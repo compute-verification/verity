@@ -26,7 +26,13 @@ them against the outputs in place. It never runs check.py, so it reads and write
 no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
-unsandboxed, and fetches dependencies the node does not keep.
+unsandboxed, and fetches dependencies the node does not keep. In the sandbox the tree's fetched dependencies are mounted
+read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
+no `.lake` gets an empty one, in the tree's own directory and never in the ones the audit keeps (`READ_ONLY`): Lake makes
+it before it compiles that configuration at a dependency order the tree was not loaded at, and a slot tree whose dependencies
+were fetched again under the `.lake/config` it kept has none. A write Lake is still refused there gives no verdict on FILE:
+the try says so, names the path and the `--records` run that builds the dependencies writable, and exits 2
+(`refused_write`).
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
@@ -168,9 +174,19 @@ FACTS = Path(".lake") / "lean-changed-facts"
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
-#: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself
+#: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself. Before its
+#: mount, each package directly under DIR (a directory of its own, never a link) that has a `lakefile.lean` and no `.lake`
+#: gets an empty one: Lake keeps such a package's compiled configuration in the workspace's
+#: `.lake/config/<the package's place among those it loads>`, and where that place holds no trace of it (a dependency order
+#: this tree was never loaded at) it first makes the package's own `.lake`, which under the mount fails the load. A package
+#: nothing builds has no `.lake` unless Lake made it so. Nothing else under DIR is written; a `mkdir` that fails is left to
+#: Lake's own error (`refused_write`)
 READ_ONLY = ('ro=(); while [ "$1" != -- ]; do ro+=("$1"); shift; done; shift; '
-             'for d in "${ro[@]}"; do mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
+             'for d in "${ro[@]}"; do '
+             'for p in "$d"/*; do [ -f "$p/lakefile.lean" ] && [ ! -L "$p" ] && [ ! -e "$p/.lake" ] && mkdir "$p/.lake"; done; '
+             'mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
+#: Lake's two lines for a write the sandbox's read-only mount refused, the second naming the path
+REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n[ \t]+file: (\S.*?)[ \t]*$", re.M)
 #: Lake's line for a Lean error, the file relative to its package: `error: Aa/Two.lean:2:39: Unknown identifier ...`
 ERROR = re.compile(r"^error: (?:\./)*(\S+?\.lean):\d+:\d+: ")
 #: {package: the dependencies' key its links were taken under}, beside the packages in the tree
@@ -385,6 +401,14 @@ def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
+
+
+def refused_write(text: str, pkg: str, tree: Path) -> str | None:
+    """The path Lake's output ``text`` says a read-only file system refused it (`REFUSED_WRITE`), when it lies in the fetched
+    dependencies of ``tree/pkg`` or of a package it requires by path, which `in_sandbox` mounts read-only; else None."""
+    ro = [(tree / p / ".lake" / "packages").resolve() for p in closure(pkg)]
+    return next((m.group(1) for m in REFUSED_WRITE.finditer(text)
+                 if any(d in Path(os.path.realpath(m.group(1))).parents for d in ro)), None)
 
 
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
@@ -1487,7 +1511,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
     probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
-    or the tree's dependencies can't be had. Never check.py. What the build compiled in the sandbox goes into the node's
+    the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
+    records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
     artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile."""
     file = file.removeprefix("./")
     if tree is not None and not kept_tree(tree):
@@ -1568,6 +1593,12 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                     log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "
                         "one was built against another version of a module both import: they lose their traces, so the "
                         "next try rebuilds them; a clash that comes back is in the source")
+                if rc and (path := refused_write(text, pkg, tree)):
+                    log(f"lean-try: {file}: not elaborated, and this says nothing about the file: Lake wanted to write "
+                        f"{path}, in the dependencies this tree fetched, which a try mounts read-only so that no try "
+                        f"changes what the next one builds against; `lean_changed.py --records {pkg} --rebuild` here builds "
+                        "them where Lake may write, on the tree it takes")
+                    rc = 2
                 if rc == 0 and checked:
                     def lean(a: list[str]) -> tuple[int, str, float, int]:
                         argv = [lake, "env", "lean", *a]

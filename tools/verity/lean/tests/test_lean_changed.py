@@ -24,6 +24,7 @@ LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
 
 STORED = LC.stored
+BUILD = LC.build
 
 
 @pytest.fixture(autouse=True)
@@ -1245,6 +1246,39 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
+def test_try_names_the_records_run_when_lake_wanted_to_write_in_the_read_only_dependencies(trying, tmp_path, monkeypatch):
+    """Lake's read-only error on a path in the tree's fetched dependencies is no verdict on the file: the try says what Lake
+    wanted to write, that a try mounts it read-only, and the run that builds the dependencies writable, and exits 2, as when
+    nothing ran. Lake names the resolved path, and a slot tree is a link."""
+    tree, calls = trying
+    pkg = tree / "Sec" / "Proofs"
+    (pkg / ".lake" / "packages" / "leansqlite").mkdir(parents=True)
+    lake = tmp_path / "lake"
+    lake.write_text('#!/usr/bin/env bash\necho "error: read-only file system (error code: 30)"\n'
+                    'echo "  file: $PWD/.lake/packages/leansqlite/.lake"\nexit 1\n')
+    lake.chmod(0o755)
+    monkeypatch.setattr(LC, "build", BUILD)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    [line] = [s for s in said if "Lake wanted to write" in s]
+    assert f"{pkg.resolve()}/.lake/packages/leansqlite/.lake" in line and "read-only" in line
+    assert "`lean_changed.py --records Sec/Proofs --rebuild`" in line and "says nothing about the file" in line
+    assert any("lake build +Proofs.Flock.X:deps exit 1" in s for s in said), "Lake's own status is still said"
+    assert not (tree / LC.DIRTY).exists()
+
+    slot = tmp_path / "build-0"
+    slot.symlink_to(tree)
+    text = f"error: read-only file system (error code: 30)\n  file: {tree.resolve()}/Sec/.lake/packages/dep/.lake\n"
+    assert LC.refused_write(text, "Sec/Proofs", slot) == f"{tree.resolve()}/Sec/.lake/packages/dep/.lake", \
+        "the dependencies of a package it requires by path are mounted read-only too"
+    for other in (text.replace("/packages/", "/build/"), text.replace(str(tree.resolve()), "/elsewhere"), text.splitlines()[0]):
+        assert LC.refused_write(other, "Sec/Proofs", slot) is None
+    monkeypatch.setattr(LC, "build", lambda *a, **k: (1, text.replace("/packages/", "/build/")))
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
+    assert not any("Lake wanted to write" in s for s in said), "a write refused anywhere else is Lake's to explain"
+
+
 def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):
     """A slot's tree is keyed by package paths, and a move renames tracked files only: the build of `Old/Proofs` would stay
     there while `new/Proofs` compiled every module again and took its dependencies again. Under the tree's lock the build
@@ -1429,6 +1463,99 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def read_only(tmp: Path, dirs: list[Path], cmd: list[str], monkeypatch) -> tuple[int, list[str]]:
+    """`READ_ONLY` as the sandbox runs it, on ``dirs`` and then ``cmd``, where a test may not mount: `mount` is a stand-in
+    that records its arguments and the `.lake` directories then under the directory it is given. The status, and its lines."""
+    stand_in, log = tmp / "mount-stand-in", tmp / "mount.log"
+    stand_in.mkdir(exist_ok=True)
+    (stand_in / "mount").write_text('#!/usr/bin/env bash\necho "$* : $(cd "${@: -1}" && echo */.lake)" >> "$MOUNT_LOG"\n')
+    (stand_in / "mount").chmod(0o755)
+    log.unlink(missing_ok=True)
+    monkeypatch.setenv("PATH", str(stand_in), prepend=os.pathsep)
+    monkeypatch.setenv("MOUNT_LOG", str(log))
+    rc = subprocess.run(["bash", "-c", LC.READ_ONLY, "ro", *map(str, dirs), "--", *cmd]).returncode
+    return rc, log.read_text().splitlines() if log.is_file() else []
+
+
+def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_one_before_its_read_only_mount(
+        tmp_path, monkeypatch):
+    """Lake keeps a `lakefile.lean` dependency's compiled configuration in the workspace's `.lake/config`, by the dependency's
+    place among the packages it loads, and where that place holds no trace of it Lake first makes the dependency's own
+    `.lake`. Under the read-only mount that failed the load, on a tree whose dependencies were fetched again under an older
+    `.lake/config` (those nothing builds then have no `.lake`), as soon as a branch changed the dependencies' order. The
+    directory is made before the mount, empty, in those dependencies alone, and nothing else there is written."""
+    packages = tmp_path / "tree" / "pkg" / ".lake" / "packages"
+    for dep, files in (("leansqlite", ["lakefile.lean", "sub/lakefile.lean"]), ("batteries", ["lakefile.toml"]),
+                       ("mathlib", ["lakefile.lean", ".lake/build/lib/Mathlib.olean"])):
+        for f in files:
+            (packages / dep / f).parent.mkdir(parents=True, exist_ok=True)
+            (packages / dep / f).write_text(f)
+    (packages / "lakefile.lean").write_text("a file of that name, in no package")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "lakefile.lean").write_text("a package this directory only links to")
+    (packages / "linked").symlink_to(elsewhere)
+    none_fetched = tmp_path / "tree" / "dep" / ".lake" / "packages"
+    none_fetched.mkdir(parents=True)
+
+    def held() -> set[str]:
+        return {p.relative_to(packages).as_posix() for p in packages.rglob("*")}
+
+    before = held()
+    rc, mounts = read_only(tmp_path, [packages, none_fetched], ["bash", "-c", "exit 7"], monkeypatch)
+    assert rc == 7, "the command runs after the mounts, and its status is the sandbox's"
+    assert held() - before == {"leansqlite/.lake"} and before <= held()
+    assert [p.name for p in elsewhere.iterdir()] == ["lakefile.lean"], "nothing is written through a link"
+    assert list((packages / "leansqlite" / ".lake").iterdir()) == [] and list(none_fetched.iterdir()) == []
+    assert [m.split(" : ")[0] for m in mounts] == [f"--bind {d} {d}" if i % 2 == 0 else f"-o remount,bind,ro {d}"
+                                                    for d in (packages, none_fetched) for i in (0, 1)]
+    assert "leansqlite/.lake" in mounts[0].split(" : ")[1].split(), "it is there before the first mount of its directory"
+    after = held()
+    assert read_only(tmp_path, [packages, none_fetched], ["true"], monkeypatch)[0] == 0 and held() == after, "and stays as it is"
+
+
+@pytest.mark.parametrize("copy", [False, True])
+def test_a_lake_directory_made_in_a_tree_never_appears_in_the_dependencies_the_node_keeps(tmp_path, monkeypatch, copy):
+    """`link` fills a tree's `.lake/packages` from the node's kept dependencies with hard links to their files (a try and
+    `--records`: a copy), and a directory is the tree's own either way: the `.lake` made there is not in the kept ones,
+    which every tree of the node is filled from and only the audit writes."""
+    monkeypatch.setattr(LC.LA, "deps_key", lambda _: "k")
+    deps, tree, links = tmp_path / "deps", tmp_path / "tree", {}
+    (deps / "k" / "leansqlite").mkdir(parents=True)
+    (deps / "k" / "leansqlite" / "lakefile.lean").write_text("package leansqlite")
+    assert LC.link("pkg", tree, deps, links, log=lambda _: None, copy=copy) and links == {"pkg": "k"}
+    packages = tree / "pkg" / ".lake" / "packages"
+    assert (packages / "leansqlite" / "lakefile.lean").samefile(deps / "k" / "leansqlite" / "lakefile.lean") == (not copy)
+    assert read_only(tmp_path, [packages], ["true"], monkeypatch)[0] == 0 and (packages / "leansqlite" / ".lake").is_dir()
+    assert sorted(p.relative_to(deps).as_posix() for p in (deps / "k").rglob("*")) == ["k/leansqlite", "k/leansqlite/lakefile.lean"]
+
+
+def test_in_the_sandbox_lake_finds_its_directory_made_and_the_dependencies_read_only(tmp_path):
+    """The same through `sandbox.sh` and its mounts, where a node allows them. A stand-in `lake` asks for the dependency's
+    `.lake` as Lake does (nothing to do when it is there) and reports as Lake does when it can't have it: it finds the
+    directory made, can write nothing in the dependencies, and the kept ones, whose files the tree's are hard links to,
+    gain nothing."""
+    if not LC.sandboxed():
+        pytest.skip("no unprivileged user namespaces here (`unshare`); lean_changed builds without the sandbox where there are none")
+    store, pkg = tmp_path / "deps" / "k", tmp_path / "tree" / "a"
+    (store / "dep").mkdir(parents=True)
+    (store / "dep" / "lakefile.lean").write_text("package dep")
+    (pkg / ".lake" / "packages" / "dep").mkdir(parents=True)
+    os.link(store / "dep" / "lakefile.lean", pkg / ".lake" / "packages" / "dep" / "lakefile.lean")
+    lake = tmp_path / "lake"
+    lake.write_text("#!/usr/bin/env bash\n"
+                    "mkdir -p .lake/packages/dep/.lake 2>/dev/null || { echo 'error: read-only file system (error code: 30)'; "
+                    'echo "  file: $PWD/.lake/packages/dep/.lake"; exit 1; }\n'
+                    "touch .lake/packages/dep/.lake/x 2>/dev/null && echo WROTE-DEPS\n"
+                    "mkdir -p .lake/config/2 && echo trace > .lake/config/2/lakefile.olean.trace\n")
+    lake.chmod(0o755)
+    rc, text = LC.build("a", tmp_path / "tree", str(lake), ["+A:deps"])
+    assert rc == 0 and "WROTE-DEPS" not in text and "read-only" not in text, text
+    assert list((pkg / ".lake" / "packages" / "dep" / ".lake").iterdir()) == []
+    assert (pkg / ".lake" / "config" / "2" / "lakefile.olean.trace").read_text() == "trace\n"
+    assert [p.name for p in (store / "dep").iterdir()] == ["lakefile.lean"]
 
 
 def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_path, monkeypatch):
