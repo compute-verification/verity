@@ -11,6 +11,7 @@ boundary), the reads and the session's window."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -45,7 +46,9 @@ SEGMENT_2152 = 11_709_069
 
 def test_an_honest_segment_is_certified_at_its_reads() -> None:
     w = _run(W.params_for(), egress_bits=3 * sw.EGRESS_UNIT_BITS - 5)
-    assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS}
+    key, = w.case["params"]["trusted"]
+    assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS,
+                                                  "key_sha512": hashlib.sha512(bytes.fromhex(key)).hexdigest()}
     assert w.answer["public"] == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
                                   "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
                                   "memory_bits": M, "r": 24}
@@ -124,7 +127,8 @@ def test_a_late_read_is_rejected() -> None:
             return super().answer(indices)
 
     w = _run(clock=clock, prover=Late, egress_bits=0)
-    assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6}
+    assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6,
+                                                  "key_sha512": w.report["key_sha512"]}
     assert "batch 5 is past its deadline of 1000 ns" in w.answer["reason"]
 
 
@@ -238,6 +242,19 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = W.summary(record)
     assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
+    key, = case["params"]["trusted"]
+    assert s["decided_by"] == record["decided_by"] == {"program": "python", "host": socket.gethostname()}
+    assert s["key_sha512"] == record["report"]["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
+
+
+def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> None:
+    """`period.decided_by`, what a piece's summary says of its verdict: the Lean by its executable's name, wherever it
+    was built, and `python` when none answered, each on the host that ran it."""
+    host = socket.gethostname()
+    assert W.decided_by(tmp_path / "scratch" / ".lake" / "build" / "bin" / "wipe-protocol") == {
+        "program": "wipe-protocol", "host": host}
+    assert W.decided_by("pous-run-protocol") == {"program": "pous-run-protocol", "host": host}
+    assert W.decided_by(None) == {"program": "python", "host": host}
 
 
 def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:

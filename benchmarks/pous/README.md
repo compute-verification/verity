@@ -166,6 +166,15 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 key that isn't on the node, and kills nothing. Its header lists the challenger's settings. `tests/test_pous_served_wipe.py`
 runs it on a CPU, with one segment in host memory.
 
+`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights as `C*` on
+the card for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session over the same store
+(`held_bandwidth.py`), whose answer the bandwidth piece collects. Each of the two cases is answered by its Lean verifier,
+`pous-run-protocol` and `remote-audit-p2-protocol`, which the script builds in a scratch copy of `verity/` before it asks
+for the card; PoUS's must agree with the Python, and a verifier that doesn't build or doesn't answer leaves no accept.
+Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's `summary.json`) names the program that
+decided and the host it ran on under `decided_by`. `tests/test_pous_served_piece.py` runs the piece on a CPU, and
+`tests/test_pous_served_piece_sh.py` the script, with stand-ins for `lake`, the card and the piece.
+
 `served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
 served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never

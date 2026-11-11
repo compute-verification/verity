@@ -310,7 +310,8 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     assert record["session"]["fill"]["bytes"] == 1 << 25
     assert record["report"]["fill"]["labels"] == W.SEGMENT_LABELS and record["report"]["streamer"]["gates"]
     s = W.summary(record)
-    assert s["verdict"] == "accept" and s["judge"] == "python" and s["segments"] == 1 and s["tier"] == "host-dram"
+    assert s["verdict"] == "accept" and s["decided_by"]["program"] == "python" and s["segments"] == 1
+    assert s["tier"] == "host-dram"
 
 
 def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
