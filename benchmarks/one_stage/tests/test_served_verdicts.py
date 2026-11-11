@@ -2893,6 +2893,7 @@ if a[0] == "warm":
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
     assert "--tie" in a or "--tie-prefix" not in a
+    assert "--delta" not in a or "--tie" in a  # type=delta_arg: a ratio, the tie's floors' DELTA
     open(os.environ["ORDER"] + ".audit", "w").write(json.dumps(a))
     if "--tie" in a:
         print("TIE " + json.dumps({"record": "cd" * 64, "chained": True, "previous": "cd" * 64, "values": []}))
@@ -3158,7 +3159,7 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     """Under H1_TIE the tables the window circuit reads are H1's W's, so V3c's audit is tied to W (records_audit's --tie,
     with H1's names' prefix h1/) at stratified:1, a stratum of each table's readers, so every table has a sampled reader,
     on as many ports as R's sample has proof blocks (its strata's k summed) unless V3C_PORTS says; an untied window's
-    audit is at subset:1 on 16 ports."""
+    audit is at subset:1 on 16 ports. Neither names a delta: the audit's own default."""
     if tied:
         _tied_commit(tmp_path, "same")
     rc, lines, order, _limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
@@ -3166,6 +3167,7 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
     assert _audited(tmp_path) == ({"--law": "stratified:1", "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
+    assert _audited(tmp_path, ("--delta",)) == {"--delta": None}
 
 
 DAYS = ("--day", "--day-log", "--day-params")
@@ -3879,18 +3881,22 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
 
-def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records_audits_tie(tmp_path):
+@pytest.mark.parametrize("floors, delta", [("4/125,1/100", "1/100"), ("3/100,1/50", "1/50")])
+def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records_audits_tie(tmp_path, floors, delta):
     """V3c makes no commit of its own: it holds the piece's R to W (chained right after it), and audits it tied to W with
     no prefix (Pearl+'s values are W's own names) at work:1 on a port a sampled block (R's strata's k summed, each its
-    floor), saying the audit's tie. The verifier's own window-circuit record it holds the commit's circuit to is the
-    circuit cut at Pearl+'s linears, stating the work table of V3C_FLOORS' floors, and it leaves that record beside R in
-    the tie the record reads, for the period's circuit."""
+    floor), at the DELTA its floors were made for (V3C_FLOORS', records_audit's --delta), saying the audit's tie. The
+    verifier's own window-circuit record it holds the commit's circuit to is the circuit cut at Pearl+'s linears, stating
+    the work table of V3C_FLOORS' floors, and it leaves that record beside R in the tie the record reads, for the
+    period's circuit."""
     _pearl_tied_commit(tmp_path)
-    rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
+    rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None,
+                                     **({} if floors == "4/125,1/100" else {"V3C_FLOORS": floors}))
     assert rc == 0 and "window-commit" not in order and "audit" in order, (lines, order)
     circuit = (tmp_path / "order.circuit").read_text().split("\n")
     assert circuit[circuit.index("--pearl-tables") + 1] == "pearl-c-h100-v1-h3", circuit
-    assert circuit[circuit.index("--reader-floors") + 1] == "4/125,1/100", circuit
+    assert circuit[circuit.index("--reader-floors") + 1] == floors, circuit
+    assert _audited(tmp_path, ("--delta",)) == {"--delta": delta}
     assert any(x.startswith(f"WINDOW-CIRCUIT class {W63K4}, cut at Pearl+'s linears: ") for x in lines), lines
     w = REG.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
@@ -4148,25 +4154,29 @@ def _no_floors(law: str, floors: str) -> str:
 
 NO_FLOORS = ("PREFLIGHT: under PEARLPLUS_TIE the verifier's record and the commit state the work table with prove_path's "
              "--reader-floors, which this tree's prove_path.py doesn't take")
+NO_RATIO = ("PREFLIGHT: under PEARLPLUS_TIE the audit's delta is V3C_FLOORS' DELTA, a ratio NUM/DEN, which this tree's "
+            "records_audit.py's --delta doesn't take")
 
 
 @pytest.mark.parametrize("args", [(), ("v3c",)])
-@pytest.mark.parametrize("extra, prove_path, line", [
-    ({"V3C_LAW": "stratified:1"}, FAKE_V3C_PROVE_PATH, _no_floors("stratified:1", "4/125,1/100")),
-    ({"V3C_LAW": "subset:1"}, FAKE_V3C_PROVE_PATH, _no_floors("subset:1", "4/125,1/100")),
-    ({"V3C_LAW": "work:0"}, FAKE_V3C_PROVE_PATH, _no_floors("work:0", "4/125,1/100")),
-    ({"V3C_FLOORS": "0.032,0.01"}, FAKE_V3C_PROVE_PATH, _no_floors("work:1", "0.032,0.01")),
-    ({"V3C_LAW": "work:2", "V3C_FLOORS": "4/125"}, FAKE_V3C_PROVE_PATH, _no_floors("work:2", "4/125")),
-    ({}, FAKE_V3C_PROVE_PATH.replace('"--reader-floors"', '"--floors"'), NO_FLOORS),
+@pytest.mark.parametrize("extra, tree, line", [
+    ({"V3C_LAW": "stratified:1"}, {}, _no_floors("stratified:1", "4/125,1/100")),
+    ({"V3C_LAW": "subset:1"}, {}, _no_floors("subset:1", "4/125,1/100")),
+    ({"V3C_LAW": "work:0"}, {}, _no_floors("work:0", "4/125,1/100")),
+    ({"V3C_FLOORS": "0.032,0.01"}, {}, _no_floors("work:1", "0.032,0.01")),
+    ({"V3C_LAW": "work:2", "V3C_FLOORS": "4/125"}, {}, _no_floors("work:2", "4/125")),
+    ({}, {"prove_path": FAKE_V3C_PROVE_PATH.replace('"--reader-floors"', '"--floors"')}, NO_FLOORS),
+    ({}, {"records_audit": FAKE_RECORDS_AUDIT.replace("type=delta_arg", "type=float")}, NO_RATIO),
 ])
 def test_the_preflight_refuses_pearlplus_tie_at_a_design_other_than_work_or_without_its_floors(
-        tmp_path, args, extra, prove_path, line):
+        tmp_path, args, extra, tree, line):
     """Under PEARLPLUS_TIE Pearl+'s reader templates are a template a shape of linear, so a sample has no reader of every
     value W registers: the design is work:K over a work table with a floor for each reader template, made from
-    V3C_FLOORS' EPS and DELTA, which the verifier's record and the commit state (prove_path's --reader-floors). Another
-    design, floors that aren't two fractions, or a tree whose prove_path.py takes no --reader-floors is refused, saying
-    what to pass, in the serve's run and in `served_verdicts.sh v3c` alike, before anything runs."""
-    rc, lines, order, _limits = _v3c(tmp_path, args, prove_path=prove_path, **PEARL_TIED, **extra)
+    V3C_FLOORS' EPS and DELTA, which the verifier's record and the commit state (prove_path's --reader-floors), and the
+    audit's delta is that DELTA (records_audit's --delta, a ratio). Another design, floors that aren't two fractions, or
+    a tree whose prove_path.py takes no --reader-floors or whose records_audit.py takes no ratio for --delta is refused,
+    saying what to pass, in the serve's run and in `served_verdicts.sh v3c` alike, before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, args, **tree, **PEARL_TIED, **extra)
     assert (rc, lines, order) == (3, [line], [])
     assert "sampled reader" not in line
 
@@ -4237,8 +4247,8 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
 
 def _deferral_settings(tmp_path: Path) -> dict[str, str]:
     """The settings `_deferred`'s deferral recorded for its follow-on (private/deferred/deferred.env), as bash reads them."""
-    names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER "
-             "DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY")
+    names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_FLOORS V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE "
+             "SERVED_PEER DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(tmp_path / "serve" / "private" / "deferred" / "deferred.env")],
                           check=True, capture_output=True, text=True).stdout
@@ -4258,19 +4268,21 @@ DEFERRED_LINE = {
 @pytest.mark.parametrize("off", ["1", "0"])
 def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_and_hashing_each_input(tmp_path, off):
     """Step 6's deferral leaves in the serve dir's private/deferred the pieces the record read, the settings the
-    follow-on runs at (the window, the product, V3c's class, law and coins, H1_TIE, the composite, the served node, its
-    peer, the tree's commit and where the final record is composed), and the follow-on's every input, listed for the
-    prover's copy and hashed for the follow-on to hold it to: V3c's window dir whole, H1's log and each record it names,
-    the tie's commit answer, the record's and the composite's inputs and its own files, and nothing else of the serve dir.
+    follow-on runs at (the window, the product, V3c's class, law, floors and coins, H1_TIE, the composite, the served
+    node, its peer, the tree's commit and where the final record is composed), and the follow-on's every input, listed
+    for the prover's copy and hashed for the follow-on to hold it to: V3c's window dir whole, H1's log and each record
+    it names, the tie's commit answer, the record's and the composite's inputs and its own files, and nothing else of
+    the serve dir.
     Its one line in $OUT names what was deferred, why and the follow-on's command (under COMPOSE_OFF_NODE=1, the default,
     V3c's audit alone, the record and the composite composed off both nodes), and no window; nothing else lands in $OUT."""
     run = _deferred(tmp_path, **({} if off == "1" else {"COMPOSE_OFF_NODE": off}))
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
     assert _deferral_settings(tmp_path) == {
-        "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "V3C_CHALLENGER": "local",
-        "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2", "DAY": ""}
+        "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "V3C_FLOORS": "",
+        "V3C_CHALLENGER": "local", "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "",
+        "SERVED_NODE": "vy-dc-h200", "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off,
+        "COMPOSE_NODE": "vy-auditor-2", "DAY": ""}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -4282,6 +4294,13 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert sorted(f.relative_to(out).as_posix() for f in out.rglob("*") if f.is_file()) == [
         "pieces/pouw/answer.json", "verdicts.txt"]
     assert not _window_data(out, 7) and oct(dd.stat().st_mode & 0o777) == "0o700"
+
+
+def test_a_deferral_records_the_floors_the_serve_ran_at_for_its_follow_on(tmp_path):
+    """V3C_FLOORS is one of the settings a follow-on runs at: under PEARLPLUS_TIE its verifier's work table and its
+    audit's delta are made from it, so the follow-on takes the serve's and not its own node's default."""
+    assert _deferred(tmp_path, V3C_FLOORS="3/100,1/50").returncode == 0
+    assert _deferral_settings(tmp_path)["V3C_FLOORS"] == "3/100,1/50"
 
 
 def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
@@ -4347,6 +4366,7 @@ CLASH = ("PREFLIGHT: the follow-on runs at the deferral's settings (the serve di
     ("case.json", {}, [V3C_ENTRY, FOLLOW_FAIL]),
     (None, {"K": "8"}, [f"{CLASH} K: unset it"]),
     (None, {"PRODUCT": "onsite", "COMPOSITE": ""}, [f"{CLASH} PRODUCT COMPOSITE: unset it"]),
+    (None, {"V3C_FLOORS": "3/100,1/100"}, [f"{CLASH} V3C_FLOORS: unset it"]),
     (None, {"NODE_MEM_GB": "196"}, [f"PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and {SHORT}"]),
     (None, {"RESEARCH_SOURCE_SHA": "cd" * 20}, ["PREFLIGHT: the follow-on reads the served node's window-circuit record, "
      f"which its tree {SHA} wrote, and this tree is {'cd' * 20}: run it at that commit, or set FOLLOW_ANY_TREE=1"]),
