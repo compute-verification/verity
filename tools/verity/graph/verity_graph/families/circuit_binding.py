@@ -11,7 +11,9 @@ under a regular package of `sidecars.PACKAGES`, named for its module as `sidecar
 ``_X_roots``, its ``_model_roots`` (every model one binding) and each ``TEMPLATE_PARAMS`` entry; `targets.py`'s own root
 functions, the templates checked at their example (``TEMPLATE_PARAMS``) and the registered roots (``<registered>``).  Each task's
 inputs are what any run of the catalog reads (`base`): every run loads every registry and binding file, so a binding's own
-share of them narrows inside circuit-check, by its read-set cache, not here."""
+share of them narrows inside circuit-check, by its read-set cache, not here.  Its var ``lookups`` is what the tree answers the
+lookups those runs make beyond those files' bytes (`lookups`), so a module file added where a run looks for one reruns them,
+and an edit to a file none reads reruns none."""
 from __future__ import annotations
 
 import ast
@@ -20,6 +22,7 @@ import json
 import tomllib
 from pathlib import Path
 
+from .. import contract
 from ..graph import RUNNERS, GraphError
 
 CHECKER = "tools/verity/circuit_check"
@@ -41,6 +44,12 @@ FAILURES = "out/failures"
 REGISTERED = ("<registered>", "_registered")
 #: the binding of the templates `targets.py` checks at their example, those no sidecar's ``TEMPLATE_PARAMS`` names
 EXAMPLES = "TEMPLATE_PARAMS"
+#: circuit-check's declaration of what its runs of the catalog read (`circuit_check.cli.READS`): its parts and their schema
+READS = f"{CHECKER}/reads"
+READS_PARTS = ("registries.json", "loaded.json", "bindings.json")
+READS_SCHEMA = "circuit-check-reads/v1"
+#: how a module file's name ends, on any platform (each of `importlib.machinery.all_suffixes()` ends so)
+MODULE_SUFFIXES = (".py", ".pyw", ".pyc", ".pyd", ".so")
 
 
 def base(root: Path, files: list[str]) -> list[str]:
@@ -54,6 +63,57 @@ def base(root: Path, files: list[str]) -> list[str]:
     exact = set(declared)
     return [f for f in files if (f in exact or f.startswith(dirs)) and not f.startswith(f"{CHECKER}/tests/")
             and not f.endswith(".md")]
+
+
+def _module_file(name: str) -> bool:
+    return name.partition(".")[0].isidentifier() and name.endswith(MODULE_SUFFIXES)
+
+
+def _at_root(files: list[str]) -> list[str]:
+    """What a module lookup at the root can find: each module file there, each directory a package's name could be
+    (``<name>/``) and the ``__init__`` file that makes one a regular package."""
+    out = set()
+    for f in files:
+        head, slash, rest = f.partition("/")
+        if not slash:
+            if _module_file(head):
+                out.add(head)
+        elif head.isidentifier():
+            out.add(f"{head}/")
+            if "/" not in rest and rest.partition(".")[0] == "__init__" and _module_file(rest):
+                out.add(f)
+    return sorted(out)
+
+
+def lookups(root: Path, files: list[str]) -> str:
+    """The digest of what the tree answers each lookup a run of the catalog makes beyond its inputs' bytes: the kind of each path
+    `READS` declares its runs probed and the names in each directory they listed (`circuit_check.cache.declared`'s ``probes``
+    and ``listed``), and the module files and packages at the root, the first entry of the import path of a run from there
+    (`runners.circuit_binding.checker`'s ``-m``), which `READS` needn't hold.  A file added or removed where a run looks
+    changes it; an edit to a file doesn't."""
+    have, got = set(files), {}
+    for part in READS_PARTS:
+        if (p := f"{READS}/{part}") in have:
+            try:
+                doc = json.loads((root / p).read_text())
+            except (OSError, ValueError) as e:
+                raise GraphError(f"{p}: {e}") from e
+            if not isinstance(doc, dict) or doc.get("schema") != READS_SCHEMA:
+                raise GraphError(f"{p} isn't {READS_SCHEMA}, the read sets this family keys its tasks' lookups on")
+            got.update(doc)
+    sets = [got.get("registries", {}), *got.get("groups", [])]
+    dirs = {""}
+    for f in files:
+        i = f.rfind("/")
+        while i > 0 and (d := f[:i]) not in dirs:
+            dirs.add(d)
+            i = f.rfind("/", 0, i)
+    probes = {*got.get("loaded", ()), *(p for s in sets for p in s.get("probes", ()))}
+    listed = sorted({d for s in sets for d in s.get("listed", ())})
+    return contract.digest(contract.canonical({
+        "probes": [[p, "file" if p in have else "dir"] for p in sorted(probes) if p in have or p in dirs],
+        "listed": [[d, sorted({f[len(d) + 1:].partition("/")[0] for f in files if f.startswith(f"{d}/")})] for d in listed],
+        "root": _at_root(files)}))
 
 
 def _packages(root: Path) -> set[str]:
@@ -136,14 +196,15 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                          f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
     reads = [{"task": CATALOG, "output": RECORDS["name"]}]
     shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
+    seen = {"lookups": lookups(root, files)}
     return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record and slice",
              "inputs": shared, "outputs": [RECORDS, SHARED, *(slice_of(name) for name in found)],
-             "resources": CATALOG_SLOT},
+             "resources": CATALOG_SLOT, "vars": seen},
             {"id": "circuit-coverage:catalog", "kind": "circuit-coverage", "inputs": shared, "reads": reads,
              "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
              "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",
-             "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"]}},
+             "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"], **seen}},
             *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "outputs": [failures(name)],
                "reads": [{"task": CATALOG, "output": SHARED["name"]}, {"task": CATALOG, "output": slice_of(name)["name"]}],
-               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"]}}
+               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"], **seen}}
               for name, (f, e) in found.items())]

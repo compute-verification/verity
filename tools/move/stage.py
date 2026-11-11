@@ -15,8 +15,9 @@ For each map in order, on BASE (default `origin/main`, fetched first) or on the 
    which `restack.py` finds the move and its script;
 4. certify the commit with BASE's `move_check.py PARENT COMMIT --json` (each `--map OLD=NEW` passed on), and refuse it
    unless certified, printing what isn't a pure move;
-5. run the map again on the commit, and refuse it unless that changes nothing (`--no-rerun` skips this): once the moves
-   land, `restack.py BRANCH` carries an open branch across all of them by rerunning each.
+5. run the map again on the commit, as `restack.py` runs it on a branch (a path map with `--report-splits`, since its
+   `[split]` rows name references the move has rewritten), and refuse it unless that changes nothing (`--no-rerun` skips
+   this): once the moves land, `restack.py BRANCH` carries an open branch across all of them by rerunning each.
 
 Nothing in this checkout changes but the branch `--branch` names, created at the last commit (refused if it exists
 here, or on the remote with `--push`); `--push` pushes it, never forced, and `--bundle FILE` writes it as a git bundle
@@ -169,7 +170,8 @@ class Stage:
         self.log(f"  {summary}")
 
         if self.rerun:
-            r = self.run(script, *args, "--root", str(self.wt))
+            # as restack.py reruns it on a branch: on the move's own commit no reference needs its [split] row any more
+            r = self.run(script, *RS.BRANCH_ARGS.get(script, ()), *args, "--root", str(self.wt))
             if r.returncode:
                 raise Refused(f"`{shown}` run again on {commit[:12]} failed (exit {r.returncode}):\n{_tail(r)}")
             status = subprocess.run(["git", "status", "--porcelain"], cwd=self.wt, check=True, capture_output=True, text=True)
