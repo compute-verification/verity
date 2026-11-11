@@ -230,8 +230,8 @@ class Settings:
         device = raw.get("device")
         if device is not None and device not in DEVICES:
             raise ValueError(f"pouw setting 'device' is one of {', '.join(DEVICES)}")
-        paths = [raw.get(key) for key in ("kernel", "cubin")]
-        if any(p is not None and not isinstance(p, str) for p in paths):
+        kernel, cubin = raw.get("kernel"), raw.get("cubin")
+        if any(p is not None and not isinstance(p, str) for p in (kernel, cubin)):
             raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
         from verity.protocols.pouw.verifier.serving import SCHEDULES
         schedule = raw.get("schedule", "serial")
@@ -244,9 +244,10 @@ class Settings:
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
             raise ValueError(f"pouw setting 'backend' is the lead's kernel and committer (`lead.LeadBackend`): "
                              f"{', '.join(PL.BACKEND)}")
-        *h1, draw_session, commit_record = PHS.of(raw)
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session,
-                   commit_record)
+        (rows, steps, runner, rounds, challenger, session, admission, gate, served, graphs, period, unit, ks, draw_session,
+         commit_record) = PHS.of(raw)
+        return cls(coins, retain, tdir, draws, tamper, device, kernel, cubin, schedule, start, rows, steps, runner, rounds,
+                   challenger, session, admission, gate, served, graphs, period, unit, ks, backend, draw_session, commit_record)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -568,7 +569,7 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
     s = (None if scheme in pouw_circuit.SCHEMES else PPD.scheme_of(scheme) if scheme in PPD.SCHEMES
          else pouw_schemes.get(scheme))
     types = linear_types()
-    layers = [m for m in target.model.modules() if isinstance(m, types)]
+    layers: list[Any] = [m for m in target.model.modules() if isinstance(m, types)]
     if not layers:
         raise ValueError(f"{entry}: the model has no linear layer to execute")
     bad, seen, shapes = [], set(), {}
@@ -619,10 +620,11 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
+        assert settings.kernel is not None      # `refusals` refuses Pearl-C without it
         key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
-        roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
-                                 salt_key=key)
-        return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
+        device_roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
+                                        scheme, salt_key=key)
+        return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
@@ -672,18 +674,20 @@ def install(scheme: str, target: Target) -> Option:
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    session, device, k = None, scheme in PPD.SCHEMES, None
+    session, device, k, end_pass = None, scheme in PPD.SCHEMES, None, None
     if settings.challenger is not None:
         session, commitment, opening, salt, carried, k = PHW.salt_session(entry, settings, weights_root(roots), device)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
+    run: PPD.PearlCDeviceRun | _CircuitRun | _Run
     with PHW.closed_on_error(session):
         if device:
+            assert settings.kernel is not None  # `refusals` refuses Pearl-C without it
             run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                       schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
-            run.commits["registration"] = weights_claim(s)
+            run.commits["registration"], end_pass = weights_claim(s), run.end_pass
         else:
             run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
                    else _Run(s, entry, settings, roots, salt, _SALT_KEYS.setdefault(entry, os.urandom(32))))
@@ -694,10 +698,12 @@ def install(scheme: str, target: Target) -> Option:
             _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
-            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+            def apply(orig: Any, w: int = w) -> Any:
+                return _executor(run, w)
+            h.wrap(layer.quant_method, "apply", apply)
         if device:
             PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=run.end_pass if device else None,
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=end_pass,
                   release=run.finish if session is None else lambda: PHW.finish(run, session))
 
 
@@ -734,11 +740,12 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
-    shapes = [tuple(int(d) for d in m.weight.shape) for m in layers]
+    shapes = [(int(n), int(k)) for n, k in (m.weight.shape for m in layers)]
     modules = {w: f"linear {w}" for w in roots} | _named(target.model, layers)
     wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
                                                               target.context.stage != "capture")) or weights_root(roots)
     if settings.challenger is not None:
+        assert settings.session is not None     # `pouw_h1_window.refusals` refuses a challenger without its session
         session = PHW.Window(entry, settings.challenger, settings.steps, wroot, settings.session, settings.gate, settings.draw_session)
 
         def opener(requests_root: bytes) -> tuple[bytes, Any, Any, Mapping[str, Any]]:
