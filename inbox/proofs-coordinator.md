@@ -56634,3 +56634,97 @@ For BENCHCROSS: item 4 is the trace you named as missing: `⌈read/64⌉` coins 
 For SCALE: at the row of record (κ 2^-6) your line "its coin stream is 0.48 of #8914's `MAX_COINS` 2^24" is about 2^30 bytes; in the model that stream is `stage ≥ ⌈bytes/2^20⌉` rounds of #8940's `Held.more + 1` (at 0.48: about 492 rounds [derived from your ratio]), inside the device's `DRAW_ROUNDS = 1024` of #8914.
 
 For the table: no new line. The stage layer (#8934, #8940; unmarked) and the by-class stack now build together file by file with six files restated [runs `92b0`, `0173`]; the whole-package run on that tree is out [`a382`]. The served challenger opens `⌈read/64⌉` coins a second stage and caps a layout at `MAX_COINS` [read]; D*1's second stage is 2.2 to 13.0 million coins at 1 to 6 sampled replay blocks [derived, modeled], over `main`'s 2^20 and inside #8914's 2^24.
+
+
+## EXTFORM (PRF-528), Wed 11 Nov 13:50Z: the `wiresOk` line as a diff (compiles, toy passes); the two-stage scope transports to the wired program; one more condition (A) needs; my 13:19Z guess on `FORM` corrected
+
+**Verdict:** the refusal is 4 lines of Lean and 4 of Python, compiled and run on the toy [run]. The scope (`InScopeTwo`) at the wired program follows from the scope side by side, compiled, generic [run]. (A) needs one condition I had not listed: no unit reads one bit of its writer at two of its own inputs [read + run].
+
+**1. `ef47`: passed** [run]. `Rewire.lean` at `92ef46019372`: lean exit 0 in 23 s, 39 theorems on the three axioms, no warning. The branch head is now `70986393974218b96c1bda2504aea8f8a101f02a` (pushed 13:45Z), add-only since my 13:19Z:
+- `Rewire.lean`, 41 theorems [run: `r20261111-134012-c83b`, exit 0 in 24 s, three axioms, no warning, siblings no clash among 175 imported]. New: `Prog.correct_wired_of_agree` (the bridge at a decoder) and `Prog.exists_correct_wired` (item 3).
+- New file `Proofs/Flock/SamplingGeneric/WiredScope.lean`, 12 theorems [run: `r20261111-133635-6c3d` at `bde4d4121dec`, exit 0, three axioms, no warning]. `inScopeTwo_cut`: `InScopeTwo Pt d s` gives `InScopeTwo` at the wired program, `Pt` cut and `d` with its replay partition cut. So the scope check as it runs today is enough given those conditions, and `cell_cut` says each cell holds the proof blocks it held: no count the design reads moves. Its conditions on ω: it moves only input gates, each to an earlier returned gate; it moves no gate it sends a wire to; the wired program returns no moved gate; every proof block keeps a gate.
+- No second reader of either yet, no kernel replay. Nothing above is at `code h`.
+- In a try now (`r20261111-134803-17a4`, local commit, not pushed): `SpotFlock/WiredAt.lean`, one theorem at `code h` for any map: a checked unit's decoded values make its cut block correct at the wired program.
+
+**2. The `wiresOk` line, for the hour Daniel says yes.** No PR, no branch pushed; the commit is local (`2e5ce1fc7462` on `86c03d1840cb`).
+- [run] Lean: `r20261111-133034-49e8`, `Spot/SecondStage.lean` exit 0, its 25 theorems on the three axioms. That is the one file, not its importers.
+- [run] Python: `r20261111-133720-f38e`, the toy's three two-stage tests pass (`each_sessions_header`, `wired_as`, `broken_wire`): the honest toy is not refused.
+- [run] `r20261111-134107-92a0`: 47 tests named wire, wired or link in the suite `verity-core-sampled-proofs` pass with both sides changed. I did not read the per-test log.
+- Not done: a difftest case that a returned-and-wired design fails `second-wires` in both; the full suite; records.
+
+```diff
+diff --git a/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean b/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean
+index fa27df4412..585411ef9b 100644
+--- a/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean
++++ b/verity/protocols/spot/verifier/lean/Spot/SecondStage.lean
+@@ -153,7 +153,7 @@ def LINKS_WHY : String :=
+ def WIRES_WHY : String :=
+   "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
+   "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
+-  "place its part's units or its writer's"
++  "place its part's units or its writer's, or it reads an output the replay block returns"
+ 
+ def INTERIOR_ORDER_WHY : String :=
+   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+@@ -608,12 +608,14 @@ def linksOk (ps : Array Part) (own : Own) : Bool :=
+   | none => false
+ 
+ /-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
+-whose rows a block are its writer's units a block. -/
++whose rows a block are its writer's units a block, and whose writer's port no link names: an output the replay block
++returns is committed at the boundary, and no unit inside it reads that output off the interior record. -/
+ def wiresOk (ps : Array Part) (own : Own) : Bool :=
+   match own.wires with
+   | some ws => ws.all fun w =>
+     ps.any (fun p => p.template == w.template && placed own p w.port) &&
+-      ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)
++      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
++      (linkOf own w.writer w.wport).isNone
+   | none => false
+ 
+ /-- The wire that names template `t`'s session port `port`. -/
+diff --git a/verity/protocols/spot/verifier/second_stage.py b/verity/protocols/spot/verifier/second_stage.py
+index 8fc47a1db8..15f2bfc6a1 100644
+--- a/verity/protocols/spot/verifier/second_stage.py
++++ b/verity/protocols/spot/verifier/second_stage.py
+@@ -89,7 +89,7 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
+              "one field, alike at every caller, or a link's rows don't place its part's units")
+ WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one field of one "
+              "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
+-             "don't place its part's units or its writer's")
++             "don't place its part's units or its writer's, or it reads an output the replay block returns")
+ INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+ STMT_KEYS = ["draw", "header", "registered", "template"]
+ #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
+@@ -725,10 +725,12 @@ def _links_ok(ps: Sequence[Part], own: Own) -> bool:
+ 
+ def _wires_ok(ps: Sequence[Part], own: Own) -> bool:
+     """`SecondStage.wiresOk`: the wires are derived, each between templates the parts are of, its reader's units placed
+-    by its rows (`_placed`), whose rows a block are its writer's units a block."""
++    by its rows (`_placed`), whose rows a block are its writer's units a block, and whose writer's port no link
++    names."""
+     def writer_ok(w: Wire) -> bool:
+         r = _rows_of(own, w.template, w.port)
+-        return r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
++        return (r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
++                and _link_of(own, w.writer, w.wport) is None)
+     return own.wires is not None and all(any(p.template == w.template and _placed(own, p, w.port) for p in ps)
+                                          and writer_ok(w) for w in own.wires)
+ 
+```
+
+**3. One more condition (A) needs: ω sends no two gates one unit reads to one gate** [read: `Opens.lean:336-339`, `:344`; run: `Prog.exists_correct_wired`].
+- `Decodes` has one decoded value a unit a gate. At the wired program a unit that read one bit of its writer at two of its own input gates reads one gate there, so its block is correct only if its session holds one value at both. Flock's relation for the unit's own circuit does not say that; only the two openings of one row do, which is the conflict event.
+- So either a ninth decidable line (no unit has two wired input bits on one writer bit: at the ports, no template instance has two ports wired to one writer unit's port), or `Decodes` at the wired program is restated up to the conflict event. Compiled: with the condition, the values exist and the cut block is correct on them.
+- The other conditions hold by construction [read, no lemma]: a returned output bit is "its copy row's AND, never an input or a constant" (`Spot/Bits.lean:566`), so ω's targets are no constants and are never moved; every unit with an output keeps a gate.
+
+**4. Correction to my 13:19Z guess, which the order's 13:26Z section relays.** I wrote that when `FORM` goes on the refusal is not enough and `readOk` must change. [read: `benchmarks/two_stage/toy.py:100-106, 125-127`] The toy already has the shape that passes the refusal: its replay block returns `LinkOut(g)`, a link template (two NOTs a bit) that nothing inside reads, and `g` itself is wired to the readers inside. A served replay block that returns a value its own units read can do the same: one link template on the way out, a registration change and no verifier change. `readOk` changes only if that copy is unwanted. Still [guess] that the token ids are such a value.
+
+**5. For REGX** [read: `cursor/proofs-wiremap-5e7b` at `29ba2e5b6cab`, `WireMap.lean:187-220`; not built by me].
+- In my terms the wired program is `(bitsProgs h.ms).wired (wireMap h) (returned h)`: `Prog.wired C ω keep = C.rewire ω (C.outs.filter keep)`. Your `wiredProg` (`:220`) uses the two-argument `rewire`; against my head it is `(bitsProgs h.ms).rewire (wireMap h) (bitsProgs h.ms).outs`, one line.
+- `noReturnedWired` is the same line as the diff above, at the auditor's copies. Your `wireMap` leaves a reader's bit unmoved where the writer's port is linked; that is the case the refusal removes.
+- What my lemmas ask of `wireMap h`, each a statement about `sourceBits` and `writtenBits`: a moved gate is an input gate of `bitsProgs h.ms`; its image is in `(bitsProgs h.ms).outs`, no constant, at a smaller position, not itself a source bit, and outside the reading unit's block; and item 3.
+
+For CAPS (no PR; if these go into one): `Proofs/Flock`: +3 modules, all wholly unread, no lock change: `Flock/SpotFlock/AddressesAt.lean` 23 declarations, `Flock/Claims/Sampling/Rewire.lean` 46, `Flock/SamplingGeneric/WiredScope.lean` 12.
+
+For the table: no number moves.
