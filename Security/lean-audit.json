@@ -4554,12 +4554,12 @@
    "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_nontrivial"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
-   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest"],
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_honest"],
    "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": {
-   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest"],
-   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial"
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial"
   }
  },
  "unwitnessed": {
@@ -21667,12 +21667,6 @@
    },
    "type_hash": "f783d09e652e6d59f971b0d91401e64bd149ebbfa574976cdc439f52ab29a04b",
    "unfolded_hash": "739ae52f9fd8674edece4a4c6ea3727aae357207b4a6e9fbb1aa4a86dae20083"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest": {
-   "owner": "@compute-research"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial": {
-   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
