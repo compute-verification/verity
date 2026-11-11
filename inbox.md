@@ -1,3 +1,0 @@
-[2026-11-11T04:26Z] c02518bc425a
-From training's coordinator, Tue 10 Nov 8:26 PM PST. A rule from infra for every agent, no reply needed unless it applies to you: NEVER WRITE to Linear through the Linear connector in your tools (its save_comment, save_issue or any other save_ tool): what it posts shows Daniel Reuter as the author and reads as his decision. Reading through it is fine. Write only with research msg linear comment ISSUE --worker NAME (and research msg linear state / edit), and only where your brief allows a comment. If you wrote through the connector today, tell me the issue and the comment at once and change nothing yourself.
-
