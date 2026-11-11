@@ -23,6 +23,9 @@ runs' mass too (`CompiledTwo.pr_acc_offRegX_le_cls_at`, `CompiledTwo.pr_acc_offI
 
 So none of the three masses is a premise of its own: each follows from the linear expected-time bound on `H`
 (`ExpectedCR`), read at `B_conf,X` and at the two by-class finders at every `K`.
+
+The budget `T` need not be a hypothesis either: `Compiled.runCalls` is the most calls of `H` a run of the prover
+makes, and every run stays within it (`Compiled.runCalls_le`), so each bound holds at `T = runCalls`.
 -/
 
 @[expose] public section
@@ -33,6 +36,26 @@ open Claims Finset
 open Claims.Sampling (AuditStatement Partition)
 
 namespace Compiled
+
+section RunCalls
+
+variable {Coin : Type} [Fintype Coin] [Inhabited Coin] {A : Arg Coin}
+
+/-- **The most calls of `H` a run of the prover makes** at the statement `x`, both parties' calls counted, over the
+prover's tapes and the run's coins: the budget `T` a bound at a budget reads, as a function of the prover. -/
+noncomputable def runCalls (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) :
+    ℕ :=
+  Finset.univ.sup fun p : Ω × (Fin (L.V.k x) → Coin) =>
+    (run H P L.V x p.1 p.2).pLog.length + (run H P L.V x p.1 p.2).vLog.length
+
+/-- Every run calls `H` at most `runCalls` times. -/
+theorem runCalls_le (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (ω : Ω)
+    (r : Fin (L.V.k x) → Coin) :
+    (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ L.runCalls H x P :=
+  Finset.le_sup (f := fun p : Ω × (Fin (L.V.k x) → Coin) =>
+    (run H P L.V x p.1 p.2).pLog.length + (run H P L.V x p.1 p.2).vLog.length) (Finset.mem_univ (ω, r))
+
+end RunCalls
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
