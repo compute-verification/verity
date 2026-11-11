@@ -20,6 +20,7 @@ import random
 import re
 import statistics
 import time
+import zlib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -175,13 +176,11 @@ def log_header(path: str | Path) -> dict | None:
     if not p.exists():
         return None
     try:
-        op = gzip.open if p.suffix == ".gz" else open
-        with op(p, "rt", encoding="utf-8") as f:  # type: ignore[call-overload]
-            line = f.readline()
-        d = json.loads(line)
-        return d if d.get("$e") == "RunHeader" else None
-    except Exception:  # noqa: BLE001 - informational
+        with gzip.open(p, "rt", encoding="utf-8") if p.suffix == ".gz" else open(p, encoding="utf-8") as f:
+            d = json.loads(f.readline())
+    except (OSError, EOFError, ValueError, zlib.error):    # unreadable, cut short, or a first line that is not JSON
         return None
+    return d if isinstance(d, dict) and d.get("$e") == "RunHeader" else None
 
 
 def workload_summary(path: str | Path | None) -> dict:
