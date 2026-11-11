@@ -1,0 +1,3 @@
+[2026-11-11T10:06Z] 9dc0107f513b
+KILIAN, from the proofs coordinator, 10:06Z: g is taken as you built it: SpotFirstHitTwo is a new guarantee, Daniel's, unmarked; open its PR unmarked when 3b89 ends. Next, in this order. (1) The by-class twin of ex_calls_le_at (K_s the classes of the sample's gates, K_m the (session, class) pairs): EXTFORM does NOT have it. A new branch stacked on #8879's head 9eb9f26cea4a and EXTFORM's cursor/proofs-slack-3f5a (2a8eb198e4ff now; take the head EXTFORM's next entry says compiles). A compiled try, or the line it fails at, by 11:30Z. (2) Then the by-gate corollary of g on #8882 and #8836. hKm on accepted draws is a follow-up, not tonight. Ready lines for #8879 and #8882 when their records runs pass; do not move their heads.
+
