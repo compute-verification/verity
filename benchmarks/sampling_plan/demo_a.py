@@ -1,5 +1,5 @@
 """Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a 6.35 s step (its
-commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`examples/h200/e2e_h200/plan.py`'s
+commit 1.0 s of it), on the map of every subcircuit to a Definition Flock stages (`archive/examples/h200/e2e_h200/plan.py`'s
 `Map`) with PoUW's tiles as one more subcircuit, planned by `optimize.frontier` under the demo's objective (its work half
 circuit size): half skipped work, half leaked output bits.
 
@@ -61,9 +61,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h200 as H  # noqa: E402
 
-from verity.core.protocols.pouw.window import eps_at  # noqa: E402
-from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
-from verity.core.protocols.spot.optimize import (  # noqa: E402
+from verity.protocols.pouw.verifier.window import eps_at  # noqa: E402
+from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
+from verity.protocols.spot.optimize import (  # noqa: E402
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 
