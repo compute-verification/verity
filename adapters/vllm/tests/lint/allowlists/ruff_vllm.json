@@ -1,6 +1,15 @@
 {
   "rule": "ruff with vLLM's rules (adapters/vllm/tests/lint/ruff_vllm.toml)",
   "entries": [
+    {"file": "tests/commitments/test_leaves.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/commitments/test_vllm_v1.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "verity_vllm/commitments/leaves.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "verity_vllm/commitments/vllm_v1/__init__.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "verity_vllm/commitments/vllm_v1/__init__.py", "kind": "UP031", "symbol": "stream_ctx_digest", "detail": "Use format specifiers instead of percent format"},
+    {"file": "verity_vllm/commitments/vllm_v1/__init__.py", "kind": "UP031", "symbol": "thread_ctx_digest", "detail": "Use format specifiers instead of percent format"},
+    {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
+    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "conftest.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/call_boundary_programs.py", "kind": "B023", "symbol": "dense_program.each", "detail": "Function definition does not bind loop variable `ks`"},
     {"file": "tests/acquire/call_boundary_programs.py", "kind": "B023", "symbol": "dense_program.each", "detail": "Function definition does not bind loop variable `s`"},
