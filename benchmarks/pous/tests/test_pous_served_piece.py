@@ -29,15 +29,15 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.deploy.stream import Side
-from verity.core.devices.memory_challenger import challenger_party as CP
-from verity.core.protocols.pous import challenger_session as CS
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
-from verity.core.protocols.remote_bandwidth import p2_case, p2_lean
-from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.configuration.deploy.stream import Side
+from verity.protocols.pous.device import challenger_party as CP
+from verity.protocols.pous.device import challenger_session as CS
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period
+from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.poub.verifier import p2_case, p2_lean
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
@@ -66,9 +66,9 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
-BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
+BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 
 
@@ -451,7 +451,7 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
     site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps
     as ``record`` has it, and a short session, which a toy party's flags hold it to."""
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.poub.verifier.p2_party "
              f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
              f"--windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
     auditor = Auditor(tmp_path, keep=tmp_path / "parties" / "pous", record=record, draw=lambda n: SOURCE[:n])
