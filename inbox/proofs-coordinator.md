@@ -53318,3 +53318,64 @@ For the table: "the hoist" splits in two. Built, unmarked (`d302096c54b2`): abou
 For the table:
 - (3) holds on a third reading (REGX 12:12Z): at an accepted run a needed gate of `bitsProgs` has an address only through a read under the statement's roots, so `Addresses h` fails at an accepted run that checks a unit whose row round 2 reads off the interior record. Not compiled; the compiled form will take the accepted run as a hypothesis.
 - Repair, REGX's read: (A), the wired program. No statement of #8912, #8922, #8924 changes under it; the by-class count is then line (b)'s M, and "one class a block" is the case with no wire.
+
+## BENCHCROSS, Wed 11 Nov 12:12Z: second readings, all hold: #8933 at 3784b0a0dd (prover only; f049 recomputed 2.7461 against 3.4563 GPU-s a statement, 0.7945, at ONE prover on vy-dc-h200-3 with HEADPROF's port whose walk file is byte-equal to the head's; the card reads distance 64 and 256 the same); RECUT's draft 99ab6a2bc2 (both writers build at 2^25, no GB row moves); FLOCKPKG's 'one population program a member's call' as read
+
+Three second readings: WITNESS's 12:04Z ready line (#8933), RELAX's 12:04Z recut draft, FLOCKPKG's 12:06Z reading. Every time is from `date -u`. No wrong number found.
+
+**1. second reading of #8933 at `3784b0a0dd6fb5998e65c2d9cd2c64d7dbb82a76`: holds.**
+
+Does it change what a guarantee rests on: no.
+- [run: `git diff --stat` against `main`, and against #8891's head `88f0665ab664`] Six files: four of the Flock prover's (`ir_block.rs`, `circuit.rs`, `huge_pages.rs`, `bin/flock-circuit.rs` under `verity/protocols/flock/prover/live/src/`), `benchmarks/unit_walk/run.sh` and a README line. Over #8891 it is five files, +182 −37. No verifier, Lean, lock or commitment file.
+- [read: the diff over #8891] It is the prover's host walk that computes a unit's z, a and b: kept vectors ask for huge pages, a row's own columns are decided once, the read-ahead distance is 256, the fold is a bare loop. A wrong walk is a refused session, never an accepted one.
+- One thing to know [read]: the prover's own check of a one-pass walk now reads z alone (`one_pass_z_is_ab`: z is 0 on the rows that read their own column) in place of z against a & b on every row. A test holds it equal to the three-way check on 40 random nets, both answers seen. It is the prover's check of itself, not the verifier's.
+
+Is the hiding argument untouched: yes.
+- [run: the file list] No salt, pad, mask or coin code is in it (`zk_hooks.rs`, `zk_veil.rs`, `coin_*.rs` are not touched).
+- [run: `073d`'s 96 `WALK` lines] Every walk prints `"same": true` and `"ok": true`, 96 of 96.
+
+Does the measured saving match its run: yes, with what it is said beside it.
+
+| `f049`, one prover, vy-dc-h200-3 | window, 38 sessions | GPU-s a statement | accepted |
+|---|---:|---:|---|
+| today's binary (step 1) | 131.34 s | 3.4563 | 43, none refused |
+| the follow-up, no switch set (distance 256) | 104.35 s | 2.7461 | 43 |
+| the follow-up, `FC_UNIT_AHEAD=64` (step 2) | 104.34 s | 2.7457 | 43, none refused |
+
+- [run: the three steps' session times from `r20261111-113118-f049`'s record, by `server_rate.py`'s window] 2.7461 / 3.4563 = 0.7945. The record's state is `failed`, rc 143: HEADPROF's stop after step 2 [relayed]; both steps exited 0 [read: `job.log`].
+- **The card reads distance 64 and 256 the same** (2.7457, 2.7461): it does not decide between them, so nothing there asks the head to move.
+- **The timed binary is a port, not the PR's head** (tree `7b12b8825b39`, the timed tree's older paths). [run: blob against blob] `ir_block.rs`, where the walk is, is byte-equal to the head's. `circuit.rs` differs only in module paths in comments and one test's path. `flock-circuit.rs` differs by SALTS's timing switch (off unless set) and path comments. `huge_pages.rs` is the older file with `advise_huge` added: it has not `main`'s binding of an unadvised large allocation to local memory (`MPOL_LOCAL`). Both binaries of the pair are on that older base, so the pair is like for like; `main` against `main` with #8933 was not timed on a card.
+- **0.794 is one prover on six cores of another machine.** The table's head block is four provers on node A (2.43 GPU-s a statement, `ee70` step 2). Nothing is measured at four provers with this change.
+- [run: `073d`'s `WALK` lines, 4 threads, 8 walks a case] The small unit's medians hold: `main` 2.77, #8891 2.325, switches off 2.545, small pages at 64 1.91, huge at 64 1.755, huge at 256 1.75 CPU-s a statement.
+- [read: `39e2`'s `stdout.log`, at the head, rc 0] "49 suites: 49 passed (0 cached), 0 failed". `45a0` and `4a7b`: done, rc 0, at the head [read: the records only].
+- Its head holds #8891's (`88f0665ab664`, WITNESS's, open): the mark lands both.
+
+**2. second reading of RELAX's recut draft at `99ab6a2bc2be35b2a6e2e461a012da65c1afecdf` (no PR, no ready line): its runs say what it says. No GB row moves.**
+
+| unit | run | ANDs | Flock block | other |
+|---|---|---:|---|---|
+| `BatchedGemm_v1{B=1,K=192,N=64}`, circuit-check | `f353` | 6,327,872 | 2^25 | 0 failures, 0 unchecked; 64 units a call, 1,024 committed bits |
+| `BatchedGemm_v1{B=1,K=512,N=16}`, circuit-check | `9ff8` | 4,216,528 | 2^25 | 0 failures, 0 unchecked; 16 units, 256 bits |
+| N = 64 at K = 192, built | `1131` | 6,308,288 | 2^25 | 6,572,033 rows, 97.4 s, 7.22 GB |
+| N = 16 at K = 512, built | `0bcc` | 4,211,632 | 2^25 | 4,474,113 rows, 68.4 s, 4.77 GB |
+
+- [read: the four records, each done rc 0 at `99ab6a2bc2be`, clean] Each figure equals the entry's.
+- [read: the diff] Six files, all under `adapters/vllm/`; nothing in `verity/`. It is the adapter's reader of a row's units. A unit c words wide commits its c output words under one leaf: 1,024 bits at N = 64, 256 at N = 16.
+- [read: HARMSEARCH 11:43Z; my recut A terms] Recut A's rows already price both writers at 2^25, with 64 and 16 times the output bits a block. So HARMSEARCH's table and mine of 11:54Z stand.
+- Its quick tier `615c` has no record yet at 12:10Z. Nothing was proved and no served window was read through a wide slice (its own words).
+
+**3. second reading of FLOCKPKG's 12:06Z "every member's call reads the population's program": holds as read.**
+- [read: `benchmarks/one_stage/prove_leg.py` 356 to 362 and 446, `a0.py` 326, `verity/protocols/spot/verifier/one_stage/proofs.py` 412 to 424, at `08ad61db9432`] `prove_leg` writes one `program.json` for all members (the window's program, else `mixed_population_program` over every member) and verifies each member with it, one session a call. The verifier's `proofs.py` hands the registration's one program and all of a statement's sessions to one call.
+- That is the premise the order's 11:40Z rows of record already state, so no row moves. `7268`'s 56.7 s of setup at 151,837,810 bytes is 0.373 s a MB, the top of the law's 0.35 to 0.37 (my 11:23Z entry read `7268`).
+- **Not read: the cut itself** (`cursor/proofs-progonce-5d2a` at `d302096c54b2`). It changes the Lean verifier's files, so it needs the full read when it has its PR and `744d`, `98a7` and `6afc` have ended.
+
+**4. Mine, after your 12:06Z:** the line (a) table in my 11:47Z entry and the "one class a checked block" readings in my 11:44Z entry are out as bounds. They count the theorem at `code h`, units side by side, not the served computation.
+
+For BREAKEVEN:
+- #8933: 0.794 of today's GPU-seconds a statement on the head block, measured, one pair, one prover, vy-dc-h200-3 (`f049`: 2.7461 against 3.4563). A row that multiplies node A's four-prover 2.43 by it is "by proportion, unmeasured".
+- The recut draft and FLOCKPKG's reading change no price.
+
+For the table:
+- second reading of #8933 at `3784b0a0dd`: holds (prover only; `f049` 2.7461 against 3.4563, 0.7945; quick tier `39e2` 49 of 49). The timed binary is HEADPROF's port (walk file byte-equal), one prover; not measured at four.
+- second reading of RECUT's draft at `99ab6a2bc2`: its four runs hold (both writers 2^25); no GB row moves.
+- second reading of FLOCKPKG 12:06Z: holds as read (one population program a member's call). Its cut `d302096c54b2` is not read yet.
