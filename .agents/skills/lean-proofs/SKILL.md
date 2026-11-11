@@ -40,16 +40,16 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **The edit loop is `verity lean try FILE`** (the README): `lake env lean FILE` in FILE's package against its built
   imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), with lean's status. Lean's exit 0
-  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond `propext`,
-  `Classical.choice` and `Quot.sound` (`sorryAx` too). After editing a file others import, `lake build` its module, then
-  try an importer. Try one that adds or renames declarations with `--siblings --on auto` too: a name another module
-  declares otherwise clashes first at the package root, an hour into a records run.
+  isn't proof: the axiom probe's last line names each theorem of FILE whose axioms go beyond the standard three
+  (`sorryAx` too). After editing a file others import, `lake build` its module, then try an importer. Try one that adds
+  or renames declarations with `--siblings --on auto` too: a name another module declares otherwise clashes first at
+  the package root, an hour into a records run.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
-  check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
+  check (`check.py PKG`) is the merge queue's; run it by hand only on a machine of your own.
 - **The fast path is for the lock and the mark**, once `verity lean try` passes: it regenerates PKG's records and its
-  requirers', with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s
+  requirers', with the `--update` printout the landing DM carries, with no build of your own (`lean_changed.py`'s
   docstring).
 
   ~~~text
@@ -57,10 +57,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
     python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
-  Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
-  `lean-audit/record/` (its log says over what). Its result, `lean-fast/v1`, no merge check accepts. It repairs a slot
-  tree another run left mid-way: never delete or copy one.
+  `--on auto` places it: never name a node or race one run on two (cancel a duplicate). Don't wrap it in `slot.py`:
+  the runner takes the slot. Commit each record it kept under `lean-audit/record/` (its log says over what). Its
+  result, `lean-fast/v1`, no merge check accepts. It repairs a slot tree left mid-way: never delete or copy one.
+  `--allow CODE:ENTRY` leaves a finding ruled open red: exit 3, no pass, its record in `allowed-record/`.
 - **A full record**: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --
   python3 tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at
   `lean-audit/audit-TAG/lean-audit.json`; below a package's memory floor check.py refuses and prints the line to run.
