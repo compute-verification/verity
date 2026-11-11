@@ -7,7 +7,8 @@ names), so one binding's edit changes only the slices that read what it changed,
 listed here.
 
 Bindings are read from the binding files' syntax alone (`ast`), as circuit-check names them: each sidecar's (`*.circuit-check.py`
-under a regular package of `sidecars.PACKAGES`, named for its module as `sidecars.discover` names it) root functions
+in a regular package under one of the directories `sidecars.discover` searches, `_packages`, named for its module as it names
+it) root functions
 ``_X_roots``, its ``_model_roots`` (every model one binding) and each ``TEMPLATE_PARAMS`` entry; `targets.py`'s own root
 functions, the templates checked at their example (``TEMPLATE_PARAMS``) and the registered roots (``<registered>``).  Each task's
 inputs are what any run of the catalog reads (`base`): every run loads every registry and binding file, so a binding's own
@@ -117,23 +118,34 @@ def lookups(files: list[str], where: dict) -> str:
         "kinds": {p: "file" if p in have else "dir" for p in sorted(kinds) if p in have or p in dirs}}))
 
 
-def _packages(root: Path) -> set[str]:
-    """The top-level names of `sidecars.PACKAGES`, read from its source."""
+def _tuple(root: Path, name: str) -> tuple[str, ...]:
+    """`sidecars`' tuple ``name``, read from its source."""
     for node in ast.parse((root / SIDECARS).read_text()).body:
-        if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["PACKAGES"]:
-            return {p.partition(".")[0] for p in ast.literal_eval(node.value)}
-    raise GraphError(f"{SIDECARS}: no PACKAGES tuple to find the sidecars' packages by")
+        if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == [name]:
+            return tuple(ast.literal_eval(node.value))
+    raise GraphError(f"{SIDECARS}: no {name} tuple to find the sidecars' packages by")
 
 
-def module(path: str, have: set[str], tops: set[str]) -> str | None:
+def _packages(root: Path, have: set[str]) -> tuple[str, ...]:
+    """The directories `sidecars.discover` searches (`sidecars._roots`), each with its slash: the top-level packages of
+    `sidecars.PACKAGES`, at the root, and each package of `sidecars.TREES` (``<tree>/<stack>/<package>``) that registers
+    itself by a sidecar of its own module."""
+    own = (f"/__init__{SUFFIX}.py", f"/__init__{SUFFIX}.json")
+    out = {p.partition(".")[0] + "/" for p in _tuple(root, "PACKAGES")}
+    for tree in _tuple(root, "TREES"):
+        out |= {f.rpartition("/")[0] + "/" for f in have if f.startswith(f"{tree}/") and f.count("/") == 3 and f.endswith(own)}
+    return tuple(sorted(out))
+
+
+def module(path: str, have: set[str], tops: tuple[str, ...]) -> str | None:
     """The module sidecar ``path`` binds, named from the top of the regular packages it is in (``__init__.py`` all the way
-    down), as `sidecars.discover` names it; None outside one of ``tops``."""
+    down), as `sidecars.discover` names it; None in no regular package, or under none of the directories ``tops``."""
     parts = path.split("/")
     i = len(parts) - 1
     while i > 0 and "/".join(parts[:i]) + "/__init__.py" in have:
         i -= 1
     pkg, stem = parts[i:-1], parts[-1][:-len(f"{SUFFIX}.py")]
-    if not pkg or pkg[0] not in tops:
+    if not pkg or not path.startswith(tops):
         return None
     return ".".join(pkg if stem == "__init__" else [*pkg, stem])
 
@@ -170,7 +182,8 @@ def entries(path: str, source: str) -> list[str]:
 
 def bindings(root: Path, files: list[str]) -> dict[str, tuple[str, str]]:
     """{binding name, as `circuit-check --binding` takes it: (its binding file, its entry)} for the tree at ``root``."""
-    have, tops = set(files), _packages(root)
+    have = set(files)
+    tops = _packages(root, have)
     out = {name: (TARGETS, entry) for name, entry in (REGISTERED, (EXAMPLES, EXAMPLES))}
     out.update({e: (TARGETS, e) for e in entries(TARGETS, (root / TARGETS).read_text()) if not e.startswith(f"{EXAMPLES}:")})
     for f in files:

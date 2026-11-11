@@ -137,7 +137,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
     "verity_vllm.acquire.sources.served_compiled_source",
     "verity_vllm.acquire.sources.taps",
-    "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
@@ -251,7 +250,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.manifest.format",
-    "verity_vllm.query.module_body",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
 })

@@ -1,5 +1,5 @@
-"""Batch invariance of the request-major compiler: the templates a registration's compilations call, for `circuit-check
---batch`, and the rule `steps.compile_steps` holds every compilation to (`check_compiled`).
+"""Batch invariance of the request-major compiler: the templates a registration's compilations call, for
+`check.batch.check`, and the rule `steps.compile_steps` holds every compilation to (`check_compiled`).
 
 A request's outputs may depend on its own certified inputs (its prompt, its seed) and on what the registration fixes (weights,
 tables, constants), never on its batch-mates. Beyond a request-owned Input whose value the batch picks, which the labels below

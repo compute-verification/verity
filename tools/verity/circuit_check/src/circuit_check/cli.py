@@ -17,7 +17,6 @@
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
-    circuit-check --batch                                           batch invariance of the v0 registration's templates
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
 ``"mode": "by-calls"`` and names the target each callee relies on.  A family a sidecar registers over a range of statics
@@ -1318,41 +1317,6 @@ def _ambient_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if any(t["failures"] for t in rep["targets"]) else 0
 
 
-#: the frozen v0 registration ``--batch`` checks: the engine profile's role and the row-id device token
-BATCH_REGISTRATION = ("LLAMA32_1B", "rtxpro6000")
-
-
-def batch(templates: Callable[[], list] | None = None) -> dict:
-    """``--batch``'s report: batch invariance (`verity_vllm.check.batch`: (a) separable, (b) shape-invariant) of each template
-    ``templates()`` gives, by default every one a request-major compilation of `BATCH_REGISTRATION` calls
-    (`verity_vllm.program.predict.batch.templates`), each verdict held to the one declared beside it."""
-    from verity_vllm.check import batch as BI
-    if templates is None:
-        from verity_vllm.program.predict import batch as PB
-
-        def templates() -> list:
-            return PB.templates(PB.registered_phi(*BATCH_REGISTRATION))
-    t0 = time.time()
-    vs = BI.check(templates())
-    return {"schema": "verity-circuit-check/batch/v1", "verdicts": [v.to_json() for v in vs], "table": BI.report(vs),
-            "seconds": round(time.time() - t0, 1)}
-
-
-def _batch_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
-    if a.all or a.targets:
-        ap.error("--batch checks the v0 registration's templates: give no target")
-    rep = batch()
-    print(rep["table"])
-    bad = [v for v in rep["verdicts"] if not v["ok"]]
-    for v in bad:
-        print(f"FAIL {v['template']}: declared {v['expect']}, got {v['got']}")
-    if a.out:
-        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
-    print(f"circuit-check --batch: {len(rep['verdicts'])} template(s), {len(bad)} not as declared, {rep['seconds']} s"
-          + (f", report {a.out}" if a.out else ""))
-    return 1 if bad else 0
-
-
 #: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
 #: registries, which build there whatever else they build on first use
 PREBUILD = ("import json\n"
@@ -1459,18 +1423,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ambient", action="store_true",
                     help="lower each target in a plain and a perturbed interpreter instead of running the property checks "
                          "(circuit_check.ambient): one text, and no read of the environment, a clock or an unseeded draw")
-    ap.add_argument("--batch", action="store_true",
-                    help="check batch invariance of every template the request-major compiler emits for the frozen v0 registration "
-                         "instead of running the property checks (cli.batch): each verdict held to the declared one")
     a = ap.parse_args(argv)
-    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine, a.records_only, a.bindings))) > 1:
-        ap.error("--structural, --ambient, --batch, --combine, --records-only and --bindings are six modes: give one")
+    if sum(map(bool, (a.structural, a.ambient, a.combine, a.records_only, a.bindings))) > 1:
+        ap.error("--structural, --ambient, --combine, --records-only and --bindings are five modes: give one")
     if a.structural:
         return _structural_main(a, ap)
     if a.ambient:
         return _ambient_main(a, ap)
-    if a.batch:
-        return _batch_main(a, ap)
     if a.combine:
         return _combine_main(a, ap)
     if a.jobs is not None and a.jobs < 0:
