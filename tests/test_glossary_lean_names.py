@@ -1,7 +1,7 @@
 """Every Lean name the one symbol table gives exists (`GLOSSARY.md`, "Notation"), and every one the security argument's
-status table gives (`Security/README.md`, "Where each step stands").
+status table gives (`security/README.md`, "Where each step stands").
 
-A row's Lean column names declarations of the tree's Lean (`Security/` and the Lean packages under `verity/`), written
+A row's Lean column names declarations of the tree's Lean (`security/` and the Lean packages under `verity/`), written
 in backticks, full (`Verity.Circuit`) or as a suffix of the full name (`Circuit.size`); a structure's field counts
 (`Verity.RegisteredCircuit.θ`), and so does a namespace (`Accounting.Compose`). A part of the cell, between semicolons, that
 says "not yet in Lean" is not checked until that lands.
@@ -13,8 +13,8 @@ import re
 from test_repository import ROOT, _tracked
 
 GLOSSARY = "GLOSSARY.md"
-SECURITY = "Security/README.md"
-LEAN_ROOTS = ("Security/", "verity/")
+SECURITY = "security/README.md"
+LEAN_ROOTS = ("security/", "verity/")
 
 _DECL = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial|unsafe)\s+)*"
                    r"(?:def|abbrev|structure|class|inductive|theorem|lemma|instance|opaque)\s+([^\s(:{\[]+)")
