@@ -355,7 +355,7 @@ def test_what_is_a_retired_term() -> None:
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
-    assert holds("verity/a.py") and holds("Security/A.lean") and holds("README.md") and holds("a/b.toml")
+    assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
     assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []

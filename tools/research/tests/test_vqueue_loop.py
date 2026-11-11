@@ -1071,7 +1071,7 @@ def test_a_land_at_an_older_head_carries_to_its_merge_of_main_as_drive_toml_s_ve
 
 @pytest.mark.parametrize("change, because", [
     ("a.txt", "authored: {new} changes a.txt"),
-    ("Security/Proofs/P.lean", "authored: {new} changes Security/Proofs/P.lean"),
+    ("security/Proofs/P.lean", "authored: {new} changes security/Proofs/P.lean"),
     ("held", "held by other (the merge breaks a) at {new}")])
 def test_a_head_that_changes_more_than_its_merge_of_main_or_is_held_carries_no_land(env, change, because):
     """drive's safety checks carry over: a commit of the PR's own since the land (a Lean one too) or a hold at the head keeps
