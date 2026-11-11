@@ -106,8 +106,8 @@ class Prover:
         self.clock.now += STEP_NS
         return ps.root
 
-    def open(self, t, draws):
-        out = [self.held.open(self.passes[t, i], p) for i, p in draws]
+    def open(self, t, sampled):
+        out = [self.held.open(self.passes[t, i], p) for i, p in sampled]
         return [dataclasses.replace(o, leaf_salt=o.leaf_salt[:-1]) for o in out] if self.garble else out
 
     def end(self, commitment, openings) -> None:
