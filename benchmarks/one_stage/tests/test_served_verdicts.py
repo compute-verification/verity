@@ -1195,6 +1195,58 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert got["pouw"]["shares_at_tensor_clock"]["declared_linears"] == tensor["declared_linears"]
 
 
+def test_a_pearlplus_piece_holds_the_execution_phase_as_the_challenger_saw_it_and_what_each_check_cost(tmp_path, live):
+    """The piece's document holds the execution phase on the auditor host's clock (`execution_phase`): its salt session's
+    reserve, open and end and its Pearl-C period's open and close, read from the ledger the coins' check fetched, with the
+    seconds from the reserve to the end; another session's and another period's entries are not its. And it holds what
+    Pearl+'s Python check and Lean check each cost where they ran (`pearlplus_checks`). The piece's line and the published
+    form carry both. A ledger without the session's end gives no span and says what it lacks, and a piece with no ledger
+    (its coins unchecked) and no check documents holds none."""
+    _calls, args = live
+    served, verified = _pearlplus_run()
+    served["coins"]["reserved"] = {"session": SID, "period": "p1"}
+    python, lean = {"seconds": 12.5, "node": "served", "jobs": 8}, {"seconds": 3.25, "node": "served"}
+
+    def entry(kind, session, **body):
+        return json.dumps({"kind": kind, "session": session, "body": body})
+
+    ledger = [entry("period-open", None, period="p1", opened_utc="2026-01-02T17:59:58Z"),
+              entry("reserve", "other", started_utc="2026-01-02T17:00:00Z"),
+              entry("reserve", SID, started_utc="2026-01-02T18:00:05Z", expires_utc="2026-01-02T18:30:05Z"),
+              entry("open", SID, started_utc="2026-01-02T18:00:09Z"),
+              entry("end", "other", ended_utc="2026-01-02T17:30:00Z"),
+              entry("end", SID, ended_utc="2026-01-02T18:07:45Z"),
+              entry("period-close", None, period="p1", closed_utc="2026-01-02T18:08:10Z"),
+              entry("period-open", None, period="p2", opened_utc="2026-01-02T19:00:00Z")]
+    (piece := tmp_path / "pieces" / "pouw").mkdir(parents=True)
+    (piece / "ledger.jsonl").write_text("\n".join(ledger) + "\n")
+    (piece / S.PEARLPLUS_LEAN_CHECK).write_text(json.dumps({"check_cost": lean}))
+    doc = S.pearlplus(piece, served, {**verified, "check_cost": python}, **args)
+    phase = {"clock": S.PHASE_CLOCK, "start_utc": "2026-01-02T18:00:05Z", "end_utc": "2026-01-02T18:07:45Z", "seconds": 460,
+             "session": {"reserved_utc": "2026-01-02T18:00:05Z", "opened_utc": "2026-01-02T18:00:09Z",
+                         "ended_utc": "2026-01-02T18:07:45Z"},
+             "period": {"opened_utc": "2026-01-02T17:59:58Z", "closed_utc": "2026-01-02T18:08:10Z"}, "why": None}
+    assert doc["verdict"] == "accept" and doc["execution_phase"] == phase and doc["checks"] == {"python": python, "lean": lean}
+    assert json.loads((piece / "development.json").read_text())["execution_phase"] == phase
+    line = S.development_line(doc)
+    assert line["execution_phase"] == {"clock": "the auditor host's", "start_utc": phase["start_utc"],
+                                       "end_utc": phase["end_utc"], "seconds": 460, "why": None}
+    assert line["checks"] == doc["checks"]
+    public = S.public_json(doc)
+    assert (public["execution_phase"], public["checks"]) == (phase, doc["checks"])
+    assert S.public_line(f"POUW-DEV {json.dumps(line, sort_keys=True)}").count('"seconds": 460') == 1
+
+    (piece / "ledger.jsonl").write_text("\n".join(x for x in ledger if '"end"' not in x) + "\n")
+    cut = S.pearlplus(piece, served, verified, **args)["execution_phase"]
+    assert (cut["start_utc"], cut["end_utc"], cut["seconds"]) == (phase["start_utc"], None, None)
+    assert cut["why"] == "the ledger has no entry for the session's ended_utc"
+    (piece / "ledger.jsonl").write_text("not a ledger\n")
+    assert S.pearlplus(piece, served, verified, **args)["execution_phase"]["why"].startswith("the ledger can't be read: ")
+    none = S.pearlplus(tmp_path / "plain", served, verified, **args)
+    assert none["execution_phase"] is None and none["checks"] == {"python": None, "lean": None}
+    assert S.development_line(none)["execution_phase"] is None
+
+
 def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shares(tmp_path, capsys, live):
     """The same load served with no pass retained (``serve --no-retain``) gives the shares' ``unretained``: the retained
     run's declared MACs over its wall at each reading, and the walls' ratio. One that served another load, or retained its
