@@ -36,8 +36,6 @@ namespace SpotFlock
 
 open Claims Claims.Sampling
 
-variable {wideLeaf : Bool}
-
 variable (h : Held)
 
 theorem regMatchesTwo_code : SamplingDeploy.RegMatchesTwo ((base h).atOrder (order h)) (reg h) (two h) := regMatchesTwo h
@@ -58,7 +56,7 @@ theorem sessionsIn_at (x : Msg) (u : ℕ) (v : Seen) (xS : Msg) (vS : Seen)
   · obtain ⟨a, b, c, d, e⟩ := h4 st hst
     exact ⟨a, b, c, d, e⟩
   · show FlockDeploy.N₀ true xS =
-      ((shapeOf (h.xS₀ (templateOf h.ms u))).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 wideLeaf m).d).sum
+      ((shapeOf (h.xS₀ (templateOf h.ms u))).map fun p => (2 : ℝ) ^ (Claims.Flock.zkLevel0 p.1 p.2).d).sum
     rw [← hshape]
     unfold FlockDeploy.N₀ shapeOf
     rw [FlockDeploy.tables_eq hset, hset]
