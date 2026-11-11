@@ -615,7 +615,7 @@ def test_trains_with_the_same_lean_inputs_share_one_regeneration(tmp_path, monke
 def _flock_repo(tmp_path: Path, rustflags: str, pattern: str | None = None) -> Path:
     repo = tmp_path / "flock"
     files = {"verity/protocols/flock/agreement/upstream.json": json.dumps({"upstream": {"sha256": "0" * 64, "rustflags": rustflags}}),
-             "verity/ml/flock/src.rs": "fn main() {}", "verity/protocols/flock/prover/README.md": "flock", "docs.md": "docs",
+             "verity/protocols/flock/prover/src.rs": "fn main() {}", "verity/protocols/flock/prover/README.md": "flock", "docs.md": "docs",
              "tools/verity/check/tool.py": 'CHECK = Tool(name="check", merge_requires={"lean-agreement": ["verity/protocols/flock/prover/", "!README.md"]})\n'}
     if pattern is not None:
         files["tools/verity/check/preflight.py"] = f"import re\nAVX512 = re.compile({pattern!r})\n"
@@ -636,12 +636,12 @@ def _change(repo: Path, path: str) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("rustflags,pattern,path,want", [
-    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/ml/flock/src.rs", False),   # today's pin
-    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/ml/flock/src.rs", True),
+    ("-C target-cpu=x86-64-v3", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/flock/prover/src.rs", False),   # today's pin
+    ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/flock/prover/src.rs", True),
     ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "docs.md", False),                # no agreement runs
     ("-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512", "verity/protocols/flock/prover/README.md", False),
-    ("-C target-cpu=x86-64-v4", r"never", "verity/ml/flock/src.rs", False),                                     # the tree's own rule
-    ("-C target-cpu=native", None, "verity/ml/flock/src.rs", True),                                            # a tree before preflight.py's AVX512
+    ("-C target-cpu=x86-64-v4", r"never", "verity/protocols/flock/prover/src.rs", False),                                     # the tree's own rule
+    ("-C target-cpu=native", None, "verity/protocols/flock/prover/src.rs", True),                                            # a tree before preflight.py's AVX512
 ])
 def test_a_check_asks_for_avx512_only_when_its_tree_says_so(tmp_path, rustflags, pattern, path, want):
     from research.jobs.cli import needs_avx512
@@ -658,7 +658,7 @@ def test_a_flock_file_whose_name_git_quotes_still_asks_for_avx512(tmp_path):
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    (repo / "verity" / "ml" / "flock" / "é.rs").write_text("fn f() {}")
+    (repo / "verity" / "protocols" / "flock" / "prover" / "é.rs").write_text("fn f() {}")
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "é")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
@@ -671,7 +671,7 @@ def test_a_check_asks_for_avx512_for_a_file_renamed_out_of_the_agreements_paths(
 
     repo = _flock_repo(tmp_path, "-C target-cpu=x86-64-v4", r"target-cpu=(native|x86-64-v4)\b|avx512")
     base = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "mv", "verity/ml/flock/src.rs", "src.rs")
+    _git(repo, "mv", "verity/protocols/flock/prover/src.rs", "src.rs")
     _git(repo, "commit", "-qm", "move")
     assert needs_avx512(_git(repo, "rev-parse", "HEAD"), base, repo) is True
 
