@@ -1,6 +1,7 @@
 """`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
 merge bases, when it has several), each queue merge on its own, no ratchet growing (a counted kind by its total, which a move
-between its keys keeps; the other entries by number, per ratchet, or by an entry's count, P10's sizes among them), a new,
+between its keys keeps, and one keyed anew at its total is compared in the base's form; the other entries by number, per
+ratchet, or by an entry's count, P10's sizes among them), a new,
 moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
 ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the repository's ruff lint beside it
@@ -244,6 +245,63 @@ def test_a_kinds_total_may_not_grow_and_the_failure_names_the_totals_and_the_key
     [c] = G.gate("main", "fresh")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total")
     assert c["fix"] == [f"{TYPED}: {G.key(one)} 0 -> 1"]
+
+
+TYPED_LINT = "adapters/vllm/tests/lint/test_typed_records.py"
+#: a toy typed_records: the `or []` reads under verity_vllm, counted per package, or, once PER is "file", per file
+COUNTING_LINT = '''\
+import json
+from collections import Counter
+from pathlib import Path
+
+NAME = "typed_records"
+PER = "package"
+HERE = Path(__file__).resolve().parent
+
+
+def test_no_new_violations():
+    found = Counter()
+    for p in sorted((HERE.parents[1] / "verity_vllm").rglob("*.py")):
+        rel = p.relative_to(HERE.parents[1]).as_posix()
+        found[rel if PER == "file" else rel.rpartition("/")[0]] += p.read_text().count("or []")
+    entries = json.loads((HERE / "allowlists" / f"{NAME}.json").read_text())["entries"]
+    allowed = Counter({e["file"]: e.get("count", 1) for e in entries})
+    new = [f"  {k}: [or-empty] ({n} found, {allowed[k]} allowed)" for k, n in sorted(found.items()) if n > allowed[k]]
+    assert not new, "typed records:\\n" + "\\n".join(new)
+'''
+
+
+def test_a_counted_kind_keyed_anew_at_its_total_is_compared_in_the_bases_form(repo):
+    """A lint that comes to count or-empty reads per file where it counted them per package leaves each of the base's
+    package keys uncovered by the change's list, with no read added: the base's lint is then held to the base's entries.
+    A read the same change adds still fails, at the base's key, and so does a re-keying that lowers the total, which the
+    base's lint can't tell from a lint loosened to drop its entries."""
+    x, y, z = (f"adapters/vllm/{f}" for f in (CHECK, "verity_vllm/check/gates.py", COMMIT))
+    per_file = {TYPED_LINT: COUNTING_LINT.replace('PER = "package"', 'PER = "file"')}
+    repo.commit("typed_records, per package", {
+        TYPED_LINT: COUNTING_LINT, x: "A = d.get('a') or []\nB = d.get('b') or []\n", y: "C = d.get('c') or []\n",
+        z: "D = d.get('d') or []\n", TYPED: _allowlist(_or_empty("verity_vllm/check", 3), _or_empty("verity_vllm/commit", 1))})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("per file", {**per_file, TYPED: _allowlist(_or_empty(CHECK, 2), _or_empty("verity_vllm/check/gates.py", 1),
+                                                           _or_empty(COMMIT, 1))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["typed_records"]), c["why"]
+    assert c["pooled"] == [f"{TYPED} or-empty 4 -> 4 in total over 5 moved key(s)",
+                           f"{TYPED} or-empty keeps its total of 4 under other keys, so the base's lint is held to the "
+                           f"base's entries for it"]
+    repo.git("checkout", "-q", "-b", "adds", "main")
+    repo.commit("per file, a read more in commit and gates.py's left out", {
+        **per_file, z: "D = d.get('d') or []\nE = d.get('e') or []\n", TYPED: _allowlist(_or_empty(CHECK, 2), _or_empty(COMMIT, 2))})
+    [c] = G.gate("main", "adds")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["typed_records: verity_vllm/commit: [or-empty] (2 found, 1 allowed)"]), c["why"]
+    repo.git("checkout", "-q", "-b", "drops", "main")
+    repo.commit("per file, with commit's entry dropped", {**per_file, TYPED: _allowlist(_or_empty(CHECK, 2),
+                                                                                       _or_empty("verity_vllm/check/gates.py", 1))})
+    [c] = G.gate("main", "drops")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["typed_records: verity_vllm/check: [or-empty] (3 found, 0 allowed)",
+                                                   "typed_records: verity_vllm/commit: [or-empty] (1 found, 0 allowed)"]), c["why"]
+    assert c["why"].endswith(f"; {TYPED} or-empty is keyed anew and its total goes 4 -> 3: a kind keyed anew is compared in the "
+                             "base's form only at the base's total, so change its keys in one change and its counts in another")
 
 
 def _size(symbol: str, lines: int) -> dict:
