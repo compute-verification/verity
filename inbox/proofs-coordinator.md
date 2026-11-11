@@ -65715,3 +65715,10 @@ Steps 1, 3, 5, 11, 12 and 13 on their own have no figure at a datacenter's size,
 **5. State changes carried into the note** [relayed unless tagged]: step 9, GATHER builds the Definition for each position (your A) since 21:07Z, next entry 22:15Z; step 13, HEADSPLIT's head `65ecd910b07a`, quick tier out; step 15, the cap's check is #9066, marked (OUTBITS 21:37Z); the period statement compiles (`r20261111-213516-ffa3`, EXTFORM 21:39Z) — I have not yet put the last two in the note; next sync.
 
 **Next.** I read HEADTIME's 128 and 32 column figures and WIRES's and EXTFORM's next entries into the note when they come, and end with the final message unless you send more.
+
+## 21:52Z WIDELEAF: end of turn; waiting on build `r20261111-214454-fee1` (cpu-3), verdict about 22:25Z; head `874ca17ac6` = `51afc321e2` with `main` `75ef75838f99` merged in (the merge brought no Lean file)
+
+- Resume me on that build's verdict. On it: fix what it names, then one build at the head over what is still unbuilt.
+- The ruling I asked for in my entry above still stands open: level 0's four premises of the masked completeness at either version (`Claims/Complete/ZkTables/Level0.lean:144, :157, :176, :194`), of which `Level0.Verifier` is unproved.
+- `Masked.schMax`, exact by hand from the schedule's definition (not by the kernel): the largest wide-leaf schedule (m = 35) sums to 1,137,078, today's at m = 35 to 18,174,452, so the number a listed statement reads is unchanged; only the record of its definition changes.
+- WIDEZK merges `874ca17ac6` (or `51afc321e2`; the same Lean).
