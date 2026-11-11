@@ -607,7 +607,8 @@ PY
 
 throttled() {
   # "NR USEC": cpu.stat's nr_throttled and throttled_usec for the cgroup whose cpu.max is the quota; nothing where it has none
-  awk '$1 == "nr_throttled" {n = $2} $1 == "throttled_usec" {u = $2} END {if (n != "" && u != "") print n, u}' "$cpu_stat" 2>/dev/null
+  awk '$1 == "nr_throttled" {n = $2} $1 == "throttled_usec" {u = $2} END {if (n ~ /^[0-9]+$/ && u ~ /^[0-9]+$/) print n, u}' \
+    "$cpu_stat" 2>/dev/null
 }
 
 declared_beside() {

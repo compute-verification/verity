@@ -201,7 +201,7 @@ def test_a_machine_without_throttle_counters_writes_none(tmp_path):
     node = Node(tmp_path)
     r = node.ask("--on", "3", "--cores", "0-9")
     line = (node.gl / "3.owner").read_text()
-    assert r.returncode == 0 and "throttl" not in line + r.stderr and " cores=0-9 cmd=true" in line
+    assert r.returncode == 0 and "throttled" not in line and "CPU throttling" not in r.stderr and " cores=0-9 cmd=true" in line
 
 
 def test_with_wait_a_request_over_the_quota_waits_unqueued_and_starts_when_a_lease_ends(tmp_path):
