@@ -59,6 +59,7 @@ block's SAT case: 12 products, model checked, and 11 under a conflict budget, wh
 from __future__ import annotations
 
 import itertools
+import json
 import sys
 from fractions import Fraction
 
@@ -1306,7 +1307,6 @@ def main():
                  and all(v <= 1.41 if "fold=3 " in k_ else v <= 1.22 for k_, v in pv_ts.items()
                          if k_.endswith("gamma over plain int8")), str(out["ts_pv"]))
 
-    import json
     print("\nRESULTS " + json.dumps(out, default=str, sort_keys=True))
     sys.exit(checks.finish())
 

@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 U_VALUES = np.r_[-64:0, 1:65]
 
 
-def outer_imad(rows, cols, s, width, signed=True):
+def outer_imad(rows: int, cols: int, s: int, width: int, signed: bool = True) -> bool:
     """Every (R bits, U values): the destination of a·b + c mod 2^width, and whether each slot (i, j) at bit 8i + s·j holds
     R[i]·U[j] + 64 exactly. IMAD.WIDE is signed s32 × s32 → s64, so b keeps its sign there (signed=False is .U32); IMAD's
     low word is the same either way."""
@@ -56,7 +56,7 @@ def outer_imad(rows, cols, s, width, signed=True):
     return ok
 
 
-def idp2a_lo(a, b, c):
+def idp2a_lo(a: np.ndarray | np.int64, b: np.ndarray, c: int) -> np.ndarray:
     """IDP.2A.LO.U16.S8: c + a's halfwords (unsigned) · b's bytes 0 and 1 (signed), mod 2^32."""
     d = np.asarray(c, dtype=np.int64)
     for k in range(2):
@@ -65,7 +65,7 @@ def idp2a_lo(a, b, c):
     return d & 0xFFFFFFFF
 
 
-def idp2a_packing(m2=129, m3=129 * 257):
+def idp2a_packing(m2: int = 129, m3: int = 129 * 257) -> bool:
     """Every R ∈ {0,1}^5 and U ∈ (±1..±64)²: a's halfwords r1 + m2·r2_0 + m3·r3_0 and m2·r2_1 + m3·r3_1, b's bytes u0, u1
     (bytes 2 and 3 junk), and whether the word decodes as r1·u0 (129 values) under Σ_k r2_k·u_k and Σ_k r3_k·u_k
     (257 values each) at radices m2 and m3."""
@@ -82,7 +82,7 @@ def idp2a_packing(m2=129, m3=129 * 257):
     return True
 
 
-def radix_packings(radix, tmp):
+def radix_packings(radix: int, tmp: Path | str) -> dict[str, tuple[int, int]]:
     """`isa_cap.c` at this radix: {"IDP4A": (cases, fails), "IMADW": (cases, fails)}."""
     exe = Path(tmp) / f"isa_cap{radix}"
     subprocess.run(["gcc", "-O2", "-fopenmp", f"-DRADIX={radix}", "-o", str(exe), str(HERE / "isa_cap.c")], check=True)
@@ -90,12 +90,12 @@ def radix_packings(radix, tmp):
     return {name: (int(cases), int(fails)) for name, cases, fails in (line.split() for line in out.splitlines())}
 
 
-def load_bound(kappa, c_load, bytes_per_load=32):
+def load_bound(kappa: float, c_load: float, bytes_per_load: int = 32) -> float:
     """Bytes of table loads a word, from 28N ≤ κA + c_L·Ld with A + Ld < 1.03N (G < 2.03N)."""
     return bytes_per_load * (28 - 1.03 * kappa) / (c_load - kappa)
 
 
-def table_eps(a, kappa, c_load, honest=1.877):
+def table_eps(a: float, kappa: float, c_load: float, honest: float = 1.877) -> float:
     """The table route read as one route (D2): words at 1 + A + Ld slots and Ld = (28 − κA)/c_L loads, as many as the
     level's bytes allow, each saving (honest − slots)/32. Up to the bandwidth and bytes a load, which scale it, this is
     the saving per load; honest is VF3o-16's Dither-like threshold."""

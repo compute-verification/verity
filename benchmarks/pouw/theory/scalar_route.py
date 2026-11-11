@@ -35,14 +35,16 @@ Run: `python scalar_route.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit
 """
 from __future__ import annotations
 
+import math
 import sys
+from collections.abc import Iterator
 
 from exact_kit.checks import Checks
 
 M32 = 0xFFFFFFFF
 
 
-def lcg(seed: int):
+def lcg(seed: int) -> Iterator[int]:
     s = seed & M32
     while True:
         s = (1664525 * s + 1013904223) & M32
@@ -78,7 +80,6 @@ def rows_that_fit(k: int, umax: int, total_bits: int = 32) -> int:
     """How many rows' length-k dot products pack into `total_bits` without a lane overflowing into the next. A lane must
     hold a signed sum of k terms each in [-umax, umax-1], i.e. magnitude up to k*umax, needing ceil(log2(2*k*umax)) + 1
     bits (sign + magnitude)."""
-    import math
     reach = k * umax
     lane_bits = math.ceil(math.log2(2 * reach + 1)) + 1  # signed lane that never wraps over the k adds
     return total_bits // lane_bits

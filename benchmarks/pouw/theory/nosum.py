@@ -34,6 +34,8 @@ from __future__ import annotations
 
 import csv
 import sys
+from collections.abc import Iterator, Sequence
+from fractions import Fraction
 from pathlib import Path
 
 from exact_kit.checks import Checks
@@ -140,23 +142,22 @@ UNITS = [
 
 # ---- the checkable physics ------------------------------------------------------------------------------------------------
 
-def bilinear(texels, alpha, beta):
+def bilinear(texels: Sequence[int], alpha: int, beta: int) -> Fraction:
     """A bilinear filter's convex 8-bit-weighted sum of 4 texels (alpha, beta in {0..255}/256). Returns the exact rational
     value before the output rounding; its point is that the weights are convex."""
-    from fractions import Fraction
     a, b = Fraction(alpha, 256), Fraction(beta, 256)
     w = [(1 - a) * (1 - b), a * (1 - b), (1 - a) * b, a * b]
     assert sum(w) == 1 and all(wi >= 0 for wi in w)
     return sum(wi * ti for wi, ti in zip(w, texels))
 
 
-def blend_u8(src, dst, sf, df):
+def blend_u8(src: int, dst: int, sf: int, df: int) -> int:
     """An 8-bit UNORM blend: round((src*sf + dst*df)/255), clamped to [0,255]. src,dst,sf,df in 0..255."""
     v = (src * sf + dst * df + 127) // 255
     return max(0, min(255, v))
 
 
-def lcg(seed: int):
+def lcg(seed: int) -> Iterator[int]:
     s = seed & M32
     while True:
         s = (1664525 * s + 1013904223) & M32

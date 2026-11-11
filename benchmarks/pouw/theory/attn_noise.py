@@ -49,7 +49,7 @@ PATCH_COLS = 128
 SEED = 2
 
 
-def operands(B: CellGrid, kind, rng):
+def operands(B: CellGrid, kind: str, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     """(P, V) of one block at instance `kind`; P in Lean coordinates, a probability row as P_prob − 64."""
     P = rng.integers(-63, 63, (B.n, B.k))
     V = rng.integers(-128, 127, (B.k, B.n2))
@@ -70,18 +70,18 @@ def operands(B: CellGrid, kind, rng):
     raise ValueError(kind)
 
 
-def ranks(B: CellGrid, rng):
+def ranks(B: CellGrid, rng: np.random.Generator) -> dict[str, tuple[int, int, int]]:
     return {kind: cross_ranks(B, *operands(B, kind, rng), mod=1) for kind in INSTANCES}
 
 
-def h_table(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
+def h_table(L: int, d: int = 128, u_bits_qk: int = 64 * 5, u_bits_pv: int = 32 * 7) -> dict[str, float]:
     """GRIND's h a form and operand: the bits of one operand row's noise over the units that read it (every unit of
     a row, or of a column, of one A·B with its own seed), at the worst row (key 0 or query L − 1: L units)."""
     return {"QKᵀ, K row (b)": d / L, "QKᵀ, Q row (c and U)": (d + u_bits_qk) / L,
             "P·V, V column (b)": L / L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
+def h_decode(L: int, d: int = 128, u_bits_qk: int = 64 * 5, u_bits_pv: int = 32 * 7) -> dict[str, float]:
     """h at a decode step of one query against L keys, K and V noised afresh by the step's matmuls: Q's row is read by
     the step's L units, each K row by one, P's row by d units and each V column's L bits by one."""
     return {"QKᵀ, K row (b)": d, "QKᵀ, Q row (c and U)": (d + u_bits_qk) / L,
@@ -92,7 +92,7 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
 DELTA_LOG2 = DELTA.denominator.bit_length() - 1
 
 
-def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
+def grind_eps(L: int, delta_log2: int = DELTA_LOG2, t_log2: int = 128, d: int = 128) -> dict[str, float]:
     """GRIND's term: a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""
@@ -103,7 +103,7 @@ def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
             "decode P·V": bits / (min(hd["P·V, V column (b)"], hd["P·V, P row (U)"]) * d)}
 
 
-def unit_compressions(k, d=128):
+def unit_compressions(k: int, d: int = 128) -> dict[str, tuple[int, int]]:
     """SHA-512 compressions a sampled proof block spends on its noise: (deployed patch layout, contiguous layout). QKᵀ's unit
     reads Q's row (c in one patch, U from its tag-11 digest) and K's row (one patch); P·V's reads P's row's U (one
     digest a row pair) and V's column of b over k keys, which the patch layout over Vᵀ serves 128 keys a compression."""
@@ -112,7 +112,7 @@ def unit_compressions(k, d=128):
     return {"QKᵀ": qk, "P·V": pv}
 
 
-def main():
+def main() -> None:
     checks = Checks()
     rng = np.random.default_rng(20261018)
     out = {}
