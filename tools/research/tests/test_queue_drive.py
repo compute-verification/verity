@@ -80,8 +80,8 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
 
 
 #: the analysis's packages, as an audit's log names each after its scratch directory
-SPEC, PROOFS = "Security", "Security/Proofs"
-LEAN_AUDIT_LOG = f"""lean-audit: verity/core/primitives/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+SPEC, PROOFS = "security", "security/Proofs"
+LEAN_AUDIT_LOG = f"""lean-audit: verity/hardware/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
 AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/{PROOFS}: FAIL; built WITHOUT a sandbox
   build: exit 1
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
@@ -104,8 +104,8 @@ def test_a_lean_audit_failure_names_the_lean_files_its_build_errors_are_in(tmp_p
     """A train that fails in lean-audit isn't told as naming no file, to be attributed by hand."""
     from research.drive import implicated, lean_errors
 
-    assert lean_errors(LEAN_AUDIT_LOG) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean",
-                                           "Security/Definitions/Claims/Sampling.lean"}
+    assert lean_errors(LEAN_AUDIT_LOG) == {"security/Proofs/Flock/Claims/NumbersRadius.lean",
+                                           "security/Definitions/Claims/Sampling.lean"}
     assert implicated(_lean_run(tmp_path)) == lean_errors(LEAN_AUDIT_LOG)
     assert implicated(_lean_run(tmp_path / "b", f"AUDIT /x/lean-audit-scratch-1/{SPEC}: FAIL\n    error: build failed\n")) is None
 
@@ -206,11 +206,11 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
-    assert forces_cold(["verity/ml/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["verity/definitions/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
-    assert forces_cold(["integrations/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
-    assert not forces_cold(["integrations/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
-    assert not forces_cold(["Security/Proofs/X.lean", "verity/ml/circuits/README.md", "verity/ml/circuits/tests/test_x.py"])
+    assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
+    assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/drive.py"])
+    assert not forces_cold(["security/Proofs/X.lean", "verity/circuits/README.md", "verity/circuits/tests/test_x.py"])
     assert not forces_cold([])
 
 
@@ -402,14 +402,14 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     train."""
     from research.drive import lean_errors
 
-    flock = "verity/core/service/flock"
+    flock = "verity/protocols/flock/verifier"
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
-           "AUDIT /w/lean-audit-scratch-1-x/verity/core/protocols/pouw/lean/check: FAIL  944 declarations in 13 modules\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -421,11 +421,11 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
            "    Some required targets logged failures:\n    - Proofs.Flock.Claims.NumbersRadius\n    error: build failed\n"
            f"AUDIT /w/lean-audit-scratch-1-x/{SPEC}: FAIL\n    Some required targets logged failures:\n"
            "    - Definitions.Claims.Sampling\n")
-    assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
+    assert lean_errors(log) == {"security/Proofs/Flock/Claims/NumbersRadius.lean", "security/Definitions/Claims/Sampling.lean"}
 
 
 def test_a_lean_audit_whose_replay_was_killed_is_a_machines_fault(tmp_path):
-    """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
+    """A security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
     on Lean sources mustn't revert landings that broke nothing."""
     from research.drive import killed
 

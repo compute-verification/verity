@@ -27,8 +27,8 @@ CHECK = _module("repo_check_for_shards", ROOT / "tools" / "verity" / "check" / "
 D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
-#: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
-SECURITY = tuple(f"lean-audit:{p}" for p in ("Security", "Security/Proofs", "Security/Properties"))
+#: the packages that build security/Proofs: it, and the specs whose `proved_in` names it
+SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
 #: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
 NAMED = SECURITY[1:]
 #: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
@@ -77,7 +77,7 @@ def test_every_plan_runs_the_composition_suites_three_parts_on_three_shards(n):
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_builds_the_security_proofs_once_a_run(n, _provers):
-    """Security and Security/Properties audit Security/Proofs beside them, from one build of it: apart, each shard holding one
+    """Security and security/Properties audit security/Proofs beside them, from one build of it: apart, each shard holding one
     builds the proofs again, cold after any change to them. The static plan's shards (gated, and an after-landing run's) put
     all three on one."""
     assert CHECK.audit_provers(PACKAGES) == {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p, qs in _provers.items()}
@@ -121,7 +121,7 @@ def test_a_package_the_plan_doesnt_name_goes_to_the_shard_with_the_rest():
     new = [*PACKAGES, "protocols/new/lean"]
     for n in D.plans():
         [holder] = [s for s in _resolved(n, new) if "lean-audit:protocols/new/lean" in s]
-        assert "lean-audit:verity/core/service/flock" in holder and not set(SECURITY) & set(holder)
+        assert "lean-audit:verity/protocols/flock/verifier" in holder and not set(SECURITY) & set(holder)
 
 
 def test_a_plan_naming_a_package_the_tree_lacks_stops_the_shard():
@@ -267,7 +267,7 @@ def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
 
 def test_lean_audit_audits_only_the_packages_it_is_given():
     assert LA.select(PACKAGES, None) == PACKAGES
-    assert LA.select(PACKAGES, ["verity/core/protocols/pous/lean", "Security"]) == ["Security", "verity/core/protocols/pous/lean"]
+    assert LA.select(PACKAGES, ["verity/protocols/pous/lean", "security"]) == ["security", "verity/protocols/pous/lean"]
     with pytest.raises(ValueError, match="no audited package nowhere"):
         LA.select(PACKAGES, ["nowhere"])
 
@@ -284,9 +284,9 @@ def test_a_shards_lean_slot_counts_only_its_own_packages(tmp_path, monkeypatch):
     (tmp_path / "lean-audit").mkdir()
     for p in PACKAGES[1:]:
         (tmp_path / "lean-audit" / f"{Audit.key(p, (), ())}.json").write_text("{}")
-    assert "Security/Proofs" in PACKAGES[1:] and CHECK.lean_audit_misses(only=["Security/Proofs"]), \
+    assert "security/Proofs" in PACKAGES[1:] and CHECK.lean_audit_misses(only=["security/Proofs"]), \
         "a pass of a package whose audit writes the ratchet's facts is reused only with them"
-    facts = tmp_path / "lean-audit" / "unread" / f"{Audit.key('Security/Proofs', (), ())}.json"
+    facts = tmp_path / "lean-audit" / "unread" / f"{Audit.key('security/Proofs', (), ())}.json"
     facts.parent.mkdir()
     facts.write_text("{}")
     assert CHECK.lean_audit_misses() and CHECK.lean_audit_misses(only=PACKAGES[:1])
