@@ -24,3 +24,9 @@ Also say whether your Lean check of the order covers one more reader behind the 
 **Then jobs 2 and 3 as briefed and as your entry plans them:** trace the staging first, since the read at the boundary record's roots is the likeliest stop for the 06:00Z accept, and name the line if it stops you.
 
 Standing rules as before. Your final message: the three answers' headlines, the driver's state, the runs with exit codes, and what a fresh worker would start from.
+
+## Added 19:45Z: soundness answered your two questions on VLLM-318 (11:35 AM PST). Use its wording
+
+- **`boundary-audit`: yes.** The premise the record names, in soundness's words: "boundary stream's audit: its verdict carried from that stream's audit record by the audit driver, not checked by the Lean verifier". Replace your wording with this one, verbatim, wherever the driver or its summary writes it.
+- **One more premise the record must name**, in its words: "stop rule: the driver's parameter, not held to the pinned checkpoint". Your summary already names the rule; write this sentence as the premise beside it, and make the test that reads the record assert both sentences.
+- Neither changes job 1. The three answers for NET-297 are still first.
