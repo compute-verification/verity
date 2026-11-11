@@ -4,16 +4,12 @@ decode and the timed audit with the parameters' own codec."""
 
 from __future__ import annotations
 
-import hashlib
 import itertools
 import json
 import random
 from pathlib import Path
 
-import pous_vectors
 import pytest
-import settings
-from test_pous_dense import SmallCapacity
 
 from verity.protocols.pous.verifier import band, dense, setup
 from verity.protocols.pous.verifier.audit import (
@@ -193,6 +189,8 @@ def test_parents_match_lean(case):
 
 @pytest.mark.parametrize("case", LEAN["labels"], ids=lambda c: f"B{c['B']}-d{c['d']}-l{c['l']}")
 def test_labels_match_lean(case):
+    from test_pous_dense import SmallCapacity
+
     b, d, ell = case["B"], case["d"], case["l"]
     params = band.BandParams(b, ell, d)
     h = SmallCapacity(params, ToyF(2 * ell + 4))
@@ -206,10 +204,12 @@ def test_labels_match_lean(case):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not settings.SLOW, reason="about a minute: set VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not __import__("os").environ.get("VERITY_POUS_SLOW"), reason="about a minute: set VERITY_POUS_SLOW=1")
 def test_secure_first_segment():
     """One whole 32 MiB secure-first segment: its pinned digest and a bit-exact decode."""
+    import hashlib
 
+    import pous_vectors
 
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())
     p, prims = band.SECURE_FIRST, band.reference(band.SECURE_FIRST)

@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 from pous_vectors import _bytes
 

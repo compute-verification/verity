@@ -42,8 +42,8 @@ from typing import Any, BinaryIO
 from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.device import memory_challenger as mc
 
-from . import period, wipe_stream
 from . import streamed_wipe as sw
+from . import wipe_stream
 
 MODULE = "verity.protocols.pous.verifier.wipe_party"
 log = logging.getLogger(__name__)
@@ -237,6 +237,8 @@ def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    from . import period  # its challenger key, made once in the device directory
+
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")

@@ -12,7 +12,6 @@ import random
 from pathlib import Path
 
 import pytest
-from test_pous_dense import SmallCapacity, ToyF
 
 from verity.protocols.pous.verifier import band, dense, setup
 from verity.protocols.pous.verifier.audit import (
@@ -153,6 +152,8 @@ def test_enc_dec(scheme):
 def test_enc_dec_matches_lean(case):
     """Lean-evaluated encode after decode on codes that are not encodings (`labelG_dec`): the decode matches Lean's `W'`
     and re-encodes to the code."""
+    from test_pous_dense import SmallCapacity, ToyF
+
     b, d, ell = case["B"], case["d"], case["l"]
     params = band.BandParams(b, ell, d)
     h = SmallCapacity(params, ToyF(2 * ell + 4))
@@ -232,6 +233,8 @@ def test_7_known_answer_vectors(group, chain):
     """The Lean-evaluated encodings with whole-byte blocks, through the verifier path: accepted against the
     commitment to the fixture's W, rejected against any other W.  `band` is `chainBand`'s (`d = 1`, where the band
     already cuts row 2's oldest parent); `real` and `small` are `chainDense`'s."""
+    from test_pous_dense import SmallCapacity, ToyF
+
     cases = [dict(c, c=4) for c in LEAN_BAND["labels"]] if group == "band" else LEAN[group]
     cases = [c for c in cases if c["l"] % 8 == 0]
     assert cases
