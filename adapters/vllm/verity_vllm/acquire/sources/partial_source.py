@@ -17,15 +17,21 @@ the all-reduce into the RMSNorm after it (`fused_allreduce_rms_norm`) adds one s
 """
 from __future__ import annotations
 
+import hashlib
 import importlib
+import json
+import re
 import time
+from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.log import init_logger
 
@@ -154,7 +160,6 @@ class TPPartialSource:
         # hook binds it) -- the k-th call of the step is the binder's occurrence k = the manifest's invocation k (`collective_site_aliases`).
         # A call its instance's flags rule out (Qwen3MoeSparseMoeBlock's sequence-parallel all_gather) is no expected partial; it is listed
         # (`mid_sites_ruled_out`, the identity report's `tp_sites_ruled_out`) and its module stays patched, so a call that runs is named.
-        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census
         census = mid_module_site_census(model, self.world)
         self.mid_sites: dict[str, dict[str, Any]] = {s["name"]: s for s in census["sites"]}
         self.mid_sites_ruled_out: list[dict[str, Any]] = census["ruled_out"]
@@ -252,7 +257,6 @@ class TPPartialSource:
                 logger.info_once("tp partial source: %s does not import here (%s): its %s is not wrapped", modname, repr(e), attr)
                 continue
         if self.mid_sites or self.mid_sites_ruled_out:
-            from verity_vllm.engine.collectives.collective_sites import patch_targets
             targets += patch_targets(list(self.mid_sites.values()) + self.mid_sites_ruled_out)   # the model classes' own imports
         done: set[tuple[int, str]] = set()
         for mod, attr, kind in targets:
@@ -486,12 +490,7 @@ class TPPartialSource:
         Each MoE align call's committed witness (`<experts>/align.*`, `moe_align_source`) is paired with the capture's
         (`align.rank<r>.jsonl`) by (step, module), exhaustively; a differing one FAILS by name with what it implies
         (`oracle_witness.implied`), and no tensor is exempt from the value compare (`oracle_witness.judge`)."""
-        import json
-        from pathlib import Path
-
         import torch
-
-        from verity_vllm.engine.collectives import fused_norm as FN
 
         t0 = time.perf_counter()
         cap = Path(capture_dir)
@@ -668,9 +667,6 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
     flush); vLLM's fused_add_rms_norm writes the next norm's output INTO that tensor in place, so a late read commits bytes equal
     to the next norm's /0.  Any equal pair = late read (result False, count named); result True needs > 0 pairs compared and 0
     equal / 0 missing."""
-    import hashlib
-    import re
-
     layouts = getattr(com, "_layouts", {}) or {}
     rd = OpenedReader(com, rc)
     pairs: list[dict] = []

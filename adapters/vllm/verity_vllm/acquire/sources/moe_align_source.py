@@ -28,6 +28,7 @@ kernel's outputs, so the Program's check of the committed values is the same und
 from __future__ import annotations
 
 import contextlib
+import importlib
 import json
 import types
 from pathlib import Path
@@ -177,8 +178,6 @@ class MoeAlignSource:
         self.stats.update(schedule_replayed=0, schedule_routing_differs=0, schedule_missing=0, schedule_routing_differs_first=[])
 
     def install(self) -> None:
-        import importlib
-
         if self.replay is not None:          # each run counts its own calls (a Commit's warm-up runs other requests)
             self._count_replays()
 

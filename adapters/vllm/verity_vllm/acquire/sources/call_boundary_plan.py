@@ -26,6 +26,7 @@ template (in the forward pre-hook); otherwise each request's rows are evaluated 
 """
 from __future__ import annotations
 
+import base64
 import bisect
 import glob
 import json
@@ -593,8 +594,6 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
 def to_json(p: Plan) -> dict[str, Any]:
     """`p` as JSON: each distinct template once (the bodies' parts index them), the literals' words as little-endian u64 in base64, each
     Definition by its spec and arity (`of_json` resolves it again)."""
-    import base64
-
     index: dict[tuple, int] = {}
     templates: list[dict[str, Any]] = []
 
@@ -623,8 +622,6 @@ def _tuples(x: Any) -> Any:
 
 def of_json(doc: Mapping[str, Any]) -> Plan:
     """The Plan `to_json` wrote; each Definition resolved from its spec (ValueError when one resolves to another arity)."""
-    import base64
-
     templates = [Template(_tuples(t["specs"]), _tuples(t["recipes"]), _tuples(t["levels"]),
                           tuple(Operand(str(w), int(k), int(e), int(b)) for w, k, e, b in t["operands"]),
                           tuple(Target(str(n), _tuples(at), int(lo), int(hi), str(dt), bool(sh)) for n, at, lo, hi, dt, sh in t["targets"]),

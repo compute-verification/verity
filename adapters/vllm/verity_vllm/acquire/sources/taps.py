@@ -29,6 +29,7 @@ from verity_vllm.acquire.sources import (attention_source, call_boundary_source,
                                          linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,
                                          route_source, router_softmax_source, scale_products_source, vocab_range_source)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
+from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
@@ -173,8 +174,6 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
     hidden class every rank reports
     (`hidden_source.require_hidden_on_every_rank`)."""
-    from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
-
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
     for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
         states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
