@@ -38,7 +38,7 @@ CHAIN = bind(CompositeDefinition("BoundaryRowsTestChain", 0, (), lambda S_: ((("
                                  lambda B, S_, x: B.call(NOT, B.call(PAIR, x)), register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
-LAW = {"law": "subset", "k": 2}
+DESIGN = {"law": "subset", "k": 2}
 
 
 def _spans(n: int = 5, prompt: int = 3, served: int = 4) -> list[BR.Span]:
@@ -95,12 +95,12 @@ def test_a_class_commits_under_core_window_domains_and_registers_by_both_verifie
     assert (L.n_rho, P.units(L.program, L.grain)) == (4, 5)
     pub = json.loads(json.dumps(c.public()))
     mine = BR.layout_of(pub, PAIR)
-    rec = BR.record(pub, PAIR, LAW)
-    assert rec == c.record(LAW) and rec["window"]["kind"] == "served" and rec["window"]["index"] == c.index_leaf
-    assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-    assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+    rec = BR.record(pub, PAIR, DESIGN)
+    assert rec == c.record(DESIGN) and rec["window"]["kind"] == "served" and rec["window"]["index"] == c.index_leaf
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
     other = _layout(n=6)
-    assert R.check(rec, other.program, other.grain, LAW, CS.SCHEME, other.ports()).codes != ()
+    assert R.check(rec, other.program, other.grain, DESIGN, CS.SCHEME, other.ports()).codes != ()
     assert BR.commit(spans, L, 0).roots != c.roots
     with pytest.raises(ValueError, match="not 5 of class"):
         BR.commit(spans[:4], L, 0)
@@ -134,7 +134,7 @@ def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
     c = BR.commit(_spans(), L, 0)
     pub = json.loads(json.dumps(c.public()))
     assert pub["inline"] is True and BR.layout_of(pub, CHAIN) == L
-    assert V.check(BR.record(pub, CHAIN, LAW), L.program, L.grain, LAW, CS.SCHEME, L.ports()).codes == ()
+    assert V.check(BR.record(pub, CHAIN, DESIGN), L.program, L.grain, DESIGN, CS.SCHEME, L.ports()).codes == ()
     plain = BR.Layout(CHAIN, 0, 1, 4, 4, 5, "a" * 128)
     assert plain.templates == (CHAIN,) and plain.ports()[BR.INGRESS]["domain"] != L.ports()[BR.INGRESS]["domain"]
     assert BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), CHAIN).roots == c.roots
@@ -226,8 +226,8 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
 RULE = BS.Stop((3, 7), 64, 4)
 #: a model that states no stop id
 NO_IDS = BS.Stop((), 64, 4)
-#: a law over a class's stop blocks
-STOP_LAW = {"law": "subset", "k": 2}
+#: a sampling design over a class's stop blocks
+STOP_DESIGN = dict(DESIGN)
 
 
 def _ended(rid: str, served: tuple[int, ...], finish: str | None, max_tokens: int = 4,
@@ -251,7 +251,7 @@ def _word(n: int, finish: int) -> int:
 def _block(rule: BS.Stop, span: BR.Span, served: tuple[int, ...] | None = None) -> int:
     """The stop block's output on the rows a class under ``rule`` holds of ``span``, its `b.egress` row of ids ``served``."""
     ids = span.served if served is None else served
-    head = _u32s(BR.ingress_row(span, BR.cap(len(span.prompt))))[:BR.HEAD_U32]
+    head = _u32s(BR.ingress_row(span, span.shape[0]))[:BR.HEAD_U32]
     (word,) = evaluate(rule.template, head, [*ids, *[0] * (rule.outputs - len(ids))])
     return word
 
@@ -264,7 +264,7 @@ def test_the_stop_block_is_the_stop_rule_over_a_spans_request_row_and_served_ids
     """`egress_stop` is `StopRule16_v1` at the registered stop ids and model length, reading ``max_tokens`` and the
     prompt's length off the span's `b.request` row and returning the rule's word, n + finish * 8192: a stop id ends a
     response at it and counts, else ``max_tokens``, else the model's length; no stop ids, and no id stops it; and past
-    the cap it runs on, finish 0, where `Stop.word` holds no span. A cap the word's n can't hold is refused."""
+    the T it runs on, finish 0, where `Stop.word` holds no span. A T the word's n can't hold is refused."""
     params, ret = RULE.template.signature()
     assert [(k, t.leaves) for k, t in params] == [("request", BR.HEAD_U32), ("ids", 4)] and ret == Bits(16)
     assert (BR.FIELD_AT["lp"], BR.FIELD_AT["max_tokens"]) == (0, 1)
@@ -320,9 +320,9 @@ def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_i
 
 
 def test_the_stop_block_at_the_registered_class_is_the_rules_reference():
-    """`egress_stop` at GLM-5.3's three stop ids, a model of 131,072 ids and a cap of 1,024, where circuit-check
+    """`egress_stop` at GLM-5.3's three stop ids, a model of 131,072 ids and T = 1,024, where circuit-check
     compares no realization with the reference: the block's output is `StopRule16_v1`'s reference on a stop id first,
-    in the middle and last, on ``max_tokens`` under the cap and at it, past the cap (finish 0), at the model's length
+    in the middle and last, on ``max_tokens`` under T and at it, past T (finish 0), at the model's length
     and under ``ignore_eos``; and `Stop.word` is that output for a span served so."""
     glm = BS.Stop((154820, 154827, 154829), 131072, 1024)
     cases = [((154820, 5, 5), 1024, 3, False, (1, 1)), ((*[9] * 500, 154827, 9), 1024, 3, False, (501, 1)),
@@ -367,19 +367,19 @@ def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_it
     assert {k: v["words"] for k, v in pub["values"].items()} == {BR.REQUEST: 2 * BR.HEAD_U32, BR.PROMPT: 8, BR.EGRESS: 8,
                                                                   BR.STOP: 1}
     mine = BR.layout_of(pub, PAIR, RULE)
-    rec = BR.record(pub, PAIR, LAW, stop=RULE)
-    assert mine == L and rec == c.record(LAW) and [r["port"] for r in rec["roots"]] == list(BR.PARTS)
+    rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
+    assert mine == L and rec == c.record(DESIGN) and [r["port"] for r in rec["roots"]] == list(BR.PARTS)
     assert (rec["window"]["stop"], rec["window"]["stopped"]) == (RULE.to_json(), True)
-    assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-    assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+    assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+    assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
     plain = _layout(n=3)
-    assert R.check(rec, plain.program, plain.grain, LAW, CS.SCHEME, plain.ports()).codes != ()
+    assert R.check(rec, plain.program, plain.grain, DESIGN, CS.SCHEME, plain.ports()).codes != ()
     assert not {"stop", "stopped"} & set(BR.commit(_spans(3), plain, 0).public())
     again = BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), PAIR, stop=RULE)
     assert again.roots == c.roots and again.layout == L and again.spans == c.spans
     with pytest.raises(ValueError, match="not 3 of class"):
         BR.commit([*HELD[:2], HELD[3]], L, 0)
-    with pytest.raises(ValueError, match="filed at its rule's cap"):
+    with pytest.raises(ValueError, match="filed at its rule's T"):
         BR.Layout(PAIR, 0, 1, 4, 8, 3, "a" * 128, stop=RULE)
     for doc, why in (({k: v for k, v in pub.items() if k != "stopped"}, "exactly under a stop rule"),
                      (pub | {"stopped": False}, "are not its layout's"),
@@ -395,7 +395,7 @@ def test_a_class_under_a_stop_rule_commits_its_rows_in_parts_and_a_stop_class_it
     assert _flat(BR.port_rows(unheld, U)[BR.EGRESS]) == [9, 9, 9, 0]
     assert BR.reopen(BR.write(u, tmp_path / "w0" / "p4-o2-nostop"), PAIR, stop=RULE).roots == u.roots
     with pytest.raises(ValueError, match="only a stop class has stop blocks"):
-        BS.stop_record(upub, PAIR, RULE, STOP_LAW, u.record(LAW))
+        BS.stop_record(upub, PAIR, RULE, STOP_DESIGN, u.record(DESIGN))
 
 
 def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_boundary_record():
@@ -410,8 +410,8 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     c = BR.commit(HELD[:3], L, 0)
     pub = json.loads(json.dumps(c.public()))
     mine = BR.layout_of(pub, PAIR, RULE)
-    rec = BR.record(pub, PAIR, LAW, stop=RULE)
-    reg, srec = BS.stop_registration(pub, PAIR, RULE, rec), BS.stop_record(pub, PAIR, RULE, STOP_LAW, rec)
+    rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
+    reg, srec = BS.stop_registration(pub, PAIR, RULE, rec), BS.stop_record(pub, PAIR, RULE, STOP_DESIGN, rec)
     assert P.units(mine.stop_program, mine.stop_query) == 3 and srec["previous"] == R.digest(rec)
     assert srec["roots"] == [{"port": BR.STOP, "root": pub["values"][BR.STOP]["root"], **mine.stop_ports()[BR.STOP]}]
     part = mine.stop_partition
@@ -425,7 +425,7 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     assert srec["window"] == {**rec["window"], "population": "stop"} and srec["registered"] == reg.registered
 
     def codes(record: dict, log: list[dict], verifier=R) -> tuple[str, ...]:
-        return verifier.check(record, mine.stop_program, mine.stop_query, STOP_LAW, CS.SCHEME, mine.stop_ports(), log=log,
+        return verifier.check(record, mine.stop_program, mine.stop_query, STOP_DESIGN, CS.SCHEME, mine.stop_ports(), log=log,
                               registered=reg.values, outputs=reg.outputs, schemas=reg.schemas).codes
 
     assert codes(srec, [rec]) == () == codes(srec, [rec], V)
@@ -439,30 +439,30 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     outputs = evaluate(population(RULE.template, 3), _flat(rows[BR.REQUEST]), _flat(rows[BR.EGRESS]))
     assert list(outputs) == rows[BR.STOP].ravel().tolist() == [RULE.word(s) for s in HELD[:3]]
     with pytest.raises(ValueError, match="not this commitment's values"):
-        BS.stop_registration(pub, PAIR, RULE, BR.commit(HELD[:3], L, 0).record(LAW))
+        BS.stop_registration(pub, PAIR, RULE, BR.commit(HELD[:3], L, 0).record(DESIGN))
 
 
 def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one_its_commitment_names(tmp_path):
     """The stop rule is the verifier's own copy, as its check template is. A ``commit.json`` naming other stop ids,
-    another model length, another cap or no rule, and one naming a rule where the verifier holds none, is refused by
+    another model length, another T or no rule, and one naming a rule where the verifier holds none, is refused by
     `layout_of`, `record`, `reopen`, `stop_registration` and `stop_record`. A serve that commits a response past a stop
     id under a rule of no stop ids is refused for the rule it names; naming the verifier's rule instead, its stop
     record is the verifier's block's (never the serve's, which the verifier's copies refuse), that block's output on
     the committed rows is not the committed word, and its files do not reopen."""
     c = BR.commit(HELD[:3], _stop_layout(), 0)
     pub = json.loads(json.dumps(c.public()))
-    rec = BR.record(pub, PAIR, LAW, stop=RULE)
+    rec = BR.record(pub, PAIR, DESIGN, stop=RULE)
     d = BR.write(c, tmp_path / "w0" / "p4-o4")
     plain = json.loads(json.dumps(BR.commit(_spans(3), _layout(n=3), 0).public()))
     others = (BS.Stop((3,), 64, 4), BS.Stop((3, 7), 128, 4), BS.Stop((3, 7), 64, 8), NO_IDS, None)
     for doc, mine in [*((pub, o) for o in others), (plain, RULE)]:
         calls = [lambda doc=doc, mine=mine: BR.layout_of(doc, PAIR, mine),
-                 lambda doc=doc, mine=mine: BR.record(doc, PAIR, LAW, stop=mine)]
+                 lambda doc=doc, mine=mine: BR.record(doc, PAIR, DESIGN, stop=mine)]
         if doc is pub:
             calls.append(lambda mine=mine: BR.reopen(d, PAIR, stop=mine))
         if mine is not None:
             calls += [lambda doc=doc, mine=mine: BS.stop_registration(doc, PAIR, mine, rec),
-                      lambda doc=doc, mine=mine: BS.stop_record(doc, PAIR, mine, STOP_LAW, rec)]
+                      lambda doc=doc, mine=mine: BS.stop_record(doc, PAIR, mine, STOP_DESIGN, rec)]
         for call in calls:
             with pytest.raises(ValueError, match="not the verifier's own"):
                 call()
@@ -474,18 +474,18 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
         BR.layout_of(named, PAIR, RULE)
     relabelled = named | {"stop": RULE.to_json()}
     mine = BR.layout_of(relabelled, PAIR, RULE)
-    brec = BR.record(relabelled, PAIR, LAW, stop=RULE)
-    reg, srec = BS.stop_registration(relabelled, PAIR, RULE, brec), BS.stop_record(relabelled, PAIR, RULE, STOP_LAW, brec)
+    brec = BR.record(relabelled, PAIR, DESIGN, stop=RULE)
+    reg, srec = BS.stop_registration(relabelled, PAIR, RULE, brec), BS.stop_record(relabelled, PAIR, RULE, STOP_DESIGN, brec)
     assert srec["program"] == P.program_digest(_stop_layout().stop_program) != P.program_digest(serve.layout.stop_program)
     assert srec["roots"][0]["domain"] == mine.stop_ports()[BR.STOP]["domain"] != named["values"][BR.STOP]["domain"]
 
     def codes(record: dict, log: list[dict]) -> tuple[str, ...]:
-        return R.check(record, mine.stop_program, mine.stop_query, STOP_LAW, CS.SCHEME, mine.stop_ports(), log=log,
+        return R.check(record, mine.stop_program, mine.stop_query, STOP_DESIGN, CS.SCHEME, mine.stop_ports(), log=log,
                        registered=reg.values, outputs=reg.outputs, schemas=reg.schemas).codes
 
     assert codes(srec, [brec]) == ()
-    theirs = BR.record(named, PAIR, LAW, stop=NO_IDS)
-    assert {"R2-program", "R3-domain"} <= set(codes(BS.stop_record(named, PAIR, NO_IDS, STOP_LAW, theirs), [theirs]))
+    theirs = BR.record(named, PAIR, DESIGN, stop=NO_IDS)
+    assert {"R2-program", "R3-domain"} <= set(codes(BS.stop_record(named, PAIR, NO_IDS, STOP_DESIGN, theirs), [theirs]))
     rows = BR.port_rows(past, serve.layout)
     outputs = evaluate(population(RULE.template, 3), _flat(rows[BR.REQUEST]), _flat(rows[BR.EGRESS]))
     assert rows[BR.STOP][:, 0].tolist() == [_word(4, 2), _word(4, 2), _word(2, 2)]
@@ -514,8 +514,8 @@ def test_the_hook_refuses_a_stop_rule_whose_model_length_is_not_the_schedulers(t
 
 
 def test_no_class_holds_both_a_stop_rule_and_history_tables(tmp_path):
-    """A history table's name holds its class's caps and slot, which a stop class and a class without a stop block
-    share at the rule's cap, so a serve with both is refused as it starts, by name: the layout, the hook and its
+    """A history table's name holds its class's (P, O) and slot, which a stop class and a class without a stop block
+    share at the rule's T, so a serve with both is refused as it starts, by name: the layout, the hook and its
     configuration each refuse the pair."""
     why = "a serve under a stop rule commits no history tables"
     with pytest.raises(ValueError, match=why):
@@ -531,12 +531,12 @@ def test_a_response_one_id_shorter_or_longer_than_the_stop_rules_is_refused():
     the span's committed rows is its `b.stop` word, whose n is the ids it was served. With its `b.egress` row one id
     shorter or one id longer, the block's n is not that row's count, so the word such a response needs, whatever finish
     it states, is not the block's output on its rows. The serve commits neither in a stop class (`commit` refuses it,
-    `filed` files it without a stop block), and a response past the cap has no row in one at all. In a class of three,
+    `filed` files it without a stop block), and a response past T has no row in one at all. In a class of three,
     a `b.egress` row forged one id shorter changes the stop population's output at that span alone, to a word that is
     not the forged count's."""
     n_of = (1 << stop_rule.N_BITS) - 1
     for s in HELD:
-        P_ = BR.cap(len(s.prompt))
+        P_ = s.shape[0]
         L = _stop_layout(1, prompt=P_)
         word = RULE.word(s)
         assert BR.port_rows([s], L)[BR.STOP].tolist() == [[word]] and _block(RULE, s) == word
@@ -544,7 +544,7 @@ def test_a_response_one_id_shorter_or_longer_than_the_stop_rules_is_refused():
         for ids in (s.served[:-1], (*s.served, 9)):
             cheat = BR.Span(s.engine_id, s.prompt, s.sampling, ids, s.finish)
             assert RULE.word(cheat) is None
-            assert list(BS.filed([cheat], RULE)) == [(P_, BR.cap(len(ids)), False)]
+            assert list(BS.filed([cheat], RULE)) == [(*cheat.shape, False)]
             if len(ids) > RULE.outputs:
                 continue
             assert _block(RULE, s, ids) & n_of != len(ids)
@@ -562,7 +562,7 @@ def test_a_response_one_id_shorter_or_longer_than_the_stop_rules_is_refused():
 
 def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_rest_without_a_stop_block(tmp_path):
     """A serve with a stop rule: a response the rule ends (a stop id, ``max_tokens``, and ``max_tokens`` past a stop id
-    for a request that set ``ignore_eos``) is committed in the stop class of its prompt cap, at the rule's cap whatever
+    for a request that set ``ignore_eos``) is committed in the stop class of its prompt's size, at the rule's T whatever
     its count, with its stop word; one it doesn't (an end at an id that is no stop id of the rule's, an abort) by its
     size class under ``-nostop``, without one, beside a stop class of the same sizes; every class names the rule and
     whether it is a stop class, and reopens to its sink line's roots; and a serve's configuration names the rule."""

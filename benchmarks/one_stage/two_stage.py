@@ -23,7 +23,7 @@ gives its outcome (`prove`, `outcome_of`).
 * **The stop blocks** (a stop class's, `stop_first`): a population of their own, one a span, on a one-stage stream of
   the stop block (`stop_spec`) whose log starts with the class's boundary record. After the class's first stage its
   stop record (`boundary_stop.stop_record`) is registered, its inputs that record's ``b.request`` and ``b.egress`` as
-  output values, and sampled once at ``--stop-law`` (a rate over the class's stop blocks; the first stage's unless
+  output values, and sampled once at ``--stop-design`` (a rate over the class's stop blocks; the first stage's unless
   given) on a rank of its own in the same session. The sample is the hand-off's ``stop``; no proof of a sampled stop
   block is built here. A stop class whose stop blocks cannot plan their sample refuses the window's whole first stage,
   as any rank that cannot; one whose stop blocks then register or sample nothing is refused itself (``stop-stage``):
@@ -80,7 +80,7 @@ Usage::
 
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K --challenger local \\
         --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] [--proof-deadline S] \\
-        [--stop RULE [--stop-law rate:NUM/DEN]]
+        [--stop RULE [--stop-design rate:NUM/DEN]]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
         [--unlinked] [--stop RULE]
@@ -295,7 +295,7 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
           previous: str | None = None, window: Mapping[str, Any] | None = None, delta: float = 0.5,
           window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
     """One class's first stage on ``coins``, laid out under the verifier's own check template and stop rule (``stop``):
-    its stream registers the boundary record (`boundary_rows.record`, at the rule's first-stage law over its spans,
+    its stream registers the boundary record (`boundary_rows.record`, at the rule's first-stage rate over its spans,
     chained after ``previous``, its window naming ``window``'s items), the coins commit to the registration's digest,
     and the stream samples once. Raises `service.Refused` as the stream does."""
     layout = BR.layout_of(pub, check, stop)
@@ -331,11 +331,11 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     return First(dict(pub), rule, layout, stream, dict(stage1["record"]), reg, draw, coins, bytes.fromhex(stage1["read"]))
 
 
-def stop_spec(layout: BR.Layout, law: str, proof_deadline: float = PROOF_DEADLINE_S) -> S.Spec:
+def stop_spec(layout: BR.Layout, design: str, proof_deadline: float = PROOF_DEADLINE_S) -> S.Spec:
     """A stop class's stop population's Spec: its one committed value `b.stop`, the stop blocks' outputs; the block's
     parameters (`boundary_stop.STOP_READS`) as registered values, the class's boundary record's rows; the one-stage
-    law ``law``, a rate over the class's stop blocks; and the check, the verifier's stop block's program and its
-    instances."""
+    sampling design ``design``, a rate over the class's stop blocks; and the check, the verifier's stop block's program
+    and its instances."""
     block = layout.stop.template
     public = (S.Public("population", "structure", "the stop class's spans N, one stop block each"),
               S.Public("window", "structure", "provenance: the class's boundary record's window, named the stop population's"),
@@ -345,31 +345,32 @@ def stop_spec(layout: BR.Layout, law: str, proof_deadline: float = PROOF_DEADLIN
                 for v, port in BS.STOP_READS.items() for k in ("leaves", "words", "domain", "word_bits")))
     values = (S.Value(BR.STOP, BR.SCHEMA, "serve"), *(S.Value(v, None, "serve", registered=True) for v in BS.STOP_READS))
     check = S.Check(P.program_digest(Program(block)), P.template_instance_query(block), proof_deadline=proof_deadline)
-    return S.Spec(values, S.Law(law), check, public, f"{BR.FORMAT}\0{layout.run}\0{BR.STOP}".encode())
+    return S.Spec(values, S.Law(design), check, public, f"{BR.FORMAT}\0{layout.run}\0{BR.STOP}".encode())
 
 
-def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, law: str, coins: CC.ChallengerCoins,
-               boundary: Mapping[str, Any], *, delta: float = 0.5, window_root: str | None = None,
-               proof_deadline: float = PROOF_DEADLINE_S) -> dict[str, Any]:
+def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str,
+               coins: CC.ChallengerCoins, boundary: Mapping[str, Any], *, delta: float = 0.5,
+               window_root: str | None = None, proof_deadline: float = PROOF_DEADLINE_S) -> dict[str, Any]:
     """A stop class's stop blocks, registered and sampled once on ``coins`` after the class's first stage: a one-stage
     stream of the verifier's stop block (`stop_spec`) whose log starts with the class's boundary record ``boundary``,
-    as the challenger logged it; the stop record (`boundary_stop.stop_record`, at ``law`` over the class's spans)
+    as the challenger logged it; the stop record (`boundary_stop.stop_record`, at ``design`` over the class's spans)
     registered on it, its inputs that record's ports as output values; the coins committed to the registration's
-    digest; and the sample. The hand-off's ``stop``: the Spec's digest, the law, the record, its registration's digest
-    and receipt, the sample and the bytes it read. Raises `service.Refused` as the stream does, and ValueError where
-    the class is no stop class of ``stop`` or ``boundary`` isn't its record."""
+    digest; and the sample. The hand-off's ``stop``: the Spec's digest, the sampling design, the record, its
+    registration's digest and receipt, the sample and the bytes it read. Raises `service.Refused` as the stream does,
+    and ValueError where the class is no stop class of ``stop`` or ``boundary`` isn't its record."""
     layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
-    stream = S.Stream(stop_spec(layout, law, proof_deadline), stop.template, budget=1, delta=delta, challenger=CHALLENGER,
-                      coins=coins, log=[boundary])
+    stream = S.Stream(stop_spec(layout, design, proof_deadline), stop.template, budget=1, delta=delta,
+                      challenger=CHALLENGER, coins=coins, log=[boundary])
     held = BS.stop_registration(pub, check, stop, boundary)
     rec = BS.stop_record(pub, check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
     reg = stream.register(rec, layout.stop_ports(), registered=held.values, outputs=held.outputs, schemas=held.schemas,
                           **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
-    draw = stream.select(reg)
-    return {"spec": stream.spec.digest(), "law": law, "record": rec, "registration": reg.digest,
-            "receipt": dict(reg.receipt), "draw": draw.draw, "units": list(draw.units), "read": bytes(coins.read).hex()}
+    sample = stream.select(reg)
+    return {"spec": stream.spec.digest(), "design": design, "record": rec, "registration": reg.digest,
+            "receipt": dict(reg.receipt), "sample": sample.draw, "units": list(sample.units),
+            "read": bytes(coins.read).hex()}
 
 
 def stop_order(evidence: Mapping[str, Any] | None, window_root: str, boundary: str, registration: str, read: bytes,
@@ -844,15 +845,15 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
 
     root = pubs[0]["run"]
     stops = {k: len(pubs) + j for j, k in enumerate(k for k, p in enumerate(pubs) if p.get("stopped") is True)}
-    manager, draws, finisher = AC.start(a.challenger, root, list(range(len(pubs) + len(stops))),
+    manager, turns, finisher = AC.start(a.challenger, root, list(range(len(pubs) + len(stops))),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
                                         key_record=a.challenger_key)
     out: list[dict] = [{} for _ in pubs]
-    stop_law = a.stop_law or a.replay
+    stop_design = a.stop_design or a.replay
     caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
 
     def run(k: int) -> None:
-        coins, blocks = AC.RankCoins(draws, k), AC.RankCoins(draws, stops[k]) if k in stops else None
+        coins, blocks = AC.RankCoins(turns, k), AC.RankCoins(turns, stops[k]) if k in stops else None
         planner, unplanned = None, []
 
         def plan_blocks(need: int) -> None:
@@ -867,7 +868,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             need = AC.need(mine.replay, layout.program, layout.grain, layout.spans)
             if blocks is not None:
                 planner = threading.Thread(target=plan_blocks, name=f"class-{k}-stop", args=(
-                    AC.need(stop_law, layout.stop_program, layout.stop_query, layout.spans),))
+                    AC.need(stop_design, layout.stop_program, layout.stop_query, layout.spans),))
                 planner.start()
             coins.plan(need)
             got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop)
@@ -876,7 +877,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             out[k] = _refusal(pubs[k], e)
         finally:
             out[k]["segment"] = coins.drawn()
-            draws.skip(k)
+            turns.skip(k)
         if blocks is None:
             return
         mine_stop: dict[str, Any] = {}
@@ -888,13 +889,13 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
                 raise unplanned[0]
             if "units" not in out[k]:
                 raise ValueError(f"the class's first stage sampled nothing: {out[k].get('error')}")
-            mine_stop = stop_first(pubs[k], check, stop, stop_law, blocks, out[k]["record"], delta=a.delta,
+            mine_stop = stop_first(pubs[k], check, stop, stop_design, blocks, out[k]["record"], delta=a.delta,
                                    window_root=root, proof_deadline=a.proof_deadline)
         except caught as e:
             mine_stop = {"refused": getattr(getattr(e, "verdict", None), "codes", None), "error": f"{type(e).__name__}: {e}"}
         finally:
             mine_stop["segment"] = blocks.drawn()
-            draws.skip(stops[k])
+            turns.skip(stops[k])
         if "units" in out[k] and "units" not in mine_stop:
             out[k] = {"format": FORMAT, "commit": pubs[k], "refused": [STOP_REFUSED], "segment": out[k]["segment"],
                       "error": f"{STOP_REFUSED}: the class's stop blocks registered or sampled nothing "
@@ -907,7 +908,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     for t in threads:
         t.join()
     finisher.join()
-    published = draws.evidence()
+    published = turns.evidence()
     wrong: list[str] = []
     for k, o in enumerate(out):
         o["evidence"] = AC.evidence(published, o["segment"]) if o.get("segment") else None
@@ -1031,8 +1032,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--span-values", help="the replay block's parameters the interior registration registers as values, "
                                          "a JSON list of [name, rows a sampled span, leaf type]")
     f.add_argument("--stop", help=STOP_HELP)
-    f.add_argument("--stop-law", help="the law over a stop class's stop blocks, one a span, a rate law as --replay is; "
-                                      "without it, --replay's")
+    f.add_argument("--stop-design", help="the sampling design over a stop class's stop blocks, one a span: a rate, as "
+                                         "--replay is; without it, --replay's")
     f.add_argument("--delta", type=float, default=0.5)
     f.add_argument("--challenger", required=True, help="local, loopback:HOST:PORT or gate:USER@HOST (a5_coins.start)")
     f.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file")
@@ -1072,8 +1073,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _second(a)
     if a.interior is None and a.span_values:
         ap.error("--span-values is the rule's that --interior gives: without --interior each class's rule is its replay block's")
-    if a.stop_law and not a.stop:
-        ap.error("--stop-law is the law over the stop blocks of the rule --stop gives")
+    if a.stop_design and not a.stop:
+        ap.error("--stop-design is the sampling design over the stop blocks of the rule --stop gives")
     pubs = [json.loads((Path(d) / BR.COMMIT).read_text()) for d in a.boundary]
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")

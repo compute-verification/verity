@@ -88,8 +88,8 @@ class BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
         ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``; ``tables``, rank 0's history tables
         (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and ``stop`` (`Stop.of`:
-        the registered model's stop ids and length and the cap on a response's ids). A stop rule the serve can't register
-        (a cap the word can't hold, or one beside history tables) is refused here, as the serve starts."""
+        the registered model's stop ids and length and T, the most ids a response has). A stop rule the serve can't
+        register (a T the word can't hold, or one beside history tables) is refused here, as the serve starts."""
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
         if stop is not None and tc:
             raise ValueError(TABLES_UNDER_A_RULE)

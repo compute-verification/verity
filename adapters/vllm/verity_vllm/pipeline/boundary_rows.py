@@ -18,9 +18,9 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
 
-**The stop rule.** A serve may register one (`boundary_stop.Stop`: the registered model's stop ids, its length, and the
-cap T on a response's ids). Its classes then commit each row above as its parts, one row a span each and no word twice,
-and the ids served n is no number the serve states:
+**The stop rule.** A serve may register one (`boundary_stop.Stop`: the registered model's stop ids, its length, and T,
+the most ids a response has). Its classes then commit each row above as its parts, one row a span each and no word
+twice, and the ids served n is no number the serve states:
 
 | value | row |
 |---|---|
@@ -30,7 +30,7 @@ and the ids served n is no number the serve states:
 | `b.stop` | one u16, n + finish * 8192 (1 a stop id, 2 ``max_tokens``, 3 the model's length): a stop class's alone |
 
 The first three are the class's boundary record's values (`PARTS`). A span the rule ends as it was served is in the stop
-class of its prompt cap, (P, T) whatever n is, which commits `b.stop` too: the output of the span's stop block, under
+class of its prompt's size, (P, T) whatever n is, which commits `b.stop` too: the output of the span's stop block, under
 the window domain of the stop population's own program (`Layout.stop_program`), and the one port of a stop record of
 its own (`boundary_stop`). Every other span is filed by its size class with no `b.stop` (``p<P>-o<O>-nostop``). The rule
 a class is laid out under is the verifier's own copy, as its check template is (`layout_of`): a ``commit.json`` that
@@ -41,8 +41,8 @@ names another rule is refused.
 `history.domain` (the class's program and the table's name, from the run, the class and the slot), listed beside the class's
 values in slot then layer order. Rank 0 builds them once the window assigns each span its slot (`boundary_tables.Builder`),
 and the class's commitment waits for their roots, so they are fixed before any coin, as the values are. A serve under a
-stop rule has none (`Layout`): a stop class and its sibling without a stop block at the same caps would share their
-tables' names.
+stop rule has none (`Layout`): a stop class and its sibling without a stop block at the same (P, O) would share
+their tables' names.
 
 **The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
 per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
@@ -96,8 +96,8 @@ PARTS = (REQUEST, PROMPT, EGRESS)
 #: every row value's name: any other name of a class's is a history table's
 ROWS = (INGRESS, EGRESS, REQUEST, PROMPT, STOP)
 #: why no class holds both a stop rule and history tables
-TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a table's name holds its class's caps and slot, "
-                       "which a stop class and its sibling without a stop block share at the rule's cap. The fix: the "
+TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a table's name holds its class's (P, O) and "
+                       "slot, which a stop class and its sibling without a stop block share at the rule's T. The fix: the "
                        "table's key names which of the two its class is (`boundary_tables.KEY`)")
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
@@ -124,6 +124,11 @@ def check_template(t: str) -> SpecializedDefinition:
 def cap(n: int) -> int:
     """The least power of two at least `MIN_CAP` and ``n``."""
     return max(MIN_CAP, 1 << max(0, int(n) - 1).bit_length())
+
+
+def class_size(v: Any) -> bool:
+    """Whether ``v`` is a class's size, of prompt ids or of outputs (`Span.shape`)."""
+    return type(v) is int and v >= MIN_CAP and v & (v - 1) == 0
 
 
 @dataclass(frozen=True)
@@ -240,7 +245,7 @@ class Layout:
     body calls (`templates`); else they are its instances (`population`). ``layers``: each span's history tables' layers,
     of ``capacity`` leaves (the module docstring). ``stop``: the serve's registered stop rule (a `boundary_stop.Stop`),
     under which the class's values are `PARTS` and it has no history tables; ``held``, under a rule: the class is a stop
-    class, its output cap the rule's T, with a stop block a span in a population of its own (`stop_program`) whose output
+    class, its outputs the rule's T, with a stop block a span in a population of its own (`stop_program`) whose output
     it commits as `b.stop`.
     What the prover commits under and the challenger's own copies (`ports`, `stop_ports`)."""
 
@@ -260,7 +265,7 @@ class Layout:
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
             v = getattr(self, k)
-            if not (type(v) is int and v >= MIN_CAP and v & (v - 1) == 0):
+            if not class_size(v):
                 raise ValueError(f"a class's {k} cap is a power of two at least {MIN_CAP}, not {v!r}")
         if not (type(self.spans) is int and self.spans >= 1):
             raise ValueError(f"a class registers one span or more, not {self.spans!r}")
@@ -275,7 +280,7 @@ class Layout:
         if self.stop is not None and ls:
             raise ValueError(TABLES_UNDER_A_RULE)
         if self.stopped and self.outputs != self.stop.outputs:
-            raise ValueError(f"a stop class is filed at its rule's cap, {self.stop.outputs} outputs, not {self.outputs}")
+            raise ValueError(f"a stop class is filed at its rule's T, {self.stop.outputs} outputs, not {self.outputs}")
         if self.inline:
             composite = isinstance(getattr(self.check, "defn", None), CompositeDefinition)
             forms = {n.form for n in self.check.body.nodes} if composite else {"primitive"}
@@ -399,7 +404,7 @@ class Layout:
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
     """Each committed value's rows (`Layout.committed`), (N, words) u16, span by span. Under a stop rule: `b.ingress`'s
-    row as its fields and its prompt ids, and the ids served alone; in a stop class, whose spans are at the rule's cap
+    row as its fields and its prompt ids, and the ids served alone; in a stop class, whose spans are at the rule's T
     whatever they were served, also the stop block's output on those rows, the rule's word. ValueError for a span of a
     stop class the rule doesn't end as it was served (`boundary_stop.Stop.word`): the block's output on its rows is not its end."""
     L = layout
@@ -569,6 +574,6 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
 
 
 __all__ = ["COMMIT", "EGRESS", "FIELD_AT", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PARTS", "PORTS",
-           "PROMPT", "REQUEST", "SALTS", "SCHEMA", "STOP", "Committed", "Layout", "Span", "cap", "check_template", "commit",
-           "egress_row", "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of",
-           "write"]
+           "PROMPT", "REQUEST", "SALTS", "SCHEMA", "STOP", "Committed", "Layout", "Span", "cap", "check_template",
+           "class_size", "commit", "egress_row", "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen",
+           "run_root", "sampling_of", "write"]

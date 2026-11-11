@@ -2,8 +2,8 @@
 that computes where a response ends (`egress_stop`), which class each span is filed in (`filed`), and a stop class's
 stop record (`stop_registration`, `stop_record`).
 
-**The rule** is the registered model's stop ids, its length, and the cap T on a response's ids. A span the rule ends as
-it was served (`Stop.word`) is in the stop class of its prompt cap, (P, T) whatever n is, which commits `b.stop`: the
+**The rule** is the registered model's stop ids, its length, and T, the most ids a response has. A span the rule ends as
+it was served (`Stop.word`) is in the stop class of its prompt's size, (P, T) whatever n is, which commits `b.stop`: the
 output of the span's stop block (`egress_stop`: `StopRule16_v1{T, NSTOP}` over the span's `b.request` and `b.egress`
 rows at the registered stop ids and length, with no stop id for a span whose row sets ``ignore_eos``), so the ids served
 n is a function of committed values and no number the serve states. Every other span is filed by its size class with no
@@ -45,11 +45,10 @@ from verity_vllm.pipeline.boundary_rows import (
     EGRESS,
     FIELD_AT,
     HEAD_U32,
-    MIN_CAP,
     REQUEST,
     SCHEMA,
     Span,
-    cap,
+    class_size,
     layout_of,
 )
 from verity_vllm.records.boundary_commit import FILE as COMMIT
@@ -60,7 +59,7 @@ STOP_READS = {"request": REQUEST, "ids": EGRESS}
 
 
 def _stop_refusal(S: Mapping[str, Any]) -> str | None:
-    t, stop, mml = S.get("T", MIN_CAP), S.get("STOP", ()), S.get("MAX_MODEL_LEN", 1)
+    t, stop, mml = S.get("T", 1), S.get("STOP", ()), S.get("MAX_MODEL_LEN", 1)
     if not (type(t) is int and 1 <= t < 1 << 13 and isinstance(stop, tuple) and len(stop) < 1 << 16
             and all(type(s) is int and 0 <= s < 1 << 32 for s in stop) and list(stop) == sorted(set(stop))
             and type(mml) is int and 1 <= mml < 1 << 31):
@@ -106,9 +105,9 @@ def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> Speci
 @dataclass(frozen=True)
 class Stop:
     """A serve's registered stop rule: the registered model's stop ids ``ids`` (a request that sets ``ignore_eos`` has
-    none, which the stop block reads off its row), its length ``max_model_len``, and ``outputs``, the cap T on a
-    response's ids, a power of two: the output cap of every stop class. Public: each class's ``commit.json`` names it,
-    and the stop block's id holds its ids, length and cap."""
+    none, which the stop block reads off its row), its length ``max_model_len``, and ``outputs``, T, the most ids a
+    response has, a power of two: every stop class's output size. Public: each class's ``commit.json`` names it, and the
+    stop block's id holds its ids, length and T."""
 
     ids: tuple[int, ...]
     max_model_len: int
@@ -116,10 +115,10 @@ class Stop:
 
     def __post_init__(self) -> None:
         why = _stop_refusal({"T": self.outputs, "STOP": self.ids, "MAX_MODEL_LEN": self.max_model_len})
-        if why is None and self.outputs != cap(self.outputs):
-            why = f"its cap is a class's outputs, a power of two at least {MIN_CAP}, not {self.outputs}"
+        if why is None and not class_size(self.outputs):
+            why = f"its T is a class's output size, a power of two (`boundary_rows.class_size`), not {self.outputs}"
         if why is not None:
-            raise ValueError(f"a stop rule's cap, ids and model length: {why}")
+            raise ValueError(f"a stop rule's T, ids and model length: {why}")
 
     @classmethod
     def of(cls, doc: Any) -> Stop | None:
@@ -140,7 +139,7 @@ class Stop:
         return egress_stop(self.outputs, self.ids, self.max_model_len)
 
     def word(self, span: Span) -> int | None:
-        """The stop block's output on ``span``'s rows at the cap, n + finish * 8192 (`StopRule16_v1`'s reference, over no
+        """The stop block's output on ``span``'s rows at T, n + finish * 8192 (`StopRule16_v1`'s reference, over no
         stop id where the span sets ``ignore_eos``), where that is how the span was served: n the ids it was served and
         its finish a stop on 1 or a length on 2 or 3, with a ``min_tokens`` of 0, which the rule doesn't read. None
         otherwise: a span no stop class holds."""
@@ -162,7 +161,7 @@ class Stop:
 def filed(spans: Sequence[Span], stop: Stop | None = None,
           released: bool = False) -> dict[tuple[int, int, bool], list[Span]]:
     """The spans by class, and whether it is a stop class: a span rule ``stop`` ends as it was served (`Stop.word`) in
-    the stop class of its prompt cap, (P, T); every other by its size class, without a stop block; all without one where
+    the stop class of its prompt's size, (P, T); every other by its size class, without a stop block; all without one where
     ``stop`` is None. ``released``: the serve knows its requests' releases, and a span without one (`Span.release`) is in
     no stop class. Each class's spans in admission order, the classes in order of their first span."""
     out: dict[tuple[int, int, bool], list[Span]] = {}
@@ -192,18 +191,18 @@ def stop_registration(pub: Mapping[str, Any], check: SpecializedDefinition, stop
     return RS.register_served(L.stop_program, L.stop_query, trees, log=[boundary])
 
 
-def stop_record(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop, law: Mapping[str, Any],
+def stop_record(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop, design: Mapping[str, Any],
                 boundary: Mapping[str, Any], window: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """A stop class's stop population's registration (one-stage's record) under the verifier's rule ``stop``, the next
-    of its log after its boundary record ``boundary``: `Layout.stop_program` under `Layout.stop_query` at ``law``, a law
-    over the class's stop blocks, one a span; its one port `b.stop`, the blocks' outputs; its registered values the
-    boundary record's ports (`stop_registration`); and that record's window with ``window``'s items, named the stop
-    population's."""
+    of its log after its boundary record ``boundary``: `Layout.stop_program` under `Layout.stop_query` at the sampling
+    design ``design`` over the class's stop blocks, one a span; its one port `b.stop`, the blocks' outputs; its
+    registered values the boundary record's ports (`stop_registration`); and that record's window with ``window``'s
+    items, named the stop population's."""
     L, c = layout_of(pub, check, stop), BoundaryCommit.of(pub, COMMIT)
     reg = stop_registration(pub, check, stop, boundary)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.stop_ports().items()]
     w = {**boundary["window"], **(window or {}), "population": "stop"}
-    return R.record(L.stop_program, L.stop_query, law, CS.SCHEME, roots, w, previous=R.digest(boundary),
+    return R.record(L.stop_program, L.stop_query, design, CS.SCHEME, roots, w, previous=R.digest(boundary),
                     registered=reg.registered)
 
 
