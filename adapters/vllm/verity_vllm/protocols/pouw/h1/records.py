@@ -35,6 +35,10 @@ def host(records: Any) -> np.ndarray | None:
     return np.ascontiguousarray(records.detach().cpu().numpy() if hasattr(records, "detach") else np.asarray(records))
 
 
+def numpy_of(t: Any) -> np.ndarray:
+    return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
+
+
 def split(records: np.ndarray, rows: int, n: int) -> tuple[np.ndarray, np.ndarray]:
     """(z [rows, n] int32, y [rows, n] bf16 bits as int16) of a call's records, unit (b, c) record b·(n / 32) + c."""
     ur, uc = UNIT
@@ -155,4 +159,4 @@ def holds_on(zy: Any, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -> bool:
     return not bool(bad)
 
 
-__all__ = ["UNIT", "ZY_BYTES", "holds_on", "of", "reason", "refusal", "split"]
+__all__ = ["UNIT", "ZY_BYTES", "holds_on", "numpy_of", "of", "reason", "refusal", "split"]

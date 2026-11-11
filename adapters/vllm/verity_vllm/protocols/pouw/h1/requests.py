@@ -196,6 +196,17 @@ def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[byte
     return out + [bytes(width)] * (rows - m)
 
 
+def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
+    """The call's A table of `rows` slots, on a's device: its m served rows and scales first, then empty rows, zero bytes
+    under scale 0 (a served row's scale is never 0)."""
+    m = int(a.shape[0])
+    if m > rows:
+        raise ValueError(f"{m} rows past the call's {rows} slots")
+    out, sc = a.new_zeros((rows, int(a.shape[1]))), s_a.reshape(-1).new_zeros(rows)
+    out[:m], sc[:m] = a, s_a.reshape(-1)
+    return out, sc
+
+
 class HidingTable:
     """A hiding table as `MerkleTree` holds it (``domain``, ``commitment``, ``open``), its levels hashed by `hiding_rows`."""
 
@@ -498,5 +509,5 @@ __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "HidingTabl
            "PER_ROUND", "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
            "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
            "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
-           "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
+           "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots", "slots_binding",
            "sort_batch_req_ids", "step_digest", "table_leaves", "table_root", "tables_reason"]

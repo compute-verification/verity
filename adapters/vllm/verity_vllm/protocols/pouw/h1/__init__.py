@@ -66,7 +66,6 @@ served int8 linear call as its own Program on bits, which `verity.protocols.pouw
 from __future__ import annotations
 
 import bisect
-import hashlib
 import json
 import os
 from collections import Counter, deque
@@ -93,7 +92,9 @@ from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,
                                              tables_device as TD)
 from verity_vllm.protocols.pouw.h1.commit import calls_root
-from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
+from verity_vllm.protocols.pouw.h1.names import SALT_TAG, program_salt
+from verity_vllm.protocols.pouw.h1.records import numpy_of
+from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, slots, table_leaves
 from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
 
 SCHEME = H.SCHEME
@@ -105,17 +106,11 @@ CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
 PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
-SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
               "auditor host's challenger (the pouw setting 'challenger'), so it credits nothing")
-
-
-def program_salt(epoch_salt: bytes) -> bytes:
-    """`pouw.salt` of the install's Programs: the epoch's 32-byte salt under `SALT_TAG`, a SHA-512 digest."""
-    return hashlib.sha512(SALT_TAG + epoch_salt).digest()
 
 
 def coordinate(k: int) -> Any:
@@ -227,17 +222,6 @@ def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int
     return offs, at
 
 
-def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
-    """The call's A table of `rows` slots, on a's device: its m served rows and scales first, then empty rows, zero bytes
-    under scale 0 (a served row's scale is never 0)."""
-    m = int(a.shape[0])
-    if m > rows:
-        raise ValueError(f"{m} rows past the call's {rows} slots")
-    out, sc = a.new_zeros((rows, int(a.shape[1]))), s_a.reshape(-1).new_zeros(rows)
-    out[:m], sc[:m] = a, s_a.reshape(-1)
-    return out, sc
-
-
 @dataclass(frozen=True)
 class Call:
     """One (step, linear) call of the window: its index, its engine step, its layer (the linear's ordinal) and module, its
@@ -291,10 +275,6 @@ Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
 #: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins (a
 #: `LiveRecord`), its sampling coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
-
-
-def numpy_of(t: Any) -> np.ndarray:
-    return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
 class H1Run:
