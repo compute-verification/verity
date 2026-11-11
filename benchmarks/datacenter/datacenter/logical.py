@@ -1,9 +1,9 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
-The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
+The circuit is a `verity.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
 proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
-Definitions (`verity/ml/circuits/PROTOCOL.md`):
+Definitions (`verity/circuits/PROTOCOL.md`):
 
     linear = bind(Gemm, K=32, N=32, **GEMM_AMPERE)     # ops.boolean.gemm: x[32] @ W[32, 32]^T on the BF16 step, on bits
     def body(B, S, x, w1, w2):
@@ -18,7 +18,7 @@ the same rows.
 
 A Program holds only gates. Its root body is its step structure: an input node for each parameter, bound per run or at
 registration (`program.bindings`), then its Calls. The accounting layer reads it at that grain, the census's
-(`verity.ml.circuits.census`):
+(`verity.definitions.circuits.census`):
 
 - a *node* is a root node, named by its parameter or by the `name` its Call was given (`names`);
 - a *value* (`Value`) is a census value: a run of one node's output leaves that the same Calls read, which is what moves
@@ -28,12 +28,12 @@ registration (`program.bindings`), then its Calls. The accounting layer reads it
   work. It times the work and is never credited;
 - a node's *ANDs* (`ands`), what is credited: the census's Boolean work, Lean's `Circuit.andSize`.
 
-`evaluate` computes the census values, each Call through `verity.ml.circuits.evaluation.evaluate_batch` (a kernel where
+`evaluate` computes the census values, each Call through `verity.circuits.evaluation.evaluate_batch` (a kernel where
 one is registered, a Boolean Definition's word Definition's among them; bit-sliced otherwise); `register` commits the
 registered inputs before any run, bound to the occupancy profiles the developer may choose from (`profile_digest`), and
 `commit` gives the hiding commitment a run's values sit under: the census values,
 which are what can cross between devices (a Call's own wires are witness of its proof blocks). Both are hm96-sha512 rows,
-one per element, in one frame-v3-sha512 tree (`verity.ml.commitments.advice`), bound to the Program's digest.
+one per element, in one frame-v3-sha512 tree (`verity.commitments.advice`), bound to the Program's digest.
 """
 from __future__ import annotations
 
@@ -46,19 +46,19 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols import registration
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import types as T
-from verity.ml.circuits.census import PRECISION, PRODUCTS, census, family
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.cut import WIRING
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.evaluation import evaluate as reference
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.batch import type_dtype
-from verity.ml.circuits.layout import FunctionCall, resolve
-from verity.ml.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
-from verity.ml.commitments import advice
+from verity.hardware import registration
+from verity.circuits import boolean as BL
+from verity.circuits import types as T
+from verity.definitions.circuits.census import PRECISION, PRODUCTS, census, family
+from verity.circuits.codec import program_digest
+from verity.circuits.cut import WIRING
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.evaluation import evaluate as reference
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.batch import type_dtype
+from verity.circuits.layout import FunctionCall, resolve
+from verity.circuits.program import REGISTRATION, RUN, Program, input_id, is_input
+from verity.commitments import advice
 
 
 @dataclass(frozen=True)
@@ -114,7 +114,7 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
     memo = _census.setdefault(program, {})
     if boolean not in memo:
-        from verity.ml.definitions.boolean import boolean_version
+        from verity.definitions.boolean import boolean_version
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 
