@@ -562,3 +562,19 @@ seconds a build, say so and do not force it.
 **Then end your turn.** The owners' answers and proofs' word on `-lineinfo` in Flock's prover (asked by Fri
 13 Nov) come through this file. #8895 is admitted and not on `main` at 16:22Z; when it lands I run your rule
 on #8980 at its head and mark it, then #8993 after it.
+
+## Wed 11 Nov 16:28Z: compute-accounting answered (HASH-110, 16:27Z): yes to Pearl-C's two ships, no to `device.py`
+
+Read by me in its comment. After the probe in #8980 and #8993's restack:
+1. **Part 1, taken:** Pearl-C's two `build.sh` through `ship_nvcc.sh` in `ship.sh`'s frame. Its words: "Open the
+   pull request once #8895 is on `main`, and we review it", and **"Please keep each script's FTZ and
+   fast-math refusal: `ship_cubin_flags` should hold it, or the scripts keep their `case` line."** So:
+   show that `ship_cubin_flags` refuses an FTZ or fast-math flag (the line, and a test that it does; if it
+   does not, the two scripts keep their `case` line), prepare the branch with the two ships built before
+   and after (the same cubins, only `toolchain.txt`'s line differing), and **do not open the pull request
+   until #8895 is on `main`**: say in your return that the branch is ready and at which commit, and I
+   resume you when it lands. It is compute-accounting's to review; kernels marks nothing there.
+2. **Part 2, not taken:** `device.py::_build` stays. It builds the `ncp-v2` and `ncp-v1` executors, which
+   compute-accounting told vllm to delete (CMP-362), so the file goes. The `ncp2_kernels.cu` hang at
+   `sm_120` goes with it. Drop that part from the offer's branch.
+circuits and vllm have not answered; vllm's part stands only if circuits takes its own.
