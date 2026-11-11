@@ -32,7 +32,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from device import BLOCK, PER_LEAF, SALT_DOMAIN, Lib, digests, pack_words, rb, skr, store_salt, stream_head
+from device import BLOCK, PER_LEAF, SALT_DOMAIN, Lib, digests, pack_words, poison, rb, skr, store_salt, stream_head
 
 ROW = 64
 """rs_gather64's row: a chunk is BLOCK // ROW of them."""
@@ -119,7 +119,11 @@ class InPlace:
     place, leaf salts under `key`; `kept_from` is h0 (at most FUSED_H0), and `ctas` the receipt grids' CTAs (0: an
     opening's as many as are resident at once, a pass's one an SM). A pass's tree is hashed on a stream of its own
     beside the caller's. `rows` is the registration's k_s, 16 or 64: each pass and each opening sets the library to
-    it with its constants (`set_pass`), so stores at different rows can share a library."""
+    it with its constants (`set_pass`), so stores at different rows can share a library.
+
+    A gate sets `poison`: every buffer a pass or an opening writes then holds `device.POISON` before it is written
+    (`_out`). Its control clears `write`: the receipts and the pass launch nothing, so what they return is what their
+    buffers held."""
 
     def __init__(self, torch, lib: Lib, regions: Sequence[Region], key: bytes, *, kept_from: int = 6,
                  ctas: int = 0, rows: int = skr.ROWS) -> None:
@@ -129,7 +133,7 @@ class InPlace:
         self.torch, self.lib, self.key, self.kept_from, self.ctas = torch, lib, key, kept_from, ctas
         if rows not in rb.ROWS:
             raise ValueError(f"sketch-sha512's rows are one of {list(rb.ROWS)}, not {rows}")
-        self.rows = rows
+        self.rows, self.poison, self.write = rows, False, True
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.side = torch.cuda.Stream(self.device)
         self.regions: tuple[Region, ...] = ()
@@ -137,6 +141,13 @@ class InPlace:
         self._firsts: list[int] = []
         self._rows = np.zeros((0, 7), dtype=np.uint64)
         self.extend(regions)
+
+    def _out(self, shape, dtype):
+        """A buffer on the device for a kernel to write, poisoned first under `poison`."""
+        t = self.torch.empty(shape, dtype=dtype, device=self.device)
+        if self.poison:
+            poison(self.torch, t)
+        return t
 
     def extend(self, regions: Sequence[Region]) -> None:
         """Regions from the store's end on, in store order: its registered regions, or chunks appended (`append`)."""
@@ -189,7 +200,7 @@ class InPlace:
         np.cumsum(runs[:-1, 1], out=pairs[1:, 1])
         d = torch.from_numpy(pairs.view(np.int64)).to(self.device)
         n = plan.length
-        addrs, js = (torch.empty(n, dtype=torch.int64, device=self.device) for _ in range(2))
+        addrs, js = (self._out(n, torch.int64) for _ in range(2))
         self.lib.call("rs_map", d.data_ptr(), len(pairs), self.table.data_ptr(), len(self.regions), n,
                       addrs.data_ptr(), js.data_ptr())
         return addrs, js
@@ -203,21 +214,22 @@ class InPlace:
                           rb.domain(seed, plan).domain_id, SALT_DOMAIN + self.key + seed, n)
         self.lib.call("rb_sketch_set", rb.sketch_prefix(seed))
         head = stream_head(seed, self.rows)
-        pk = self.torch.empty(pack_words(self.rows), dtype=self.torch.int32, device=self.device)
+        pk = self._out(pack_words(self.rows), self.torch.int32)
         self.lib.call("rs_signs64" if self.rows == skr.ROWS64 else "rs_signs16", head, len(head), pk.data_ptr())
         return pk
 
     def receipts(self, addrs, js, pk, p0: int, n: int):
         """Positions p0 … p0 + n − 1's receipts (n × 8 words) under the pass constants set."""
-        ys = self.torch.empty((n, 8), dtype=self.torch.int64, device=self.device)
-        self.lib.call("rs_mapped_receipts", addrs.data_ptr() + 8 * p0, js.data_ptr() + 8 * p0, n, pk.data_ptr(),
-                      ys.data_ptr(), self.ctas)
+        ys = self._out((n, 8), self.torch.int64)
+        if self.write:
+            self.lib.call("rs_mapped_receipts", addrs.data_ptr() + 8 * p0, js.data_ptr() + 8 * p0, n, pk.data_ptr(),
+                          ys.data_ptr(), self.ctas)
         return ys
 
     def tree(self, ys, c0: int, real: int, width: int):
         """The 2 · width − 1 nodes of the subtree of `width` leaves from leaf c0: `real` leaves from ys, then padding,
         then every level above (`rb_tree`'s layout, level 0 first)."""
-        nodes = self.torch.empty((2 * width - 1, 8), dtype=self.torch.int64, device=self.device)
+        nodes = self._out((2 * width - 1, 8), self.torch.int64)
         self.lib.call("rb_leaves", ys.data_ptr(), c0, real, nodes.data_ptr(), None)
         if real < width:
             self.lib.call("rb_pads", c0 + real, width - real, nodes.data_ptr() + ROW * real)
@@ -230,25 +242,30 @@ class InPlace:
         addrs, js = self.map(plan)
         return self.receipts(addrs, js, self.set_pass(seed, plan), 0, plan.length)
 
-    def run_pass(self, seed: bytes, plan: rb.Plan) -> tuple[bytes, Pass]:
-        """One pass under `seed` over `plan`: its root and what its openings need (`Pass`)."""
+    def run_pass(self, seed: bytes, plan: rb.Plan, own_tiles: bool = False, keep: dict | None = None) -> tuple[bytes, Pass]:
+        """One pass under `seed` over `plan`: its root and what its openings need (`Pass`). `own_tiles` and `keep` are
+        `fused`'s."""
         addrs, js = self.map(plan)
-        H, h0, kept = self.fused(addrs, js, self.set_pass(seed, plan), plan.length)
+        H, h0, kept = self.fused(addrs, js, self.set_pass(seed, plan), plan.length, own_tiles, keep)
         root = digests(kept[-1:].cpu())[0]
         return root, Pass(seed, plan, H, h0, kept)
 
-    def fused(self, addrs, js, pk, n: int):
+    def fused(self, addrs, js, pk, n: int, own_tiles: bool = False, keep: dict | None = None):
         """The receipts and tree of n positions mapped (`map`) under the pass constants and signs set (`set_pass`),
-        the tree hashed behind the receipts (`rs_mapped_pass`): its H, h0 and its levels h0 … H on the device."""
+        the tree hashed behind the receipts (`rs_mapped_pass`): its H, h0 and its levels h0 … H on the device. With
+        `own_tiles` the pass has no receipt grid, so its consumers compute every tile themselves; `keep`, a gate's,
+        gets the pass's receipts (`ys`) and whether a receipt CTA started (`started`, a one-word tensor)."""
         torch = self.torch
         H = (rb.leaves(n) - 1).bit_length()
         h0 = min(self.kept_from, H)
-        top = 1 << (H - h0)
-        ys = torch.empty((n, 8), dtype=torch.int64, device=self.device)
-        kept = torch.empty((2 * top - 1, 8), dtype=torch.int64, device=self.device)
-        ctr = torch.empty(2 + -(-n // READY_BLOCKS) + top, dtype=torch.int32, device=self.device)
-        self.lib.call("rs_mapped_pass", addrs.data_ptr(), js.data_ptr(), n, pk.data_ptr(), ctr.data_ptr(), len(ctr),
-                      ys.data_ptr(), kept.data_ptr(), h0, self.ctas, self.side.cuda_stream)
+        top, groups = 1 << (H - h0), -(-n // READY_BLOCKS)
+        ys, kept = self._out((n, 8), torch.int64), self._out((2 * top - 1, 8), torch.int64)
+        ctr = torch.empty(2 + groups + top, dtype=torch.int32, device=self.device)   # the launch's own, which it clears
+        if self.write:
+            self.lib.call("rs_mapped_pass", addrs.data_ptr(), js.data_ptr(), n, pk.data_ptr(), ctr.data_ptr(), len(ctr),
+                          ys.data_ptr(), kept.data_ptr(), h0, -1 if own_tiles else self.ctas, self.side.cuda_stream)
+        if keep is not None:
+            keep.update(ys=ys, started=ctr[2 + groups:3 + groups])
         return H, h0, kept
 
     def open(self, handle: Pass, positions: Sequence[int]) -> list[tuple[bytes, bytes, bytes, tuple[bytes, ...]]]:
@@ -268,7 +285,7 @@ class InPlace:
         kept = handle.kept.cpu()
         at = addrs[torch.tensor(list(positions), dtype=torch.int64, device=self.device)].cpu().numpy().view(np.uint64)
         rows = (at[:, None] + np.arange(0, BLOCK, ROW, dtype=np.uint64)).reshape(-1)
-        got = torch.empty((len(rows), 8), dtype=torch.int64, device=self.device)
+        got = self._out((len(rows), 8), torch.int64)
         if len(rows):
             self.lib.call("rs_gather64", torch.from_numpy(rows.view(np.int64)).to(self.device).data_ptr(), len(rows),
                           got.data_ptr())

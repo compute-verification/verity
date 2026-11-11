@@ -18,6 +18,11 @@ check is against the driver's reference over each chunk as the binder reads it (
     refusals   a misaligned region, a gap, a plan past the store, a plane of part chunks, a CPU tensor, pages past
                their storage
 
+Every buffer a gate's pass or opening writes holds 0xA5 first (`InPlace.poison`). After each plan's pass, a control
+under the same seed launches neither the receipts nor the pass, and the plan's own comparisons must refuse what it
+returns (`no_write`). At 64 rows each plan has one more pass with no receipt grid, so every tile is a consumer's own
+(`consumer_tiles`): its receipts and root are the reference's, and no receipt CTA started.
+
 Timing is at Llama-3.1-8B's weights as vLLM holds them in bf16 (the embedding; per layer qkv, o, gate_up, down and two
 norms; the final norm and lm_head: 195 tensors, 16.06 GB), and then with a KV pool beside them (`--pages` pages a layer,
 FlashAttention's layout): the read alone through the map, the receipts alone and the whole pass (map, constants and
@@ -143,6 +148,7 @@ def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS) -> dict:
     key = rng.bytes(32)
     ip = InPlace(torch, lib, [Region.of_backing(r.first, b) for r, b in zip(store.layout().regions, backs)], key,
                  kept_from=2, rows=rows)
+    ip.poison = True
     blocks = held(store, backs)
     page_blocks = 2 * 2   # planes · plane_blocks: a page's chunks in a layer's region
     out = {"rows": rows, "blocks": N,
@@ -158,8 +164,19 @@ def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS) -> dict:
              "kept": unfused_kept(ip, mapped, handle)}
         for h in (0, FUSED_H0):
             other = InPlace(torch, lib, ip.regions, key, kept_from=h, rows=rows)
+            other.poison = True
             root_h, handle_h = other.run_pass(seed, plan)
             r[f"kept_from_{h}"] = root_h == want and unfused_kept(other, mapped, handle_h)
+        ip.write = False   # the control, after the receipts and the pass that wrote this seed's
+        r["no_write"] = {"receipts": digests(ip.pass_receipts(seed, plan).cpu()) == ys,
+                         "root": ip.run_pass(seed, plan)[0] == want}
+        ip.write = True
+        tiles = {"receipts": True, "root": True, "receipt_ctas_started": 0}
+        if rows == skr.ROWS64:
+            keep = {}
+            root_c, _ = ip.run_pass(seed, plan, own_tiles=True, keep=keep)
+            r["consumer_tiles"] = {"receipts": digests(keep["ys"].cpu()) == ys, "root": root_c == want,
+                                   "receipt_ctas_started": int(keep["started"][0])}
         if draws:
             ps = sorted({0, plan.length - 1, *map(int, rng.integers(0, plan.length, draws))})
             ok = []
@@ -170,7 +187,8 @@ def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS) -> dict:
         out[name] = r
         log(f"gate {name}: {r}")
         return bool(r["receipts"] and r["root"] and r["kept"] and r["kept_from_0"] and r[f"kept_from_{FUSED_H0}"]
-                    and r.get("openings", True))
+                    and r.get("openings", True) and not any(r["no_write"].values())
+                    and r.get("consumer_tiles", tiles) == tiles)
 
     ok = check("whole", rb.Plan.whole(N), 24)
     kv_firsts = [infos[f"kv/{li}"].first for li in range(3)]

@@ -1480,7 +1480,8 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
 
 // The in-place pass (`InPlace.run_pass`) as rs_pass runs a shard's: positions 0 … n − 1, each read where rs_map's
 // addrs puts it and hashed at its js, their receipts into ys (n × 8 words) by one persistent grid of ctas CTAs on sa
-// (`mapped16_pass_kernel`, at 64 rows `mapped64_pass_kernel`; 0: one an SM), and the receipt tree behind them by
+// (`mapped16_pass_kernel`, at 64 rows `mapped64_pass_kernel`; 0: one an SM; −1: no receipt grid, so the consumers
+// compute every tile themselves, which a gate runs to check their own tile), and the receipt tree behind them by
 // persistent consumer grids (`mapped_consumer_kernel`, `pass_consumers`), one on sb beside the receipt grid and one
 // behind it on sa, so the tree follows the reads with no kernel boundary. The tree is `receipts.tree`'s under the
 // pass's constants set: ⌈n / 16⌉
@@ -1502,8 +1503,9 @@ int rs_mapped_pass(const uint64_t *addrs, const uint64_t *js, uint64_t n, const 
       return 4;
     made[dev] = true;
   }
-  if (!addrs || !js || !pk || !ctr || !ys || !kept || n < 1 || n >= (1ULL << 36) || h0 < 0 || h0 > 8 || ctas < 0)
+  if (!addrs || !js || !pk || !ctr || !ys || !kept || n < 1 || n >= (1ULL << 36) || h0 < 0 || h0 > 8 || ctas < -1)
     return 1;
+  const bool receipts = ctas >= 0;
   const uint64_t nl = (n + PER_LEAF - 1) / PER_LEAF;
   int H = 0;
   while ((1ULL << H) < nl) ++H;
@@ -1522,15 +1524,15 @@ int rs_mapped_pass(const uint64_t *addrs, const uint64_t *js, uint64_t n, const 
   uint64_t side, tail;
   int rc;
   if (wide && shared64(producer, K64_MAPPED_PASS)) return 4;
-  if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, ctas, shared, subtrees, &side,
-                           &tail)))
+  if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, receipts ? ctas : 0, shared,
+                           subtrees, &side, &tail)))
     return rc;
   unsigned *started = ctr + 2 + groups;
   if (cudaMemsetAsync(ctr, 0, 4 * words, sa) || cudaEventRecord(go[dev], sa) || cudaStreamWaitEvent(sb, go[dev], 0))
     return 4;
-  if (wide)
+  if (receipts && wide)
     mapped64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>(addrs, js, n, (const uint4 *)pk, ys, ctr, started);
-  else
+  else if (receipts)
     mapped16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>(addrs, js, n, pk, ys, ctr, started);
   consumer<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
   if (tail) consumer<<<(unsigned)tail, CONSUMER_THREADS, shared, sa>>>(addrs, js, n, pk, ys, ctr, kept, h0, H);
