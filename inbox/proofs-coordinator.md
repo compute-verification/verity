@@ -40008,3 +40008,46 @@ Clock: `date -u` read 05:52:30Z before writing. My VM was reset at about 04:31Z 
 - **The writer** (c) follows it and waits on one thing only, your word on the parse-only subcommand; it has no date of its own until then.
 
 - **Could not do:** nothing. I end my turn on the two runs; resume me when they end.
+
+## CROSS, Wed 11 Nov 06:06Z: your 06:02Z read; two more pairs of our heads do not merge with each other: marked #8539 with #8414 (new with the crossing) and with #8139 (old); #8512's records passed, no ready line written
+
+**Your 06:02Z message is read** `[read]`. I write no ready line for #8512 and change neither #8512's nor #8527's head.
+
+**I had checked every head against `main` only. Now checked pair by pair** `[run]`: `git merge-tree --write-tree A B` over
+my thirteen pushed heads and #8820's `f1a8ef0141ff`, 91 pairs. Five exit 1:
+
+| pair | files | at the old heads |
+|---|---|---|
+| #8512 with #8785 | `security/Proofs/Flock/SamplingGeneric.lean` | conflicted too (yours, through #8820) |
+| #8527 with #8785 | the same file | (it holds #8512) |
+| **#8539 (marked) with #8414** | `verity/protocols/spot/verifier/one_stage/partition.py`, `.../tests/test_two_stage.py` | **clean**: old #8414 `4975a307d3f7` is an ancestor of old #8539 `4744e3e96c89` |
+| **#8539 (marked) with #8139** | 14 files: `security/Proofs/Flock/Claims/Sampling/Select/Code.lean`, `security/Proofs/Properties/Spot.lean`, `security/Properties/Spot.lean`, four under `verity/protocols/spot/verifier/lean/Spot/`, `service.py`, `verifier.py` and others | conflicted too, in the same files at their old paths |
+| #8339 with #8406 | `fixtures/artifacts.json` (each gives `guard.tar.xz` a new id) | conflicted too (in my 05:15Z table) |
+
+**#8414 should not be marked beside #8539: it lands inside #8539** `[derived]`
+
+- #8539's change holds all of #8414's and builds on it: #8539's old head merged #8414's old head.
+- I crossed the two separately, so each crossing rewrote the same import lines. That is the conflict: the two crossed
+  heads differ there only by #8539's own later change (it dropped `member_refs` from `partition.py` and reads
+  `is_registered`).
+- Merging #8414's crossed head into #8539's changes nothing outside those two files. Inside them the right result is
+  #8539's file whole. **Resolving only the marked hunks is wrong:** git also takes #8414's
+  `from verity.circuits.cut import boundary_widths, call_scope, member_refs` into `partition.py` with no marker,
+  which #8539 had removed.
+- So once #8539 lands, #8414 has no change of its own left. Its quick tier `61dd` still runs (55 of 65 suites passed at
+  05:57Z); I report its verdict but write no ready line for it unless you say otherwise.
+- The crossing that would have kept them mergeable is #8539 over #8414's crossed head (the stack recipe). I did not
+  do that: #8539 was pushed at 04:12Z, #8414 at 05:16Z. I change neither head now.
+
+**#8139 conflicts with marked #8539 in 14 files, as it did before the move** `[run]`. That is the two PRs, not the
+crossing. Its records run `r20261111-051704-f230` passed at `c274cac9c132` (`security: check.py exit 0 in 1583 s`, three
+packages `pass`); its quick tier `76af` runs. I will give you its verdicts; whether it is marked before #8539 lands is
+yours.
+
+**#8512: records passed; body to be updated; no ready line** `[run]`
+
+- `r20261111-041418-c513` at `815b893acd23`: `"outcome": "pass"`, three packages `pass`,
+  `security: check.py exit 0 in 5746 s`, `security/Properties: check.py exit 0 in 403 s`.
+- The second run `r20261111-053233-79af` I cancelled at 06:02Z, when `c513` had passed and before I read your message
+  ("let its records runs end"). It had built for 30 minutes and has no verdict.
+- Quick tier `r20261111-041947-fb67`: `8 suites: 8 passed (0 cached), 0 failed`.
