@@ -1,17 +1,17 @@
-# Security/Properties: what the code does
+# security/Properties: what the code does
 
-The package `security_properties` (`Security/Properties/lakefile.toml`): statements about the code's Lean functions,
-the checks each protocol runs, each listed in `Security/Properties/lean-audit.json` and proved under
-`Security/Proofs/Properties/` (`proved_in`). [`Security/README.md`](../README.md) has the argument and what code outside
-`Security/` may do.
+The package `security_properties` (`security/Properties/lakefile.toml`): statements about the code's Lean functions,
+the checks each protocol runs, each listed in `security/Properties/lean-audit.json` and proved under
+`security/Proofs/Properties/` (`proved_in`). [`security/README.md`](../README.md) has the argument and what code outside
+`security/` may do.
 
 ## Who may import it
 
 - `Proofs.*` imports it, and nothing else: `security_proofs` is the one package that requires it
-  (`Security/Proofs/lakefile.toml`).
-- It requires `security` and, by path, the code packages it states properties of (`Security/Properties/lakefile.toml`).
-  No module here imports one of `Proofs/` (`trees` in `Security/lean-audit.json`).
-- `layers` in `Security/Properties/lean-audit.json` lists what each module prefix may import: the definitions and the
+  (`security/Proofs/lakefile.toml`).
+- It requires `security` and, by path, the code packages it states properties of (`security/Properties/lakefile.toml`).
+  No module here imports one of `Proofs/` (`trees` in `security/lean-audit.json`).
+- `layers` in `security/Properties/lean-audit.json` lists what each module prefix may import: the definitions and the
   code a property is about, never a proof.
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`.
 

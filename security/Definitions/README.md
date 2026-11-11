@@ -1,21 +1,21 @@
-# Security/Definitions: the spec
+# security/Definitions: the spec
 
-The one tree of the package `security` (`Security/lakefile.toml`, root `Definitions.lean`): each area's vocabulary, its
+The one tree of the package `security` (`security/lakefile.toml`, root `Definitions.lean`): each area's vocabulary, its
 premises (`Assumptions`) and its guarantee statements (`Guarantees`), each a `def G : Prop`. It is the part a reader
-reads. [`Security/README.md`](../README.md) has the argument, the lock and what code outside `Security/` may do.
+reads. [`security/README.md`](../README.md) has the argument, the lock and what code outside `security/` may do.
 
 ## Who may import it
 
 - `Properties.*` and `Proofs.*` import it. It imports neither: `security` requires only Mathlib
-  (`tests/test_lean_packages.py`), and no module here imports one of `Proofs/` (`trees` in `Security/lean-audit.json`).
-- Inside the tree, `layers` in `Security/lean-audit.json` lists the module prefixes each prefix may import. An area's
+  (`tests/test_lean_packages.py`), and no module here imports one of `Proofs/` (`trees` in `security/lean-audit.json`).
+- Inside the tree, `layers` in `security/lean-audit.json` lists the module prefixes each prefix may import. An area's
   definitions import no assumption, guarantee or proof; its `Assumptions` read the definitions; its `Guarantees` read
   both.
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`, and on a `.lean` file
   that no root imports.
 - One pin's command (`tools/verity/check/pins.py`) runs Lean in this package's Lake environment:
   `verity/protocols/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
-  `Security/`, and the command runs it there and removes it.
+  `security/`, and the command runs it there and removes it.
 
 ## Areas
 
@@ -46,5 +46,5 @@ A generated file is its generator's: change the generator and run it, never the 
 - `Accounting/Sheets/`: `benchmarks/pouw/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
-Each generator's tests hold the files to its output. `Security/README.md` lists every program that writes Lean under
-`Security/`.
+Each generator's tests hold the files to its output. `security/README.md` lists every program that writes Lean under
+`security/`.

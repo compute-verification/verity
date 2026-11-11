@@ -1,24 +1,24 @@
-# Security/Proofs: the proofs
+# security/Proofs: the proofs
 
-The package `security_proofs` (`Security/Proofs/lakefile.toml`): every proof, `<Area>.SecurityProofs.G :
+The package `security_proofs` (`security/Proofs/lakefile.toml`): every proof, `<Area>.SecurityProofs.G :
 <Area>.Guarantees.G` for each proved guarantee, the lemmas behind them, and under `Properties/` the proofs of
-`Security/Properties/`. The kernel checks it and nobody reads it for meaning: the locks of `Security/` and
-`Security/Properties/` name its theorems (`proved_in`), and its own lock lists no guarantee.
-[`Security/README.md`](../README.md) has the argument and what code outside `Security/` may do.
+`security/Properties/`. The kernel checks it and nobody reads it for meaning: the locks of `security/` and
+`security/Properties/` name its theorems (`proved_in`), and its own lock lists no guarantee.
+[`security/README.md`](../README.md) has the argument and what code outside `security/` may do.
 
 ## Who may import it
 
 - Nothing requires it. It requires `security`, `security_properties`, the code packages its proofs are about and
-  ArkLib (`Security/Proofs/lakefile.toml`).
+  ArkLib (`security/Proofs/lakefile.toml`).
 - No module of `Definitions/` or `Properties/` imports a module here, and no guarantee's statement reads a definition
-  here (`trees` in `Security/lean-audit.json`, which the Lean check, `tools/verity/lean/check.py`, enforces). Flock is
+  here (`trees` in `security/lean-audit.json`, which the Lean check, `tools/verity/lean/check.py`, enforces). Flock is
   the exception until its spec is extracted: its guarantees and assumptions are still in `Flock/`, which `trees`'
   `except` lists by module, with the few modules of other areas that read them.
 - A code package's test may build modules here and run a Lean file that imports them in this package's Lake
   environment (`lake env lean`). These name a module here today, so renaming it changes them:
   - `verity/protocols/pous/lean/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
     `Proofs.Pous.Accounting.Numbers` for a submission to import, as `submissions/reference.lean` beside it does the
-    first; `check.sh` beside it runs the Lean check on `Security` with the grader.
+    first; `check.sh` beside it runs the Lean check on `security` with the grader.
   - `verity/protocols/spot/verifier/tests/lean/generate.sh` runs `ExfiltrationVectors.lean`
     (`Proofs.Flock.Soundness.Audit.Influence`, `Proofs.Flock.Soundness.Audit.StratifiedMiss`) and
     `ExfiltrationTwoVectors.lean` (`Proofs.Flock.SamplingGeneric.TwoTable`), both beside it.
@@ -41,6 +41,6 @@ registry, path by path: `research msg owners PATH`.
 | `NetworkCertifier` | The network certifier's proofs ([README](NetworkCertifier/README.md)) |
 | `Pous` | The proofs of PoUS's guarantees; `Statements` holds the lemmas' statements |
 | `Pouw` | PoUW's proofs: every theorem and lemma over `Definitions.Pouw` |
-| `Properties/` | The proofs of `Security/Properties/`, under each property's area name |
+| `Properties/` | The proofs of `security/Properties/`, under each property's area name |
 | `Spot` | Populations: which object each policy needs of SPOT's guarantee |
 | `WeightSecurity` | Model weight security's proofs: the leakage lemma and its forms at a deployment |
