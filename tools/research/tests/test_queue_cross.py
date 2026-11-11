@@ -16,7 +16,7 @@ import research.queue as Q
 from research.queue import StoreLabels, label_target
 from research.store import vocab
 from test_queue import World, _git
-from test_queue_moves_carry import A, B, _kept, _land, _mark, _move, _push_main, _queue, world  # noqa: F401
+from test_queue_moves_carry import LIB, A, B, _kept, _land, _mark, _move, _push_main, _queue, world  # noqa: F401
 
 
 def _open(world: World, n: int, head: str) -> None:
@@ -81,6 +81,32 @@ def test_a_clean_crossing_is_pushed_only_with_push_and_its_mark_and_verdict_carr
     (drop / "cross.json").write_text((out / Q.CROSS_MAPPED).read_text())
     q.mapped_jobs = 1
     q.work_out_mapped()
+    labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
+    assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
+
+
+def test_a_head_lacking_an_earlier_move_crosses_the_later_one_named_and_its_mark_and_verdict_carry(world, monkeypatch):
+    """#1 is based on a commit `main` took after the first move's base, before that move landed, so it lacks that move, which
+    restack.py won't cross (`based-after`).  Naming only the second, the step lets restack.py cross that one, and the loop's
+    mapping skips the first as that crossing does: the crossed head's own change is the old one mapped across the second, so
+    it crosses clean, keyed by both moves as the loop keys it, and its mark and verdict carry."""
+    first = _move(world)
+    _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
+    _open(world, 1, old := world.change({"new_proto/extra.py": "X = 1\n"}))
+    _mark(world, 1, old)
+    tree = _git(world.dev, "merge-tree", "--write-tree", other, first)
+    _push_main(world, _git(world.dev, "commit-tree", tree, "-p", other, "-p", first, "-m", "Queue: #9 the move"))
+    _land(world, second := _move(world, LIB))
+    out = world.tmp / "out"
+    assert _cross(world, monkeypatch, "--move-commit", second, "--out", str(out)) == 0
+    report = _report(out)
+    assert report["refused"] == [] and [(c["pr"], c["old"], c["lands"]) for c in report["crossed"]] == [(1, old, True)]
+    new = report["crossed"][0]["new"]
+    assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == new
+    world.gh.put(1, new, ready=False)
+    q = _queue(world)
+    assert _git(q.workdir, "show", f"{new}:lib/new_proto/extra.py") == "X = 1" and q.own_change(new) != q.own_change(old)
+    assert json.loads((out / Q.CROSS_MAPPED).read_text()) == {Q.mapped_key(old, [(first, []), (second, [])]): q.own_change(new)}
     labels = StoreLabels(world.store, change=q.own_change, moved=q.mapped_change, owners=lambda n: {f"lane-{n}"})
     assert _kept(labels, 1, new) == (True, [("land", "reviewer")])
 

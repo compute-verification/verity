@@ -4227,11 +4227,12 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
 
 def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready: Callable[[int, str], bool],
                verdict: Callable[[int, str], str | None], unlanded: bool = False, only: Collection[int] = (),
-               slug: str = REPO) -> tuple[dict[int, dict], list[dict], list[dict]]:
+               slug: str = REPO) -> tuple[dict[int, dict], list[dict]]:
     """Which open PRs into `main` ``prs`` (``only`` these numbers, when given) `research queue cross` carries across the moves
     ``main`` has and their heads lack: ({number: {"pr", "branch", "old", "lands", "src", "moves", "below"}} of each to cross,
-    [each refused, with why], [each skipped, with its `kind` and why]).  A head crosses the moves ``named`` names (none: every
-    move `moves_between` finds), and is refused when it lacks another besides.  It crosses once marked ready at its head
+    [each skipped, with its `kind` and why]).  A head crosses the moves ``named`` names that it lacks (none named: every move
+    `moves_between` finds), whatever other moves it lacks, as `restack.py --move-commit` crosses a branch: restack.py judges
+    whether it crosses them, and `cross_one` whether its mark would carry.  It crosses once marked ready at its head
     (``ready``, as the loop reads marks), and with a land verdict (``verdict``: the head of the PR whose own verdict counts for
     it, `src`, that one or one whose labels it takes) unless ``unlanded``, then only without one (`CROSS_UNLANDED`).  A PR whose
     head holds another open PR's head off `main` crosses only with that PR, onto its crossed head (`below`, the highest of those
@@ -4241,7 +4242,6 @@ def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready
 
     opened = {p.number: p for p in prs if p.base == "main"}
     todo: dict[int, dict] = {}
-    refused: list[dict] = []
     skipped: list[dict] = []
     off: dict[int, str] = {}                            # why each open PR this run doesn't cross isn't crossed
 
@@ -4264,9 +4264,6 @@ def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready
             off[n] = "not asked for (--only)"
         elif not ready(n, p.head):
             skip(p, "not marked", "not marked ready at its head")
-        elif extra := [mv[0][:12] for mv in found if mv not in moves]:
-            off[n] = why = f"it lacks the moves {', '.join(extra)} too, which --move-commit doesn't name"
-            refused.append({"pr": n, "old": p.head, "why": why})
         elif ((src := verdict(n, p.head)) is not None) == unlanded:
             skip(p, "land verdict" if src else "no land verdict",
                  "it has a land verdict of its own: the run without --unlanded crosses it" if src else CROSS_UNLANDED)
@@ -4294,7 +4291,7 @@ def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready
             skip(opened[n], "stack", f"it holds #{todo[n]['below']}'s head, which this run doesn't cross: "
                                      f"{off.get(todo[n]['below'], 'refused')}")
             del todo[n]
-    return todo, refused, skipped
+    return todo, skipped
 
 
 def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: bool = False,
@@ -6746,11 +6743,11 @@ def _cross(a: argparse.Namespace) -> int:
         set_drivers(top)
     except Refused as e:
         raise SystemExit(f"research queue cross: the merge drivers restack.py merges with can't be set here: {e}") from None
-    todo, refused, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, a.unlanded, set(a.only or ()), slug_)
-    log(f"research queue cross: {len(todo)} to cross, {len(refused)} refused, {len(skipped)} skipped; crossing {a.jobs} at once")
-    crossed, refused2, skipped2 = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log)
+    todo, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, a.unlanded, set(a.only or ()), slug_)
+    log(f"research queue cross: {len(todo)} to cross, {len(skipped)} skipped; crossing {a.jobs} at once")
+    crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log)
     report = {"main": main, "moves": named or list(dict.fromkeys(m for t in todo.values() for m, _ in t["moves"])),
-              "unlanded": a.unlanded, "crossed": crossed, "refused": refused + refused2, "skipped": skipped + skipped2}
+              "unlanded": a.unlanded, "crossed": crossed, "refused": refused, "skipped": skipped + stacked}
     out = a.out or Path(os.environ.get("OUT") or "cross")
     cross_write(top, out, report)
     if a.push:
@@ -6784,7 +6781,7 @@ def main(argv: list[str]) -> int:
                     "and whose tools/move/restack.py crosses them (default origin/main)")
     ap.add_argument("--move-commit", action="append", default=[], metavar="SHA", help="cross: a move to cross, a commit of "
                     "--main with a `Move:` or `Layout-move:` line, repeated (default: every move --main has and a head lacks); "
-                    "a head lacking another is refused")
+                    "a head lacking others besides crosses the named ones, as restack.py --move-commit crosses it")
     ap.add_argument("--only", type=int, nargs="+", metavar="N", help="cross: only these PRs; one stacked on a PR it doesn't name "
                     "is skipped, as its stack doesn't cross")
     ap.add_argument("--unlanded", action="store_true", help=f"cross: only the marked heads with no land verdict: {CROSS_UNLANDED}")
