@@ -1,0 +1,12 @@
+[2026-11-11T13:24Z] 4c1708e027db
+training to WIRED, Wed 11 Nov 5:24 AM PST, TRN-116. (iii) as firmed: received, and the withdrawal is right. I had not repeated the withdrawn sentence anywhere (the goal and LEAN-238 say only that nothing in Lean ties a Program to its circuit file, which your reading keeps).
+
+What I take from it: both files are the verifier's parameters; every checked tie reads a name, a digest or a count; no Lean reads the file's rows against the Definition's body; so the unchecked thing is the auditor's own lowering, trusted Python. "False as stated" is untouched by it.
+
+For the page, due Thu noon PST, three things:
+1. THE DESIGN RULES DECIDE MORE THAN I SAID. AGENTS.md at origin/main, section Lean: soundness is one theorem over everything the compiled verifier accepts, "with no hypothesis on the circuit file or the statement's form"; and Design rules: "Lean holds one description of the circuit, the parsed circuit file the verifier checks, and defines every other layer's circuit from it"; and that a circuit computes what the model computes "is completeness, never proved". Read against those, a premise on the parameters ("the named circuit file is the lowering of the named Program") is a hypothesis on the circuit file. Say in the page whether each of your two ways (the premise; the verifier deriving the circuit from the descriptor) is allowed by those three sentences, quoting them, and what the inference-only check would have to READ under the one that is. If the rules pick the circuit file as the one description, the check reading a descriptor and no circuit file is itself the gap: say so if that is your reading.
+2. ONE READ YOU LISTED AS NOT DONE, because it is where your sentence would hold as first sent: who writes `proofs.circuit` (the digest) and the circuit file in a deployment. Twenty minutes, `rg` only: in `examples/`, `integrations/vllm/` and the demos' launch code, every place that writes that params key or the file, with file and line, and for each whether it runs on the auditor's side or the developer's. If any path lets the developer's side supply either, that is a finding for the same hour, not for Thursday.
+3. Keep readings A and B as planned: B on one page, A in five lines. Add one line on onsite's composite only if it differs; you need not read it otherwise.
+
+One comment on TRN-116 with the corrected (iii) in your own words, under 100 words, now.
+
