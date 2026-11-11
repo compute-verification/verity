@@ -32,7 +32,9 @@ SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5
 
 
 def reads(tp: Any) -> str:
-    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its Boolean
+    version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its own outputs,
+    the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`, each table folded
     once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
     were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
@@ -40,26 +42,30 @@ def reads(tp: Any) -> str:
     k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
     five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
     an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
-    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table
-    (its EX2 is gates), so it lowers flat either way."""
+    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A key block's Boolean body
+    (``SparseMlaHeadBlock_v2``, the template a partition names for a key block proved under ``--zk``) has no table to read,
+    its EX2 being gates, so it is flat at every key count: the unit returns its own outputs, the one form `verify --zk`
+    takes (`one_stage.proofs.ks_form_why`), which a word block in slots, whose last stage returns them, is not."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    if tp.layout == "stage" and tp.id != tp.word:
+        return "inline"
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
         return "slots"
-    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block"):
+    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block") or tp.id != tp.word:
         return "inline"
     S = spec_statics(tp.word)
     return "slots" if int(S["NVIS"]) >= int(S["BN"]) else "inline"
 
 
 def statement(tp: Any) -> dict[str, Any]:
-    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``) the templated statement at
+    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``, ``history``) the templated statement at
     `READ_LAYOUT` of the verifier's read template (``structural``: `verity_flock.read_tmpl`, the one template
     `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says."""
-    if tp.layout == "read":
+    if tp.layout in ("read", "history"):
         return {"layout": READ_LAYOUT, "structural": True}
     return {"reads": reads(tp)}
 
@@ -78,7 +84,8 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "expert", "fused"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "history", "expert",
+                         "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 

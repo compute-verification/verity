@@ -70,15 +70,13 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
             ent.pop("eos_lag_rows_accepted", None)   # no lag row is 'accepted' on a request whose EOS evidence is not
         ent["g6_problems"] = len(c.problems) - _n_problems_before   # the scheduled workload state is built from established requests only
     conc = _achieved_concurrency(c, res, gp, steps, present)
-    # the top-p split count S is a WORKLOAD-level derived value of the chronology this check established:
-    # S_t = SplitsFor_v1(|live(t)|, num_SMs) per engine step; every top-p TokenSelect of the fold at t must carry it (the launch's S,
-    # host-computed by vLLM -- no kernel, no fold instance of its own). Nothing to check on a greedy fold; a top-p fold against a Program
+    # every top-p TokenSelect of the fold must carry the registered split count S = registered_splits(num_SMs), whatever the live
+    # batch (the launch's S; serving pins it, `engine.topp_pin`). Nothing to check on a greedy fold; a top-p fold against a Program
     # without a declared num_SMs fails closed.
     # |live(t)| is the SCHEDULED workload state -- declared arrivals, served lengths (the cap, or the
     # verified EOS position), the declared lag rows after an EOS stop (the post-EOS step is active computation: its row is in the sampler
     # batch) and the prefill chunks -- derived from the per-request facts established above; the record's logits rows and the SampleEnd
-    # batch must equal it at every step. The observed row count is never the source of |live(t)|: an unscheduled sampler row would
-    # otherwise inflate the batch and S would follow it. The live->S transitions and their causes go on the record.
+    # batch must equal it at every step. The observed row count is never the source of |live(t)|. The live transitions go on the record.
     scheduled = scheduled_live_counts(res["requests"], present)
     geo = sampler_geometry_check(gp, B, engine_step_of, steps, rec.get("sampler_batch"), scheduled)
     for p in geo["problems"]:
