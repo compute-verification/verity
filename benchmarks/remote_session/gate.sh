@@ -13,6 +13,11 @@
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
 #          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
+#          With SESSIONS the request asks for that many sessions of one coin a window in place of PACED's paced ones:
+#          WINDOWS windows of WINDOW_MS, SAMPLES openings a window (each the verifier's own default where unset). The
+#          host's run takes one form, so SESSIONS beside PACED or PACE_PASS_MS, or one of the three without SESSIONS, is
+#          refused (exit 2) before any request, whatever the VERB: a gate run's probe refuses it before its prover is
+#          launched.
 #   close  `period-close --name PERIOD`, then the closed ledger.
 #   audit  `auditor.sh` over the host run HOST_RUN (default the one `host` fetched), into $OUT itself: ledger.jsonl,
 #          pins.jsonl, auditor_line.json, credit.md, which `gate_whatif.sh` reads.
@@ -32,6 +37,17 @@ GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
 CHALLENGER=${CHALLENGER:-research@204.12.178.84}
 AUDITOR=${AUDITOR:-research@81.85.1.145}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
+if [ -n "${SESSIONS:-}" ]; then
+  [ -z "${PACED:-}${PACE_PASS_MS:-}" ] || {
+    echo "SESSIONS asks for sessions of one coin a window and PACED or PACE_PASS_MS for paced ones: the host's run" \
+      "takes one form, so unset SESSIONS or both of the others"
+    exit 2
+  }
+elif [ -n "${WINDOWS:-}${WINDOW_MS:-}${SAMPLES:-}" ]; then
+  echo "WINDOWS, WINDOW_MS and SAMPLES shape SESSIONS's sessions of one coin a window, and SESSIONS is unset: set it," \
+    "or unset them for PACED's sessions"
+  exit 2
+fi
 LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
 PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
@@ -151,10 +167,16 @@ open_period() {
 }
 
 host_run() {
-  local words r run
-  read -ra words <<< "$PACED"
-  gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" --paced "${words[@]}" \
-    --pace-pass-ms "$PACE_PASS_MS" --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
+  local form words r run
+  if [ -n "${SESSIONS:-}" ]; then
+    form=(--sessions "$SESSIONS" ${WINDOWS:+--windows "$WINDOWS"} ${WINDOW_MS:+--window-ms "$WINDOW_MS"}
+      ${SAMPLES:+--samples "$SAMPLES"})
+  else
+    read -ra words <<< "$PACED"
+    form=(--paced "${words[@]}" --pace-pass-ms "$PACE_PASS_MS")
+  fi
+  gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" "${form[@]}" \
+    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
     --model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS" > "$OUT/host-run.json" 2> "$OUT/host-run.err"
   r=$?
   echo "host run rc $r"
