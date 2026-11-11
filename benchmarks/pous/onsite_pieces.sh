@@ -6,7 +6,8 @@
 #       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it
 #       POUS_CMD       'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
-#                      holds and writes its answer where the bandwidth piece's goes
+#                      holds and writes its answer where the bandwidth piece's goes, and each of the two cases is
+#                      answered by its Lean (pous-run-protocol, remote-audit-p2-protocol), which the piece builds
 #       BANDWIDTH_CMD  once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect ...', which collects
 #                      it; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the
 #                      tree has it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its
