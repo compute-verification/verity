@@ -53965,3 +53965,31 @@ For the table: no change.
 
 For the table:
 - SCALE | (b) over the served wiring; modeled; no Lean statement at the code is behind it | M = 4,130 at the plan's cut, 145 at the final recut, 273 at the nine-writer recut [run `153e`, `082b`]
+
+## ATTACK, Wed 11 Nov 12:21Z: PRF-553's follow-up: no row of the served GLM-5.3 Program is keyed with an input id at any of its 8 ranks [run `77a1`]. Second read of REGX's `OneKey.lean`: it says what REGX says. One thing for repair (A): `Bits.wiresOf` is not the map round 2 checks, and nothing proves the two equal
+
+**1. PRF-553, the part my 11:54Z entry left to a run** [run `r20261111-114256-77a1`, vy-nebius-cpu-5, rc 0; `r20261111-120227-f490`, vy-nebius-cpu-2, rc 0].
+- Each of ranks 0 to 7 of the row `glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager`: 1,331,964 rows, 909 distinct specs, none keyed with an input id by form, none whose family name holds `Input`.
+- The row's directory holds no descriptor as JSON: 201 `.json` files, 200 read, none with a `verity-ir/descriptor/` object. Not read: `manifest.json` (400 MiB), the eight `instances.json.gz`, the 3,024 `.bin` files.
+- What this is and is not: the specs are each row's own Definition name. The definitions nested under them are named by the same Python the 11:54Z scan read (1,627 literal names, one input id, in NCI's own decoy vector). I did not decode a Program's binary to list every nested id at ranks 1 to 7.
+- The output is in the lane's notes: `tools/attack_decoy_rows.every.out.txt`.
+- PRF-553 has no ready line yet [read 12:19Z]; lean's lead wrote it comes by noon PST, which is 20:00Z, after I stop. Section 4 says where a reader starts.
+
+**2. `OneKey.lean` (REGX 12:04Z, `cursor/proofs-onekey-6a2d` at `b40674d790c9`), read whole** [read; not built by me].
+- The seven theorems say what REGX's entry says. `Closed C b` (`:34-35`): each gate of `b` reads gates of `b` or constants. `needs_single` needs only disjoint blocks and `Closed`. `gateKey_eq_of_needs` and `clsOf_eq_of_needs` also take `InScopeTwo` and "no block holds a constant"; REGX's title leaves those two out and its body states them.
+- Why the constant matters: `Prog.Needs` counts a gate a block holds on its boundary whatever its kind, so a constant another block reads would be needed with a boundary bit of its own. That is the only use of the hypothesis (`needs_io_of_closed`).
+- The two hypotheses at `code h`, by reading, each agrees with REGX's:
+  - closed: a lowered row is `.xor` of positions of what its unit's row reads and `.and` of its own two XORs (`Spot/Bits.lean:267-272`); `wire u` is the unit's own source gate, its own computed gate, gate 0 or gate 1 (`:243-246`); gates 0 and 1 are constants (`consts`, `:597-599`).
+  - no constant in a block: a block is its unit's lowered rows and the unfixed inputs it owns (`blockOf`, `:306-307`), and `bitsGate` maps constructor for constructor (`Properties/Spot/Bits.lean:27-32`).
+  - one fact neither of us proved, which REGX names too: `keyIdx c B col < B`, so that `2 + u·B + b` stays in unit `u`'s own sources.
+- The four checks: elaborates and three axioms [relayed: REGX's try `4d5d`]; no kernel replay; second reader, this entry, of the statements.
+
+**3. For repair (A), before anyone builds on REGX's step 1** [read; the last line a guess].
+- The wiring the code checks is `h.wires`, handed to round 2 (`SpotFlock/Code.lean:436`). At a wired port round 2 holds the reader's registered read to its writer's output port of the interior record, each slot at its writer unit's row, `span·per + x` (`SecondStage.readOk`, `Spot/SecondStage.lean:826-829`; `wiredRow`, `:802-804`).
+- `Bits.wiresOf` wires two bits when their rows have one name and one leaf at the partition's VUs (`RowPos`, `srcPos`: `row := c.ports[p].name`, `leaf := u`; `Spot/Bits.lean:573-591, 643-673`). That is the rule for members that each commit their own ports under shared names.
+- Nothing reads `Bits.wiresOf` but its own `#guard`s [run: `git grep -w wiresOf`, `main`], so no lemma says it gives `h.wires`' pairs at `h.ms`. A reader's port and its writer's output port need not share a name, and a reader's unit need not have its writer's leaf [guess: I did not evaluate either at the served members].
+- So a wired program for (A) should be the one `h.wires` and the addresses describe (two gates are one value where their addresses are one slot and one place), or carry a lemma that `Bits.wiresOf` is that.
+
+**4. Where PRF-553's reader starts, if it is not me.** My 11:54Z entry; the two skips `TemplateQuery.lean:126` and `Slots.lean:58`; the six key-alone readers listed there; `attack_decoy_scan.py` and `attack_decoy_rows.py` in the lane's `tools/`; and the check that matters for our statements: the locks' records of `evaluate` change in what they read and in no statement's text.
+
+For the table: no cell moves. PRF-553: nothing the plan's row serves registers a composite under an input id [run `77a1`: 8 ranks, row specs; nested ids at ranks 1 to 7 not decoded]. `OneKey.lean` is a reduction with two hypotheses read at the code and not proved; under your 12:06Z section it supports no number for the served computation.
