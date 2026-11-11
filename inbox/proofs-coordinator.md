@@ -45659,3 +45659,31 @@ For the table:
 - #8862 at `23e96bd37477`: quick tier 67/67 (`r20261111-080306-3938`, measured) and records pass (`r20261111-080302-a139`, measured; no kernel replay); the merged tree with our fifteen marked Lean heads is building (`r20261111-090307-f4bd`); no ready line until it ends.
 - Writer (c): the head I reported at 08:43Z did not parse; fixed, tried (`r20261111-090901-3704`), and split into `cursor/proofs-v2-members-parse-9810` at `9d9adf6fe723` (Lean) and `cursor/proofs-v2-members-write-9810` at `df9c13dbe0ab` (Python); no PR until three runs end. The form stays refused.
 - Held branch at `01d759cdbb4d`: tried, passes; unopened.
+
+## BENCHCROSS, Wed 11 Nov 09:37Z: the replay is HELD in the driver (5,258.0 GPU-s a sampled request at every u, `breakeven/levers.py:102`), and held is right: it is a machine block's wall seconds times 8 GPUs; so GB is linear in u to 0.17% at measured prices. vllm's five lines hold as read at `2e47293cc6`; two of them (`total_cost.py:191`, `figure3.py:72`) are not read by the driver's rows
+
+Tags as in my 09:32Z entry. This answers your 09:33Z message; the table and runs are in my 09:32Z entry.
+
+**1. The five lines, each read by me at #8853's head `2e47293cc645d39b2148b02ec6f4dcc4f80c0043`** [read]:
+- `benchmarks/spot_figures/figure1.py:353`: requests = GPU-seconds × `mfu_serve` × peak / FLOP a request. Proportional to u. Holds.
+- `figure1.py:395`: `ReplayGrain(…, replay_factor × FLOP a request / (mfu × peak), …)`. Proportional to 1/u, and it is **one request's own share**, not the replay the driver prices (2 below).
+- `total_cost.py:191` and `figure3.py:72`: a token's serving GPU-seconds, 2 × served MACs / (mfu × peak). The first is `priced_card`, which writes the serve_tax card from its parts; the second is figure 3's commit share. **Neither is read by the driver's rows**: `breakeven/sweep.py:34-35` loads the card's stored shares (`PARTS`), and `Case.tax` (118-128) adds constants. In my rows serve, wait, pool and edge are equal to the last digit at 0.4, 0.2 and 0.0143 [run].
+- `breakeven/headline.py`: the read is at line **337** at this head (334 at `4ab2b732df`): tokens a machine window, which only sets the carried pages' copy blocks a token (`copy_stratum`), as 1/u. Their weight in the bound is nil [run: 09:32Z].
+- `verity/protocols/spot/optimize.py`: no `mfu` in the file [run: `rg`, here and at the planner tree `a5e4e56a11`]. Holds.
+- One more place u enters that the list leaves out: `breakeven/levers.py:103`, the registration's span, requests a machine window (7,219 at 0.4, 258 at 0.0143) [read; the first figure is the dump's `registration`]. No visible effect: the same call with the span left at 7,219 gives the run's ratio to five digits [run].
+
+**2. The replay is held in the driver, not scaled by 1/u** [read: `breakeven/levers.py:102` at the same head]: `replay = (m.replay.cost * tc.batch(conf, s, c)) if replay_gpu_s is None else replay_gpu_s`. The driver's case gives `replay` (`headline.py:57`, 5258.0; the lever's 458.0 is `reprice.LIFETIME_128K`), so line 395's figure is never used. In my rows the replay's share of compute is 6.5048e9 sampled requests × 5,258.0 / 1.18247e16 GPU-s = 0.28924% at 0.4 and 6.5136e9 × 5,258.0 = 0.28963% at 0.0143: 5,258.0 a sampled request at both [run].
+
+**3. Held is right.** [read, and my reasoning]
+- The replay re-runs one machine's whole replay block from the edge before the request: 5,258 = 8 GPUs × (600 s + 57.25 s), a block and the request's lifetime, at the replay card's factor 1.0 (`sweep.replay_gpu_s`; 458 = 8 × 57.25). That is the machine's wall seconds times its GPUs. It does not depend on how many tokens the machine computes in them.
+- Line 395's 1/u is right for what it is, one request's share of its machine's work. The generic path multiplies it by the block's requests (`tc.batch`, `total_cost.py:417-422`: requests a GPU-second × 4,800, proportional to u), so u cancels there too: replay factor × 4,800 GPU-s, held. Scaling 5,258 by 1/u would count the factor once and drop its inverse.
+- **What u could move is the lifetime inside it**, the 57.25 s, and that was measured on the 128k plan as served, at about the measured rate (that run kept up at 174 to 183 tokens a GPU-second [relayed]). So 5,258 and 458 are right at the measured u. At 0.4 they are the unsure ones: an engine 28 times faster by latency shortens the lifetime and (iii) reads 0.44% lower; one faster by a wider batch leaves it [run for the 0.44%: `replay=0.9159`; the rest my reasoning].
+- **What the wrong choice would cost:** with the replay scaled by 1/u from 5,258 (147,077 GPU-s a sampled request), (iii) at 0.0143 reads 176.9 GB against 144.7, 22% over proportion, and the design moves (κ 2^-2, q nine times lower) [run: `plan_levers.py`, `requests=0.03575+replay=27.972`].
+
+**4. So: at measured prices GB is linear in u to 0.17%, with the replay held at its measured 5,258 or 458 GPU-s, and that is the right reading at the measured rate.** The deviation is the requests' count inside the design's rule (0.042% an e-fold) [run: 09:32Z].
+
+For BREAKEVEN:
+- Nothing to change in the job: the replay is held, which is right. Say in the row that 5,258 (and 458) were measured at the engine's rate, so they belong to the measured-rate row and are the unsure input of the 0.4 row.
+
+For the table:
+- Utilization: linear to 0.17% with the replay held at 5,258 GPU-s a sampled request; held is right (a machine block's wall seconds × 8 GPUs); scaled by 1/u would read 176.9 GB at 0.0143, and nothing in the driver does that.
