@@ -2544,6 +2544,7 @@
     {"file": "Security/Proofs/Properties/Nci/ReadsExact.lean", "count": 5},
     {"file": "Security/Proofs/Properties/Nci/ReadsOneNode.lean", "count": 4},
     {"file": "Security/Proofs/Properties/Nci/ReadsSet.lean", "count": 7},
+    {"file": "Security/Proofs/Properties/Nci/RecordRead.lean", "count": 3},
     {"file": "Security/Proofs/Properties/Nci/Resolve.lean", "count": 5},
     {"file": "Security/Proofs/Properties/Nci/Walk.lean", "count": 3},
     {"file": "Security/Proofs/Properties/Nci/Width.lean", "count": 6},
