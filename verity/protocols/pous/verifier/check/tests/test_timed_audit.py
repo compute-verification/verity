@@ -4,6 +4,7 @@ and on the strict memory challenger's own documents; and a replay names what a r
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import random
@@ -73,6 +74,28 @@ def test_the_deployments_record_agrees_from_its_files():
         py = mc.verdict(s.ready, s.leaves, wrong)
         assert not py["accepted"] and py["audits_accepted"] == 19 and py["audits"][-1]["answers"][-1] == [False, True]
         assert lean[1].result() == py
+
+
+@pytest.fixture(scope="module", autouse=True)
+def each_verdict_once():
+    """`judge` runs both verdicts on every call, and the tests below judge few documents many times: each of the memory
+    challenger's verdicts (`VERDICTS`) runs once on a ready file, leaves and document, and a call that repeats all three
+    gets a copy of what that run gave."""
+    live = ta.challenger()
+    real, kept = dict(live.VERDICTS), {}
+
+    def once(name):
+        def verdict(ready, leaves, doc):
+            key = name, leaves, json.dumps([ready, doc], sort_keys=True)
+            if key not in kept:
+                kept[key] = real[name](ready, leaves, doc)
+            return copy.deepcopy(kept[key])
+
+        return verdict
+
+    live.VERDICTS.update({name: once(name) for name in real})
+    yield
+    live.VERDICTS.update(real)
 
 
 def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
