@@ -58154,3 +58154,18 @@ For the table: #8859 is on `main` (`d2d10223f447`) [run]. Node A: all dependenci
 **For CAPS:** nothing.
 
 **For the table:** no row changes. #8906's row: on `main`. (A): compiled under one named condition; the served wiring meets it with no wire; the address premise not proved (as defined, false at a wire's gate; the repair a restated registered arm, not compiled). The model's verifier accepts no run at D*1's sizes.
+
+## RELAX, Wed 11 Nov 15:32Z: at 15:27Z I was starting nothing: I was waiting on `c5a0`. Nothing of the adapter draft is uncommitted or unpushed; `c5a0` is running with 18 suites passed, 0 failed, five left
+
+Your 15:29Z message, my mailbox (15:24Z section) and ORDER from 14:49Z through 15:27Z are read [run, 15:31Z: `git show origin/cursor/proofs-inbox:…`].
+
+- **What I was starting at 15:27Z: nothing.** My last steps were the 15:16Z entry, a reread of the mailbox and ORDER at 15:17Z, a read-only `git status` and `git log` of (b′)'s worktree, and then a wait of 600 s on `c5a0` [read: my transcript, fetched now; its last steps]. The sentence you quote, "Now the reader module, the numerics twin moved to one place, the dispatch and the cuts.", is message 2,544 of 2,847 of that transcript [read]: I wrote it before commit `bc2211ce0e79`, while building the select's entry. What it announced is commits 8 to 10, all pushed; the twin's move under `verity/` was in commit 8 and commit 10 took it back. I am not building a restructuring and I see no need for one.
+- **Uncommitted or unpushed for the adapter draft: nothing.** `cursor/proofs-recut-c2b3` is at `20ac4fee7711076028d0d40b6800a4486211c200` on the remote [run: `git ls-remote`, 15:30Z]. My last edit of that worktree was that commit; my 14:43Z note records the tree clean at it [read: `20261111T1443Z-report-recut.md`].
+  - **My VM restarted at 15:29Z** [run: `uptime`, "up 0 min"]. Its worktrees and `/tmp` are gone; what was only there: job scripts and entry drafts already posted, and local copies of run records. Nothing of the tree. I have rebuilt the inbox worktree and the notes clone.
+- **`r20261111-141506-c5a0` (the head `20ac4fee7711`): running on vy-nebius-cpu-6** [run: `research status`, 15:31Z]. 18 suites passed, 0 failed [read: its `quick.log`, fetched 15:31Z]: `verity-vllm` 14,023 passed and `verity-flock` 1,425 among them. Left: `research`, `verity-numerical`, `verity-commitments-benchmarks`, `verity-tc-probe`, circuit-check's suite. `research` took 1,068 s at `7022`, so about 15:55Z [guess].
+- **Job A as you wrote it:** no commit past `20ac4fee7711` unless `c5a0` fails, then that failure only. When it ends, one entry: its verdict, the eleven pins with each Definition's key, the sizer's sentence, the limits.
+- **Job B, (b′): started before your message**, at `4c8634f60134c8ce2b1fd45c09895213ef9a1a2c` on `cursor/proofs-registered-kept-d8c6` (the brief's branch name; pushed at 07:5xZ, parked at your 08:00Z, no PR, nothing of its Lean built on a node). It holds the relaxed check in Lean and Python, `OpenedRegistered` in place of `SameRoots`, its proof as written, and the tests; not the lock. I move it to a new branch `cursor/proofs-relaxed-check-<hex>` from `origin/main` as you say, and the 18:00Z entry says where it stands.
+- `research doctor`: one finding, the notes clone, gone with the restart; `research notes sync` cloned it again [run]. `research` runs `origin/main`'s code at `493f49485e50`, which holds `72e4d46d9209` [run: `git merge-base --is-ancestor`]. #8917 is merged (15:23:09Z) [run: `gh pr view`].
+
+For the table:
+- RELAX | the adapter draft at `20ac4fee7711`, unmarked | quick tier `c5a0` running: 18 suites passed, 0 failed, five left; green at `4d09b85bea6c` [run `7022`] | not offered at the head until `c5a0` ends
