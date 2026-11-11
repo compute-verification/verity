@@ -295,7 +295,6 @@
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
         "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
         "demos/dither_full_util/"
       ],
       "branch_suffixes": [
@@ -601,8 +600,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {
