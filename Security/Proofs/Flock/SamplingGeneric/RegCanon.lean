@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Core.Game.RewindingCanon
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Sampling.Cost
+import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The rewinding lemma at the committed trace, counting each bad run at one gate
@@ -10,7 +13,8 @@ public import Proofs.Core.Game.RewindingCanon
 program off the committed trace with probability at most `√(N·Pr[conflict])`, `N` the program's gates, where
 `pr_offReg_le` gives `N·√Pr[conflict]`; `pr_regHit_le_canon` carries it through `ksReg_of_sessionKS`'s first half,
 so `εreg`'s `N·√Pr[B_conf]` can read `√(N·Pr[B_conf])`. The `_on` forms count only a set `S` of gates holding every
-gate some run's extractions open.
+gate some run's extractions open; `pr_regHit_le_canon_pos` takes for `S` the positions the reveals open under the
+statement's roots (`opensAt_isSome_mem`).
 -/
 
 @[expose] public section
@@ -156,6 +160,57 @@ theorem pr_regHit_le_canon {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
         (Bconf H L Ω P x).Pr H := by
   have h := pr_regHit_le_canon_on hbind hS hSK hsc Ω P univ fun _ _ g _ => mem_univ g
   rwa [card_univ, Fintype.card_fin] at h
+
+/-- **A run's extractions open only what the reveals open**: a gate `opensAt` opens is the position of an opening some
+reveal makes under the statement's roots. -/
+theorem opensAt_isSome_mem (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    {s : AuditStatement} (hs : L.parse x = some s) (Spos : Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ Spos)
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (g : ℕ) (hg : (L.opensAt H P x ω r c g).isSome) : g ∈ Spos := by
+  simp only [opensAt, hs] at hg
+  obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 hg
+  unfold Sampling.Wit.val at hb
+  obtain ⟨o, ho, -⟩ := Option.map_eq_some_iff.1 hb
+  have hpred := List.find?_some ho
+  simp only [Bool.and_eq_true, beq_iff_eq] at hpred
+  obtain ⟨q, hq, hqo⟩ := List.mem_filterMap.1 (List.mem_of_find?_eq_some ho)
+  by_cases hr : q.1 = s.roots
+  · rw [if_pos hr] at hqo
+    obtain rfl := Option.some.inj hqo
+    rw [← hpred.1]
+    unfold runExt at hq
+    rw [Sampling.flatMapRP_eval] at hq
+    obtain ⟨iu, -, hiu⟩ := List.mem_flatMap.1 hq
+    split at hiu
+    · unfold sessExt at hiu
+      rw [(Claims.RP.eval_bind H _ _ _).1] at hiu
+      split at hiu
+      · simp [RP.eval] at hiu
+      · rw [Sampling.flatMapRP_eval] at hiu
+        obtain ⟨u', -, hu'⟩ := List.mem_flatMap.1 hiu
+        exact hpos _ _ _ q (Sampling.checkRevealed_mem H _ L.commit _ q hu').1 hr
+    · simp [RP.eval] at hiu
+  · rw [if_neg hr] at hqo
+    exact absurd hqo (by simp)
+
+set_option synthInstance.maxSize 1024 in
+/-- `pr_regHit_le_canon_on` at the positions the reveals open under the statement's roots: `KSReg`'s first half at
+`√(#Spos·Pr[B_conf])`, wherever every reveal under `s.roots` opens a position of `Spos`. -/
+theorem pr_regHit_le_canon_pos {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    {s : AuditStatement} (hs : L.parse x = some s) (Spos : Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ Spos) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + Real.sqrt (#Spos * (Bconf H L Ω P x).Pr H) +
+        (Bconf H L Ω P x).Pr H := by
+  have h := pr_regHit_le_canon_on hbind hS hSK hsc Ω P (univ.filter fun g : Fin (L.nG x) => g.val ∈ Spos)
+    fun ω rc g hg => mem_filter.2 ⟨mem_univ _, opensAt_isSome_mem H L P x ω hs Spos hpos rc.1 rc.2 g hg⟩
+  have hcard : #(univ.filter fun g : Fin (L.nG x) => g.val ∈ Spos) ≤ #Spos :=
+    card_le_card_of_injOn Fin.val (by intro g hg; exact (mem_filter.1 hg).2) (by intro a _ b _ hab; exact Fin.ext hab)
+  have hB : 0 ≤ (Bconf H L Ω P x).Pr H := by unfold Finder.Pr; exact Pr_nonneg _
+  have hsq := Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_right (Nat.cast_le.2 hcard : (_ : ℝ) ≤ _) hB)
+  linarith
 
 end Compiled
 
