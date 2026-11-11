@@ -31,12 +31,10 @@ from verity.circuits.codec import (
     descriptor_id,
     encode_program,
     lookup_primitive,
-    program_digest,
 )
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.numerics import kernel_registry as KR
 from verity.definitions.numerics.rows import KERNEL, ROWS
-from verity.definitions.registry.catalog import load
 
 from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.commit import challenge as CH
@@ -85,6 +83,9 @@ def kernel_refusal(specs: Iterable[str]) -> str | None:
 def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
     """Why the Definitions this tree evaluates ``specs`` by are not the ones the Build at ``program_dir`` bound into Program
     ``digest``, or None.  With no ``specs`` nothing is evaluated, so nothing is read."""
+    from verity.circuits.codec import program_digest
+    from verity.definitions.registry.catalog import load
+
     specs = list(specs)
     if not specs:
         return None
