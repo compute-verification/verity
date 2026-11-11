@@ -161,12 +161,13 @@ theorem zkRunCols_length_le (r : ZkRun) : (zkRunCols r).length ≤ r.reps.length
   obtain ⟨x, -, rfl⟩ := List.mem_map.1 hn
   exact length_zkRepColsOf_le r.shape x.1 x.2
 
-/-- **One masked run's two reps open fewer level-0 columns than the Johnson count** of a trace at the run's `m`, at
-`0 < agree ≤ 1`. -/
+/-- **One masked run's two reps open fewer level-0 columns than the Johnson count** of a trace at the run's table
+(`ZkIdx.At`: its `m` and statement version), at `0 < agree ≤ 1`. -/
 theorem zkRunCols_length_lt_zkNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 : agree ≤ 1) (r : ZkRun)
-    (h2 : r.reps.length ≤ 2) (M : ZkTrace) (hm : M.1.m = r.m) : (zkRunCols r).length < zkNMinD agree M := by
+    (h2 : r.reps.length ≤ 2) (M : ZkTrace) (hm : M.1.At r.wideLeaf r.m) :
+    (zkRunCols r).length < zkNMinD agree M := by
   refine lt_of_le_of_lt ((zkRunCols_length_le r).trans (Nat.mul_le_mul_right _ h2)) ?_
-  rw [← hm]
+  rw [← hm.level0]
   exact zkQueries_lt_zkNMinD ha0 ha1 M
 
 end Claims.Flock
