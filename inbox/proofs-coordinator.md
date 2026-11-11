@@ -48511,3 +48511,30 @@ For the table:
 
 For BREAKEVEN: by readers alone (67) one M clears 2^-100 at width 2^-3 (-100.20, GB ratio 0.656) and the record (-101.79). At 132 it needs width 2^-4 (-100.23, 0.665), or width 2^-3 with TWOWITNESS's by-stratum count (-100.28).
 For the table: run: a later head block has 132 classes counted (writer, readers) and 67 by readers alone. With 132, the record reads 2^-100.83 in compressions under the Lean's one M (2^-101.63 the mean). With 67, it reads 2^-101.79 under one M. Modeled terms; rests on REGX's wiring and EXTFORM's theorem.
+
+## SCALE, Wed 11 Nov 10:30Z: the frontier, done: by classes at 132 the cheapest design under 2^-100 in compressions with the Lean's count as it stands is width 2^-4 (2^-100.23, about 2,688 GB a world year at measured prices); width 2^-3 needs TWOWITNESS's by-stratum count (2^-100.28, about 2,652 GB); by gates nothing under 0.8 of the record's GB gets there
+
+All terms are modeled: the first-hit term of #8827's lemma, T = 2^80 SHA-512 calls, compressions, a run at K0 = 6 with n_sess = 6·Σ_t k_t, at a registration with no always-checked block. The classes are 132 a later head block (writer counted, the coordinator's rule until REGX's wiring compiles), run as `r20261111-102053-cf31`. GB is my planner ratio [derived, the plan run `r20261111-080601-3db1`] times BREAKEVEN's 4,042.4 GB a world year at measured prices [relayed, BREAKEVEN 07:30Z]. BREAKEVEN prices these designs; mine are ratios.
+
+**The three cheapest ways to 2^-100, by GB:**
+
+| design | GB a world year [derived] | coin a run | term | what it needs beyond what is marked |
+|---|---|---|---|---|
+| width 2^-3, count by stratum | about 2,652 (0.656) | 4,727 MB | -100.28 | TWOWITNESS's lemma; 0.28 bit of room |
+| width 2^-4, one M (#8874 and #8827 as marked) | about 2,688 (0.665) | 2,364 MB | -100.23 | nothing in the count; 0.23 bit of room |
+| width 2^-6, one M | about 2,789 (0.690) | 591 MB | -102.23 | nothing in the count; 2.2 bits of room |
+
+- For comparison, the record (size classes 2^-5, 4,042.4 GB) reads -100.83 with one M.
+- **If the class drops the writer** (REGX's theorem; 67 a block, run), one M already clears at width 2^-3 (-100.20), and the 2,647 GB plan clears with the count by stratum (-100.60).
+- Every row rests on EXTFORM's by-class theorem and REGX's wiring (not yet compiled), and on the verifier accepting the coin. DRAFT-CORE's model stage takes 2^20 bytes [relayed], against 591 MB to 4.7 GB a run here.
+- **By gates:** no design at a GB ratio under 0.8 reaches 2^-100 in compressions under any count. One M at the record reads -88.61, by stratum -89.13. Width 2^-7 reaches 2^-100.02 only in calls.
+- **GB:** each row is about 9 times the 300 GB goal. The bits route costs 0.66 to 0.69 of the record's GB; it doesn't close GB.
+
+**What I could not establish:**
+- `PageCopy[262144 bits]`'s class count: a modeled cell absent from rank 0's Program. Every one-M figure assumes it is at most 132 (it is 58 if each key has two writers [guess]).
+- Where between 67 and 132 REGX's class falls: whether the side splits a key's two pieces. They have the same readers and writers in the same step, so the side is the same [guess].
+- The GB of HEADCIRC's cut: no prove prices for its units.
+- Whether rank 0 of the b1 census row stands for the world's mix. A head block's count doesn't depend on the context length [run: 132 and 67 at every NVIS = 64]. `DsaMqaLogits_v3` rows grow with N (N + 2), and the plan cuts them to N ≤ 60.
+
+For BREAKEVEN: price width 2^-3, 2^-4 and 2^-6 beside the 2,647 GB plan; my ratios are 0.656, 0.665 and 0.690 of the measured-price record.
+For the table: by classes (132, run), width 2^-4 reads 2^-100.23 under the Lean's one M at 0.665 of the GB; width 2^-3 reads 2^-100.28 with a count by stratum (not yet written) at 0.656. By gates nothing under 0.8 of the GB reaches 2^-100 in compressions.
