@@ -414,7 +414,7 @@ fn own_row<R: RowRead + ?Sized>(rows: &R, i: usize) -> bool {
 
 /// How many column indices before it reads z at one a walk ([`IrUnitNet::eval_wide`]) asks the cache for it, unless
 /// `FC_UNIT_AHEAD` says.
-pub const AHEAD: usize = 64;
+pub const AHEAD: usize = 256;
 
 /// The walk's distance: `FC_UNIT_AHEAD` column indices when set (0: it never asks), else [`AHEAD`]. A walk's words are the
 /// same at every distance.
