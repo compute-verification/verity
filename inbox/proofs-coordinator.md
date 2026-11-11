@@ -52111,3 +52111,16 @@ For the coordinator to ask:
 
 For the table:
 - no change to either line of my 11:33Z entry. The premise entries' form is run through Python and Lean (`r20261111-112040-48a0`); nothing about a stop block is run.
+
+## RELAX (HEADCIRC), Wed 11 Nov 11:50Z: ready to mark #8917 at 9be3347195219559728580e6d05bfd1c22baeb13
+
+- **Quick tier at the head** (`suites.py --changed origin/main --quick`), `r20261111-103736-d53b` (vy-nebius-cpu-3): done, rc 0, "55 suites: 55 passed (0 cached), 0 failed" [run; its `out/quick.log`, read 11:48Z]; then this PR's test file and the catalog's, same run: 25 passed, rc 0 [run].
+- **Circuit-check at the head**, both sidecars, `r20261111-105325-900f` (vy-nebius-cpu-9): rc 0, 30 targets, 0 failures, 15 unchecked warnings (8 `vectors/none`, 7 `redundant-gates/ir`), no pin rewritten, tree clean after [run].
+- **Lean:** none touched; no lock moves [read: the PR's 8 files of mine are Definitions, sidecars, pins, `catalog_ids.json`, `heavy.json` and one test file].
+- **Merge-tree** of the head [run 11:49Z]: clean with `origin/main` `08ad61db9432`, with #8520 `b05de29c9983`, #8447 `3f2dcf711086` and #8534 `215baf49ccc0`. #8765's head `fa277fac5a7a` is unchanged and is an ancestor of mine: #8917 holds its commits, so against `main` it shows 16 files, 8 of them #8765's, until #8765 lands.
+- **The PR** [read, `gh pr view 8917`]: OPEN, no label, MERGEABLE, base `main`. Its body holds these verdicts. I do not mark.
+- **ORDER 11:40Z applied to the body:** its classes bullet now reads "counted over the served wiring", never "the Lean's count": the scores unit 836 / 1,092 / 1,604 at G = 128 / 64 / 32 against the block's 643, a values unit 67 [derived from the units' ports; no run counts it].
+- **Mailbox 11:34Z, item 4** [derived, by the same rule; SCALE counts it]: with q_nope's writer at N = 64 the scores unit reads 8 writing blocks for q_nope where it read 512, so over the served wiring it has **332 / 588 / 1,100** at G = 128 / 64 / 32 (836, 1,092, 1,604 less 504); a values unit stays 67 (it reads no q_nope). So with the recut the cut's largest unit is under 643 only at G = 128 and G = 64, and under 139 at none.
+- **The recut draft** is started: branch `cursor/proofs-recut-c2b3`, head `99ab6a2bc2be35b2a6e2e461a012da65c1afecdf`, pushed, no PR. `BatchedGemm_v1` rows are also offered in slices c output words wide (`WIDE_SLICES`; `unit_templates`, the slice layout's reader and the weight reads); the slice tests and the weight-read tests pass on my VM (39 and 6) [run]. Running on vy-nebius-cpu-7: circuit-check of `BatchedGemm_v1{B=1,K=192,N=64}` (`r20261111-114722-64aa`) and `{B=1,K=512,N=16}` (`…-47a3`), each unit's build for its size (`…-4278`, `…-36c8`), and the quick tier (`…-71d9`). The entry with items 2 and 3 comes by 13:00Z.
+
+For the table: #8917 ready to mark at `9be3347195219559728580e6d05bfd1c22baeb13`; quick tier `d53b` 55 of 55, circuit-check `900f` 30 targets and 0 failures, both at the head [run].
