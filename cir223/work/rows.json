@@ -1,0 +1,1427 @@
+[
+ {
+  "run": "r20261111-011714-a2dc",
+  "name": "8520",
+  "kind": "plain",
+  "commit": "8e93d39a900962e546cc6d8896f562b5b580db51",
+  "seconds": 304,
+  "exit": 0,
+  "status": "clean",
+  "result": "423203fccf2c9d41cb96107707a89aba02a829e2",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "6 files changed, 91 insertions(+), 16 deletions(-)",
+   "before": "6 files changed, 91 insertions(+), 16 deletions(-)",
+   "changed_files": 6,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011714-a2dc",
+  "name": "8765",
+  "kind": "child-steps",
+  "commit": "c7834a9c581b7083737f10e738a54d333e726a7c",
+  "seconds": 306,
+  "status": "clean",
+  "result": "75fe378ababfd7bc35ee0d934bede26d9e655a04",
+  "crossed": [
+   "c97b269158c8ef074649f1ab4f443dcfd6331cae"
+  ],
+  "parent": "8520",
+  "parent_result": "423203fccf2c9d41cb96107707a89aba02a829e2",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "7 files changed, 292 insertions(+), 29 deletions(-)",
+   "before": "7 files changed, 292 insertions(+), 29 deletions(-)",
+   "changed_files": 7,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011714-a2dc",
+  "name": "8765onto",
+  "kind": "child-onto",
+  "commit": "c7834a9c581b7083737f10e738a54d333e726a7c",
+  "seconds": 83,
+  "exit": 1,
+  "status": "based-after",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ],
+  "parent": "8520",
+  "parent_result": "423203fccf2c9d41cb96107707a89aba02a829e2"
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8430",
+  "kind": "plain",
+  "commit": "06c8eb8b49b3ce38a1885024c24b180a574df78a",
+  "seconds": 241,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8447",
+  "kind": "plain",
+  "commit": "70a2fe2e6923a0e8eb19f775056b45a3ff30a217",
+  "seconds": 313,
+  "exit": 0,
+  "status": "clean",
+  "result": "7fd475f87d4613a92871ea509a665252b8c4d319",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "15 files changed, 1101 insertions(+), 46 deletions(-)",
+   "before": "15 files changed, 1101 insertions(+), 46 deletions(-)",
+   "changed_files": 15,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8362",
+  "kind": "plain",
+  "commit": "fa5cc4d01ac1bb492477cf9d7395428b2a9b7ac3",
+  "seconds": 314,
+  "exit": 0,
+  "status": "clean",
+  "result": "ffafab44edb7c387e0d341cb7b037b65a782b4b8",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "before": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "changed_files": 13,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8432",
+  "kind": "plain",
+  "commit": "95a317b0cd121434ad7fde235194d92ddc1266eb",
+  "seconds": 319,
+  "exit": 0,
+  "status": "clean",
+  "result": "b247cfc72f98f514cc51440e19c6cf3d4678f286",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "5 files changed, 297 insertions(+), 104 deletions(-)",
+   "before": "5 files changed, 297 insertions(+), 104 deletions(-)",
+   "changed_files": 5,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8534",
+  "kind": "child-steps",
+  "commit": "c81530a51d5366226955ec2c74ecccc4ed409a5d",
+  "seconds": 310,
+  "status": "clean",
+  "result": "e931157f8f7151ee958e345fea746f43ca23a50a",
+  "crossed": [
+   "cd659e13197cd7aa302c1138530dc5cf43c4682f"
+  ],
+  "parent": "8447",
+  "parent_result": "7fd475f87d4613a92871ea509a665252b8c4d319",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "9 files changed, 219 insertions(+), 105 deletions(-)",
+   "before": "9 files changed, 219 insertions(+), 105 deletions(-)",
+   "changed_files": 9,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8397",
+  "kind": "child-steps",
+  "commit": "4d9a14f3630427e9f6b23d5eb23b06c8bf903be7",
+  "seconds": 310,
+  "status": "clean",
+  "result": "d36b7a255cd98cc7cbaf7ae1e8878094ae6d780f",
+  "crossed": [
+   "798e058a720167038779270c502cf76e69f3adbb"
+  ],
+  "parent": "8362",
+  "parent_result": "ffafab44edb7c387e0d341cb7b037b65a782b4b8",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "35 files changed, 1255 insertions(+), 173 deletions(-)",
+   "before": "35 files changed, 1255 insertions(+), 173 deletions(-)",
+   "changed_files": 35,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-011916-754f",
+  "name": "8451",
+  "kind": "child-steps",
+  "commit": "26f9ef19b917031fb3a1be594dddf36ee2ff6524",
+  "seconds": 314,
+  "status": "clean",
+  "result": "ac740851230ec19edd2906ae7bbc33e65d5eba03",
+  "crossed": [
+   "72b7dfb70fcf5b2724f8c0d78161310b89193dbb"
+  ],
+  "parent": "8432",
+  "parent_result": "b247cfc72f98f514cc51440e19c6cf3d4678f286",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "11 files changed, 1277 insertions(+), 47 deletions(-)",
+   "before": "11 files changed, 1277 insertions(+), 47 deletions(-)",
+   "changed_files": 11,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8694",
+  "kind": "plain",
+  "commit": "92d85ce4b348631c7157cdf558d7d0d60c9b01fc",
+  "seconds": 314,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "moved",
+  "files": [
+   "benchmarks/served_units/prove_time.sh",
+   "benchmarks/served_units/tests/test_names.py",
+   "benchmarks/served_units/window.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8466",
+  "kind": "plain",
+  "commit": "c9976fe35181bdf4829892d7b27cfa4587a82afc",
+  "seconds": 315,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "moved",
+  "files": [
+   "benchmarks/tc_probe_fp4/tool.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8651",
+  "kind": "plain",
+  "commit": "87c9d85b1c87cdbb137ddda09c8990abdc2f1304",
+  "seconds": 316,
+  "exit": 0,
+  "status": "clean",
+  "result": "b10eddef5316791e3347c13eee2cb8983b57245e",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "7 files changed, 4 insertions(+), 329 deletions(-)",
+   "before": "7 files changed, 1 insertion(+), 326 deletions(-)",
+   "changed_files": 7,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8618",
+  "kind": "plain",
+  "commit": "adea5e7767abeb133de5cb4b66686d7053cce774",
+  "seconds": 317,
+  "exit": 0,
+  "status": "clean",
+  "result": "203ab1c2adbcbf5e4e4e8e8e3cbc18838f0c20be",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "21 files changed, 249 insertions(+)",
+   "before": "21 files changed, 249 insertions(+)",
+   "changed_files": 21,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8461",
+  "kind": "plain",
+  "commit": "a7807897c89a9b97b11cf35c9cdc0d81a161c0f7",
+  "seconds": 318,
+  "exit": 0,
+  "status": "clean",
+  "result": "f1bfef81c80fa278fbf9ff1cc7bea4c7a6451840",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "22 files changed, 21 insertions(+), 2448 deletions(-)",
+   "before": "22 files changed, 21 insertions(+), 2448 deletions(-)",
+   "changed_files": 23,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8463",
+  "kind": "plain",
+  "commit": "a602d55e0f6789ee59cfa456b2d7b29c39cb9d57",
+  "seconds": 87,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/circuit_check/pyproject.toml"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8673",
+  "kind": "plain",
+  "commit": "1a3876716246bc5def2d842b4f3a8e42805fe795",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "e6fc3eb396b5f45da911bf62cf87a1d20b911ec9",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "1 file changed, 4 insertions(+), 3 deletions(-)",
+   "before": "1 file changed, 4 insertions(+), 3 deletions(-)",
+   "changed_files": 1,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8599",
+  "kind": "plain",
+  "commit": "190124e3c5faa0596e03c8316e5f273baf891f73",
+  "seconds": 158,
+  "exit": 0,
+  "status": "clean",
+  "result": "0164049ac3ab8eed3cc709182366426b62994773",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "10 files changed, 459 insertions(+), 79 deletions(-)",
+   "before": "10 files changed, 459 insertions(+), 79 deletions(-)",
+   "changed_files": 10,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8394raw",
+  "kind": "plain",
+  "commit": "4d93db79242b1800a5162bcf88e7e56640b6a7a6",
+  "seconds": 0,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "integrations/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "integrations/vllm/verity_vllm/pipeline/serving_rows.py"
+  ]
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8426",
+  "kind": "plain",
+  "commit": "0cd1a270013f41a9d23eec0170bf688c2ca61dc0",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "01cae321b918691f39afd119a99358d119abec13",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "17 files changed, 834 insertions(+), 81 deletions(-)",
+   "before": "17 files changed, 834 insertions(+), 81 deletions(-)",
+   "changed_files": 17,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8370",
+  "kind": "plain",
+  "commit": "725460ddc6fd6bbe42b6671e84b85a4476940d07",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "2d4a0d338181e752f223ef758daf39f2cc2deedf",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "1 file changed, 7 insertions(+), 9 deletions(-)",
+   "before": "1 file changed, 7 insertions(+), 9 deletions(-)",
+   "changed_files": 1,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8651raw",
+  "kind": "plain",
+  "commit": "604d77b99d66c625c374fc5e867bd8d97358613b",
+  "seconds": 8,
+  "exit": 1,
+  "status": "based-after"
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8594raw",
+  "kind": "plain",
+  "commit": "6a4579d227fea9ab952ed7be9c3289f234c530f4",
+  "seconds": 7,
+  "exit": 1,
+  "status": "based-after"
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8464",
+  "kind": "plain",
+  "commit": "fa1ea710f8d8f12b7ad7dd5b83cf317dbcd178f6",
+  "seconds": 85,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8054raw",
+  "kind": "plain",
+  "commit": "166fecef6ac8abe41769c24493310a722d3fffd3",
+  "seconds": 28,
+  "exit": 1,
+  "status": "based-after",
+  "crossed": [
+   "92acf33adc77e545a4c02a9e123fe7342973ecbc"
+  ]
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8394mend",
+  "kind": "plain",
+  "commit": "3b33911f1bb99057d1200c2db47979c69992cfd1",
+  "seconds": 161,
+  "exit": 0,
+  "status": "clean",
+  "result": "ef5633afe7bb779c9618c45939c4d8f24d1b8e80",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "38 files changed, 1310 insertions(+), 221 deletions(-)",
+   "before": "38 files changed, 1310 insertions(+), 221 deletions(-)",
+   "changed_files": 38,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8397own",
+  "kind": "plain",
+  "commit": "ae765572ace3c129d5e7b7491b975c62610e5708",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "62eaf0dad3164cd559210319cd82fcb0529d2127",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "47 files changed, 1968 insertions(+), 195 deletions(-)",
+   "before": "47 files changed, 1968 insertions(+), 195 deletions(-)",
+   "changed_files": 47,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8451own",
+  "kind": "plain",
+  "commit": "7cbc411614152629aecd50a704d4aeaef15496bd",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "4ae00d1611d32c764966b58f016e320f933e82a1",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "14 files changed, 1563 insertions(+), 140 deletions(-)",
+   "before": "14 files changed, 1563 insertions(+), 140 deletions(-)",
+   "changed_files": 14,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8534own",
+  "kind": "plain",
+  "commit": "681132d187795c5cce907e6e40812ddc40aa965f",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "e7d007397242fcc1e3d3ef8d2e3cd569e92bd135",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "15 files changed, 1244 insertions(+), 75 deletions(-)",
+   "before": "15 files changed, 1244 insertions(+), 75 deletions(-)",
+   "changed_files": 15,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-012534-9b16",
+  "name": "8765own",
+  "kind": "plain",
+  "commit": "3de52ed9df23a0b39843b51179246d7194451869",
+  "seconds": 158,
+  "exit": 0,
+  "status": "clean",
+  "result": "d9ae665d144495d42a533bcee5c2c12884d22eb0",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "13 files changed, 383 insertions(+), 45 deletions(-)",
+   "before": "13 files changed, 383 insertions(+), 45 deletions(-)",
+   "changed_files": 13,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-013027-7b15",
+  "name": "8430",
+  "kind": "plain",
+  "commit": "06c8eb8b49b3ce38a1885024c24b180a574df78a",
+  "seconds": 89,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ],
+  "partial": "81cdc0e333ca4988bf7ffbe970ba7d19ca8578c9"
+ },
+ {
+  "run": "r20261111-014140-f2b6",
+  "name": "8651named",
+  "kind": "named",
+  "commit": "604d77b99d66c625c374fc5e867bd8d97358613b",
+  "seconds": 1,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "integrations/vllm/tests/dead_code_keep.json"
+  ]
+ },
+ {
+  "run": "r20261111-014140-f2b6",
+  "name": "8694m",
+  "kind": "pins",
+  "commit": "cf77e456d1ca9e97fdcb68474dbdf3edffe1682f",
+  "seconds": 3,
+  "status": "clean",
+  "step": "pins",
+  "result": "cf77e456d1ca9e97fdcb68474dbdf3edffe1682f",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "4 files changed, 102 insertions(+), 16 deletions(-)",
+   "changed_files": 4,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014140-f2b6",
+  "name": "8466m",
+  "kind": "pins",
+  "commit": "261ff9e2057554d8dfe74aaff5823ee292df3787",
+  "seconds": 3,
+  "status": "clean",
+  "step": "pins",
+  "result": "261ff9e2057554d8dfe74aaff5823ee292df3787",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "19 files changed, 16 insertions(+), 4157 deletions(-)",
+   "changed_files": 19,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014140-f2b6",
+  "name": "8430m",
+  "kind": "plain",
+  "commit": "70c81dfe0c07ff05f1f4d1651f986e36c6cd4447",
+  "seconds": 79,
+  "exit": 0,
+  "status": "clean",
+  "result": "809cfca70a843ed41b915f1d4401f041713ebfec",
+  "crossed": [
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "11 files changed, 356 insertions(+), 10322 deletions(-)",
+   "before": "6548 files changed, 26254 insertions(+), 35703 deletions(-)",
+   "changed_files": 11,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014140-f2b6",
+  "name": "8464",
+  "kind": "plain",
+  "commit": "fa1ea710f8d8f12b7ad7dd5b83cf317dbcd178f6",
+  "seconds": 92,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ],
+  "partial": "13df38a03e5e1b0635067995942dc1c9321eb1b6"
+ },
+ {
+  "run": "r20261111-014140-f2b6",
+  "name": "8463",
+  "kind": "plain",
+  "commit": "a602d55e0f6789ee59cfa456b2d7b29c39cb9d57",
+  "seconds": 94,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/circuit_check/pyproject.toml"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ],
+  "partial": "080b3519ad9ca8ba2c2f1d97dcf0bae4b488d55d"
+ },
+ {
+  "run": "r20261111-014210-9e75",
+  "name": "8362",
+  "kind": "plain",
+  "commit": "fa5cc4d01ac1bb492477cf9d7395428b2a9b7ac3",
+  "seconds": 157,
+  "exit": 0,
+  "status": "clean",
+  "result": "8ac10a9fb448da6d66718e8f7fcc4e41e780fadc",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "before": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "changed_files": 13,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014210-9e75",
+  "name": "8394s",
+  "kind": "child-steps",
+  "commit": "8b7e1917e8cf54692cf9f9aabb81029c865886f4",
+  "seconds": 312,
+  "status": "clean",
+  "result": "b80c1087651d7f4d7f3139e76c1c050eadc56448",
+  "crossed": [
+   "529805380789fb3403258e6d402375be19199334"
+  ],
+  "parent": "8362",
+  "parent_result": "8ac10a9fb448da6d66718e8f7fcc4e41e780fadc",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "26 files changed, 598 insertions(+), 200 deletions(-)",
+   "before": "26 files changed, 598 insertions(+), 200 deletions(-)",
+   "changed_files": 26,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014210-9e75",
+  "name": "8447s",
+  "kind": "child-steps",
+  "commit": "db5a0bc7fd651e635acdea20a523e0b8011c3864",
+  "seconds": 312,
+  "status": "clean",
+  "result": "a1847c92794e74886862b2845229dc15b4456f4f",
+  "crossed": [
+   "529805380789fb3403258e6d402375be19199334"
+  ],
+  "parent": "8362",
+  "parent_result": "8ac10a9fb448da6d66718e8f7fcc4e41e780fadc",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "10 files changed, 415 insertions(+), 51 deletions(-)",
+   "before": "10 files changed, 415 insertions(+), 51 deletions(-)",
+   "changed_files": 10,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014210-9e75",
+  "name": "8534s",
+  "kind": "child-steps",
+  "commit": "809a773c1a4d43d8693ec4b596a48a0185544347",
+  "seconds": 313,
+  "status": "clean",
+  "result": "862a86052ba4b9078fb3abc1c052b1465db9065d",
+  "crossed": [
+   "0310985943049de9d77d32ff501535c4848d74e7"
+  ],
+  "parent": "8447s",
+  "parent_result": "a1847c92794e74886862b2845229dc15b4456f4f",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "9 files changed, 219 insertions(+), 105 deletions(-)",
+   "before": "9 files changed, 219 insertions(+), 105 deletions(-)",
+   "changed_files": 9,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014754-5f76",
+  "name": "8594named",
+  "kind": "named",
+  "commit": "6a4579d227fea9ab952ed7be9c3289f234c530f4",
+  "seconds": 0,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "integrations/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "verity/ml/definitions/registry/gumbel_boolean.py"
+  ]
+ },
+ {
+  "run": "r20261111-014754-5f76",
+  "name": "8054named",
+  "kind": "named",
+  "commit": "166fecef6ac8abe41769c24493310a722d3fffd3",
+  "seconds": 1,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "benchmarks/prove_path/tests/test_prove_path.py",
+   "integrations/vllm/tests/check/test_fold_sampler_construction.py",
+   "integrations/vllm/tests/lint/allowlists/typed_records.json",
+   "integrations/vllm/tests/program/predict/test_batch.py",
+   "integrations/vllm/tests/program/test_derive_tp_stochastic.py",
+   "integrations/vllm/tests/program/test_inputs.py",
+   "integrations/vllm/tests/program/test_topp_splits_operand.py",
+   "integrations/vllm/verity_vllm/program/frontend/vllm_meta.py",
+   "integrations/vllm/verity_vllm/program/inputs.py",
+   "integrations/vllm/verity_vllm/program/predict/batch.py",
+   "integrations/vllm/verity_vllm/program/predict/build.py",
+   "integrations/vllm/verity_vllm/program/predict/naming.py",
+   "integrations/vllm/verity_vllm/program/predict/node.py",
+   "integrations/vllm/verity_vllm/program/workload.py",
+   "verity/core/protocols/certifier/protocol/arbitrary-serving-attacks.md"
+  ]
+ },
+ {
+  "run": "r20261111-014754-5f76",
+  "name": "8463m",
+  "kind": "plain",
+  "commit": "8cb95bb3b36c1faf2469d85dc5c6ed36de1995bf",
+  "seconds": 71,
+  "exit": 0,
+  "status": "clean",
+  "result": "b24e4fb821b132c53ace4ca29ff3ff622e986a5c",
+  "crossed": [
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "4 files changed, 442 insertions(+), 2 deletions(-)",
+   "before": "6549 files changed, 29709 insertions(+), 28752 deletions(-)",
+   "changed_files": 4,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-014754-5f76",
+  "name": "8464m",
+  "kind": "plain",
+  "commit": "fa2b3f29b5d024f2245ea829a67cecb292f4bf24",
+  "seconds": 71,
+  "exit": 0,
+  "status": "clean",
+  "result": "168058c330169d2508dd03bc85e661d028dbf47d",
+  "crossed": [
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "27 files changed, 1721 insertions(+), 2181 deletions(-)",
+   "before": "6551 files changed, 30087 insertions(+), 30030 deletions(-)",
+   "changed_files": 27,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-015713-ff38",
+  "name": "8394n",
+  "kind": "plain",
+  "commit": "ec1cc2f9ab9521b9a945251516ac9b552b03e9fb",
+  "seconds": 153,
+  "exit": 0,
+  "status": "clean",
+  "result": "631c266fc7d020fc6b6eccb48e723bb404866619",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "38 files changed, 1311 insertions(+), 221 deletions(-)",
+   "before": "38 files changed, 1311 insertions(+), 221 deletions(-)",
+   "changed_files": 38,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-015713-ff38",
+  "name": "8594n",
+  "kind": "plain",
+  "commit": "5ae88e40fa02c89899b94f76ff734fd892f37a89",
+  "seconds": 155,
+  "exit": 0,
+  "status": "clean",
+  "result": "163b86bb080e83bbcea4617c295ed4c660a440e2",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "10 files changed, 438 insertions(+), 11 deletions(-)",
+   "before": "10 files changed, 438 insertions(+), 11 deletions(-)",
+   "changed_files": 10,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-015713-ff38",
+  "name": "8362",
+  "kind": "plain",
+  "commit": "fa5cc4d01ac1bb492477cf9d7395428b2a9b7ac3",
+  "seconds": 156,
+  "exit": 0,
+  "status": "clean",
+  "result": "ab99415f41f39605d88a7e1f87ab6d601fcc1d8e",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "before": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "changed_files": 13,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-015713-ff38",
+  "name": "8394ns",
+  "kind": "child-steps",
+  "commit": "ee2c87a61869422f5a5e28d4cafa4ba7b616aa64",
+  "seconds": 301,
+  "status": "clean",
+  "result": "838fa30d27b210ad1b39fa4bf5f0d3b41ce52b58",
+  "crossed": [
+   "afb2ca478f2777aa59cf272d704c4533fa3b9a59"
+  ],
+  "parent": "8362",
+  "parent_result": "ab99415f41f39605d88a7e1f87ab6d601fcc1d8e",
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "26 files changed, 599 insertions(+), 200 deletions(-)",
+   "before": "26 files changed, 599 insertions(+), 200 deletions(-)",
+   "changed_files": 26,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8520n",
+  "kind": "named",
+  "commit": "141593ac72167d5fbc3292295a16118e0b4147cd",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "4824b08ba68dc58a7f23b7f1ab2ee8d5f58ba078",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "6 files changed, 91 insertions(+), 16 deletions(-)",
+   "changed_files": 6,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8362n",
+  "kind": "named",
+  "commit": "3e6afe88d753186aa047dc7ffd068d0452381da4",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "067a4caca6640a130a6bef8a258d404bd5643a5c",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "13 files changed, 713 insertions(+), 22 deletions(-)",
+   "changed_files": 13,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8432n",
+  "kind": "named",
+  "commit": "f4b3bfc5cd521e6d58e55df797e605db4041c1fb",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "45497a495160cfd3a680d493cae5d92965282131",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "5 files changed, 297 insertions(+), 104 deletions(-)",
+   "changed_files": 5,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8451n",
+  "kind": "named",
+  "commit": "22316ab8535bbef0aa95a286c1092a91cbbca927",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "3737995cbba91f4dfa56e2036d15de2f5673f40c",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "14 files changed, 1563 insertions(+), 140 deletions(-)",
+   "changed_files": 14,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8534n",
+  "kind": "named",
+  "commit": "b44c6651d71bb79f77e6453e0b264bcde7e8c18c",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "879331924cfcce70983e34088de89deb58ebc383",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "15 files changed, 1244 insertions(+), 75 deletions(-)",
+   "changed_files": 15,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8461n",
+  "kind": "named",
+  "commit": "61f74eb1b376a5841350c42c90cd05120652cad5",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "28fc163adbeb059a2c0593b101b96242d4631334",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "22 files changed, 21 insertions(+), 2448 deletions(-)",
+   "changed_files": 23,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8447n",
+  "kind": "named",
+  "commit": "1a0c5ede5503f940f7bea01052c0fceabed298a8",
+  "seconds": 161,
+  "exit": 0,
+  "status": "clean",
+  "result": "f3c1dfee304532b09ce2aba46cff85cb26d154a8",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "15 files changed, 1101 insertions(+), 46 deletions(-)",
+   "changed_files": 15,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8430n",
+  "kind": "named",
+  "commit": "f9fb6cc291ba7847f1333960780fc79304c8cc24",
+  "seconds": 87,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8466n",
+  "kind": "named",
+  "commit": "bcd9f40b5b0e3e31c69eb45a9cd2a3abc746543e",
+  "seconds": 158,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "moved",
+  "files": [
+   "benchmarks/tc_probe_fp4/tool.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8694n",
+  "kind": "named",
+  "commit": "224da3f20d7c7de273fa4150d5775f216c5b6bfd",
+  "seconds": 157,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "moved",
+  "files": [
+   "benchmarks/served_units/prove_time.sh",
+   "benchmarks/served_units/tests/test_names.py",
+   "benchmarks/served_units/window.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8673n",
+  "kind": "named",
+  "commit": "552cf2cd7bc5bad3ae5c12c5f358c65c08badd70",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "26b67f9fcc10eae9ffc5930c42eeeee746fb8ca0",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "1 file changed, 4 insertions(+), 3 deletions(-)",
+   "changed_files": 1,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8618n",
+  "kind": "named",
+  "commit": "cabf272e0151f291fcbb57691d1f05e466a42d37",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "119c683e42d1f644e9b87d14772c9bd6e582a83e",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "21 files changed, 249 insertions(+)",
+   "changed_files": 21,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8599n",
+  "kind": "named",
+  "commit": "143408665f6d68524a2436645f21ecfa5f942fa8",
+  "seconds": 161,
+  "exit": 0,
+  "status": "clean",
+  "result": "4a4a6d29944710f80a80a46d63adf7e25320759a",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "10 files changed, 459 insertions(+), 79 deletions(-)",
+   "changed_files": 10,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8397n",
+  "kind": "named",
+  "commit": "46293b329a1281b55a9d1fe30ba4690c300dc12d",
+  "seconds": 160,
+  "exit": 0,
+  "status": "clean",
+  "result": "dd37c70dd176be0d6339c4111177fe26c699bbb2",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "47 files changed, 1968 insertions(+), 195 deletions(-)",
+   "changed_files": 47,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8463n",
+  "kind": "named",
+  "commit": "a7f45a95b647a7b1406306b638a88c6f139d55fe",
+  "seconds": 86,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/circuit_check/pyproject.toml"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8464n",
+  "kind": "named",
+  "commit": "4740cbd794ceb9881eebd489863338c87a749684",
+  "seconds": 86,
+  "exit": 1,
+  "status": "conflicted",
+  "step": "base",
+  "files": [
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e"
+  ]
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8394nn",
+  "kind": "named",
+  "commit": "18832bfe182275f51a797d561d328aa36e29ea78",
+  "seconds": 158,
+  "exit": 0,
+  "status": "clean",
+  "result": "68c6a057050a5c1ff237bd9e5b34c90d43d6edaf",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "38 files changed, 1311 insertions(+), 221 deletions(-)",
+   "changed_files": 38,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8370n",
+  "kind": "named",
+  "commit": "8e57e1d07c9635e02a2a9ad71d99dd130e6bdd9c",
+  "seconds": 157,
+  "exit": 0,
+  "status": "clean",
+  "result": "3457c65fef6efb8f61d73b7560c5465bedb420bc",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "1 file changed, 7 insertions(+), 9 deletions(-)",
+   "changed_files": 1,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8426n",
+  "kind": "named",
+  "commit": "0a76ecd405ddd5c8e2a8356cd6b26f348b6aa42b",
+  "seconds": 158,
+  "exit": 0,
+  "status": "clean",
+  "result": "78857547a2a36efe7dd9354a6fc28ae48df0be02",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "17 files changed, 834 insertions(+), 81 deletions(-)",
+   "changed_files": 17,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8594nn",
+  "kind": "named",
+  "commit": "3dc6495f745fc94c68637f5c027075242e9d5e96",
+  "seconds": 158,
+  "exit": 0,
+  "status": "clean",
+  "result": "bc14c72a504166e6b47eddfb735bdfa31ebf688f",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "10 files changed, 438 insertions(+), 11 deletions(-)",
+   "changed_files": 10,
+   "conflict_markers": []
+  }
+ },
+ {
+  "run": "r20261111-021132-a93e",
+  "name": "8765n",
+  "kind": "named",
+  "commit": "31d8a67e25a65c960f64017ac0ca2efe0e2ddecb",
+  "seconds": 159,
+  "exit": 0,
+  "status": "clean",
+  "result": "fe3c8a8a8bd13b66c8e5d8f0f1e176d64b136b12",
+  "crossed": [
+   "6581bcf197d3c87051ae45bad0a2fb778d1f6e2e",
+   "c1ca25a247486ec597a815f46f0adacfd9ef2063"
+  ],
+  "facts": {
+   "holds_commit": true,
+   "holds_main": true,
+   "holds_after_from": true,
+   "after": "13 files changed, 383 insertions(+), 45 deletions(-)",
+   "changed_files": 13,
+   "conflict_markers": []
+  }
+ }
+]

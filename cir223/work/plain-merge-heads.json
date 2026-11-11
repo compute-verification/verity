@@ -1,0 +1,666 @@
+[
+ {
+  "name": "8520",
+  "head": "141593ac7216",
+  "result": "423203fccf2c",
+  "merge_tree": "151c19b1c7326cb3b198a981dded43d6cf8d9cc6",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_chains.py",
+   "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_chains.py",
+   "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
+  ],
+  "shortstat": "2 files changed, 4 insertions(+), 27 deletions(-)"
+ },
+ {
+  "name": "8397",
+  "head": "46293b329a12",
+  "result": "d36b7a255cd9",
+  "merge_tree": "ec721967b35b68fb5766f119aa1517673b59adb5",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_norm_split.py",
+   "adapters/vllm/tests/pipeline/test_serving_rows_parts.py",
+   "adapters/vllm/verity_vllm/pipeline/gemm_rows.py",
+   "adapters/vllm/verity_vllm/pipeline/part_rows.py",
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/boolean_dsa_norm.circuit-check.json",
+   "verity/definitions/registry/boolean_dsa_norm.circuit-check.py",
+   "verity/definitions/registry/boolean_dsa_norm.py",
+   "verity/definitions/registry/boolean_norms.py",
+   "verity/definitions/registry/boolean_norms_split.circuit-check.json",
+   "verity/definitions/registry/boolean_norms_split.circuit-check.py",
+   "verity/definitions/registry/boolean_norms_split.py",
+   "verity/definitions/registry/boolean_sigma.py",
+   "verity/definitions/registry/cuda_rmsnorm_split.circuit-check.py",
+   "verity/definitions/registry/cuda_rmsnorm_split.py",
+   "verity/definitions/registry/dsa_norm.circuit-check.py",
+   "verity/definitions/registry/dsa_norm.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.json",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/registry/tp_allreduce_split.circuit-check.py",
+   "verity/definitions/registry/tp_allreduce_split.py",
+   "verity/definitions/tests/test_cuda_rmsnorm_split.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py",
+   "verity/definitions/tests/test_mnnvl_and_dsa_norm_splits.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_norm_split.py",
+   "adapters/vllm/tests/pipeline/test_serving_rows_parts.py",
+   "adapters/vllm/verity_vllm/pipeline/gemm_rows.py",
+   "adapters/vllm/verity_vllm/pipeline/part_rows.py",
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/boolean_dsa_norm.circuit-check.py",
+   "verity/definitions/registry/boolean_dsa_norm.py",
+   "verity/definitions/registry/boolean_norms.py",
+   "verity/definitions/registry/boolean_norms_split.circuit-check.py",
+   "verity/definitions/registry/boolean_norms_split.py",
+   "verity/definitions/registry/boolean_sigma.py",
+   "verity/definitions/registry/cuda_rmsnorm_split.circuit-check.py",
+   "verity/definitions/registry/cuda_rmsnorm_split.py",
+   "verity/definitions/registry/dsa_norm.circuit-check.py",
+   "verity/definitions/registry/dsa_norm.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/registry/tp_allreduce_split.circuit-check.py",
+   "verity/definitions/registry/tp_allreduce_split.py",
+   "verity/definitions/tests/test_cuda_rmsnorm_split.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py",
+   "verity/definitions/tests/test_mnnvl_and_dsa_norm_splits.py"
+  ],
+  "shortstat": "24 files changed, 118 insertions(+), 191 deletions(-)"
+ },
+ {
+  "name": "8362",
+  "head": "3e6afe88d753",
+  "result": "ffafab44edb7",
+  "merge_tree": "8d56d6de6abaae02dfd71b4d7d5a8cf454467c3e",
+  "merge_exit": 1,
+  "conflicts": [
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.json",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "shortstat": "6 files changed, 39 insertions(+), 49 deletions(-)"
+ },
+ {
+  "name": "8430",
+  "head": "f9fb6cc291ba",
+  "result": "809cfca70a84",
+  "merge_tree": "96e2f391eb4600d7f72116a0bead4901487d35c5",
+  "merge_exit": 1,
+  "conflicts": [
+   "tools/verity/circuit_check/reads/bindings.json",
+   "tools/verity/circuit_check/reads/loaded.json",
+   "tools/verity/circuit_check/reads/registries.json",
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "tools/verity/circuit_check/reads/bindings.json",
+   "tools/verity/circuit_check/reads/loaded.json",
+   "tools/verity/circuit_check/reads/registries.json",
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "shortstat": "4 files changed, 10 insertions(+), 9930 deletions(-)"
+ },
+ {
+  "name": "8432",
+  "head": "f4b3bfc5cd52",
+  "result": "b247cfc72f98",
+  "merge_tree": "d2882b7cfde11a941cbe8f509856fac1d8e258c1",
+  "merge_exit": 1,
+  "conflicts": [
+   "tools/verity/circuit_check/tests/test_structural.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "tools/verity/circuit_check/tests/test_structural.py"
+  ],
+  "shortstat": "1 file changed, 3 insertions(+), 9 deletions(-)"
+ },
+ {
+  "name": "8451",
+  "head": "22316ab8535b",
+  "result": "ac740851230e",
+  "merge_tree": "9c0a3bd3403a9db3d3d7c4e6bdc7292e90000b9b",
+  "merge_exit": 1,
+  "conflicts": [
+   "tools/verity/circuit_check/tests/test_structural.py",
+   "verity/protocols/flock/prover/python/verity_flock/struct_slots.py",
+   "verity/protocols/flock/prover/tests/test_struct_slots.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "tools/verity/circuit_check/src/circuit_check/structural_slots.py",
+   "tools/verity/circuit_check/tests/test_structural.py",
+   "tools/verity/circuit_check/tests/test_structural_slots.py",
+   "verity/protocols/flock/prover/python/verity_flock/struct_slots.py",
+   "verity/protocols/flock/prover/tests/test_struct_slots.py"
+  ],
+  "shortstat": "5 files changed, 16 insertions(+), 22 deletions(-)"
+ },
+ {
+  "name": "8447",
+  "head": "1a0c5ede5503",
+  "result": "7fd475f87d46",
+  "merge_tree": "74a726babbabbf1c2980c3e7fbec4ede3dc1a880",
+  "merge_exit": 1,
+  "conflicts": [
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.json",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_mask_cut.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_mask_cut.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "shortstat": "8 files changed, 45 insertions(+), 79 deletions(-)"
+ },
+ {
+  "name": "8534",
+  "head": "b44c6651d71b",
+  "result": "e931157f8f71",
+  "merge_tree": "ed7c3bf0663961354fb1f7f658b18e8e0393a29b",
+  "merge_exit": 1,
+  "conflicts": [
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_mask_cut.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.json",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_mask_cut.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_mask_cut.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_mask_cut.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "shortstat": "9 files changed, 47 insertions(+), 93 deletions(-)"
+ },
+ {
+  "name": "8461",
+  "head": "61f74eb1b376",
+  "result": "f1bfef81c80f",
+  "merge_tree": "1bbf378b4c0486c48929da500a0a5399b55ae06c",
+  "merge_exit": 1,
+  "conflicts": [
+   "benchmarks/g2/served.py",
+   "benchmarks/mempool/slots.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "benchmarks/g2/served.py",
+   "benchmarks/mempool/slots.py",
+   "tests/lint/allowlists/repo_env_reads.json",
+   "tests/lint/allowlists/repo_retired_terms.json"
+  ],
+  "shortstat": "4 files changed, 1249 insertions(+), 2039 deletions(-)"
+ },
+ {
+  "name": "8466",
+  "head": "bcd9f40b5b0e",
+  "result": "261ff9e20575",
+  "merge_tree": "9f468cd205556fd75b7f039e877128f24995f1ea",
+  "merge_exit": 1,
+  "conflicts": [
+   "benchmarks/mempool/slots.py",
+   "benchmarks/tc_probe_fp4/f2_strassen.py",
+   "benchmarks/tc_probe_fp4/f3_lut.cu",
+   "benchmarks/tc_probe_fp4/f3_lut.py",
+   "benchmarks/tc_probe_fp4/nvf4_step.cuh",
+   "benchmarks/tc_probe_fp4/recheck.py",
+   "benchmarks/tc_probe_fp4/tests/test_tc_probe_fp4.py",
+   "benchmarks/tc_probe_fp4/tool.py",
+   "benchmarks/tc_probe_fp4/vec.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "benchmarks/mempool/slots.py",
+   "benchmarks/tc_probe_fp4/f2_strassen.py",
+   "benchmarks/tc_probe_fp4/f3_lut.cu",
+   "benchmarks/tc_probe_fp4/f3_lut.py",
+   "benchmarks/tc_probe_fp4/nvf4_step.cuh",
+   "benchmarks/tc_probe_fp4/recheck.py",
+   "benchmarks/tc_probe_fp4/tests/test_tc_probe_fp4.py",
+   "benchmarks/tc_probe_fp4/tool.py",
+   "benchmarks/tc_probe_fp4/vec.py",
+   "tests/lint/allowlists/repo_env_reads.json",
+   "tests/lint/allowlists/repo_retired_terms.json"
+  ],
+  "shortstat": "11 files changed, 1249 insertions(+), 4253 deletions(-)"
+ },
+ {
+  "name": "8618",
+  "head": "cabf272e0151",
+  "result": "203ab1c2adbc",
+  "merge_tree": "87a9e951e0c1d3ab63c9c038db5f2cf5aea76173",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/manifests/README.md",
+   "adapters/vllm/verity_vllm/acquire/README.md",
+   "adapters/vllm/verity_vllm/commit/README.md",
+   "adapters/vllm/verity_vllm/correspondence/README.md",
+   "adapters/vllm/verity_vllm/program/README.md",
+   "adapters/vllm/verity_vllm/program/predict/README.md",
+   "adapters/vllm/verity_vllm/properties/README.md",
+   "adapters/vllm/verity_vllm/query/README.md",
+   "adapters/vllm/workloads/README.md",
+   "benchmarks/served_commit/README.md"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/verity_vllm/acquire/README.md",
+   "adapters/vllm/verity_vllm/commit/README.md",
+   "adapters/vllm/verity_vllm/correspondence/README.md",
+   "adapters/vllm/verity_vllm/program/README.md",
+   "adapters/vllm/verity_vllm/program/predict/README.md",
+   "adapters/vllm/verity_vllm/properties/README.md",
+   "adapters/vllm/verity_vllm/query/README.md",
+   "benchmarks/bool_build_cost/README.md",
+   "benchmarks/compile_cost/README.md",
+   "benchmarks/f32_exhaustive/README.md",
+   "benchmarks/mempool/README.md",
+   "benchmarks/served_commit/README.md",
+   "benchmarks/served_units/README.md",
+   "benchmarks/tc_probe/README.md",
+   "benchmarks/tc_probe_fp4/README.md",
+   "benchmarks/unit_block/README.md",
+   "tools/verity/circuit_check/README.md",
+   "verity/definitions/ops/README.md"
+  ],
+  "shortstat": "18 files changed, 34 insertions(+), 38 deletions(-)"
+ },
+ {
+  "name": "8651",
+  "head": "604d77b99d66",
+  "result": "b10eddef5316",
+  "merge_tree": "b23f4fc2f4f0f160e2a9384da5b1db342b712d52",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/query/test_query_artifact.py",
+   "adapters/vllm/verity_vllm/query/query_artifact.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/dead_code_keep.json",
+   "adapters/vllm/tests/lint/allowlists/p07_declared_inputs.json",
+   "adapters/vllm/tests/lint/allowlists/ruff.json",
+   "adapters/vllm/tests/lint/allowlists/typed_records.json",
+   "adapters/vllm/tests/query/test_query_artifact.py",
+   "adapters/vllm/verity_vllm/query/query_artifact.py"
+  ],
+  "shortstat": "6 files changed, 65 insertions(+), 386 deletions(-)"
+ },
+ {
+  "name": "8673",
+  "head": "552cf2cd7bc5",
+  "result": "e6fc3eb396b5",
+  "merge_tree": "3822472691d97fbcfeba0fa65555608298a10abe",
+  "merge_exit": 0,
+  "conflicts": [],
+  "equal": true
+ },
+ {
+  "name": "8694",
+  "head": "224da3f20d7c",
+  "result": "cf77e456d1ca",
+  "merge_tree": "550c86d86d536823bbe2b01cc9aeeed4fb9fb917",
+  "merge_exit": 1,
+  "conflicts": [
+   "benchmarks/served_units/prove_time.sh",
+   "benchmarks/served_units/tests/test_names.py",
+   "benchmarks/served_units/window.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "benchmarks/served_units/prove_time.sh",
+   "benchmarks/served_units/tests/test_names.py",
+   "benchmarks/served_units/window.py"
+  ],
+  "shortstat": "3 files changed, 7 insertions(+), 26 deletions(-)"
+ },
+ {
+  "name": "8599",
+  "head": "143408665f6d",
+  "result": "0164049ac3ab",
+  "merge_tree": "5c466367b5e235afb10321b2947beaf18c7c4777",
+  "merge_exit": 0,
+  "conflicts": [],
+  "equal": false,
+  "differ_files": [
+   "tests/lint/allowlists/repo_silent_excepts.json"
+  ],
+  "shortstat": "1 file changed, 10 insertions(+), 10 deletions(-)"
+ },
+ {
+  "name": "8394old",
+  "head": "4d93db79242b",
+  "result": "ef5633afe7bb",
+  "merge_tree": "7174245a06ac94a83331ce8e6cb9b52093bb7d4a",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_row_chunks.py",
+   "adapters/vllm/tests/program/test_dsa_derive.py",
+   "adapters/vllm/tests/program/test_dsa_table.py",
+   "adapters/vllm/verity_vllm/pipeline/build.py",
+   "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vocab.py",
+   "adapters/vllm/verity_vllm/program/predict/traced.py",
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.json",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_row_chunks.py",
+   "adapters/vllm/tests/program/test_dsa_derive.py",
+   "adapters/vllm/tests/program/test_dsa_table.py",
+   "adapters/vllm/verity_vllm/pipeline/build.py",
+   "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vocab.py",
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "shortstat": "15 files changed, 65 insertions(+), 162 deletions(-)"
+ },
+ {
+  "name": "8394new",
+  "head": "18832bfe182275f51a797d561d328aa36e29ea78",
+  "result": "631c266fc7d0",
+  "merge_tree": "d57a1ce033f5ed0c0859cda6460fe1efcc9a8b7b",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_row_chunks.py",
+   "adapters/vllm/tests/program/test_dsa_derive.py",
+   "adapters/vllm/tests/program/test_dsa_table.py",
+   "adapters/vllm/verity_vllm/pipeline/build.py",
+   "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vocab.py",
+   "adapters/vllm/verity_vllm/program/predict/traced.py",
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.json",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_row_chunks.py",
+   "adapters/vllm/tests/program/test_dsa_derive.py",
+   "adapters/vllm/tests/program/test_dsa_table.py",
+   "adapters/vllm/verity_vllm/pipeline/build.py",
+   "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py",
+   "adapters/vllm/verity_vllm/program/dsa_table.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vocab.py",
+   "benchmarks/one_stage/zk_cost_cpu.sh",
+   "benchmarks/served_units/stage.py",
+   "verity/commitments/gates/embedding.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+   "verity/definitions/registry/dsa_topk_reads.py",
+   "verity/definitions/tests/test_dsa_topk_reads.py"
+  ],
+  "shortstat": "14 files changed, 58 insertions(+), 136 deletions(-)"
+ },
+ {
+  "name": "8426",
+  "head": "0a76ecd405dd",
+  "result": "01cae321b918",
+  "merge_tree": "288f95b38a34158a4a6fdf0f034c7ed56943b91c",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_greedy.py",
+   "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
+   "adapters/vllm/verity_vllm/pipeline/stage_rows.py",
+   "verity/definitions/registry/greedy_stages.circuit-check.py",
+   "verity/definitions/registry/greedy_stages.py",
+   "verity/definitions/tests/test_greedy_stages.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_greedy.py",
+   "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
+   "adapters/vllm/verity_vllm/pipeline/stage_rows.py",
+   "tools/verity/circuit_check/tests/test_block.py",
+   "verity/definitions/registry/b1.py",
+   "verity/definitions/registry/greedy_stages.circuit-check.py",
+   "verity/definitions/registry/greedy_stages.py",
+   "verity/definitions/tests/test_greedy_stages.py"
+  ],
+  "shortstat": "8 files changed, 32 insertions(+), 58 deletions(-)"
+ },
+ {
+  "name": "8370",
+  "head": "8e57e1d07c96",
+  "result": "2d4a0d338181",
+  "merge_tree": "3415d11eaa2f6d0b69dfc19b127853b2dfb2f719",
+  "merge_exit": 0,
+  "conflicts": [],
+  "equal": true
+ },
+ {
+  "name": "8594old",
+  "head": "6a4579d227fe",
+  "result": "",
+  "merge_tree": "c352ac8c898badea33d89fc2e90ac864978cee3a",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_stages.py",
+   "adapters/vllm/tests/program/data/sampling_split_digests.json",
+   "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "verity/definitions/registry/boolean_topp_stages.circuit-check.json",
+   "verity/definitions/registry/boolean_topp_stages.circuit-check.py",
+   "verity/definitions/registry/boolean_topp_stages.py",
+   "verity/definitions/registry/gumbel_boolean.py",
+   "verity/definitions/tests/test_boolean_topp_stages.py"
+  ]
+ },
+ {
+  "name": "8594new",
+  "head": "3dc6495f745fc94c68637f5c027075242e9d5e96",
+  "result": "163b86bb080e",
+  "merge_tree": "8bd3966110f041b901b30803bedcde86a16370f3",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_stages.py",
+   "adapters/vllm/tests/program/data/sampling_split_digests.json",
+   "verity/definitions/registry/boolean_topp_stages.circuit-check.json",
+   "verity/definitions/registry/boolean_topp_stages.circuit-check.py",
+   "verity/definitions/registry/boolean_topp_stages.py",
+   "verity/definitions/registry/gumbel_boolean.py",
+   "verity/definitions/tests/test_boolean_topp_stages.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_stages.py",
+   "adapters/vllm/tests/program/data/sampling_split_digests.json",
+   "verity/definitions/registry/boolean_topp_stages.circuit-check.py",
+   "verity/definitions/registry/boolean_topp_stages.py",
+   "verity/definitions/registry/gumbel_boolean.py",
+   "verity/definitions/tests/test_boolean_topp_stages.py"
+  ],
+  "shortstat": "6 files changed, 33 insertions(+), 114 deletions(-)"
+ },
+ {
+  "name": "8765",
+  "head": "31d8a67e25a6",
+  "result": "75fe378ababf",
+  "merge_tree": "af9b86554032677be5905d8b4f8148905a93c366",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_chains.py",
+   "adapters/vllm/tests/pipeline/test_serving_rows_splits.py",
+   "adapters/vllm/tests/program/test_sparse_mla_chain.py",
+   "verity/definitions/registry/boolean_sparse_mla.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/tests/pipeline/test_serving_rows_chains.py",
+   "adapters/vllm/tests/pipeline/test_serving_rows_splits.py",
+   "adapters/vllm/tests/program/test_sparse_mla_chain.py",
+   "verity/definitions/registry/boolean_sparse_mla.circuit-check.py",
+   "verity/definitions/registry/boolean_sparse_mla.py"
+  ],
+  "shortstat": "5 files changed, 18 insertions(+), 64 deletions(-)"
+ },
+ {
+  "name": "8463",
+  "head": "a7f45a95b647",
+  "result": "b24e4fb821b1",
+  "merge_tree": "bc1cfba38b67d9b7768c227ec03ef68784de424e",
+  "merge_exit": 1,
+  "conflicts": [
+   "tools/verity/circuit_check/pyproject.toml"
+  ],
+  "equal": false,
+  "differ_files": [
+   "tests/lint/allowlists/superseded_versions.json",
+   "tools/verity/circuit_check/pyproject.toml",
+   "tools/verity/circuit_check/tests/test_superseded_versions.py"
+  ],
+  "shortstat": "3 files changed, 239 insertions(+), 432 deletions(-)"
+ },
+ {
+  "name": "8464",
+  "head": "4740cbd794ce",
+  "result": "168058c33016",
+  "merge_tree": "e03f48c6a61f52aebfe927d577cae07be4b00273",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/verity_vllm/__init__.circuit-check.py",
+   "tools/verity/circuit_check/reads/bindings.json",
+   "tools/verity/circuit_check/reads/loaded.json",
+   "tools/verity/circuit_check/reads/registries.json",
+   "tools/verity/circuit_check/src/circuit_check/checks.py",
+   "tools/verity/circuit_check/src/circuit_check/cli.py",
+   "tools/verity/circuit_check/src/circuit_check/sidecars.py",
+   "tools/verity/circuit_check/src/circuit_check/targets.py",
+   "tools/verity/circuit_check/tests/test_batch.py",
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "equal": false,
+  "differ_files": [
+   "adapters/vllm/verity_vllm/__init__.circuit-check.py",
+   "tests/test_boundaries.py",
+   "tools/verity/circuit_check/README.md",
+   "tools/verity/circuit_check/pyproject.toml",
+   "tools/verity/circuit_check/reads/bindings.json",
+   "tools/verity/circuit_check/reads/loaded.json",
+   "tools/verity/circuit_check/reads/registries.json",
+   "tools/verity/circuit_check/src/circuit_check/checks.py",
+   "tools/verity/circuit_check/src/circuit_check/cli.py",
+   "tools/verity/circuit_check/src/circuit_check/sidecars.py",
+   "tools/verity/circuit_check/src/circuit_check/targets.py",
+   "tools/verity/circuit_check/tests/test_batch.py",
+   "tools/verity/graph/tests/test_circuit_binding.py"
+  ],
+  "shortstat": "13 files changed, 859 insertions(+), 5687 deletions(-)"
+ },
+ {
+  "name": "8054",
+  "head": "166fecef6ac8",
+  "result": "",
+  "merge_tree": "404ab7ba8d2b922b728ba91158f53c768ef3ae0b",
+  "merge_exit": 1,
+  "conflicts": [
+   "adapters/vllm/tests/check/test_fold_sampler_construction.py",
+   "adapters/vllm/tests/check/test_prescribed_input_linkage.py",
+   "adapters/vllm/tests/commit/test_native_collect_splits.py",
+   "adapters/vllm/tests/commit/test_topp_split_proxies.py",
+   "adapters/vllm/tests/lint/allowlists/typed_records.json",
+   "adapters/vllm/tests/program/predict/test_batch.py",
+   "adapters/vllm/tests/program/test_derive_stochastic.py",
+   "adapters/vllm/tests/program/test_derive_tp_stochastic.py",
+   "adapters/vllm/tests/program/test_inputs.py",
+   "adapters/vllm/tests/program/test_lifted_mixed.py",
+   "adapters/vllm/tests/program/test_lifted_tiny.py",
+   "adapters/vllm/tests/program/test_lifted_workload_padrev.py",
+   "adapters/vllm/tests/program/test_sampling_policy.py",
+   "adapters/vllm/tests/program/test_splits_for.py",
+   "adapters/vllm/tests/program/test_splits_for_v1.py",
+   "adapters/vllm/tests/program/test_topp_splits_operand.py",
+   "adapters/vllm/verity_vllm/acquire/sources/taps.py",
+   "adapters/vllm/verity_vllm/check/replay/linkage.py",
+   "adapters/vllm/verity_vllm/check/replay/stoch_recompute.py",
+   "adapters/vllm/verity_vllm/ops/stoch_negative_n3.sh",
+   "adapters/vllm/verity_vllm/pipeline/global_program.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vllm_sampling.py",
+   "adapters/vllm/verity_vllm/program/frontend/rules/vocab.py",
+   "adapters/vllm/verity_vllm/program/frontend/vllm_meta.py",
+   "adapters/vllm/verity_vllm/program/inputs.py",
+   "adapters/vllm/verity_vllm/program/predict/batch.py",
+   "adapters/vllm/verity_vllm/program/predict/build.py",
+   "adapters/vllm/verity_vllm/program/predict/naming.py",
+   "adapters/vllm/verity_vllm/program/predict/node.py",
+   "adapters/vllm/verity_vllm/program/workload.py",
+   "benchmarks/prove_path/tests/test_prove_path.py",
+   "integrations/vllm/tests/lint/allowlists/p15_versioned_twins.json",
+   "integrations/vllm/tests/program/test_splits_for_v1.py",
+   "verity/definitions/registry/lifted.py",
+   "verity/protocols/certifier/verifier/protocol/arbitrary-serving-attacks.md"
+  ]
+ }
+]

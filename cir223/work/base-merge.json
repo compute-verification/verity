@@ -1,0 +1,208 @@
+{
+ "8520": {
+  "pr": "8520",
+  "head": "141593ac72167d5fbc3292295a16118e0b4147cd",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "8e93d39a900962e546cc6d8896f562b5b580db51",
+  "tree": "7d4b1dd47cf5e7ec962cfbfe212b660c69c22e23"
+ },
+ "8397": {
+  "pr": "8397",
+  "head": "46293b329a1281b55a9d1fe30ba4690c300dc12d",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "ae765572ace3c129d5e7b7491b975c62610e5708",
+  "tree": "dd6439023de09cb66b4144c770222a0d256fc9f5"
+ },
+ "8362": {
+  "pr": "8362",
+  "head": "3e6afe88d753186aa047dc7ffd068d0452381da4",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "fa5cc4d01ac1bb492477cf9d7395428b2a9b7ac3",
+  "tree": "141b4541fceaa5df34525b4ba78427c863747dec"
+ },
+ "8430": {
+  "pr": "8430",
+  "head": "f9fb6cc291ba7847f1333960780fc79304c8cc24",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "06c8eb8b49b3ce38a1885024c24b180a574df78a",
+  "tree": "518044b63d33dac31d55dc7a1f0388a24148043d"
+ },
+ "8432": {
+  "pr": "8432",
+  "head": "f4b3bfc5cd521e6d58e55df797e605db4041c1fb",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "95a317b0cd121434ad7fde235194d92ddc1266eb",
+  "tree": "75c580639b0b8a6422b75bb9da5bd77559874dd9"
+ },
+ "8451": {
+  "pr": "8451",
+  "head": "22316ab8535bbef0aa95a286c1092a91cbbca927",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "7cbc411614152629aecd50a704d4aeaef15496bd",
+  "tree": "4a35e31dc9a850cf388cb5ab6692b472852c3f2a"
+ },
+ "8447": {
+  "pr": "8447",
+  "head": "1a0c5ede5503f940f7bea01052c0fceabed298a8",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "70a2fe2e6923a0e8eb19f775056b45a3ff30a217",
+  "tree": "40ed81b3b08e1a69a3ecf72305f5e97f02ecbeb7"
+ },
+ "8534": {
+  "pr": "8534",
+  "head": "b44c6651d71bb79f77e6453e0b264bcde7e8c18c",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "681132d187795c5cce907e6e40812ddc40aa965f",
+  "tree": "b55f8998690ddc194e34e03f10586fd554cb298d"
+ },
+ "8461": {
+  "pr": "8461",
+  "head": "61f74eb1b376a5841350c42c90cd05120652cad5",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "a7807897c89a9b97b11cf35c9cdc0d81a161c0f7",
+  "tree": "1645fe4900dd2ca6ed50f1dd72161549e6f8f004"
+ },
+ "8466": {
+  "pr": "8466",
+  "head": "bcd9f40b5b0e3e31c69eb45a9cd2a3abc746543e",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "c9976fe35181bdf4829892d7b27cfa4587a82afc",
+  "tree": "18d8d570d34e8952eea66ea1f7a264137f192ed7"
+ },
+ "8618": {
+  "pr": "8618",
+  "head": "cabf272e0151f291fcbb57691d1f05e466a42d37",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "adea5e7767abeb133de5cb4b66686d7053cce774",
+  "tree": "1590098f6a13ee27732eca23c9ea1df2415d17b0"
+ },
+ "8651": {
+  "pr": "8651",
+  "head": "604d77b99d66c625c374fc5e867bd8d97358613b",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "87c9d85b1c87cdbb137ddda09c8990abdc2f1304",
+  "tree": "87e63c4bcc18b4c9a7bb3359188d7e29ec57110d"
+ },
+ "8673": {
+  "pr": "8673",
+  "head": "552cf2cd7bc5bad3ae5c12c5f358c65c08badd70",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "1a3876716246bc5def2d842b4f3a8e42805fe795",
+  "tree": "358285ae3131ed8f4bf559d58dc8b7bc30809e0f"
+ },
+ "8694": {
+  "pr": "8694",
+  "head": "224da3f20d7c7de273fa4150d5775f216c5b6bfd",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "92d85ce4b348631c7157cdf558d7d0d60c9b01fc",
+  "tree": "9e884b217b8d1037e9c8c56999c67d0b36b88ba4"
+ },
+ "8599": {
+  "pr": "8599",
+  "head": "143408665f6d68524a2436645f21ecfa5f942fa8",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "190124e3c5faa0596e03c8316e5f273baf891f73",
+  "tree": "ad81ff48cd47c8a9428290e96d6e832f9c7f6a24"
+ },
+ "8394": {
+  "pr": "8394",
+  "head": "4d93db79242b1800a5162bcf88e7e56640b6a7a6",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "conflicted",
+  "files": [
+   "integrations/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "integrations/vllm/verity_vllm/pipeline/serving_rows.py"
+  ],
+  "tree": "c313a7edd731be4fbf955b5379d1d266af57369f"
+ },
+ "8426": {
+  "pr": "8426",
+  "head": "0a76ecd405ddd5c8e2a8356cd6b26f348b6aa42b",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "0cd1a270013f41a9d23eec0170bf688c2ca61dc0",
+  "tree": "fe2a42a8e17b9d317ac01345699669e0f3396bed"
+ },
+ "8370": {
+  "pr": "8370",
+  "head": "8e57e1d07c9635e02a2a9ad71d99dd130e6bdd9c",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "725460ddc6fd6bbe42b6671e84b85a4476940d07",
+  "tree": "b953ddb508db7d4e72d5ad3a120d9ef1ed932482"
+ },
+ "8594": {
+  "pr": "8594",
+  "head": "6a4579d227fea9ab952ed7be9c3289f234c530f4",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "conflicted",
+  "files": [
+   "integrations/vllm/verity_vllm/pipeline/chunk_rows.py",
+   "verity/ml/definitions/registry/gumbel_boolean.py"
+  ],
+  "tree": "11ef051074a68d124beca7ac1721ea17c08ac9d9"
+ },
+ "8765": {
+  "pr": "8765",
+  "head": "31d8a67e25a65c960f64017ac0ca2efe0e2ddecb",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "3de52ed9df23a0b39843b51179246d7194451869",
+  "tree": "dc469d300c008fd0c40cd39b846787b88e247f9e"
+ },
+ "8463": {
+  "pr": "8463",
+  "head": "a7f45a95b647a7b1406306b638a88c6f139d55fe",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "a602d55e0f6789ee59cfa456b2d7b29c39cb9d57",
+  "tree": "47f143116ce5d9b2cc105440d9de3141626aaa85"
+ },
+ "8464": {
+  "pr": "8464",
+  "head": "4740cbd794ceb9881eebd489863338c87a749684",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "clean",
+  "merged": "fa1ea710f8d8f12b7ad7dd5b83cf317dbcd178f6",
+  "tree": "3e6cf0998fda2be938e66fb096c68ce289c30fda"
+ },
+ "8054": {
+  "pr": "8054",
+  "head": "166fecef6ac8abe41769c24493310a722d3fffd3",
+  "base": "b5354b9c23441d14b663e3890ec94140b2a0b9a6",
+  "status": "conflicted",
+  "files": [
+   "benchmarks/prove_path/tests/test_prove_path.py",
+   "integrations/vllm/tests/check/test_fold_sampler_construction.py",
+   "integrations/vllm/tests/lint/allowlists/typed_records.json",
+   "integrations/vllm/tests/program/predict/test_batch.py",
+   "integrations/vllm/tests/program/test_derive_tp_stochastic.py",
+   "integrations/vllm/tests/program/test_inputs.py",
+   "integrations/vllm/tests/program/test_topp_splits_operand.py",
+   "integrations/vllm/verity_vllm/program/frontend/vllm_meta.py",
+   "integrations/vllm/verity_vllm/program/inputs.py",
+   "integrations/vllm/verity_vllm/program/predict/batch.py",
+   "integrations/vllm/verity_vllm/program/predict/build.py",
+   "integrations/vllm/verity_vllm/program/predict/naming.py",
+   "integrations/vllm/verity_vllm/program/predict/node.py",
+   "integrations/vllm/verity_vllm/program/workload.py",
+   "verity/core/protocols/certifier/protocol/arbitrary-serving-attacks.md"
+  ],
+  "tree": "87dc0c29c402c06e8f9741c2e3fbe533901fb0ef"
+ }
+}
