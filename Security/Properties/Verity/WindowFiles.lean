@@ -67,7 +67,7 @@ theorem besideOp_right (j : Fin D.N) (v : (a : Fin (C.N + D.N)) → BitVec (besi
 
 /-- **Two circuits side by side**: `C`'s gates, then `D`'s, each gate with its own circuit's width, input flag, wires
 and operation, no wire between the two, and both circuits' outputs. -/
-def beside : Circuit where
+@[reducible] def beside : Circuit where
   N := C.N + D.N
   w := besideW C D
   isInput := Fin.addCases C.isInput D.isInput
