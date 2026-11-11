@@ -15,7 +15,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -49,13 +49,20 @@ comment says what it trains. Each entry is held to a reference in plain torch (`
 dials, a few steps at a small shape, and the same output model as torch's own optimizer and its own average of the
 weights give, or the published rule where torch has none. An entry without a reference fails the suite.
 
+A run that could hand out its weights or their average is two entries, `NAME` and `NAME-ema`, the same config but for
+the route and the average's horizon: each is a run of its own, a frontier takes the lower of the two, and no entry
+chooses between them inside a run. The suite refuses an average over a horizon with no such entry beside it, and holds
+it to torch's own average of the weights that entry writes.
+
 The standard algorithms differ in two ways the table shows apart. AdamW, SGD, Lion, Adafactor and the average of the
 weights train every tensor by the same forward and backward passes, so they carry the same products with two operands
 the update reaches, and differ only in the gates the optimizer itself adds to the step; gradient accumulation carries
-those products in several passes, which write more outputs. The rest change those products. Muon and Shampoo have no
-rule for the embedding, so their entries leave it untrained, and the output head, whose weight is the embedding, no
-longer has two operands the update reaches. Frozen layers (`last-blocks`) leave more products out, and adapters
-(`lora`) reach a matrix only through a rank-wide product.
+those products in several passes, which write more outputs. Muon and Shampoo with AdamW beside them on the gains and
+the embedding (`muon-whole`, `shampoo-whole`) train every tensor by those passes too: the bound is on the same
+products, and the optimizer adds gates and products of its own (Muon's Newton-Schulz steps, Shampoo's factors and
+roots). The rest change the passes' products. `ref-optim` (Muon) and `shampoo` leave the embedding untrained, and the
+output head, whose weight is the embedding, no longer has two operands the update reaches. Frozen layers
+(`last-blocks`) leave more products out, and adapters (`lora`) reach a matrix only through a rank-wide product.
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
@@ -137,7 +144,8 @@ or here, one after another, with `--local`. It exits 0 when every job has its re
 one failed; a failed job is never run again.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
-`routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
+`routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`; a dial its
+`LATER` names is out of a config's digest while at its default, so a route gains a dial and no digest moves); the harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
