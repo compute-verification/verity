@@ -125,7 +125,8 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
-# cpu-13 (a train slot and a proofs pool): only the verified queue's loop and the retention collector are deploy's there so far
+# cpu-13 (a train slot and a proofs pool): only the verified queue's loop, the retention collector and the unattended upgrades
+# are deploy's there so far, and `managed` names just the loop's
 [nodes.vy-nebius-cpu-13]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/local/lib/vy-vqueue/bin/*", "/etc/systemd/system/vy-vqueue*"]
