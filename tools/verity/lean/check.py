@@ -48,7 +48,7 @@ import textwrap
 import threading
 import time
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -60,6 +60,10 @@ ROOT = HERE.parents[2]
 #: test that drives `main` can redirect it off the checkout, which the test suite's read guard would otherwise flag
 SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
+#: what a package's work directory holds from the moment its builds are about to run: the package, and whether they run in
+#: the sandbox. A run that is killed leaves no report, and this is then what says whether the modules it compiled may go
+#: into the artifact cache (`lean_audit.built`)
+BUILDING = "building.json"
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
 #: conflict rather than merge what it can't read
@@ -116,6 +120,9 @@ OPEN_ISSUE, OPEN_DUE = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+"), re.compile(r"[0-9]{
 #: those resting on a read that it reads (`on_read`), and the other definitions of an assumptions module it reads without
 #: taking them
 PREMISE_KINDS = ("assumptions", "domain", "open", "reads")
+#: a premise of each kind, as a review's line says it
+PREMISE_NAMES = {"assumptions": "a named assumption", "domain": "a domain hypothesis", "open": "open",
+                 "reads": "read, not taken"}
 
 
 class Failure(str):
@@ -337,7 +344,7 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
-#: `--artifacts`: the node's Lake artifact cache, which only a passing run writes (`lean_audit.LakeArtifacts`)
+#: `--artifacts`: the node's Lake artifact cache, which a run writes after its builds (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
@@ -1038,6 +1045,24 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
             "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
             "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
             "honest": honest_witnesses(policy)}
+
+
+#: the lock sections a lock run rewrites (`regenerated`, `repaired`), of which everything before the judge reads only what
+#: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
+#: witnesses); and `format`, which `dump` writes and only the merge driver reads
+JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
+                    "witnesses", "witnesses_assumed", "format"})
+
+
+def build_inputs(policy: dict) -> dict:
+    """What of the lock every step before the judge reads: `Facts.lean`'s slice (`facts_config`, a prover's too: `proved`
+    passes it this lock's) and every section outside `JUDGED` whole, among them the ones the build and the seal (`roots`,
+    `exempt`), the tests (`runs`), the provers' facts (`proved_in`) and the stored findings (`FINDINGS_SECTIONS`) read.  Two
+    locks of one tree that agree on it give an audit the same build, seal, facts document, kernel replay and tests, and
+    differ only in what the judge reads of the live lock (`audit_from_facts`); they differ on it when one lists a
+    guarantee, a premise or an inline name the other doesn't, since `Facts.lean` walks what is listed.  KeyError for a lock
+    without `roots`."""
+    return {"facts": facts_config(policy), "sections": {k: v for k, v in policy.items() if k not in JUDGED}}
 
 
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True,
@@ -1803,7 +1828,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     parameters), its guarantee is listed under `guarantees` and states `C` itself (its pin's `body.head`, or its lift's),
     `witnesses` holds that guarantee to its honest and nontrivial lemmas with no `unwitnessed` entry, and its statement
     reads only `claims.modules`, Core and what no package of this repository builds (`generic_reads`). Its guarantee is then exempt from `inline_failures` and `shape`
-    (`generic_claims`), and held to every other rule."""
+    (`generic_claims`), and held to every other rule. `claims.not` excuses no closed statement (`claims.not-closed`): a
+    helper or a domain takes parameters, and a closed one is either a claim or `claims.generic`'s."""
     rule = policy.get("claims")
     if not rule:
         return []
@@ -1836,6 +1862,11 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
             fails.append(Failure("claims.both", c, f"claims: {c} is under both `claims.witnesses` and `claims.not`; keep one"))
         elif not str(why).strip():
             fails.append(Failure("claims.no-reason", c, f"claims: claims.not[{c}] gives no reason"))
+        elif c in found and c not in gen and specs[c].get("statement"):
+            fails.append(Failure("claims.not-closed", c, f"claims: {c} ({found[c]}) is a closed statement (`def {c} : "
+                                 f"Prop`) that `claims.not` excuses, so nothing holds it to witnesses: move it to "
+                                 f"`claims.generic` with the guarantee that states it (`theorem …: {c}`, under "
+                                 f"`guarantees`) and its `witnesses`, {GENERIC_WITNESSES}"))
     for c, g in sorted(gen.items()):
         if c in preds:
             fails += generic_failures(c, g, policy, facts, specs[c], in_ws=c in ws, in_not=c in nots)
@@ -4097,8 +4128,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it in the build (none for one gone) and its source as it is now.  A
     guarantee whose statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so
-    does one whose 32-bit record is rewritten with SHA-256 while the 32-bit hash still matches; read groups rewritten that
-    way are counted on one line, and so are
+    does one whose 32-bit record is rewritten with SHA-256 while the 32-bit hash still matches, unless its record takes a
+    premise as another kind than it did: then its line names each such premise (`premise_changes`) and heads a statement
+    change; read groups rewritten that way are counted on one line, and so are
     records whose declarations are unchanged but whose generated constants `group_keys` groups differently.
     Definitions are compared by name, whichever module reads them.  A guarantee lifted into a `Guarantees` definition that
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
@@ -4126,7 +4158,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
                 a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
             if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and \
                     a.get("assumptions") == b.get("assumptions"):
-                out.append(f"guarantee {name}: {REHASHED if rehashed else REPRINTED}")
+                rests = premise_changes(a, b, new)
+                out.append(Change("guarantees", name, f"guarantee {name}: {'; '.join(rests)}") if rests else
+                           f"guarantee {name}: {REHASHED if rehashed else REPRINTED}")
                 continue
         mv, th = moved.get(name, {}), a.get("type_hash")
         head = None if th == mv.get("sha256") else lifted_into(a, b, facts["pins"].get(name, {}), mv, renames if moves else None)
@@ -4208,18 +4242,48 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     return out
 
 
+def premise_changes(a: dict, b: dict, new: dict) -> list[str]:
+    """What a guarantee rests on that its record ``b`` holds otherwise than its record ``a`` (their `premises`), one
+    phrase for each premise whose kind (`PREMISE_KINDS`) changed, a domain hypothesis with its `why` in the lock
+    ``new``: an open premise is a gap to discharge and a domain hypothesis is part of what the guarantee says, so the
+    statement changed though its type hash did not.  None where a record holds no `premises`: it says nothing of them."""
+    x, y = a.get("premises"), b.get("premises")
+    if not isinstance(x, dict) or not isinstance(y, dict):
+        return []
+    was, now = ({p: k for k in PREMISE_KINDS for p in d.get(k) or []} for d in (x, y))
+    domain = new.get("domain") if isinstance(new.get("domain"), dict) else {}
+    out = []
+    for p in sorted(set(was) | set(now)):
+        k, before = now.get(p), was.get(p)
+        if k == before:
+            continue
+        verb = "reads" if (k or before) == "reads" else "takes"
+        if k is None:
+            out.append(f"no longer {verb} {p} (was {PREMISE_NAMES[before]})")
+            continue
+        why = (domain.get(p) or {}).get("why") if k == "domain" else None
+        out.append(f"{verb} {p}" + (f" as {PREMISE_NAMES[k]}" if k != "reads" else " without taking it")
+                   + f" ({'was ' + PREMISE_NAMES[before] if before else 'new'})" + (f": {why}" if why else ""))
+    return out
+
+
 def assumption_changes(old: dict, new: dict) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
     `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed; and one
     for each that moved between `assumptions`, `domain` and `open`, or whose open entry's issue or due date changed, or
-    whose domain entry's `why` or `cites` did."""
+    whose domain entry's `why` or `cites` did; and one for each domain hypothesis ``old`` lists under none of the three,
+    with its `why` and the guarantees whose records take it: it restricts what they say, and nothing else prints it."""
     was, now = map(listed_premises, (old, new))
+    records = new.get("guarantees") if isinstance(new.get("guarantees"), dict) else {}
+
+    def takers(a: str) -> list[str]:
+        return sorted(g for g, r in records.items() if isinstance(r, dict) and isinstance(p := r.get("premises"), dict)
+                      and a in (p.get("domain") or ()))
 
     def kind(policy: dict, a: str) -> str:
         return next((k for k in ("assumptions", "domain", "open") if a in (policy.get(k) if isinstance(policy.get(k), dict)
                                                                           else {})), "assumptions")
 
-    names = {"assumptions": "a named assumption", "domain": "a domain hypothesis", "open": "open"}
     opened = new.get("open") if isinstance(new.get("open"), dict) else {}
     before_open = old.get("open") if isinstance(old.get("open"), dict) else {}
     held = {d for rec in new.get("reads", {}).values() for d in definitions(rec)}
@@ -4231,10 +4295,14 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         if a in was and h and h != before and a not in held:
             out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
                                                        "recorded: its statement and the definitions it reads, digested")))
+        if a not in was and k == "domain":
+            by, entry = takers(a), rec or {}
+            out.append(Change(k, a, f"domain hypothesis {a}" + (f", taken by {', '.join(by)}" if by else "")
+                              + f": new: {entry.get('why')}" + (f", citing {entry['cites']}" if entry.get("cites") else "")))
         if a in was and k != (b := kind(old, a)):
-            now_is = f"open, {rec.get('issue') or 'no issue'} due {rec.get('due')}" if k == "open" else names[k] + (
-                f": {rec.get('why')}" if k == "domain" else "")
-            out.append(Change(k, a, f"{what} {a}: {now_is} (was {names[b]})"))
+            now_is = f"open, {rec.get('issue') or 'no issue'} due {rec.get('due')}" if k == "open" else (
+                PREMISE_NAMES[k] + (f": {rec.get('why')}" if k == "domain" else ""))
+            out.append(Change(k, a, f"{what} {a}: {now_is} (was {PREMISE_NAMES[b]})"))
         elif k == "domain" and a in was and ((rec or {}).get("why"), (rec or {}).get("cites")) != (
                 (was[a] or {}).get("why"), (was[a] or {}).get("cites")):
             out.append(Change(k, a, f"domain hypothesis {a}: {rec.get('why')}"
@@ -4357,22 +4425,51 @@ def build_roots_over(path: Path, pkgs) -> list[Path]:
     return sorted({r for q in pkgs for r in (d.resolve() for d in writable(q)) if p.is_relative_to(r) or r.is_relative_to(p)})
 
 
-def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], dict]:
+#: (a path dependency's directory, module) of each module a `stage` step of this process reached in the build of a package
+#: this run doesn't audit (`stage_build`'s ``unaudited``): the first build to reach one settles it, and no later one takes
+#: its trace (`module_keys.settle`)
+RUN_SETTLED: set[tuple[Path, str]] = set()
+
+
+def stage_build(mk, pkg: Path, roots: list[str], dest: Path,
+                unaudited: Iterable[Path] = ()) -> tuple[dict[tuple[str, str], str], dict]:
     """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
     the node's artifact cache (`ARTIFACTS`) indexes under its key, its artifacts checked (``mk``: `module_keys`,
     `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
     package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
     processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
-    of how many keyed, and the error where staging failed, which leaves ``dest`` empty and everything to be built)."""
+    of how many keyed, why each other one isn't, by reason (`missed`, with the `first` module of each), the traces it took
+    so that Lake restores or compiles those modules (`took`, `module_keys.settle`) and how many
+    modules it `left` to Lake, and the error where staging failed, which leaves ``dest`` empty and everything to be built).
+    It takes traces from ``pkg``'s own build and from the build of each package of ``unaudited`` it requires by path: one
+    this run doesn't audit, whose build in this tree no build of its own settles (`lean_audit.WarmBuilds` gives it a copy
+    of a kept build), each module there once a run (`RUN_SETTLED`). Staging writes nothing in the build of any other
+    package ``pkg`` requires by path: `main` seals that build before ``pkg`` is staged, and other audits read it
+    meanwhile. The caller holds the builds (`writing`), and stores what the build compiles
+    when it ends (`lean_audit.LakeArtifacts.put`): a module whose trace is taken is compiled again by every build until
+    one stores it."""
     try:
         mk.sweep(ARTIFACTS)
         shutil.rmtree(dest, ignore_errors=True)
-        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest)
-        return staged, {"modules": len(staged), "keyed": keyed}
+        why: dict = {}
+        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest, report=why, settled=True, also=unaudited, seen=RUN_SETTLED)
+        return staged, {"modules": len(staged), "keyed": keyed, **why}
     except OSError as e:
         shutil.rmtree(dest, ignore_errors=True)
         dest.mkdir(parents=True, exist_ok=True)
         return {}, {"modules": 0, "keyed": 0, "error": str(e)}
+
+
+def staged_line(staged: dict) -> str:
+    """One line of a build's `staged` report: how many keyed modules the artifact cache restores, and the others by reason."""
+    if "error" in staged:
+        return f"nothing restored from the artifact cache: {staged['error']}"
+    missed, first = staged.get("missed") or {}, staged.get("first") or {}
+    took, left = staged.get("took") or {}, staged.get("left") or 0
+    return (f"{staged['modules']} of {staged['keyed']} keyed modules restored from the artifact cache"
+            + ("; missed: " + ", ".join(f"{n} {why} (first {first.get(why)})" for why, n in missed.items()) if missed else "")
+            + ("; traces taken from the build: " + ", ".join(f"{n} {why}" for why, n in sorted(took.items())) if took else "")
+            + (f"; {left} left to Lake, which the cache could not index" if left else ""))
 
 
 #: the sampled recompile's randomness (`sampled_recompile`): fresh, this process's, and used only after the build, so nothing
@@ -5351,7 +5448,7 @@ def _open(pkg: Path, out: Path) -> tuple[dict, dict | None, Path | None]:
     if work.resolve().is_relative_to(pkg.resolve()):
         raise ValueError(f"the audit's output {work} is inside the package {pkg}")
     work.mkdir(parents=True, exist_ok=True)
-    for stale in (POLICY, "review.txt"):
+    for stale in (POLICY, "review.txt", BUILDING):
         (work / stale).unlink(missing_ok=True)
     return rep, policy, work
 
@@ -5386,7 +5483,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again and compared with what the build holds (`sampled_recompile`; the
     report's `sampled`) before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
+    ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
+    package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
@@ -5437,6 +5535,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     pipe = None
     if build:
         rep["sandbox"] = sandboxed()
+        (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"]}))
         n = build_threads(pkg)
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
@@ -5461,9 +5560,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
                 if step == "stage":
                     if cache:
-                        s = time.monotonic()
-                        staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
-                        rep["seconds"][step] = round(time.monotonic() - s, 1)
+                        # it takes traces from this build and from those of the path dependencies this run doesn't audit
+                        unaudited = [d for d in path_deps(pkg) if d != pkg and ready(d) is None]
+                        with writing(pkg, log):
+                            s = time.monotonic()
+                            staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache, unaudited)
+                            rep["seconds"][step] = round(time.monotonic() - s, 1)
+                        log(f"stage: {pkg}: {staged_line(rep['staged'])}")
                     continue
                 if callable(argv) and not (argv := argv()):
                     continue
@@ -5721,7 +5824,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
             repairs = bookkeeping_repairs(fails, fixed, ticket, policy)
             rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
                     "changes": changes(notes, policy, fixed), "bookkeeping": [r["line"] for r in repairs], "repairs": repairs}
-            log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which drive "
+            log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which the queue "
                 f"commits: {len(rep['bookkeeping'])} repairs, each a warning")
     elif update:
         dump(work, new)
@@ -5992,7 +6095,9 @@ def main(argv: list[str]) -> int:
                     "checked here")
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
                     "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
-                    "(`stage_build`)")
+                    "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
+                    "the caller stores what the build compiled when it ends (`LakeArtifacts.put`); so is one of a package it "
+                    "requires by path that this run doesn't audit, and the build of one it audits is left as it is")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")
@@ -6241,7 +6346,7 @@ def main(argv: list[str]) -> int:
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
         print(f"audit: {p}: every failure is a record difference{' or bookkeeping' if a.bookkeeping else ''}, settled by "
-              f"{f}, which drive commits over {p}/{POLICY} when it lands", flush=True)
+              f"{f}, which the queue commits over {p}/{POLICY}", flush=True)
     warned = [f"{os.path.relpath(r['package'], a.repo.resolve())}: {w}" for r in reports for w in r.get("bookkeeping", [])]
     doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen} | (
         {"bookkeeping": warned} if a.bookkeeping else {})

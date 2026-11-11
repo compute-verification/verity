@@ -555,11 +555,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     max_new = max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs)
     # a stochastic workload (declared temperature > 0, every request seeded) requires the sampler's consumed seed per step
     stochastic = (sampling.get("greedy") is not True) and float(sampling.get("temperature", 0.0) or 0.0) > 0.0 and bool(reqs) and all(r.get("seed") is not None for r in reqs)
-    # a derived-S Program (its required manifest names `sampler_splits`: the Program declares a `splits` input its
-    # selector reads; equivalently the workload declares `sampling.splits == "derived"`) also requires the sampler's split count per step
-    _man_fams = ((_hdr.get("query") or {}).get("required_families") or []) if getattr(args, "required_manifest", None) else []
-    derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
-    structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
+    structure = B.structure_of(com, stochastic=stochastic)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
                  "arena_mb": args.arena_mb, "layout": "chunk-leaf-v1", **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
     # the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
@@ -1544,7 +1540,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # windowed staging ring instead of per-step blocks; device staging = slots x window regardless of the step size
                 wi = com.enable_windows(asz)
                 print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
-                      f"{wi['largest_tensor_bound'] >> 20} MiB); layout {wi['layout']}; in-place hashing: {wi['in_place_hashing']}", flush=True)
+                      f"{wi['largest_tensor_bound'] >> 20} MiB); in-place hashing: {wi['in_place_hashing']}", flush=True)
                 (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
         if args.flip_weight:
             # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it

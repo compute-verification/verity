@@ -60,9 +60,8 @@ class Projection(PX.CachedKv, C.RootView):
         # multi-node weight read would be located at offset 0 of the field map -- the wrong field (or `W?`) -- on the projection side only
         self.input_base = getattr(oracle, "input_base", {})
         # the fold's bound top-p split constants (compare.RootView._bind_splits): select node -> S; the
-        # request's e-th select canonicalises its splits operand as ("SPLITS", e, e+1) against the Program's `splits` input entry e
+        # request's e-th select canonicalises its splits operand as ("SPLITS", e, e+1)
         self.splits_values = getattr(oracle, "splits_values", {})
-        self.splits_nodes = getattr(oracle, "splits_nodes", set())
         self.xreq = collections.Counter()
         self.xreq_examples: list[dict] = []
         self._segment()
@@ -80,8 +79,6 @@ class Projection(PX.CachedKv, C.RootView):
                     return ("TOK", lo, hi)
                 if idx in self.seed_nodes:
                     return ("SEED", lo, hi)
-                if idx in self.splits_nodes:
-                    return ("SPLITS", lo, hi)
                 if idx == self.peer_node:
                     return self._peer_src(idx, lo, hi)     # the request's own received-collective peer input
                 if idx in self.witness_fields:
@@ -115,8 +112,6 @@ class Projection(PX.CachedKv, C.RootView):
                         return [("TOK", (lo0, hi0), (dL, dH), c)]
                     if idx0 in self.seed_nodes:
                         return [("SEED", (lo0, hi0), (dL, dH), c)]
-                    if idx0 in self.splits_nodes:
-                        return [("SPLITS", (lo0, hi0), (dL, dH), c)]
                     if idx0 == self.peer_node:
                         return self._peer_srcP(p, unfold)     # the request's own received-collective peer input
                     if idx0 in self.witness_fields:
