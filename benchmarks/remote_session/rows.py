@@ -13,6 +13,9 @@ the gates once, at its first count, and the rest at each:
     openings   over the store itself, a pass's openings at --openings positions, the first and last block of every
                segment among them: each opened block's receipt in its leaf equal to the reference's, and the leaf
                under the pass's root (`receipts.verify_leaf`)
+    whole      with --whole-store, at its first count: one pass over the store itself, into poisoned buffers, against
+               a reference that runs none of the kernels' code (`whole_store`): every block's receipt, and the
+               pass's root
     calibrate  the plain read, --calibration-passes chained passes queued as a session queues them, the chained pass
                against the plain pass at the same seed over the whole store, the device's signs against the
                reference's and a window's openings (`GpuBackend.calibrate`): tau is the pass over the read
@@ -29,6 +32,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -37,7 +41,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import device  # noqa: E402
-from device import audit, rb  # noqa: E402
+import sketching  # noqa: E402
+from device import audit, rb, skr  # noqa: E402
 
 
 def openings(backend: device.GpuBackend, rows: int, draws: int, rng: np.random.Generator) -> dict:
@@ -54,6 +59,57 @@ def openings(backend: device.GpuBackend, rows: int, draws: int, rng: np.random.G
         paths += rb.verify_leaf(seed, s.plan, root, p, leaf, salt, path)
     return {"opened": len(ps), "receipts": receipts, "paths": paths,
             "ok": receipts == len(ps) and paths == len(ps)}
+
+
+def reference(torch, seed: bytes, rows: int):
+    """`receipts(blocks, j0)`: the receipts under pass `seed` at `rows` of the store's blocks j0 … held in `blocks` (a
+    uint8 tensor of whole blocks, on any device), 64 bytes each, by the reference's definition and none of the kernels'
+    code. σ is one float32 product of the blocks' bytes as int8 with the signs of `receipts.sign_bits` (exact:
+    `sketching.sketch_torch`), and y is `SketchReceipter.receipt`, SHA-512 on the CPU: no tile, no packed signs, no
+    tensor-core instruction and no device hash."""
+    bits = np.unpackbits(skr.sign_bits(seed, rows), axis=1, bitorder="little")
+    receipt, width = rb.SketchReceipter(seed, rows).receipt, 4 * rows
+
+    def receipts(blocks, j0: int) -> bytes:
+        e = blocks.view(torch.int8).view(-1, device.BLOCK)
+        sigma = sketching.sketch_torch(torch, e, bits).cpu().numpy().astype("<i4").tobytes()
+        return b"".join(receipt(j0 + k, sigma[k * width:(k + 1) * width]) for k in range(e.shape[0]))
+
+    return receipts
+
+
+def whole_store(backend: device.GpuBackend, rows: int, rng: np.random.Generator, step: int = 1 << 15) -> dict:
+    """One pass over the backend's store, every buffer it writes poisoned first, against `reference` at `rows`: every
+    block's receipt as the devices hold it after the pass, and the pass's root against `receipts.tree` over the
+    reference's receipts. The reference reads the store's bytes where they are and shares no code with the pass."""
+    s = backend.store
+    seed = rb.seed(rng.bytes(rb.CHALLENGE_BYTES), 0, bytes(rb.DIGEST_BYTES))
+    s.poison = True
+    try:
+        root, _ = s.run_pass(seed)
+    finally:
+        s.poison = False
+    t0 = time.perf_counter()
+    receipts, want, wrong, differ = reference(s.torch, seed, rows), [], [], 0
+    for q, x in enumerate(s.seg_ring):
+        gpu = s.gpus[s.seg_gpu[q]]
+        with s.on(gpu):
+            dev = s.torch.device("cuda", gpu.index)
+            for a in range(0, s.n[q], step):
+                b = min(a + step, s.n[q])
+                ref = receipts(s.data_g[q][a * device.BLOCK:b * device.BLOCK].to(dev), s.base[q] + a)
+                want.append(ref)
+                if b"".join(device.digests(x["ys"][a:b])) != ref:
+                    got = device.digests(x["ys"][a:b])
+                    bad = [s.base[q] + a + k for k in range(b - a) if got[k] != ref[64 * k:64 * (k + 1)]]
+                    differ += len(bad)
+                    wrong += bad[:8 - len(wrong)]
+    want = b"".join(want)
+    salts = [device.store_salt(backend.salt_key, seed, c) for c in range(s.blocks // device.PER_LEAF)]
+    tree = rb.tree(seed, s.plan, [want[64 * j:64 * (j + 1)] for j in range(s.blocks)], salts)
+    same = root == tree.commitment.root
+    return {"blocks": s.blocks, "receipts": s.blocks - differ, "first_wrong": wrong, "root": same,
+            "reference_s": time.perf_counter() - t0, "ok": not differ and same}
 
 
 def ctas_at(words: list[str], rows: list[int], default: int) -> dict[int, list[int]]:
@@ -75,6 +131,9 @@ def main() -> int:
     ap.add_argument("--ctas-at", nargs="+", default=[], metavar="ROWS=N[,N...]",
                     help="the receipt grid's CTA counts at a row count, each in turn (default: --sketch-ctas alone)")
     ap.add_argument("--openings", type=int, default=256, help="the positions opened on the store each time")
+    ap.add_argument("--whole-store", action="store_true",
+                    help="at each row count's first CTA count, a pass over the store against the reference at every "
+                         "block (about a minute of one core for 64 GiB)")
     ap.add_argument("--node", default="rows")
     ap.add_argument("--seed", type=int, default=20261111)
     device.add_arguments(ap)
@@ -108,6 +167,11 @@ def main() -> int:
                     backend.gates = backend.gate(reg)
                     if not backend.gates["ok"]:
                         raise RuntimeError(f"a gate failed, nothing is timed: {backend.gates}")
+                if i == 0 and a.whole_store:
+                    row["whole_store"] = whole_store(backend, rows, rng)
+                    log(f"rows {rows}: the whole store against the reference {row['whole_store']}")
+                    if not row["whole_store"]["ok"]:
+                        raise RuntimeError(f"the store's pass is not the reference's: {row['whole_store']}")
                 row["openings"] = openings(backend, rows, a.openings, rng)
                 if not row["openings"]["ok"]:
                     raise RuntimeError(f"the store's openings are not the reference's: {row['openings']}")
