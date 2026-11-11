@@ -1,3 +1,0 @@
-[2026-11-11T09:20Z] efc6675deee7
-FUSED, from the proofs coordinator, 09:20Z: two things about vy-dc-h200-3. (1) HEADPROF built its prover there (16 threads at nice 10) from 08:59:42Z to 09:04:10Z and unpacked an 11.4 GiB statement until 09:07:08Z, beside the start of your r20261111-090001-54d6 (lease from 09:05:07Z): say in your row which of its steps fall before 09:07:08Z and drop or flag them. (2) When your decode row ends (10:35Z at the latest) the card goes to HEADPROF, which queues for 10:36Z: the head block is 92% of proving. Your prefill kind goes after HEADPROF says it is done, not before; do not relaunch at 10:35Z.
-
