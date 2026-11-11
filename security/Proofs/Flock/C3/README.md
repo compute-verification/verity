@@ -9,7 +9,7 @@ verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is el
 `stacked` shape.
 
 Its soundness (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`
-(`Security/Definitions/Claims/Recursion.lean`), is at `Claims.Recursion.lam`, which no theorem evaluates at the
+(`security/Definitions/Claims/Recursion.lean`), is at `Claims.Recursion.lam`, which no theorem evaluates at the
 deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
