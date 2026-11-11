@@ -323,12 +323,13 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
         _sr_kw["executed_prefix"] = {} if s.args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
         _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
         if _epr_r["any_eos_stop"] or _flt:
-            print("[delta] not-executed class -> sampled_replay(executed_prefix=): " + ", ".join(
-                f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items())
-                  + (f"; FAULTS {_flt}" if _flt else "; no faults"), flush=True)
+            (logger.warning if _flt else logger.info)(
+                "[delta] not-executed class -> sampled_replay(executed_prefix=): %s%s",
+                ", ".join(f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items()),
+                f"; FAULTS {_flt}" if _flt else "; no faults")
     elif _epr_r["any_eos_stop"]:
-        print("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
-              "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
+        logger.warning("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
+                       "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS")
     return _sr_kw, _ep_facts
 
 
@@ -384,7 +385,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     _arr, _moved = arrivals(s, _rl)
     if _moved:
         _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-        print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
+        logger.info("[delta] replay/linkage arrivals follow the engine schedule of record: %s (declared %s)", _arr, _sched_r.get("declared_arrive_steps"))
     if facts is None:
         _k0 = next(iter(_progs))
         held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
@@ -404,8 +405,9 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                                            eos_of_record=s.stop_of_record.get("eos"), lag=s.stop_of_record.get("lag"))
     _horizons = ({k: int(v["executed_prefix_len"]) for k, v in _epr_r["requests"].items()} if _epr_r["ok"] else None)
     if _epr_r["any_eos_stop"]:
-        print(f"[delta] replay/linkage horizons = the executed prefix of record: {_horizons} (LAG {_epr_r['lag']}; "
-              f"{'ok' if _epr_r['ok'] else 'PROBLEMS ' + str(_epr_r['problems'][:2])})", flush=True)
+        (logger.info if _epr_r["ok"] else logger.warning)(
+            "[delta] replay/linkage horizons = the executed prefix of record: %s (LAG %s; %s)", _horizons, _epr_r["lag"],
+            "ok" if _epr_r["ok"] else "PROBLEMS " + str(_epr_r["problems"][:2]))
     _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
     # the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
     # a request linked over fewer steps than its cap fails closed by name -- never the engine value as the rule
@@ -442,7 +444,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                                                                                   "facts_of_record": _ep_facts, "mechanism": ("population.not_executed_by_rule" if "executed_prefix" in _sr_kw else "none in this tree (rows past the stop sampled as ordinary strata)")}
     reconcile(s, sr, _bm, _rd, _epr_r, _sr_kw)
     sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
-    print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair %s): %s", pair, OV.filed(row["commit"], "replay_linkage", sr["value_source"]))
     if s.after_replay is not None:
         s.after_replay(sr, _progs, _bm, _rd, _wp, _arr, _sr_kw, _loaded, _digs)
     return sr, lk
@@ -470,12 +472,13 @@ def reconcile(s: ReplaySources, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr
         _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
         sr["not_executed_reconciliation"] = _recon
         row["commit"]["not_executed_reconciliation"] = _recon
-        print(f"[delta] not-executed reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
-              + ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items())
-              + f"; row families {[(f, d['commit'], d['population']) for f, d in _recon['by_family'].items()]}"
-              + (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"
-                 if _recon["outside_population_reach"] else "")
-              + (f"; PROBLEMS {_recon['problems'][:3]}" if _recon["problems"] else ""), flush=True)
+        (logger.info if _recon["ok"] else logger.warning)(
+            "[delta] not-executed reconciliation (pair %s): %s n_exec %s; row families %s%s%s", pair, "AGREE" if _recon["ok"] else "DISAGREE",
+            ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items()),
+            [(f, d["commit"], d["population"]) for f, d in _recon["by_family"].items()],
+            (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"
+             if _recon["outside_population_reach"] else ""),
+            f"; PROBLEMS {_recon['problems'][:3]}" if _recon["problems"] else "")
         if not _recon["ok"]:
             _cv = row["commit"].get("coverage")
             if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict

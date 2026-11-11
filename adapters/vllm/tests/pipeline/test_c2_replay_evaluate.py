@@ -7,6 +7,7 @@ the replay itself is `tests/check/test_sampled_replay.py`."""
 from __future__ import annotations
 
 import copy
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,9 +51,16 @@ class Weights:
 
 
 @pytest.fixture
-def said(capsys: pytest.CaptureFixture[str]) -> Lines:
-    """The lines `c2_replay` has written so far in this test."""
-    return lambda: capsys.readouterr().out.splitlines()
+def said(caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]) -> Lines:
+    """The lines `c2_replay` has logged since the last call, each after its level; it prints none."""
+    caplog.set_level(logging.INFO, logger=C2.__name__)
+
+    def lines() -> list[str]:
+        assert capsys.readouterr().out == ""
+        got = [f"{r.levelname} {r.getMessage()}" for r in caplog.records if r.name == C2.__name__]
+        caplog.clear()
+        return got
+    return lines
 
 
 def executed(tokens: Record | None = None) -> Record:
@@ -81,7 +89,7 @@ def test_an_eos_stopped_request_s_facts_of_record_bound_the_replay_s_population(
     assert (r0["a_r"], r0["n_exec"], r0["cap"], r0["faults"]) == (4, 4, 4, [])
     assert (r1["a_r"], r1["n_exec"], r1["cap"], r1["arrive"], r1["faults"]) == (2, 2, 4, 1, [])
     assert facts["r1"]["served"] == [5, 2] and facts["r1"]["eos_ids"] == [2] and facts["r1"]["linked"] is True
-    assert said() == ["[delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; no faults"]
+    assert said() == ["INFO [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; no faults"]
 
 
 def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: Path, said: Lines) -> None:
@@ -90,7 +98,7 @@ def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: 
     faults = {k: v["faults"] for k, v in kw["executed_prefix"].items()}
     assert all(len(f) == 3 and "a_r is not linked" in f[1] for f in faults.values())
     line, = said()
-    assert line == ("[delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; "
+    assert line == ("WARNING [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; "
                     f"FAULTS {faults}")
 
 
@@ -113,7 +121,7 @@ def test_a_replay_that_takes_no_executed_prefix_is_given_none_and_an_early_stop_
     assert said() == []
     kw, facts = C2.executed_prefix_kw(sources(tmp_path), executed(), LINKAGE, {"r0": 0, "r1": 1}, LABELS)
     assert kw == {} and facts["r1"]["a_r"] == 2
-    warned = ("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped request's rows past the stop are "
+    warned = ("WARNING [delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped request's rows past the stop are "
               "sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS")
     assert said() == [warned]
 
@@ -133,7 +141,7 @@ def test_the_commit_s_and_the_population_s_not_executed_class_are_reconciled_on_
     assert rec["n_exec"] == {"r0": {"commit": 4, "population": 4, "equal": True}, "r1": {"commit": 2, "population": 2, "equal": True}}
     assert rec["by_family"] == {"instance_outputs": {"commit": 2, "population": 2, "equal": True}}
     assert s.row["commit"]["coverage"] == {"ok": True}
-    assert said() == ["[delta] not-executed reconciliation (pair 0): AGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 2)]"]
+    assert said() == ["INFO [delta] not-executed reconciliation (pair 0): AGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 2)]"]
 
 
 def test_a_disagreement_fails_the_commit_s_coverage_by_name(tmp_path: Path, said: Lines) -> None:
@@ -144,7 +152,7 @@ def test_a_disagreement_fails_the_commit_s_coverage_by_name(tmp_path: Path, said
     why = "instance_outputs: the Commit classified 2 identities not-executed-by-rule, the population excluded 1"
     assert not rec["ok"] and rec["problems"] == [why]
     assert s.row["commit"]["coverage"] == {"ok": False, "error": f"one mechanism: {why}"}
-    line = "[delta] not-executed reconciliation (pair 0): DISAGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 1)]"
+    line = "WARNING [delta] not-executed reconciliation (pair 0): DISAGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 1)]"
     assert said() == [f"{line}; PROBLEMS {[why]}"]
     failed = sources(tmp_path)
     failed.row["commit"]["coverage"] = {"ok": False, "error": "an identity is unbound"}
@@ -258,11 +266,11 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
     assert told[0] is sr and told[1:5] == (steps.progs, {"entries": 5}, steps.reader, Weights("model.")) and told[5] == arr
     assert told[7:] == (steps.loaded, {"r0": "d" * 8, "r1": "e" * 8})
     assert said() == [
-        "[delta] replay/linkage horizons = the executed prefix of record: {'r0': 4, 'r1': 2} (LAG 0; ok)",
-        "[delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; no faults",
-        "[delta] not-executed reconciliation (pair 0): AGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 2)]",
-        ("[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair 0): 6 reads, 12 leaves, 96 B verified against the run root in 0.5 s (5 steps "
-         "bound); not retained 0, failed 0; forked evaluators 3")]
+        "INFO [delta] replay/linkage horizons = the executed prefix of record: {'r0': 4, 'r1': 2} (LAG 0; ok)",
+        "INFO [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; no faults",
+        "INFO [delta] not-executed reconciliation (pair 0): AGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 2)]",
+        ("INFO [delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair 0): 6 reads, 12 leaves, 96 B verified against the run root in 0.5 s (5 "
+         "steps bound); not retained 0, failed 0; forked evaluators 3")]
 
 
 def test_arrivals_the_engine_s_schedule_moved_are_the_replay_s_and_the_linkage_s(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -277,7 +285,7 @@ def test_arrivals_the_engine_s_schedule_moved_are_the_replay_s_and_the_linkage_s
     seed, source = C2.SR.challenge_seed("c0ffee", bytes(64))
     assert (steps.replays[0]["seed"], steps.replays[0]["seed_source"], steps.replays[0]["seed_challenge"]) == (seed, source, "c0ffee")
     assert sr["sample"]["seed_form"] == "challenge"
-    assert said()[0] == "[delta] replay/linkage arrivals follow the engine schedule of record: {'r0': 0, 'r1': 2} (declared {'r0': 0, 'r1': 1})"
+    assert said()[0] == "INFO [delta] replay/linkage arrivals follow the engine schedule of record: {'r0': 0, 'r1': 2} (declared {'r0': 0, 'r1': 1})"
 
 
 def test_a_plan_makes_the_sample_s_reads_and_evaluates_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
