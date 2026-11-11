@@ -291,6 +291,14 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 - `owner`, in each guarantee's entry: the registry handle of the lane that answers for it, whom a broken or restated
   guarantee goes to; an entry without one fails. Write it by hand, or pass `--update --owner @lane`, which owns only the
   new entries (`--update` keeps an entry's owner). A changed owner is one line in the review, not a changed statement.
+- An unowned lock: one that lists a guarantee or a premise and holds no `owner`, `issue` or `due` in an entry of
+  `guarantees`, `assumptions`, `domain` or `open`, and none of `default_owner`, `open_default_issue` and `open_seed`.
+  It is the lock of a tree with no lanes, and the check reads it from the lock's content; no flag makes a lock unowned.
+  No entry owes an owner, an `open` entry is its `digest` alone (a premise the lock doesn't list still fails),
+  `--update` writes no owner, and `--bookkeeping warn` repairs nothing in it. Its `AUDIT` line ends with `unowned`, and
+  its report holds `"unowned": true`. One lane field makes a lock owned and held to every rule, and a run given
+  `--owner` reads an unowned lock as owned: `--update --owner @lane` owns its entries, as in a new package's lock, and
+  every rule applies in that run. Every lock of this tree is owned (`tests/test_lean_packages.py`).
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
   inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
@@ -383,8 +391,8 @@ warning naming the entry and its owner, in audit.json's `bookkeeping`; a package
 Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
 
 When the change lands on `main`, the landing DM (`research.spec_alert`) lists each new, removed or changed guarantee and
-each changed definition; nobody approves it first. A statement that only prints differently (the same type hash and named
-assumptions: a toolchain bump, notation) gets one line, "printed differently", and stays out of the DM; a definition read
+each changed definition; nobody approves it first. A statement whose type hash, named assumptions and premises are the
+same (a toolchain bump, notation) gets one line, "printed differently", and stays out of the DM; a definition read
 from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
