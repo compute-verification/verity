@@ -578,6 +578,10 @@ def _apt_conf(text: str) -> tuple[dict[str, str], dict[str, list[str]], list[str
 
 UPGRADES = {"/etc/apt/apt.conf.d/52vy-trust": "apt-security-updates.conf",
             "/etc/needrestart/conf.d/50-vy.conf": "needrestart-list-only.conf"}
+#: the nodes that take neither file, each with why in one line. A VM whose systemd timers run apt's daily passes is never one.
+UPGRADES_EXEMPT = {
+    "vy-control-verity": "a RunPod container whose watchers run under their own supervisor, with no systemd timers: the files would never act",
+}
 # package names as apt has them on a node: what an unattended pass never moves, and what it must be free to
 HELD = ["linux-image-6.11.0-1016-nvidia", "linux-modules-6.11.0-1016-nvidia", "linux-modules-nvidia-580-open-6.11.0-1016-nvidia",
         "linux-headers-6.8.0-149-generic", "linux-image-virtual", "linux-tools-common", "linux-firmware", "linux-libc-dev",
@@ -590,14 +594,19 @@ FREE = ["ca-certificates", "libnss3", "libc6", "libc6-dev", "libssl3t64", "opens
 
 
 def test_every_node_takes_ubuntus_security_pocket_unattended_and_holds_the_kernel_and_the_driver():
-    """A node's unattended upgrades. Every node gets both files, and installing them restarts nothing. The origins are Ubuntu's
-    release and security pockets alone, with the stock file's cleared first, so -updates or a third-party repository listed
-    there stays out. No whitelist: a strict one holds every other package back, a relaxed one changes nothing. The kernel, the
-    driver and the boot chain are held by the start of their names, and nothing a node needs current is. No reboot, a journal
-    line a pass, and needrestart only lists what a window should restart."""
+    """A node's unattended upgrades. Every node gets both files but the ones `UPGRADES_EXEMPT` names, which get neither, and
+    installing them restarts nothing. An exemption is stale, and fails, once deploy.toml has no such node or gives it a file.
+    The origins are Ubuntu's release and security pockets alone, with the stock file's cleared first, so -updates or a
+    third-party repository listed there stays out. No whitelist: a strict one holds every other package back, a relaxed one
+    changes nothing. The kernel, the driver and the boot chain are held by the start of their names, and nothing a node needs
+    current is. No reboot, a journal line a pass, and needrestart only lists what a window should restart."""
     nodes, rel = deploy.load(), PODS.relative_to(deploy.SRC).as_posix()
+    assert not [n for n in UPGRADES_EXEMPT if n not in nodes], "UPGRADES_EXEMPT names a node deploy.toml no longer has: delete its row"
     for node in nodes.values():
         entries = {e.path: e for e in node.entries}
+        if node.name in UPGRADES_EXEMPT:
+            assert not [p for p in UPGRADES if p in entries], f"{node.name} takes an unattended-upgrades file: delete its UPGRADES_EXEMPT row"
+            continue
         for path, name in UPGRADES.items():
             assert path in entries, f"{node.name} lacks {path}"
             assert (entries[path].src, entries[path].run, entries[path].hold) == (f"{rel}/{name}", [], None), (node.name, path)
