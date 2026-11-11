@@ -109,7 +109,9 @@ or here, one after another, with `--local`. It exits 0 when every job has its re
 one failed; a failed job is never run again.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
-`routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
+`routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the routes
+here run their forward under bf16 autocast on every device (`routes/subset.py`'s `step`), so a job on a CPU runs the
+program a job on a GPU does; the harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes

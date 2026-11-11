@@ -21,6 +21,29 @@ def test_subsets_schedule_ramps_holds_then_falls_to_zero():
     assert subset.schedule(share, 0, 838) == 1 / (0.02 * 838) and subset.schedule(share, 16, 838) == 1.0
 
 
+def test_a_routes_forward_runs_under_bf16_autocast_on_a_cpu():
+    """An entry's program is its job's on every device: the step runs the model's forward under bf16 autocast on a
+    CPU as on a GPU, so its products are bf16 there too, and the weights stay float32."""
+    seen = []
+
+    class Probe(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.w = torch.nn.Parameter(torch.randn(8, 8, generator=torch.Generator().manual_seed(0)))
+
+        def forward(self, x):
+            out = self.w[x] @ self.w
+            seen.append((torch.is_autocast_enabled("cpu"), out.dtype))
+            return out
+
+    model = Probe()
+    rows = torch.randint(0, 8, (2, 5), generator=torch.Generator().manual_seed(1))
+    dials = subset.DIALS | {"lr": 1e-2, "micro_batches": 2}
+    subset.step(model, rows, [torch.optim.SGD(model.parameters(), lr=1e-2)], dials, 0, 4)
+    assert seen == [(True, torch.bfloat16)] * 2 and model.w.dtype == torch.float32
+    assert not torch.is_autocast_enabled("cpu")
+
+
 def test_every_module_of_routes_passes_the_screen_a_route_does():
     """A route's load screens the route's own source; what it imports from beside it is held to the same names."""
     for path in sorted(config.ROUTES.glob("*.py")):

@@ -105,6 +105,11 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     assert whole["trains"] == {"parameters": SHAPE["parameters"], "of": SHAPE["parameters"], "share": 1.0}
     assert part["trains"]["parameters"] == SHAPE["parameters"] - VOCAB * 16 and part["trains"]["share"] < 1
     assert whole["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0}
+    # the table's trace is the job's program: bf16 under autocast on this CPU, attention's products too; Shampoo's
+    # own products are float32, as it runs them
+    assert whole["step"]["priced_in"] == {"bfloat16": 1.0} and library.line(whole)[3] == "bfloat16"
+    assert set(part["step"]["priced_in"]) == {"bfloat16", "float32"}
+    assert sum(part["step"]["priced_in"].values()) == pytest.approx(1)
     approx = part["step"]["approximated"]
     # each of the seven matrices' two factors, an eigendecomposition each, at its side cubed
     assert approx["macs"] == 4 * 2 * 16 ** 3 + 3 * (16 ** 3 + 32 ** 3)

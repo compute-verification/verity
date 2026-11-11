@@ -1,7 +1,13 @@
 """Each entry of the library held to a reference in plain torch: the entry's own dials, read from its config, run for
 a few steps at a small shape through its route, and the same steps written here against torch's own optimizers and
 its own average of the weights, or against the published rule where torch has none. The two end at the same output
-model."""
+model.
+
+What is held to a reference is the update's rule, so both sides run their forward in float32 (`forward_in_float32`):
+a reference sums a gradient in another order than its route (accumulation's micro-batches against the whole batch,
+LoRA's two factors against the merged matrix), and under the routes' bf16 autocast the two orders differ in the
+gradient's third digit, enough to turn the sign of an Adam step."""
+import contextlib
 import fnmatch
 import tomllib
 
@@ -19,6 +25,12 @@ from training_slowdown.routes._optimizers import newton_schulz
 #: six blocks, as the entries' patterns name them, 16 wide
 SHAPE = TINY | {"n_layer": 6}
 STEPS, BATCH, CTX = 3, 4, 8
+
+
+@pytest.fixture(autouse=True)
+def forward_in_float32(monkeypatch):
+    """The routes' forward in float32: their bf16 autocast (`subset.step`'s) is switched off for these tests."""
+    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
 
 
 def entry(name: str):
