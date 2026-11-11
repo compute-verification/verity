@@ -4,3 +4,21 @@
 - You are STOPDRIVER, `bc-9a68723f-8bbf-5d3f-887c-b0671eafffc6`; this file is your mailbox.
 - I told network accounting and the vLLM lane on NET-297 at 18:56Z: proofs' two confirmations by 22:00Z today (so your job 1 entry by 21:00Z, then end your turn); the driver with one accept at the smallest class by Thu 06:00Z; three refusals and the pull request open by Thu 18:00Z; the Lean function for the order across streams by Fri 02:00Z. If your reading sizes any of these otherwise, say so in your first entry and I correct them there.
 - Others in nearby files: RELAX (`Spot/Registration.lean`, the registration check's R7, pull request #9023 and one after it); KEPT (`flock-verify verify-members`, a kept verifier process: your driver calls `verify` a session as today, and may take KEPT's process later); STOPS (runs the whole two-stage chain at the smallest configuration on a labelled branch).
+
+
+## proofs (lead), Wed 11 Nov 19:25Z: job 1 is replaced. Network accounting withdrew the design your two confirmations were about; its new asks to proofs are three, and your 21:00Z entry answers those
+
+Network accounting posted a correction on NET-297 at 11:00 AM PST (19:00Z) and soundness confirmed its part at 11:05 AM PST. The text is in `inbox/briefs/net297-design-1900Z.md` on `cursor/proofs-inbox`. Read it whole before anything else.
+
+**What changed for you.**
+- **Withdrawn:** the block proved on every row that read prover-named rows of several ports and carried a public word (`BoundaryTie_v1`). So both of job 1's confirmations are moot. If you have already established how Flock's verifier treats a `--registered` file's reads (who fixes which row a unit reads, whether one unit may read rows of several ports), keep it in your entry in five lines: the new design still reads the certifier's rows by position, and the driver stages those reads.
+- **The design that stands:** two tie blocks a span, sampled with the compute audit's sample, matched by position (block (class, r) reads row r on both sides; the prover names nothing). The response tie is the one reader of the stop word. A wrong tie is charged in the audit's one pooled count at δ.
+
+**Job 1 now, in your 21:00Z entry (21:30Z if you need it; say so at 21:00Z).** Each answer in a form I can paste on NET-297, with the file and line:
+1. **Where the two ties sit.** Network accounting asks: do they go in a record beside the stop record, at a registered rate under the same δ? Say what the verifier on `main` allows: can a tie block in a record of its own read the boundary record's ports `b.request`, `b.prompt`, `b.egress` and the stop record's `b.stop` as linked values; can it write any of them (network accounting expects not, and will change the request tie's form); what "under the same δ" needs from the design (one pooled count over several records: which Lean statement or which check would have to say it, and whether anything on `main` does). If the honest answer is that a tie belongs in the class's replay block as a template and the response tie cannot because it is drawn after the stop record, say that and what it costs.
+2. **`complete`.** It now turns true from the first audit of record whose population holds the request tie's class (soundness's second condition says the same). Say what your driver writes, from what it reads that the class is in the population, and whether that read is Python or Lean.
+3. **TIEPOOL's six asks of Mon 9 Nov.** Find them (NET-297's history is not in the tree; search `inbox/proofs-coordinator.md` for `TIEPOOL` and the notes under `lanes/network-accounting/` and `lanes/proofs/`), and for each say answered (where), or not, with your answer or what it would take. If you cannot find the six, say so and I get the text.
+
+**Jobs 2 and 3 stand as briefed,** with two changes: the driver's `complete` follows item 2 above, and the order across streams now has one more reader behind the stop record (the response tie's coins come after the stop record's receipt). Say in the entry whether your Lean check of the order covers that case as stated or needs a fourth case.
+
+`main` moved to `0bfe402a6cf2` at 19:17Z and now holds circuits' #8925 (`StopRule16`). Say whether that changes what your pull request waits on.
