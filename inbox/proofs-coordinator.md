@@ -36763,3 +36763,52 @@ To your 02:02Z job (top's question on TOP-389). Each sentence or bullet carries 
 
 - **What the two caveats are worth on it.** [derived from the Goals page's GB at the inverse law; rough] At a cache factor of 0.25, 0.5 and 1.0, the world-year 12.40 becomes about 16.3, 22.9 and 36.1. At the response cap's 32,832 bits it becomes about 13.3.
 - **If you would rather keep row 1's own target and design,** the minimal correction names them: "at the planner's bound at GLM-5.3's FP4 weights (376.7 GB), λ = 1, on the fused cut alone with sparse MLA at the census request's keys, step one of run r20261109-201233-0467: the world 9.73, 9.71, 9.80; one datacenter 9.51, 9.54, 9.59". [guess] I wouldn't use it: it still disagrees with the Goals page by construction, which is top's point.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 02:36Z: the LEAN-249 comment with the proposal for ci is posted; the cures branch is not a PR against `main`, it is ready for lean's merge at `0d3b99b9ee21`
+
+**Ready to open as a PR: no, and it should not be one.** `cursor/proofs-remote-cures-dac3` at `0d3b99b9ee21021001fb1b450c0033df839a172a` is the remote merge's base plus eight files of ours. Against `main` it is 3,712 commits and 1,555 files [run, `git`]. It lands as PRF-522's branch did: lean merges it into the base. For that it is ready at that SHA. Left: the base moved at 6:27 PM PST (02:27Z), so the branch takes the new head by a merge; one more cure, `whole_run.py`, is in a run; ci decides its list; TRN-83's line waits for the move.
+
+**Posted** [run; read back from Linear]: one comment on LEAN-249, Tue 10 Nov 6:27 PM PST (02:27Z Wed), starting "PUBUNITS (proofs)". It names the branch, the head and each commit, the runs, and the proposal for ci: lines 98, 99 and 102 of `tools/verity/check/public_boundary.toml` with the before and after text, the tool's count, and the `[[needed]]` alternative with why not. **You can ring @ci and @lean on it.**
+
+**The head's run, `r20261111-020627-bd1b`** (vy-nebius-cpu-1, rc 0, at `0d3b99b9ee21`, which holds the base `eb56c217f831`) [run; each log read]. The base's column is MAINMERGE's `r20261111-004734-05e3` [read].
+
+| | base `eb56c217f831` | head `0d3b99b9ee21` |
+|---|---|---|
+| root suite, `--quick` | 277 passed, 4 failed | 279 passed, 2 failed |
+| `benchmarks/one_stage`, `--quick` | 875 passed | 876 passed |
+| `benchmarks/live_challenger`, `--quick` | 654 passed | 654 passed |
+| the tool's edges | 17: ours 11, vllm's 6 | 15: ours 9, vllm's 6 |
+| edges with the proposal | not run | 6, none ours |
+
+- The head's two failures: `test_public_boundary` (the edges) and `test_vllm_boundary` (network-accounting's). `test_gate_paths` and `test_literal_addresses` pass.
+- Call 2's slow test, run without `--quick`, passes. Call 3's `whole-run-time` builds, 462 jobs.
+
+**The base moved again** [read, MAINMERGE's comment of 02:30Z; the ref fetched by me]: `cursor/lean-remote-merge-fc8d` is at `e6cbb1ad5801934da4b2b961811578b587729f53` since 02:27Z. Four merges, 16 files, none ours and not the list [run, `git diff --name-only`]. vllm's six edges are gone on it.
+
+- The cures branch still holds `eb56c217f831`. I did not move its head yet: see "Next".
+- **`r20261111-023214-b44a`** (cpu-1, rc 0) ran on the merge of the two, a scratch commit not pushed, tree `a3701ec74900`, no conflict [run]:
+  - `tests/test_gate_paths.py`: 8 passed. `tests/test_literal_addresses.py`: 2 passed.
+  - `tests/test_public_boundary.py`: 42 passed, 1 failed. The tool counts 9 edges, all ours, the 9 of the proposal.
+  - With the proposal's three lines: 0 edges, and `tests/test_public_boundary.py` is 43 passed. The list was put back.
+
+**A second fault in `whole_run`, ours, found by `bd1b`** [run]: after the build, `whole_run.sh` stops in its input writer. `benchmarks/verifier_cost/whole_run.py` asks for the fixed count `stratified:3`, and the base's reference refuses a fixed count. It is in no suite. The comment says so and says it is not cured on the branch.
+
+- **Cure written, not pushed:** commit `861e61badf7539af41ce8dd481b8076d8069118a`, one file, on a local branch cut from `0d3b99b9ee21`. The input states `stratified-rate:1/population`, which is one draw a stratum, and takes its record from `service.params_law` and `draw.derive`, as the difftest's valid audit does.
+- **`r20261111-022949-e2c1`** (cpu-1, launched 02:30Z) is running it: `whole_run.sh run toy 146 1000` and `desc l5 146`. So far the Python reference accepts both inputs [run]. ETA 7:00 PM PST (03:00Z) [guess].
+
+**Next, unless you say otherwise.** When `e2c1` is read, the cures branch gets one new head, not forced, the old head its ancestor: the base's `e6cbb1ad5801` merged in, and `861e61badf75` on top if `e2c1` shows `whole_run.sh` runs to its end. Then the three suites' quick tier at that head on a node, and one short line on LEAN-249 that names the new head, as my comment's last line promised.
+
+**The move** [read at the staged head `178f49c90c89`; `main` is at `a930252c4993`, no move yet, 02:30Z]:
+
+- Mailbox read at 02:31Z, your two items. Item 1 I have from lean's 02:23Z: nothing more on the five files or line 112.
+- Item 2 (TRN-83): after the move, `verity/composite/device/live_challenger/README.md:17` to `:19` says a session "runs through `research run ... -- bash verity/composite/device/live_challenger/run.sh` (its header has the full command), not bare `verity bench live_challenger`." The cure ends the sentence at "(its header has the full command).": the runner is already named by path. The branch, its run and the PR wait for the move on `main`.
+
+**Not run:** a served run on a GPU node; `benchmarks/prove_path`'s slow tests; the Lean check (no file of a Lake package changes).
+
+**What is left, for whoever continues:**
+
+1. Read `e2c1` (`research fetch --all`, then `out/verdicts.txt`). The cure's patch is `lean249-whole_run.py-cure-861e61badf75.patch` in my artifacts; the job is `lean249-wholerun.sh` there.
+2. Give the cures branch its new head as under "Next", run the quick tier there, name it on LEAN-249.
+3. ci's answer on the three lines. The branch needs neither answer.
+4. After the move is on `main`: TRN-83's line as its own PR from the moved `main`. If the move is late, the diff and the command go in my last entry.
+5. The remote merge's crossing of the move is lean's (its 02:23Z). My preview run `r20261111-020220-f99b` stands if the landed map and script are the staged ones.
