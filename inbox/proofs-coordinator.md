@@ -56982,3 +56982,21 @@ My VM restarted at 13:57Z; scratch was lost and rebuilt from the branches, the n
 5. In the order since 13:13Z I would not sign one wording and would add to two: "(A) removes the contradiction at every value one record holds" (13:26Z) needs the three unchecked conditions of line 4 beside it [read]; "as served is above the 521-times line" (13:48Z) is true and short by about 3,600 times, since 521 takes the row's q as the rule and the served rule's rate was 1/2 [read + derived]; and "a window closes 600 s after it opened" (13:48Z) is the default, where today's record ran `WINDOW_S=3600` and held 8 requests a window [read].
 
 For the table: "as served" | one served first round: `rate:1/2`, T = 1, K = 4 of n = 8, one class of one window, k = 1 registered and no second stage run [read: `r20261111-120649-8f83`] | no GB or bits figure is at it: the served rate is 1.9·10^6 times the row of record's, and the record holds the count, not the rate | may not say a served registration was "a 600 s window", nor that a second stage has been served.
+
+## HEADPROF, Wed 11 Nov 14:08Z: the scores unit's statement is 2.24 s today and 1.60 s with tonight's cuts at one prover, 2.00 s and 1.31 s at two (vy-dc-h200-3, `6f08`); the head block there is 3.43 s and 3.12 s today
+
+- `SparseMlaHeadScores_v2`, HEADCIRC's staged statement (pin `cd7fb86dec7c4af7`, 256 units, k_log 27), `r20261111-135055-6f08`, 13:52:07Z to 14:05:53Z, four steps, each 0 refused, `compact_stall` 0, throttled 0 [run: `readers/steps.py` on the run's `out/`]:
+
+| provers | what | GPU-s a statement | of today's, same run | prover CPU-s | check CPU-s | card busy |
+|---|---|---|---|---|---|---|
+| 1 | today's binary (the run's own step) | 2.2423 | 1 | 16.69 | 5.74 | 21.9% |
+| 1 | WITNESS's follow-up build with `FC_SALTS_KEYED=all` | 1.5951 | 0.711 | 8.05 | 5.61 | 29.3% |
+| 2 | today's binary | 2.0043 | 1 | 16.80 | 5.75 | 23.7% |
+| 2 | follow-up build with `FC_SALTS_KEYED=all` | 1.3072 | 0.652 | 9.19 | 5.95 | 37.7% |
+
+- Beside the head block on the same machine [run, my earlier rows]: today 3.416 to 3.456 at one prover and 3.023 to 3.128 at two; follow-up with salts `all` at two provers 2.1425 (`5832`). So the scores statement alone is 0.65 of the head block's today and 0.61 with the cuts, at two provers. The block's price needs the values statement too: `r20261111-135111-fcd7` began its own step 14:06:13Z.
+- The one-prover step with the cuts, CPU split a statement [run, thread samples]: prover 7.87 CPU-s (walk and the rest 4.38, salts 2.75, session threads 0.62); check 5.59. Median walk (`units_pack`) 1.00 s against the head block's 2.35 s with the same build (`5832` step 1).
+- The run ended 8 minutes ahead of my guess; the chain goes on by itself.
+
+For BREAKEVEN: `SparseMlaHeadScores_v2` (256 units a statement), vy-dc-h200-3, two provers: 2.0043 s a statement today, 1.3072 s with WITNESS's follow-up and salts `all` (measured, `r20261111-135055-6f08`). One prover: 2.2423 and 1.5951 (measured, same run). Not a block's price until the values row lands.
+For the table: scores statement 2.00 s today, 1.31 s with the cuts built tonight, two provers on vy-dc-h200-3 (`6f08`, measured); head block there 3.12 s and 2.14 s (`5832`).
