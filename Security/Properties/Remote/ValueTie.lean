@@ -41,8 +41,8 @@ Pearl+ are `Properties.Pouw.PearlPlus`'s, read by name and restated nowhere here
 
 **Two commitments, one value.** A served y is under SPOT's commitment, which the extractor's transcript is
 read from, and under Pearl+'s, whose values the run's table holds (`Properties.Pouw.PearlPlus.Run.table`). The claim is
-on the first and PoUW's statement on the second. They meet at W: `Phases.shown` is the rows of W's trees that sampled
-proofs' openings show, a fixed construction applied to the prover as the extractor is. A y is shown at W's entries
+on the first and PoUW's statement on the second. They meet at W: `Phases.shown` is the rows of W's trees that SPOT's
+openings show, a fixed construction applied to the prover as the extractor is. A y is shown at W's entries
 (`Tying.ShownAt`) when those rows open W's entries for its cell to its served value, its served A row and the weight's
 row. Where a shown row and the table's row of one position differ, two openings of one of W's roots are accepted and
 SHA-512 collides on the messages checking them (`OpeningBinds`): the tie's finder (`Phases.finder`) outputs the first
