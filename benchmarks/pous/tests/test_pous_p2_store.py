@@ -357,17 +357,17 @@ def test_parts_join_to_the_whole_store(gen: tuple[str, str], tmp_path: Path) -> 
     assert (joined["root"], joined["w_root"], joined["tie"]) == (whole["root"], whole["w_root"], whole["tie"])
 
 
-H200_DEMO = BENCH.parents[1] / "archive" / "examples" / "h200"
+ROOT = BENCH.parents[1]
 
 
 def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The store's default generator (`S.GENERATOR`, run with `archive/examples/h200` on the path), not the stand-in. At `h200`
-    `Generated` is the frozen store under the generator's `model_id`, its tensors are the generator's parts' bytes, and
-    `pieces` knows the generator's manifest by its `"model"`: it refuses another seed's, and this seed's only for the
-    digests it lacks. A manifest with digests generates the whole stream, so `pieces` and `commit` run whole at `tiny`,
-    where `setup.json` holds that name as `"program"`. The stand-in has no name, and its manifest no key, that the
-    default generator's lacks."""
-    monkeypatch.syspath_prepend(str(H200_DEMO))
+    """The store's default generator (`S.GENERATOR`, imported by that name with the repository root on the path), not
+    the stand-in. At `h200` `Generated` is the frozen store under the generator's `model_id`, its tensors are the
+    generator's parts' bytes, and `pieces` knows the generator's manifest by its `"model"`: it refuses another seed's,
+    and this seed's only for the digests it lacks. A manifest with digests generates the whole stream, so `pieces` and
+    `commit` run whole at `tiny`, where `setup.json` holds that name as `"program"`. The stand-in has no name, and its
+    manifest no key, that the default generator's lacks."""
+    monkeypatch.syspath_prepend(str(ROOT))
     mod = importlib.import_module("benchmarks.torch_gpu.p2_stage.served_weights")
     seed, h200 = mod.TEST_SEED, mod.H200
     real = S.Generated(S.GENERATOR, "h200", seed)
