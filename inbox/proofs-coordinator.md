@@ -53412,3 +53412,35 @@ For BREAKEVEN:
 For the table:
 - NET (fourth addendum): the certifier's part is unchanged, 24,447,500 GB a world year at the 1,024 class (modeled 0.4; 873,998 to 941,229 at the measured engine rate on node A, a floor; the rate is not measured at the headline's mix). No audit has drawn a stop block.
 - soundness took the driver's order entry as written; it checks the order alone. The count's removal now needs seven parts, the new one a served command that writes the boundary stream's audit record (nobody's yet; asked of vllm).
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 12:15Z: the coin against the rows now priced: #8914's MAX_COINS 2^24 covers every row at kappa 2^-6 or narrower and NO row at kappa 2^-4 or wider at a padded first stage of 6 (those need 2^25 to 2^26) [derived from HARMSEARCH's relayed counts, not an exact rerun]
+No claim changes: this is arithmetic on #8914 (unmarked, Daniel's) against the designs now on the table. Every row below is [derived] by a script on my VM from HARMSEARCH's Σ_t k_t (its 11:43Z table, [relayed], on `3db1`'s dumped call) and my formula's floor and ceiling of 18 to 26 bytes a sampled proof block (`2·width(n)`, widths 9 to 13; D*1 measured 25.09 by the exact formula, so expect the high end), times the padded first stage K0, without the 64 bytes a stratum. It is NOT the exact rerun of `draftcore_coin.py` on each design (that needs each design's strata sizes; say if you want it and where the rows are).
+
+**At K0 = 6** (bytes a run; the `MAX_COINS` that covers it; whether #8914's 2^24 = 2^30 bytes does; the model's `stage ≥` in #8940):
+
+| HARMSEARCH's row (11:43Z) | Σ_t k_t | bytes a run | `MAX_COINS` | 2^24 covers | `stage ≥` |
+|---|---:|---|---|---|---|
+| plan's cut, record, κ 2^-5 (6,320 GB) | 10,046,500 | 1,085,022,000..1,567,254,000 | 2^25 | NO | 1,035..1,495 |
+| plan's cut, planner's pick, κ 2^-3 (3,781) | 32,469,700 | 3,506,727,600..5,065,273,200 | 2^26..2^27 | NO | 3,345..4,831 |
+| plan's cut, 2^-100 by stratum, κ 2^-6 (4,069) | 4,058,782 | 438,348,456..633,169,992 | 2^23..2^24 | yes | 419..604 |
+| plan's cut, 2^-100 one M, κ 2^-8 (5,431) | 1,014,756 | 109,593,648..158,301,936 | 2^21..2^22 | yes | 105..151 |
+| recut A, record, κ 2^-5 (6,360) | 9,387,373 | 1,013,836,284..1,464,430,188 | 2^24..2^25 | low end only | 967..1,397 |
+| recut A, by stratum and one M, κ 2^-4 (3,860) | 14,729,547 | 1,590,791,076..2,297,809,332 | 2^25..2^26 | NO | 1,518..2,192 |
+| recut A, PageCopy 205, κ 2^-5 (3,936) | 7,364,810 | 795,399,480..1,148,910,360 | 2^24..2^25 | low end only | 759..1,096 |
+| recut A, cut G=64, by stratum, κ 2^-4 (1,188) | 15,438,367 | 1,667,343,636..2,408,385,252 | 2^25..2^26 | NO | 1,591..2,297 |
+| recut A, cut G=64, one M, κ 2^-6 (1,500) | 3,617,957 | 390,739,356..564,401,292 | 2^23..2^24 | yes | 373..539 |
+| recut A, cut G=32, by stratum, κ 2^-4 (979) | 16,486,108 | 1,780,499,664..2,571,832,848 | 2^25..2^26 | NO | 1,699..2,453 |
+| recut A, cut G=32, one M, κ 2^-7 (1,770) | 2,060,828 | 222,569,424..321,489,168 | 2^22..2^23 | yes | 213..307 |
+| D*1 (ii), what #8914 was sized for | 5,523,986 | 596,590,488..861,741,816 (exact 831,481,176) | 2^24 | yes | 569..822 |
+
+- **The rule that falls out:** at K0 = 6, 2^30 bytes hold a second stage of at most 6,882,960 sampled proof blocks a sampled replay block at 26 bytes a block (9,942,053 at 18). Every row at κ 2^-6 or narrower fits; every row at κ 2^-4 or wider does not; κ 2^-5 is on the edge (expect NO at 25 bytes a block).
+- **At K0 = 4** the κ 2^-5 rows and both records fit (the record 723,348,000..1,044,836,000), and the κ 2^-4 rows still do not (recut A's 3,860 GB row: 1,060,527,384..1,531,872,888).
+- **What a larger cap costs** (from #8914's table; `MAX_COINS` does not enter the hiding term): each doubling doubles the device's memory and the finder's reads: 2^25 is 8 GiB and 4 GiB, `DRAW_ROUNDS` 2,048; 2^26 is 16 GiB and 8 GiB, `DRAW_ROUNDS` 4,096 [2^26 by the same arithmetic, not in the PR's table]. Another value is four literals in #8914.
+- **`MAX_TREE_LINES` moves the same way** [guess, by proportion from D*1's 2,893 sessions a sampled replay block, 322 lines a session]: #8914's 2^23 lines hold about 26,000 sessions; a κ 2^-4 row at K0 = 6 is about 46,000 sessions, so it needs 2^24 lines, and the hiding term then reads 2^-206.
+- In #8940's model none of this is a cap: `stage` is free. The last column is the least `stage` at which the model's verifier is not refused for want of bytes.
+
+For the table: #8914's `MAX_COINS` 2^24 was sized for D*1 (5.5 million sampled proof blocks a sampled replay block). The cheapest rows now priced at κ 2^-4 (3,860 GB; 1,188 and 979 GB with the head block's cut) sample 14.7 to 16.5 million and need `MAX_COINS` 2^25 to 2^26 at a padded first stage of 6 [derived from relayed counts, not an exact rerun]; the κ 2^-6 rows (4,069; 1,500 GB) fit 2^24. So Daniel's value for `MAX_COINS` and the GB row go together.
+
+For HARMSEARCH: a price row at K0 = 6 needs its second stage's stream under the device's cap: at #8914's 2^30 bytes that is Σ_t k_t ≤ about 6.9 million (at 26 bytes a block). If you can give each priced row's strata (size, k), I rerun the exact formula; or add the column yourself: `Σ_s (2·k_s·width(size_s) + 64)` bytes a sampled replay block, `width(n)` = `n`'s bit length plus 64, rounded up to bytes (`Flock.Draw.width`).
+
+For SCALE: the same rule for any design you quote at K0 = 6.
