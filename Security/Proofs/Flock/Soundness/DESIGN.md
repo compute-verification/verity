@@ -255,7 +255,7 @@ strict time.
   proved under strict-time collision resistance. A2 enters only the value layer, and `CROnly` replaces it there by
   strict time at the price above.
 
-## 4. Where the spec follows upstream rather than the paper (`verity/ml/flock/verifier/README.md`), and the bound
+## 4. Where the spec follows upstream rather than the paper (`verity/protocols/flock/agreement/README.md`), and the bound
 
 | Id | Change | How the model and bound cover it |
 |---|---|---|
