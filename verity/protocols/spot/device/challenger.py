@@ -244,7 +244,7 @@ CLOSE_ROLE = "verity/challenger-close/v1"
 LOG_TAG = "verity/challenger/release-log/v1"
 MAX_SESSION_ID = 128
 #: a release log's most coin-tree lines (`coin_trees_of`): each tree the challenger sampled and each round it opened
-MAX_TREE_LINES = 1 << 20
+MAX_TREE_LINES = 1 << 23
 #: a release log's most lines: its head, then a root and its release per coin, and its coin-tree lines
 MAX_LOG_LINES = 2 * MAX_COINS + 1 + MAX_TREE_LINES
 #: a release log line's most characters
