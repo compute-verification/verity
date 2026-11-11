@@ -71,6 +71,12 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
   partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
+- `member_seconds.py` (`a5_tp.sh` with `A5_MEMBER_SECONDS=1`): an audit's seconds a member outside its prover's clock and in
+  Lean's verify before its first check, split by what is read. The audit runs on stamping wrappers of `flock-circuit`,
+  `flock-verify` and `flock-firewall`; each member's seconds are its own processes' starts and ends and its logs' lines, and
+  each reader of its files is then run alone (the verifier's and the prover's load, the ZK server's Lean loop's start with
+  and without the window's partition and program, `archive-put` of each file). `STANDIN=warden` is the smallest window with
+  members of two templates.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
