@@ -713,11 +713,11 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     sizes = [(store / e).stat().st_size + sum((store / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
     out = tmp_path / "out"
     out.mkdir()
-    dests, n = arts.bundle_into(out, cap := max(sizes))               # what it added is more than one bundle holds
+    dests, n = arts.bundle_into(out, room := max(sizes))              # what it added is more than one bundle holds
     assert n == len(arts.added) > 0 and len(dests) > 1
     for d in dests:
         with tarfile.open(d) as t:
-            assert sum(m.size for m in t.getmembers()) <= cap
+            assert sum(m.size for m in t.getmembers()) <= room
     urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
     assert LA.LakeArtifacts(other).take(urls, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")

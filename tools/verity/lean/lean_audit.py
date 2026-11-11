@@ -1260,7 +1260,7 @@ class LakeArtifacts:
         names, the entries before the artifacts, up to ``cap`` bytes uncompressed: (the number of entries written (none: no
         file), the index in `added` of the first entry this bundle had no room for, where the next one starts). A bundle
         is whole in itself: an artifact that entries of two bundles name is in both. An entry that is gone from the
-        cache, or that with its artifacts is over ``cap`` alone, is in no bundle, and the entries after it still are."""
+        cache, or that with its artifacts is more than a bundle holds, is in no bundle, and the entries after it still are."""
         with self._lock():
             todo, size, names, stop = [], 0, set(), len(self.added)
             for i in range(start, len(self.added)):
@@ -2005,8 +2005,7 @@ def bundled(dests: list[Path], n: int, added: int) -> str:
     """What a run says of the bundles it wrote (`LakeArtifacts.bundle_into`'s, and how many entries it had ``added``)."""
     return (f"{n} of the {added} module version(s) it added bundled for other nodes "
             f"({', '.join(d.name for d in dests) or 'no bundle'})"
-            + ("" if n == added else f"; {added - n} in none: gone from the cache since, or over a bundle's "
-                                     f"{BUNDLE_CAP >> 20} MiB alone"))
+            + ("" if n == added else f"; {added - n} in none: gone from the cache since, or more than a bundle holds"))
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:

@@ -1155,11 +1155,11 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
 
 
 def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_takes_and_another_node_takes_them_all(tmp_path):
-    """A bundle holds at most `BUNDLE_CAP`, since a larger file of a run uploads without resume, and a cold build of a
-    large package adds more than that: what was past the cap was in no bundle, and every other node compiled it again. So
-    a run writes as many bundles as its additions take, none over the cap and each whole in itself (its entries, and every
+    """A bundle has a largest size, since a larger file of a run uploads without resume, and a cold build of a large
+    package adds more than that: what was past it was in no bundle, and every other node compiled it again. So a run
+    writes as many bundles as its additions take, none larger than that and each whole in itself (its entries, and every
     artifact they name), the entries added first in the first; a node that takes them all restores every module. An
-    entry that is over the cap alone is in none, and those after it still travel."""
+    entry that is larger than a bundle alone is in none, and those after it still travel."""
     pkg = _package(tmp_path)
     entries = _keys(pkg)
     a = tmp_path / "node-a"
@@ -1167,11 +1167,11 @@ def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_take
     arts.put({pkg: SANDBOXED})
     assert [e for e, _ in arts.added] == [entries[m] for m in ("P.A", "P.B", "P")]
     sizes = [(a / e).stat().st_size + sum((a / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
-    cap = sizes[0] + sizes[1]
-    assert max(sizes) <= cap < sum(sizes), "room for the first two, not for all three"
+    room = sizes[0] + sizes[1]
+    assert max(sizes) <= room < sum(sizes), "room for the first two, not for all three"
     out = tmp_path / "out"
     out.mkdir()
-    dests, n = arts.bundle_into(out, cap)
+    dests, n = arts.bundle_into(out, room)
     assert [d.name for d in dests] == ["lean-artifacts.tar.gz", "lean-artifacts-2.tar.gz"] and n == 3
     assert all(LA.BUNDLE_FILE.fullmatch(f"lean-audit/{d.name}") for d in dests), "the names the launcher lists"
     held = []
@@ -1179,7 +1179,7 @@ def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_take
         with tarfile.open(d) as t:
             members = t.getmembers()
             mine = [json.loads(t.extractfile(m).read()) for m in members if m.name.startswith("keys/")]
-        assert sum(m.size for m in members) <= cap, "no bundle over the cap"
+        assert sum(m.size for m in members) <= room, "no bundle holds more"
         assert [m.name.split("/")[0] for m in members] == ["keys"] * len(mine) + ["artifacts"] * (3 * len(mine))
         assert {m.name for m in members if m.name.startswith("artifacts/")} == {f"artifacts/{o}" for e in mine for o in e["digests"]}
         held.append([e["module"] for e in mine])
@@ -1196,14 +1196,14 @@ def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_take
         "the first bundle alone restores what it holds"
     again = LA.LakeArtifacts(a)
     again.added = arts.added[2:]
-    dests, n = again.bundle_into(out, cap)
+    dests, n = again.bundle_into(out, room)
     assert [d.name for d in dests] == ["lean-artifacts-3.tar.gz"] and n == 1, "a later audit of the run: the next free name"
     assert LA.bundled(dests, n, 1) == "1 of the 1 module version(s) it added bundled for other nodes (lean-artifacts-3.tar.gz)"
     alone = tmp_path / "alone"
     alone.mkdir()
     dests, n = arts.bundle_into(alone, sizes[2] - 1)
-    assert sizes[0] < sizes[1] < sizes[2] and (len(dests), n) == (2, 2), "P is over this cap alone; P.A and P.B travel"
-    assert LA.bundled(dests, n, 3).endswith("; 1 in none: gone from the cache since, or over a bundle's 3072 MiB alone")
+    assert sizes[0] < sizes[1] < sizes[2] and (len(dests), n) == (2, 2), "P alone is more than such a bundle holds; P.A and P.B travel"
+    assert LA.bundled(dests, n, 3).endswith("; 1 in none: gone from the cache since, or more than a bundle holds")
     assert arts.bundle_into(alone, 1) == ([], 0) and len(list(alone.iterdir())) == 2, "nothing fits: no file"
 
 
@@ -1491,7 +1491,7 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
         return 1
 
     monkeypatch.setattr(LA.LakeArtifacts, "put", put)
-    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, cap=0, start=0: (dest.write_bytes(b"") or 1, 1))
+    monkeypatch.setattr(LA.LakeArtifacts, "bundle", lambda self, dest, *at: (dest.write_bytes(b"") or 1, 1))
     for n, bundle in enumerate((False, True)):
         shutil.rmtree(tmp_path / "cache", ignore_errors=True)
         assert LA.run(tmp_path / f"out{n}", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
