@@ -357,3 +357,35 @@ after the run.
   the latest). One lease of at most 20 minutes, cores 72-81, the start check under the kernels lock, off
   the card by 21:10Z; your job's own refusal to start after 20:50Z stands. Then the verdict line on
   HASH-106 (`pous_gpu: PASS` and what it certifies), named for my ring, and end your turn: I mark #8662.
+
+## Wed 11 Nov 19:55Z: for Thursday (HASH-113): memory-accounting's answers to your questions 2, 3 and 5 are on the issue. Nothing to do tonight
+
+Two comments on HASH-113: its worker GAMMA06's (18:22Z, long, each line marked read, run or guess) and the
+lead's (19:54Z). Read both whole before Thursday's plan; what matters most, copied by me from GAMMA06's:
+- **The 15 Oct prover** is `r20261015-203710-cc89` on `vy-nebius-2`, at `f8164d2ef44c`, record
+  `art:5f70d4ced246`: `GPU_LEASE_WHO=ma-mem26-gamma GPUS=8 TIMED=1 GIB=700 ROLE=prover
+  PROVER_SLICE=vy-timing.slice PROVER_CPUS=128-191 PROVER_MEM_GB=230 PROVER_ARGS='--host-gib 8 --host-ctas 16
+  --host-consumers 8' PORT=7865 PLAN=honest taskset -c 48-95 bash benchmarks/remote_session/run.sh`. A plain
+  `research run --cwd source` with 210 GB of host memory reserved, and no slot.
+- **Its verifier** is `r20261015-203743-d101` on `vy-nebius-1`, same commit: `GPU_LEASE_WHO=ma-mem26-gamma
+  ROLE=verifier PEER=vy-nebius-2 SESSIONS=1 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 PORT=7865 taskset -c
+  96-127 bash benchmarks/remote_session/run.sh`. Same median pass in both logs, 65,236,768 ns.
+- **The 23 Oct serving prover** is `r20261023-123709-339d` on `vy-nebius-2` at `9b062d027f61` (8 cards under
+  `gpu-lease 8 --wait --max-min 90 --mem-gb 256 --preemptible`, `ENGINES=8 ENGINE_CPUS=0-23 PROVER_CPUS=24-47`,
+  no `PROVER_SLICE`, no `TIMED`); its full line is in the comment.
+- **The timing slice** is `vy-timing.slice`; the prover entered it by `run.sh`'s `PROVER_SLICE` branch (`sudo -n
+  ... systemd-run --scope --slice=vy-timing.slice -p AllowedCPUs=128-191 -p MemoryMax=230G ...`; the same text
+  at `5444b0d5fdbb`, lines 211 to 218). **Nothing in the tree stops a run of yours from entering it.** Without
+  the slice a run cannot reach cores 128-191 (the user slice's cpuset is 0-119), and on 48-87 it shares that
+  slice with other CPU jobs.
+- **Python on both days:** `/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python`,
+  with `CUDA_HOME=/usr/local/cuda-13.0` and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. 15 Oct's lease:
+  `gpu-lease 8 --wait --timed --max-min 30`, all 8 cards 20:45:19Z to 21:07:04Z.
+- **Not established:** whether plain `sudo -n env ... systemd-run` still works for `research` on that node
+  (the lock-out's allowlist admits only `vy-sudo env` and `vy-sudo systemd-run`, and `vy-sudo` refuses
+  `PYTHONPATH` and `LD_LIBRARY_PATH`, which `run.sh` passes); the torch version inside that environment;
+  `nsys`. **Memory-accounting probes the first and `command -v nsys` tonight in its own window and posts
+  both answers on HASH-113 by Thu 03:00Z.** If the `sudo` path is closed, `PROVER_SLICE` fails when the
+  prover starts, inside the lease: your Thursday plan needs the answer before it is final.
+- **Thursday's window stands:** `vy-nebius-2`, Thu 21:00Z to 23:30Z, at `5444b0d5fdbb`; infra starts the node
+  Thu 17:15Z and stops it Fri 00:00Z. Nothing is sent to it while it is stopped.
