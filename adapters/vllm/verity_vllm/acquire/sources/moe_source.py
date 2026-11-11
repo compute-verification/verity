@@ -96,9 +96,12 @@ from typing import Any
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity.definitions.registry.moe import router_kernel
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
+
+logger = init_logger(__name__)
 
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 TENSORS_PER_LAYER = len(MOE_PLANES)
@@ -228,7 +231,8 @@ class MoeBlockSource:
                               (TOPK_BIAS_MODULE, "fused_topk_bias")):
             try:
                 mod = importlib.import_module(modname)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.info_once("moe source: %s does not import here (%s): its %s is not wrapped", modname, repr(e), attr)
                 continue
             if hasattr(mod, attr):
                 sites.append((mod, attr))

@@ -27,6 +27,9 @@ from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 SITES = (("vllm.model_executor.layers.linear", "tensor_model_parallel_all_reduce", "all_reduce"),
          ("vllm.model_executor.layers.vocab_parallel_embedding", "tensor_model_parallel_all_reduce", "all_reduce"),
@@ -248,7 +251,8 @@ class TPPartialSource:
         for modname, attr, kind in SITES:
             try:
                 targets.append((importlib.import_module(modname), attr, kind))
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.info_once("tp partial source: %s does not import here (%s): its %s is not wrapped", modname, repr(e), attr)
                 continue
         if self.mid_sites or self.mid_sites_ruled_out:
             from verity_vllm.engine.collectives.collective_sites import patch_targets
