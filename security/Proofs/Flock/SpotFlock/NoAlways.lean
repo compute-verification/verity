@@ -186,7 +186,7 @@ theorem ksTwo_noAlways (hB : Built h) (hS : Addresses h) :
 /-! ## The addresses premise only weakens -/
 
 /-- **An accepted run's checked unit at the emptied registration is one at the registration.** -/
-theorem CheckedRun.ok_noAlways {r : CheckedRun} (hr : r.Ok h.noAlways) : r.Ok h := by
+theorem CheckedRun.ok_noAlways {r : CheckedRun h.stage} (hr : r.Ok h.noAlways) : r.Ok h := by
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hrest⟩ := hr
   exact ⟨Pt, d, spec, hx, hP, h2, hin, hok, h.reg.noAlways_checked_sub _ _ _ _ hu, hrest⟩
 
