@@ -149,7 +149,7 @@ untraced = [
 # tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
 # into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`).
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/definitions/kernels",
-          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
+          "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "verity/configuration/config/pyproject.toml", "verity/protocols/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/check/settings.py",

@@ -49,7 +49,7 @@
    "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
    "draws": 32,
    "generator": "verity_flock.synthetic",
-   "key": "verity.ml.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'rope-head/d64/neox-bf16', 'seed': 20261020})",
+   "key": "verity.commitments.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'rope-head/d64/neox-bf16', 'seed': 20261020})",
    "n": 32,
    "parameters": {
     "D": 64
