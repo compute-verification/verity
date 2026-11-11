@@ -47,6 +47,7 @@ public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric
+public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingServed
