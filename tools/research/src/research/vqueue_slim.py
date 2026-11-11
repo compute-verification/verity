@@ -166,6 +166,23 @@ def deselection(driver: Landing, listed: Path | None) -> Path | None:
     return sent
 
 
+def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
+    """``steps`` but those candidate ``sha``'s own `tools/verity/check/ci.toml` declares no job of (`merge.declared`), one line
+    logged naming them: check.py refuses a `--deferred` naming a job its tree doesn't declare, so sending one would fail the
+    candidate's own check.  Every one of ``steps``, logged, when that ci.toml can't be read."""
+    from .merge import declared
+
+    if (jobs := declared(driver.repo, sha)) is None:
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its --deferred "
+                     f"keeps every step ({','.join(steps)})")
+        return steps
+    names = {t["name"] for t in jobs}
+    if gone := [s for s in steps if s not in names]:
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job "
+                     f"{', '.join(gone)}, which check.py refuses: left out of its --deferred")
+    return [s for s in steps if s in names]
+
+
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
           audit_from: str | None = None) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
@@ -175,7 +192,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
     `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
     With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
-    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.
+    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  Each sends only the steps the
+    candidate's own ci.toml declares as jobs (`declared_steps`).
     The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
@@ -194,7 +212,7 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
-    every = [s for s in (AFTER_LANDING if n else SLIM_STEPS) if not (audit_from and s == LEAN_STEP)]
+    every = declared_steps(driver, sha, [s for s in (AFTER_LANDING if n else SLIM_STEPS) if not (audit_from and s == LEAN_STEP)])
     skip = [s for s in skip if s in every]
     steps = [s for s in every if s not in skip]
     sent = ",".join(every if n else steps)

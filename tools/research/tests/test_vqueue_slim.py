@@ -17,13 +17,13 @@ import pytest
 
 from research import merge
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
-                              SIGTERM_RC, shard_machines, step_paths, step_records)
+                              SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
 from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures, audited, audits, based,
                                   combine, failures, judge, key, lean_inputs, reads, shard_count, start, step_test, unnamed)
 from test_policy import LIVE, TEST
-from test_landing import GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
+from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
@@ -420,6 +420,38 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
     whole = start(h.d, sha, base, shards=1)
     assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "train_from": OWN_TRAIN}) and machines[3] == "m1,m2,m3,m4"
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
+
+
+@pytest.mark.parametrize("shards", [0, 1, 3, "auto:2"])
+@pytest.mark.parametrize("drops", [False, True])
+def test_a_candidate_is_sent_only_the_steps_its_own_ci_toml_declares_as_jobs(world, monkeypatch, tmp_path, shards, drops):
+    """check.py refuses a `--deferred` naming a job the candidate's own ci.toml doesn't declare (`declared_steps`): a candidate
+    whose ci.toml drops a step's job (lean-changed, or ratchet-gate beside its check) is sent every other step, beside its
+    check, whole, as each shard or to its auto plan, with one line naming the step; one declaring every step is sent them all."""
+    dropped = "lean-changed" if shards else "ratchet-gate"
+    jobs = CI_TOML.replace(f'[[job]]\nname = "{dropped}"\nowner = "ci"\ngroup = 1\n', "")
+    assert jobs != CI_TOML
+    h, base, sha, _ = _harness(world, monkeypatch, agreement=True,
+                               change={"tools/verity/check/ci.toml": jobs} if drops else None)
+    h.d.on, plans = "m1,m2,m3", Plans(h.d, tmp_path)
+    start(h.d, sha, base, shards=shards)
+    want = ",".join(s for s in (AFTER_LANDING if shards else SLIM_STEPS) if not (drops and s == dropped))
+    sent = [steps for _, steps, _ in h.posted] + [steps for _, steps, *_ in plans.asked]
+    assert sent == [want] * {0: 1, 1: 1, 3: 3, "auto:2": 1}[shards]
+    said = (f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job {dropped}, which "
+            "check.py refuses: left out of its --deferred")
+    assert (said in world.logs) == drops and not any("ci.toml can't be read" in x for x in world.logs)
+
+
+@pytest.mark.parametrize("ci", [None, "not toml ["])
+def test_a_candidate_whose_ci_toml_can_t_be_read_is_sent_every_step_and_one_line_says_so(world, monkeypatch, ci):
+    """Where git can't read the candidate's ci.toml (gone, or not TOML), `declared_steps` can't say which jobs it declares: its
+    check is sent every step, as before the tree's own list was read, and one line says why."""
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": ci})
+    start(h.d, sha, base, shards=1)
+    assert [steps for _, steps, _ in h.posted] == [",".join(AFTER_LANDING)]
+    assert world.logs.count(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its "
+                            f"--deferred keeps every step ({','.join(AFTER_LANDING)})") == 1
 
 
 def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
