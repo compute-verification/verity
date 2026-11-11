@@ -42,6 +42,7 @@ from typing import Any, NamedTuple
 
 from verity.commitments import pool_row as R
 from verity.definitions.commitments.gates import block_key as BK
+
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.errors import Refused
 
@@ -95,7 +96,7 @@ def snapshot(pool: Any, block_size: int | None = None) -> Pool:
     if pool.null_block.block_id != 0:
         raise Refused(f"the null block is block {pool.null_block.block_id}, not 0")
     B = pool.hash_block_size
-    if block_size is not None and B != block_size:
+    if block_size is not None and block_size != B:
         raise Refused(f"the pool keys blocks of {B} tokens, not the engine's {block_size}")
     if pool.cached_block_hashes_by_block:
         b = next(iter(pool.cached_block_hashes_by_block))

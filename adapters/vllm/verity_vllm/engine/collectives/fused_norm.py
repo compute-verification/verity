@@ -16,8 +16,9 @@ The normed half is the Commit's replay's.  Torch is imported lazily.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator
+from typing import Any
 
 FAR_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
 FAR_NAME = "fused_allreduce_rms_norm"

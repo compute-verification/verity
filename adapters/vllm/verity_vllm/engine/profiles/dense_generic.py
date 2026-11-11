@@ -37,7 +37,8 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import CHECKPOINTS as MANIFEST, checkpoint_entries
+from verity_vllm.config import CHECKPOINTS as MANIFEST
+from verity_vllm.config import checkpoint_entries
 
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.fold.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")

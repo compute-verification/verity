@@ -5,6 +5,7 @@ and the versions and host documents.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -16,10 +17,14 @@ import numpy as np
 import torch
 
 from verity_vllm.engine import handle
-from verity_vllm.engine.build import (Engine, compilation_facts, observed_flash_attn_version, resolved_async_scheduling,
-                                      vllm_has_flashinfer)
+from verity_vllm.engine.build import (
+    Engine,
+    compilation_facts,
+    observed_flash_attn_version,
+    resolved_async_scheduling,
+    vllm_has_flashinfer,
+)
 from verity_vllm.engine.code_identity import generated_kernels_of_this_process
-
 
 #: The accepted production record per checkpoint role (its tokens are the reference the runs are compared with).
 ACCEPTED: dict[str, dict[str, str]] = {
@@ -195,10 +200,8 @@ def host_doc() -> dict:
         doc["cpu_quota"] = None if q[0] == "max" else float(q[0]) / float(q[1])
     except (OSError, IndexError, ValueError, ZeroDivisionError):
         pass
-    try:
+    with contextlib.suppress(OSError, ValueError):
         doc["clocksource"] = Path("/sys/devices/system/clocksource/clocksource0/current_clocksource").read_text().strip()
-    except (OSError, ValueError):
-        pass
     n = 20000
     t0 = time.perf_counter()
     for _ in range(n):

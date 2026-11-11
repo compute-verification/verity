@@ -204,7 +204,7 @@ class Align:
         K, EP, has_map = self._launch, next_pow2(E + 1), expert_map is not None
         mp = expert_map if has_map else topk_ids
         bufs = (sorted_token_ids, experts_ids, num_tokens_post_pad)
-        if P <= self.small_max:
+        if self.small_max >= P:
             self.calls["one"] += 1
             PB = max(next_pow2(P), 16)
             T = min(self.tile, PB)

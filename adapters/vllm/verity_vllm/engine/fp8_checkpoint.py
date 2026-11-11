@@ -154,9 +154,9 @@ class Recipe:
     #: the 2-D shapes copied as they are, not made (a MoE's routers, set by `make`)
     kept: tuple[tuple[int, int], ...] = ()
     lm_head: bool = False
-    plan: Callable[[dict[str, Any], "Recipe"], Any] | None = None
-    shard: Callable[[Path, Path, Any, "Recipe"], tuple[dict[str, Any], dict[str, str], int, int]] | None = None
-    config: Callable[[bytes, "Recipe", dict[str, tuple[str, list[int]]]], bytes] | None = None
+    plan: Callable[[dict[str, Any], Recipe], Any] | None = None
+    shard: Callable[[Path, Path, Any, Recipe], tuple[dict[str, Any], dict[str, str], int, int]] | None = None
+    config: Callable[[bytes, Recipe, dict[str, tuple[str, list[int]]]], bytes] | None = None
 
 
 FP8 = Recipe(id=RECIPE, weight_dtype="F8_E4M3", scale_suffix="weight_scale_inv", rows_per_scale=BLOCK,
