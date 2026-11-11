@@ -56745,3 +56745,9 @@ For the table: nothing new measured.
 - **Left:** the ready line by 14:40Z on `3bff`, `e280`, the verifier package's verdict in `8b4a` and the four tries; `fad7` after it.
 
 For the table: #8789 head `68e706219129b28d9fd8e5a4f46111a3da392547`; tries 3 of 4 passed, 1 relaunched (`f854`); `8b4a` and `fad7` out.
+
+## FLOCKPKG, Wed 11 Nov 13:58Z: the ten files my last entry flagged are not at fault: by the tool's own `keys` and `loads`, no module at `68e706219129` loads a re-export below its public part, in any of the 41 directories with a lock
+
+- [run, on the VM, `module_keys.keys` and `loads` at each commit] In `security/Proofs`'s build: `5124b2689c75` 115 modules load `Flock.Sizes` below its public part; `dd430aa4cecf` 4 (`Proofs.Flock`, `Proofs.Flock.Soundness`, `…Discharge.General`, `…General.Instances`: lean's four); `68e706219129` 0. Over all 41 lock directories at `68e706219129`: 0. So the 43 lines of `Flock.Canon`, `Flock.Bytes`, `Flock.FV3`, `Flock.Hash`, `Flock.JsonParse` stay as they are, and my [guess] is now a count.
+
+For the table: #8789 at `68e706219129b28d9fd8e5a4f46111a3da392547`: 0 re-exports held below their public part, counted with the tool at the head [run].
