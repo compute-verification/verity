@@ -308,7 +308,8 @@ def check(a: CheckOptions) -> int:
         return CM.GemmModelSpec(model.name, bias_mode=mode, note=f"{gt.kind}: one ascending k16 chain from zero")
 
     CM.build()
-    results, t0, wcache = [], time.time(), {}
+    results, t0 = [], time.time()
+    wcache: dict = {}
     for case in meta["cases"]:
         if case["w_file"] not in wcache:
             wcache.clear()

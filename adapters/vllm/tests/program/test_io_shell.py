@@ -57,7 +57,7 @@ def _corrupt(st: dict, body: bytes) -> list[bytes]:
 
 
 def _word(st: dict, bodies: list[bytes]) -> np.ndarray:
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     return np.asarray(evaluate_batch(bind(X.IngressPrompt, **st), arr, kernel="reference"), dtype=np.uint64).reshape(len(bodies), -1)
 
 
@@ -307,7 +307,7 @@ def test_the_boolean_definition_is_its_word(st):
     assert SW.boolean_version(word_of(target)).id == target.id
     bodies = _bodies(st, 12, 1)
     bodies += [c for b in bodies[:2] for c in _corrupt(st, b)]
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     got = np.asarray(evaluate_words(target, arr), dtype=np.uint64).reshape(len(bodies), -1)
     assert np.array_equal(got, _ref(st, bodies))
 
@@ -345,7 +345,7 @@ def _sampled_corrupt(st: dict, body: bytes) -> list[bytes]:
 
 
 def _sampled_word(st: dict, bodies: list[bytes]) -> np.ndarray:
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     return np.asarray(evaluate_words(bind(BX.IngressSampledV1, **st), arr), dtype=np.uint64).reshape(len(bodies), -1)
 
 

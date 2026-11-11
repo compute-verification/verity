@@ -45,8 +45,8 @@ def attn():
     return Program(bind(b1.AttentionHeadV3, T=40, D=16, BN=16))
 
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
+TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+              "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 
 
 @pytest.fixture(scope="module")
@@ -247,7 +247,7 @@ def test_default_32_tiles_every_body(fixture, request):
     for body in tl.bodies.values():
         spec = body.spec
         assert body.n_nodes == len(spec.body.nodes) and body.spec_id == spec.id
-        cover = {}
+        cover: dict = {}
         for e in body.entries:
             cover.setdefault(e.node, []).extend(e.members)
             if e.kind == "descend":

@@ -64,8 +64,8 @@ def test_tc_dot32_e4m3_cancellation_and_subnormal_accumulators() -> None:
 
 
 def test_tc_dot32_e4m3_flags_nan_bytes_and_nonfinite_accumulators() -> None:
-    a = np.zeros((3, 32), dtype=np.uint8)
-    b = np.zeros((3, 32), dtype=np.uint8)
+    a: np.ndarray = np.zeros((3, 32), dtype=np.uint8)
+    b: np.ndarray = np.zeros((3, 32), dtype=np.uint8)
     a[1, 5] = 0x7F                                                          # e4m3 NaN
     acc = np.array([0, 0, 0x7F800000], dtype=np.uint32)                     # lane 2: +inf accumulator
     _got, nf = D.tc_dot32_e4m3(acc, a, b)
@@ -130,9 +130,9 @@ def test_promotion_is_ffma_ascending_in_the_twin() -> None:
     """The adversarial case of test_fp8.test_fp8_block_promotion_is_ffma_ascending, through the vectorised row."""
     one, onehalf = 0x38, 0x3C
     K, G = 256, 128
-    xq = np.zeros(K, dtype=np.uint8)
+    xq: np.ndarray = np.zeros(K, dtype=np.uint8)
     xq[0] = xq[G] = one
-    w = np.zeros((G, K), dtype=np.uint8)                                      # N = G = 128 columns, column 0 carries the case
+    w: np.ndarray = np.zeros((G, K), dtype=np.uint8)                                      # N = G = 128 columns, column 0 carries the case
     w[0, 0], w[0, G] = one, onehalf
     sx = np.array([0x3F800000] * 2, dtype=np.uint32)
     mid = int(np.float32(1.0 + 2.0 ** -8).view(np.uint32))

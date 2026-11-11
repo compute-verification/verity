@@ -119,7 +119,7 @@ def _swa_tokens(st: dict, seed: int) -> list[np.ndarray]:
     span = NB * BS
     positions = sorted({p for p in [*range(SW + 2), BS - 1, BS, BS + 1, 2 * BS - 1, SW + BS - 1, span - SW - 1, span - SW,
                                     span - 2, span - 1] if 0 <= p < span})
-    cols = [[] for _ in range(6)]
+    cols: list[list] = [[] for _ in range(6)]
     for i, pos in enumerate(positions):
         qlen = 1 + i % 4
         qs = int(rng.integers(0, 1 << 20))

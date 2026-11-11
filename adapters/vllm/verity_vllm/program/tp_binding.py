@@ -92,7 +92,8 @@ def _segments(rs: list[tuple[str, int, int, int]], world: int, what: str) -> lis
     total = sum(hi - lo for *_, lo, hi in rs)
     if total % world:
         raise ValueError(f"{what}: its parts are {total} leaves, not {world} equal segments")
-    n, out, at = total // world, [[] for _ in range(world)], 0
+    n, at = total // world, 0
+    out: list[list[tuple[str, int, int, int]]] = [[] for _ in range(world)]
     for space, idx, lo, hi in rs:
         while lo < hi:
             seg, off = divmod(at, n)

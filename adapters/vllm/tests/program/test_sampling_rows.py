@@ -357,6 +357,6 @@ def test_the_select_is_the_strict_first_maximum_scan_nan_never_wins_and_a_nan_la
     x_nan0 = x.copy()
     x_nan0[0] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan0, 0, 0, 0)[0] == 0                         # nothing is > NaN: the scan keeps lane 0
-    neg = np.full(4, SP.NEG_INF_BITS, dtype=np.uint32)
+    neg: np.ndarray = np.full(4, SP.NEG_INF_BITS, dtype=np.uint32)
     assert SR.gumbel_select_row(neg, 0, 0, 0)[0] == 0                            # all -inf: lane 0
     assert (SR.topp_mask_row(x, f32b(0.9), 3) == SP.NEG_INF_BITS).all()           # S outside the split counts keeps no lane, as the primitive

@@ -118,7 +118,8 @@ def test_the_quantizer_element_ties_saturates_and_takes_extreme_scales() -> None
     subnormal, the largest finite and the floored scale RN32(1e-30) / 127, and NaN and infinite x or s."""
     xs = [2.5, 3.5, 126.5, 127.5, -2.5, -126.5, -127.5, 1000.0, -1000.0, 0.0, -0.0, 1.0, np.inf, -np.inf, np.nan]
     ss = [1.0, 2.0, 0.0, -1.0, float(np.float32(1e-30) / np.float32(127)), 1.4e-45, 3.4028235e38, np.inf, np.nan]
-    x, s = (a.ravel() for a in np.meshgrid(_bf16(xs), _f32(ss)))
+    mesh: tuple[np.ndarray, ...] = np.meshgrid(_bf16(xs), _f32(ss))
+    x, s = (a.ravel() for a in mesh)
     _agree(QE, [x, s])
     codes = BS.evaluate_words(_bits_of(QE), _bf16([2.5, 3.5, 127.5, 1000.0, -1000.0, -127.5]),
                               _f32([1.0] * 6)).astype(np.uint8).view(np.int8)

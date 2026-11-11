@@ -87,7 +87,7 @@ def test_the_primitives_on_their_edge_words():
 
 
 def _ulps(got: np.ndarray, want: np.ndarray) -> np.ndarray:
-    w32 = want.astype(np.float32)
+    w32: np.ndarray = want.astype(np.float32)
     ok = np.isfinite(w32) & (np.abs(w32) >= np.float32(2.0 ** -126))
     return (np.abs(got.view(np.float32).astype(np.float64) - want) / np.spacing(np.abs(w32)).astype(np.float64))[ok]
 

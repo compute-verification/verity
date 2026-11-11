@@ -99,7 +99,9 @@ def _read(r: Refs, out: set[int], done: dict[int, list]) -> None:
 
 def live_units(body: Body) -> list[bool]:
     """Per node of `body`, whether the return reads it through live nodes (a node reads only earlier nodes)."""
-    live, read, done = [False] * len(body.nodes), set(), {}
+    live = [False] * len(body.nodes)
+    read: set[int] = set()
+    done: dict[int, list] = {}
     _read(body.ret, read, done)
     for k in range(len(body.nodes) - 1, -1, -1):
         if k in read:

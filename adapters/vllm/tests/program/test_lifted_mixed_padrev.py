@@ -63,7 +63,7 @@ def _single(eos, prompt=None):
 
 
 def _all_words(prog, t, calls):
-    words = []
+    words: list = []
     stack = list(calls)[::-1]
     while stack:
         c = stack.pop()

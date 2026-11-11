@@ -86,7 +86,7 @@ def test_temperature_zero_is_the_greedy_first_maximum():
 @needs_tables
 def test_seed_and_pos_are_inputs_not_structure():
     """The same specialization (V only) serves every request: seed and pos change the token through the operands."""
-    x = np.zeros(1024, dtype=np.uint16)                       # all-equal logits: the token is the argmax of the noise alone
+    x: np.ndarray = np.zeros(1024, dtype=np.uint16)                       # all-equal logits: the token is the argmax of the noise alone
     toks = {select(x, s, p, 1.0) for s, p in [(1, 0), (2, 0), (1, 1), (3, 5), (2**40, 0)]}
     assert len(toks) >= 4
     assert bind(S.GumbelTokenSelect, V=1024).id == bind(S.GumbelTokenSelect, V=1024).id
@@ -105,7 +105,7 @@ def test_masked_lanes_never_win_and_f32_entry_composes():
     masked[best] = 0xFF800000  # -inf as the top-p mask writes it
     b2 = evaluate_spec(bind(S.GumbelSelectF32, V=V), [masked, w64(1), w64(2), w32(S.f32_bits(1.0))])[0]
     assert b2 != best
-    everything = np.full(V, 0xFF800000, dtype=np.uint32)
+    everything: np.ndarray = np.full(V, 0xFF800000, dtype=np.uint32)
     assert evaluate_spec(bind(S.GumbelSelectF32, V=V), [everything, w64(1), w64(2), w32(S.f32_bits(1.0))])[0] == 0
     # composition = the chained Definition
     scaled = evaluate_spec(bind(S.TemperatureScale, V=V), [x, w32(S.f32_bits(0.8))])

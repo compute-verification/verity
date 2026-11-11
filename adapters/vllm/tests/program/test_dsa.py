@@ -568,7 +568,7 @@ def test_logit_against_vllm_reference() -> None:
     w = _f32(rng, 32, 0.0, 0.05)
     ks = [_e4m3_row(rng, 128) for _ in range(N)]
     sc = [D.f32_bits(2.0 ** -int(rng.integers(0, 6))) for _ in range(N)]
-    got = np.asarray(_flat(evaluate(bind(D.DsaMqaLogitsV3, N=N, H=32, D=128), [v for r in q for v in r], w,
+    got: np.ndarray = np.asarray(_flat(evaluate(bind(D.DsaMqaLogitsV3, N=N, H=32, D=128), [v for r in q for v in r], w,
                                     [v for r in ks for v in r], sc)), np.uint32).view(np.float32).astype(np.float64)
     qt = torch.tensor(q, dtype=torch.uint8).view(torch.float8_e4m3fn).double()
     kt = torch.tensor(ks, dtype=torch.uint8).view(torch.float8_e4m3fn).double()

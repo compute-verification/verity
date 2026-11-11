@@ -192,6 +192,7 @@ def _cut(layers: int, tokens: int, fused: bool = False) -> tuple[WI.Circuit, dic
     templates: list[tuple[object, int]] = [(ROUTER, L * T)]
     wires: list[WI.Wire] = []
     params: dict[str, int] = {}
+    roots: list
     tables, roots, openings = [], [], []
 
     def read(name: str, H: int, B: int, fn=None, routed: bool = False) -> str:

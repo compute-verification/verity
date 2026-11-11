@@ -473,7 +473,8 @@ def _ref_quant(v: np.ndarray, eps: float) -> tuple[list[int], int]:
 
 def _ref_rotate(x: np.ndarray, cs: np.ndarray, inverse: bool) -> np.ndarray:
     half = len(cs) // 2
-    c, s = cs[:half], (-1 if inverse else 1) * cs[half:]
+    c = cs[:half]
+    s: np.ndarray = (-1 if inverse else 1) * cs[half:]
     out = x.copy()
     e, o = x[0::2].copy(), x[1::2].copy()
     out[0::2], out[1::2] = e * c - o * s, o * c + e * s

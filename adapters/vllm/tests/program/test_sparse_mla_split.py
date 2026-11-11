@@ -86,7 +86,7 @@ def test_lg2_is_log2_within_its_accuracy() -> None:
 
 def _lg2_sample() -> np.ndarray:
     rng = np.random.default_rng(5)
-    E_ = np.arange(1, 255, dtype=U32)
+    E_: np.ndarray = np.arange(1, 255, dtype=U32)
     band = (rng.integers(126, 129, 3000, dtype=np.uint32) << 23) | rng.integers(0, 1 << 23, 3000, dtype=np.uint32)
     return np.concatenate([F32_SPECIALS.astype(U32), E_ << 23, (E_ << 23) | 1, (E_ << 23) | 0x7FFFFF, U32(1 << 31) | (E_ << 23),
                            band, rng.integers(0, 1 << 32, 3000, dtype=np.uint64).astype(U32),
@@ -149,7 +149,7 @@ def test_c0s_range_changes_no_word() -> None:
 
 
 def test_the_undetermined_words_are_the_powers_of_two_below_one() -> None:
-    E_ = np.arange(0, 256, dtype=U32)
+    E_: np.ndarray = np.arange(0, 256, dtype=U32)
     powers = E_ << 23
     assert np.flatnonzero(TW.undetermined_words(powers)).tolist() == list(range(1, 127))
     assert not TW.undetermined_words(U32(1 << 31) | powers).any()
@@ -467,7 +467,7 @@ def test_the_combine_lse_is_one_ffma_where_one_rounding_shows() -> None:
     NSPLIT, DV = 3, 8
     rng = np.random.default_rng(31)
     lse = (rng.standard_normal((4096, NSPLIT)).astype(np.float32) * np.float32(8)).view(U32)
-    o = np.zeros((4096, NSPLIT, DV), U32)
+    o: np.ndarray = np.zeros((4096, NSPLIT, DV), U32)
     _, fused = TW.combine_lse_rows(lse, o)
     _, mx, tot = TW._combine(lse, o, DR.fa3_inv_sum)
     unfused = DR.add_ftz(DR.mul_ftz(TW.mufu_lg2_words(tot), np.full(tot.shape, W.LN2, U32)), mx)

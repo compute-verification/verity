@@ -39,7 +39,7 @@ def test_cases_carry_every_edge_kind_and_bind_their_inputs(mod, n):
 
 
 def _bf16_rne(f: np.ndarray) -> np.ndarray:
-    u = f.astype(np.float32).view(np.uint32).astype(np.uint64)
+    u: np.ndarray = f.astype(np.float32).view(np.uint32).astype(np.uint64)
     return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
 
 

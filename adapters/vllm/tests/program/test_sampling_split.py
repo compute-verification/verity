@@ -81,7 +81,7 @@ def family_definitions() -> dict[str, object]:
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
-    out = {}
+    out: dict = {}
     for m in sorted(mods):
         if (REG / f"{m.rsplit('.', 1)[1]}.py").exists():
             for v in vars(importlib.import_module(m)).values():

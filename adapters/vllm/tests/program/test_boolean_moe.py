@@ -59,7 +59,7 @@ _EXP = [0, 1, 2, 126, 127, 128, 133, 134, 135, 253, 254, 255]
 #: per sign: zero, subnormals, ones and their neighbours, the finite maximum and its neighbours, infinities and NaNs
 _MAGNITUDES = sorted({e << 7 | m for e in _EXP for m in (0, 1, 0x40, 0x7F) if e < 255} | {0x7F80, 0x7F81, 0x7FC0, 0x7FFF})
 SPECIALS = np.array([m | s for m in _MAGNITUDES for s in (0, 0x8000)], np.uint16)
-EVERY = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+EVERY: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
 #: f32: signed zeros and smallest subnormals, +-1, infinities, NaNs of both kinds and signs, the finite maxima, and the ends of
 #: expf's range (above 0x42B17217 it overflows, below 0xC2CFF1B4 it is +0, near 0xC2AEAC50 its scale 2^j is the smallest normal)
 F32_SPECIALS = np.array([0, 0x80000000, 1, 0x80000001, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7F800001,

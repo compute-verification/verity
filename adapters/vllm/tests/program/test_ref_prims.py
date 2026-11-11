@@ -349,7 +349,7 @@ def test_layernorm_ref_vs_torch(DT):
 def _elementwise_domain(rng, DT: str) -> np.ndarray:
     """Every finite bf16 word (exhaustive) for DT=bf16; 65,536 random f32 values ~ N(0, 4) plus edge words for f32."""
     if DT == "bf16":
-        w = np.arange(1 << 16, dtype=np.uint16)
+        w: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
         finite = (w & 0x7F80) != 0x7F80
         return w[finite]
     x = (rng.standard_normal(1 << 16) * 4).astype(np.float32).view(np.uint32)

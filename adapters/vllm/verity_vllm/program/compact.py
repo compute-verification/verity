@@ -406,7 +406,7 @@ def expanded_file_args(args: Iterable) -> list:
 
 def first_runs(progs: Iterable[tuple], n: int) -> list[tuple]:
     """The first `n` runs of a compact list (bounded work: examples)."""
-    out = []
+    out: list[tuple] = []
     for t in progs:
         head, base, delta, c = t[:-3], t[-3], t[-2], t[-1]
         for k in range(min(c, n - len(out))):

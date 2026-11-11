@@ -125,7 +125,7 @@ def test_ex2_every_exponent_class_equals_the_exact_rule():
     tabs = D._fa2_tables()
     mants = np.concatenate([[0, 1, 2, 0x3FFFFF, 0x400000, 0x400001, 0x7FFFFE, 0x7FFFFF],
                             np.random.default_rng(64).integers(0, 1 << 23, 8)]).astype(np.uint32)
-    e = np.arange(256, dtype=np.uint32)
+    e: np.ndarray = np.arange(256, dtype=np.uint32)
     xs = ((np.arange(2, dtype=np.uint32)[:, None, None] << 31) | (e[None, :, None] << 23) | mants[None, None, :]).reshape(-1)
     want = np.array([_ex2_exact(int(w), tabs.ex2) for w in xs], dtype=np.uint32)
     assert np.array_equal(FA.mufu_ex2(xs.view(np.float32), tabs).view(np.uint32), want)
@@ -540,9 +540,9 @@ def test_attention_rows_fa3_equals_the_registered_attention_v2_hopper_definition
     assert out.shape == (NH, Dh) and not nf.any()
     # (1) the independent C++ FA3 model: one head per row, per-row KV head, col_limit = T, ceil(T / BN) blocks
     tables = fa2_relation.tables()
-    kvh = (np.arange(NH) // (NH // KVH)).astype(np.int32)
-    col = np.full(NH, T, np.int32)
-    nb = np.full(NH, (T + BN - 1) // BN, np.int32)
+    kvh: np.ndarray = (np.arange(NH) // (NH // KVH)).astype(np.int32)
+    col: np.ndarray = np.full(NH, T, np.int32)
+    nb: np.ndarray = np.full(NH, (T + BN - 1) // BN, np.int32)
     res = fa3_model.attention_rows(q, kc, vc, kvh, col, nb, float(Dh) ** -0.5, tables, kblock_n=BN)
     assert np.array_equal(res.out, out), int((res.out != out).sum())
     # (2) the registered Definition, gate for gate (a small GQA slice keeps the scalar evaluation cheap: 2 q heads over 1 KV head)
@@ -601,7 +601,7 @@ def test_silu_mid_factorises_the_prim():
     from verity.definitions.registry import prims as P
     mid = D.silu_mid_table()
     rng = np.random.default_rng(41)
-    g = np.arange(65536, dtype=np.uint16)
+    g: np.ndarray = np.arange(65536, dtype=np.uint16)
     u = rng.integers(0, 2 ** 16, 65536, dtype=np.int64).astype(np.uint16)
     out = D.bf16_rn_torch(D.mul_rn(D.bf16_to_f32_words(mid[g]), D.bf16_to_f32_words(u)))
     rows = D.silu_mul_rows(np.concatenate([g, u])[None, :])
@@ -632,7 +632,7 @@ def test_rmsnorm_triton_rows_vs_gates(N, eps):
     for scale in (0.02, 1.0, 40.0):
         x = _rand_bf16(rng, N, scale)
         w = _rand_bf16(rng, N)
-        t = {}
+        t: dict = {}
         out = evaluate_call(prog.circuit, call, [int(v) for v in x] + [int(v) for v in w], trace=t)
         got = D.rmsnorm_triton_rows(x[None], w, eps)
         assert np.array_equal(got["out"][0], np.array(out, dtype=np.uint16))
@@ -654,7 +654,7 @@ def test_rmsnorm_fused_v2_rows_vs_gates():
     rng = np.random.default_rng(7)
     for scale in (0.02, 1.0, 40.0):
         x, res, w = (_rand_bf16(rng, N, scale) for _ in range(3))
-        t = {}
+        t: dict = {}
         out = np.array(evaluate_call(prog.circuit, call,
                                      [int(v) for v in x] + [int(v) for v in res] + [int(v) for v in w],
                                      trace=t), dtype=np.uint16)
@@ -706,7 +706,7 @@ def test_attention_head_states_vs_gates(T, D_):
     q = _rand_bf16(rng, D_)
     k = _rand_bf16(rng, (T, D_))
     v = _rand_bf16(rng, (T, D_))
-    t = {}
+    t: dict = {}
     out = evaluate_call(prog.circuit, call,
                         [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()],
                         trace=t)
@@ -775,7 +775,7 @@ def test_attention_head_v3_states_vs_gates(T, D_):
     q = _rand_bf16(rng, D_)
     k = _rand_bf16(rng, (T, D_))
     v = _rand_bf16(rng, (T, D_))
-    t = {}
+    t: dict = {}
     out = evaluate_call(prog.circuit, call,
                         [int(x) for x in q] + [int(x) for x in k.ravel()] + [int(x) for x in v.ravel()],
                         trace=t)
@@ -834,7 +834,7 @@ def test_v1_and_v3_attention_heads_are_gate_for_gate_equal_within_one_block(T):
     words = []
     for defn, extra in ((b1.AttentionHead, {}), (b1.AttentionHeadV3, {"BN": 128})):
         prog, call = _standalone(bind(defn, T=T, D=64, **extra))
-        t = {}
+        t: dict = {}
         out = evaluate_call(prog.circuit, call, args, trace=t)
         words.append((call.hi - call.lo, tuple(out), tuple(t[g] for g in sorted(t))))
     assert words[0][0] == words[1][0]
@@ -857,7 +857,7 @@ def test_attention_head_v3_at_bn_64_is_attention_head_v1_gate_for_gate():
     words = []
     for defn, extra in ((b1.AttentionHead, {}), (b1.AttentionHeadV3, {"BN": 64})):
         prog, call = _standalone(bind(defn, T=T, D=64, **extra))
-        t = {}
+        t: dict = {}
         out = evaluate_call(prog.circuit, call, args, trace=t)
         words.append((call.hi - call.lo, tuple(out), tuple(t[g] for g in sorted(t))))
     assert words[0] == words[1]
