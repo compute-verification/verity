@@ -33,7 +33,8 @@ class Node:
             self.cpu_max.write_text(quota + "\n")
         self.program("taskset", f'echo "$1 $2" >> "{self.pinned}"\nshift 2\nexec "$@"')
         env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
-        self.env = {**env, "PATH": f"{self.bin}:{env['PATH']}", "GPU_LEASE_DIR": str(self.gl), "GPU_LEASE_COUNT": "4",
+        self.path = env["PATH"]                                              # this machine's programs, its taskset among them
+        self.env = {**env, "PATH": f"{self.bin}:{self.path}", "GPU_LEASE_DIR": str(self.gl), "GPU_LEASE_COUNT": "4",
                     "GPU_LEASE_CPU_MAX": str(self.cpu_max), "GPU_LEASE_PROC": str(self.proc), "GPU_LEASE_WHO": "asker",
                     "RESEARCH_RUN_ID": "r-new", "GPU_LEASE_USAGE_LOG": str(tmp_path / "usage.jsonl"),
                     "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl"), "GPU_LEASE_POLL_S": "0"}
@@ -162,7 +163,7 @@ def test_a_check_that_fails_leases_nothing_and_cores_must_be_a_cpu_list(tmp_path
 def test_cmd_runs_on_the_cores_it_declared(tmp_path):
     node = Node(tmp_path, quota=None)
     cpu = min(os.sched_getaffinity(0))
-    env = {**node.env, "PATH": os.environ["PATH"]}                           # this machine's taskset
+    env = {**node.env, "PATH": node.path}                                    # this machine's taskset
     r = subprocess.run(["bash", str(GPU_LEASE), "1", "--cores", str(cpu), "--mem-gb", "0", "--", sys.executable, "-c",
                         "import os; print(sorted(os.sched_getaffinity(0)))"], env=env, capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout == f"[{cpu}]\n"
