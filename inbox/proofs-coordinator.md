@@ -54665,3 +54665,24 @@ machine is 12.9% slower than node A):
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, two provers on one H200 with six cores, WITNESS's follow-up with salts `all`, the check on the prover's cores: 2.143 GPU-s a statement against 3.117 today (0.687), measured, `r20261111-115454-5832` steps 4 and 5, vy-dc-h200-3 (12.9% slower than node A); neither cut is marked.
 For the table: head block with WITNESS's follow-up and salts `all` at full cores: 0.69 of today's seconds (measured, two provers, vy-dc-h200-3). vy-dc-h200-3's card is released at 12:35Z.
+
+## REGX, Wed 11 Nov 12:36Z: ready to mark #8912 at 62eb1fdc64de88b5a6c5a48f9eae187aa77b61cc. A lemma PR: no lock record, no guarantee, no named premise added. Three of its theorems are under `Addresses h` and hold from a false premise at a two-stage registration with a checked interior row: the body says so first. #8922's records run is on its last package
+
+**ready to mark #8912 at 62eb1fdc64de88b5a6c5a48f9eae187aa77b61cc**
+- **What it is** [read]: one new module `security/Proofs/Flock/SpotFlock/OpensWhole.lean` (one definition, `gateKey`, and 16 theorems) and its import line, on #8827's head, which is on `main`. The head has not moved since its runs started [run: `gh pr view` 12:35Z].
+- **Try** `r20261111-102152-e625` at the head: lean exit 0, no warning in the file, siblings clean, 16 theorems on `propext`, `Classical.choice`, `Quot.sound` only [run].
+- **Quick tier** `r20261111-104254-a55f`: done rc 0 SUCCESS; the 8 suites it selected ran and passed, none failed [run].
+- **Records** `r20261111-115811-84f6` (`lean_changed.py --records security/Proofs --update`): done rc 0 SUCCESS; `security/Proofs` AUDIT: PASS (193817 declarations in 3832 modules, `check.py` exit 0 in 1335 s), its requirers `security` and `security/Properties` AUDIT: PASS; `"regenerated": {}` in all three reports, so no lock record changes [run]. The first records run, `58f3`, was cancelled at its cap and gave no verdict (my 12:04Z).
+- **Kernel replay:** the candidate's check. **Second reader:** EXTFORM 11:29Z read `OpensWhole.lean` whole at #8924's head, the same blob (`c6e886ce3a53`) [relayed; the blob equality run by me].
+- **Merges** [run 12:35Z]: `git merge-tree --write-tree` exits 0 with `main` `967b722429f3` and with the heads of #8871 `2d4670d64165`, #8906 `e7b2e51d928b`, #8916 `8784a105de5b` and #8931 `2cc7decd36a6`.
+- **The merged tree builds** [run]: with #8906's head, try `r20261111-102503-99d2` (lean exit 0); with `main` `86c03d1840cb` and the heads of #8906, #8916, #8922 and #8924, try `r20261111-120604-a868` (lean exit 0, `OpensWhole` built under `Definitions.Claims.SamplingGeneric` as `main` has it).
+- **Not yet built at `main` `967b722429f3`:** the same try on the merge with it, `r20261111-122853-f321`, is running (68 files changed on its machine); verdict in my next entry.
+- **The body** (rewritten 12:35Z; the head did not move): the change; the premise line (`reveal_passes`, `sessWit_reveal_passes` and `sessWit_reveal_key` are under `Addresses h`, false as defined at a registration with a checked interior row; the code's program is the units side by side); the four checks; no lock record changes; the run ids; the merged-tree builds; the module it adds.
+- For CAPS: Proofs/Flock: +1 module, +17 declarations (#8912: SpotFlock/OpensWhole.lean)
+
+**#8922 at `5b37c49d6a5c`** [run, read 12:35Z]: records `r20261111-120152-80c2` has `security/Proofs` AUDIT: PASS (1218 s) and `security` AUDIT: PASS (682 s), `"regenerated": {}`; `security/Properties` is running; ETA 12:45Z [guess]. Its ready line follows.
+
+**A strike, mine** [relayed: order 12:24Z]: my 12:04Z entry quoted line (b)'s M as "2,049 at the plan's cut, 139 at the recut". Those are struck: the exact counts are 4,130 at the plan's cut and 145 at the final recut. No PR body of mine quotes a count.
+
+For the table:
+- #8912 (`OpensWhole.lean`, `gateKey`): ready at `62eb1fdc64de`; quick tier, records and the merged-tree build at `main` `86c03d1840cb` pass; the build at `main` `967b722429f3` is out (`f321`). A lemma, true as stated; its reveal theorems are under `Addresses h`, false as defined at a registration with a checked interior row.
