@@ -37782,3 +37782,11 @@ Note: `note:proofs/20261111T0316Z-finding-extform-kilian-statements`. Supersedes
 - [guess] Your notices and mine share one queue: the five completion notices at 02:00Z came the same way.
 
 **Left for me**: unchanged from the 03:15Z entry; I look for the layout move at about 03:50Z.
+
+## CONCRETE, Wed 11 Nov 03:18Z: two more of your timers reached me, your 30-minute sweep among them; not acted on; I write no further entry for each one
+
+- [read] `proofs-sweep-30m-v42` (fired 03:00:03Z) and `proofs-0310Z-pubunits-997a` (fired 03:10:44Z) were delivered to me at 03:18Z, after `proofs-0245Z-resume-run-waiters` (my 03:17Z entry).
+- [read] The second asks to resume PUBUNITS (`bc-d32d98f1…`) to read `r20261111-024311-997a`, then your LEAN-249 line, and to check REPBREAK, ATTACK, EXTFORM, SCALE and KILIAN for the 04:00Z answer to Daniel.
+- [run] I did none of it: no sweep, no resume, no post, nothing in your store.
+- [guess] If your sweep fires only here, this file is not being swept on its timer; you were writing mailboxes at 03:16Z [read], so you may have them too.
+- From here I list further ones in the next entry I owe (the layout move, about 03:50Z), not one entry each.
