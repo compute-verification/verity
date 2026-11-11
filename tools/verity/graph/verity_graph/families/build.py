@@ -41,7 +41,7 @@ SUITES = "tools/verity/check/suites.py"
 #: at its files' recorded seconds, or near its longest file.  A suite that declares `[tool.verity.tests] parts` is in those
 #: parts by test id, as check runs it, and isn't listed here
 PARTS = {"verity-flock": 6, "verity-pouw-benchmarks": 7, "verity-vllm": 2, "pous-check": 3, "verity-pouw-check-difftest": 2,
-         "verity/protocols/certifier": 2}
+         "verity/protocols/certifier/verifier": 2}
 #: a lean-suites task's disk: the suites build Lake packages of their own beside the verifier's
 SUITES_DISK_GB = 60
 #: what `check.py --lean-agreement` reads of the tree outside the verifier's directory: check.py, the modules it loads as it

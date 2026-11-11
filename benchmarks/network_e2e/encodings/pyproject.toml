@@ -34,4 +34,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "adapters/vllm/verity_vllm/engine/hooks.py",
           # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
           # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
-          "adapters/vllm/verity_vllm/pipeline/advice_code"]
+          "adapters/vllm/verity_vllm/pipeline/advice_code",
+          "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py",
+          "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py", "verity/definitions/commitments/__init__.py", "verity/definitions/circuits/boolean/__init__.py", "verity/definitions/circuits/boolean/memcheck.py", "verity/definitions/commitments/gates/__init__.py", "verity/definitions/commitments/gates/block_key.py"]

@@ -616,14 +616,14 @@ def test_the_doc_scan_reads_the_protocol_terms():
         "a.md": "The draw, a drawn unit, nothing redraws; the firewall and a sampling\nblock; the declared circuit.\n"
                 "Committed as hm96 rows before that period's coins; rejection dominates. A Commit period stays.\n"
                 "The commit period, `flock-verify verify`, then flock-verify.\n",
-        "verity/ml/commitments/x/PROTOCOL.md": "hm96 rows in frame-v3-sha512 trees, before the draw.\n",
+        "verity/commitments/x/PROTOCOL.md": "hm96 rows in frame-v3-sha512 trees, before the draw.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("NETWORK.md", 1, "warden"), ("NETWORK.md", 1, "warden"), ("NETWORK.md", 1, "Wardens"),
         ("a.md", 1, "draw"), ("a.md", 1, "drawn"), ("a.md", 1, "redraws"), ("a.md", 1, "firewall"),
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
-        ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]
+        ("a.md", 4, "flock-verify"), ("verity/commitments/x/PROTOCOL.md", 1, "draw")]
 
 
 def test_the_doc_scan_reads_the_network_and_process_terms():

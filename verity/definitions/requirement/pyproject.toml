@@ -29,4 +29,5 @@ inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/d
           "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
           "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock/Field.lean",
-          "verity/protocols/flock/verifier/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Canon.lean"]
+          "verity/protocols/flock/verifier/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Canon.lean",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]

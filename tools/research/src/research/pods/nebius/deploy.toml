@@ -285,7 +285,7 @@ owner = "infra"
 # `git archive COMMIT verity verity/composite/device/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json
 # | ssh vy-admin@HOST sudo
 # vy-challenger-pin COMMIT`, then `sudo runuser -u
-# auditor -- python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py keygen` once.
+# auditor -- python3 -I /opt/vy-challenger/current/verity/composite/device/live_challenger/auditor.py keygen` once.
 # Its /etc/vy/peers is its own: it reaches the serving nodes over their public addresses with the auditor's tunnel key.
 
 [[file]]

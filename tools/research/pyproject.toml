@@ -160,7 +160,8 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra
           "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
           "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
-          "tools/verity/graph/verity_graph/contract.py"]
+          "tools/verity/graph/verity_graph/contract.py",
+          "tools/verity/graph/verity_graph/__init__.py"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge

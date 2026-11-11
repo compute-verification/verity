@@ -29,4 +29,7 @@ inputs = ["verity/configuration/config/verity_config",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/store-toy",
           "benchmarks/pous/p2_v1/serve.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/torch_gpu/sha512_rows",
-          "benchmarks/torch_gpu/s8_linear/int_mm.py"]
+          "benchmarks/torch_gpu/s8_linear/int_mm.py",
+          "verity/protocols/__init__.py",
+          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon",
+          "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/poub/__init__.py"]

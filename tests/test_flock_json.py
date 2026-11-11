@@ -15,6 +15,7 @@ import re
 from test_repository import ROOT, _tracked
 
 TREES = ("verity/protocols/flock/verifier/", "verity/protocols/spot/verifier/lean/", "Security/Proofs/Properties/Verity/")
+NOT_READ = ("verity/protocols/recursion/verifier/firewall/", "verity/protocols/interface/", "verity/protocols/recursion/verifier/vstar_cli/")  # Lake packages of their own, not held to the total parser yet (proofs)
 ALLOWED = {
     "verity/protocols/flock/verifier/Flock/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
     "verity/protocols/flock/verifier/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
@@ -41,7 +42,7 @@ def _calls(path: str) -> list[tuple[int, str]]:
 def test_lean_reads_json_through_the_total_parser() -> None:
     bad = []
     for path in _tracked():
-        if not (path.startswith(TREES) and path.endswith(".lean")) or path in ALLOWED:
+        if not (path.startswith(TREES) and path.endswith(".lean")) or path in ALLOWED or path.startswith(NOT_READ):
             continue
         bad += [f"{path}:{line} ({decl or 'no declaration'})" for line, decl in _calls(path) if (path, decl) not in PENDING]
     assert not bad, ("Lean.Json.parse is partial, so no proof reads through it: call Flock.JsonParse.parse (JsonParse.parse "
