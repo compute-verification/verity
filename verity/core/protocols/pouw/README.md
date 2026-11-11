@@ -19,15 +19,18 @@ every product, is a reference, not an answer.
   `Security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
   miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 units, a layout in the
   domain D, int7 weight entries) under the Ω_max bound (each unit's reference work at most Ω_max times its matrix
-  products'), with at most 2^64 oracle calls:
+  products'), with at most 2^64 oracle calls. That bound is where TT is conjectured, and the reduction does not use it;
+  read past it, TT's error formula gives 2^−48 at 2^80 calls, which no statement claims:
   1. `Pouw.Guarantees.EndToEnd` (`Pouw/Guarantees/Game.lean`): the audit accepts while the work done is below the
      scheme's discounted share of (1 − ε_s)·W, and the run breaks no SHA-512 collision, with probability at most
      (1 − ε_s)^t plus TT's error. Assumes TT (`Pouw.Assumptions.TT`), the scheme's conjecture.
   2. `Accounting.Guarantees.ComputeOfPouwPerRun` (`Accounting/Guarantees/PerRun.lean`): the same certificate and error
      as the compute audit's per-run guarantee, on any device whose compute audit realizes PoUW's game. Assumes TT and
      `Accounting.BudgetAbort`.
-  3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): a credit period's openings
-     fail to bind with probability at most |L|·√(q/2^256 + κ). Assumes `Claims.ExpectedCR`; κ is not yet bounded.
+  3. `Pouw.Guarantees.PeriodBindingPerProver` (`Accounting/Guarantees/PeriodBinding.lean`): in each verification phase
+     of a credit period the openings fail to bind with probability at most |L|·√(q/2^256 + κ), L every position of the
+     period. That is one phase's bound, and the period's term is n times it, n its phases. Assumes `Claims.ExpectedCR`;
+     κ is not yet bounded, and no deployed |L| is stated.
   4. `Pouw.Guarantees.RelativeSecurity.TheoremSStaged` and `TheoremSOverlap` (`Pouw/Guarantees/RelativeSecurity.lean`):
      a play whose errors are of degree at most 2 is accepted with deficiency at least D with probability at most
      e^{−D/4}. No premise.

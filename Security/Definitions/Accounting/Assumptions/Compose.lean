@@ -99,7 +99,8 @@ past, a deficient round passes with probability at most `p0` (`Accounting.TS.Rou
 tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold are both skipped
 keeps its checked values, the fold state its proof pins, with probability at most `p0`. It is a condition at the `p0` it
 is given, and nothing here takes it as a fact. The live line reads it at B′'s `½` until a smaller value survives attack:
-`2^-64` for a 64-bit fold state was proposed and isn't granted. A guess falsifies `luck0 = 0`. It fails if the cheater's
+`2^-64`, one set's checkpoint (two 32-bit receipt words of the tile's `2·(K/32 + m)`), was proposed and isn't granted,
+and no statement reads it. A guess falsifies `luck0 = 0`. It fails if the cheater's
 view pins the fold state without the fold: a state that a computed word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
   Accounting.TS.RoundGame.LuckAt p0 G.game

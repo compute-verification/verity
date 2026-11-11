@@ -117,7 +117,8 @@ is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the 
 sample's (`Declared.atSample`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
 `2·T_q` SHA-512 calls. At the best `δ'` the bound is about `|L|·√(E[cost F]/2^256)`, and a seeded window prices it at
 the budget its premium reads (one `T` for the cheater): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|` from
-`2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). `ecr` is the
+`2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). Each figure
+is for a finder of that many calls, `L` one window's positions and `κ = 0`. `ecr` is the
 weaker of the two collision claims at a fixed cost (`StrictBirthday` implies it) and the one that applies to
 expected-time finders such as an extractor. -/
 def BindingOfECR : Prop :=

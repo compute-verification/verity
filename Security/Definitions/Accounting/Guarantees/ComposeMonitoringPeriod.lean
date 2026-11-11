@@ -190,9 +190,13 @@ and a period picked from `N` windows after the fact would pay `ln C(N, n)` in pl
 
 *The whole δ.* The period fails with probability `δ_s + n·(δ_bind + δ_ks)`, `n` the cap, and binding is
 priced at one prover budget `T` (`BindingOfECR`): `|L|·2^-88` a window at `T = 2^80` and `|L|·2^-64` at `2^128`, `|L|`
-from `2^20` to `2^30`. At `n = 82,403` (`2^16.3`) the binding term is `2^-51.7` to `2^-41.7` at `T = 2^80`, so
+from `2^20` to `2^30`. These figures read `|L|` as one window's positions and take `κ = 0` (`BindingOfECR`'s reading).
+At `n = 82,403` (`2^16.3`) the binding term is then `2^-51.7` to `2^-41.7` at `T = 2^80`, so
 `δ_s + n·δ_bind` is `2^-40.0` to `2^-39.6`; at `T = 2^128` it is `2^-27.7` to `2^-17.7`, set by binding, not by `δ_s`
-(`2^-30.9` to `2^-20.9` at 8,513). `δ_ks` has no number (`WindowDelta`'s `max_c κ_c + coll` is unstated), and
+(`2^-30.9` to `2^-20.9` at 8,513). They hold only on that per-window reading. `Pouw.Guarantees.PeriodBindingPerProver`
+takes `L` as the whole period's positions, in every window, so under it the term at `n = 82,403` is `n` times larger:
+`2^-35.3` to `2^-25.3` at `T = 2^80`, above `δ_s`.
+`δ_ks` has no number (`WindowDelta`'s `max_c κ_c + coll` is unstated), and
 `n·δ_ks` stays under `2^-40` at 82,403 windows only if `δ_ks ≤ 2^-56.3` a window.
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of
