@@ -111,7 +111,8 @@ def _init(instr: str) -> None:
     _CTX["model"] = S.PINNED[instr]
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+                ) -> tuple[np.ndarray, np.ndarray]:
     return gather_words(_CTX["model"], *args)
 
 
@@ -251,7 +252,7 @@ def nibble_rule(W: np.ndarray, BLK_a: np.ndarray, BLK_b: np.ndarray, nb: int) ->
 
 def predicate_tables(rule: dict) -> dict:
     """Part C: the 256 zero patterns of an 8-chunk against the hardware's images and D-24."""
-    def image(m):
+    def image(m: int) -> int:
         return sum(1 << o for o in rule[m] if o is not None)
 
     ordered = [m for m in S.META_VALID.tolist() if m in rule]
@@ -259,10 +260,10 @@ def predicate_tables(rule: dict) -> dict:
     img_o = [image(m) for m in ordered]
     img_a = [image(m) for m in all16]
 
-    def d24(p):
+    def d24(p: int) -> bool:
         return bin(p & 0xF).count("1") <= 2 and bin(p >> 4).count("1") <= 2
 
-    def pairs(p):
+    def pairs(p: int) -> int:
         return sum(1 for q in range(4) if p >> (2 * q) & 3)
 
     rows = []
@@ -270,7 +271,7 @@ def predicate_tables(rule: dict) -> dict:
         rows.append({"pattern": p, "hw_ordered": any(p & ~i == 0 for i in img_o), "hw_all16": any(p & ~i == 0 for i in img_a),
                      "d24": d24(p), "pairs_touched": pairs(p)})
 
-    def offs(p):
+    def offs(p: int) -> list[int]:
         return [o for o in range(8) if p >> o & 1]
 
     count = {k: sum(r[k] for r in rows) for k in ("hw_ordered", "hw_all16", "d24")}

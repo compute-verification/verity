@@ -16,7 +16,7 @@ re-raises or records its outcome passing, a rename moving its entry, the list's 
 counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
 a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
-counted lint's violations in a lint module the gate runs as the base has it counted on the change's own copy, a
+counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy, a
 public command P16's list gains (passing when the file it names runs it, failing when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
@@ -622,6 +622,35 @@ def test_loosening_ruff_to_drop_its_findings_fails_naming_what_the_base_ruff_fin
     assert c["fix"] == ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused"]
 
 
+RUFF_VLLM_LINT = "integrations/vllm/tests/lint/test_ruff_vllm.py"
+RUFF_VLLM_JSON = "integrations/vllm/tests/lint/allowlists/ruff_vllm.json"
+RUFF_VLLM_TOML = '[lint]\nselect = ["T201"]\n'
+T201 = {"file": "verity_vllm/b.py", "kind": "T201", "symbol": "<module>", "detail": "`print` found"}
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + 'ignore = ["T201"]\n'},
+    {G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + '[lint.per-file-ignores]\n"verity_vllm/*" = ["T201"]\n'},
+], ids=["ignore", "per-file-ignore"])
+def test_loosening_the_vllm_rules_config_alone_is_judged_like_ruffs(ruffed, loosen):
+    """``ruff_vllm.toml`` sits in the lint directory but isn't Python: the gate takes it as that lint's config."""
+    assert G.lint_selection([G.RUFF_VLLM_CONFIG]) == ["ruff_vllm"] and G.lint_selection([G.RUFF_CONFIG]) == ["ruff"]
+    assert G.python_for(ruffed.pin, ["ruff_vllm"]) == [sys.executable, "-I"]
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("ruff with vLLM's rules", {RUFF_VLLM_LINT: (REAL_LINT / "test_ruff_vllm.py").read_text(),
+                                             G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML, RUFF_VLLM_JSON: _allowlist(T201),
+                                             "integrations/vllm/verity_vllm/b.py": "print(1)\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    ruffed.commit("loosens it and drops its entry", {RUFF_VLLM_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("failed", ["ruff_vllm"]), c["why"]
+    assert c["fix"] == ["ruff_vllm: verity_vllm/b.py:1 [T201] <module>: `print` found"]
+    ruffed.git("checkout", "-q", "-B", "pr", "main")
+    ruffed.commit("only loosens it", loosen)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.RUFF_VLLM_CONFIG], ["ruff_vllm"]), c["why"]
+
+
 def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_not_ruffs_change(ruffed):
     ruffed.git("checkout", "-q", "main")
     ruffed.commit("c.py", {"integrations/vllm/verity_vllm/c.py": "f = lambda: 0\n"})
@@ -740,6 +769,32 @@ def test_a_fixed_ruff_finding_passes_and_does_not_pay_for_another_rule(both_ruff
     assert (c["verdict"], c["fix"]) == ("failed", ["tools/a.py:1 F821 Undefined name `B`"])
 
 
+def test_a_ruff_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_copy(both_ruffed):
+    """The gate runs the base's copy of a lint module the change edits, and both ruff lints read that copy too: a change
+    that fixes each module's finding and drops its entry passes, judged on its own copy, and one that edits the module, keeps
+    its finding and drops its entry fails, naming the finding where the change's copy holds it."""
+    util, toy = "tests/lint/_util.py", LINT.removeprefix(f"{G.INTEGRATION}/")
+    f541 = {"file": toy, "kind": "F541", "symbol": "<module>", "detail": "f-string without any placeholders"}
+    both_ruffed.git("checkout", "-q", "main")
+    both_ruffed.commit("a lint module of each directory with an f-string, listed", {
+        LINT: TOY_LINT + 'X = f"x"\n', util: 'X = f"x"\n', RUFF_JSON: _allowlist(F401, f541),
+        REPO_RUFF_JSON: _allowlist(TOOLS_F401, {"file": util, "rule": "F541", "count": 1})})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("fixes both and drops their entries", {
+        LINT: TOY_LINT + 'X = "x"\n', util: 'X = "x"\n', RUFF_JSON: _allowlist(F401), REPO_RUFF_JSON: _allowlist(TOOLS_F401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "ruff", "repo_ruff"]), c["why"]
+    assert (f"finds 3 violation(s) in the base's copy of {util}, {toy}, which it runs in place of the change's, and the "
+            "change's own copy is within its list") in c["why"], c["why"]
+    both_ruffed.git("checkout", "-q", "-B", "pr", "main")
+    both_ruffed.commit("edits the module, keeps its finding, and drops its entry", {
+        LINT: TOY_LINT + '# kept\nX = f"x"\n', RUFF_JSON: _allowlist(F401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [
+        f"ruff: {toy}: 1 F541 found, 0 allowed",
+        f"ruff: {toy}:{len(TOY_LINT.splitlines()) + 2} [F541] f-string without any placeholders"]), c["why"]
+
+
 def _repo_lint(repo: Repo) -> str | None:
     """the repository's ruff lint, as the root suite runs it after landing, on ``repo``'s checkout: its failure, or None"""
     r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_ruff as T; "
@@ -807,11 +862,11 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
     seen, real = [], G.ruff_findings
     monkeypatch.setattr(G, "ruff_findings", lambda ruff, config, files: seen.append(sorted(files)) or real(ruff, config, files))
     both_ruffed.git("checkout", "-q", "main")
-    both_ruffed.commit("definitions", {"verity/ml/definitions/old.py": "X = 1\n"})
+    both_ruffed.commit("definitions", {"verity/ml/definitions/word.py": "X = 1\n"})
     both_ruffed.git("checkout", "-q", "-B", "pr")
     both_ruffed.commit("a clean file, and others the lint doesn't hold", {
         "tools/c.py": "C = 1\n", "integrations/vllm/verity_vllm/c.py": "import os\n",
-        "verity/ml/definitions/x.py": "import os\n", "verity/ml/definitions/old.py": None, "tools/notes.md": "import os\n"})
+        "verity/ml/definitions/tiny.py": "import os\n", "verity/ml/definitions/word.py": None, "tools/notes.md": "import os\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
     assert seen == [[], ["tools/c.py"]]
@@ -1281,16 +1336,16 @@ def _lane_lint(repo: Repo) -> str | None:
 def test_lane_text_is_counted_in_every_kind_of_file_its_lint_reads_naming_where_the_text_goes(lane_linted):
     """Markdown, a Lean comment and a Python docstring count, each by its path; a Python string literal is code, not prose."""
     lane_linted.commit("an attribution, a Linear id, a PR and a literal", {
-        "docs/a.md": "# A\n\nSee #1234 (Daniel, 8 Oct).\n", "Security/B.lean": "-- VLLM-136\ndef b := 1\n",
+        "docs/a.md": "# A\n\nSee #1234 (Daniel, 8 Oct).\n", "Lean/B.lean": "-- VLLM-136\ndef b := 1\n",
         "tools/c.py": '"""Built for #4321."""\nX = "#1234"\n', "tools/d.json": '{"pr": "#1234"}\n'})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["counted"].get("repo_lane_text")) == (
-        "failed", ["Security/B.lean", "docs/a.md", "tools/c.py"]), c["why"]
+        "failed", ["Lean/B.lean", "docs/a.md", "tools/c.py"]), c["why"]
     assert c["why"].startswith(
-        f"adds 3 lane-text site(s) to the files it changes, as the base's {REPO_LANE_LINT} counts them (Security/B.lean 0 -> 1; "
+        f"adds 3 lane-text site(s) to the files it changes, as the base's {REPO_LANE_LINT} counts them (Lean/B.lean 0 -> 1; "
         "docs/a.md 1 -> 2; tools/c.py 0 -> 1): Say what is true now, and put the rest where it lives: history in git "
         "(the commit message), work in Linear (the issue), rulings in Notion (the decisions log), results in the store"), c["why"]
-    assert c["fix"] == ["Security/B.lean:1 linear: VLLM-136", "docs/a.md:3 attribution: (Daniel, 8 Oct)",
+    assert c["fix"] == ["Lean/B.lean:1 linear: VLLM-136", "docs/a.md:3 attribution: (Daniel, 8 Oct)",
                         "tools/c.py:1 pr: #4321"]
     assert "docs/a.md: 2 found, 1 allowed" in (_lane_lint(lane_linted) or "")
 
