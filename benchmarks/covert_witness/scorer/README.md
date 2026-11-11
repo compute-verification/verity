@@ -16,6 +16,7 @@ python scorer.py final dispatch [--nodes N1,N2,...] [--deadline HH:MM] [--dry-ru
 python scorer.py final collect|table                   # final-set reruns (below)
 python node_loop.py init|once|loop|finish RUN          # the refresh (v1cycle.py) as a research run on a CPU node
 python plot2_final.py build --finals F --policy T --out D | put D  # algorithm-policy from the finals table (its docstring)
+python plot2_final.py put-fit BODY                     # frontier-fit: a search build's console body, as it is
 ~~~
 
 The refresh runs on a CPU node (`refresh-node.sh`, its state kept there; the agent VM only edits): `node_loop.py` on
@@ -155,6 +156,18 @@ research run --pool research --on NODE --mem-gb 128 --send scorer/correct.sh --s
     --send scorer/restate.json --send scorer/replot.py --send scorer/trace40.py --send replot.bundle \
     --send replot-code.tar --send replot-inputs.tar --send layers.tar --send meta.json \
     -- bash -c 'TE=COMMIT exec bash "$RESEARCH_RUN_DIR/inputs/correct.sh"'
+~~~
+
+With `SIZE_SCALING=1` each build makes training/size-scaling from its own tables too (`correct.sh`'s header). The
+rebuilt panels are PUT from the agent VM, one command a panel, in `benchmarks/covert_witness`. Each takes `--dry`,
+which stores nothing and PUTs nothing: it prints the body's sha256, bytes, rows and note length, and what
+te_core.console's `put` would refuse it for.
+
+~~~text
+python scorer/plot2_final.py put DIR [--note FILE]        # training/algorithm-policy: DIR/tables, the overlay's
+python scorer/plot2_final.py put-fit BODY                 # training/frontier-fit: the search build's console body
+python islands/standard-workloads/standard_workloads.py --put BODY --served FILE
+python islands/ladder-v3/size_scaling.py put FILE
 ~~~
 
 The rules a rebuild follows:
