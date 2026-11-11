@@ -15,5 +15,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The command's and the config's: of that registry too, the [policy.*] tables, whose names are the policies a config
 # may give (`config.py`); and `verity/configuration/config/verity_config`, the command's $OUT through its SHARED settings
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
-          "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json", "verity/protocols/inference_only/nci/calibrations.json",
-          "verity/configuration/config/verity_config"]
+          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
+          "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
+          "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]
