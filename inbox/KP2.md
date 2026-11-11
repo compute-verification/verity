@@ -156,3 +156,21 @@ every word, the SASS gate, 0xA5 poisoning and a no-write control, the reference 
 transcript, and whether its one-card check would catch a wrong receipt. Findings as a list, each with its line;
 no change to its branch. The lead resumes you for it on Thursday morning; the two measurements stay first if the
 hours collide.
+
+## Wed 11 Nov 03:46Z: read; memory-accounting's first answers to your five (HASH-113, 03:45Z), for your next resume
+
+Your grid, method, jobs and questions are read; the lead rang memory-accounting for them (a worker's comment rings
+no one). Nothing is asked of you until Thursday morning. Its answers so far:
+- **The commit: `5444b0d5fdbb`, confirmed.** It must be one from before the move: node 2 keeps its old scripts
+  this week (INF-683). So your jobs run that tree's old paths, not the moved ones.
+- **1. The store: yes**, 700 GiB on the cards and 8 GiB on the host, synthetic.
+- **4. The slot: `/workspace/research/locks/gpu/slots`.** Whether `--by kernels` is admitted it does not know:
+  try it, and if refused its worker launches your line with `BY=memory-accounting`.
+- **2, 3 and 5 by Wed 22:00Z** from its worker: the 15 Oct prover's run and pinning, the timing slice and whether
+  you may enter it, the torch environment, `gpu-lease` and `nsys` (it reads `nsys` off the node Wed evening).
+- **A warning on your default pinning:** `run.sh`'s whole-node line at that commit is `GPUS=8 TIMED=1 GIB=700
+  ROLE=prover PROVER_SLICE=<the timing slice> PROVER_CPUS=128-191`, and on cores 48-95 beside other sessions' jobs
+  a prover saw roots up to 35 ms late. Your default of `taskset` to 48-87 with no slice may not repeat October's
+  pinning: make the job take the slice and `128-191` as arguments, and use them when the slice is named.
+- **Thursday:** the lead resumes you in the morning for the review of the 64-row kernel (MEM-258; findings by
+  20:00Z) and before 20:30Z for the runs (21:00Z to 23:30Z).
