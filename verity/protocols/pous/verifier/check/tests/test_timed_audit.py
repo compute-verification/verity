@@ -72,7 +72,7 @@ def test_the_deployments_record_agrees_from_its_files():
     assert ta.lean_verdict(s.ready, s.leaves, doc) == py
 
 
-def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
+def _live(limit_ns: int, wrong=lambda i: False):
     """The memory challenger's `timed_audit.py --strict`'s document of `p2-16448/v4` at its registered point (one
     segment) against a responder whose labels match the leaves (but for the indices `wrong` picks, answered with zeros),
     with its ready file and leaves."""
@@ -102,7 +102,7 @@ def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
 
 
 @pytest.mark.slow
-def test_the_strict_memory_challengers_documents_are_judged_alike(tmp_path):
+def test_the_strict_memory_challengers_documents_are_judged_alike():
     """`judge` by either verdict gives the same document, the one the memory challenger wrote: accepted at the RTT cap,
     refused before any challenge one microsecond past it, and rejected where the responder serves zeros for every index
     divisible by 7 (each audit of 105 challenges meets one but with probability (6/7)^105 < 2^-23)."""
@@ -111,7 +111,7 @@ def test_the_strict_memory_challengers_documents_are_judged_alike(tmp_path):
     cap = 500_000 + p2.RTT_ALLOWANCE_CAP_NS
     honest = lambda i: False  # noqa: E731
     for limit, wrong, accepted in [(cap, honest, 2), (cap + 1_000, honest, 0), (cap, lambda i: i % 7 == 0, 0)]:
-        live, ready, leaves, doc = _live(tmp_path, limit, wrong)
+        live, ready, leaves, doc = _live(limit, wrong)
         by = {name: live.judge(ready, leaves, doc, by=name) for name in ("python", "lean")}
         assert live.judge(ready, leaves, doc)["verdict"]["by"] == live.VERDICT == "lean"
         assert by["python"]["verdict"].pop("by") == "python" and by["lean"]["verdict"].pop("by") == "lean"
@@ -124,12 +124,12 @@ def test_the_strict_memory_challengers_documents_are_judged_alike(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def strict_doc(tmp_path_factory):
+def strict_doc():
     """The strict memory challenger's accepted document at the RTT cap, and the same with one answer's label flipped,
     which both verdicts reject."""
     from verity.protocols.pous.verifier.schemes import p2
 
-    live, ready, leaves, doc = _live(tmp_path_factory.mktemp("strict"), 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    live, ready, leaves, doc = _live(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     bad = json.loads(json.dumps(doc))
     a = bad["records"][1]["answers"][3]
     a["block"] = a["block"][:-1] + ("0" if a["block"][-1] != "0" else "1")
@@ -219,7 +219,7 @@ def test_a_replay_writes_out_and_holds_the_recorded_verdicts_to_its_own(strict_d
 def test_a_replay_judges_a_record_with_blocks_and_names_what_one_without_lacks(tmp_path, capsys):
     from verity.protocols.pous.verifier.schemes import p2
 
-    _, ready, leaves, doc = _live(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
+    _, ready, leaves, doc = _live(500_000 + p2.RTT_ALLOWANCE_CAP_NS)
     bench = tmp_path / "r-blocks" / "bench"
     bench.mkdir(parents=True)
     (bench / "ready-p2-honest.json").write_text(json.dumps(ready))
