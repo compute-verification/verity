@@ -464,8 +464,10 @@ def test_check_py_takes_no_allowance_and_the_fast_path_gives_it_none(tmp_path, c
 #: who runs check.py or `lean_changed.py` besides a lane: the Lean check's steps (`check`'s `check.py`, `lean_audit.py`), the
 #: merge queue's loop and its Lean tasks (the graph's runners), the ready mark's preflight and the records gate (`research
 #: queue`), and the `verity` command
-CALLERS = ["tools/verity/check/check.py", "tools/verity/lean/lean_audit.py", "tools/research/src/research/vqueue_loop.py",
-           "tools/research/src/research/queue.py", "tools/verity/cli/verity_cli/__init__.py",
+CALLERS = ["tools/verity/check/check.py", "tools/verity/check/train.sh", "tools/verity/lean/lean_audit.py",
+           "tools/research/src/research/vqueue_loop.py", "tools/research/src/research/vqueue_records.py",
+           "tools/research/src/research/landing.py", "tools/research/src/research/queue.py",
+           "tools/verity/cli/verity_cli/__init__.py",
            *sorted(str(f.relative_to(ROOT)) for f in (ROOT / "tools/verity/graph/verity_graph/runners").glob("lean_*.py"))]
 ALLOW = re.compile(r"(?<![\w-])--allow(?![\w-])")
 
