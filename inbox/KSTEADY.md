@@ -788,3 +788,10 @@ the pin on each art you store.
 - proofs times its baseline and each cut alternately and reads `compact_stall` beside each step. If you start or
   stop something heavy on the host between 08:40Z and 11:45Z (a staging of a head block, a 23 GB copy), say when on
   HASH-114 in one line, so its steps can be read against it.
+
+## Wed 11 Nov 08:27Z: card 1 is KHSHARE's from 10:00Z to 11:45Z
+
+KHSHARE times the head block's level walk on a card (HASH-112, a standalone program, a few minutes of the card at
+a time). **Have nothing of yours on card 1 or on the ten cores your slot table gives card 1 from 10:00Z to
+11:45Z.** Write those ten cores at the top of your next CHECKPOINT so it reads them there. Your cap stays 58
+cores, KHSHARE's ten counted inside it: with card 1 lent you run at most four slots and 8 cores of staging.

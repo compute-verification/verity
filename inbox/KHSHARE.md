@@ -374,3 +374,34 @@ from `…d72e`.
 - **Also in the table: memory compaction.** Your 08:16Z checkpoint says `…6773` and `…d72e` show it and that
   it slows a statement by about a fifth in its episodes. Say it on HASH-114 now in three lines (measured or
   inferred, each), since HEADPROF reads `compact_stall` beside each step on your word.
+
+## Wed 11 Nov 08:27Z: HASH-114 is closed, well done. Tonight on HASH-112: the level walk's time on a card, measured
+
+Your report is read; HASH-114 is Done and its goal closed with your figures. Two things until 11:45Z, in this order.
+
+1. **proofs' workers first.** Read HASH-114's new comments at about 09:05Z (WITNESS's files and functions) and
+   then every half hour until 11:45Z; answer a question of HEADPROF, WITNESS or SERVEDCARD within a quarter of
+   an hour, each line marked measured, read or inferred. You edit none of the prover's files tonight.
+2. **The one number nothing measures: the evaluator's time on the card** (GPU work approved by the lead; its
+   question: *on an H200, does one head-block statement's level walk, on the unit's real schedule, take under
+   0.2 s or a second or more?*). proofs prices the head block tonight for Daniel's morning table at 1.8 s, 0.9 s
+   and 0.52 s, and each leaves this term out. My own guess, unverified, is that it is not small: the host walk
+   reads about 5.5 G nonzeros a statement (4 walks of 606 M + 762 M), and a card that gathers a few G a second
+   needs most of a second for the wide levels alone, beside 11,516 levels' launch or barrier cost. Measure it:
+   - **What:** a standalone CUDA program in your notes job directory (not in the tree, not in the prover): the
+     per-row operation `eval64_flat` does, 64 units a word, over the real schedule of `FIRST=false` exported
+     from `unit-levels` (each level's rows, each row's operands), levels in order. Two forms: one launch a
+     level, and one kernel that walks the levels itself. 20 statements each after a warm-up; seconds a
+     statement, median and spread; the time in the 38 widest levels against the 9,542 narrow ones.
+   - **Held to the builder if it is cheap:** seed it with a real statement's inputs and compare the words of one
+     group of 64 units against the twin's. If you cannot in the time, time it on stand-in values and say so in
+     the first line: the number is then a bound on the walk's cost, not a kernel.
+   - **Where:** build without a card on `vy-nebius-cpu-1` (where KMOVE builds). **Card 1 on node A is yours from
+     10:00Z to 11:45Z**, with the ten cores KSTEADY's slot table gives card 1 (`ksteady-jobs`; read them there
+     and say them on HASH-112 before you launch), one lease, the start check under the kernels lock, everything
+     pinned inside those ten. Node A is vllm's from 12:00Z; if you are not done, say where it stands and it runs
+     again in kernels' 18:15Z row (cards 6 and 7).
+   - **Report on HASH-112 by 11:40Z**, under 150 words: the two figures, what was held to the builder and what
+     was not, the run ids, and what it does to 1.8, 0.9 and 0.52 [inferred]. Source, schedule export and logs
+     in the notes and the store.
+3. **Thursday's design note** (HASH-112, due Thu 12 Nov) then carries this number and the form it argues for.
