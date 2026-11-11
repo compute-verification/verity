@@ -20,9 +20,9 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   its proof blocks don't each read alone (`R8`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
-* **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+* **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
+  one of the record's own values is of a registered value, opened against its registered root (`UnitsProved`; a
+  registered value needs no reported read), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -360,18 +360,18 @@ to null; none when no such verdict reports any (`audit.session_registered`, whic
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
   Record.ownRegistered rec (Record.sessionRegistered vs)
 
-/-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
-the same key and root in the second. -/
-def SameRoots (a b : Array (String × Json)) : Prop :=
-  a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
+/-- Each opened read is of a registered value at its registered root: every entry of `opened`, a `{value: root}`, has its
+value and root in `registered`. It asks nothing of a registered value that `opened` lacks. -/
+def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
+  ∀ x ∈ opened, ∃ y ∈ registered, x.1 = y.1 ∧ jeq x.2 y.2
 
 /-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
+each port); and each of the record's own values the verifiers report a read of is a value the record registers, the read
+opened against the record's root for it (`Record.registeredRoots`, each value's last entry). A registered value no
+verifier reports a read of is not required to have one. -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
@@ -379,8 +379,7 @@ def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
-    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
