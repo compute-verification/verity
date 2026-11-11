@@ -58884,3 +58884,105 @@ By the note's rule the verdict column is unchanged: 13 yes, 25 no, 10 by design,
 - Row 3's only figure past the bar (one session at the floor) is gone.
 
 The script and its output are Appendix A of `note:proofs/20261111T1620Z-report-security-numbers-audit`, synced with this section, the nine rows' cells and the size bullet. The count is 13 / 25 / 10 / 19 before JOB 2, which follows with the re-ordered miss list.
+
+## BREAKEVEN, Wed 11 Nov 16:58Z: the columns at the digest's 15.5 s: every cell within 0.05% of the by-proportion figure (the row of record 12,576.1 GB as `main` is, the lowest row 3,734.8 GB, 12.45 times 300 GB; modeled 0.4); #8853 is not merged with `main`, and its quick tier passes on a local merge
+
+Tags: [run] a command I ran for this entry, [read] a record I read now (its place given), [derived] my arithmetic on those, [relayed] another lane's statement I did not check. Every GB, N and budget below is **modeled**, not measured: the planner at utilization 0.4 (`m40`), from the recorded run named beside it. No new claim: the 14:12Z rows, levers and caveats with the digest's seconds changed, nothing else. `research` here runs `main` `493f49485e50` [run].
+
+**0. What I read in FLOCKPKG's run.** `r20261111-150802-f068`, vy-nebius-cpu-3, done rc 0 [read: its `out/job.log`, lines 16 to 23, fetched 16:44Z]: eight `inputs` calls of #8949's binary on the fused MoE block (K = 6144, program 152 MB).
+- With `--program`, rc 0: 35.427, 34.237, 33.870 and 34.264 s. Without, rc 1 (refused at the setup, which took 17 to 19 ms): 18.917, 19.086, 18.874 and 18.812 s.
+- In time order the four pairs are FLOCKPKG's 16.51, 15.15, 15.00 and 15.45 s: mean **15.527 s, 0.102 s a MB** [derived]. The run's first call, labelled unpinned in the log, read 30.768 s and is outside the pairs, as FLOCKPKG says.
+- In the planner's term (+207 core-s a statement at 14.4 s) that is 207 × 15.527 / 14.4 = **+223.2** core-s, +215.6 at 15.00 s and +237.3 at 16.51 s [derived]: FLOCKPKG's +223 (+216 to +237).
+- The fixes [derived]: as `main` is +783 + 223 = **+1,006** (+999 to +1,020); the hoist +554 to +563 + 223 = **+777 to +786** (+770 to +800); the hoist + one parse +236 to +239 + 223 = **+459 to +462** (+452 to +476). No program reads no program and does not move.
+
+**1. The runs** [run: `research run --on auto --cwd clone --as proofs`, launched 16:35Z to 16:42Z, each done rc 0 by 16:48Z]. The 14:12Z harness (tree `a5e4e56a11`; every input equal to `85c3`'s by sha256 but `wf_width.py` and a one-row file; the same levers; row (iii) honest, world year, the registered pair, modeled 0.4 only), with `wf_width.py` extended by two outputs: by width at κ 2^-9 and 2^-10 on the uncut cells, and the design at one machine's window (section 5). 252 rows, none with an error.
+
+| run | what it priced | node (by auto) |
+|---|---|---|
+| `r20261111-163515-2cd7` | no program; as `main` is at +1,006, +999 and +1,020 | vy-nebius-cpu-1 |
+| `r20261111-163535-e72a` | the hoist at +777, +786, +770 and +800 | vy-nebius-cpu-1 |
+| `r20261111-163555-77a6` | the hoist + one parse at +459, +462, +452 and +476 | vy-nebius-cpu-2 |
+| `r20261111-164132-a629` | no program's head-cut and S-halved rows; the hoist's setup alone at +554 and +563 | vy-nebius-cpu-3 |
+
+Check [run]: the four no-program cells equal 14:12Z's (`85c3`) to 0.1 GB.
+
+**2. The five rows by four columns at 15.5 s** [run: the four runs above; GB a world year at 10% compute ×1.05, (iii) honest, registered pair, **modeled 0.4**; in parentheses the range from 15.0 and 16.5 s]:
+
+| row (cumulative) | no program (not what `main` verifies) | as `main` is, +1,006 (+999 to +1,020) | the hoist as built (#8949), +777 to +786 (+770 to +800) | the hoist + one parse (a branch, only compiled), +459 to +462 (+452 to +476) |
+|---|---:|---:|---:|---:|
+| the record, at the plan's cut | 6,344.2 | 19,641.8 (19,550.2 to 19,824.9) | 16,645.9 to 16,763.6 (16,554.3 to 16,946.8) | 12,434.1 to 12,474.0 (12,341.3 to 12,659.7) |
+| the final recut, κ 2^-6 (the row of record) | 4,183.0 | 12,576.1 (12,517.7 to 12,692.8) | 10,666.4 to 10,741.5 (10,608.1 to 10,858.2) | 8,010.5 to 8,035.5 (7,952.1 to 8,152.3) |
+| + #8917's cut and every head cut, G = 128 | 1,697.4 | 5,444.6 (5,418.6 to 5,496.7) | 4,590.1 to 4,623.6 (4,564.0 to 4,675.7) | 3,406.2 to 3,417.3 (3,380.1 to 3,469.4) |
+| + S halved, G = 64 (the lowest row) | 1,066.8 | 3,734.8 (3,714.9 to 3,771.9) | 3,126.5 to 3,150.3 (3,107.9 to 3,187.4) | 2,283.5 to 2,291.4 (2,264.9 to 2,328.6) |
+| the lowest row over 300 GB | 3.56 | 12.45 (12.38 to 12.57) | 10.42 to 10.50 (10.36 to 10.62) | 7.61 to 7.64 (7.55 to 7.76) |
+
+Labels as at 14:12Z. #8917's cut is unbuilt and has no Program (modeled). The head cuts are measured (HEADPROF's quiet/quiet). S halved is assumed (unbuilt). Every figure holds at a registration cut by its count of requests, which no code builds. On each row with #8917's cut: "the prover's card time is 1.35 to 1.67 of the head block's, measured" [relayed: your 14:25Z; HEADPROF's 15:28Z reads 1.67 as the code walks values today and 1.05 with `FC_HOST_UNITS=1`].
+
+**3. Each cell against the by-proportion figure** [derived].
+- **The rule.** Take the 14:12Z cell (the digest at 207 core-s) and add its digest's part scaled to the new digest: cell(s + 207) + (cell(s + 207) − cell(s)) × (d − 207)/207, with d = 223, 216 or 237. Here cell(s) is the setup alone at the same s: 14:12Z's posted +783 and +236 to +239, and for the hoist `a629`'s +554 and +563 (14:12Z posted only +559). On the row of record as `main` is, the rule gives 12,576.0, your "about 12,580".
+- **The table** shows mine minus the rule's figure, in GB. Each cell gives the point first and the two ends after the semicolon. A percentage is given only where the gap is 0.01% or more.
+
+| row | no program | as `main` is | the hoist as built | the hoist + one parse |
+|---|---|---|---|---|
+| the record | 0.0 | 0.0; 0.0, 0.0 | −7.5 (−0.05%), −2.5 (−0.01%); −6.2 (−0.04%), −4.7 (−0.03%) | 0.0, 0.0; 0.0, 0.0 |
+| κ 2^-6 (the row of record) | 0.0 | 0.0; 0.0, 0.0 | +4.2 (+0.04%), −0.4; +4.2 (+0.04%), −0.7 (−0.01%) | 0.0, 0.0; 0.0, 0.0 |
+| every head cut, G = 128 | 0.0 | −0.1; 0.0, −0.2 | 0.0, 0.0; 0.0, 0.0 | 0.0, 0.0; 0.0, −0.1 |
+| S halved, G = 64 (the lowest row) | 0.0 | +1.2 (+0.03%); 0.0, +1.2 (+0.03%) | 0.0, 0.0; 0.0, 0.0 | 0.0, 0.0; 0.0, 0.0 |
+
+- **The largest difference is −0.05%**, −7.5 GB: the record row, the hoist at +777 (16,645.9 against 16,653.4). Every other cell is within 0.04%. The no-program, as-`main`-is and one-parse columns are within 0.03% (1.2 GB). The row over 300 GB moves with its row, within 0.01. With 14:12Z's +559 as the hoist's setup alone instead, the largest gap is 0.07% (12.4 GB, the record at +800).
+- **Why it is so close** [derived from the runs' cells]. Each row is a line in the program's core-seconds wherever its design does not switch:
+  - The two head-cut rows lie on one line from +554 to +800, to within 0.1 GB (3.723 and 2.651 GB a core-s).
+  - The κ 2^-6 row has one step of 4.2 GB between +761 and +770, at 8.339 GB a core-s on each side.
+  - The record row's plan switches between near-tied designs, as 14:12Z said: at +554 it is 33 GB under the line through +770 to +800.
+  - The rule misses only across those steps.
+- **The digest's share of the row of record**, over the setup alone [derived from my cells and 14:12Z's posted setup-alone cells]:
+  - as `main` is: +17.4% (+16.8% to +18.4%), against FLOCKPKG's +17.4% (+16.8% to +18.5%);
+  - with the one parse: +30.1% to +30.2% (+29.3% to +32.0%), against its +30.3% (+29.3% to +32.2%).
+
+**4. N, machine-windows a registration** [derived: ⌊1/(q × span)⌋ from each run's q at the 10% point, a span of 7,219.04 requests]:
+
+| row | no program | as `main` is | the hoist as built | the hoist + one parse |
+|---|---|---|---|---|
+| κ 2^-6 (the row of record) | 197 | 592 (589 to 598) | 502 to 506 (499 to 511) | 377 to 378 (374 to 384) |
+| + S halved, G = 64 (the lowest row) | 98 | 344 (343 to 348) | 288 to 290 (286 to 294) | 210 to 211 (209 to 215) |
+
+At 14:12Z these were 197 / 586 / 496 to 500 / 371 to 372, and 98 / 340 / 284 to 286 / 206 to 207 [read: my 14:12Z entry]. Each moves as its cell does: as `main` is, +6 on the row of record and +4 on the lowest row. No program does not move.
+
+**5. One machine's window** [run: the runs' `win_k6`, `win_k9` and `win_k10`; derived at the 10% point]. The planner works by width, with no margin and its own statements. It takes κ's k and multiplies the budget by N until q × span = 1. All 36 evaluations (12 fixes × 3 κ, each at six β) returned q × span = 1.000000 with the same k [run].
+
+| κ | GB at one machine's window | N: no program | N: as `main` is | N: the hoist as built | N: the hoist + one parse |
+|---|---:|---:|---:|---:|---:|
+| 2^-6 | 21.22 | 197.1 | 592.6 (589.9 to 598.1) | 502.6 to 506.2 (499.9 to 511.7) | 377.5 to 378.7 (374.7 to 384.2) |
+| 2^-9 | 165.92 | 46.1 | 103.2 (102.8 to 104.0) | 90.2 to 90.7 (89.8 to 91.5) | 72.1 to 72.3 (71.7 to 73.1) |
+| 2^-10 | 331.82 | 35.3 | 68.4 (68.2 to 68.9) | 60.9 to 61.2 (60.6 to 61.6) | 50.4 to 50.5 (50.2 to 51.0) |
+
+- The window's GB is the same in all four columns and at all six β: the program's seconds move the budgets, not the bound [run].
+- **Against BENCHCROSS** [read: its 14:27Z, section 4, and its 14:29Z]:
+  - 165.92 and 331.82 GB are its 165.9 and 331.8.
+  - Its budgets there (45.6 / 101.2 and 34.9 / 67.2) are at β = 0.056 and +990. Mine are at the 10% point, where its own κ 2^-6 figure of 195.4 reads 197.1, and at +1,006.
+  - Its 20.74 GB at κ 2^-6 is the design with a 0.03 margin, which only #8904's tree has (`two_stage_design(margin=)` at `f1e9d625dd`; `main`'s has no margin) [run: `git grep`]. With no margin, as the table's κ 2^-6 row is, the planner gives 21.22 GB at the same 197.1 budgets with no program.
+
+**6. #8853, the figure of record's driver** (`benchmarks/spot_figures/breakeven/headline.py`). Not marked; I pushed nothing to its head.
+- **Head** `9c9da7466aea` on `cursor/proofs-headline-driver-c41e`: open, not a draft, no labels, mergeable by GitHub's reading, last updated 10:58:45Z [run: `gh pr view 8853`, 16:52Z].
+- **Merged with `main` at `493f49485e50` or later: no.**
+  - Its merge-base is `08ad61db9432`, 1,348 commits behind `main` `493f49485e50` [run].
+  - It merges clean as text (tree `96403d370031`) [run: `git merge-tree --write-tree`].
+  - Since its base, `main` changed five files the driver reads: `reprice.py` +64/−9, `optimize.py` +35/−30, `sweep.py` +13/−1, `figure1.py` +5/−1 (read through `common`) and `levers.py` +2/−1 [run: `git diff --numstat`].
+- **Its last quick tier**: `r20261111-105901-de7c` at `9c9da7466a` (`suites.py --changed 08ad61db9432 --quick`, vy-nebius-cpu-9). It is done, rc 0 [read: its record, fetched 16:37Z], with 3 of 3 suites passed: verity-graph 207, repository 294 and benchmarks/spot_figures 103 [read: my 11:31Z ready line in this file].
+- **New, on the merge** [run]: `r20261111-163913-2070` ran the same tier on a local merge of the head with `main` `493f49485e50`: commit `1d45b3482a06`, tree `96403d370031`, pushed nowhere, `--changed 493f49485e50`. It is done, rc 0: "3 suites: 3 passed (0 cached), 0 failed". That is verity-graph 207, repository 304 and benchmarks/spot_figures 130, with `test_headline.py` run whole and its slow tests included [read: its `stdout.log`].
+- **Left before a second reader can read it:**
+  1. The merge on its head, and the tier at that head. The merge is clean and its tier passes (`2070`), but I did not push it. #8950 (`cursor/proofs-headline-plan-4e1b` at `f8b6e599b19b`) carries #8853's head [run: `git merge-base --is-ancestor`], and your rule keeps me off this head. It is one commit, `1d45b3482a06`: say if I push it, or if HARMSEARCH merges `main` under #8950.
+  2. Which figure it prints. Its rows are the planner-verifier figure with the measured levers (`V_MEASURED`, and `V_OTHER` at the planner's head-check seconds), not the table of record. It has no program setup or digest seconds, no registered pair, no head cuts, no S halving, no κ by width, no #8917 cut and no window [read: `headline.py` at `9c9da7466a`]. Either its body says which figure it prints, or the driver gains those as named levers (code, tests and a tier).
+  3. Its tests pin no GB row: they assert the heads, volumes, splits and requests, and the 10% point on synthetic rows [read: `test_headline.py` at the merge, lines 34 to 126].
+- **Did part 1 run through it? No: it cannot.**
+  - Its command line is `rows --out DIR [--rows …] [--scopes …] [--betas …] [--workers N]`, plus `read` and `plan` [read: `headline.py` lines 575 to 588].
+  - Its rows' levers are fixed in the driver, and it takes no fix strings, no program seconds and no window design.
+  - The table's inputs live in the harness's scratch files (`headline_world_succfix.py`, `wf_width.py`, `plansearch.py`, `plan_dump.py`). Part 1 ran on that harness at tree `a5e4e56a11`.
+
+**Nothing of mine is still running.** The checkpoint note is `lanes/proofs/20261111T1638Z-checkpoint-breakeven-digest155.md`. The builder and the extended `wf_width.py` are under `lanes/proofs/tools/`.
+
+For the table:
+- BREAKEVEN | the four columns at the digest's 15.5 s (+223 core-s a statement, +216 to +237) | (iii), world year, registered pair, modeled 0.4 | row of record 4,183.0 / 12,576.1 (12,517.7 to 12,692.8) / 10,666.4 to 10,741.5 / 8,010.5 to 8,035.5 GB; lowest row 1,066.8 / 3,734.8 (3,714.9 to 3,771.9) / 3,126.5 to 3,150.3 / 2,283.5 to 2,291.4 GB, 3.56 / 12.45 / 10.42 to 10.50 / 7.61 to 7.64 times 300 GB [run `2cd7`, `e72a`, `77a6`, `a629`; modeled]; every cell within 0.05% of the by-proportion figure [derived].
+- BREAKEVEN | N, machine-windows a registration | row of record 197 / 592 (589 to 598) / 502 to 506 / 377 to 378; lowest row 98 / 344 (343 to 348) / 288 to 290 / 210 to 211 [derived; modeled].
+- BREAKEVEN | one machine's window | 21.22 / 165.92 / 331.82 GB at κ 2^-6 / 2^-9 / 2^-10 in every column, at 197.1 / 592.6 / 502.6 to 506.2 / 377.5 to 378.7 budgets (κ 2^-6), 46.1 / 103.2 / 90.2 to 90.7 / 72.1 to 72.3 (κ 2^-9) and 35.3 / 68.4 / 60.9 to 61.2 / 50.4 to 50.5 (κ 2^-10) [run; modeled].
+- BREAKEVEN | #8853 | head `9c9da7466aea`, not merged with `main` (base `08ad61db9432`, 1,348 behind `493f49485e50`); last tier `de7c` 3 of 3; on a local merge `2070` 3 of 3; left: the merge on its head (#8950 carries it), a body that names the figure it prints, tests that pin a row; part 1 could not run through it [run; read].
