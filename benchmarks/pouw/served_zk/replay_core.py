@@ -52,16 +52,16 @@ from typing import Any
 
 import verity_difftest as D
 
-from verity.core.protocols.pouw import coins as Co
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import verifier as PV
-from verity.core.protocols.pouw import window as Wd
+from verity.protocols.pouw.verifier import coins as Co
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import verifier as PV
+from verity.protocols.pouw.verifier import window as Wd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
-LEAN = REPO / "verity/core/protocols/pouw/lean/check"
+LEAN = REPO / "verity/protocols/pouw/verifier/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
 V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
 REGISTRATION_RULES = ("window", "window-form", "public-items", "level", "public-value", "population", "law", "query",

@@ -23,7 +23,7 @@ config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
 ``art:``, branch and lane names.  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its
 file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
-(``integrations/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
+(``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
 leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
 standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 

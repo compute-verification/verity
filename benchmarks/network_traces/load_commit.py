@@ -37,11 +37,11 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, _uint
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.commitments import hm96
+from verity.commitments.hm96 import batch as HB
+from verity.commitments.merkle import _FRAME, _LEAF, _NODE, _uint
+from verity.commitments.rowleaf import sha512_row_v2_prefix
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -154,8 +154,8 @@ def exact() -> dict:
     ref = G.Registered.commit(PROGRAM, "w", words, [salts[192 * i:192 * (i + 1)] for i in range(n)], 16, SCHEMA)
     dom = G.domain(PROGRAM, "w", ROW_WORDS, n)
     ours = frame_nodes(dom, hm96_leaves(dom, rows, salts))
-    from verity.core.protocols.pous import verifier as PV
-    from verity.core.protocols.pous.labels import salt_value, tag
+    from verity.protocols.pous.verifier import verifier as PV
+    from verity.protocols.pous.verifier.labels import salt_value, tag
     params = SimpleNamespace(blocks_per_segment=P2_SEGMENT, block_bytes=P2_BLOCK)
     salt = os.urandom(24)
     blocks = os.urandom(5 * P2_BLOCK)
@@ -177,7 +177,7 @@ def _time(fn, *a) -> float:
 def p2_decode(blocks: bytes, salt: bytes) -> None:
     """P2 v4's decode of whole blocks of segment 0 (`pous.schemes.p2.decode_segment`'s arithmetic and keys, without its
     codeword check, which random blocks fail): what a certifier that commits the decoded weights pays first."""
-    from verity.core.protocols.pous.schemes import p2 as P2
+    from verity.protocols.pous.verifier.schemes import p2 as P2
     params = P2.P2Params(*P2.POINT)
     f, keys = P2._field(params), P2.segment_keys(params, salt, 0)
     for j in range(len(blocks) // P2_BLOCK):
