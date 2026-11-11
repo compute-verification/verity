@@ -30,7 +30,7 @@ population Program of its one Definition at ``--n`` instances and that Program's
 as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
@@ -87,11 +87,11 @@ def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
     rows' split as a window reads it (`serving_rows.members` and `read`).  Returns the units' rows by port, their output words
     (the Call's, as committed), the Call's output words by the numpy twin (`fp8_moe_rows.moe_expert_fp8_block_row`,
     `deepgemm_twins.flashinfer_linear_row`) and the IR reference of the coordinate on every unit's rows."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import deepgemm_twins as DT
-    from verity.ml.definitions.numerics import fp8_moe_rows as FR
+    from verity.definitions.numerics import deepgemm_twins as DT
+    from verity.definitions.numerics import fp8_moe_rows as FR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = {**SRW.COORDS[spec_base(tp.word)], **spec_statics(tp.word)}
@@ -154,12 +154,12 @@ def cols_call(tp, w_call: int, rng: np.random.Generator) -> dict:
     the units' rows by port, their outputs (the row's, as committed), the row's output by the numpy twin of the whole row
     (`rows.moe_sum`, `tp_allreduce_check.mnnvl_rows`, `tp_allreduce_check.multimem_rows` through the row's own owners' trees), and
     the IR reference of the template's word on every unit's rows."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import rows as KR
-    from verity.ml.definitions.registry import tp_allreduce as TA
-    from verity.ml.definitions.registry import tp_allreduce_check as TAC
+    from verity.definitions.numerics import rows as KR
+    from verity.definitions.registry import tp_allreduce as TA
+    from verity.definitions.registry import tp_allreduce_check as TAC
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     axis, S = SRW.COLS[spec_base(tp.word)], spec_statics(tp.word)
@@ -201,11 +201,11 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
     port, their outputs (the row's, as committed; every output port's words in order), those outputs by the numpy twin of the
     whole row (`tp_allreduce_check.mnnvl_norm_rows`, `deepgemm_twins.deepgemm_linear_row`), and the IR reference of the
     template's word on every unit's rows."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import deepgemm_twins as DT
-    from verity.ml.definitions.registry import tp_allreduce_check as TAC
-    from verity.ml.definitions.registry.fp8 import FP8_BLOCK
+    from verity.definitions.numerics import deepgemm_twins as DT
+    from verity.definitions.registry import tp_allreduce_check as TAC
+    from verity.definitions.registry.fp8 import FP8_BLOCK
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S, p = spec_statics(row), SRW.part(tp.word, row)
@@ -269,12 +269,12 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     those outputs by the row's twin (`glm53_rows.ROWS`' kernel where the family has one, cuBLAS's split-K's
     `cublas_gemm_rows.ROWS`, the embedding shard's table row by index, else the row's word Definition by `evaluate_batch`), and
     the IR reference of the template's word on every unit's rows, each as u16 words."""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.codec import descriptor_id
+    from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline import slice_rows as SL
-    from verity.ml.definitions.numerics import cublas_gemm_rows as CGR
-    from verity.ml.definitions.numerics import glm53_rows as GR
+    from verity.definitions.numerics import cublas_gemm_rows as CGR
+    from verity.definitions.numerics import glm53_rows as GR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     fn, S = SRW._bind(row), spec_statics(row)
@@ -331,7 +331,7 @@ def _packed(a: np.ndarray, bits: int) -> np.ndarray:
 def _reference(fn, rows: dict, ports, packed) -> np.ndarray:
     """Word Definition ``fn`` on every unit's rows (``ports``' u16 words as their elements of ``packed`` bits): each unit's every
     output port's elements as their words, in order."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     leaves = [np.ascontiguousarray(rows[p], dtype="<u2").view(np.uint8 if b == 8 else np.dtype(f"<u{b // 8}"))
               .reshape(len(rows[p]), -1).astype(np.uint64) for (p, _w), b in zip(ports, packed)]
@@ -347,11 +347,11 @@ def chunk_call(tp, k_call: int, rng: np.random.Generator) -> dict:
     `MoeExpertFp8CoordinateChunk_v1` chunks of the unit's K, chunk c reading the coordinate's columns of its weights and chunk c - 1's
     output as its ``acc``: every chunk's rows and output word by the word Definition in order, and the last one's word against the
     numpy twin of the whole coordinate (`fp8_moe_rows.moe_expert_fp8_block_row`) and `MoeExpertFp8Gemm_v1{N=1}` at K = ``k_call``."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import fp8_moe_rows as FR
-    from verity.ml.definitions.registry import fp8_moe_experts as X
+    from verity.definitions.numerics import fp8_moe_rows as FR
+    from verity.definitions.registry import fp8_moe_experts as X
     from verity_vllm.query.program_view import spec_statics
 
     S = spec_statics(tp.word)
@@ -384,9 +384,9 @@ def vchunk_call(tp, v_call: int, rng: np.random.Generator) -> dict:
     the middle chunk boundary) cut into V-chunks of a `TokenSelectChunk_v1` or `TokenSelectCombine_v1` template's C (`b1.chunks`):
     each chunk's partial by `TokenSelectChunk_v1`, the combine's token from logits[0] and the partials, and the row's by
     `TokenSelect_v1{V}`, which is the first of the two largest words."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.definitions.registry import b1
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.definitions.registry import b1
     from verity_vllm.query.program_view import spec_statics
 
     def ev(fn, *xs):
@@ -443,7 +443,7 @@ def main() -> int:
     from verity_flock import ir_lower as IL
     from verity_vllm.pipeline import serving_rows as SRW
 
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -457,8 +457,8 @@ def main() -> int:
     t = time.time()
     held, bind, base = {}, {}, 0
     if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
-        from verity.core.protocols.spot.one_stage import partition as P
-        from verity.ml.circuits.codec import canonical_json, encode_program
+        from verity.protocols.spot.verifier.one_stage import partition as P
+        from verity.circuits.codec import canonical_json, encode_program
 
         program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])
         part = P.partition(program, query)

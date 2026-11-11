@@ -34,7 +34,7 @@ fi
 if [ -n "${GPU_LEASE:-}" ] && [ -z "${VY_BOOTSTRAP_LEASED:-}" ] && [[ " $* " != *" --cpu "* ]]; then
   VY_BOOTSTRAP_LEASED=1 exec "$GPU_LEASE" 1 --wait --max-min 60 --mem-gb 0 -- bash "$here/vllm_bootstrap.sh" "$@"
 fi
-cd "$tree/integrations/vllm"
+cd "$tree/adapters/vllm"
 exec 9>> "$work/.vllm-bootstrap.lock"
 if ! flock -n 9; then
   [ -z "${VY_BOOTSTRAP_LEASED:-}" ] || echo "[bootstrap] holding leased GPU ${CUDA_VISIBLE_DEVICES:-?}; waiting for the host-wide lock"
