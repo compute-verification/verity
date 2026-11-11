@@ -143,3 +143,61 @@ def test_documents_are_compared_leaf_by_leaf_with_runs_as_keys():
     assert replot.deep(a, b, skip=("built_at",)) == [
         {"at": "/points/r2/at/1.1/C", "before": 2.0, "after": 2.5, "change": 0.25},
         {"at": "/tables/0/rows/1", "before": 2, "after": 3, "change": 0.5}]
+
+
+def test_the_builders_script_is_read_from_the_refreshs_source_without_importing_it():
+    script = replot.policy_source()
+    assert script.rstrip().endswith("sys.exit(algorithm_policy.main(sys.argv[1:]))") and "TE_TRACE_FAILED" in script
+    assert "v1cycle" not in sys.modules
+
+
+def whole(rows):
+    cols = ["run", "g", "record", "te_core", "C_gates", "H_gates", "p", *replot.RHOS]
+    return {"columns": cols, "rows": [[r.get(c) for c in cols] for r in rows]}
+
+
+def cells(run, c, h, rho, te="1", g=0.01):
+    return {"run": run, "g": g, "record": f"{run}@40", "te_core": te, "C_gates": c, "H_gates": h, "p": c / h,
+            **{k: rho for k in replot.RHOS}}
+
+
+def test_a_rotating_rows_move_is_split_into_the_prices_and_the_widths(tmp_path):
+    def write(path, rows):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(whole(rows)))
+    name = replot.TABLES[0]
+    builds = {"control": [cells("rot", 100.0, 50.0, 4.0), cells("still", 80.0, 40.0, 3.0), cells("h", 60.0, 30.0, 2.0)],
+              "price": [cells("rot", 101.0, 50.0, 3.96, "2"), cells("still", 80.0, 40.0, 3.0, "2"),
+                        cells("h", 60.0, 30.3, 2.0, "2")],
+              "priced": [cells("rot", 101.0, 50.0, 3.95, "2"), cells("still", 80.0, 40.0, 3.0, "2"),
+                         cells("h", 60.0, 30.3, 2.0, "2")]}
+    for n, rows in builds.items():
+        write(tmp_path / "search" / n / name, rows)
+        write(tmp_path / ("overlay" if n == "priced" else f"overlays/{n}") / "tables" / name, rows)
+    tabs = {n: json.loads((tmp_path / "search" / n / name).read_text()) for n in builds}
+    last = {"last": tabs["control"], "served": tabs["control"]}
+    replot.dump(tmp_path / "diff" / "search.json", replot.compare({"last": last["last"], **tabs}, {"rot"}, base="control"))
+    replot.dump(tmp_path / "diff" / "overlay.json", replot.compare({"served": last["served"], **tabs}, {"rot"}, base="control"))
+    same = {"rows": True, "columns": True}
+    replot.dump(tmp_path / "diff" / "frontier-fit.json", {"tables": {"priced": same}, "points": {"priced": True},
+                                                         "refused": {"priced": True}, "console_served_against_rebuilt": same})
+    replot.dump(tmp_path / "diff" / "finals-table.json", {"differ": []})
+    replot.dump(tmp_path / "diff" / "console.json", {"served_rows": 3, "rebuilt_rows": 3, "bytes": {}, "note": "",
+                                                    "served_rows_the_rebuild_drops": [], "rows_the_rebuild_adds": []})
+    replot.dump(tmp_path / "inputs.json", {"code": "c", "main_head": "m"})
+    replot.dump(tmp_path / "rotations.json", {
+        "runs": {"rot": {"checkpoints": {"40": {"gates_added": 1.0, "C_before": 100.0, "C_after": 101.0,
+                                               "rotation_macs": 1}}, "structures": {}}},
+        "unread": [], "no_record": [], "no_arguments": [], "unknown_program": []})
+    v = replot.verdict(tmp_path, {"rows": [{"run": "rot", "step": 40, "before": 4.0, "after": 3.96}]})
+    assert v["checks"]["search: each rotating row's |C| rose by its rotations' added gates"]
+    assert v["checks"]["overlay: no run without a rotation moves but in p over an H that moved"]
+    [moved] = v["lists"]["overlay: rows without a rotation whose p moved"]
+    assert moved["run"] == "h" and moved["change"] == pytest.approx(1 / 1.01 - 1)
+    [r] = v["lists"]["overlay: rotating rows, split"]
+    assert r["cells"]["rho_own"]["price_only"] == pytest.approx(-0.01)
+    assert r["cells"]["rho_own"]["price_and_width"] == pytest.approx(-0.0125)
+    assert r["largest"] == pytest.approx(0.0125) and v["summary"]["rows_moving_over_1_percent"] == [r]
+    [s] = v["lists"]["stated rows"]
+    assert s["price_agrees"] and not s["priced_agrees"] and not v["holds"]
+    assert s["delta"] == pytest.approx(0.01) and s["stated_delta"] == pytest.approx(4.0 / 3.96 - 1)

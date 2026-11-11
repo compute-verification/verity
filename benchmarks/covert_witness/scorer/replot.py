@@ -1,6 +1,7 @@
 """training/algorithm-policy rebuilt with every rotation product priced as the GEMM it ran as, and what moved.
 
     python scorer/replot.py node --state K --inputs IN --scratch S --out OUT     # on the scorer's node
+    python scorer/replot.py check --run OUT --out FILE [--stated STATED.json]    # what moved, before publishing
     python scorer/replot.py diff --out FILE LABEL=PANEL.json LABEL=PANEL.json [...]
 
 Run from benchmarks/covert_witness with the scorer's interpreter (K/venv's). te_core.rotations names a rotating run's
@@ -28,11 +29,18 @@ it, so `node` builds the panel again from the scorer's state, changing nothing i
 
 Every build's tables, console copies and logs go to OUT, so nothing is read back from the node.
 
+`check` reads `node`'s OUT and says whether the rebuild may be published (`verdict`): the control reproduces the last
+refresh and the served overlay, the fit is the served one, a run that doesn't rotate moves only in p and only where
+its H did, a rotating run's |C| rose by its rotations' added gates, and each rotating row's move in every rho, in p and
+in S, split into the price's and the width's. STATED.json holds rho_own values someone stated for rows of the rebuild
+(`{"rows": [{"run", "step", "before", "after"}]}`); each is compared at `DIGITS` significant digits.
+
 `diff` is `compare` on stored panels.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import collections
 import hashlib
 import json
@@ -55,6 +63,12 @@ TABLES = ("algorithm-policy.json", "frontier-fit.json", "frontier-points.json", 
 STAMPS = ("updated_at", "source")
 #: the column that carries the builder's VERSION, which every rebuilt row changes
 VERSION_COLUMN = "te_core"
+#: the columns a row's slowdown is read in, each rho kind, and the cells a run that doesn't rotate may move in: its p
+#: over an H that moved, and the overlay's record cell, which spells p's range
+RHOS = ("rho_own", "rho_default", "rho_console", "rho_served")
+H_CELLS = {"p", "H_gates", "record"}
+#: the significant digits a stated value is compared at, and the relative room two sums of one row's gates get
+DIGITS, ROOM = 4, 1e-9
 T0 = time.monotonic()
 
 
@@ -187,6 +201,165 @@ def deep(a, b, path: str = "", skip: tuple[str, ...] = ()) -> list[dict]:
     return [] if canon(a) == canon(b) else [{"at": path, "before": a, "after": b, "change": change(a, b)}]
 
 
+# -- before publishing
+
+
+def sig(x: float, digits: int = DIGITS) -> float:
+    return float(f"{x:.{digits}g}")
+
+
+def step_of(record: str) -> int:
+    return int(str(record).split(";")[0].rsplit("@", 1)[1])
+
+
+def moves(a: dict, b: dict) -> dict[tuple, dict]:
+    """Per row of both tables whose cells differ (`VERSION_COLUMN` aside): each differing cell's (before, after)."""
+    out = {}
+    for k in a.keys() & b.keys():
+        cells = {c: (a[k][c], b[k][c]) for c in a[k] if c != VERSION_COLUMN and c in b[k] and a[k][c] != b[k][c]}
+        if cells:
+            out[k] = cells
+    return out
+
+
+def split(control: dict, price: dict, priced: dict, rotating: set[str]) -> list[dict]:
+    """Each rotating run's row that moved: per rho kind, p and S = p rho_own, its change under the price alone and
+    under the price and the tiles' width, and the greater total."""
+    def s_of(d: dict):
+        return d["p"] * d["rho_own"] if isinstance(d.get("p"), float) and isinstance(d.get("rho_own"), float) else None
+    out = []
+    for k in sorted(control.keys() & price.keys() & priced.keys(), key=str):
+        if k[0] not in rotating:
+            continue
+        cells = {}
+        for c in (*RHOS, "p", "C_gates", "S"):
+            was, mid, now = ((s_of(t[k]) if c == "S" else t[k].get(c)) for t in (control, price, priced))
+            if was != now or was != mid:
+                cells[c] = {"control": was, "price": mid, "priced": now, "price_only": change(was, mid),
+                            "price_and_width": change(was, now)}
+        if cells:
+            out.append({"run": k[0], "g": k[1], "record": priced[k].get("record"), "cells": cells,
+                        "largest": max((abs(v["price_and_width"]) for c, v in cells.items()
+                                        if c != "C_gates" and v["price_and_width"] is not None), default=0.0)})
+    return out
+
+
+def verdict(OUT: Path, stated: dict | None = None) -> dict:
+    """What `node`'s OUT says, as checks that each hold or name their rows (module docstring)."""
+    def load(*parts: str) -> dict:
+        return json.loads(OUT.joinpath(*parts).read_text())
+    name = TABLES[0]
+    rot, inputs = load("rotations.json"), load("inputs.json")
+    rotating = set(rot["runs"])
+    search = {n: table(load("search", n, name)) for n in ("control", "price", "priced")}
+    over = {"control": table(load("overlays", "control", "tables", name)),
+            "price": table(load("overlays", "price", "tables", name)), "priced": table(load("overlay", "tables", name))}
+    diff = {n: load("diff", f"{n}.json") for n in ("search", "overlay", "frontier-fit", "finals-table", "console")}
+    checks, lists = {}, {}
+
+    # the control is the last refresh's table, and its overlay the served one
+    for what, d, a, b in (("search", diff["search"], "last", "control"), ("overlay", diff["overlay"], "served", "control")):
+        off = [m for m in d["moved"] if f"{a}/{b}" in m["between"]] + [o for o in d["only"] if set(o["in"]) & {a, b}
+                                                                         and not {a, b} <= set(o["in"])]
+        checks[f"the control {what} table is the {a} one"] = not off
+        lists[f"{what}: {a} against control"] = off
+    fit = diff["frontier-fit"]
+    checks["frontier-fit is the last refresh's in every build, and the console's is the served one"] = (
+        all(v["rows"] and v["columns"] for v in fit["tables"].values()) and all(fit["refused"].values())
+        and all(v["rows"] and v["columns"] if isinstance(v, dict) else v for v in fit["points"].values())
+        and fit["console_served_against_rebuilt"]["rows"] and fit["console_served_against_rebuilt"]["columns"])
+    checks["every rotating run with rows is read"] = not rot["unread"] and not rot["no_record"] and not rot["no_arguments"]
+    lists["rotating runs not re-priced"] = {"unread": rot["unread"], "no_record": rot["no_record"],
+                                            "no_arguments": rot["no_arguments"], "unknown_program": rot["unknown_program"]}
+
+    # a run that doesn't rotate moves only in p, and only over an H that moved
+    for what, tabs in (("search", search), ("overlay", over)):
+        other = {k: c for k, c in moves(tabs["control"], tabs["priced"]).items() if k[0] not in rotating}
+        beyond = {k: c for k, c in other.items() if set(c) - H_CELLS or ("p" in c and "H_gates" in tabs["priced"][k]
+                                                                         and "H_gates" not in c)}
+        checks[f"{what}: no run without a rotation moves but in p over an H that moved"] = not beyond
+        lists[f"{what}: rows without a rotation that moved otherwise"] = [
+            {"run": k[0], "g": k[1], "cells": c} for k, c in sorted(beyond.items(), key=str)]
+        lists[f"{what}: rows without a rotation whose p moved"] = [
+            {"run": k[0], "g": k[1], "p": c["p"], "change": change(*c["p"]), "H_gates": c.get("H_gates")}
+            for k, c in sorted(other.items(), key=str) if "p" in c]
+
+    # a rotating run's |C| rose by its rotations' added gates through the row's checkpoint
+    off, still = [], []
+    for k, d in sorted(search["priced"].items(), key=str):
+        if k[0] not in rotating or k not in search["control"]:
+            continue
+        was, now = search["control"][k]["C_gates"], d["C_gates"]
+        cp = rot["runs"][k[0]]["checkpoints"].get(str(step_of(d["record"])))
+        if cp is None or abs((now - was) - cp["gates_added"]) > ROOM * now:
+            off.append({"run": k[0], "g": k[1], "record": d["record"], "C_gates": [was, now], "checkpoint": cp})
+        if now == was:
+            still.append({"run": k[0], "g": k[1], "record": d["record"]})
+    checks["search: each rotating row's |C| rose by its rotations' added gates"] = not off
+    lists["search: rotating rows whose |C| moved otherwise"] = off
+    lists["search: rotating rows whose |C| stayed"] = still
+
+    # each rotating row's move, the price's and the width's
+    parts = {what: split(t["control"], t["price"], t["priced"], rotating) for what, t in (("search", search), ("overlay", over))}
+    width = [{"run": m["run"], "g": m["g"], "cells": {c: v for c, v in m["cells"].items() if v["price"] != v["priced"]}}
+             for m in parts["overlay"] if any(v["price"] != v["priced"] for v in m["cells"].values())]
+    lists["overlay: rotating rows the tiles' width moves beyond the price"] = width
+    lists["overlay: rotating rows, split"] = parts["overlay"]
+    lists["search: rotating rows, split"] = parts["search"]
+
+    def largest(rows: list[dict], cols: tuple[str, ...]) -> dict | None:
+        best = None
+        for m in rows:
+            for c in cols:
+                v = m["cells"].get(c)
+                if v and v["price_and_width"] is not None and (best is None or abs(v["price_and_width"]) > abs(best["change"])):
+                    best = {"run": m["run"], "g": m["g"], "column": c, "change": v["price_and_width"],
+                            "price_only": v["price_only"], "before": v["control"], "after": v["priced"]}
+        return best
+    p_all = [{"run": k[0], "g": k[1], "column": "p", "change": change(*c["p"]), "before": c["p"][0], "after": c["p"][1],
+              "rotating": k[0] in rotating}
+             for k, c in moves(over["control"], over["priced"]).items() if "p" in c and change(*c["p"]) is not None]
+    summary = {"rotating_runs": len(rotating),
+               "overlay_rows": len(over["priced"]),
+               "overlay_rows_moved": len(moves(over["control"], over["priced"])),
+               "overlay_rows_moved_rotating": sum(k[0] in rotating for k in moves(over["control"], over["priced"])),
+               "search_rows": len(search["priced"]), "search_rows_moved": len(moves(search["control"], search["priced"])),
+               "largest_move_in_rho": largest(parts["overlay"], RHOS),
+               "largest_move_in_p": max(p_all, key=lambda x: abs(x["change"]), default=None),
+               "largest_move_in_S": largest(parts["overlay"], ("S",)),
+               "rows_moving_over_1_percent": [m for m in parts["overlay"] if m["largest"] > 0.01],
+               "console": {k: diff["console"][k] for k in ("served_rows", "rebuilt_rows", "served_rows_the_rebuild_drops",
+                                                           "rows_the_rebuild_adds", "bytes", "note")},
+               "finals_table_leaves_that_differ": len(diff["finals-table"]["differ"]),
+               "versions": {n: d[VERSION_COLUMN] for n, d in diff["overlay"]["panels"].items()}}
+    checks["the console's cut drops no row the served one kept"] = not diff["console"]["served_rows_the_rebuild_drops"]
+
+    # values stated for rows of the rebuild
+    if stated:
+        rows = []
+        for e in stated["rows"]:
+            for k, d in sorted(search["priced"].items(), key=str):
+                if not k[0].endswith(e["run"]) or (e.get("step") is not None and step_of(d["record"]) != e["step"]):
+                    continue
+                was, mid, now = (search[n][k]["rho_own"] for n in ("control", "price", "priced"))
+                cp = rot["runs"].get(k[0], {}).get("checkpoints", {}).get(str(step_of(d["record"])))
+                factors = {c: change(search["control"][k][c], d[c]) for c in RHOS}
+                rows.append({"run": k[0], "g": k[1], "record": d["record"], "stated": [e["before"], e["after"]],
+                             "rho_own": {"control": was, "price": mid, "priced": now},
+                             "before_agrees": sig(was) == sig(e["before"]), "price_agrees": sig(mid) == sig(e["after"]),
+                             "priced_agrees": sig(now) == sig(e["after"]),
+                             "stated_delta": e["before"] / e["after"] - 1,
+                             "delta": cp["gates_added"] / cp["C_before"] if cp and cp["C_before"] else None,
+                             "rotation_macs": cp["rotation_macs"] if cp else None,
+                             "every_rho_by_one_factor": len({sig(f, 6) for f in factors.values() if f is not None}) <= 1,
+                             "factors": factors, "structures": rot["runs"].get(k[0], {}).get("structures")})
+        checks["every stated rho_own agrees with the rebuild"] = bool(rows) and all(r["priced_agrees"] for r in rows)
+        lists["stated rows"] = rows
+        lists["stated rows that differ"] = [r for r in rows if not r["priced_agrees"]]
+    return {"run_out": str(OUT), "code": inputs.get("code"), "main_head": inputs.get("main_head"),
+            "holds": all(checks.values()), "checks": checks, "summary": summary, "lists": lists}
+
+
 # -- on the node
 
 
@@ -276,6 +449,17 @@ def gate_factors(K: Path, stamp: str) -> Path:
         raise SystemExit(f"replot: no gate factors under {K / 'v1'} (trial/gates.json, or a refresh's "
                          "algorithm-policy/analysis-gates.json), and the scorer's interpreter can't compile them")
     return found
+
+
+def policy_source() -> str:
+    """v1cycle's POLICY_IO, read from its source: importing v1cycle imports the scorer, which reads the te_core its
+    own refresh pins."""
+    names, got = ("REFUSED_ROWS", "POLICY_IO"), {}
+    for stmt in ast.parse((HERE / "v1cycle.py").read_text()).body:
+        if isinstance(stmt, ast.Assign) and [getattr(t, "id", None) for t in stmt.targets] in ([n] for n in names):
+            exec(compile(ast.Module([stmt], []), "v1cycle.py", "exec"), got)  # noqa: S102
+    compile(got["POLICY_IO"], "POLICY_IO", "exec")
+    return got["POLICY_IO"]
 
 
 def builder(out: Path, root: Path, K: Path, meta: dict, cap: Path, failed: Path, policy_io: str,
@@ -445,20 +629,14 @@ def node(a) -> int:
     led = measured_ledger(K, S, meta, logs)
     dump(OUT / "ledger.json", led)
     say(f"the measured ledger: {led['built']} (the last refresh's: {led['last_refresh_built']})")
-    env = scorer_env(K, S)
-    policy_io = subprocess.run([sys.executable, "-c", "import v1cycle; print(v1cycle.POLICY_IO)"], cwd=HERE, env=env,
-                               check=True, capture_output=True, text=True).stdout
     failed = K / "v1" / meta["stamp"].replace(":", "") / "trace-failed.json"
     if not failed.exists():
-        te40, over = layers(K, meta)
-        code = ("import json, sys, v1cycle\nfrom pathlib import Path\n"
-                "print(json.dumps(v1cycle.trace_failed([Path(p) for p in sys.argv[1:]]), indent=1))")
-        failed = S / "trace-failed.json"
-        failed.write_text(subprocess.run([sys.executable, "-c", code, str(te40), *map(str, over)], cwd=HERE, env=env,
-                                         check=True, capture_output=True, text=True).stdout)
+        raise SystemExit(f"replot: {failed}, the runs whose trace failed at the last refresh, is gone, and without it "
+                         "their rows would read 'not yet traced'")
     shutil.copyfile(failed, OUT / "trace-failed.json")
     cap = IN / "finals" / "CAP.json"
     say("the control build starts")
+    policy_io = policy_source()
     procs = {"control": builder(S / "control", S / "measured", K, meta, cap, failed, policy_io)}
     say("the rotating runs' rows")
     rot = reprice(S / "measured", S / "priced", K)
@@ -535,6 +713,10 @@ def main(argv=None) -> int:
     n.add_argument("--inputs", type=Path, required=True, help="the last builds' stored tables and the finals' inputs")
     n.add_argument("--scratch", type=Path, required=True)
     n.add_argument("--out", type=Path, required=True)
+    c = sub.add_parser("check", help="what a rebuild moved, and whether it may be published")
+    c.add_argument("--run", type=Path, required=True, help="`node`'s OUT")
+    c.add_argument("--stated", type=Path, default=None, help="rho_own values stated for rows of the rebuild")
+    c.add_argument("--out", type=Path, required=True)
     d = sub.add_parser("diff", help="stored panels' rows, cell by cell")
     d.add_argument("--out", type=Path, required=True)
     d.add_argument("--rotations", type=Path, default=None, help="`node`'s rotations.json, for which runs rotate")
@@ -542,6 +724,13 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "node":
         return node(a)
+    if a.cmd == "check":
+        v = verdict(a.run, json.loads(a.stated.read_text()) if a.stated else None)
+        dump(a.out, v)
+        for what, ok in v["checks"].items():
+            print(f"{'holds' if ok else 'FAILS'}: {what}")
+        print(json.dumps(v["summary"], indent=1, default=str))
+        return 0 if v["holds"] else 1
     rotating = set(json.loads(a.rotations.read_text())["runs"]) if a.rotations else set()
     panels = {label: json.loads(Path(path).read_text()) for label, _, path in (x.partition("=") for x in a.panels)}
     out = compare(panels, rotating)
