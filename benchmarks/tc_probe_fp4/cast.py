@@ -31,10 +31,10 @@ import k32
 import probe as P
 
 # isort: split
-# verity_config is importable once probe has put tools/config on sys.path
+# verity_config is importable once probe has put verity/configuration/config on sys.path
 from verity_config.settings import SHARED
 
-from verity.ml.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
+from verity.definitions.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
 
 if TYPE_CHECKING:
     import argparse

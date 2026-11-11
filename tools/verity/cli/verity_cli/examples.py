@@ -1,4 +1,4 @@
-"""The ladder: each demo's doneness on two independent axes, from its `examples/<name>/demo.toml` (`examples/README.md`).
+"""The ladder: each demo's doneness on two independent axes, from its `demos/<name>/demo.toml` (`demos/README.md`).
 
 A demo names its protocol (or a composite, or a list), its workload and its placement (role -> machine class), how far it
 runs (`run`: moved, runs, placed) and how far its guarantee is proved (`proof`: none, stated, proved, measured), and the
@@ -35,7 +35,7 @@ KEYS = {"protocol", "workload", *AXES, "placement", "evidence"}
 LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("placed", "stated"), 4: ("placed", "proved"),
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
-SCHEMA = "examples/README.md has the schema"
+SCHEMA = "demos/README.md has the schema"
 WHERE = "tools/verity/cli/verity_cli/examples.py"
 DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*\n?[ \t]*)?(?:(?:private|protected|noncomputable|nonrec|partial|unsafe)[ \t]+)*"
                   r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|class|opaque)[ \t]+([^\s:({\[]+)", re.M)
@@ -123,10 +123,10 @@ def _names(v) -> list[str]:
 
 
 def vocabulary(root: Path) -> tuple[list[str], list[str]]:
-    """The known protocols (packages under verity/core/protocols/, the composites among them) and workloads."""
+    """The known protocols (packages under verity/protocols/, the composites among them) and workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
-    return dirs(root / "verity" / "core" / "protocols"), [*dirs(root / "integrations"), "none"]
+    return dirs(root / "verity" / "protocols"), [*dirs(root / "integrations"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
@@ -148,9 +148,9 @@ def schema(ex: Demo, root: Path) -> list[str]:
     if not ps or not all(isinstance(x, str) for x in ps) or (isinstance(p, list) and len(ps) < 2):
         out.append(f"protocol: give a protocol or composite ({', '.join(protocols)}) or a list of two or more")
     elif unknown := [x for x in ps if x not in protocols]:
-        out.append(f"protocol {unknown} is no package under verity/core/protocols/: one of {', '.join(protocols)}")
+        out.append(f"protocol {unknown} is no package under verity/protocols/: one of {', '.join(protocols)}")
     if d.get("workload") not in workloads:
-        out.append(f"workload {d.get('workload')!r}: one of {', '.join(workloads)} (a directory under integrations/, or none)")
+        out.append(f"workload {d.get('workload')!r}: one of {', '.join(workloads)} (a directory under adapters/, or none)")
     for axis, steps in AXES.items():
         if axis not in d:
             out.append(f"add {axis}, one of {', '.join(steps)}")

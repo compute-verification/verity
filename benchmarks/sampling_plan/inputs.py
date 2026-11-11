@@ -9,9 +9,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
-from verity.ml.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
-from verity.core.protocols.spot.costfit import Observation
-from verity.core.protocols.spot.optimize import SHA512_ANDS
+from verity.commitments.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
+from verity.protocols.spot.costfit import Observation
+from verity.protocols.spot.optimize import SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -194,7 +194,7 @@ def cap(ands: int, rows: Sequence[int]) -> int:
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
     operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
-    from verity.core.protocols.spot.optimize import row_ands
+    from verity.protocols.spot.optimize import row_ands
 
     return k // 32 * S8_STEP + EPILOGUE + 2 * row_ands(k) + 3 * row_ands(1)
 
@@ -227,7 +227,7 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
     (14336, 512, 512): (131.07, 119.78, 41.6)}
 
 
-#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a sampled receipt opened in
+#: PoUB's opening unit (`verity.protocols.poub.verifier.commitments.gates.block_check`): a sampled receipt opened in
 #: circuit, its 4 KiB block decoded to its payload, its sketch receipt recomputed, and the receipt leaf and the payload
 #: opened to their roots (its ANDs are the whole unit's, every opening included)
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"

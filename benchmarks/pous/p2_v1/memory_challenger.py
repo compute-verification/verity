@@ -11,7 +11,7 @@ its own secret: `audit_id` from `verity/pous/p2-audit-id/v4` at the audit's coun
 answer's last byte, correct when the label's leaf is the retained one, on time within the limit, and the audit stops at the
 first failure. `k` is 105, the deployment's.
 
-The limit, the calibration, the clocks and the record are the band memory challenger's (`verity/core/devices/memory_challenger/timed_audit.py`): `--calibrate-only` fixes
+The limit, the calibration, the clocks and the record are the band memory challenger's (`verity/protocols/pous/device/timed_audit.py`): `--calibrate-only` fixes
 `Δ + allowance` before any load, `--limit-ns` judges every audit against it, the allowance is a loopback one (spec v4 caps it
 at 354 µs), and every audit's secret source and every answer's time are kept.
 
@@ -34,7 +34,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity.core.devices.memory_challenger.timed_audit import (  # noqa: E402
+from verity.protocols.pous.device.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     OP_CHALLENGE,
     LiveResponder,
@@ -45,7 +45,7 @@ from verity.core.devices.memory_challenger.timed_audit import (  # noqa: E402
     quantiles,
 )
 from p2_v1 import reference  # noqa: E402
-from verity.core.protocols.pous.verifier import MerkleTree
+from verity.protocols.pous.verifier.verifier import MerkleTree
 
 
 def params_of(manifest: dict[str, Any], payload_bytes: int) -> reference.Params:

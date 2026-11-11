@@ -8,7 +8,7 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.core.protocols.spot.optimize import Cell
+from verity.protocols.spot.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():

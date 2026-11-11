@@ -19,7 +19,7 @@ export HZ_CONFIGS=live HZ_MEM_GB=${H1_MEM_GB:-128} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm
 H=$SRC/benchmarks/pouw/h1_prove
 LIVE=${H1_LIVE:?}
 case $LIVE in /*) ;; *) LIVE=$RESEARCH_RUN_DIR/$LIVE ;; esac

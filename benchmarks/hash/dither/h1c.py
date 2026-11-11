@@ -34,10 +34,10 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pouw" / "served_h1"))
 import commit as CM  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
-from verity.ml.commitments import identity as ID  # noqa: E402
-from verity.ml.commitments import rowleaf as RL  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.merkle import merkle_depth  # noqa: E402
+from verity.commitments import identity as ID  # noqa: E402
+from verity.commitments import rowleaf as RL  # noqa: E402
+from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
+from verity.commitments.merkle import merkle_depth  # noqa: E402
 
 settings = of(__file__)
 U64_8, U64_16 = C.c_uint64 * 8, C.c_uint64 * 16

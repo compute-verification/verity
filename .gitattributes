@@ -10,8 +10,8 @@ tests/test_lean_packages.py merge=lean-caps
 pyproject.toml merge=pyproject-test-lists
 # the fixture replica map key by key; a key set two ways refuses (tools/verity/check/merge_map.py)
 fixtures/artifacts.json merge=fixture-map
-# the vLLM lints' shrink-only lists entry by entry; an entry changed two ways refuses (integrations/vllm/tests/lint/merge_allowlist.py)
-integrations/vllm/tests/lint/allowlists/*.json merge=vllm-allowlist
-integrations/vllm/tests/dead_code_keep.json merge=vllm-allowlist
+# the vLLM lints' shrink-only lists entry by entry; an entry changed two ways refuses (adapters/vllm/tests/lint/merge_allowlist.py)
+adapters/vllm/tests/lint/allowlists/*.json merge=vllm-allowlist
+adapters/vllm/tests/dead_code_keep.json merge=vllm-allowlist
 # the repository's lists (tests/lint/test_repo_*.py), entry by entry with the same driver
 tests/lint/allowlists/*.json merge=vllm-allowlist

@@ -135,7 +135,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interfaces"):
+for _p in (Path(__file__).resolve().parent, ROOT / "benchmarks" / "one_stage" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -719,14 +719,14 @@ def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | 
 
 def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
                      inputs: Mapping[str, str], python: str) -> dict[str, Any]:
-    """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
+    """`pouw_h1_gpu.py --check-challenger` (run by `python` in adapters/vllm, so ``tests`` is that package's) of the
     window's record `calls` against its session's tree `tree`, with credit's `inputs` (`credit_inputs`); its
     ``pouw_h1_challenger.json``."""
     out.mkdir(parents=True, exist_ok=True)
     argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
             "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out),
             *(x for kv in inputs.items() for x in kv)]
-    p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
+    p = subprocess.run(argv, cwd=ROOT / "adapters" / "vllm", capture_output=True, text=True, check=False)
     (out / "check.log").write_text(p.stdout + p.stderr)
     try:
         return json.loads((out / "pouw_h1_challenger.json").read_text())
@@ -827,7 +827,7 @@ def check_answer(a: Any) -> dict[str, Any]:
     """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
     the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
     reason and neither. Anything else is a ValueError, which the row reports as the subprotocol's error."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.protocols.pouw.verifier import core_check as CC
 
     try:
         CC.answer_of(a)

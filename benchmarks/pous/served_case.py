@@ -47,12 +47,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period
-from verity.core.protocols.pous import run as R
-from verity.core.protocols.pous import wipe_party, wipe_period
-from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period
+from verity.protocols.pous.verifier import run as R
+from verity.protocols.pous.verifier import wipe_party, wipe_period
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 
 HERE = Path(__file__).resolve().parent
 CASE, ANSWER = "case.json", "answer.json"

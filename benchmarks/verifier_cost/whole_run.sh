@@ -18,7 +18,7 @@ while [ $# -gt 0 ]; do
   [ "$1" = "--" ] && { shift; flags=("$@"); break; }
   ns+=("$1"); shift
 done
-L=$PWD/verity/core/service/spot
+L=$PWD/verity/protocols/spot/verifier/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
