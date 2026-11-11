@@ -1,7 +1,7 @@
 """An attack config: one TOML file naming a start, a route and its dials, the training budget, the seeds, and what the
 grade reads (the target gain, the policy, the honest config). `load(path)` reads one and refuses, by name, a key the
 schema lacks, a start the registry lacks, a route `routes/` lacks, a dial the route lacks, of another type or of a
-value its plan refuses, a policy neither the calculator's registry nor `policy.py` names, and an honest config at another start or gain.
+value its plan refuses, two dials written of which the route reads one, a policy neither the calculator's registry nor `policy.py` names, and an honest config at another start or gain.
 
     start = "s-t20"                       # a start in starts.toml
     route = "subset"                      # routes/subset.py
@@ -66,7 +66,8 @@ def _is(value, kind) -> bool:
 
 
 def dials(mod: ModuleType, given: dict, where: str) -> dict:
-    """The route's DIALS with `given` over them, each of its default's type (an int where a float is due is one)."""
+    """The route's DIALS with `given` over them, each of its default's type (an int where a float is due is one), and
+    at most one written of each group of the route's `EITHER`."""
     out = dict(mod.DIALS)
     for k, v in given.items():
         if k not in out:
@@ -77,6 +78,10 @@ def dials(mod: ModuleType, given: dict, where: str) -> dict:
             raise SystemExit(f"{where}: dial {k!r} is {type(v).__name__} {v!r}, the route's is "
                              f"{type(out[k]).__name__} ({out[k]!r})")
         out[k] = float(v) if isinstance(out[k], float) else v
+    for group in getattr(mod, "EITHER", ()):
+        if len(both := [k for k in group if k in given]) > 1:
+            raise SystemExit(f"{where}: dials {' and '.join(both)} say one thing in two ways and route "
+                             f"{mod.__name__.rsplit('.', 1)[-1]} reads one of them (its EITHER): write one")
     return out
 
 

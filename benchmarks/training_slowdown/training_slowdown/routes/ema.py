@@ -7,7 +7,7 @@
 - `ema_horizon` (0: `ema_decay` at every step): the share of the steps so far the average reaches back over. At step
   t, the first being 0, the average keeps 1 - 1/max(1, `ema_horizon`·(t + 1)) of itself: nothing until that share
   of the steps is a whole step, so until then it is the weights themselves, and more of itself the longer the run.
-  A config sets this or `ema_decay`.
+  A config writes this or `ema_decay` (`EITHER`): over a horizon the route reads no `ema_decay`.
 
 The average of each trained tensor is a buffer of the model, outside its state: the route carries it from step to
 step, the step still reads the weights themselves, and a checkpoint's output takes each average in its tensor's
@@ -22,6 +22,7 @@ from . import subset
 VERSION = 1
 DIALS = subset.DIALS | {"ema_decay": 0.99, "ema_horizon": 0.0}
 LATER = (*subset.LATER, "ema_horizon")
+EITHER = (("ema_decay", "ema_horizon"),)
 
 
 def plan(dials: dict):
@@ -29,8 +30,6 @@ def plan(dials: dict):
         raise ValueError("ema: ema_decay is a share in [0, 1)")
     if not 0 <= dials["ema_horizon"] <= 1:
         raise ValueError("ema: ema_horizon is a share of the steps so far, in [0, 1]")
-    if dials["ema_horizon"] and dials["ema_decay"] != DIALS["ema_decay"]:
-        raise ValueError("ema: ema_horizon says what the average keeps at each step, so leave ema_decay out")
     return subset.plan(dials)
 
 

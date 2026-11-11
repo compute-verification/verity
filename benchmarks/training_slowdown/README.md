@@ -100,7 +100,8 @@ one failed; a failed job is never run again.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`; a dial its
-`LATER` names is out of a config's digest while at its default, so a route gains a dial and no digest moves); the harness
+`LATER` names is out of a config's digest while at its default, so a route gains a dial and no digest moves, and a
+config writes one dial of a group its `EITHER` names); the harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
