@@ -1,4 +1,4 @@
-"""`verity config` and `verity run` (`verity_cli.run`, `verity.core.deploy.config`): the configuration's refusals by name,
+"""`verity config` and `verity run` (`verity_cli.run`, `verity.configuration.deploy.config`): the configuration's refusals by name,
 a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
 runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
@@ -14,11 +14,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.deploy import config as K
-from verity.core.deploy.manifest import Channel, Role
-from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage import registration as RG
-from verity.core.wire import Refused
+from verity.configuration.deploy import config as K
+from verity.configuration.deploy.manifest import Channel, Role
+from verity.protocols.spot.verifier import parties as SP
+from verity.protocols.spot.verifier.one_stage import registration as RG
+from verity.configuration.wire import Refused
 from verity_cli import run as R
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"
@@ -167,7 +167,7 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 
 def test_the_canonical_form_is_verity_canonical_json():
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
 
     cfg = K.check(config(), REG.components, REG.workloads)
     assert K.canonical(cfg) == canonical_json(cfg)
