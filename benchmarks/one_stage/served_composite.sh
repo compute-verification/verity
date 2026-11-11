@@ -26,8 +26,11 @@
 # each case not written or left out by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
 # (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a deferral's follow-on copied the
 # serve dir's audit inputs to), headed COMPOSITE, and nothing else. Without composite.py in the tree, or under
-# PRODUCT=onsite without ONSITE_PIECES's file or where its `onsite_cases` can't read the two cases, it says so and exits
-# 1, since no product's Lean answered. It makes no verdict: exit 0 when each product's Lean answered, else 1.
+# PRODUCT=onsite without ONSITE_PIECES's file or where its `onsite_cases` itself fails (its Python's exit isn't 0, or
+# its list of the directories it left out can't be read), it says so (`COMPOSITE: not run`) and exits 1, since no
+# product's Lean answered. It exits 1 only where the step itself fails, not for a piece's summary or answer that doesn't
+# parse: that makes its protocol NOT_WRITTEN, its case is not composed, the step goes on, and onsite's NOT_ESTABLISHED
+# line names the protocol as missing. It makes no verdict: exit 0 when each product's Lean answered, else 1.
 # PRODUCT=remote (`served_verdicts.sh`'s) reads no PoUS or wipe case and no ONSITE_PIECES, and runs remote's Lean alone.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
