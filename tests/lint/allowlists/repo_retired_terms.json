@@ -2547,7 +2547,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordGates.lean", "count": 11},
     {"file": "security/Proofs/Properties/Nci/RecordGrid.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordJson.lean", "count": 6},
-    {"file": "security/Proofs/Properties/Nci/RecordLaidOut.lean", "count": 13},
+    {"file": "security/Proofs/Properties/Nci/RecordLaidOut.lean", "count": 14},
     {"file": "security/Proofs/Properties/Nci/RecordLanding.lean", "count": 8},
     {"file": "security/Proofs/Properties/Nci/RecordOwn.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordPassed.lean", "count": 3},
@@ -5879,6 +5879,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordRows.lean", "count": 10},
     {"file": "security/Proofs/Properties/Nci/RecordTemplates.lean", "count": 12},
     {"file": "security/Proofs/Properties/Nci/RecordWide.lean", "count": 8},
-    {"file": "security/Proofs/Properties/Nci/RecordWire.lean", "count": 4}
+    {"file": "security/Proofs/Properties/Nci/RecordWire.lean", "count": 4},
+    {"file": "security/Proofs/Properties/Nci/RecordLeafWide.lean", "count": 20}
   ]
 }

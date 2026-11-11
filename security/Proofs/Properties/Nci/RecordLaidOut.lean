@@ -5,6 +5,7 @@ public import Proofs.Properties.Nci.LeafWidthsDecoded
 public import Proofs.Properties.Nci.LeafWidthsResolve
 public import Proofs.Properties.Nci.RecordFields
 public import Proofs.Properties.Nci.RecordInputs
+public import Proofs.Properties.Nci.RecordLeafWide
 public import Proofs.Properties.Nci.RecordPrim
 public import Proofs.Properties.Nci.RecordProgram
 public import Proofs.Properties.Nci.RecordRows
@@ -32,5 +33,6 @@ templates are that Program's (`RecordTemplates`).
 Of the property's clauses on a unit: its rows are its own input gates, and what it returns and what its gates read
 are its own (`RecordRows`). Of the wires: what `Spot.Wires.check` has tested of a wire and gives of a row the wire
 covers (`RecordWire`), a wired row holds its output (`RecordWide`), whose leaves are leaves of the writer's return
-(`RecordFields`), and the wires' declarations come first, so no row the check holds has a writer (`RecordInputs`).
+(`RecordFields`), a gate is as wide as the leaf that names it (`RecordLeafWide`), and the wires' declarations come
+first, so no row the check holds has a writer (`RecordInputs`).
 -/
