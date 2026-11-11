@@ -218,7 +218,8 @@ def test_each_statement_pays_its_verify_at_the_cards_ratio():
     assert how == "family" and k4096 == pytest.approx(v["fixed_seconds"] + 2 * (by["FlashInferFp8Linear_v1{K=2048,"]
                                                                                  - v["fixed_seconds"]))
     lo, hi = by["SparseMlaCombine_v1{NSPLIT=2,"], by["SparseMlaCombine_v1{NSPLIT=12,"]
-    assert t.verifier_seconds(v, "SparseMlaCombine_v1{NSPLIT=5,DV=512}")[0] == pytest.approx(lo + 3 * (hi - lo) / 10)
+    assert t.verifier_seconds(v, "SparseMlaCombine_v1{NSPLIT=8,DV=512}") == (pytest.approx(lo + 6 * (hi - lo) / 10),
+                                                                             "family")
     assert t.verifier_seconds(v, "MoeExpertFp8BlockGemm_v4{K=6144}") == (by["MoeExpertFp8GemmW_v1{"], "family")
     assert t.verifier_seconds(v, "Unseen_v1{K=3}")[1] == "assumed"
     c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
