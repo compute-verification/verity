@@ -16,7 +16,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - **An agent VM only edits.** Its 16 GB are shared by every agent on it, and one out-of-memory kill takes them all down.
   Locally, run only git, reading and editing, messaging and the notes, one test file or `-k` selection under about a
   minute and 1 GB, `lake env lean` on one file of a built tree, a Lean package with no Mathlib or ArkLib, and the lock
-  fast path. Everything else (every suite, `verity check`, circuit-check, any build of `Security`, cargo, nvcc, every
+  fast path. Everything else (every suite, `verity check`, circuit-check, any build of `security`, cargo, nvcc, every
   e2e and GPU job) runs through `research run --on auto --cwd source [--wait] -- CMD` (the writing-runs skill): an
   `agent-test` job on the cluster queue (4 CPUs, 16 GiB, 60 min unless `--cpus`, `--mem-gb` or `--timeout` say
   otherwise), or a `research` pool when one starts sooner. The shell hook refuses those locally and names the remote
@@ -38,8 +38,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
-  print the environment or every process's command line; on a VM booted without it, run origin/main's
-  `tools/agent-guard/boot.sh`. A secret is stored as one line (a key as base64, `NAME_B64`).
+  print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
+  hook); on a VM booted without it, run origin/main's `tools/agent-guard/boot.sh`. A secret is stored as one line (a
+  key as base64, `NAME_B64`).
 
 ## Landing
 
@@ -67,8 +68,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
   moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
-  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and `Security/`'s
-  Lake files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive
+  `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
+  Lake files) or to Lean that runs as code (a `.lean` outside `security/`) lands on its verdict like any other. Drive
   then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
   records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
   ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
@@ -132,10 +133,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Pick a subagent's effort by how conceptually heavy its task is**, and pass it as `Task`'s `model`
-  (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
-  the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
-  execution, `low` for trivial lookups.
+- **Every agent runs Claude Fable 5.2.** Pick a subagent's effort by how conceptually heavy its task is, and pass it
+  as `Task`'s `model` (`claude-fable-5-2-<effort>`; `inherit` only when you run Fable 5.2 yourself), a standing
+  request for every agent here: `max` for the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for
+  slightly heavy work, `medium` for routine execution, `low` for trivial lookups.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
