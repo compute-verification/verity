@@ -70,6 +70,15 @@ def test_a_row_s_split_is_its_own_plan_s():
         H.assemble(row(a), b, CALLS, STRATA, CALLS[0][1])
 
 
+def test_a_row_carries_what_the_command_selects_it_by():
+    """`verity bench exfiltration` takes a run of record's rows by world, row and a step's prefix, at the pinned beta
+    it reads as `b10`: a row without them is one the command can't read."""
+    p = plan()
+    got = H.assemble(row(p), p, CALLS, STRATA, CALLS[0][1])
+    assert (got["world"], got["b10"]) == ("ours", p["beta"])
+    assert H.STEP.startswith("+ the verifier as measured")
+
+
 def test_the_pricing_split_is_the_row_s_last_call():
     """Each family's share of the proving seconds a token, X, from the strata the row's last call priced."""
     s = H.pricing_split(CALLS[0][1] + [{"block": "Gemm_v2{M=1}", "per_token": 1.0, "seconds_per_block": 2.0,

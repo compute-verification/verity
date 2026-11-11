@@ -43,7 +43,10 @@ SERVED_BITS = 875 * 32.0
 SERVED_CASE = "trace128 max x32"
 MIX, RULE = "B128", "paced at 10 tokens/s"
 CHARGES = "certified hits, replays reprove hits"
-STEP = "the verifier as measured, FlashInfer K6144 and K2048 in slots"
+STEP = "+ the verifier as measured, FlashInfer K6144 and K2048 in slots"
+#: the world the rows are priced in, the tree's reference fleet, by the name `verity bench exfiltration` takes a run of
+#: record's rows by; it also reads a row's pinned beta as `b10`, and its step by the prefix "+ the verifier as measured"
+WORLD = "ours"
 
 #: the GPU prover at its measured 3.71 times, not the 4 times goal (1.101 s against 2.088 s over 3.71)
 PROVER_MEASURED = 1.101 / (2.088 / 3.71)
@@ -460,7 +463,8 @@ def assemble(row: dict, p: dict, calls: list, strata: list, pricing: list) -> di
     if abs(planned / row["requests"] - 1) > REQUESTS_RTOL:
         raise ValueError(f"{row['row']}, {row['scope']}: the row's {row['requests']:.6g} requests are not its plan's "
                          f"{planned:.6g} (replay_sample / q)")
-    return row | {"pricing_split": pricing_split(pricing), "split": plan_split(p, calls, strata)}
+    return row | {"world": WORLD, "b10": row["beta"], "pricing_split": pricing_split(pricing),
+                  "split": plan_split(p, calls, strata)}
 
 
 def run(spec: dict, known: dict | None = None, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
