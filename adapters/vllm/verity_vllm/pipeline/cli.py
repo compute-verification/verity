@@ -89,7 +89,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
-    "sampling-rng": ("verity_vllm.program.sampling_rng", "sampler noise recomputation"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
