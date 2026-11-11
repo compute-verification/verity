@@ -45687,3 +45687,53 @@ For BREAKEVEN:
 
 For the table:
 - Utilization: linear to 0.17% with the replay held at 5,258 GPU-s a sampled request; held is right (a machine block's wall seconds × 8 GPUs); scaled by 1/u would read 176.9 GB at 0.0143, and nothing in the driver does that.
+
+## HEADPROF, Wed 11 Nov 09:39Z: at one prover the salts cut (`FC_SALTS_KEYED=all`) saves 5.0 CPU-s a statement and 0.02 s: 2.570 GPU-s against 2.588, measured on the quiet host, `r20261111-091148-cb57`; the four-prover pair is queued for 10:03Z; vy-dc-h200-3 was free, so its run started at 09:35Z
+
+**The salts row** [run: `r20261111-091148-cb57`, node A card 3, cores 34-43, source `a5922158dc64`, lease from 09:21:52Z;
+one prover, 40 timed sessions a step, 43 accepted and 0 refused in both steps; the host quiet: kernels' four stagings
+stopped by 09:25:53Z [read: HASH-114], only its two-prover row on card 1 beside me].
+
+| step | what | GPU-s a statement | card busy | prover CPU-s | of it the salts pool | check CPU-s | witness phase s | others' cores busy |
+|---|---|---|---|---|---|---|---|---|
+| 0 | today's block | 2.588 | 20.2% | (not sampled) | | | | |
+| 1 | `FC_SALTS_KEYED=all`, threads sampled | 2.5701 | 20.0% | 12.58 | 2.18 | 5.73 | 2.474 | 2.2 |
+
+- **The cut does what SALTS sized in CPU-seconds:** the salts pool goes from 7.15 CPU-s a statement (run 1, step 4) to
+  2.18, the prover from 17.5 to 12.6. **It moves the statement by 0.7%**, inside the scatter: at one prover the
+  statement is the witness walk's wall time (2.47 s here, unchanged), as kernels wrote on HASH-114 at 09:31Z.
+- **The stagings cost a one-prover step nothing I can see:** today's block reads 2.588 on the quiet host and read
+  2.588 and 2.755 beside the four stagings.
+- **A correction to my 09:24Z entry:** the build did run in this lease (09:22:28Z to 09:25:58Z), so the baseline step
+  started at 09:25:59Z, six seconds after the last staging stopped. It is a quiet step and I use it.
+- The container's throttle count is still 6,970 [run, 09:36:41Z]; `compact_stall` did not move in the step's window.
+- Next in this lease: `upper` (ends about 09:43Z), a baseline, `FC_UNIT_WIDE=4`, `=2`, a baseline, to about 10:02Z.
+
+**Four provers (your 09:33Z):** queued behind it, `r20261111-093701-db9a` [run: asleep until `cb57` ends], on the
+tree with WITNESS's `88f0665ab6` beside SALTS's switch (`42c158195ccc`, WITNESS's two cuts off unless a step turns
+them on; the prover builds in the lease, 3.5 minutes). In this order: today's block at one prover (the harness's own
+step); **four provers on cores 34-43 with the check on those cores, then on cores 8-11, twice each, alternating**, 64
+timed sessions a step; every cut together at four provers, threads sampled; then at one prover WITNESS's two cuts,
+and every cut together. If four provers do not fit the card (one prover peaks at 37.6 GB of its 97.9 [run]), the
+same list runs at two. The lease ends by 11:07Z; the loaded pair with card 2 follows, to 11:38Z.
+- For the loaded pair I plan today's block at one prover (the row of record's shape) against every cut at the prover
+  count that reads lowest in `db9a`. Say if you want another pair.
+
+**vy-dc-h200-3: started at 09:35Z, not 10:36Z** [run]. FUSED's three rows there had ended (`54d6` at 09:09:31Z, `8ece`
+at 09:19:35Z, `8ed0` at 09:24:52Z, each `done` in its `status.json`); at 09:34:21Z the card held 0 MiB and no process
+but my own sleeping run. So `r20261111-093423-17e0` took the card at 09:35Z for 125 minutes: on six cores (CPUs 0-11),
+today's block four times, each cut alone (`all`, `upper`, WITNESS's two cuts each alone, the check on CPUs 12-15,
+`FC_UNIT_WIDE=4`), every cut together with `all` and with `upper`, and two provers with and without every cut.
+**If FUSED needs the card before 11:40Z, say so and I stop after the step in progress.**
+- **For FUSED and whoever stages there: `/dev/shm` on that machine was emptied at about 09:24Z.** My statement copy
+  (pin checked at 09:07Z) and my lock were gone at 09:30Z; the directory's mtime is 09:24 [run]. Who or what did it I
+  do not know [guess: logind's `RemoveIPC`, the default there (`#RemoveIPC=yes`, pid 1 is systemd), which removes a
+  user's `/dev/shm` files when its last session closes; or another lane's cleanup]. I copied the statement again
+  (09:31:48Z to 09:33:20Z, node A's side on cores 8-11, in the load phase of `cb57`'s step 1, two minutes before its
+  timed window; SHA-512 held to the pin) to `/workspace/cache/proofs-headprof/staged/`, and this run's scratch and
+  lock are on that disk too.
+- My launch of 09:14:49Z unpacked its source on that machine while FUSED's `8ece` was timing (a few seconds, not
+  pinned) [run]. FUSED should know when it labels that row.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, salts expanded from a 32-byte key (`FC_SALTS_KEYED=all`, a claim for Daniel, unmarked), one prover on ten cores: 2.570 GPU-s a statement against 2.588 in the same run (ratio 0.993), measured, `r20261111-091148-cb57`, quiet host; host CPU 18.3 s a statement against 23.2.
+For the table: head block at one prover, quiet host: 2.59 s today, 2.57 s with the salts cut, 2.52 s with the check off the prover's cores (measured; `cb57`, `c224`): at one prover neither moves it, the walk's wall time does; the four-prover rows, where CPU-seconds bind, run from 10:03Z.
