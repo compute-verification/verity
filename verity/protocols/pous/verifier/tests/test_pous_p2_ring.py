@@ -1,10 +1,10 @@
-"""Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`Security/Definitions/Pous/Assumptions/P2.lean`), the
-test that `shape.conjectures` in `Security/lean-audit.json` and `Security/Properties/lean-audit.json` names for it and
+"""Falsification test of `Pous.P2.Assumptions.P2RingAuditSecure` (`security/Definitions/Pous/Assumptions/P2.lean`), the
+test that `shape.conjectures` in `security/lean-audit.json` and `security/Properties/lean-audit.json` names for it and
 for `P2RingReducesToM1p`, which implies it: P2 in the ring model, with sequential reveal, accepts every `⌊ρ·|C|⌋`-bit, `(D, Q, L)`-bounded responder with probability at
 most `δ + ε`. The same samples test the per-round form `P2RingRoundSecure`
 (`test_p2_ring_round_secure_at_a_scaled_point`).
 
-The audit is `p2ring` as `Security/Definitions/Pous/P2/Cost.lean` defines it: a uniform odd labeling of `Z/p`
+The audit is `p2ring` as `security/Definitions/Pous/P2/Cost.lean` defines it: a uniform odd labeling of `Z/p`
 (sampled lazily, which is the same distribution), per-block keys `(K_j, τ_j)`, a responder that sees elements only
 as labels through metered `add`, `mul`, `one` and `key` queries, and the trusted encoder `ρ(σ_K(ρ(m + t)))`, which at
 the identity labeling is `verifier/schemes/p2.py`'s field (`test_the_model_is_the_reference_codec`). It is played at a scaled
