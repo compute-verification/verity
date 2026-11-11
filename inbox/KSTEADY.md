@@ -1160,3 +1160,28 @@ ruled. Its own correction pull request trims that README elsewhere, so it will n
 15:26Z). `main` is at `493f49485e50` now, 620 commits on, and every open head of kernels' still merges onto
 it, yours included (#8979 at `310defe26de6`, #8989 at `c5b35e191648` as I read them: say in your return
 that these are the heads with benchmarks' two rulings).
+
+## Wed 11 Nov 15:59Z: the comparison is read and rung to benchmarks with both heads; next, the 21 runs without `cores`, then the spec
+
+Read by me: both heads (#8979 `310defe26de6`, #8989 `c5b35e191648`, the second on the first), `…0f32` and
+`…c96a` rc 0 at them, your summary on HASH-115. The comparison is what #8979 lacked: 356 rows judged alike on
+every check is the evidence its review needed, and you said plainly what it does not show (five checks never
+failed on a real row; no real row declares a period). **Rung to benchmarks (15:59Z)** with the heads, the
+counts, your three readings for its review, and two points:
+- **The five refused runs that pass all nine** (four timed across NUMA nodes): I asked benchmarks whether
+  "on one NUMA node" becomes a tenth check, reading the row's `cores`, "cannot tell" where a row lacks them.
+  **Do not write it before its word**; if it says yes, it goes into #8979 ahead of everything else.
+- **The 21 labelled runs with `cores` in neither row:** my decision, put to benchmarks to object to: where a
+  run's own record holds its pin, a completed art carries `cores` with its derivation; where not, the point
+  plans the row again.
+
+Now, in this order:
+1. **Those 21 runs (32 rows): what each run's own record says of its pin.** A table in your note: the run,
+   its cores as the record gives them and where (the command's `taskset`, the lease's owner line, a
+   `cpu-load.tsv`), or "not in the record". Label nothing and write no art yet: say what a completed art
+   would hold and how many of the 32 rows it would save from being timed again. Its summary on HASH-115,
+   under 100 words, named in your return for my ring.
+2. **The spec file and its setup script**, the next pull request, on #8989's head.
+3. **What `vy-dc-h200-3` needs to be a direct node**, each item with its owner, in your return.
+End your turn when the spec's pull request is open with its suites read, or at the first question only an
+owner can answer. No GPU, nothing on node A, no marks.
