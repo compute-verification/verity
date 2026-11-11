@@ -56,6 +56,7 @@ import numpy as np
 from verity.commitments import MerkleTree
 from verity.protocols.pouw.prover import circuit as pouw_circuit
 from verity.protocols.pouw.prover import schemes as pouw_schemes
+from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
@@ -68,25 +69,24 @@ from verity.protocols.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment
 from verity.protocols.pouw.verifier.protocol import Context as UnitContext
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
 
+from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import device as PD
 from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import settings as PHS
-from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
-from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw import lead as PL
 from verity_vllm.protocols.pouw import native as PN
+from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import settings as PHS
+from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 from verity_vllm.protocols.pouw.operands import Operands, ncp_tiles, quantize, stack_y
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw import lead as PL
-from verity_vllm.protocols.interface import Context, Option, Target
 
 NAME = "pouw"
 DEFAULT_SCHEME = "ncp-v1"

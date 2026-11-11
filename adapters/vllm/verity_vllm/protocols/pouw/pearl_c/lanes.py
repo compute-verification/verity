@@ -39,7 +39,13 @@ import struct
 from contextlib import nullcontext
 from typing import Any
 
-from verity.protocols.pouw.verifier.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
+from verity.protocols.pouw.verifier.serving import (
+    SCHEDULES,
+    Schedule,
+    StepIO,
+    hash_format,
+    schedule_refusals,
+)
 
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
 from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream

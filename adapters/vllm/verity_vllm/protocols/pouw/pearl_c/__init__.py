@@ -61,11 +61,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.verifier.audit import Workload, rows_domain
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
-from verity.protocols.pouw.prover.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
+from verity.protocols.pouw.prover.schemes.pearl_c_device import (
+    H100,
+    SM120,
+    SM120_UNPROMOTED,
+)
+from verity.protocols.pouw.verifier.audit import Workload, rows_domain
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.verifier.serving import (
     SERIAL,
     Schedule,
@@ -73,19 +77,12 @@ from verity.protocols.pouw.verifier.serving import (
     hash_format,
 )
 
-from verity_vllm.protocols.pouw.pearl_c.passes import EpochCalls, call_index, pass_dir, room
-from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
-from verity_vllm.protocols.pouw.pearl_c.lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
-    SCHEDULES,
-    SIDE_GROUPS,
-    SIDE_IO,
-    STEP_GROUPS,
-    LaneCalls,
-    admitted,
-    rotated,
-    schedule_of,
-    splits,
-    whole_options,
+from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+from verity_vllm.protocols.pouw.pearl_c.graphs import (
+    GRAPH_ROWS,
+    SLOT_BYTES,
+    GraphCalls,
+    _Graph,
 )
 from verity_vllm.protocols.pouw.pearl_c.host import (
     SaltCoins,
@@ -111,12 +108,29 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import (
     Kernel,
     source_digest,  # noqa: F401 - kept importable here, as callers read it
 )
+from verity_vllm.protocols.pouw.pearl_c.lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
+    SCHEDULES,
+    SIDE_GROUPS,
+    SIDE_IO,
+    STEP_GROUPS,
+    LaneCalls,
+    admitted,
+    rotated,
+    schedule_of,
+    splits,
+    whole_options,
+)
 from verity_vllm.protocols.pouw.pearl_c.manifest import (  # noqa: F401 - the manifest's readers, kept importable here, as callers read them
     manifest_epoch,
     manifest_schema,
     session_head,
 )
-from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+from verity_vllm.protocols.pouw.pearl_c.passes import (
+    EpochCalls,
+    call_index,
+    pass_dir,
+    room,
+)
 from verity_vllm.protocols.pouw.pearl_c.screen import (
     excluded,
     screen,

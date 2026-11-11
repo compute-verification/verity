@@ -49,9 +49,9 @@ from typing import Any
 
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 
-from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _put, _zeros
 from verity_vllm.protocols.pouw.pearl_c.kernel import _load
+from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into, screen_into
 
 #: the call buffers' least rows
@@ -431,6 +431,7 @@ def _replay(run: Any, g: _Group, c: _Call, j: int, slot: int, nbytes: int, b: di
 
 def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...], bias: Any) -> Any:
     import torch
+
     from verity_vllm.protocols.pouw.pearl_c import CALL_CAPACITY
     if set(run.schedule.side) - set(SIDE_STEPS):
         raise ValueError(f"{run.entry}: a grouped call runs only {', '.join(sorted(SIDE_STEPS))} on a side lane, not "

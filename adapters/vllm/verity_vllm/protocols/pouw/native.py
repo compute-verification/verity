@@ -28,12 +28,12 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import cache, cached_property
 
 import numpy as np
+from verity.definitions.kernels.tc import f32_to_bf16_rn_batch
+from verity.definitions.ops.scalar import F32_NAN_PTX
 from verity.protocols.pouw.prover.circuit import ncp2
 from verity.protocols.pouw.prover.circuit import reference as R
 from verity.protocols.pouw.prover.circuit.ncp2 import D, Shape
 
-from verity.definitions.kernels.tc import f32_to_bf16_rn_batch
-from verity.definitions.ops.scalar import F32_NAN_PTX
 from verity_vllm.protocols.pouw import circuit as PC
 
 M32 = 0xFFFFFFFF

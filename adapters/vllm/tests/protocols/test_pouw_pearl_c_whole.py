@@ -16,11 +16,12 @@ from types import SimpleNamespace
 import pytest
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.verifier.serving import SERIAL
+
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
+from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
 
 NONE, FULL = "NONE", "FULL"
