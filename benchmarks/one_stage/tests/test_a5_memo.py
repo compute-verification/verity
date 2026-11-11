@@ -11,11 +11,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Value as Bits
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

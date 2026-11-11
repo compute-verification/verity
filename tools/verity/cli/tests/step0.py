@@ -1,7 +1,7 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
-`verity.core.protocols.spot.parties`) on a machine (`Machine`).
+`verity.protocols.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
@@ -21,15 +21,15 @@ from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any
 
-from verity.core.deploy import runtime
-from verity.core.deploy.config import Component, Workload
-from verity.core.deploy.manifest import Channel, Role
-from verity.core.protocols.certifier.warden import WardenParams
-from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage.draw import parse_design
-from verity.core.wire import Refused
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.crypto import lms
+from verity.configuration.deploy import runtime
+from verity.configuration.deploy.config import Component, Workload
+from verity.configuration.deploy.manifest import Channel, Role
+from verity.protocols.certifier.verifier.warden import WardenParams
+from verity.protocols.spot.verifier import parties as SP
+from verity.protocols.spot.verifier.one_stage.draw import parse_design
+from verity.configuration.wire import Refused
+from verity.circuits.codec import canonical_json
+from verity.commitments.crypto import lms
 
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
 Check = Callable[[Mapping[str, Any], Path, int], tuple[dict[str, Any], dict[str, Any] | None] | None]
@@ -58,18 +58,27 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true."""
+    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
+    by default (``max_tokens_cap``, ``lengths``) stays out of the table while unset (`WARDEN_DEFAULTS`), as it stays
+    out of `WardenParams.digest`, so a configuration that sets neither has the form and hash it had before either was
+    a parameter."""
     names = [f.name for f in fields(WardenParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
         raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
+    given = {k: params[k] for k in names if k in params}
     try:
-        WardenParams(**{k: params[k] for k in names})
+        WardenParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
-    return {**{k: params[k] for k in names}, "tie": True}
+    return {**given, "tie": True}
+
+
+#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response cap, the lengths
+#: rows' form), and ``tie``.
+WARDEN_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -105,7 +114,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
-              default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
+              default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),
@@ -239,7 +248,7 @@ def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
          machine: Callable[[Mapping[str, Any], Path], Machine] = Machine) -> runtime.RunResult:
-    """The live run of sampled proofs' parties ``here`` (`verity.core.deploy.runtime.run`) on ``machine``: every one
+    """The live run of sampled proofs' parties ``here`` (`verity.configuration.deploy.runtime.run`) on ``machine``: every one
     of them in this process when all four are here, else each listening one at its configured address (`listening`)
     and the verifier dialing those that run elsewhere; refused by name (``listen``) when one the verifier needs has
     none. Its transcripts and record are under ``STATE/runs/<local|here joined by +>/``."""

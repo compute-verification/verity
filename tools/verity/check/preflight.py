@@ -14,11 +14,14 @@ One line per fact on stdout, one per failure on stderr. It checks:
   clones them from GitHub; for a shard (`check.py`'s `SHARD_PARTS` among its inputs), only each package the shard audits;
 - that the store answers: every bundle still to restore, or else one pinned object, is read with the run's custody key
   (RESEARCH_PREFLIGHT_CUSTODY), else through its sent URL;
-- that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
+- that the CPU has `avx512f` when the run carries the pinned upstream build's URL (so lean-agreement runs) and its RUSTFLAGS
+  need it;
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
   A machine with check slots (`slot.py`) shares its disk with other work, which a recorded drop in free space counts, so
-  there it is 45 GB (a 2 GB check can seem to take hundreds of GB while the node's other jobs write).
+  there it is 45 GB (a 2 GB check can seem to take hundreds of GB while the node's other jobs write). A filesystem short of
+  that first loses the Lean audit scratch no audit holds, which a check killed mid-audit leaves in the cache
+  (`lean_audit.sweep`), and is measured again.
 The run's `--send` files are in RESEARCH_PREFLIGHT_INPUTS.
 """
 from __future__ import annotations
@@ -143,7 +146,7 @@ def probe(root: Path, packages: list[str]) -> list[dict]:
     for k, v in sorted(pins(root).items()):
         if k in keys:
             return [{"name": f"{v['package']}'s Lean bundle {k[:12]}", "key": k, "sha256": v["sha256"], "bytes": v["bytes"]}]
-    up = root / "verity" / "ml" / "flock" / "verifier" / "upstream.json"
+    up = root / "verity" / "protocols" / "flock" / "agreement" / "upstream.json"
     if up.is_file():
         return [{"name": "the pinned upstream build", "sha256": json.loads(up.read_text())["upstream"]["sha256"]}]
     return []
@@ -196,23 +199,27 @@ def cpu_flags(cpuinfo: Path) -> set[str]:
 
 
 def _sent(inputs: Path | None, sha256: str) -> bool:
-    """Whether a file among the run's `--send` files is the one with this sha256 (the smallest hashed first)."""
-    if inputs is None or not inputs.is_dir():
+    """Whether the run's `--send` files list a URL of the upstream build with this sha256 (check.py's `AGREEMENT_URLS`)."""
+    sent = inputs / CHECK.AGREEMENT_URLS if inputs is not None else None
+    try:
+        doc = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}
+    except (OSError, ValueError):
         return False
-    return any(CHECK._sha256(p) == sha256 for p in sorted((q for q in inputs.iterdir() if q.is_file()), key=lambda q: q.stat().st_size))
+    return isinstance(doc, dict) and isinstance(up := doc.get("upstream"), dict) and up.get("sha256") == sha256
 
 
 def cpu(root: Path, inputs: Path | None, cpuinfo: Path) -> tuple[list[str], list[str]]:
-    """avx512f, when the run carries the pinned upstream build (lean-agreement runs) and that build needs it."""
-    pin = root / "verity" / "ml" / "flock" / "verifier" / "upstream.json"
-    if not pin.is_file() or not (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").exists():
+    """avx512f, when the run carries the pinned upstream build's URL (lean-agreement runs) and that build needs it."""
+    pin = root / "verity" / "protocols" / "flock" / "agreement" / "upstream.json"
+    if not pin.is_file() or not (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").exists():
         return ["cpu: no lean-agreement on this tree"], []
     up = json.loads(pin.read_text())["upstream"]
     flags = up.get("rustflags") or "the build host's own (target-cpu=native)"
     if not AVX512.search(flags):
         return [f"cpu: the pinned upstream build ({flags}) needs no AVX-512"], []
     if not _sent(inputs, up["sha256"]):
-        return [f"cpu: the run carries no upstream build, so lean-agreement skips and its AVX-512 ({flags}) is not needed"], []
+        return [f"cpu: the run carries no URL of the upstream build, so lean-agreement skips and its AVX-512 ({flags}) is not "
+                f"needed"], []
     if "avx512f" in cpu_flags(cpuinfo):
         return [f"cpu: avx512f, which the pinned upstream build ({flags}) needs"], []
     return [], [f"cpu: no avx512f, which the pinned upstream build the run carries needs ({flags}): its replays would die of SIGILL; "
@@ -264,18 +271,20 @@ def recorded_peak(runs: Path | None, recent: int = RECENT) -> tuple[float, str] 
 
 
 def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, runs: Path | None = None,
-         shared: bool = False) -> tuple[list[str], list[str]]:
+         shared: bool = False, proc: Path = Path("/proc")) -> tuple[list[str], list[str]]:
     """Free space on the tree's and the cache's filesystems (one sum when they are one) against what a check takes there: the
     warm floor (`TREE_GB`, `CACHE_GB`), or `MARGIN` times the peak recent checks here recorded on the tree's (`recorded_peak`)
     when that is more and the machine is not `shared` (it has check slots), plus `MARGIN` times each dependency tree to
-    restore, on the cache's."""
+    restore, on the cache's.  When either is short, the Lean audit scratch in the cache that no audit holds (a check killed
+    mid-audit leaves its trees there, tens of GB) is removed first (`lean_audit.sweep`, which reads ``proc``) and both are
+    measured again."""
     peak = None if shared else recorded_peak(runs)
     derived = MARGIN * peak[0] if peak else 0.0
     at_tree, at_cache = _existing(tree), _existing(cache)
     extra = MARGIN * sum(DEPS_TREE_GB + r["bytes"] / GB for r in restore)
     one = at_tree.stat().st_dev == at_cache.stat().st_dev
     need = [(at_tree, TREE_GB + CACHE_GB if one else TREE_GB, extra if one else 0.0)] + ([] if one else [(at_cache, CACHE_GB, extra)])
-    facts, fails = [], []
+    checks = []
     for at, floor, more in need:
         why = []
         if at == at_tree and derived > floor:
@@ -285,7 +294,12 @@ def disk(tree: Path, cache: Path, restore: list[dict], usage=shutil.disk_usage, 
             why.append("the warm floor: this machine's check slots share its disk with other work")
         if more:
             why.append(f"{len(restore)} Lean dependency tree(s) to restore")
-        gb = floor + more
+        checks.append((at, floor + more, why))
+    facts, fails = [], []
+    if any(usage(at).free / GB < gb for at, gb, _ in checks) and (gone := LA.sweep(cache, log=lambda _: None, proc=proc)):
+        facts.append(f"disk: removed {len(gone)} Lean audit scratch tree(s) in {cache} that no audit holds, a killed check's: "
+                     f"{', '.join(sorted(gone))}")
+    for at, gb, why in checks:
         free = usage(at).free / GB
         line = f"disk: {free:.0f} GB free on {at}'s filesystem, where a check needs {gb:.0f} GB" + (f" ({'; '.join(why)})" if why else "")
         if free >= gb:
@@ -313,7 +327,7 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
         usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, shared: bool = False) -> tuple[list[str], list[str]]:
-    lean = (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").exists()
+    lean = (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
     urls = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}

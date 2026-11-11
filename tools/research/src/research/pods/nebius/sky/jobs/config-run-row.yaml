@@ -4,9 +4,8 @@
 # Coverage cells (--config-run 1) use config-run.yaml instead: a CPU Build task and a short GPU Commit task. The night sweep submits the same
 # file with the priority label set to sweep-night (the runbook's one-line sed).
 #
-#   sky jobs launch -n row-<id> tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml \
-#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha> \
-#     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
+#   tools/research/src/research/pods/nebius/sky/submit.sh config-run-row row-<id> \
+#     --env ROW=<row-id> --env ROLE=B1 --env REPO=Qwen/Qwen2.5-1.5B --env REVISION=<sha>
 #
 # Resources are the measured peak of the 1-7B dense class, B 8-64: 240-512 GB of host RAM, the Build on 1-4
 # cores (16 vCPU per GPU is the fleet plan's floor), ~200 GB on /workspace. Other classes override on the command line:
@@ -15,8 +14,8 @@
 #   TP2                                 --gpus RTXPRO6000:2 --cpus 32 --memory 384   >= 377 GB
 # A row can't be checkpointed yet (5-11 h): circuits never borrows (kueue.yaml), so a row runs on circuits' own quota, which no
 # reclaim takes back. No config run is admitted in the quiet hour, 12:30-13:30Z.
-# The job runs from the tree at $SRC on the host's /workspace (no upload): ship it first with
-#   research pods sync vy-nebius-1 --dest /workspace/research/checkout   (or your own --dest, and --env SRC=...)
+# The job runs from the tree at $SRC on the host's /workspace (no upload). submit.sh ships this checkout there, sets SRC and mints
+# the job's store key; a launch by hand that names AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY would hand it the shell's own pair.
 name: config-run-row
 
 resources:
@@ -57,7 +56,7 @@ setup: |
   SRC=$(bash "$SRC/tools/research/src/research/pods/nebius/sky/job_tree.sh" "$SRC"); export SRC
   [ -x /workspace/jobs/bin/uv ] || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/workspace/jobs/bin UV_NO_MODIFY_PATH=1 sh
   cd "$SRC"
-  cd integrations/vllm
+  cd adapters/vllm
   bash "$SRC/tools/research/src/research/pods/nebius/sky/vllm_bootstrap.sh" --cases "$ROLE" --out "/workspace/jobs/bootstrap/$ROLE"     # skipped, without the lock, once this tree, role and venv passed
 
 run: |
@@ -68,11 +67,11 @@ run: |
   export PATH=$CUDA_HOME/bin:$PATH
   # compiled kernels and JIT builds persist on the host, under config-run.yaml's gpu-task rules (eager rows; trees whose native_jit stages its sources)
   case "$ROW" in *__bi-eager) export TRITON_CACHE_DIR=/workspace/jobs/cache/triton/$(basename "$SRC") VLLM_CACHE_ROOT=/workspace/jobs/cache/vllm/$(basename "$SRC");; esac
-  if grep -q staged_sources "$SRC/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
+  if grep -q staged_sources "$SRC/adapters/vllm/verity_vllm/commit/committer/native_jit.py"; then
     export HIDDEN_GPU_BUILD=/workspace/jobs/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=/workspace/jobs/cache/jit/nc
   fi
   PYTHONPATH=$SRC/tools/research/src /workspace/jobs/bin/uv run --no-project --python 3.12 python -m research run --campaign "$CAMPAIGN" -- \
-    bash -c 'cd "$SRC/integrations/vllm" && /workspace/jobs/venv312/bin/python -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REVISION"'
+    bash -c 'cd "$SRC/adapters/vllm" && /workspace/jobs/venv312/bin/python -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REVISION"'
 
 config:
   ssh:

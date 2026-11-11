@@ -34,16 +34,16 @@ def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned:
     t = tmp_path / "tree"
     for d in ("check", "lean"):
         (t / "tools" / "verity" / d).mkdir(parents=True)
-    (t / "verity" / "ml" / "flock" / "verifier").mkdir(parents=True)
+    (t / "verity" / "protocols" / "flock" / "agreement").mkdir(parents=True)
     (t / "tools" / "verity" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
-    for pkg, deps in (("verity/core/service/flock", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
+    for pkg, deps in (("verity/protocols/flock/verifier", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
         d = t / pkg
         d.mkdir(parents=True)
         (d / "lakefile.toml").write_text("")
         (d / "lean-toolchain").write_text(TOOLCHAIN + "\n")
         (d / "lean-audit.json").write_text("{}")
         (d / "lake-manifest.json").write_text(json.dumps({"packages": deps}))
-    (t / "verity" / "ml" / "flock" / "verifier" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
+    (t / "verity" / "protocols" / "flock" / "agreement" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
     deps = {PF.LA.deps_key(t / "pkg" / "a"): {"package": "pkg/a", "sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}} if pinned else {}
     (t / "tools" / "verity" / "lean" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
     for args in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "tree"]):         # not this machine's git config (a signing helper)
@@ -92,13 +92,16 @@ def _custody(tmp_path: Path, *objects: bytes) -> Path:
     return c
 
 
-def _inputs(tmp_path: Path, urls: dict[str, str] | None = None, *files: bytes) -> Path:
+def _inputs(tmp_path: Path, urls: dict[str, str] | None = None, upstream: bytes | None = None) -> Path:
+    """The run's `--send` files: ``urls`` as the Lean bundles' URLs, and with ``upstream``, the agreement's URLs, its upstream
+    build's listed under the sha256 of those bytes."""
     d = tmp_path / "inputs"
     d.mkdir()
     if urls is not None:
         (d / PF.CHECK.LEAN_DEPS_URLS).write_text(json.dumps(urls))
-    for i, data in enumerate(files):
-        (d / f"sent-{i}.tar.gz").write_bytes(data)
+    if upstream is not None:
+        (d / PF.CHECK.AGREEMENT_URLS).write_text(json.dumps({"upstream": {"art": "art:u", "sha256": _sha(upstream),
+                                                                          "bytes": len(upstream), "url": "https://store.invalid/u"}}))
     return d
 
 
@@ -106,12 +109,13 @@ def _usage(free_gb: float):
     return lambda p: types.SimpleNamespace(free=int(free_gb * PF.GB))
 
 
-def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None, shared=False):
+def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, usage=None, sha=None, runs=None,
+         shared=False):
     cache = tmp_path / "cache"
     if warm:
         (cache / "lean-deps" / _key(tree)).mkdir(parents=True, exist_ok=True)
     (tmp_path / "cpuinfo").write_text(cpu)
-    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs, shared=shared)
+    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", usage or _usage(free_gb), sha=sha, runs=runs, shared=shared)
 
 
 def test_a_prepared_pod_passes(tmp_path, path):
@@ -205,16 +209,18 @@ def test_the_store_read_uses_the_custody_key_and_fails_without_a_credential(tmp_
 
 
 @pytest.mark.parametrize("rustflags, sent, cpu, fail", [
-    ("-C target-cpu=x86-64-v3", True, NO_AVX, False),
-    ("-C target-cpu=native", False, NO_AVX, False),
-    ("-C target-cpu=native", True, AVX, False),
-    ("-C target-cpu=native", True, NO_AVX, True),
-    ("-C target-cpu=x86-64-v4", True, NO_AVX, True),
-    ("", True, NO_AVX, True),
+    ("-C target-cpu=x86-64-v3", UPSTREAM, NO_AVX, False),
+    ("-C target-cpu=native", None, NO_AVX, False),
+    ("-C target-cpu=native", b"another build", NO_AVX, False),
+    ("-C target-cpu=native", UPSTREAM, AVX, False),
+    ("-C target-cpu=native", UPSTREAM, NO_AVX, True),
+    ("-C target-cpu=x86-64-v4", UPSTREAM, NO_AVX, True),
+    ("", UPSTREAM, NO_AVX, True),
 ])
 def test_avx512f_is_required_only_when_the_run_carries_a_build_that_needs_it(tmp_path, path, rustflags, sent, cpu, fail):
+    """The run carries the pinned build as its URL (check.py's `AGREEMENT_URLS`), listed under the pin's sha256."""
     tree = _tree(tmp_path, rustflags=rustflags)
-    inputs = _inputs(tmp_path, None, *([b"other input", UPSTREAM] if sent else [b"other input"]))
+    inputs = _inputs(tmp_path, None, sent)
     _, fails = _run(tmp_path, tree, inputs=inputs, custody=_custody(tmp_path, BUNDLE), cpu=cpu)
     flags = rustflags or "the build host's own (target-cpu=native)"
     want = f"cpu: no avx512f, which the pinned upstream build the run carries needs ({flags}): its replays would die of SIGILL; use a pod with AVX-512"
@@ -225,6 +231,26 @@ def test_too_little_disk_is_refused(tmp_path, path):
     """TO3's check ran out of space on a pod that started with 36 GB free."""
     _, fails = _run(tmp_path, _tree(tmp_path), inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), free_gb=36)
     assert len(fails) == 1 and fails[0].startswith("disk: 36 GB free") and "needs 45 GB" in fails[0] and "larger pod" in fails[0]
+
+
+def test_a_short_disk_first_loses_the_scratch_a_killed_check_left(tmp_path, path):
+    """A check cancelled mid-audit leaves its Lean audit scratch in the cache, and the next run on the machine was refused for
+    the space it held: the preflight removes each tree no audit holds (here one whose creator's pid is gone) before it measures
+    again, keeps one whose creator lives, and on a machine with the space removes nothing."""
+    tree, cache = _tree(tmp_path), tmp_path / "cache"
+    dead, alive = cache / f"{PF.LA.SCRATCH}{2 ** 31}-a", cache / f"{PF.LA.SCRATCH}{os.getpid()}-b"     # no pid reaches 2^31
+    for d in (dead, alive):
+        (d / "build").mkdir(parents=True)
+    ok = dict(inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE))
+    _, fails = _run(tmp_path, tree, **ok, free_gb=100)
+    assert fails == [] and dead.is_dir()
+    facts, fails = _run(tmp_path, tree, **ok, usage=lambda p: types.SimpleNamespace(free=int((36 if dead.exists() else 76) * PF.GB)))
+    assert fails == [] and not dead.exists() and alive.is_dir(), fails
+    assert f"disk: removed 1 Lean audit scratch tree(s) in {cache} that no audit holds, a killed check's: {dead.name}" in facts
+    assert any(f.startswith("disk: 76 GB free") and "needs 45 GB" in f for f in facts), facts
+    (dead / "build").mkdir(parents=True)
+    facts, fails = _run(tmp_path, tree, **ok, free_gb=36)
+    assert not dead.exists() and len(fails) == 1 and fails[0].startswith("disk: 36 GB free"), "what it frees is measured, not assumed"
 
 
 def _recorded(runs: Path, run_id: str, tool: str, free_gb: list[float]) -> None:

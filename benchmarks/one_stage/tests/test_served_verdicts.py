@@ -10,8 +10,8 @@ product runs no onsite piece and composes sampled proofs and PoUW alone, the oth
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
-`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
+CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
 front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
@@ -53,8 +53,8 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-from verity.core.protocols.pous import wipe_period as W
-from verity.core.protocols.spot.one_stage import registration as REG
+from verity.protocols.pous.verifier import wipe_period as W
+from verity.protocols.spot.verifier.one_stage import registration as REG
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -62,7 +62,7 @@ import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
-_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "demos" / "vllm" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
 
@@ -964,12 +964,15 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
 
-def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
+def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
+    """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
+    which CLASSES doesn't name and which would run out of time here, is never started."""
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
+    assert rc == 0 and limits == ["30m"], (rc, lines)
+    assert len(lines) == 1, lines
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    assert not list(tmp_path.rglob("window-circuit*record*"))
     published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
     kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
     assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
@@ -981,13 +984,12 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     ("record", {"record": "expire"}, "WINDOW-CIRCUIT class record timed out after WC_TIMEOUT=30m"),
 ])
 def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classes, answers, refused):
-    """Each class of CLASSES gates, not just one of them, whatever the class of record's measurement says; CLASSES that
-    names `record` gates on it under WC_TIMEOUT and doesn't measure it again."""
+    """Each class of CLASSES gates, not just one of them; CLASSES that names `record` gates on the class of record
+    under WC_TIMEOUT, and no class CLASSES doesn't name is counted."""
     rc, lines, limits = _circuits(tmp_path, classes, answers)
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
-    measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+    assert len(lines) == len(classes.split()) and limits == ["30m"] * len(classes.split()), (lines, limits)
 
 
 W63K4 = "8,32,4,4,16"
@@ -1056,13 +1058,13 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     main's first-parent line a toy MAIN_FILE and the split certifier's two commands set (``extra`` adds to the
     environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
-    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
-              tree / "verity" / "core" / "service" / "spot", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
+    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "flock" / "verifier",
+              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
-    (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    (tree / "verity" / "protocols" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
@@ -1862,8 +1864,8 @@ echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/privat
 echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
 echo "CASE: evidence beef"
 echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
-    for pkg in ("protocols/pous/check", "devices/memory_challenger/lean", "protocols/remote", "protocols/onsite"):
-        (tree / "verity" / "core" / pkg).mkdir(parents=True)
+    for pkg in ("protocols/pous/verifier/check", "protocols/pous/device/lean", "protocols/remote/verifier", "protocols/onsite/verifier"):
+        (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"
@@ -1966,9 +1968,9 @@ DIGEST = "5e" * 64
 
 
 def _auditor():
-    """Infra's gate, ``benchmarks/live_challenger/auditor.py``, as a module of its own."""
+    """Infra's gate, ``verity/composite/device/live_challenger/auditor.py``, as a module of its own."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "benchmarks" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -1997,8 +1999,8 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     commits the Program digest serve-openai wrote, its T, the sample K, the fixed length and the circuit files, each read
     back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.ml.crypto import lms
+    from verity.protocols.pouw.verifier import credit as CR
+    from verity.commitments.crypto import lms
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     A = _auditor()
@@ -2154,7 +2156,7 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     from types import SimpleNamespace
 
     torch = pytest.importorskip("torch")
-    from verity.ml.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1 as PH
@@ -2212,7 +2214,7 @@ def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
     """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
     under a no-op `sleep`: the exit status and that argv."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
-    for d in (tree / "integrations" / "vllm", bin_, venv):
+    for d in (tree / "adapters" / "vllm", bin_, venv):
         d.mkdir(parents=True)
     for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
         path.write_text(f"#!/bin/sh\n{body}\n")

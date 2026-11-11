@@ -8,7 +8,8 @@ the statements read (its hash, under `reads`), every listed premise no `reads` r
 or `open`, of it and the definitions it reads: one that gains a digest is shown as recorded), the named assumptions
 (`assumptions`: one added or removed is shown, and so is a premise that becomes one), the domain hypotheses (`domain`:
 one listed, with its `why`, one no longer listed, and a new `why` are shown) and the open premises (`open`: one listed,
-one discharged, and a new issue or due date are shown; an assumption that becomes open is tallied), what
+one discharged, a new issue or due date, and a `why` gained or lost, by which the guarantees that read the premise
+without taking it rest on it, are shown; an assumption that becomes open is tallied), what
 the shape rule exempts (`shape.frozen`:
 an entry added there is shown with its reason), the compiled code allowed on a verifier's path (`verifier.allow`: an
 entry added there is shown), and the trust (`deployed`, the guarantees that state the deployed system; `trust`, the
@@ -17,7 +18,8 @@ which only a hand edit does, is shown first, ahead of everything else, and a gua
 trusted or no longer, and a gap shrunk are shown too). Between the main the push replaced and the one it
 pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
 across every record that changed, not record by record: a guarantee or a definition that moved from one package's record
-to another's under its name is no change, nor is a guarantee renamed with the same type hash, one that only prints
+to another's under its name is no change, nor is a guarantee renamed with the same type hash (the premises it gains or
+drops under its new name are shown all the same), one that only prints
 differently, or a record that moved with its package, and a push of only these sends nothing. Nor is a definition whose
 hash changed in a push that changed no Lean input (a `.lean` file, a lakefile, a manifest or a toolchain, outside the
 audit's own `tools/verity/lean/`, or a dependency bundle newly pinned in its `lean-deps.json`): what a definition says
@@ -45,6 +47,8 @@ LEAN_INPUTS = (".lean", "lakefile.toml", "lakefile.lean", "lake-manifest.json", 
 AUDIT_DIR = "tools/verity/lean/"
 #: the dependency bundles every package with fetched dependencies is built against, pinned by content (`sha256`)
 DEPS_PINS = AUDIT_DIR + "lean-deps.json"
+#: who an open premise whose entry gives a `why` counts for besides the statements that take it
+READERS = "the guarantees that read it without taking it"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -110,6 +114,12 @@ def _ticket(r: dict) -> str:
 
 def _scope(r: dict) -> str:
     return f"{r.get('why')}" + (f", citing `{r['cites']}`" if r.get("cites") else "")
+
+
+def _on_read(entry: tuple[str, dict]) -> bool:
+    """Whether a listed premise's entry is an open one that gives a `why`: `READERS` rest on it, and each one's record
+    lists it under `premises.open`."""
+    return entry[0] == "open" and "why" in entry[1]
 
 
 def _was(entry: tuple[str, dict]) -> str:
@@ -278,14 +288,17 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     A trust gap grown by hand (`_trust_changes`' `grown`) comes first, before anything else, and the rest of what changed
     in the records' trust (`deployed`, `undeployed`, `trusted`, `untrusted`, `shrunk`, and `trust` for one held for the
     first time) right after `changed` and `removed`, through any rename (`_renames`).
-    The other kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed;
+    The other kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed,
+    under its name or through the same renames, its own and a premise's;
     `premised`, text "", for a record that lists them for the first time), `assumed` (a named assumption
     added, or another premise now one), `unassumed` (a named assumption no longer listed, saying so when statements still read
     it), `domain` (a domain hypothesis
     listed, or another premise now one, with its `why`), `undomained` (a domain hypothesis no longer listed), `scope` (a
     domain hypothesis's `why` or `cites` changed), `open` (an open premise listed, or a domain hypothesis now one),
     `opened` (text "": a named assumption now open), `discharged` (an open premise no longer listed), `ticket` (an open
-    premise's issue or due date changed), `definition`, `assumption` (a listed premise's digest changed under its name),
+    premise's issue or due date changed), `on_read` and `off_read` (an open premise's entry gains or loses its `why`, by
+    which `READERS` rest on it; one listed or discharged with a `why` says so in its own line), `definition`,
+    `assumption` (a listed premise's digest changed under its name),
     `recorded` (a premise listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
     `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first, and
@@ -307,18 +320,21 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     moved_to = {n: m for n, r in gone.items() for m, s in came.items()
                 if r.get("type_hash") and r.get("type_hash") == s.get("type_hash") and hg.count(r["type_hash"]) == 1
                 and hc.count(r["type_hash"]) == 1}
-    trust = _trust_changes(olds, news, _renames(olds, news, moved_to))
+    ren = _renames(olds, news, moved_to)
+    trust = _trust_changes(olds, news, ren)
     out = [e for e in trust if e[1] == "grown"] + out + [e for e in trust if e[1] != "grown"]
-    for n in sorted(set(a) & set(b)):
-        was, now = _premises(a[n][1]), _premises(b[n][1])
+    for n, m in sorted(({n: n for n in set(a) & set(b)} | moved_to).items(), key=lambda pair: pair[1]):
+        was, now = _premises(a[n][1]), _premises(b[m][1])
+        was = was and sorted({ren.get(x, x) for x in was})
         if now is None or was == now:
             continue
         if was is None:
-            out.append((b[n][0], "premised", ""))
+            out.append((b[m][0], "premised", ""))
             continue
         more, less = [f"`{x}`" for x in now if x not in was], [f"`{x}`" for x in was if x not in now]
         said = ([f"now also on {', '.join(more)}"] if more else []) + ([f"no longer on {', '.join(less)}"] if less else [])
-        out.append((b[n][0], "premises", f"• guarantee `{n}` rests {'; '.join(said)}"))
+        out.append((b[m][0], "premises", f"• guarantee `{m}`" + (f" (renamed from `{n}`)" if m != n else "")
+                    + f" rests {'; '.join(said)}"))
     hashed: list[tuple[str, str, str]] = []
     da: dict[str, set[str]] = {}
     for d in olds.values():
@@ -363,11 +379,15 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
             out.append((p, "scope", f"• domain hypothesis `{n}`: {_scope(r)} (was {_scope(was[1])})"))
         elif kind == "open" and (was is None or was[0] == "domain"):
             out.append((p, "open", f"• open premise `{n}` listed ({_ticket(r)})"
+                        + (f"; {READERS} rest on it ({r['why']})" if "why" in r else "")
                         + (f" (was {_was(was)})" if was else "")))
         elif kind == "open" and was[0] == "assumptions":
             out.append((p, "opened", ""))
         elif kind == "open" and _ticket(r) != _ticket(was[1]):
             out.append((p, "ticket", f"• open premise `{n}`: {_ticket(r)} (was {_ticket(was[1])})"))
+        if kind == "open" and was is not None and was[0] != "domain" and ("why" in r) != _on_read(was):
+            out.append((p, "on_read", f"• open premise `{n}`: {READERS} now rest on it ({r['why']})") if "why" in r else
+                       (p, "off_read", f"• open premise `{n}`: {READERS} no longer rest on it (its `why` was: {was[1]['why']})"))
     read = {name for d in news.values() for name in _definitions(d)}
     for n, (p, (kind, r)) in sorted(la.items()):
         if n not in lb:
@@ -375,7 +395,8 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
                         + (": statements only read it, and its `reads` record holds it" if n in read else ""))
                        if kind == "assumptions" else
                        (p, "undomained", f"• domain hypothesis `{n}` no longer listed ({_scope(r)})") if kind == "domain"
-                       else (p, "discharged", f"• open premise `{n}` discharged: no longer listed ({_ticket(r)})"))
+                       else (p, "discharged", f"• open premise `{n}` discharged: no longer listed ({_ticket(r)})"
+                             + (f"; {READERS} rested on it ({r['why']})" if "why" in r else "")))
     out += hashed
     fa = {n for d in olds.values() for n in _frozen(d)}
     out += [(_package(p), "frozen", f"• frozen `{n}` (doesn't have the shape yet): {why}")
@@ -416,7 +437,9 @@ def _tally(kinds: list[str]) -> str:
                                                        ("domain", "domain listed"), ("undomained", "domain dropped"),
                                                        ("scope", "domain restated"),
                                                        ("open", "open listed"), ("opened", "now open"),
-                                                       ("discharged", "discharged"), ("ticket", "re-ticketed"))
+                                                       ("discharged", "discharged"), ("ticket", "re-ticketed"),
+                                                       ("on_read", "open where read"),
+                                                       ("off_read", "no longer open where read"))
                   if k in kinds)
     f = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("frozen", "frozen"), ("conjecture", "conjectures marked"))
                   if k in kinds)

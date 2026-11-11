@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier.certificate import Direction, Issuer
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer
 
 HERE = Path(__file__).resolve().parents[1]
 TOKENS, REQUESTS = 4, 8
@@ -210,8 +210,8 @@ def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_
     """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
     under the root, the changed one doesn't, and no other frame changes. The run keeps no frames, so `make` says what
     the negative waits for."""
-    from verity.core.protocols.certifier.certificate import frames_root, open_frame, verify_frame
-    from verity.core.protocols.certifier.grid import GridParams
+    from verity.protocols.certifier.verifier.certificate import frames_root, open_frame, verify_frame
+    from verity.protocols.certifier.verifier.grid import GridParams
 
     params = GridParams(buckets=4, allocation=2, frame_bytes=64, bucket_ms=100, queue_capacity=8)
     frames = [bytes([k]) * 64 for k in range(5)]
@@ -522,7 +522,7 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
     request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
     record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
-    from verity.core.protocols.certifier.active import id_request
+    from verity.protocols.certifier.verifier.active import id_request
 
     brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
@@ -773,9 +773,9 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
-    from verity.core.protocols.certifier.active import DATA, HEADER, PAD
-    from verity.core.protocols.certifier.grid import COMPLETE, Record
-    from verity.core.protocols.certifier.warden import WardenParams, cell
+    from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD
+    from verity.protocols.certifier.verifier.grid import COMPLETE, Record
+    from verity.protocols.certifier.verifier.warden import WardenParams, cell
 
     params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation

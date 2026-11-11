@@ -19,7 +19,7 @@ from its bundle afterwards (`verity-vllm tp-serving-rows`, `tp.serving_rows.from
 `stand-in`, its `of` the rank's rows-sha512 root under the TP run root and the bundle's manifest digest, made after the Commit and
 before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         [--firewall flock-firewall] --out DIR [--delta 0.5]
@@ -54,8 +54,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   window is the population program and partition over the served Programs, the sampling design and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a member of bit rows in chunks (`serving_rows.chunked`: a MoE pair GEMM's coordinate,
-  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's split part or
-  combine, `SPLITS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
+  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's key block,
+  end, column end or combine, `CHAINS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
@@ -90,7 +90,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
   `zk_cost.py`'s `dev` arm, which Figure 1 prices), Lean's verify each session's verdict of record. A templated
-  statement's (`--tmpl-unit`) runs as a process pair of its own (`a0.session`). Under ``--firewall`` (Lean's `flock-firewall`), the
+  statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
   core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
   (units derived).
@@ -154,8 +154,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
   sampled chunk's ``acc`` is then the committed output of the chunk that wrote it, sampled or not. A unit whose wired row is
   not its writer's is incorrect in the wired flattening, so the sampled proof blocks' wires are the check; every unit's
-  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
-  (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
+  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's key blocks read the state before them, and its combines its splits' partials and lses, the same way
+  (`pipeline.chain_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 * **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
   values ahead of its templates' parameters (`program_values`, a served window's H1 tables) registers them as the values of
@@ -192,16 +192,17 @@ import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
-from verity.ml.commitments import row_table as RT  # noqa: E402
-from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
-from verity.ml.windows import wiring as WI  # noqa: E402
+from verity.commitments import row_table as RT  # noqa: E402
+from verity.protocols.spot.device import coins as CC
+from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.commitments.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.commitments.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.drawLaw`)
@@ -846,7 +847,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    server = proof_server(a, out, [mm for mm, _ in drawn])
+    server = proof_server(a, out)
 
     def staged(mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
@@ -872,7 +873,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if server is not None:
             st = mm["st"]
             h = server.submit(Statement(pin=st["pin"], circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
-                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin"),
+                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin",
+                                        tmpl_unit=st.get("tmpl_unit")),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
                               verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
             return {**s, "handle": h}
@@ -973,7 +975,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part)
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
+                   per_member=members_proof(members, done, not plain(a)))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -996,7 +999,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
+                   per_member=members_proof(members, done, not plain(a)))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1101,7 +1105,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
-               partition: dict | None = None, tied: dict | None = None) -> None:
+               partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
@@ -1110,7 +1114,9 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
     ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
-    proofs case."""
+    proofs case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
+    (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
+    parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case."""
     try:
         import replay as RP
 
@@ -1123,17 +1129,23 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
-    if v2 is None:
-        return
-    try:
-        if isinstance(v2, str):
-            raise ValueError(v2)
-        zk = case_v2(c.case(), sessions, **v2)
-        sampled = case_with_form(zk)
-        (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
-        (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
-    except Exception as x:  # noqa: BLE001 -- as the v1 case's
-        (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+    if v2 is not None:
+        try:
+            if isinstance(v2, str):
+                raise ValueError(v2)
+            zk = case_v2(c.case(), sessions, **v2)
+            sampled = case_with_form(zk)
+            (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
+            (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
+        except Exception as x:  # noqa: BLE001 -- as the v1 case's
+            (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+    if per_member is not None:
+        try:
+            if isinstance(per_member, str):
+                raise ValueError(per_member)
+            (out / "case-v2-members.json").write_text(json.dumps(case_members(c.case(), **per_member), sort_keys=True))
+        except Exception as x:  # noqa: BLE001 -- as the v1 case's
+            (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
@@ -1146,13 +1158,36 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     header to the registration (`registration.matches_public`, and its ``units.indices`` the population's units in
     order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``)."""
     import replay as RP
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
             "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
+
+
+def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> dict:
+    """v1's ``case`` in `Spot.OneStageZk`'s per-member form, for a window of several `members` (`proofs.Member`, every
+    one of the window's): the params with ``proofs`` the members, each with its circuit and public files' digests, taken
+    when it was staged before the sample, its registered file, its units and its circuit's ``vus_per_block``; the
+    evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
+    (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
+    ``blobs``, the paths of the statements' files and of the pinned lookup ``tables`` their circuits look up. The
+    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
+    (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
+    import replay as RP
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+
+    names = {m.name: [PF.file_sha512(s / "session.json") for s in m.proof.sessions] for m in members}
+    pm, pe, blobs = PF.members_v2(members, names)
+    v1 = json.loads(bytes.fromhex(case["evidence"]))
+    if [s["name"] for st in pe["statements"] for s in st["sessions"]] != v1.get("sessions"):
+        raise ValueError("the statements' sessions, in the members' order by first unit, are not the evidence's sessions "
+                         "in order: the sampled members' sessions ran in another order")
+    evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
+    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": pm}}
 
 
 #: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
@@ -1176,7 +1211,7 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1184,14 +1219,53 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
         return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
-    tdir = st["dir"] / "tables"
-    looked_up = PF.circuit_lookups(st["dir"] / "circuit.txt") if tdir.is_dir() else []
-    tables = sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
     reads = st.get("registered_file")
-    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
-                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
+    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin", session_dirs(sdir)),
             "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
-            "tables": tables}
+            "tables": looked_up_tables(st["dir"])}
+
+
+def session_dirs(sdir: Path) -> tuple[Path, ...]:
+    """A sampled member's sessions' directories under its ``sdir``, in the order v1's ``sessions`` names them."""
+    return tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))
+
+
+def looked_up_tables(st_dir: Path) -> list[Path]:
+    """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
+    v2 holds the blobs' tables to exactly those."""
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+
+    tdir = st_dir / "tables"
+    looked_up = PF.circuit_lookups(st_dir / "circuit.txt") if tdir.is_dir() else []
+    return sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
+
+
+def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> dict | str | None:
+    """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
+    members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
+    the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
+    the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
+    statement's (`v2_proof`); or why the audit has no per-member case."""
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+
+    if len(members) < 2:
+        return None
+    if not zk:
+        return "v2 verifies --zk sessions; this audit's are plain"
+    sdirs = {got["mm"]["m"].key: got["sdir"] for got in done}
+    out, tables = [], {}
+    for mm in members:
+        m, st = mm["m"], mm["st"]
+        g = st["meta"].get("vus_per_block")
+        if isinstance(g, bool) or not isinstance(g, int) or g < 1:
+            return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
+        sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
+        reads = st.get("registered_file")
+        out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
+                             st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
+        if sessions:
+            tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+    return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 
 def streamed(a: argparse.Namespace) -> bool:
@@ -1218,12 +1292,12 @@ def plain(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "plain", False))
 
 
-def proof_server(a: argparse.Namespace, out: Path, members: Sequence[dict]) -> ProofServer | None:
+def proof_server(a: argparse.Namespace, out: Path) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
     ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
-    FLOCK_CHALLENGER=1. None where a session is one it doesn't prove (plain, behind the ZK server under ``--firewall``, or a
-    templated statement's, `--tmpl-unit`): each session is then a process pair of its own (`a0.session`)."""
-    if plain(a) or a.firewall or any(mm["st"].get("tmpl_unit") for mm in members):
+    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. None where a session is one it doesn't
+    prove (plain, or behind the ZK server under ``--firewall``): each session is then a process pair of its own (`a0.session`)."""
+    if plain(a) or a.firewall:
         return None
     return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
 
@@ -1445,7 +1519,7 @@ def main() -> int:
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
-                         "machine, as does composing the 64-key SparseMlaSplitPart_v1 in lookup slots")
+                         "machine, as does composing a 64-key SparseMlaHeadBlock_v1 in lookup slots")
     ap.add_argument("--challenger", help="with --tp-commit: draw each rank from the auditor's challenger's coins, one session on the TP "
                     "run root (a5_coins): local (a development session on this machine), or gate:USER@HOST (vy-challenger-1 through "
                     "infra's gate, with --peer and --challenger-key)")

@@ -1,4 +1,4 @@
-"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
+"""Outside `adapters/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
 ``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
 ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATION = "integrations/vllm/"
+INTEGRATION = "adapters/vllm/"
 PACKAGE = "verity_vllm"
 PACKAGE_DIR = ROOT / INTEGRATION / PACKAGE
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
@@ -45,7 +45,8 @@ PUBLIC = {
                                        "that see each pass begin and end, with its runner state, output or error",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
-    "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
+    "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
+                                      "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.collectives.all_reduce": "I2: the CUDA communicator's one seam for its all-reduce (AllReduceSeam): "
                                                  "one replacement of the routes vLLM picks, which reaches them for the rest",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
@@ -56,8 +57,14 @@ PUBLIC = {
                                  "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
+    "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
+                                          "across ranks and written as a token select's span, which benchmarks/serve_tax's "
+                                          "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
+    "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
+                                   "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
+                                   "benchmarks/network_e2e/encodings drives over recorded traces",
     "verity_vllm.engine.step_end": "I2: the scheduler's one seam at each step's end (StepSeam): observers that see each "
                                    "step's scheduler and model outputs once the scheduler has taken them",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
@@ -68,10 +75,18 @@ PUBLIC = {
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
+    "verity_vllm.program.predict.block_counts": "I7: a circuit record's inference blocks counted as the Lean count counts "
+                                                "them (the session Definition, its Boolean gates by the gate table, a "
+                                                "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
+    "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
+                                         "(request, layer), their switch, retention and roots (Histories), which "
+                                         "benchmarks/commitments times",
+    "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
+                                                "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
@@ -94,6 +109,9 @@ PUBLIC = {
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
                                       "its record R and their log (W_FILE, R_FILE, LOG)",
+    "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
+                                       "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
+                                       "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
@@ -126,7 +144,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
     "verity_vllm.acquire.sources.served_compiled_source",
     "verity_vllm.acquire.sources.taps",
-    "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
@@ -199,6 +216,9 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
+    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
+    "verity_vllm.program.frontend.rules",
+    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
     "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",
@@ -232,12 +252,11 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.pearl_c.screen",
     "verity_vllm.protocols.pouw.pearl_c.whole",
     "verity_vllm.protocols.remote_bandwidth.binder",
-    "verity_vllm.protocols.remote_bandwidth.commit_map",
     "verity_vllm.protocols.remote_bandwidth.interface",
+    "verity_vllm.protocols.remote_bandwidth.memory_map",
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.manifest.format",
-    "verity_vllm.query.module_body",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
 })

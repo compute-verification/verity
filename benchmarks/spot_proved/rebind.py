@@ -12,8 +12,8 @@ import sys
 from pathlib import Path
 
 TREE = Path.cwd()
-for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "integrations/vllm",
-           "verity/ml/flock/python", "."):
+for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "adapters/vllm",
+           "verity/protocols/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 
 import numpy as np  # noqa: E402
@@ -50,12 +50,12 @@ def main() -> int:
     a = ap.parse_args()
     import a11
     import a11_kinds as K
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.protocols.spot.verifier.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
-    from verity.ml.circuits.codec import decode_program
-    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity.circuits.codec import decode_program
+    from verity.definitions.registry.catalog import load as load_registry
 
     src, out = Path(a.values), Path(a.out)
     doc = json.loads((src / "values.json").read_text())
