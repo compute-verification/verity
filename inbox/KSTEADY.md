@@ -715,3 +715,23 @@ on your rows: SPOT is 0.0367 with 87.1% of its proving in one row, the head bloc
 
 When 1 to 4 are done, or at 11:45Z, write what is left in card-hours and end your turn. The lead books Thursday's
 and Friday's hours from that, and gives back what kernels does not need.
+
+## Wed 11 Nov 06:12Z: after your node hours end at 11:45Z: HASH-116, the quota rule, as one small pull request
+
+top asked (TOP-400, 06:10Z) that one piece of kernels' hotspot not wait: the rule that refuses a start when the
+cores pinned on a node would pass its CPU quota. It cost you five rows on Tue 23:17Z. Read HASH-116's brief and
+HASH-115's (the larger piece it is the first part of; not yours yet).
+
+- **When:** from 11:45Z, when your turn on the rows ends with its report. The lead resumes you for this. It does
+  not come before a timed row or the 06:0xZ section's four items.
+- **What:** HASH-116 as written: a run that declares its cores is refused before the lease when the node's pinned
+  sum would pass `cpu.max`; the lease records the cores; a test with a made-up quota and leases, no GPU and no
+  clock. Beside the GPU lease in `tools/research` (`pods/sh/gpu_lease.sh`, `cores.py`,
+  `telemetry/cgroup.py`), unless infra names another place on TOP-400 by Wed 18:00Z. Your `cpuquota.py` and
+  `slot.py` are the source.
+- **How:** a branch from the moved `main` (`cursor/kernels-cores-quota-<hex>`); the suites it touches in one
+  named run; `research queue open --issue HASH-116`, the body opening with `Lane kernels` and ending
+  `Refs HASH-116` and `Goal kernels/timed-rows-from-harness`. **Open by Thu 02:00Z. Mark nothing:** the lead
+  marks, after infra's yes on the pull request.
+- Your evening hours on node A (18:15Z to 24:00Z, cards 6 and 7) are for what the rows still need; the lead says
+  by 18:00Z whether they are used or given back.
