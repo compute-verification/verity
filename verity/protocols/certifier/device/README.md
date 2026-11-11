@@ -6,7 +6,7 @@ The network certifier's device in executable Lean: the certifier's proxy as a st
 and the issuer that signs its records. This directory is `lean/` and this file: it has no Python package and no
 console script.
 
-- **Lean**: `lean/` is the Lake package `certifier_device`, whose library `CertifierDevice` `Security/Properties`
+- **Lean**: `lean/` is the Lake package `certifier_device`, whose library `CertifierDevice` `security/Properties`
   requires by path.
 - **Commands** (`lake exe`, in `lean/`): `certifier-device-difftest` and `certifier-issuer-difftest`, each
   `INSTANCES PYTHON N`, and `certifier-device-smoke`, which takes no argument and which no test runs, since it reads
