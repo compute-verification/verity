@@ -241,6 +241,10 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
+tests = ["tests/test_targets.py"]
+paths = ["verity/protocols/flock/prover/python/verity_flock/struct_slots.circuit-check.py"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/test_shard.py", "tests/test_split_prims_serve.py"]
 paths = [
     "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
