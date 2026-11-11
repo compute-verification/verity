@@ -83,8 +83,6 @@ from verity.protocols.poub.verifier.memory_map import (
     parse,
 )
 
-__all__ = ["Lines"]
-
 LIFETIME = audit.lifetime_windows(audit.WINDOW_NS, deferred=True)
 """The lifetime cap a map keeps without the session's, in windows: the audit's at its stated window under deferred
 residency, 2."""

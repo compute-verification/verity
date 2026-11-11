@@ -41,8 +41,6 @@ from typing import Any, Protocol, runtime_checkable
 
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["Context", "Option", "Target"]
-
 #: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
 #: observed run executes what the Commit serves); ``commit`` is the Commit stage of a row.
 STAGES = ("serve", "capture", "commit")
