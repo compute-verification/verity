@@ -37322,3 +37322,95 @@ It is a paper derivation. Nothing is built, by SCALE or by me, and the definitio
 - `refusedSeen` and `view` (item 6).
 
 **In one sentence for Daniel:** the two-stage finder's derivation checks out against the Lean it cites, so the binding miss at two stages is at most `2K*T*(1 + d*e_s)/2^256` for one audit on paper, with K the bits one audit's sample opens; at 2^80 compressions the number runs from -132 bits (the smallest design, its best corner) to -96 (the largest design quoted, its worst corner), it is not yet a Lean theorem, and the Lean must also say that the registration has no always-checked blocks, which is true of the deployed sample and stated nowhere [derived, run, read].
+
+## REPBREAK, Wed 11 Nov 02:53Z: the rows of record price capped patterns at machine registration (S = 28,000), with m = 5.5 to 44 million proof blocks a sampled request and K = 2^40.2 to 2^43.2
+
+All three rows of record, (i), (ii) and (iii), at both steps and every β, price the capped patterns form (`union=True`) at machine registration with S = 28,000 bits, and my rerun of their own command reproduces every row's q and proving share to four digits [run].
+
+Every number below is for one audit, with T in SHA-512 compressions unless it says 64 KiB calls; each names its m and d [derived].
+
+**1. Which design the rows of record price.** Rows: `art:7db57b96`, run `r20261110-033213-4d4e`, tree `a5e4e56a11`, 240 rows, all at S = 28,000 and the world-year scope [read: `out/rows.log`, `out/rows.jsonl`].
+
+The form, read through the code:
+- The job runs `headline_world.py`, which pins β at 0.035, 0.045, 0.055 and 0.065 and calls `headline_at10.run` [read: `inputs/headline_world_job.sh`, `headline_world.py:1-60` in `inputs/tools.tgz`].
+- Row (i) is the planner's `tokens` line, unfused. Rows (ii) and (iii) are the per-expert fused cut (`P5+poolwin600`, `line="per_expert"`) [read: `headline_rows.py:14-22`; `benchmarks/spot_figures/breakeven/sweep.py:433` at `a5e4e56a11`].
+- `make_line` takes each line's `Configuration` from `total_cost.CONFIGURATIONS` and keeps its registration when none is passed [read: `breakeven/levers.py:86-92`, `breakeven/common.py:14`, `total_cost.py:673`].
+  - `tokens` is `form="patterns", registration="machine"` (`total_cost.py:166-169`) [read].
+  - `per_expert` is `form="patterns", registration="machine"` (`total_cost.py:178-181`) [read].
+- `levers.bound` passes `conf.form` to `total_cost._point`, which calls `two_stage_design(..., served=m.served, union=form == "patterns", registration=span)` (`levers.py:113`, `total_cost.py:488-489`) [read].
+- `breakeven_burst_price.model` replaces the served-bits card with the job's S (`breakeven_burst_price.py:67-70`) [read]. Every row's `S_seen`, the S the model read, is 28,000 [run].
+- `optimize.py` differs from `origin/main` only in docstrings [run: `git diff a5e4e56a11 origin/main -- verity/core/protocols/spot/optimize.py`].
+
+How I recomputed m [run]:
+- I ran `headline_world.py`'s own jobs on a worktree at `a5e4e56a11`, with the job's `K6144` and `FI2048` from `rows.log`, world `ours` (the tree's default `reference.toml`).
+- I captured `total_cost.two_stage_design`'s last call, which gives `kappa`, `merged`, `k` by stratum, `q`, `replay_blocks` and the cells.
+- Command: `cd tree && HOME=… K6144=… FI2048=… PYTHONPATH=. .venv/bin/python design_m.py`, about 40 s on 4 cores.
+- It reproduces each row's `q` and `prove` to four digits at S = 28,000, for all 18 rows I ran: (i), (ii) and (iii), both steps, β 0.035, 0.055 and 0.065 [run].
+- The rows themselves carry neither κ nor `k`, so m can't be read from them [read: the rows' keys].
+
+The table, at S = 28,000 [run]:
+- m = Σ_t k_t, the proof blocks the second stage proves in one sampled replay block. A replay block is one request: `replay_blocks` = the scope's requests, 2^54.0 to 2^54.2.
+- K = Σ_t k_t × (stratum t's widest in + out bits), the sum (b) of item 2. K mean is the same sum at each stratum's n-weighted mean block.
+- κ and m don't move with β.
+
+| row | step | form | registration | S | κ | m | K | K mean |
+|---|---|---|---|---|---|---|---|---|
+| (i) tokens | both | patterns | machine (span 8,590 requests) | 28,000 | 2^-6 | 6,389,664 | 2^42.58 | 2^41.82 |
+| (ii) per-expert fused | verifier as measured | patterns | machine (7,220) | 28,000 | 2^-5 | 5,523,986 | 2^40.23 | 2^37.69 |
+| (ii) | one table, m = 37 | patterns | machine | 28,000 | 2^-3 | 22,095,916 | 2^42.23 | 2^39.69 |
+| (iii) warm | verifier as measured | patterns | machine | 28,000 | 2^-4 | 11,047,962 | 2^41.23 | 2^38.69 |
+| (iii) | one table, m = 37 | patterns | machine | 28,000 | 2^-2 | 44,191,826 | 2^43.23 | 2^40.69 |
+
+At S = 32,832 the same command, with only S changed, gives [run]:
+- Row (i): m = 5,499,106, K 2^42.36.
+- Row (ii): m = 9,562,410 and 19,124,815 at the two steps.
+- Row (iii): m = 19,124,815 and 38,249,627.
+- K runs from 2^41.04 to 2^43.04.
+- This is what BREAKEVEN's `r20261110-173854-ea3b` ran, the rows' command at both S in the patterns form [relayed: BREAKEVEN, Tue 10 Nov 18:34Z]. I did not fetch its rows to compare [not reached].
+
+Two caveats on these rows:
+- Rows (ii) and (iii)'s K omit the input bits of 5 of their 151 strata (two `EmbeddingRead_v1` types, a router, and two `Fused[EmbeddingRead_v1 + MoeExpertFp8BlockGemm…]`), whose fused strata carry no `in_bits` [run]. Those K are low by that much [derived]. Row (i)'s strata all carry `in_bits` [run].
+- Per machine registration the first stage samples Q = q × span = 0.0025 to 0.034 replay blocks in expectation [run]. So one audit's sample is one replay block's, as SCALE's (c) says where ⌈q·n⌉ = 1 (`one_stage/draw.py:111-115`) [derived].
+
+So the cost quoted at the 10% line is this design's: m = 5.5 to 44 million, and K = 2^40.2 to 2^43.2 [derived]. That is not my earlier 2^36.8 to 2^40.1 [derived]. That earlier figure used `optimize.py`'s rule at R = 1 or 1,843 replay blocks and S = 144,000. The rows use R = 2^54 (each request of the world's year a replay block) and S = 28,000, which raise every k_t through `log2(R*n_t)` and the capped charge (`optimize.py:1416`) [read, derived].
+
+**2. What K counts.**
+- All my K values (above, and 2^36.8 to 2^40.1 for capped patterns and 2^30.1 for capped sets in my 02:13Z entry) are (b): a sum over sampled blocks of each block's in + out bits. A block's weights count once for that block, at the stratum's widest block [run: `kt.py`, `design_m.py`].
+- The finder's `Reads(r)` is (a): the union of `needs s u` over `u` in `checked x r` (`Security/Proofs/Flock/Claims/Sampling/Reg.lean:90-94`; `pos_mem_needs`, `RevealsOpen.lean:28-32` at `db65e96678`), a set of positions. So a weight two sampled blocks read counts once [read].
+- (a) <= (b), so (b) is a valid K for the bound and over-counts only repeated weight reads [derived].
+- I did not compute (a): the card's strata give `in_bits` without splitting weights from activations [read: the strata's keys are block, kind, per_token, macs, out_bits, in_bits, ands, k_log].
+- The model's weights are 2^41.45 bits at FP4 (the rows' `weights_bits`) [read], so 2^42.45 at FP8 [derived]. That is near every K above, so the union can be well below the sum where sampled blocks share weight chunks [guess].
+- Neither (a) nor (b) as I computed it includes the always-checked blocks (item 4) [derived].
+
+**3. The coin.** The verifier of record refuses; it never truncates and never samples everything.
+- The second stage draws from the run's `source` bytes (`verity/core/service/spot/Spot/Run.lean:200`, read from the run file at `Pieces.lean:667`). `coinsHold` requires the bytes read to be the challenger's coins (`Run.lean:201`) [read].
+- The draw takes bytes with `Draw.take`, which throws "the randomness source ran out" when fewer are left (`Spot/Draw.lean:253-258`). `selectSecond` passes that error up (`Spot/Select.lean:294-305`), and the run errors at its second stage [read].
+- "Checked = every unit" on error is only the security model's convention for a refused run, where the run rejects (`Reg.lean:94`) [read].
+
+Can the code run the rows' design today?
+- The Lean model reads 2^20 bytes of a coin (`Security/Proofs/Flock/SpotFlock/Code.lean:366-367`) [read]. That holds about 58,254 drawn blocks at 18 bytes a block [relayed: ATTACK, Wed 11 Nov 02:09Z, row 3].
+- The rows' design draws 5.5 to 44 million a sampled request [run]: 95 to 760 times that, about 99 to 795 MB of coin [derived]. So every run is refused against the model's coin, and the design the cost rows price is not one the model the proofs read can run [derived].
+- The verifier of record reads as many bytes as the run file supplies, if they are the challenger's [read]. The Python challenger's coin is 64 bytes (`verity/core/protocols/spot/challenger.py:219`) [read]. I did not find how many coins one second stage's evidence may join, so whether the deployed verifier could run it is open [not reached].
+
+**4. `RegTwo.always` is not empty at SPOT[Flock]'s instance.**
+- `RegMatchesTwo` requires every proof block in an input slot's cells (a layout block with `unit = none`) to be always checked (`Security/Proofs/Flock/SamplingGeneric/TwoCode.lean:409-419`, last disjunct) [read].
+- `regMatchesTwo` proves it at SPOT[Flock]'s code (`Security/Proofs/Flock/SpotFlock/Facts.lean:371-380`), and `Cap.lean:169` adds their count to the sample's cap [read].
+- So `always` is empty only for a layout with no input slot [derived]. I did not count it at GLM-5.3 [not reached].
+
+**The four numbers.** Each is `log2(2K*T(1 + d*e_s)/2^256)` with `e_s = 1 + 210k`, one audit, T = 2^80 [run: `python3`, `1 + log2K + 80 + log2(1 + d*e_s) - 256`; `log2(1 + e_s)` is 18.272 at k 1,507, `log2(1 + 167 e_s)` is 38.655 at k 12,343,986, and 64 KiB calls add `log2(513)` = 9.003]. K runs over the design the rows price, at S = 28,000.
+
+| K (m) | k 1,507, d 1 | same, 64 KiB calls | k 12,343,986, d 167 | same, 64 KiB calls |
+|---|---|---|---|---|
+| smallest: 2^40.23, row (ii), verifier as measured (m 5,523,986) | -116.50 | -107.50 | -96.11 | -87.11 |
+| row (i), complete `in_bits` (m 6,389,664) | -114.15 | -105.15 | -93.76 | -84.76 |
+| largest: 2^43.23, row (iii), one table (m 44,191,826) | -113.50 | -104.50 | -93.11 | -84.11 |
+| at S = 32,832: 2^41.04 to 2^43.04 (m 9,562,410 to 38,249,627) | -115.69 to -113.69 | -106.69 to -104.69 | -95.30 to -93.30 | -86.30 to -84.30 |
+
+How these compare [derived]:
+- They are 3.1 to 3.4 bits worse than SCALE's -119.9 to -116.6, -99.5 to -96.2 and -90.5 to -87.2, which used my earlier K, not the rows' design.
+- At d = 167 and the largest k, every row misses 100, by 3.9 to 6.9 bits in compressions and 12.9 to 15.9 with 64 KiB calls.
+- At k 1,507 and d 1, every row clears it in both units.
+- d = 167 is the coordinator's. At this design d is at most the templates, one session a template at SPOT[Flock]'s code (about 150 here), and at most m at `main`'s one-session-a-block instance.
+- A year of 600 s runs on one stream adds 15.7 bits if T = 2^80 is per run [relayed: ATTACK row 5].
+
+Scripts: `design_m.py`, the rows' rerun with the capture, and its output, in `note:proofs/20261111T0255Z-finding-rows-design` [run].
