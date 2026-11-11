@@ -158,7 +158,7 @@ theorem Partition.wrong_ofAudit (xs : Fin C.N → Bool) :
     (Partition.ofAudit P).wrong (Circuit.ofBits xs) = P.wrong xs := by
   classical
   ext u
-  rw [Partition.mem_wrong, FlockSoundness.Audit.Partition.mem_wrong]
+  rw [Partition.mem_incorrect, FlockSoundness.Audit.Partition.mem_wrong]
   refine not_congr ⟨fun h g hg hu => ?_, fun h g hg hu => ?_⟩
   · have e := h g ((Partition.mem_committed_ofAudit P g).2 hg) hu
     rw [Partition.localEval_ofAudit] at e

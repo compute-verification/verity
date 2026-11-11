@@ -553,7 +553,7 @@ theorem tile_out {K : ℕ} (X : (tileSpec p K TM TN).toCircuit.Trace)
     ∀ g ∈ (tileSpec p K TM TN).outs, val X g = tileVal p K TM TN X g := by
   have hw : (tileSpec p K TM TN).part.wrong X = ∅ := by
     ext u
-    simp only [Verity.Partition.mem_wrong, Finset.notMem_empty, iff_false, not_not]
+    simp only [Verity.Partition.mem_incorrect, Finset.notMem_empty, iff_false, not_not]
     rwa [Subsingleton.elim u 0]
   intro g hg
   have hlt : g < (tileSpec p K TM TN).toCircuit.N := by

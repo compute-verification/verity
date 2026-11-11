@@ -13,7 +13,7 @@ width:
   value in the circuit's evaluation;
 * `compose_cone`: the same for the wires `T` a consumer reads, given only that the units of `T`'s cone are correct;
 * `correct_congr`: a unit's correctness depends only on its committed inputs and outputs (`Partition.io`);
-* `Refines.exists_wrong_fine`: when a fine partition refines a coarse one, a wrong coarse unit has a wrong fine unit
+* `Refines.exists_incorrect_fine`: when a fine partition refines a coarse one, a wrong coarse unit has a wrong fine unit
   inside it, whatever the values on the coarse unit's interior;
 * `Containment.implementation`: a circuit that contains `C` implements it.
 -/
@@ -132,7 +132,7 @@ theorem localEval_of_not_mem (X : C.Trace) {u : Fin n} {g : Fin C.N} (h : P.unit
     P.localEval X u g = X g :=
   C.run_fixed (by simp [h])
 
-theorem mem_wrong {X : C.Trace} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
+theorem mem_incorrect {X : C.Trace} {u : Fin n} : u ∈ P.wrong X ↔ ¬ P.Correct X u := by
   classical
   simp [wrong]
 
@@ -183,7 +183,7 @@ theorem compose_cone (X a : C.Trace) (T : Finset (Fin C.N)) (hin : C.InputsAgree
   intro t ht htc
   have hc : ∀ u ∈ P.cone T, P.Correct X u := fun u hu => by
     by_contra hw
-    exact Finset.disjoint_left.1 h (P.mem_wrong.2 hw) hu
+    exact Finset.disjoint_left.1 h (P.mem_incorrect.2 hw) hu
   exact (P.cone_induction X a T hin hc t.val t rfl ⟨t, ht, .refl t⟩).2 htc
 
 /-- **Composition.** If every unit is correct and the committed inputs are the anchors' values, every committed wire
@@ -234,7 +234,7 @@ theorem committed_subset : Pc.committed ⊆ Pf.committed := by
   · refine Or.inr (Or.inr ⟨h, hgh, fun heq => hne ?_⟩)
     rw [r.sub h, r.sub g, heq]
 
-/-- The induction behind `exists_wrong_fine`: when every fine unit inside `u` is correct in `Y`, and `Y` agrees with
+/-- The induction behind `exists_incorrect_fine`: when every fine unit inside `u` is correct in `Y`, and `Y` agrees with
 `X` on the coarse committed wires, `u`'s local evaluation in `X` is each fine unit's local evaluation in `Y`. -/
 theorem localEval_eq {X Y : C.Trace} {u : Fin nc}
     (hY : ∀ g ∈ Pc.committed, Y g = X g) (hf : ∀ v, r.parent v = u → Pf.Correct Y v) :
@@ -266,14 +266,14 @@ theorem localEval_eq {X Y : C.Trace} {u : Fin nc}
 
 /-- **A wrong coarse unit has a wrong fine unit inside it**, whatever `Y` holds on the coarse unit's interior, as long
 as `Y` agrees with `X` on the coarse committed wires. -/
-theorem exists_wrong_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g)
+theorem exists_incorrect_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g)
     {u : Fin nc} (hu : u ∈ Pc.wrong X) : ∃ v, r.parent v = u ∧ v ∈ Pf.wrong Y := by
   by_contra hno
   push Not at hno
   have hf : ∀ v, r.parent v = u → Pf.Correct Y v := fun v hv => by
     have := hno v hv
-    rwa [Pf.mem_wrong, not_not] at this
-  refine Pc.mem_wrong.1 hu fun g hg hgu => ?_
+    rwa [Pf.mem_incorrect, not_not] at this
+  refine Pc.mem_incorrect.1 hu fun g hg hgu => ?_
   obtain ⟨v, hv, hvu⟩ : ∃ v, Pf.unit g = some v ∧ r.parent v = u := by
     rw [r.sub g] at hgu
     simpa using hgu
@@ -281,12 +281,12 @@ theorem exists_wrong_fine {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X 
 
 /-- A fine trace that extends a coarse one has at least as many wrong fine units as the coarse one has wrong
 coarse units. -/
-theorem card_wrong_le {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
+theorem card_incorrect_le {X Y : C.Trace} (hY : ∀ g ∈ Pc.committed, Y g = X g) :
     (Pc.wrong X).card ≤ (Pf.wrong Y).card := by
   classical
   calc (Pc.wrong X).card ≤ ((Pf.wrong Y).image r.parent).card := by
         refine Finset.card_le_card fun u hu => ?_
-        obtain ⟨v, hv, hvw⟩ := r.exists_wrong_fine hY hu
+        obtain ⟨v, hv, hvw⟩ := r.exists_incorrect_fine hY hu
         exact Finset.mem_image.2 ⟨v, hvw, hv⟩
     _ ≤ (Pf.wrong Y).card := Finset.card_image_le
 
@@ -355,8 +355,8 @@ theorem ComposeCone : Guarantees.ComposeCone :=
 theorem CorrectOfOpening : Guarantees.CorrectOfOpening :=
   fun _ _ P _ _ _ hXY => ⟨P.correct_congr fun g hg => (hXY g hg).symm, P.correct_congr hXY⟩
 
-theorem RefineWrong : Guarantees.RefineWrong :=
-  fun _ _ _ _ _ r _ _ hY => r.card_wrong_le hY
+theorem RefineIncorrect : Guarantees.RefineIncorrect :=
+  fun _ _ _ _ _ r _ _ hY => r.card_incorrect_le hY
 
 theorem ContainsImplements : Guarantees.ContainsImplements :=
   fun _ _ M hM => ⟨M.implementation, hM⟩
