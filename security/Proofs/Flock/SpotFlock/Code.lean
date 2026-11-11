@@ -573,6 +573,42 @@ def V : Verifier FlockDeploy.Coin where
   k _ := off h h.ms.length + 1
   next := next h
 
+/-- **The verifier's step in rounds `0` to `stage`**: the round's coin, a non-empty message past round 1 refused. -/
+theorem next_coin (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : as ≠ []) (hcs : cs.length = as.length)
+    (hle : as.length ≤ h.stage + 1) :
+    next h x as cs = .ret (if as.length ≤ 2 ∨ as.getD (as.length - 1) [] = [] then
+      .msg (cs.getD (as.length - 1) default).bytes else .rej) := by
+  have hc : ¬(as.length = 0 ∨ cs.length ≠ as.length) := fun hc =>
+    hc.elim (fun e => h0 (List.length_eq_zero_iff.1 e)) fun hne => hne hcs
+  unfold next
+  rw [ite_eq_right hc, ite_eq_left hle]
+
+/-- **The verifier's step at round `stage + 1`**: the session statements' check. -/
+theorem next_stmt (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (hcs : cs.length = as.length)
+    (hlen : as.length = h.stage + 2) :
+    next h x as cs = .ret (if stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs)
+      then .msg [] else .rej) := by
+  have hc : ¬(as.length = 0 ∨ cs.length ≠ as.length) := fun hc =>
+    hc.elim (fun e => by omega) fun hne => hne hcs
+  have h1 : ¬as.length ≤ h.stage + 1 := by omega
+  unfold next
+  rw [ite_eq_right hc, ite_eq_right h1, ite_eq_left hlen]
+
+/-- **The verifier's step after round `stage + 1`**: a session's round where one holds it, else the verdict's. -/
+theorem next_long (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (has : h.stage + 2 < as.length)
+    (hcs : cs.length = as.length) :
+    next h x as cs = match slotOf h as.length with
+      | some t => sessStep h t (stmtAt h (as.getD (h.stage + 1) []) t) as cs
+      | none =>
+        .ret (if as.length == off h h.ms.length + 1 && verdict h (as.getD (h.stage + 1) []) as cs then .acc
+          else .rej) := by
+  have hc : ¬(as.length = 0 ∨ cs.length ≠ as.length) := fun hc =>
+    hc.elim (fun e => by omega) fun hne => hne hcs
+  have h1 : ¬as.length ≤ h.stage + 1 := by omega
+  have h2 : ¬as.length = h.stage + 2 := by omega
+  unfold next
+  rw [ite_eq_right hc, ite_eq_right h1, ite_eq_right h2]
+
 theorem stage_le_off (t : ℕ) : h.stage + 2 ≤ off h t := le_sessOff (h.stage + 2) (k₀ h) t
 
 theorem three_le_off (t : ℕ) : 3 ≤ off h t := (Nat.le_add_left 3 h.more).trans (stage_le_off h t)
