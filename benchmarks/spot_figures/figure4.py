@@ -61,8 +61,9 @@ def largest(rate: float, tokens: float, bits_per_token: float, target: float) ->
 
 
 def run(model: str, one: dict) -> dict:
-    """The figure's JSON from `model`'s cards and Figure 1's (`total_cost.run`'s) configurations and serve taxes."""
-    c = f1.cards(model)
+    """The figure's JSON from `model`'s cards and Figure 1's (`total_cost.run`'s) configurations and serve taxes, each
+    scope's tokens at the reading of serving's rate `one` was planned at."""
+    c = f1.cards(model, serving=one.get("serving", {}).get("reading", f1.SERVING[0]))
     sc = f1.slot_cards(model)
     part = f1.TokenBlocks.of(c["partition"].value["strata"], c["partition"].value.get("served_macs_per_token"))
     per_token = part.blocks * part.bits

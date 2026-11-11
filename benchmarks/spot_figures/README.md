@@ -14,6 +14,7 @@ forms are the planner's.
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
                                                        # [--request workload] [--workers N] [--points N] [--no-lean]
+                                                       # [--serving measured]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
@@ -24,7 +25,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`, `serving_rate`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -56,6 +57,15 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
+
+  A `serving_rate` card is the engine's measured computed tokens, prompt and output, a GPU-second on the mix its
+  `plan` names. It is `saturated` only where a rate above it was served and computed no more; a lower bound is
+  `saturated` false on a provisional card, and `bound` says what held the rate (compute, the KV pool, or unknown). No
+  figure reads it by its presence. `--serving measured` plans every scope at it: a scope's requests are its
+  GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens over the rate, the scope's
+  GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB, by
+  proportion. Without it every figure is planned at rho's fleet utilization, as before the card. The `serve_tax` card
+  stays as priced; `total_cost.py priced-card --serving measured` prices one at the card's rate.
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
   of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
