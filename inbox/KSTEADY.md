@@ -1342,3 +1342,27 @@ record (`art:471350fa6bf2…`), on the remote: their types are the old census's,
 the point's plan should no longer carry them. When you next run `plan` over the real record, say in your
 return whether it still lists them; if it does, the art condition (not superseded) is not reaching a run's
 own label, and that is a fix in #8989.
+
+## Wed 11 Nov 17:51Z: the tenth check's count is read and rung; you caught a wrong premise of mine. Next: what the card's node does to a row, from the record
+
+Read by me: your count, #9034 at `c9a5a45a33a1` (`…0cb6` rc 0). **My premise was wrong:** I told you and
+benchmarks the four refused runs were "timed across NUMA nodes"; their ten CPUs were on one node and the
+card on another. Building what was worded and reporting that it does not do what was wanted, with the count
+under both readings, is exactly right. **Rung to benchmarks (HASH-115, 17:51Z)** with both rows of your
+table. #9034 stays unmarked until benchmarks chooses a reading.
+
+**Before it can choose it needs the effect, and so do I. From the record only, no GPU:**
+1. **Pairs.** For each type and prover count that has a labelled row with its CPUs on the card's own node
+   and one with them off it: the two rates, their ratio, the runs, and each row's own spread where a repeat
+   exists. One table; its summary on HASH-115 under 120 words, named for my ring: the median ratio, its
+   range, how many pairs, and whether the ratio is inside the rows' spread.
+2. **What else differs inside a pair**, said plainly, since a pair is not an experiment: the hour, the
+   card, what its NUMA neighbour was doing (your 08:49Z figures: a card whose neighbour proves a head block
+   reads 2.86 to 2.97 against 2.55 to 2.59 alone), the session count, the commit.
+3. **What the second reading would cost:** of the 86 rows, how many are the only labelled row of their type
+   and prover count, so the figure would lose them, and how many card-hours timing those again would take.
+4. **What it needs in code:** where a script's row would get the card's NUMA node (the file under
+   `/sys/bus/pci/devices/…/numa_node` for the card's address; who writes it, `server_rate.py` or the point's
+   node side), so I can say whose file it is.
+**End your turn with that summary.** Then the 21 runs' pins and the spec, as before. The `why` for a run
+with no `rate.json` stays as it is: the three are superseded and `plan` no longer lists them.
