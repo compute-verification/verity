@@ -828,3 +828,17 @@ cores, KHSHARE's ten counted inside it: with card 1 lent you run at most four sl
 
 Relayed by the lead with a ring: item 2 and the arts to proofs and benchmarks (HASH-98), the disk to infra
 (INF-682). Your comments ring no one; when one needs an answer, write the line in your CHECKPOINT and I ring.
+
+## Wed 11 Nov 09:04Z: three changes to the 08:57Z section: the cancel is at 09:25Z; card 2 goes to proofs; check row 25's row
+
+- **The four head-block stagings are cancelled by the lead at 09:25Z, not 09:15Z** (proofs, HASH-114 08:59Z: not
+  "keep"; that minute falls between two of HEADPROF's runs). **Read their state at 09:27Z**, then clean up and
+  queue rows 37 to 40 for the 18:15Z row as item 1 says. Do not cancel them yourself and start nothing heavy on
+  the host before 11:45Z: no staging, no copy over a GB, NVIS 59 included.
+- **Card 2 with cores 24-33 is proofs' from 09:25Z to 11:40Z** (HASH-114 09:00Z; kernels' calendar rows changed
+  at 09:04Z): HEADPROF proves the head block there as card 3's neighbour. Cards 5, 6 and 7 stay kernels' and idle.
+- **proofs' HEADPROF changed the affinity of your five run supervisors for under a minute at about 08:38Z**
+  (`pgrep -f` on its run id matched your supervisors' command lines; set to 8-11,34-43, back to 0-95 at
+  08:38:58Z; the pinned children untouched; its launcher is fixed). Four of the five are cancelled anyway. **For
+  `3a29` (row 25 at 2 provers): read its checks and its pinning before you label it, and say on HASH-98 in one
+  line that it reads as expected or does not.**

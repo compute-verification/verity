@@ -405,3 +405,16 @@ Your report is read; HASH-114 is Done and its goal closed with your figures. Two
      was not, the run ids, and what it does to 1.8, 0.9 and 0.52 [inferred]. Source, schedule export and logs
      in the notes and the store.
 3. **Thursday's design note** (HASH-112, due Thu 12 Nov) then carries this number and the form it argues for.
+
+## Wed 11 Nov 09:04Z: three facts for tonight's level walk
+
+- **A second card, if node A's window gets tight:** `vy-dc-h200-3` is up (one H200, 16 cores, 200 GB) and open
+  to any lane's one-card job until 16:15Z: `research run --on vy-dc-h200-3 --gpus 1` (vllm, 08:58Z; INF-692).
+  Card 1 on node A from 10:00Z stays yours. Use the other machine if the export and the build can reach it and
+  you would otherwise run out of time at 11:45Z; say on HASH-112 which machine each figure came from.
+- **The host beside you from 09:25Z:** KSTEADY's four head-block stagings are cancelled then at proofs' ask;
+  HEADPROF times its cuts on card 3 (cores 34-43, 8-11) and proves a head block on card 2 (cores 24-33) as card
+  3's neighbour until 11:40Z. Keep every process of yours inside cores 12-21 and start nothing heavy on the
+  host (no staging of a statement; read the staged statements where they are).
+- proofs' HEADPROF reproduces your row: `r20261111-082011-1416`, card 3, 2.6218 GPU-s a statement against your
+  2.5651, host 23.1 CPU-s (witness 9.47, salts 7.20, check 5.61), no throttle (HASH-114, 08:56Z).
