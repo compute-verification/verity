@@ -91,14 +91,6 @@ if [ "$CLIENT" = vllm-bench ]; then
 fi
 export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
-case " ${ARMS:-} " in *" boundary-rows "*)
-  if [ -e "$D/job.json" ]; then
-    echo "serve-tax: ARMS=boundary-rows writes each class's index.json and salts.bin (the spans' prompts and served ids, every" \
-      "leaf's salt) under $OUT, and $D is a research run's own dir, which the run publishes: give this script RESEARCH_RUN_DIR=DIR," \
-      "a private dir on the node outside the run dir (mode 0700), and copy out only each class's commit.json"
-    exit 2
-  fi ;;
-esac
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
