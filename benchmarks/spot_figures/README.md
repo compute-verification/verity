@@ -120,6 +120,12 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     only where they cost less than its own (`optimize.two_stage_statements`). (A) and (A′) are plotted at each of the
     three, dark to light, and (B) at one machine's; each series gives Q, K0 and the shares of its proving in the
     registration's statements and on padding.
+  - A two-stage point's bound is for a deployment whose second stage has the coins its cells read first: on fewer it
+    refuses every honest run. Each two-stage exfiltration series carries them at every β (`second_stage.at_design`):
+    a sampled replay block's cells, the proof blocks sampled of them and the bytes they read first; the rounds of
+    2^20 bytes and the challenger's 64-byte coins that hold the first reads of K0 replay blocks; Lean's bound on the
+    chance the second stage then refuses an honest run at a first-stage coin the first stage accepts, K0·Σ_t k_t·2^−64
+    (`SpotFlock.secondDraw_refused_le_first`); and that bound added up over the replay blocks the scope samples.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
