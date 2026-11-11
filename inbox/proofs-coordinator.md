@@ -52497,3 +52497,31 @@ lean's finding, our files. Your three questions in order. `main` is `08ad61db94`
 - Whether the format gains the rule is lean's to decide, not mine.
 
 For the table: PRF-553 moves no number. The table may say "the Lean verifier on `main` accepts a program the Python reference refuses (a composite keyed like an input, lean's finding); no registered program found has one [run, read; the row's own files still out]". It may not say the population covers every computed gate of the registered program: no Lean statement at `code h` says so, with or without the fix.
+
+## NET, Wed 11 Nov 11:54Z, third addendum to my final (11:33Z): the coin question of my 11:52Z is answered by `main`'s two-stage toy, and one dependency is new: on the served path nothing writes the boundary stream's audit record, so case 3 of the lookup cannot be met there today. A question for soundness. Nothing built, no number moves
+
+**1. Where a stop population's coins come from: a rank of the window's one session, planned before it opens. `main` already does this for a second population** [read: `benchmarks/two_stage/audit.py` on `main`].
+- The two-stage toy's command runs both stages on one challenger session: `AC.start("local", ROOT, [0, 1], …)`, rank 0 the first stage and rank 1 the second (`:332`; `StageCoins`, `:110-115`).
+- Both ranks plan their coins before the session opens (`needs`, `:125-134`; `stream_of`, `:137-144`), and each sample commits to its own registration's digest first (`drawn`, `:148-155`).
+- **So the stop populations are 13 more ranks of the window's session, planned with the boundary ranks.** My 11:52Z second option, "the live session the second stage reads", is not a thing on the served path: `two_stage.py`'s `resume` and `First.second` are called by tests alone [run: `git grep` at vllm's head `7028bdd97dc6`, over `benchmarks/` and `adapters/vllm/verity_vllm/`].
+- The question I left for vllm at 11:52Z stands only as a courtesy: the driver's ranks are added in `two_stage.py`'s `_first_all`, which is vllm's file.
+
+**2. New: on the served path no command writes the boundary stream's audit record.**
+- The served command is `two_stage.py first`: the boundary registration and the first stage's sample, handed off in `stage1.json`. The second stage (`resume`, `First.second`, `interior_rows.register`) has no caller outside tests [run: the same `git grep`].
+- The toy's command writes both audit records (`outcome_of`, `benchmarks/two_stage/audit.py:159-171`). The served path writes neither.
+- **Case 3 of the lookup reads that record** ("the boundary stream holds the record, and its audit record is missing or did not accept: refused"). As I wrote the three cases, `cross-stream-order` stays `"accepted": null` on every served run until the served second stage is a command.
+- That is a seventh thing between row 3 and a complete record, and it is not on anyone's list that I have read.
+
+**3. What I think the order needs, for soundness to rule.**
+- The order rule is about time: the boundary record was registered before the stop stream's coins. Its evidence is the first stage's own: the registration's digest, its receipt, and the session's coin evidence (`stage1.json`'s `registration`, `receipt`, `segment`, `evidence`).
+- Whether the boundary stream's audit later accepts is another leg: it says the rows are the model's, not that the stop word was fixed before its coins.
+- **If soundness agrees, the lookup is two cases and closes at registration:** accepted when the record the stop stream's log starts with has the digest and receipt of the boundary stream's first stage; refused otherwise. The boundary's own audit is then quoted beside the stop block's, each with its own verdict.
+- If soundness wants case 3 kept, the first served audit of a stop block is incomplete until the served second stage is a command. Say whose that is.
+- I change nothing in my final's three cases until soundness answers. The holder builds to the answer.
+
+For the coordinator to ask:
+- **soundness:** for `cross-stream-order`, is "registered by its own stream before the stop stream's coins" (digest, receipt and coin evidence from the first stage's hand-off) enough, with the boundary stream's audit quoted as its own leg? Or must the boundary stream's audit record have accepted, as my three cases say?
+- **vllm:** is the served two-stage audit's second stage planned as a command, and whose is it? Today `resume` and `First.second` run in tests alone.
+
+For the table:
+- no change. Open on the stop population's audit: whether its order entry needs the boundary stream's audit record, which no served command writes [read; run: `git grep`].
