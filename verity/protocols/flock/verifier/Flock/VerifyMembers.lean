@@ -26,7 +26,9 @@ member's line when that member is ready and read its verdicts before it writes t
 which the output is flushed. `E` is the exit status `verify` ends with on those arguments: 0 when every session is
 accepted, 1 when one is refused or an exception stopped it, 2 when it stopped before any session (its usage, an input it
 cannot read). A line that is no argument list gets no verdict and `MEMBER {"error":WHY,"exit":2,"index":I}`. Standard
-error holds what `verify` writes there for each member, in order.
+error holds what `verify` writes there for each member, in order, and is flushed before that member's `MEMBER` line is
+written: a caller that writes a member's line only once the member before it is answered finds there, when a `MEMBER`
+line arrives, the lines of the members answered so far, that member's last, and nothing else.
 
 **Its exit status** is 0 when every member's is 0, else 1; 2, before any member is read, when its own `--program` is not
 given or cannot be read.
@@ -90,10 +92,12 @@ def memberLine (index : Nat) (status : UInt32) (error : Option String := none) :
 handed what the member before it kept (`start` for the first) and one member's argument list, and nothing else; the
 loop keeps of a member only whether its exit status was 0 and what `member` returns to keep, which it hands to the next
 member and to no other. An exception `member` throws ends that member alone, with the line and the status 1 an uncaught
-one ends `verify` with, and nothing kept; a line that is no argument list leaves what is kept as it was. -/
+one ends `verify` with, and nothing kept; a line that is no argument list leaves what is kept as it was. Standard error
+is flushed before a member's `MEMBER` line is written. -/
 def run {σ : Type} (member : σ → List String → IO (UInt32 × σ)) (start : σ) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
+  let stderr ← IO.getStderr
   let mut index := 0
   let mut all := true
   let mut kept := start
@@ -112,6 +116,7 @@ def run {σ : Type} (member : σ → List String → IO (UInt32 × σ)) (start :
         IO.eprintln s!"verify-members: member {index}: {e}"
         pure (2, some e, kept)
     kept := done.2.2
+    stderr.flush
     stdout.putStrLn (memberLine index done.1 done.2.1)
     stdout.flush
     all := all && done.1 == 0

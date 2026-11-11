@@ -181,12 +181,13 @@ before it read) against a process a member (`verify`). Per spec, `one_stage/m1_u
 statement bound to its program, and `flock_members.py` hands that member in `FM_MEMBERS` times each way, pinned to one
 core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers are a member's `before_check_ms` (the verifier's own
 `inputs:` and `setup:` stage lines) alone, as the kept process's first member, which pays the one read, and as a later
-member. Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s alone, every member is accepted and
-the kept process exits 0; a run that fails it exits nonzero and none of its figures counts. The target is a later
-member's wait with nothing of the program's in it, and nothing of a circuit file it shares with the member before it
-but the file's bytes read and compared. `FM_ORDER` (the members by their spec's index, `0,0,1,0`) adds the specs'
-members in one kept process: a member whose circuit file is another than the one before's pays for its own, and the
-process's peak RSS says what the change of file holds at once.
+member, with the memory the kept process holds between members (`rss_kb`: its resident memory at each `MEMBER` line).
+Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s alone, every member is accepted and the kept
+process exits 0; a run that fails it exits nonzero and none of its figures counts. The target is a later member's wait
+with nothing of the program's in it, and nothing of a circuit file it shares with the member before it but the file's
+bytes read and compared. `FM_ORDER` (the members by their spec's index, `0,0,1,0`) adds the specs' members in one kept
+process: a member whose circuit file is another than the one before's pays for its own, and the process's peak RSS
+says what the change of file holds at once.
 
 ~~~sh
 research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
