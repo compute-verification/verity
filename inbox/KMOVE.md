@@ -647,3 +647,24 @@ branch from `cursor/proofs-wideleaf-782c` or `main`; I pass the answer on.
 what you read on the verifier's and the host's paths at the wide entry, what each change touches (file and
 line), what waits for the Lean's module, which card the bit-for-bit check needs and for how long, and what
 could make Friday slip. Follow the kernel-engineering skill for the card check. No GPU without my go.
+
+## Wed 11 Nov 17:40Z: today's build pieces are read and rung; Pearl-C's change is withdrawn; now HASH-119
+
+Read by me: #8980 at `28b46f993a93` and #8993 at `df81bd49d317` (`…026c` and `…d296` rc 0 at them), #9033's
+diff whole (`…7b21` rc 0), your return. The probe at 1.3 s a build is what I hoped for.
+- **#9033 rung to circuits (HASH-110, 17:40Z)** with the one difference from the diff it took (the system's
+  temporary directory, since P7 refuses a literal `/tmp`): its call; it reads and marks.
+- **Pearl-C's two `build.sh`: withdrawn, my decision**, said to compute-accounting in the same comment. The
+  scripts are in the public export and the ship frame is not; making the frame public is a boundary change
+  for a guard that moves no byte, and their cubins already hold with plain nvcc. Keep the branch; do
+  nothing more on it unless compute-accounting asks for the boundary change.
+- **#8980 and #8993** wait for #8895 on `main` (admitted, not merged at 17:38Z); I run the ship tests on a
+  toolkit machine at each head and mark them then.
+- vllm has not answered its part; it stays out.
+
+**Now HASH-119, as the section above this one says.** Your first return: the plan on HASH-119, under 150
+words, named for my ring: what you read of the verifier's and the host's paths at the wide entry, what each
+change touches (file and line), what waits for the Lean's module (Thu 06:00Z), which card the bit-for-bit
+check of the leaf kernel needs and for how long, and what could make Fri 13 Nov slip. Proofs' answers to my
+two questions (which statement is the m = 35 one and at how many provers; branch from its branch or `main`)
+come through this file. No GPU without my go.
