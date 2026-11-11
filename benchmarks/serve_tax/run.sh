@@ -22,9 +22,9 @@
 # shard and no plan). Its arms are by default stock, stock again and two-stage, with --arms all one arm for each change
 # in between and the canonical top-k's own; its loads chat and long. Chat's dataset file is the node's copy of the pinned
 # one, downloaded once into HF_HOME before the GPUs are held and checked by its SHA-512 (serve_tax.py passes --fetch);
-# --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a file
-# of planned requests (arrival times, lengths and block ids) in place of load prefix's four, each sent as it arrives:
-# the row then says whether stock kept up, and which of its figures is the cost. After the table it prints the cost of
+# --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a table
+# of planned requests (arrival times and lengths; prefix_plan.jsonl is the full-size one) in place of load prefix's
+# four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost. After the table it prints the cost of
 # ARMS's last arm over compiled (serve_tax.py cost) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
