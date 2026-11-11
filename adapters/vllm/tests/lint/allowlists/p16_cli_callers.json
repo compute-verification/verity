@@ -6,6 +6,7 @@
     "block-counts": "benchmarks/one_stage/served_verdicts.sh",
     "build": "benchmarks/stacked_share/job.sh",
     "epoch": "demos/vllm/commit.sh",
+    "ids-front": "benchmarks/network_e2e/traces/ids.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
     "properties-admission": "adapters/vllm/tools/migrate/superseded_quarantine.py",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
