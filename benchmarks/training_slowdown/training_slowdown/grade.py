@@ -372,8 +372,8 @@ def traced(record: dict, row: dict) -> dict:
         macs = [(r["count"] * r["macs"], any(r["affected"])) for r in block["rows"]]
         circuit = {"affected_share": sum(m for m, hit in macs if hit) / sum(m for m, _ in macs) if macs else 0.0}
     else:
-        f = F.of_record(with_circuit(record, circuit), prefix(record, row["checkpoint_step"]))
-        f |= F.of_trace(circuit) | {"labels": f["labels"] | F.of_trace(circuit)["labels"]}
+        f, read = F.of_record(with_circuit(record, circuit), prefix(record, row["checkpoint_step"])), F.of_trace(circuit)
+        f |= read | {"labels": f["labels"] | read["labels"]}
     return row | {"formalism": f | {
         "products": got, "labels": f.get("labels", {}) | {"products": label},
         "trace": circuit | {"products": block} | {k: tr[k] for k in F.READ_BACKS}}}
