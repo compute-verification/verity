@@ -34,8 +34,9 @@ Program it refuses every session once its checks pass.
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
-Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
-chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
+Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, block_bits (where its
+block's last range ends, of 2^k_log), vus_per_block and chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and
+Lean's verdict.
 """
 from __future__ import annotations
 
@@ -479,6 +480,7 @@ def main() -> int:
                                    "refs": sum(len(x) + len(y) for df in tm.defs for _c, x, y in df.rows)}
     say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
         nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
+        block_bits=max((r["pos0"] + r["count"]) << r["slot_log"] for r in m["ranges"]),
         vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
         domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
     if not a.bin:
