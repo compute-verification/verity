@@ -35,7 +35,7 @@ from operator import xor
 from pathlib import Path
 
 import compact_stage as CST
-from verity.ml.circuits.boolean import forms
+from verity.circuits.boolean import forms
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL

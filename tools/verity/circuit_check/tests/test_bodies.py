@@ -1,4 +1,4 @@
-"""`circuit_check.bodies`: a composite run body by body is the reference (`verity.ml.circuits.evaluation.evaluate`) on every
+"""`circuit_check.bodies`: a composite run body by body is the reference (`verity.circuits.evaluation.evaluate`) on every
 construct a body has (a call, a batch along no axis, axis 0 and a later one, a batch and a scan of composites, a scan with xs
 and shared arguments, a lazy and a wide-fan-in primitive, a parameter returned as is, And2, Xor2 and Not alone and batched on
 any operands, a body of gates and constant bits on rows of bits `LANES` at once), raises what the reference raises with
@@ -17,14 +17,14 @@ from circuit_check import bodies as BD
 from circuit_check import checks as CK
 from circuit_check import targets as TG
 from circuit_check import vectors as VX
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluation import evaluate as reference
-from verity.ml.circuits.evaluation.reference import signature_of
-from verity.ml.circuits.layout import WIDE_FAN_IN
-from verity.ml.circuits.ops.prims import const
-from verity.ml.circuits.refs import Coll, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation import evaluate as reference
+from verity.circuits.evaluation.reference import signature_of
+from verity.circuits.layout import WIDE_FAN_IN
+from verity.definitions.ops.prims import const
+from verity.circuits.refs import Coll, concat, tuple_of
+from verity.circuits.types import Array, Tuple, Value
 
 V8 = Value(8)
 N_WIDE = WIDE_FAN_IN + 3
@@ -373,7 +373,7 @@ def test_the_non_constant_gates_are_the_ones_counted_gate_by_gate(monkeypatch):
     """Constants (a ``Const`` gate, a gate of no parameters, one whose operands are all constant) flow into calls, batches
     and scans, so a body's gates are constant in one activation and not in another; the counts, the estimate and the order
     each primitive first appears in are the gate-by-gate walk's."""
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     k5 = const(8, 5)
 
