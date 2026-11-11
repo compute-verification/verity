@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from verity.core.protocols.remote_bandwidth import p2_party  # noqa: E402
+from verity.protocols.poub.verifier import p2_party  # noqa: E402
 
 #: an H200's specified HBM read rate, bytes a second
 H200_BYTES_PER_S = 4_800_000_000_000

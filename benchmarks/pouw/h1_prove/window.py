@@ -139,7 +139,7 @@ def cmd_commit(a) -> int:
     if a.program_sha512:
         prog = a.program_sha512
     else:
-        from verity.core.protocols.spot.one_stage import partition as P
+        from verity.protocols.spot.verifier.one_stage import partition as P
         prog = P.program_digest(shape.window([(c["name"], c["n"]) for c in out_calls], m)[0])
     ZY = window_records(com, A, SA, B, SB)
     wa, nc = U.row_words(A, SA), len(out_calls)
@@ -203,8 +203,8 @@ def _serve_one(u: int, d_word: bool = False, xa_flip: bool = False) -> tuple[int
     bit xa (A = 127 with dither bit 1). ``d_word``: as a kernel whose lane 0 made its D_1 entry 0 one too large, folded and
     recombined like the honest words, so z and the receipt agree with each other. ``xa_flip``: v3's z with one entry's xa
     flipped (`_xa_target`), the receipt the honest one."""
-    from verity.ml.protocols.pouw.circuit import h1tile as H
-    from verity.ml.protocols.pouw.circuit import seeds as SD
+    from verity.protocols.pouw.prover.circuit import h1tile as H
+    from verity.protocols.pouw.prover.circuit import seeds as SD
     a, b, _sa, _sw = _rows(_W["priv"], _W["com"], u)
     roots_ = roots(_W["com"])
     a, b = [[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b]

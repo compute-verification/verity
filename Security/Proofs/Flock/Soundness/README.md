@@ -7,7 +7,7 @@ analysis, the compiled proof, the knowledge extractor, the spec deviations, the 
 and the post-quantum and root-reuse analyses.
 
 The interactive mode only. The Lean development is this directory (namespace `FlockSoundness`). The verifier it is about
-is the Lean package `verity/core/service/flock/` (outlined in `verity/ml/flock/verifier/README.md`). The work is staged along a16z's zkVM security stages (DESIGN.md §7).
+is the Lean package `verity/protocols/flock/verifier/` (outlined in `verity/protocols/flock/agreement/README.md`). The work is staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
 
@@ -33,7 +33,7 @@ at most `tableError(fast100 m, shape)`:
 - **For the optimal prover** (`table_value_sound`): the same bound on `value`, which `table_sound` specializes to each
   strategy. This form composes across the tables of a batched session (`value_batch_le`, `Audit/README.md`).
 - **With masking's padded level 0** (`table_sound_pad`, `SoundnessPad.lean`; the model is `Definitions/Flock/LigeritoPad.lean`). Masking
-  (`verity/ml/flock/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
+  (`verity/protocols/flock/prover/live/PROTOCOL.md` §7) pads every level-0 lane with `t` coefficients, so level 0's code is
   `RS[2^d, 2^cols + t]`, of rate `ρ' = (2^cols + t)/2^d`. Each rep also folds its own `e` extra lanes with fresh coins.
   - **The bound is a function of `t` and `e`** (`padTableError`). It is `tableError` with level 0's radius, list size,
     queries and MCA numerator taken at `ρ'`, plus one MCA line and one coin on the restarted claim per extra lane.
