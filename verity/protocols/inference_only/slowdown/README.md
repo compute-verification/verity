@@ -20,7 +20,8 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
-  `Nci.Guarantees.DampenerRemote`'s `ρ`. `verity/protocols/inference_only/nci` reads its slowdown `D` from `multiple_bound`. It
+  the slowdown `Nci.Guarantees.DampenerRemote` bounds. `verity/protocols/inference_only/nci` reads its slowdown `D` from
+  `multiple_bound`. It
   comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
@@ -234,12 +235,13 @@ uncertified or unregistered gates at a structure whose `s_×` is above 1, with t
 ## Names
 
 The package and its outputs (`verity/protocols/inference_only/slowdown`, `slowdown.md`, `slowdown.json`) and the
-identifiers `Slowdown.value`, `Estimate.slowdown`, `slowdown_worst`, `Corner.slowdown` and the JSON's `slowdown` and `slowdown` all name the
-slowdown (the training cost once called the overhead; `Slowdown` and `theorem.slowdown` keep that name);
-`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's
-`Nci.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `verity/protocols/inference_only/nci`'s
-slowdown `D`; the padded size ratio `|A| / T_0` (`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the
-intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
+identifiers `Slowdown`, `Slowdown.value`, `theorem.slowdown`, `Estimate.slowdown`, `slowdown_worst`, `Corner.slowdown`
+and the JSON's `slowdown` and `declared_slowdown` all name the slowdown (the training cost once called the overhead);
+`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound, and an estimate's `parts` is the `Slowdown` it was
+read from. The slowdown is what Lean's `Nci.Guarantees.DampenerRemote` bounds (`remoteDampener`, bounded by
+`hardwareMultiple`) and `verity/protocols/inference_only/nci`'s slowdown `D`; the padded size ratio `|A| / T_0`
+(`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the intermediate, not the slowdown. The one key that
+keeps the older name is the board's `"rho"` (`nci.bracket.search`), which `tests/test_attacks.py` reads.
 
 ## Extending
 
