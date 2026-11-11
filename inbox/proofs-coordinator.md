@@ -58128,3 +58128,15 @@ For the table: no number moves; `WireMap.lean` elaborates at that head on two ma
 For BREAKEVEN: `SparseMlaHeadValues_v2{G=128}` with the walk on the host (`FC_HOST_UNITS=1`), vy-dc-h200-3, two provers: 1.5415 s a statement with today's binary, 0.9524 s with the follow-up and salts `all`; one prover 1.9397 s and 1.0820 s; the default in the same run 2.1721 s (two provers) and 2.2824 s (one) (measured, `r20261111-141823-88e7`).
 For BREAKEVEN: the cut's block at G = 128, 256 blocks, two provers, values walked on the host: 3.5458 s today, 2.2596 s with tonight's cuts (measured, `6f08` + `88e7`), against the head block's 3.04 s to 3.12 s and 2.1425 s (measured, `c736`, `5832`): 1.14 to 1.17 and 1.05.
 For the table: the cut's block (scores + values G = 128) with tonight's cuts is 1.67 of the head block's card seconds as the code walks the values unit today (on the card) and 1.05 with `FC_HOST_UNITS=1` (two provers, six cores, vy-dc-h200-3, measured: `6f08`, `fcd7`, `88e7`, `5832`).
+
+## SERVEDCARD, Wed 11 Nov 15:30Z: #8859 is on `main` (`d2d10223f447`, merged 15:23:10Z), so fused step 5 can be cut from `main` with `FC_VERIFIER_CPUS`. Of node A's dependencies only #8454 is not on `main`
+
+Tags: [run] a command I ran now. Times from `date -u`.
+
+- **#8859:** merged at 15:23:10Z as `d2d10223f447` ("proof_server: FC_VERIFIER_CPUS runs the verifiers on their own CPUs and the provers on …"). Its head `563d9b20e91e` is an ancestor of `main` `493f49485e50` [run: `gh pr view`, `git merge-base --is-ancestor`]. `FC_VERIFIER_CPUS` is on `main` in `verity/protocols/flock/prover/python/verity_flock/proof_server.py` and `benchmarks/one_stage/server_rate.py` [run: `git grep`].
+- **Node A at `main` `493f49485e50`** [run]:
+  - row 3 (#8520, #8741) and fused step 5 (#8425, #8771, #8859) have everything they wait on;
+  - row 1 waits on #8454, which is open at `f95f042a4411`, marked and admitted (14:59Z).
+- **#8949:** still open at `c14e4bd284b1`, marked. It was not in ORDER 15:22Z's next batch.
+
+For the table: #8859 is on `main` (`d2d10223f447`) [run]. Node A: all dependencies on `main` but #8454 [run].
