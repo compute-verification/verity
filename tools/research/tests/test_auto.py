@@ -124,18 +124,18 @@ def test_the_lean_pool_a_command_takes_a_slot_of():
     changed = ["python3", "tools/verity/lean/lean_changed.py"]
     assert auto.lean_pool([*changed, "--no-wait", "--build", "X.lean"]) == "build"
     assert auto.lean_pool(["uv", "run", "verity", "lean", "try", "X.lean"]) == "build"
-    assert auto.lean_pool([*changed, "--records", "Security", "--update"]) == "build"
+    assert auto.lean_pool([*changed, "--records", "security", "--update"]) == "build"
     assert auto.lean_pool([*changed, "--records=Security"]) == "build"
     assert auto.lean_pool(["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records Security"]) == "build"
-    assert auto.lean_pool([*changed, "--records", "Security"], ["A=1", "LEAN_RECORDS_POOL=proofs"]) == "proofs", "the run's --env"
+    assert auto.lean_pool([*changed, "--records", "security"], ["A=1", "LEAN_RECORDS_POOL=proofs"]) == "proofs", "the run's --env"
     assert auto.lean_pool(["env", "LEAN_RECORDS_POOL=proofs", *changed, "--try", "X.lean"]) == "proofs"
     assert auto.lean_pool(["bash", "-c", "LEAN_RECORDS_POOL=proofs python3 tools/verity/lean/lean_changed.py --records P"]) == "proofs"
-    assert auto.lean_pool([*changed, "--records", "Security", "--dev-cache"]) == "audit", "check.py --dev-cache --build takes it"
-    audit = ["python3", "tools/verity/lean/check.py", "--build", "--update", "Security"]
+    assert auto.lean_pool([*changed, "--records", "security", "--dev-cache"]) == "audit", "check.py --dev-cache --build takes it"
+    audit = ["python3", "tools/verity/lean/check.py", "--build", "--update", "security"]
     assert auto.lean_pool(audit) == "audit" and auto.lean_pool(audit, ["LEAN_SLOT_POOL=check"]) == "check"
-    assert auto.lean_pool(["python3", "tools/verity/lean/check.py", "Security"]) is None, "without --build it takes no slot"
+    assert auto.lean_pool(["python3", "tools/verity/lean/check.py", "security"]) is None, "without --build it takes no slot"
     assert auto.lean_pool(["python3", "tools/verity/check/check.py", "--build"]) is None, "the whole check is not the Lean check"
-    assert auto.lean_pool([*changed, "--inputs-key", "Security"]) is None
+    assert auto.lean_pool([*changed, "--inputs-key", "security"]) is None
     assert auto.lean_pool(["uv", "run", "pytest", "tools/verity/lean/tests/test_lean_changed.py", "-k", "records"]) is None
     assert auto.lean_pool(["bash", "-c", "echo 'an unclosed quote"]) is None
 
@@ -496,7 +496,7 @@ def test_on_auto_places_a_records_run_by_its_lean_pool_and_says_which(tmp_path, 
     monkeypatch.setattr(remote, "queue_placement", _refusing([]))
     monkeypatch.chdir(_auto_repo(tmp_path))
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
-    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "Security", "--update"]
+    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
     assert main([*runs, "--", "pytest", "-q"]) == 3
     assert f"spilled to {CPU1}'s research pool" in (err := capsys.readouterr().err) and "Lean" not in err
     assert main([*runs, "--", *records]) == 3
