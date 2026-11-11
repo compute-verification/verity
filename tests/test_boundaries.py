@@ -201,10 +201,11 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
 #: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
-#: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
-#: which holds it to the wire's Python reference through ``verity_difftest``.  PoUB's prover and PoUS's P2 prover run on a
-#: GPU through torch, which ``verity`` never imports: each is loaded by path under its own names (``prover``, ``device``,
-#: ``kv``, ``paged``; the package ``p2_store``), by the vLLM adapter and by its harness in ``benchmarks/``.
+#: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path: its difftest generator, which its
+#: ``lean-audit.json`` runs, and ``interop.py``, which holds it to the wire's Python reference through
+#: ``verity_difftest``.  PoUB's prover and PoUS's P2 prover run on a GPU through torch, which ``verity`` never imports:
+#: each is loaded by path under its own names (``prover``, ``device``, ``kv``, ``paged``; the package ``p2_store``), by
+#: the vLLM adapter and by its harness in ``benchmarks/``.
 SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
             "protocols/inference_only/nci", "protocols/poub/prover", "protocols/pous/prover/p2")
