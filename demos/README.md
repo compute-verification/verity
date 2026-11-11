@@ -2,7 +2,7 @@
 
 One directory per demo. A demo holds what is its own: the workload it serves, its placement (where each party
 runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the integration's
-(`adapters/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from `demos/`
+(`adapters/`), and the protocols it runs stay in `verity/protocols/`. `verity` imports nothing from `demos/`
 (`tests/test_boundaries.py`), and `verity demo NAME` runs `demos/<NAME>/config.toml` (`verity run`), else its `run.py`
 or `run.sh`.
 
