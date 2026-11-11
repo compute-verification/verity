@@ -28,14 +28,14 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.circuits.refs import Affine, runs
 
 from tests.engine.moe_scope_cut import cut, write
-from verity.circuits.refs import Affine, runs
 from verity_vllm.check.match import program_compare as PC
-from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.events import Note
 from verity_vllm.observe.fold import fold as FD
 from verity_vllm.observe.fold.memory import Unresolved
+from verity_vllm.observe.fold.profiles import generic
 from verity_vllm.observe.fold.resolve_log import resolve_log
 from verity_vllm.observe.fold.resolver import Compute, Group, Transparent
 from verity_vllm.observe.log import read_log
@@ -59,7 +59,7 @@ def fixture(rank: int) -> Path:
     return FIXTURES / f"qwen3_235b_a22b_tp8_moe_l{LAYER}.rank{rank}.jsonl.gz"
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def profile():
     cfg = json.loads(CONFIG.read_text())
     # this base's `generic.rank_hf_config` refuses 4 key/value heads over 8 ranks; vLLM gives each rank one of them (num_kv_head_replicas),
@@ -71,7 +71,7 @@ C = profile().config
 H, I, E, TOPK, V = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["V"]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _resolved(rank: int):
     header, results, roots, notes = resolve_log(fixture(rank), profile())
     return header, {sr.step: sr for sr in results}, roots, notes
@@ -160,7 +160,7 @@ class _CutFold(FD._Fold):
             return Affine("p", -1, 0, args[0].numel)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _folded(rank: int):
     f = _CutFold(profile(), False)
     f.live_in = set()
@@ -324,7 +324,7 @@ def _merged(rs: list[tuple]) -> list[tuple]:
     return out
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _folded_routed(rank: int):
     """`_folded` with a stand-in captured route for this model's [M, 4096] all-reduces at the capture's settings (batch-invariant
     pynccl over SHM on 8 RTX PRO 6000; no world-8 chain is recorded), so the fold takes the Build's one call per all-reduce."""

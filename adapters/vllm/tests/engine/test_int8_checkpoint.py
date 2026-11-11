@@ -13,12 +13,16 @@ import numpy as np
 import pytest
 import torch
 
+from tests.engine import ppl_oracle as O
+from tests.engine.test_fp8_checkpoint import (
+    _base_checkpoint,
+    _bf16,
+    _one_tensor_base,
+    _write_base_shard,
+)
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.program import model as M
-
-from tests.engine import ppl_oracle as O
-from tests.engine.test_fp8_checkpoint import _base_checkpoint, _bf16, _one_tensor_base, _write_base_shard
 
 FLOOR = np.float32(np.float32(1e-30) / np.float32(127))                          # an all-zero row's scale (steps.py's clamp)
 

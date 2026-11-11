@@ -27,7 +27,16 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc, views_in
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
 from verity_vllm.observe.log import read_log
 
 COLLECTIVE_OPS = ("vllm.all_reduce", "vllm.all_gather", "vllm.reduce_scatter", "c10d.", "_c10d_functional.", "_C.vocab_parallel_embedding",

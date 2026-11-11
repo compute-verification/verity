@@ -25,7 +25,7 @@ class Params:
 
 def test_the_default_is_the_hash_of_its_name():
     want = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
-    assert served_seed.DEFAULT_SEED == want and 0 <= want < 1 << 63
+    assert want == served_seed.DEFAULT_SEED and 0 <= want < 1 << 63
 
 
 def test_a_derived_seed_is_the_hash_of_its_domain_the_coin_and_the_id_each_length_prefixed():

@@ -314,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[negative] {name} sm_{cap} ok={r['ok']} {r.get('same_sass', '')} {[x[:120] for x in r['refused']]}", flush=True)
     if a.launch:
         import torch
+
         from tests.engine import int8_batch_gpu as B
         for i, case in enumerate([(32, 8, 128, 8, 600, 16, 1.0), (8, 2, 64, 6, 200, 16, 1.0)]):
             B.run_case(7000 + i, case)

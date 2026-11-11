@@ -22,13 +22,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.definitions.numerics.int8_rows import ROWS
 
 from tests.engine import int8_attention_cut as C
 from verity_vllm.observe.events import Note, RunHeader, ViewDesc
 from verity_vllm.observe.fold.resolve_log import collect_roots
 from verity_vllm.observe.fold.resolver import Compute, Const, Group, spec_label
 from verity_vllm.observe.log import read_log, split_steps
-from verity.definitions.numerics.int8_rows import ROWS
 from verity_vllm.query.manifest import format as RM
 
 FIXTURE = Path(__file__).parent / "fixtures" / "llama31_8b_int8_attn_l0.jsonl.gz"
@@ -57,7 +57,7 @@ class Memory:
         words, at = self._at(v)
         return words[at]
 
-    def flipped(self, v: ViewDesc, bit: int = 0) -> "Memory":
+    def flipped(self, v: ViewDesc, bit: int = 0) -> Memory:
         """This memory with bit `bit` of the first word of `v` flipped."""
         words, at = self._at(v)
         w = words.copy()
@@ -91,7 +91,7 @@ def refused(c: Compute, mem: Memory) -> list[str]:
     return out
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _cut() -> tuple[RunHeader, dict, dict[int, list], dict[int, Memory]]:
     header, roots, steps = None, {}, {}
     for pre, step in split_steps(read_log(FIXTURE)):

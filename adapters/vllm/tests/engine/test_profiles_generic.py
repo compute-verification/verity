@@ -9,15 +9,18 @@ import json
 
 import pytest
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import RunHeader
-from verity_vllm.observe.fold.patterns import TokenSelectArgmax
 from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.observe.events import RunHeader
+from verity_vllm.observe.fold.patterns import TokenSelectArgmax
+from verity_vllm.observe.fold.patterns.collectives import (
+    EmbeddingShardCuda,
+    TpCollective,
+)
 from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
-from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
+from verity_vllm.program import model as analytic
 
 SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
 #: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
@@ -220,7 +223,9 @@ def test_the_sparse_attention_family_builds_its_h200_dsa_and_shared_moe_profile(
         DsaSparseMla,
         DsaTopK,
     )
-    from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
+    from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (
+        MoEFusedSharedExpertsFp8,
+    )
 
     cfg = json.loads((Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
     assert FF.facts_for(cfg)["arch"] == "dsa-moe"

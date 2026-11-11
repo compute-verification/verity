@@ -16,10 +16,9 @@ import numpy as np
 import pytest
 import torch
 
+from tests.engine.test_fp8_checkpoint import _bf16, _write_base_shard
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
-
-from tests.engine.test_fp8_checkpoint import _bf16, _write_base_shard
 
 G = 128
 VOCAB, H = 16, 256
@@ -317,7 +316,7 @@ def test_report_reads_the_pin_against_its_base(tmp_path):
     t, s = doc["tensors"], doc["summary"]
     assert s["mismatch"] == 0 and s["tensors"] == len(t) == 8 and s["int8"]["tensors"] == 6 and s["bf16"]["tensors"] == 2
     q = t["model.layers.0.self_attn.q_a_proj.weight"]
-    assert q["kind"] == "int8" and q["base_dtype"] == "F8_E4M3" and 0 < q["rel_fro"] and 0 < q["rel_max"] <= 0.5 / 127 + 1e-9
+    assert q["kind"] == "int8" and q["base_dtype"] == "F8_E4M3" and q["rel_fro"] > 0 and 0 < q["rel_max"] <= 0.5 / 127 + 1e-9
     assert q["inexact_f32"] > q["elements"] // 2 and t["lm_head.weight"]["inexact_f32"] == 0
     assert len(q["rows"]) == 3 and q["rows"][0]["rel_fro"] >= q["rows"][-1]["rel_fro"]
     assert 0 < t["model.layers.0.self_attn.kv_b_proj.weight"]["rel_max"] <= 2.0 ** -8 * 1.001   # half a bf16 ulp

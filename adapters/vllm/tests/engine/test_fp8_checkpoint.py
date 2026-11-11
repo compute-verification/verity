@@ -16,7 +16,6 @@ import pytest
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.program import model as M
 
-
 # ------------------------------------------------------------------------------------------------------------------ numerics
 
 def _finite_codes() -> np.ndarray:

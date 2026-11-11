@@ -13,10 +13,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from tests.engine import ppl_oracle as O  # noqa: E402
 from verity_vllm.engine import int8_checkpoint as I  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
-
-from tests.engine import ppl_oracle as O  # noqa: E402
 
 
 def _bf16(a: np.ndarray) -> torch.Tensor:
