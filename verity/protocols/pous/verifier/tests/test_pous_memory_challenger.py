@@ -15,6 +15,7 @@ from pous_fakes import Clock
 
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import schemes
 from verity.protocols.pous.verifier.schemes import p2
@@ -62,7 +63,7 @@ def judge(c, signed, signer, *, schemes_=ts.SCHEMES, openings=None):
 
 def test_coin_tree_commits_before_and_opens_after():
     tree = coins()
-    want = mc.derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
+    want = derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
     c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())

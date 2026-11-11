@@ -484,7 +484,7 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 __all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
+           "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "egress_units",
            "label", "labels", "log2_error", "message", "records_root", "retained_bits", "sample_indices", "verdict",
            "wipe_key"]
