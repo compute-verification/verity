@@ -407,3 +407,26 @@ directories, the prover's and `verity/definitions/kernels` do not differ between
 - **The small pull request on the moved `main`:** `h1v3_ref.py`'s fallback (the 23:16Z section) and
   `sbench.sh:204` with its three points (the 00:45Z section). Its suites in one named run. The lead marks.
 - After merging the moved `main` on your VM: `uv sync --all-packages --extra torch-cpu` (infra, 03:34Z).
+
+## Wed 11 Nov 07:36Z: HASH-108 is read and closed (Done). Next: HASH-110, why a move changes a kernel's machine code
+
+- **Read by the lead:** the records of …8ef2 (rc 0), …5ea0 and …18ae (rc 1 on both trees: `commit_slots`' two
+  tests) and …8cf8 (#8851's suites: `repository` 284, `benchmarks/hash/dither` 68, at its head). Said on HASH-108,
+  now Done. **#8851 is marked** (07:33Z). Your widening of the two pinned-tree checks stays in it.
+- **Crossing:** #8525 and #7970 do not cross (said on HASH-107). The lead is marking #8521, #8542, #8666 and #8669
+  again through the quick tier; nothing more is asked of you there unless a tier goes red.
+- **HASH-110 is yours now (read its brief; due Tue 17 Nov).** Tonight's table gives the case to explain: after the
+  move `decode_sq_kernel` in `libp2v1.so` is different machine code and Flock's prover differs only in
+  `.debug_line`; everything else is byte for byte the parent's. First piece, no GPU, on a node with the toolkit
+  (`vy-nebius-cpu-1`): **what in that one function's build depends on where a source file sits.** Two builds
+  that differ only in the tree's root, then only in one moved include, compared at the PTX and the SASS:
+  `__FILE__`, a path in an assert or a symbol's hash, the include string, the order of inlining. Say on HASH-110
+  what it is, with the two lines of PTX or SASS that show it, and whether the two forms compute the same values on
+  every input (by reading; say if a test is needed). Then the build rule that removes it, proposed with its diff.
+- **Also yours, small, in the same or its own pull request:** `commit_slots`' two tests that fail on node A for
+  the node's reasons (its torch lacks `torch.cuda._utils._cuda_bindings_driver`; a fetched fixture a fresh clone
+  does not hold). A kernel's own check should not be red for its machine: make each pass where it can and refuse
+  with the reason where it cannot, as the testing skill says for a test that needs something the machine lacks.
+- A branch from the moved `main`; a worker comments with `research msg linear comment ISSUE 'TEXT' --worker
+  KMOVE`. Report the first piece on HASH-110 by Wed 16:00Z; end your turn when it is posted or when you wait
+  on a run for more than 40 minutes.
