@@ -62490,3 +62490,196 @@ For the table: no change to the verdict.
 **Next**: read both runs, open the pull request with the rows that move, mark it. Then I wait for the vLLM lane's shares on Thu noon PST.
 
 **A second worker** would not bring a date in [guess].
+
+## NETBRIEF, Wed 11 Nov 19:34Z: the brief is written and synced (note `20261111T1922Z-draft-network-prototype-brief`). Show a lab one red-team run on GLM-5.3, bits recovered beside bits charged, with the cost at a full load. The lane is on top of it; it should build the attacking server before the content proof, not after
+
+**The note.** `~/.research/notes/lanes/proofs/20261111T1922Z-draft-network-prototype-brief.md`, kind `draft`, synced with `research notes sync --path lanes/proofs` at 19:33Z ("committed 3ac253b710 (1 paths); pushed"). [run] Three earlier syncs of the same note, at 19:23Z and 19:29Z, are replaced by this one; the first two held the Sources errors named below. [run] Its whole text is below, with its headings set two levels down so this file's sections stay whole. [run] I read my mailbox on `cursor/proofs-inbox` at 19:34Z: your 19:25Z message is its last and is folded in, below. [run] It gives no date for the stop check's builder, so the brief gives none. [read]
+
+**The recommended prototype, in three sentences.** Build one red-team demonstration on GLM-5.3: a modified inference server tries each named way to send a planted random string out through the network certifier. [guess: my judgment] For each way it reports the bits recovered outside beside the bits the audit's bound charged, and three arms at one full load (no certifier, an honest server, the attacking server) give the cost. [guess: my judgment] Run it on our eight-H200 node, and use VCF's cluster for the timing test and for a certifier on a second machine. [guess: my judgment]
+
+**Faster or more principled, in three sentences.** The lane is on top of its problem: its own answer names the same prototype and the same gaps, and of its 36 goals 22 are done, 9 on track and 5 off track, with three of the four that slipped a week waiting on the remote demo's branch. [read: Linear NET-337, 18:45Z and 19:01Z] [run: `research goals show --json`, 17:52Z and 18:17Z] It would be faster building the attacking server and measuring cost and failure rate now, since they need only serving hours, where its answer says the cheating server "is built after the tie". [guess: my judgment] [read: NET-337] It would be more principled measuring what an attacker recovers on every channel beside the bound, where today it has done so only for timing. [guess: my judgment] [read: `benchmarks/network_traces/covert.py` and `benchmarks/certifier_timing/README.md` on `main` at `cc6ee7446278`]
+
+**Your 19:25Z message, folded in.**
+
+- A, the timing test and its figures: part 3 says it is a software test across two of our CPU hosts with no model, and gives 0.0064 bit a tick with the cores kept from idling and 0.024 and 0.054 bit with them free. [read: NET-337, 19:01Z; Notion ASK-286] The 0.3% is marked scaled and not measured, and the 183 to 726 times is marked modeled, in part 5. [read: NET-337]
+- B, the goal's name: the brief names no goal for GLM-5.3's proof, and quotes neither Tue 17 Nov nor Fri 13 Nov. [run] It says the lane names the first served proof's date on Thu 12 Nov, which is my reading of "I date it on Thu 12 Nov at 6 PM PST from the worker's report and your answers". [read: `inbox/briefs/net297-design-1900Z.md`, section 9]
+- C, the design: read in `inbox/briefs/net297-design-1900Z.md` on `cursor/proofs-inbox` at 19:31Z. [read] Part 5's first bullet says the content is checked on a sample, so a wrong response is charged and not refused for certain, that nothing has run, and that three new records come first; its second bullet says we owe the lane where the two proof blocks sit. [run]
+- That the design changed twice this morning: part 5's first bullet, with the times 10:38 AM and 11:00 AM PST. [read: the design file's opening] The reason is given as the lane's own account and tagged as relayed by you, because the file's section 1 is your summary and I did not read the lane's words for it. [relayed: your 19:25Z message]
+- Proofs' earlier dates to the lane (Wed 10 PM, Thu 10 AM, Thu 6 PM PST): none is in the brief. [run]
+- **News after your message.** At 19:26Z the lane wrote on NET-337 that it decided the one-schedule question itself at 11:25 AM PST, provisionally, on ASK-286, whose status reads "Decided by lane" and which Daniel can reverse. [read: NET-337; Notion ASK-286, fetched 19:33Z] So part 5 no longer lists it as a decision waiting on Daniel, and part 8 quotes the lane's update in place of its earlier request. [run]
+
+**What you asked for at 18:36Z and 18:53Z, and where it is.**
+
+- The lead sentence and the honest state: the brief's first paragraph. [run]
+- The lane's table with its four labels, and the sentence that the content (164 billion GB a world year) is not in it: part 3. [relayed: NET-337]
+- Proofs' two rows: part 5, first bullet. [read: this file's entries of today, 18:14Z to 19:03Z] [relayed: your 18:53Z message, for the stop check's builder]
+- The pooled bridge: part 5, third bullet. [read: PR #8883's description and statement at `88eab3f17ad1`; `security/Definitions/NetworkCertifier/Checked.lean` line 180; `Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`; `security/lean-audit.json`; `security/Proofs/Flock/Bridge/Canon.lean` line 279; `security/Proofs/NetworkCertifier/Pooled.lean`] My answer to your question: `PeriodEscapes` is the one-phase statement we already prove (`SampledKSLiveV2`) applied at each phase's history with K₀ = |W_i|, so it is ours to write and needs no new mathematics for the one-stage form. [guess: from reading the two statements, not from a proof attempt] It needs three lemmas: W_i read as the extracted witness's incorrect set, the bound C(n−K₀, k)/C(n, k) ≤ (1 − q)^K₀ (which `Pooled.lean` has as `pr_disjoint_le`), and conditioning on the earlier phases' coins. [guess] For GLM-5.3 it waits on the two-stage form. [read: this file's entries of today] `PhaseLeaks` is the network accounting lane's one-audit guarantee on live coins, by `PooledLeak.lean`'s own text. [read] Not read: the PR's `PhaseLeaks` file line by line, and the two-stage files under `security/Proofs/Flock/SamplingGeneric`. [run]
+- Where my evidence disagrees with the lead's, both are kept, in parts 7 and 8:
+  - Where today's certifier ran. The lead says "a process on the server's machine" (NET-337 at 18:45Z, TOP-401 at 19:11Z). [read] The certifier side's run record `r20261111-160319-6d24` gives its machine as `vy-nebius-cpu-11` (`job.json`, `remote.json`, read at 19:19Z), and the vLLM lane's note `20261111T1704Z-certserve-results` says "a process of ours on a CPU node". [run] [read] I did not read `certside/job.sh`, so I do not know which process the job started where. [run]
+  - The world's year as `main` counts today: 57,798,028 GB in the lead's table, printed at #8777's head with the sampling plan's request count. [relayed: NET-337] 65,942,537 GB from `verity bench certifier_term --scope world --period year`, run by me at 19:21Z from my checkout at `08c62377327f`; `git diff --stat 08c62377327f cc6ee7446278` over the command's directory and the inputs it lists shows only one added card file. [run] The failure budget is one in 232,000 on the lead's count and one in 266,000 (3.759e-06) on mine. [relayed: NET-337] [run]
+
+**What changed since my 17:59Z entry.**
+
+- RAND's software that keeps trying to reach the outside is at its fourth level, not its third. [read: the report's Appendix B, https://www.rand.org/content/dam/rand/pubs/research_reports/RRA2800/RRA2849-1/RAND_RRA2849-1.pdf]
+- `main` holds attack code (`covert.py`, `negatives.py`, `certifier_serve.py --tamper`); only the ten attacks' table and judge are on a branch. [read: `main` at `cc6ee7446278`]
+- The timing test ran across two of our hosts: the attacking server on the certifier's host, the receiver on a second. [relayed: NET-337, 19:01Z]
+- VCF's GPU node may be eight H100 cards, which do not hold GLM-5.3 (710 GiB of weights against 596 GiB); the served run there would be Qwen3-235B-A22B, and the plan there takes 8 to 23 node-hours against a first 20. [relayed: TOP-401, 18:56Z to 19:16Z] So the brief runs the attacks and the cost on our own node and uses VCF's cluster for timing and placement. [guess: my judgment]
+- The lane's answer is in, quoted and marked as theirs in part 8. [read: NET-337]
+- Source 10 now names the timing benchmark's change as #8830. [read: my 17:59Z entry]
+- **A fault of mine, repaired.** At 19:15Z I rewrote the Sources list from memory, and at 19:24Z I saw it. [run] I then checked every item against the files on `main`, the notes, the pages I had saved and fresh fetches, and corrected these: a RAND sentence on cost I could not find (removed); the LessWrong figure, which is about 200 GB of text a day in February 2024 and not a terabyte, with its quotation (the brief's sentence now says hundreds of gigabytes); Anthropic's wording; a link to an OpenAI framework PDF and one to NVIDIA's tool pages that I could not confirm (both removed); and where the two merge waits come from (the goals' text and the merge times, my arithmetic). [run: `rg` over the saved pages; `curl` for each link's status; `docs.litellm.ai/docs/benchmarks`, the gateway benchmark's README and NVIDIA's page fetched again at 19:27Z; Notion's ASK-265 page fetched at 19:27Z] RAND's and OpenAI's pages answer 403 to `curl`; RAND's text I hold from the earlier fetch, and OpenAI's wording is from the search tool's extract. [run]
+
+**Its length.** 1,547 words of mine outside the two tables, the lane's quoted answer (436 words) and Sources; the limit was about 900 and one table. [run: counted by script at 19:33Z] Of the excess, part 5 (352 words), the text around the lane's table (about 125) and the state paragraph (65) are what you ordered at 18:36Z, 18:53Z and 19:25Z; about 100 words are mine to cut. [guess: my arithmetic] If you cut for Daniel, part 5's third bullet and part 7 lose least. [guess]
+
+**What I could not establish.**
+
+- Any lab's limit on outbound traffic as a number. [read: the six sources of part 1]
+- Where today's certifier ran, as above. [run]
+- Whether Thu 12 Nov 6 PM PST is when the lane names the first served proof's date, as I read it, or is that date. [guess]
+- Whether a second machine of ours can be the only path to our H200 node. [guess: not looked for]
+- Whether VCF's GPU node holds GLM-5.3, and whether its network cards can send at a set time. [relayed: TOP-401]
+- GLM-5.3's failure rate behind the certifier beyond 0 in 5,240 connections. [relayed: NET-334 and two team notes]
+- Whether the attack code runs on `main` and on GLM-5.3, and which of its ten verdicts the audit made. [relayed: NET-196]
+- The server side's run record `r20261111-154001-b6a2`: `research status` could not reach its machine at 19:19Z. [run]
+- The page that goes to Daniel on VCF at 12:30 PM PST: not read. [run]
+
+**Not done, on purpose.** The network accounting lane's lead has not read this draft; I write to no Linear issue and no Slack channel, so sending it is yours. [run] I ran no build, no test suite and no GPU job; the two commands I ran print arithmetic and a run's record. [run]
+
+### The brief, whole (note `20261111T1922Z-draft-network-prototype-brief`)
+
+#### Network certification: what to show a lab
+
+For Daniel, on his question of Wed 11 Nov, 9:42 AM PST. From the proofs lane. The network accounting lane's lead has not read this draft; the lane's own answer of today is quoted in part 8. Bracketed marks are explained under Sources.
+
+##### The answer
+
+**The state.** A lab's security engineer asks how many bytes a compromised inference server can get out in a year, against the size of the weights. For GLM-5.3 today the honest answer is every byte of every response. GLM-5.3 has been served behind the network certifier, but nothing yet proves that a served response is the model's output, and everything else rests on that. [relayed 20]
+
+**The prototype.** Build one red-team demonstration on GLM-5.3: a modified inference server tries each named way to send a planted random string out through the network certifier. For each way it reports the bits recovered outside beside the bits the audit's bound charged, and three arms at one full load (no certifier, an honest server, the attacking server) give the cost. Run it on our eight-H200 node, and use VCF's cluster (the one you call the B300 cluster) for the timing test and for a certifier on a second machine. [judgment]
+
+**The lane.** It is on top of its problem: its own answer names the same prototype and the same gaps. [read 20] The proof above waits on that lane for two proof blocks and on ours for the audit beneath them. [relayed 20] [read 23] It would be faster and more principled building the attacking server and measuring the cost now, not after that proof. [judgment]
+
+##### 1. What a lab's security engineer wants to see
+
+- **Unit: bytes out a year against the weights' size.** RAND's fourth of five security levels caps all outbound connections together, in hardware, at "e.g., 5 percent" of the weights' size a year. [read 1] Anthropic's ASL-3 standard limits traffic out of the machines holding weights, with no published number. [read 2]
+- **Adversary: whoever controls the inference server.** RAND's third level covers insiders, its fourth and fifth states; ASL-3 excludes sophisticated insiders and states. [read 1] [read 2]
+- **Channels: responses, then timing.** A large service sends hundreds of gigabytes of responses a day, near the weights' own size, and that channel cannot be capped. [read 3] One paper recomputes sampled responses and holds a compromised server under 0.5% of those bytes, assuming timing carries nothing. [read 4]
+- **Test: an attack.** RAND's fourth level places software beside the weights that keeps trying to reach the outside. [read 1]
+- OpenAI names "egress controls" (limits on outbound traffic) without numbers; Google DeepMind adopts RAND's levels. [read 5] [read 6]
+
+##### 2. What a lab's performance engineer wants to see
+
+- **One full load (the node's cards fully used), with and without the device:** output tokens a second and time to first token, at the median and the 99th percentile. [read 7] [read 8]
+- **The bar is tens of milliseconds:** two gateways (proxies in front of model servers) publish 13 ms added at the 99th percentile and 61 ms added to first token at the median. [read 8]
+- **Streaming and TLS still work, and a failure is plain to the client.** [judgment]
+
+##### 3. What the lane has built and shown
+
+- **Demonstrated on a served run.** Ten named attacks, each refused or counted, on Llama-3.2-1B on one H200 with the certifier on a separate machine (Thu 5 Nov). [relayed 9] An accepted audit there (Mon 9 Nov): its proved bound, 446 GB each 128 s execution phase, is too loose, as the lane says. [relayed 11; GB my arithmetic] GLM-5.3 behind the certifier on our eight-H200 node today: 2,240 short connections, none failed, no proof, no attack. [relayed 12]
+- **Built, not run on a served model.** Response lengths: the cap, the certifier's signed length records and their proof block reached `main` today; no audit reads them. [run 10] [read 13] Timing inside a tick (when within its 100 ms tick a release leaves): a software test across two of our CPU hosts, with no model. A receiver recovered 0.0064 bit a tick with the server host's cores kept from idling, and 0.024 and 0.054 bit with them free. 300 GB a year allows 0.00017 to 0.00042 bit, so the software certifier is 15 to 38 times over at its best. [relayed 14, 26]
+- **Designed.** The proof that a response is the model's output (part 5): one proof block is being written, nothing has run. [relayed 20] Release at a time set in the network card: no machine of ours can. [relayed 14]
+- **Not addressed.** TLS ("both sides are plain TCP"). [read 13] Other routes out, beyond a mock datacenter on one host. [read 16] Cost: no run compares with and without. [judgment] Today the certifier held every response a fixed 15 s, against 0.25 s to the server's own first token (median, below a full load); [relayed 12] at 128,000-token prompts the lane expects above 101 s. [relayed 14]
+
+**The lane's table:** the network certifier's part of GLM-5.3's exfiltration capacity, in GB, modeled by the Lean check's counting rule. A datacenter is 12,500 nodes, the world 46.87 million. A stop check is the audit's check that a response ends where the model's stop rule ends it. The two middle rows have no run behind them. [relayed 20]
+
+| The certifier's part, GB | Datacenter, a week | a month | a year | World, a week | a month | a year |
+|---|---:|---:|---:|---:|---:|---:|
+| As `main` counts today | 295.6 | 1,267 | 15,414 | 1,108,455 | 4,750,523 | 57,798,028 |
+| The design, before a stop check has run on a served record | 147.8 | 633.5 | 7,707 | 554,228 | 2,375,261 | 28,899,014 |
+| The design, all of it | 0 | 0 | 0 | 0 | 0 | 0 |
+| The same, if a server can move each release between two times | 9.45 | 40.5 | 492.8 | 35,434 | 151,859 | 1,847,615 |
+
+**The response's content is not in it.** Until the proof above exists, the audit charges every response in full: 164 billion GB a year for the world. [relayed 20] The third row is 0 only while no connection fails. 300 GB allows one failure in 232,000 connections, and no run has measured the rate. [relayed 20]
+
+##### 4. The prototype
+
+| | A. The attacks again, on the small model | B. The attacks on GLM-5.3, with a planted string and the cost (recommended) | C. B, with release timed by the network card, and TLS | D. A rack |
+|---|---|---|---|---|
+| What runs, on which machines | Llama-3.2-1B on one H200. The certifier on a separate machine. The ten attacks of Thu 5 Nov, run from `main`. | GLM-5.3 on all eight cards of our H200 node. The certifier on a second machine, a receiver on a third. Three arms at one full load: no certifier, an honest server, the attacking server. On VCF's cluster: the timing test, and serving behind a certifier on a second node (a smaller model if its cards are H100). | The same. The certifier's machine sends each tick's bytes at a time set in its network card, and carries TLS. | Several GPU nodes, a switch, storage and a management network. A certifier on every uplink. The string may leave by any route. |
+| What it shows the security engineer | Each named way is refused or counted. | For each way, bits recovered beside bits charged: extra bytes, other content in place of tokens, lengths, timing between ticks, timing inside a tick, failing on purpose, a route around the certifier. Then the year's GB against the weights' size. | Timing inside a tick is closed by hardware, not measured to be small. | Nothing leaves the room except through a certifier. |
+| What it shows the performance engineer | Nothing. | Output tokens a second and time to first token, at the median and the 99th percentile, with and without. The fixed delay, set against the failures a shorter one causes. | The same, over TLS. | The cost for a room, and what one certifier down does. |
+| What it leaves out | The model a lab serves. Cost. Timing inside a tick. | Hardware timing. TLS. Other routes. More than one node. Until the proof that a response is the model's output exists, it reports a wrong token as not caught. On either cluster one owner holds both machines, so `trusted-host` is assumed, not shown. | Other routes. More than one node. | Nothing named in parts 1 and 2. |
+| How much exists today | It ran once. Its code is on a branch. | GLM-5.3 behind the certifier, once, today. On `main`: a tampering server for five ways, the timing attacker with its scoring, and the command that prints GB a year. On a branch: the ten attacks and their judge. | Nothing of ours has run on such a card. | A mock datacenter on one host. |
+| What it takes to finish | Move the attack code to `main`. | Point the attacks at GLM-5.3. Write a receiver that scores recovered bits for every way, not only timing. Add a full load with a no-certifier arm. Put the length check, then the content proof, into a served audit. | A machine with such a card. A change to the certifier's sender. TLS in the certifier. | Hardware, and a rule for each route. |
+| Main risk | It reads as a toy. | Its honest numbers stay large until the content proof, the length check and timing are done. With a stand-in server the certifier missed ticks at 512 connections at once, and a node needs 400 to 1,000. VCF's node may be eight H100 cards, which do not hold GLM-5.3, and the plan there already takes 8 to 23 of its first 20 free node-hours. | No machine of ours has such a card. Another group thinks VCF's cards cannot do it, unchecked. | Size. |
+
+Sources for the table: what exists today, [relayed 9] [relayed 12] [run 10] [read 21]; the risks, [relayed 17] [relayed 18]; the rest is [judgment].
+
+**What would change it.** If VCF's network cards can send at a set time, add C in the same visit, since timing decides the number. If a lab rules out a fixed delay of seconds, show batch traffic first. If its engineers care most about other routes out, D's first step, listing every port off the chassis, comes first. [judgment]
+
+##### 5. What the prototype waits on
+
+- **The proof that a response is the model's output.** The design: the certifier signs three more records for each connection, and two proof blocks in each sampled request check them against the committed prompt and output. Being sampled, a wrong response is charged in the audit's count, not refused for certain. [read 25] Nothing has run; its cost, about 0.3% of serving, is scaled, not measured. [relayed 20] It is newly settled: at 10:38 AM PST today the lane posted a design it had ruled out on Mon 9 Nov (modeled at 183 to 726 times a node's serving) and withdrew it at 11:00 AM PST, saying it had not reread its own earlier design. [read 25] [relayed 24] It names the first served proof's date on Thu 12 Nov. [read 20]
+- **Two parts are the proofs lane's.** The audit that the committed outputs are the model's: the Lean verifier refuses every such run until its proof, the guarantee was restated today, and nothing is proved from it yet. [read 23] The audit's side of the stop check: started today, no date given to me; the stop check itself is not on `main`. [relayed 24] [relayed 20] We owe the lane an answer today on where its two proof blocks sit in the audit. [relayed 24]
+- **A decision you can reverse.** At 11:25 AM PST the lane decided, provisionally, to report timing as 0 under a named assumption: the certifier's device releases on one schedule. Beside the 0 it prints the fourth row's figure and what the timing test measured on today's software certifier. [read 26]
+- **Two inputs no proof gives,** under every week, month and year figure. A Lean statement in review pays the sampling error once a monitoring period, where `main` pays it every execution phase. [read 22] First input: given the earlier phases' coins, a phase's audit accepts with probability at most (1 − q)^w + e, w counting its incorrect proof blocks. That is our one-phase sampling theorem applied at each phase: no new mathematics, the proofs lane's to write, and for GLM-5.3 after the audit above. Second input: an accepted phase's record meets the network bound except with small probability: the network accounting lane's one-audit guarantee, on live coins. [read 22]
+
+##### 6. Could the lane move faster, or be more principled?
+
+**Facts**
+
+- 36 goals: 22 done, 9 on track, 5 off track. Four dates slipped a week, three of them waiting on the remote demo's branch reaching `main`, which other lanes own. [run 19]
+- Two reviewed changes waited 17 and 33 hours to merge this week, [read 14] [run 10; hours my arithmetic] and its ask to you for the timing test's machines waited a day and a half. [read 17]
+- Its Lean bound has the Glossary's form for one uplink. Exfiltration capacity itself, the sum over links and a whole monitoring period are not in Lean. [read 13]
+
+**Judgment**
+
+- On top of things: yes, and stretched. Its goals state their own gaps, it reported its own timing miss, and it caught its own design error within 22 minutes. [read 14] [read 25] It decided the timing question itself today, where it could have waited on you. [read 26]
+- Faster: it plans the attacking server after the content proof. [relayed 20] Build it and measure cost and failure rate now: they need only serving hours, and each later proof then turns one row from charged to refused. [judgment]
+- More principled: it proves a bound from above on every channel, but has measured what an attacker recovers only for timing. [read 21] One run should show both for every channel. [judgment]
+
+##### 7. What I could not establish
+
+- Any lab's limit on outbound traffic as a number: none publishes one. [read 1 to 6]
+- Where today's certifier ran. Its run record names a CPU machine of ours; [run 12] the lane's lead says "a process on the server's own machine". [relayed 17] I did not read the job's script.
+- Whether a second machine of ours can be the only path to our H200 node, whether VCF's GPU node holds GLM-5.3, and whether its network cards can send at a set time. [relayed 17]
+- GLM-5.3's failure rate behind the certifier: 0 in 5,240 connections so far. [relayed 12, 18]
+- Whether the ten attacks' code runs on `main` and on GLM-5.3. [relayed 9]
+
+##### 8. The lane's own answer, in its words
+
+Posted by the network accounting lane's lead today at 10:45 AM PST, and corrected by it at 11:01, 11:20 and 11:26 AM PST. [read 20] Everything in quotation marks is theirs. "The tie" is its name for the proof that a response is the committed output.
+
+- **In one line:** "the prototype is a real model served behind a network certifier on its own machine, a printed bound on what could leave in a week, a month and a year, and four cheating servers shown refused or charged. The serving has run; the proof that a response is the model's output has not, and it is the part everything else rests on."
+- **What has not run:** "The proof that a served response is the model's output. … Nothing of it is built." "The certifier on its own machine." "Any cheating server against a served run." "The timing test with arrival times stamped in hardware."
+- **On timing:** "It was in software. No card that sends at a set time was used. So timing is not shown closed".
+- **On our part:** "That the committed outputs are the model's is proofs' audit".
+- **What would make it faster:** "A standing GPU hour a day on the eight-card node for certified serves, until Tue 17 Nov." "the tree's reorganization took this lane's morning: 22 conflicts to rule on, two workers". It first listed "A decision of Daniel's: the one-schedule question", and at 11:26 AM PST wrote: "This lane decided it at 11:25 AM PST, provisionally, … which he reviews and can reverse."
+- **Its corrections:** "The timing test ran across two of our hosts, not on one machine." "The tie is not the design I described. … That was wrong." "I named the wrong goal twice."
+- **More principled, "and ours to do":** "Show a refused cheat on a served run, not only an accepted honest one. I open the issue for the cheating server today; it is built after the tie." "Measure what the table assumes: the share of connections that fail and the delay the certifier adds."
+
+**Where we differ.**
+
+- Order: the lane builds the attacking server after the content proof, and I would build it first. [judgment]
+- Two figures, by the count of requests behind them. The lane's, printed at a change of its own not yet on `main`: 57.8 million GB a world year as `main` counts today, and one failure in 232,000 connections. [relayed 20] Mine, from the same command on `main`: 65.9 million GB, and one in 266,000. [run 15]
+- Where today's certifier ran (part 7).
+
+##### Sources
+
+The marks: [read n] and [run n] point to source n below, read or run by me on Wed 11 Nov 2026. [relayed n] is another lane's own statement, which I did not check. [judgment] and [my arithmetic] are mine. Run ids, issue ids and team notes appear only here.
+
+1. RAND, "Securing AI Model Weights" (RR-A2849-1, 2024), chapter 6 and Appendix B: https://www.rand.org/pubs/research_reports/RRA2849-1.html, PDF https://www.rand.org/content/dam/rand/pubs/research_reports/RRA2800/RRA2849-1/RAND_RRA2849-1.pdf. Third level: "can likely thwart cybercrime syndicates or insider threats (OC3)". Fourth level: "aggregate output rate across all connections must not exceed a certain portion of the size of the weights per year (e.g., 5 percent)", and "Automated weight exfiltration attempts. Software is placed within the weights' protected setup that attempts to replicate itself and communicate with an external endpoint on the internet". Fifth level: "also inject noise, time delays".
+2. Anthropic, "Activating AI Safety Level 3 protections": https://www.anthropic.com/news/activating-asl3-protections, and its report: https://www-cdn.anthropic.com/807c59454757214bfd37592d6e048079cd7a7728.pdf ("our preliminary implementation of egress bandwidth controls"; out of scope: "Sophisticated insiders, state-compromised insiders, nation-state" attackers).
+3. Rinberg and others, "Defending Against Model Weight Exfiltration Through Inference Verification", LessWrong, Dec 2025: https://www.lesswrong.com/posts/7i33FDCfcRLJbPs6u/defending-against-model-weight-exfiltration-through-1 (ChatGPT's output in February 2024 "is about 200 GB of text per day"; "it's the one channel you can't just turn off").
+4. Rinberg and others, "Verifying LLM Inference to Prevent Model Weight Exfiltration", arXiv 2511.02620: https://arxiv.org/abs/2511.02620 ("<0.5% exfiltrable information rate"; "No Side Channels. We assume that adversaries cannot exploit any side channels (e.g., timing, cache access, or power analysis)").
+5. OpenAI, "Preparing for future AI capabilities in biology": https://openai.com/index/preparing-for-future-ai-capabilities-in-biology/. The page refuses a direct fetch; I read the search tool's extract, which lists access controls, infrastructure hardening, "egress controls" and monitoring for model weights. The 2024 post https://openai.com/index/reimagining-secure-infrastructure-for-advanced-ai did not load.
+6. Google DeepMind, Frontier Safety Framework: https://deepmind.google/blog/strengthening-our-frontier-safety-framework/. Its use of RAND's levels, read in two summaries: https://casrai.org/guides/security-level-nine-labs-regulators-one-undefined-term (which quotes it: "We use security levels that indicate goals/principles in line with the corresponding level in the RAND framework") and https://frontierrisk.substack.com/p/google-deepminds-frontier-safety.
+7. NVIDIA, "LLM Inference Benchmarking: Fundamental Concepts": https://developer.nvidia.com/blog/llm-benchmarking-fundamental-concepts/ (time to first token, tokens a second, and load raised to where the cards saturate; it names no percentiles, which are from source 8).
+8. LiteLLM's published benchmarks: https://docs.litellm.ai/docs/benchmarks ("Gateway overhead, p99": 13 ms on four instances against a mock endpoint), and https://github.com/BerriAI/ai-gateway-bench (its README: OpenRouter's time to first token, "p50 delta vs direct (ms)" +61.0, 95% interval 51.3 to 75.2).
+9. Linear NET-196 and its comments. Runs `r20261105-204847-b1f5` (served, one H200: "judged all 10 attacks as expected") and `r20261104-074925-b750` (CPU rehearsal, where the split into refused and counted is read). PR #7182.
+10. `gh pr view`: #8405, #8690, #8702 and #8537 merged Wed 11 Nov 14:02Z, #8579 at 17:12Z; #8499 and #8777 open; the timing benchmark is #8830, on `main`. `benchmarks/network_traces` on `main` at `cc6ee7446278` holds no `attacks.py`.
+11. Goals `benchmarks/onsite-network-per-period`, `network/monday-record` and `network/record-at-tight-figure`; run `r20261109-084127-4ca1`. The proved figure is 3.57×10¹² bits a 128 s execution phase for one node; 446 GB is my arithmetic.
+12. Linear NET-334; runs `r20261111-154001-b6a2` (server) and `r20261111-160319-6d24` (certifier side: its record, read by me at 19:19Z, gives its machine as the CPU machine `vy-nebius-cpu-11`); team note `vllm/20261111T1704Z-certserve-results` ("the certifier is a process of ours on a CPU node, with a key made for the run") (agents only).
+13. On `main` at `cc6ee7446278`: `verity/protocols/certifier/verifier/README.md` ("The network bound"); its `PROTOCOL.md`, lines 2096 and 2178; `GLOSSARY.md`, line 34; `benchmarks/network_traces/README.md`, line 216.
+14. Goals `network/certifier-term-zero`, `network/long-timing-run-read`, `network/term-in-the-number` and `network/content-tie-design-posted`; runs `r20261111-013324-6307` and `r20261111-013331-16a6`. The two changes' waits are from the goals' own text ("reviewed and waiting to merge since Tue 1 PM" and "since Tue 12 AM", PST) and source 10's merge times.
+15. `verity bench certifier_term --scope world --period year`, run by me at 19:21Z from my checkout at `08c62377327f` (arithmetic only; its code and the inputs it lists are the same on `main` at `cc6ee7446278`). It prints 65,942,537 GB for the world's year as `main` counts today, 1,847,615 GB if each release can move between two times, and a failure rate of at most 3.759e-06, one in 266,000. Also `benchmarks/certifier_timing/README.md`, "The target": at most 0.00017 to 0.00042 bit a 100 ms tick.
+16. `benchmarks/network_sim/README.md`.
+17. Notion, Asks for Daniel, ASK-265 (asked Mon 9 Nov 9:24 PM PST, decided Wed 11 Nov 9:56 AM PST): https://app.notion.com/p/414399515d9e8157ae9dd18bfdf3ea89. Linear TOP-391 and TOP-401, its comments of 18:10Z to 19:12Z (the network accounting, vLLM and infra leads). Its draft page for Daniel, which I did not read: https://app.notion.com/p/415399515d9e81239828cf56ab386c73.
+18. Team notes `network-accounting/20261110T0455Z-report-net300-device-rehearsal` (run `r20261110-045140-33a5`) and `vllm/20261110T1946Z-report-vllm270-answers`, section 11 (run `r20261108-200706-1758`) (agents only).
+19. `research goals show --json`, run at 17:52Z and again at 18:17Z.
+20. Linear NET-337: the network accounting lead's answer of 18:45Z and its corrections of 19:01Z, 19:20Z and 19:26Z, read by me at 19:32Z. Its table was printed at PR #8777's head, which is not on `main`.
+21. On `main` at `cc6ee7446278`: `benchmarks/network_traces/covert.py`, `negatives.py` and `certifier_serve.py` (`--tamper`), and `benchmarks/certifier_timing/README.md`. Team notes `network-accounting/20261006T0418Z-report-covert-sync-rate` and `network-accounting/20261027T0813Z-finding-jitter-j` (agents only).
+22. PR #8883 (open, head `88eab3f17ad1`): its description and the statement `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted`. On `main` at `cc6ee7446278`: `security/Definitions/NetworkCertifier/Checked.lean`, line 180 (`NetTiming.PeriodEscapes`); `security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean` (its text names what would give each input); `security/lean-audit.json` (the first input's owner is the proofs lane); `security/Proofs/Flock/Bridge/Canon.lean` (`SampledKSLiveV2`, the one-phase statement); `security/Proofs/NetworkCertifier/Pooled.lean` (the lemma that turns its bound into (1 − q)^w). Not read: the second input's file line by line, and the two-stage files under `security/Proofs/Flock/SamplingGeneric`.
+23. The proofs lane's entries of Wed 11 Nov, 18:14Z to 19:03Z, in `inbox/proofs-coordinator.md` on branch `cursor/verity-proofs-84b5`; PR #9041.
+24. The proofs coordinator's messages to me of 18:53Z and 19:25Z.
+25. `inbox/briefs/net297-design-1900Z.md` on branch `cursor/proofs-inbox`: the network accounting lane's design of 11:00 AM PST, with the soundness lane's confirmation, copied from Linear NET-297 by the proofs coordinator. Its opening: "My 10:38 AM PST comment above is wrong in its main choice, and I withdraw it wherever it differs from this one. … Nothing is built and nothing ran."
+26. Notion, Asks for Daniel, ASK-286, "May the network certifier's timing term be reported at one release schedule, as a named assumption about the auditor's device?" (status: decided by lane): https://app.notion.com/p/415399515d9e81769925e1abc19d6428. It gives the timing test's figures and the budget, and says the test ran on Tue 10 Nov across two hosts with the certifier in software.
