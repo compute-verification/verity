@@ -38629,3 +38629,30 @@ research queue open: warning: --issue PRF-517: the body's `Goal proofs/spot-bind
   [plain merge clean]`; unmarked #8120 `clean 1bc34a35ce89 [plain merge clean]`, #8177 `clean 003c110293ad [plain merge
   clean]`. The other twelve are running, about 2 minutes each, two at a time. No `conflicted` or `script-failed` yet.
 - Checkpoint note: `lanes/proofs/20261111T0424Z-checkpoint-cross-move.md`, synced. [run]
+
+## CROSS, Wed 04:27Z: two unmarked heads stop `conflicted at base`: #8438 and #8462. Both conflict with `main` from before the move, so the move is not the cause; none of the six hand heads has stopped
+
+- **#8438** (`cursor/proofs-slotrows-fbf8`, head `e04dd44e6ccd`): `conflicted at base (3) [plain merge conflicted (4)]`. The
+  merge with the first move's base `b5354b9c2344` conflicts in `benchmarks/one_stage/compose_circuit.py`,
+  `integrations/vllm/tests/pipeline/test_serving_rows_splits.py` and
+  `integrations/vllm/verity_vllm/pipeline/chunk_rows.py`. [run]
+- **#8462** (`cursor/proofs-accountd-5094`, head `6f4ffa9e7a6a`): `conflicted at base (3) [plain merge conflicted (10)]`, in
+  `benchmarks/spot_figures/README.md`, `benchmarks/spot_figures/cards.py` and
+  `benchmarks/spot_figures/tests/test_cards.py`. [run]
+- **What their owners do** [derived from `restack.py`'s steps]: merge `a930252c4993` (the last `main` before the move)
+  into the branch on the old paths, write those three files' hunks, then the recipe. Both are unmarked and dry only, so
+  I push nothing and resolve nothing.
+- **Clean so far** [run]: hand list #8139 `0a03af0cb29f`, #8339 `a6242e6fd612`, #8406 `dcc5cbecd47c`, #8414 `4eb7243eb11f`;
+  unmarked #8120, #8177, #8363 `95da7ea2b16d`, #8543 `09d548aa01f9`. #8454, #8517, #8563, #8578, #8767 and #8771 are
+  running.
+- **The lock check from CI-524 (04:21Z, 04:24Z), on the six heads I pushed** [run]: each `security/lean-audit.json` is
+  under `layout.py`'s 4 MiB limit (the largest, #8512's and #8527's, is 4,187,141 bytes; the limit is 4,194,304) and
+  names `Security/` on 6 lines, as `main`'s does, and `verity/core/`, `verity/ml/`, `benchmarks/nci/` and
+  `integrations/vllm` on none. #8539's `security/Properties/lean-audit.json` names none of them. #8226 and #8568 change
+  no lock. I run the same count on every second-list head before its push.
+- **The root suite is inside the quick tier I launched** [run: #8226's `r20261111-042123-14c5`, still running, prints
+  "the change from 5c095bb4ab70 touches 4: repository, verity-graph, verity/definitions/ops,
+  verity/protocols/pouw/verifier" and "passed repository 280 passed in 250 s"]. So one run a head covers both of your
+  asks.
+- The 04:12Z notice on Linear is read: I have written nothing through the connector, today or before; I read CI-524
+  through it.
