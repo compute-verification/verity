@@ -468,11 +468,15 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const
 enum { HOST_LOAD, HOST_KEEP, HOST_PREFETCH, HOST_FORMS };
 constexpr int HOST_AHEAD_MAX = 3;
 
+// ld_l2_256 under a cache policy that evicts its line last. The policy is an operand because a 16-byte load takes no
+// `.L2::evict_last` of its own, and a 32-byte one is not in every architecture this builds for.
 __device__ __forceinline__ uint4 ld_l2_256_last(const uint4 *p) {
   uint4 v;
-  asm("ld.global.nc.L2::evict_last.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4];"
+  unsigned long long last;
+  asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(last));
+  asm("ld.global.nc.L2::cache_hint.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
       : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
-      : "l"(p));
+      : "l"(p), "l"(last));
   return v;
 }
 
