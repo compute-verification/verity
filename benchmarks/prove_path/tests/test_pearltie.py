@@ -5,7 +5,8 @@ right after W, each of Pearl+'s values an output value of W's).
 **The toy** (`toy`): a one-layer bf16 Llama of hidden 128 (two heads of 64, one KV head) and vocabulary 512 on the H200, at
 class (1 slot, prompts of 27, 2 outputs), cut at its linears (`window_class.PearlTables`, each y handed on in rows of 64
 words). So the window has 2 rounds, round 0 the prompt's 27 rows and round 1 one decode row, of 4 calls each (q/k/v, o,
-gate/up and down), and its 895 units of 58 templates are proof blocks C-Flock's composer takes.
+gate/up and down), which take 3 A-row shapes and 3 y shapes, and its 895 units of 48 templates are proof blocks C-Flock's
+composer takes.
 
 * **Pearl+'s passes**, a pass a round: each call's A rows (its x widened to FP32, then zero rows up to m₁₆) and y (its value
   widened) as the circuit's proof blocks make them (`window_rows.Rows.value`), committed as Pearl+'s reference commits them
@@ -23,13 +24,12 @@ accepts W, and `reuse` makes each value W's entry.
 **A root other than the credited one** (slow): W', the record of passes that committed round 1's o-projection A row with
 one bit flipped, differs from W at that value's root alone. The verdict's W check refuses it on the honest passes and
 `reuse` refuses it. On the flipped passes the verdict accepts W' (it is their record), and `reuse` still refuses it: the
-proof blocks don't make that row. Its reader is the one proof block of a template of its own, which `stratified:1` always
-draws, and its Definition on its input gives the honest row, so a prover who records W''s row instead has a proof block
-whose proof fails.
+proof blocks don't make that row. Its reader is one proof block, of its shape's template, and its Definition on its
+input gives the honest row, so a prover who records W''s row instead has a proof block whose proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take a minute): R registers the
-circuit's values at W's entries and nothing else, chained right after W, and its sampling design draws a reader of every
-value, each value's readers templates of their own. `records_audit.tie_of` with no prefix ties the audit to W (each value
+circuit's values at W's entries and nothing else, chained right after W, and its sampling design draws from each shape's
+template, a value's readers units of one. `records_audit.tie_of` with no prefix ties the audit to W (each value
 by its own name, in ``row-seg/v1`` rows of 32-bit words), and R1-R7 (`registration.check`) accept R on the log [W] and
 refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by hand after W' is accepted on [W']: no record
 holds a row, so the flipped row is refused by its reader's proof alone.
@@ -243,6 +243,7 @@ def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_t
     rows' filler rows never. The verdict's W check accepts W on the passes, on all 16 values and the 4 weights' B rows,
     and `reuse` makes each value, from the rows its proof blocks make, W's entry."""
     c = toy.low.circuit
+    assert (sum(c.units.values()), len(c.units)) == (895, 48)
     assert c.registered.values == tuple(v for s in range(CLASS.outputs) for k in range(CALLS) for v in (PEARL.a(s, k),
                                                                                                        PEARL.y(s, k)))
     assert c.registered.formats == {v: {"row_schema": IF.SEG, "word_bits": 32} for v in c.registered.values}
@@ -262,9 +263,9 @@ def test_the_circuit_reads_each_calls_committed_rows_and_the_verdict_and_reuse_t
 def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_readers_definition(toy):
     """W' differs from W at the flipped value's root alone. The verdict's W check refuses it on the honest passes (its root
     not the call's) and accepts it on the flipped ones, whose record it is; `reuse` refuses it on either, since the proof
-    blocks make the honest row. That row's reader is the one proof block of its template (`LinearARow_v1` at round 1 and
-    the o-projection's K), a stratum of its own whose sample under `stratified:1` is that proof block (`draw.stratum_k`),
-    and its Definition on its input gives the honest row, not W''s."""
+    blocks make the honest row. That row's reader is one proof block of the o-projection's shape's template
+    (`LinearARow_v1{K, R}`, which every round's o-projection is a unit of), and its Definition on its input gives the
+    honest row, not W''s."""
     VR, flipped, c = _verify_run(), _flipped(toy), toy.low.circuit
     assert [x["value"] for x, y in zip(toy.W["registered"], flipped.W["registered"], strict=True) if x != y] == [FLIP[0]]
     with pytest.raises(ValueError, match=f"W's {FLIP[0]}: its root not the call's"):
@@ -275,8 +276,7 @@ def test_a_w_whose_root_isnt_the_credited_one_is_refused_and_its_row_is_off_its_
     with pytest.raises(ValueError, match=f"^{FLIP[0]}: the rows the audited circuit's proof blocks make of it are not"):
         _reuse(toy, flipped.W, flipped.manifests)
     (tid, port, u), = [k for k, v in _reads(c).items() if v == FLIP[:2]]
-    assert c.units[tid] == 1 and "ROUND=1" in tid and "CALL=1" in tid and port == "o0" and u == 0
-    assert D.stratum_k(LAW["k"], c.units[tid], sum(c.units.values())) == 1
+    assert tid.startswith("LinearARow_v1{") and port == "o0" and c.units[tid] == CLASS.prompt + 1
     j = next(j for j, r in toy.low.programs[0].arows.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).astype("<u4").view("<u2").reshape(-1)
@@ -320,7 +320,7 @@ def _check(written, W: dict, R: dict):
 @RECORDS
 def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_another_root(toy, written):
     """R registers the 16 values at W's entries and nothing else, chained right after W; its sampling design (R1 holds it to
-    the verifier's own) draws a reader of every value, each value's readers templates of their own. R1-R7 tied to W accept
+    the verifier's own) draws from each of the 6 shapes' templates, a value's readers units of one. R1-R7 tied to W accept
     it, and tied to W' refuse it: it is chained after W (``R6-previous``), and of its values only the flipped one's root is
     not the one W' registers (``R7-held``)."""
     R, W = written.R, toy.W
@@ -329,8 +329,9 @@ def test_r_registers_ws_values_and_r1_r7_accept_it_on_w_and_refuse_it_on_a_w_of_
     strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
     for (tid, _port, _u), (v, _row) in _reads(toy.low.circuit).items():
         readers.setdefault(v, set()).add(tid)
-    assert all(strata[t]["k"] >= 1 for ts in readers.values() for t in ts)
-    assert len({t for ts in readers.values() for t in ts}) == sum(len(ts) for ts in readers.values()) == len(_calls(W))
+    shapes = {t for ts in readers.values() for t in ts}
+    assert all(len(ts) == 1 for ts in readers.values()) and len(readers) == len(_calls(W))
+    assert len(shapes) == 6 and all(strata[t]["k"] >= 1 for t in shapes)
     assert list(_check(written, W, R).codes) == []
     got = _check(written, _flipped(toy).W, R)
     assert list(got.codes) == ["R6-previous", "R7-held"] and got.detail["R7-held"]["value"] == FLIP[0], got
