@@ -93,25 +93,36 @@ theorem check_empty : Spot.Wires.check ⟨[], [], [], none⟩ = .ok ⟨[], []⟩
 
 /-- A text that names no Program has no templates, whatever the Program. -/
 theorem templatesOf_noProgram {P : Prog} {doc : Json} (h : NciCheck.RecordText.stringAt doc "program" = none) :
-    NciCheck.RecordText.templatesOf P doc = .error "templates" := by
-  first
-    | (unfold NciCheck.RecordText.templatesOf; rw [h]; rfl)
-    | simp [NciCheck.RecordText.templatesOf, h]
+    ∃ e, NciCheck.RecordText.templatesOf P doc = .error e := by
+  cases hres : NciCheck.RecordText.templatesOf P doc with
+  | error e => exact ⟨e, rfl⟩
+  | ok ts =>
+    exfalso
+    unfold NciCheck.RecordText.templatesOf at hres
+    rw [h] at hres
+    first
+      | exact Except.noConfusion hres
+      | cases hres
+      | simp at hres
 
 /-- So it gives no unit a slot. -/
 theorem slot_noProgram {P : Prog} {doc : Json} (h : NciCheck.RecordText.stringAt doc "program" = none)
     (tid : String) (u : ℕ) : NciCheck.RecordText.slot P doc tid u = none := by
+  obtain ⟨e, he⟩ := templatesOf_noProgram (P := P) h
   first
-    | (unfold NciCheck.RecordText.slot; rw [templatesOf_noProgram h])
-    | simp [NciCheck.RecordText.slot, templatesOf_noProgram h]
+    | (unfold NciCheck.RecordText.slot; rw [he]; done)
+    | (unfold NciCheck.RecordText.slot; rw [he]; rfl)
+    | simp [NciCheck.RecordText.slot, he]
 
 /-- And declares no row. -/
 theorem declared_noProgram {P : Prog} {doc : Json} (h : NciCheck.RecordText.stringAt doc "program" = none)
     (r : Row) : NciCheck.RecordText.declared P doc r = none := by
+  obtain ⟨e, he⟩ := templatesOf_noProgram (P := P) h
   first
-    | (unfold NciCheck.RecordText.declared; rw [templatesOf_noProgram h])
-    | (unfold NciCheck.RecordText.declared; rw [templatesOf_noProgram h]; rfl)
-    | simp [NciCheck.RecordText.declared, templatesOf_noProgram h]
+    | (unfold NciCheck.RecordText.declared; rw [he]; done)
+    | (unfold NciCheck.RecordText.declared; rw [he]; rfl)
+    | (unfold NciCheck.RecordText.declared; rw [he]; cases NciCheck.RecordText.wiring doc <;> rfl)
+    | simp [NciCheck.RecordText.declared, he]
 
 /-- **The clauses are of the instance's two texts.** Where the instance's Program decodes to `P` and its record
 parses to `doc`, a served check's slots are the text's, and each row it holds is one the text declares, for that
@@ -178,12 +189,12 @@ def formTie (p : String) (sl : Option ℕ) (hd : Option Held) : Form where
 the check that holds nothing are both refused, whatever the Program's text and the circuit. -/
 theorem not_served_slotted (p : String) (s : ℕ) (hd : Option Held) (d : Verity.RegisteredCircuit) :
     ¬ Served (formTie p (some s) hd) () d :=
-  not_served_of_slot (tid := "") (u := 0) rfl noProgram_empty rfl d
+  not_served_of_slot (cs := recordEmpty) (tid := "") (u := 0) rfl noProgram_empty rfl d
 
 /-- The check that holds a row is refused by its held rows alone, with no unit in a slot. -/
 theorem not_served_holding (p : String) (x : Held) (d : Verity.RegisteredCircuit) :
     ¬ Served (formTie p none (some x)) () d :=
-  not_served_of_held (r := default) rfl noProgram_empty rfl d
+  not_served_of_held (cs := recordEmpty) (r := default) rfl noProgram_empty rfl d
 
 /-! ### Held rows -/
 
