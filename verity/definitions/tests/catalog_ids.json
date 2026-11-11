@@ -1443,6 +1443,8 @@
 "SquareF32_v2",
 "StepBody_v1",
 "StopCheck_v1",
+"StopRule16_v1",
+"StopRule16_v2",
 "StopRule_v1",
 "StopRule_v2",
 "TanhBf16_v1",
