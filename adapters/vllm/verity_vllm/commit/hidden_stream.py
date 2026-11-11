@@ -106,12 +106,15 @@ class StreamLayout:
             return o["RP"] + (slab * self.M + row) * (self.N // 2) + col // 2   # word holds cols (c, c+1); bf16 halves
         if cls == "ROW":
             assert block is not None and 0 <= block < self.NB
-            f = field if field is not None else 4 + lane
-            return o["ROW"] + ((slab * self.M + row) * self.NB + block) * 8 + f
+            if field is None:
+                assert lane is not None
+                field = 4 + lane
+            return o["ROW"] + ((slab * self.M + row) * self.NB + block) * 8 + field
         if cls == "O":
             assert block is not None and d is not None and 0 <= d < self.D
             return o["O"] + ((slab * self.M + row) * self.NB + block) * self.D + d
         if cls == "FIN":
+            assert field is not None
             return o["FIN"] + (slab * self.M + row) * 4 + field
         if cls == "MS" and self.ms:
             assert block is not None and 0 <= block < self.NB

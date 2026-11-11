@@ -179,11 +179,11 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
         m_served = None if tj is None else tj.served_by_request.get(rid)
         g_len = None if g6 is None or g6.served_by_request is None else g6.served_by_request.get(rid)
         tr_served = None if cl is None or cl.served_by_request is None else cl.served_by_request.get(rid)
-        if m_served is not None:
+        if tj is not None and m_served is not None:
             a_r, src = int(m_served), f"match record {tj.path} (sha256 {tj.sha256[:16]}): tokens.json generated_token_ids"
-        elif g_len is not None:
+        elif g6 is not None and g_len is not None:
             a_r, src = int(g_len), f"match record {g6.path} (sha256 {g6.sha256[:16]}): G6 lengths_by_request.served_output_len"
-        elif by_commit and tr_served is not None:
+        elif by_commit and cl is not None and tr_served is not None:
             a_r, src = int(tr_served), (f"commit token record {cl.record_path} (sha256 {str(cl.record_sha256)[:16]}): generated_token_ids opened "
                                        "from the run root; no Match record beside the Commit (a config run has no Match stage): the prefix is "
                                        "linked to the Commit's token record")
@@ -194,7 +194,7 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
         linked = bool(link is not None and link.ok and tj is not None and tj.tokens_equal.get(rid) is True
                       and g6 is not None and g6.verdict == "PASS" and lk_ok)
         lag_attested = link is not None and link.lag_attested
-        if with_commit:
+        if cl is not None and with_commit:
             # the boundary linkage must have run over exactly this executed prefix: the committed tokens are the ones the next step consumed
             linked_c = bool(cl.ok is True and cl.tokens_committed is not None and cl.tokens_committed.get(rid) is True and lk_ok
                             and (horizon.get(rid) or {}).get("linked_steps") == rec.get("executed_prefix_len"))

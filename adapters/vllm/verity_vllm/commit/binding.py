@@ -82,6 +82,7 @@ class LaunchIdentity(tuple):
     """A batch-level hidden identity (member `*`: one per request a B>1 launch row lists, at its engine step) and the launch the op's
     committed stream must carry there: `launch` = {"geometry": the row's launch geometry, "rows": {r<i>: token rows} of the step's declared
     composition} (`format.batch_launch_shortfall`).  It equals its identity tuple: the population's digest and record read the identity only."""
+    launch: dict[str, Any]
 
     def __new__(cls, ident: tuple, launch: dict[str, Any] | None = None) -> LaunchIdentity:
         self = super().__new__(cls, ident)
@@ -736,7 +737,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
 # ---------------------------------------------------------------------- sampling from the expected population
 
 def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_root: bytes, k: int, *, salt: bytes = b"",
-                         forced_late_step: bool = True, source: bytes | None) -> list[tuple[tuple, dict[str, Any], int]]:
+                         forced_late_step: bool = True, source: bytes | None) -> list[tuple[tuple, dict[str, Any] | None, int]]:
     """Sample `k` identities from the EXPECTED population (not from the leaves that exist) with `challenge.identity_picker` over
     (source, run_root, map digest, salt), `source` the run's identities coin; map each to one committed leaf of its binding
     (a leaf chosen by the same picker inside the entry's leaf range).  Forced picks: the
@@ -759,7 +760,7 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         fam = p[4].split(".")[-1].split("/")[0] if not p[4].startswith(HIDDEN_FAMILIES) else p[4].split("/")[0]
         fams.setdefault(fam, p)
     chosen.extend(fams.values())
-    out = []
+    out: list[tuple[tuple, dict[str, Any] | None, int]] = []
     op_keys = _op_key_index(idx)
     for j, ident in enumerate(chosen):
         pd, rid, st, inv, op, mem, (lo, hi), rk = ident

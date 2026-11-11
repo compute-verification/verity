@@ -432,7 +432,7 @@ class DumpedStore(NativeRangeOpenings):
         self._salted: dict[int, tuple[list[tuple[int, int, int]], memoryview]] = {}
         self._layouts: dict[int, list[TensorMeta]] = {}
         self._gpu_blocks: dict[int, tuple[_Block, int]] = {}
-        self._gpu_levels: dict[int, list[_Level]] = {}
+        self._gpu_levels: dict[int, list[_Level] | list[_SparseLevel]] = {}
         self._maps: list[mmap.mmap] = []
         for st in doc["steps"]:
             s = int(st["step"])

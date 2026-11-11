@@ -174,7 +174,8 @@ def _window(window_dir: str | Path) -> dict[str, Any]:
 
 def of_dir(window_dir: str | Path) -> list[Table]:
     """The prover's tables, from the window serving wrote (``window.json``'s ``row_tables`` and ``row_table_steps``)."""
-    win, out = _window(window_dir), []
+    win = _window(window_dir)
+    out: list[Table] = []
     if not win.get("row_tables"):
         return out
     st = win["row_table_steps"]

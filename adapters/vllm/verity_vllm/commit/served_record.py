@@ -410,8 +410,8 @@ class BlockValues:
             sampled = committed_ints(committer, s, SAMPLED)
             seeds = committed_ints(committer, s, SAMPLER_INPUTS[0])
             pos = committed_ints(committer, s, SAMPLER_INPUTS[1])
-            gone = [n for n, v in ((ids_name, ids), (SAMPLED, sampled), *zip(SAMPLER_INPUTS, (seeds, pos))) if v is None]
-            if gone:
+            if ids is None or sampled is None or seeds is None or pos is None:
+                gone = [n for n, v in ((ids_name, ids), (SAMPLED, sampled), *zip(SAMPLER_INPUTS, (seeds, pos))) if v is None]
                 errors.append(f"step {s}: nothing committed under {gone}")
                 continue
             if not (len(sampled) == len(seeds) == len(pos) == len(rows)) or rows[-1].hi > len(ids):
@@ -431,10 +431,10 @@ class BlockValues:
                 rec.add(window, s, row, ids[row.lo:row.hi], sampled[i], seeds[i])
                 if rid not in held:
                     held.append(rid)
-        rec = {"window": window, "ids_name": ids_name, "steps": len(steps), "requests": held, "readback_errors": errors[:10],
-               "readback_errors_n": len(errors), "passed": not errors}
-        self.windows.append(rec)
-        return rec
+        done = {"window": window, "ids_name": ids_name, "steps": len(steps), "requests": held, "readback_errors": errors[:10],
+                "readback_errors_n": len(errors), "passed": not errors}
+        self.windows.append(done)
+        return done
 
     def check(self, request: str, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None,
               finish: Mapping[str, Any] | None = None, decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:

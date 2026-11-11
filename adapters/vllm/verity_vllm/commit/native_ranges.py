@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,8 +66,7 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
     parts = [levels[d][i] for d, i in idx]
     if len({p.device for p in parts}) > 1:
         parts = [p.cpu() for p in parts]
-    rows = torch.stack(parts).cpu().numpy() if parts else None
-    got = {di: rows[k].tobytes() for k, di in enumerate(idx)}
+    got = {di: row.tobytes() for di, row in zip(idx, torch.stack(parts).cpu().numpy())} if parts else {}
     return tuple((None if left is None else got[(d, left)], None if right is None else got[(d, right)]) for d, (left, right) in enumerate(need))
 
 
@@ -86,6 +86,21 @@ class NativeRangeOpenings:
     commit_scheme = step_rows.NAME
     rows = True
     replay_row_keys: dict[int, bytes] | None = None
+    #: what the class this is mixed into holds: the run's identity, its row size and retain mode, and per step its salt key, its metas,
+    #: its retained copy and its levels
+    program_digest: bytes
+    chunk: int
+    retain: str
+    row_keys: dict[int, bytes]
+    _geo_digest: bytes
+    _layouts: dict[int, list[Any]]
+    _gpu_blocks: dict[int, Any]
+    _gpu_levels: dict[int, Any]
+    #: and its rules: a step's context digest, a layout's digest, a leaf's identity, and whether a retained copy holds a byte range
+    _ctx_digest: Callable[[int], bytes]
+    layout_digest: Callable[[list[Any]], bytes]
+    identity_of: Callable[[int, int], dict]
+    _block_holds: Callable[[Any, int, int], bool]
 
     def _fold_run_root(self, roots: list[bytes]) -> bytes | None:
         """The run root over the step roots; None over a placeholder step root (b""): equal to no run root, the empty one included."""
@@ -127,9 +142,10 @@ class NativeRangeOpenings:
         retained copy (the copy every opening and value check reads).  The run root binds the unflipped bytes, so the opened value check must
         FAIL naming the member.  Raises when no member matches or its retained copy does not hold that byte."""
         sub = spec.partition(":")[2] or "qkv_proj"
-        step, m = next(((s, m) for s in sorted(self._layouts) for m in self._layouts[s] if sub in m.name), (None, None))
-        if m is None:
+        hit = next(((s, m) for s in sorted(self._layouts) for m in self._layouts[s] if sub in m.name), None)
+        if hit is None:
             raise RuntimeError(f"{spec}: no committed member name contains {sub!r}")
+        step, m = hit
         a, _b, _o = self.leaf_span(step, m, 0, 1)
         blk, pos = self._gpu_blocks[step][0], m.stream_off
         if blk is None or not self._block_holds(blk, pos, pos + 1):
