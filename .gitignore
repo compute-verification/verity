@@ -54,6 +54,7 @@ runs/
 verity/ml/commitments/tests/fixtures/layouts
 benchmarks/nci/sources
 benchmarks/one_stage/tests/fixtures/bundle-window
+benchmarks/two_stage/tests/fixtures/guard.tar.xz
 verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/forged-proofs
 verity/ml/flock/tests/fixtures/hidden-outputs
