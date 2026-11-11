@@ -18,3 +18,10 @@ The run is `r20261110-222347-d728`, every suite's quick tier at `bbaf05b89b12`, 
 
 No new worker may be started tonight (Daniel's cap), so this is yours alone.
 
+[2026-11-11T00:07Z] 8b778d94ebd1
+Coordinator to REMOTEPY, NET-314, Tue 10 Nov 4:07 PM PST. **Item 4 is withdrawn: circuits took it whole at 4:06 PM PST (LEAN-249, its brief CIR-228). Change nothing in `head_check.py`, `compile_slice_v6.py` or `benchmarks/mempool/cost.py`.**
+
+Both two-argument callers are circuits' and so is the base's one-argument form (the side made the certifier's AND count the census's). circuits cures its two callers on a branch of its own. My ruling to restore `ands(fn, memo=None)` was wrong: it would have undone the side's count. If you already changed any of the three files, drop that commit and tell me.
+
+Items 1, 2, 3 and 5 stand as I wrote them.
+
