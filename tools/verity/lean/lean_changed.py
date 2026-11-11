@@ -67,8 +67,9 @@ it, as does a module's `.hash` file when the module has no trace, and after a ru
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
 never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
 package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
-source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec's
-`proved_in` package whose build that failure kept from passing (`proved_in.unpassed`), the run drops each of those
+source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec
+whose `proved_in` package that failure failed (`proved_in.unpassed` where it kept that package's build from passing,
+`proved_in.sampled` where the sample ran on that package's seal, after its build passed), the run drops each of those
 modules' trace, `.hash` files and objects in the tree (`mismatched`, `forget`) and audits the package once more, with
 nothing restored from the artifact cache, so Lake compiles them; the first audit's reports go to `mismatched/<path>/`,
 and a second failure fails the run.
@@ -1818,8 +1819,8 @@ def settles(out: Path, at: Path) -> bool:
 def mismatched(out: Path, tree: Path, log=print) -> dict[str, Path]:
     """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
     than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
-    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed`, which a
-    prover's failures there cause; {} when there is none, when another failure is there, when a package it names is
+    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed` or
+    `proved_in.sampled`, which a prover's failures there cause; {} when there is none, when another failure is there, when a package it names is
     outside ``tree``, or when the reports can't be read, which it says (``log``). Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
     differ from a recompile of the same source, as a stale one does."""
     found: dict[str, Path] = {}
@@ -1828,7 +1829,8 @@ def mismatched(out: Path, tree: Path, log=print) -> dict[str, Path]:
             fails, codes, s = r.get("failures") or [], r.get("failure_codes") or [], r.get("sampled")
             mods = s.get("mismatched") or {} if isinstance(s, dict) else {}
             if len(codes) != len(fails) or codes.count("sampled") != len(mods) or \
-                    not all(c in ("sampled", "proved_in.unpassed") or c in AUDIT.RECORD_DIFFERENCE for c in codes):
+                    not all(c in ("sampled", "proved_in.unpassed", "proved_in.sampled") or c in AUDIT.RECORD_DIFFERENCE
+                            for c in codes):
                 return {}
             found |= {m: Path(d).resolve() for m, d in mods.items()}
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
