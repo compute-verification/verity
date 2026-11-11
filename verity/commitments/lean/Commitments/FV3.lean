@@ -1,7 +1,7 @@
 /-
 # frame-v3 (PROTOCOL.md §16.6; `verity.ml.commitments.merkle`)
 
-The tree every committed value is opened from, as the verifiers compute it; its spec is `Security/Definitions/Hash/Tree.lean`.
+The tree every committed value is opened from, as the verifiers compute it; its spec is `security/Definitions/Hash/Tree.lean`.
 A frame hashes `FRAME ‖ be32 |tag| ‖ tag ‖ Σ (be64 |part| ‖ part)` (`input`, `merkle._message`), and an integer in a frame
 is its minimal big-endian bytes, one zero byte for 0 (`uint`, `merkle._uint`). A tree pads its leaves to a power of two
 with `"pad"` leaves and hashes `"node"`s level by level up to its root.
