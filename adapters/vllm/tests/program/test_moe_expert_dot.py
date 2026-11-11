@@ -9,9 +9,9 @@ import json
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.definitions.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.definitions.ops.prims import AmpereBF16TcDot16, HopperBF16WgmmaDot16
 from verity.definitions.registry import b1
 from verity.definitions.registry import moe as M
 from verity.definitions.registry import prims as P
@@ -130,9 +130,7 @@ def test_the_static_pair_forms_are_the_dot_forms():
     """`verity.definitions.ops.moe`'s `MoePairGemm(W)_v1` (the word view of the padded static MoE form's Boolean pair units,
     `ops.boolean.moe`) is `MoeExpertGemm(W)_v2` at the same statics, on every expert id and on ids outside [0, E), through the
     pair forms' kernels and the registry's reference."""
-    from verity.circuits.evaluation import evaluate_batch
     from verity.definitions.ops import moe as SM
-    from verity.definitions.ops.prims import AmpereBF16TcDot16
 
     rng = np.random.default_rng(9)
     ids = np.asarray([*range(E), E, 1 << 31, (1 << 32) - 1], np.uint32)

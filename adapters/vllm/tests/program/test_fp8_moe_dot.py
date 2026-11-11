@@ -21,7 +21,8 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
-from verity.circuits.defs import bind
+from verity.circuits.codec import lookup_primitive
+from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.definitions import boolean as SW
@@ -163,8 +164,6 @@ def test_the_gathers_are_column_reads() -> None:
 def test_the_gathers_resolve_by_id_in_a_cold_decode() -> None:
     """A descriptor naming `GatherE4m3x{V}_v1` / `GatherF32x{V}_v1` decodes in a process that never built the program (the gathers
     are made per vocabulary while deriving): the lazy families resolve them like `GatherBf16x{V}_v1` (the GLM-5.3 Match of record)."""
-    from verity.circuits.codec import lookup_primitive
-    from verity.circuits.defs import REGISTRY
     assert lookup_primitive(REGISTRY, "GatherE4m3x256_v1") is X.gather_e4m3(256)
     assert lookup_primitive(REGISTRY, "GatherF32x256_v1") is X.gather_f32(256)
 

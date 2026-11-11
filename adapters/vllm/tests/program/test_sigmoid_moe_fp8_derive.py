@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.derived_rows import fp8_group_quant_row
 from verity.definitions.numerics.fp8_moe_rows import (
     moe_expert_fp8_block_row,
     silu_mul_fp8_block_quant_rows,
@@ -33,10 +34,12 @@ from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import fp8_moe
 from verity.definitions.registry import moe as MOE
 
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_iface as _vi  # noqa: F401  (defines the vllm_iface stand-ins)
+from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
@@ -158,14 +161,12 @@ def test_each_router_pin_refuses_by_name(call, needle, on_target):
 
 class _LaunchedRouter(_Router):
     def forward(self, logits):
-        from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
         with OB.launch_region(0, "tokens"):
             return super().forward(logits)
 
 
 def test_the_router_kernel_is_the_launchs_not_the_requests(on_target):
     """vLLM launches `grouped_topk` over the step's tokens: a request's 2 rows in a step of 1,100 run the warp kernel at 256 experts."""
-    from verity_vllm.program.frontend import targets as TG
     on_target(H200)
     VB.observe_launch_context(TG.parse_launch_context({"batch": [[[M, 0], [1100 - M, 7]]]}))
     with torch.fx.traceback.preserve_node_meta():
@@ -236,7 +237,6 @@ class _InputQuant(nn.Module):
 @pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
 def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
     from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
-    from verity.definitions.numerics.derived_rows import fp8_group_quant_row
 
     on_target(H200)
     x = _bf16(np.random.default_rng(6), M, 2 * G)

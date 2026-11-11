@@ -15,6 +15,7 @@ import types
 
 import numpy as np
 import pytest
+import torch
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
@@ -25,6 +26,7 @@ from verity.definitions import boolean as SW
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import boolean_fp8 as BF
+from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8 as F
 from verity.definitions.registry import fp8_vocab
 
@@ -38,6 +40,13 @@ from verity_vllm.observe.fold.patterns.fp8 import (
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    observe_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 ONE, MINUS_ONE = 0x38, 0xB8          # e4m3 1.0, -1.0
@@ -174,8 +183,6 @@ def test_blackwell_consumer_binds_the_version_3_forms_over_its_step() -> None:
 
 
 def test_the_vocabulary_binds_the_step_it_is_given() -> None:
-    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-
     scale = "shared-per-block"
     assert V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE=scale) == bind(F.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128)
     got = V.kind("scaled_mm_fp8_block", K=256, N=384, G=128, SCALE=scale, FP8_DOT=BlackwellE4m3QmmaDot32)
@@ -186,12 +193,6 @@ def test_the_vocabulary_binds_the_step_it_is_given() -> None:
 
 
 def _gate(tp):
-    from verity_vllm.program.frontend.rules.vllm_bindings import (
-        clear_observations,
-        observe_target_profile,
-    )
-    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
-
     clear_observations()
     try:
         observe_target_profile(tp)
@@ -292,11 +293,6 @@ def test_a_64_group_is_the_128_group_over_it_padded_with_zeros() -> None:
 
 
 def _quant_rule_ctx(K: int, G: int):
-    import torch
-
-    from verity_vllm.program.frontend.derive import Alloc
-    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
-
     g = torch.fx.Graph()
     x, xq, xs = (g.placeholder(n) for n in ("x", "x_q", "x_s"))
     dtypes = {x: torch.bfloat16, xq: R.FP8_E4M3, xs: torch.float32}
@@ -310,11 +306,6 @@ def _quant_rule_ctx(K: int, G: int):
 def test_the_quant_rule_binds_every_registered_group(G: int, ue8m0: bool) -> None:
     """`use_ue8m0` selects the Definition the rule emits: False `fp8_group_quant` (Fp8GroupQuant_v1), True `fp8_group_quant_ue8m0`
     (Fp8GroupQuantUe8m0_v1, registry.deepgemm) -- the MoE experts' input quant when DeepGEMM is on, vLLM's sm_90 default."""
-    from verity.definitions.registry import deepgemm as DG
-
-    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
-    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-
     (x, xq, xs), ctx = _quant_rule_ctx(6144, G)
     node = types.SimpleNamespace(args=(x, xq, xs, G, 1e-10, -448.0, 448.0, ue8m0, False, False), kwargs={})
     assert R.PerTokenGroupFp8QuantRule().applies(node, ctx) is True
@@ -324,8 +315,6 @@ def test_the_quant_rule_binds_every_registered_group(G: int, ue8m0: bool) -> Non
 
 @pytest.mark.parametrize("G", [32, 96, 256, True])
 def test_the_quant_rule_refuses_every_other_group(G) -> None:
-    from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
-
     (x, xq, xs), ctx = _quant_rule_ctx(6144, 64)
     node = types.SimpleNamespace(args=(x, xq, xs, G, 1e-10, -448.0, 448.0, False, False, False), kwargs={})
     assert R.PerTokenGroupFp8QuantRule().applies(node, ctx) == (
