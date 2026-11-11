@@ -34,6 +34,14 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from types import ModuleType
+
+    from transformers import PreTrainedTokenizerBase
+    from vllm import LLM, LLMEngine
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -44,7 +52,7 @@ EPILOGUE = 4    # int8_exact.dequantize's torch kernels: to(f32), * s_a, * s_w, 
 QUANT_BODY = 10  # int8_exact.quantize_rows' torch kernels: to(f32), full, abs, amax, clamp, /, /, round, clamp_, to(int8)
 
 
-def build(arm: str, scratch: Path, gpu_mem: float):
+def build(arm: str, scratch: Path, gpu_mem: float) -> tuple[LLM, ModuleType]:
     sys.path.insert(0, str(ROOT / "benchmarks" / "hash" / "dither"))
     import sbench
     os.environ["SBENCH_T"] = str(T)
@@ -53,7 +61,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     return sbench.build(arm, scratch, gpu_mem), sbench
 
 
-def scenarios(tok, sbench) -> dict[str, list[list[int]]]:
+def scenarios(tok: PreTrainedTokenizerBase, sbench: ModuleType) -> dict[str, list[list[int]]]:
     short = [tok.encode(p) for p in sbench.prompts(B)]
     filler = tok.encode(" ".join(sbench.prompts(64)), add_special_tokens=False)
     while len(filler) < 4 * PREFILL:
@@ -65,7 +73,8 @@ def scenarios(tok, sbench) -> dict[str, list[list[int]]]:
             "prefill-2k-b4": [bos + filler[i * 7:i * 7 + PREFILL - 1] for i in range(4)]}
 
 
-def drive(eng, tag: str, reqs: list[list[int]], decode: bool, nvtx, sync) -> dict:
+def drive(eng: LLMEngine, tag: str, reqs: list[list[int]], decode: bool, nvtx: ModuleType | None,
+          sync: Callable[[], None]) -> dict:
     """Add REQS; for decode, step until each has its first token, then WARM steps, then time STEPS steps; for a prefill,
     time the steps until it's done."""
     from vllm import SamplingParams
@@ -111,7 +120,7 @@ def drive(eng, tag: str, reqs: list[list[int]], decode: bool, nvtx, sync) -> dic
             "context_before": ctx0, "context_after": ctx1, "tokens": [toks.get(r, []) for r in ids]}
 
 
-def run(a) -> int:
+def run(a: argparse.Namespace) -> int:
     os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     import torch
     out = Path(a.out)
