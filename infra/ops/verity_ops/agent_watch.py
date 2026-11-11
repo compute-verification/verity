@@ -258,7 +258,7 @@ NOTE_CHARS = 30_000             # a note given to a relaunched agent is cut to t
 #: a branch a note names, `cursor/...` in backticks: a relaunched worker with no recorded branch is told these, the first first
 NOTE_BRANCH_RE = re.compile(r"`(cursor/[A-Za-z0-9._/-]+)`")
 ENV_NAME = "Verity compute-verification"     # the one-repo environment every coordinator and worker runs on
-MODEL = {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+MODEL = {"id": "claude-fable-5-2", "params": [{"id": "effort", "value": "high"}]}
 COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verification/verity/coordinators")  # launch_coordinator's
 DOORBELL_S = 10 * 60
 BELLS_STALE_S = 30 * 60
@@ -267,6 +267,7 @@ BELLS_STALE_S = 30 * 60
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 SHORT_AGENT_RE = re.compile(r"\b(bc-[0-9a-f]{8})\b(?!-[0-9a-f]{4}-)")
+LANE_LINE_RE = re.compile(r"^Lane ([A-Za-z0-9_-]+)", re.M)
 
 
 def short_id(agent: str) -> str:
@@ -410,15 +411,21 @@ def front_matter(p: Path) -> dict[str, str]:
 
 
 def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, dict[str, str]]]:
-    """(path, mtime, front-matter) of each note under `notes/lanes/` modified in the last `WORKER_NOTES_S`. The notes clone is
-    synced every 2 min, and git gives a file it adds or changes the time it did so, so a note's mtime is when it arrived."""
-    for p in sorted((notes / "lanes").glob("*/*.md")) if notes else []:
+    """(path, mtime, front-matter) of each note under `notes/lanes/`, at any depth (`lanes/ci/reviewers/review-1.md`), modified in
+    the last `WORKER_NOTES_S`. The notes clone is synced every 2 min, and git gives a file it adds or changes the time it did so,
+    so a note's mtime is when it arrived."""
+    for p in sorted((notes / "lanes").glob("*/**/*.md")) if notes else []:
         try:
             heard = p.stat().st_mtime
         except OSError:
             continue
         if t - heard < WORKER_NOTES_S:
             yield p, heard, front_matter(p)
+
+
+def note_lane(notes: Path, p: Path) -> str:
+    """The lane whose directory under `notes/lanes/` holds note `p`, however deep."""
+    return p.relative_to(notes / "lanes").parts[0]
 
 
 def lane_handle(lane: str, names: set[str]) -> str | None:
@@ -452,7 +459,7 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
             handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
             add(m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
     for p, heard, fm in recent_notes(notes, t):
-        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or p.parent.name
+        ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or note_lane(notes, p)
         launcher = next((i for i in ids if i in coords), None)
         for agent in ids:
             if agent not in coords:
@@ -473,7 +480,7 @@ def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str
         for agent in set(AGENT_RE.findall(origin)) | set(SHORT_AGENT_RE.findall(origin)):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
-        for lane in {p.parent.name, fm.get("lane", "")} - {""}:
+        for lane in {note_lane(notes, p), fm.get("lane", "")} - {""}:
             lanes[lane] = max(lanes.get(lane, mtime), mtime)
     return heard, named, lanes
 
@@ -867,6 +874,7 @@ class Watch:
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.open_prs, self.prs_read = open_prs, -float("inf")
         self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
+        self.pr_lanes: dict[str, set[str]] = {}     # lane an open PR's `Lane NAME` line names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
         self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
         self.launch_env, self.launcher, self.launch, self.launch_api = log.with_name("launch.env"), launcher, launch, launch_api
@@ -1503,6 +1511,9 @@ class Watch:
             if status == "ACTIVE":
                 if prev != "ACTIVE":                            # updatedAt moves on a status change, not during work
                     w["since"], w["long"] = updated, False
+                if (not w.get("no_runs") and (latest := info.get("latestRunId"))
+                        and (x := self.read({**info, "id": agent}, latest)) and x.get("status") == "FINISHED"):
+                    w["no_runs"] = True                         # it works with its latest API run finished: a Task worker
                 if not w["long"] and t - w["since"] >= self.worker_long_s:
                     w["long"] = True
                     self.record("worker_long", r, since=iso(w["since"]), hours=int((t - w["since"]) // 3600), **detail)
@@ -1515,7 +1526,11 @@ class Watch:
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
-            if status == "IDLE" and (latest := info.get("latestRunId")):
+            # a Task worker's runs aren't the API's, so its `latestRunId` never moves (one kept a week-old id through ten runs):
+            # only a worker whose runs the API lists can drop a message, and an IDLE read right after an ACTIVE one is a run that
+            # ended
+            if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
+                    and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
@@ -1537,11 +1552,14 @@ class Watch:
             self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
             return
         named: dict[str, set[str]] = {}
+        lanes: dict[str, set[str]] = {}
         for pr in prs:
             body, branch = str(pr.get("body") or ""), str(pr.get("branch") or "")
             for agent in {*AGENT_RE.findall(body), *SHORT_AGENT_RE.findall(body)} if branch else ():
                 named.setdefault(agent, set()).add(branch)
-        self.pr_branches = named
+            for lane in LANE_LINE_RE.findall(body) if branch else ():
+                lanes.setdefault(lane, set()).add(branch)
+        self.pr_branches, self.pr_lanes = named, lanes
 
     def read_heads(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
@@ -1569,7 +1587,8 @@ class Watch:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
         note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
         it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
-        finds for any of these) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
+        finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it, and
+        its lane's agents' runs) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
         the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
         of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
@@ -1589,10 +1608,21 @@ class Watch:
                     *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}
             mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
+            by_lane = not mine and bool(k.get("lane"))
+            if by_lane:
+                # nothing names its branches (a Task-launched worker: no `git.branches`, a PR body naming only its lane): its
+                # lane's pushes and runs stand in, since archiving one at work loses it (one was archived 40 min after a push,
+                # its runs filed under its coordinator's id)
+                mine = {b for b in heads if b.startswith(f"cursor/{k['lane']}-")} | self.pr_lanes.get(k["lane"], set())
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id, so its id alone rings it falsely as silent
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            ran = (self.ends.get("ran") or {}).get(agent)
+            ran_by = self.ends.get("ran") or {}
+            ran = ran_by.get(agent)
+            if by_lane:
+                ran = max((x for a, x in ran_by.items() if x is not None and (a == agent or (known.get(a) or {}).get("lane") == k["lane"]
+                                                                              or (known.get(a) or {}).get("handle") == k["lane"])),
+                          default=ran)
             last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
                                    self.heads["t0"]) if x is not None)
             s = self.silent.get(agent)

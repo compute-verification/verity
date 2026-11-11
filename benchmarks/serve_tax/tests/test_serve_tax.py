@@ -188,6 +188,13 @@ def test_only_the_batch_invariant_arms_run_vllms_batch_invariant_kernels(tmp_pat
     assert (S.ARMS["bi-compiled"].parent, S.ARMS["bi-eager"].parent) == ("compiled", "eager")
 
 
+def test_run_shs_replay_runs_at_the_models_width_and_captures_what_it_is_told():
+    sh = (S.HERE / "run.sh").read_text()
+    call = sh[sh.index('"$PY" "$here/replay.py"'):]
+    call = call[:call.index("rc=1; }")]
+    assert '--tp "$GPUS"' in call and '${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"}' in call
+
+
 def test_run_sh_serves_every_model():
     cases = [re.match(r"  ([a-z0-9-]+(?:\|[a-z0-9-]+)*)\)", line) for line in (S.HERE / "run.sh").read_text().splitlines()]
     assert {name for m in cases if m for name in m[1].split("|")} == set(S.MODELS)
