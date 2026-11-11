@@ -128,7 +128,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
 
     # The runtime incoming accumulator: a value r in [0, 2^23) the circuit holds biased toward the s32 edge (any earlier
     # chain or add puts it there once); each threshold test then adds a short constant chain (<= 17 IMMA steps).
-    def draw() -> tuple[int, int]:
+    def sample() -> tuple[int, int]:
         T = rng.randrange(1, 1 << 22)
         r = rng.randrange(0, 1 << 23) if rng.random() < 0.5 else max(0, T + rng.randrange(-2, 3))
         return r, T
@@ -137,7 +137,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
     sat_base = S32_MAX - (1 << 23)
     sat_ok = 0
     for _ in range(trials):
-        r, T = draw()
+        r, T = sample()
         d1 = s32_value(_shift(IMMA_SAT, r + sat_base, (1 << 23) - T + 1))
         d2 = s32_value(_shift(IMMA_SAT, r + sat_base, (1 << 23) - T))
         sat_ok += (d1 - d2) == int(r < T)
@@ -148,7 +148,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
     wrap_base = (1 << 31) - (1 << 23)
     wrap_ok = 0
     for _ in range(trials):
-        r, T = draw()
+        r, T = sample()
         d = _shift(IMMA_WRAP, r + wrap_base, (1 << 23) - T)
         wrap_ok += (d >> 31) == int(r >= T)
     out["wrap_runtime_C_sign_is_compare"] = {"trials": trials, "exact": wrap_ok}
@@ -158,7 +158,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
     add = REGISTRY.defs["I32Add_v1"].evaluate
     split_ok = 0
     for _ in range(trials):
-        r, T = draw()
+        r, T = sample()
         half = r // 2
         p2 = _shift(IMMA_WRAP, (r - half) + wrap_base, (1 << 23) - T)
         split_ok += (add(half, p2) >> 31) == int(r >= T)

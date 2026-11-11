@@ -85,7 +85,7 @@ def _square(name):
 
 def _free_codec():
     b, _out, _slots = FC.free_encode_word(8, 5, 2)
-    return b, [FC.draw_inputs(8, 5, [92, 7], 253, 18, 54, 195)]
+    return b, [FC.sample_inputs(8, 5, [92, 7], 253, 18, 54, 195)]
 
 
 CIRCUITS = {"gathers": _gathers, "free_bit": _free_bit, "mma_clamp_wrap": _mma_clamp_wrap,

@@ -116,7 +116,8 @@ def _oracle(table):
         try:
             by_fn[c.program().fn.name] = c
         except (TypeError, ValueError):
-            continue
+            if c.kind == "honest":
+                raise
 
     def check(program):
         return table(by_fn[program.fn.name])
