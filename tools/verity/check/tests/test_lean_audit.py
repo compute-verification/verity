@@ -15,7 +15,9 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 import types
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -1150,8 +1152,54 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     j = hashlib.sha256(junk.read_bytes()).hexdigest()
     seen = len(logged)
     assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
-    assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
-    assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
+    assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0
+    assert len(logged) == seen + 2                         # the bytes named, which can't be unpacked: never fetched again
+
+
+def test_a_bundle_whose_download_gave_other_bytes_than_those_named_is_fetched_again_by_a_later_run(tmp_path, monkeypatch):
+    """A response that ends before its length does so without an error, and what arrived has another sha256 than the one
+    named. Such a bundle was marked taken, so the node never fetched it again and built its modules for as long as the
+    launcher listed it. Nothing tells those bytes from a bundle that is wrong where it is kept, so neither is marked: only
+    bytes that are the ones named are. A chunked response that ends early raises an error that is no `OSError`, which
+    ended the take and the bundles after it."""
+    pkg = _package(tmp_path)
+    dest, h = _bundle_of(tmp_path, pkg)
+    data, asked = dest.read_bytes(), []
+
+    class Short(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            asked.append(self.path)
+            self.send_response(200)
+            if self.path == "/chunked":
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(f"{len(data):x}\r\n".encode() + data[:len(data) // 2])
+            else:
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data[:len(data) // 2] if asked.count(self.path) == 1 else data)
+
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    srv = HTTPServer(("127.0.0.1", 0), Short)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        at = f"http://127.0.0.1:{srv.server_address[1]}"
+        b, logged = LA.LakeArtifacts(tmp_path / "node-b"), []
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and "is not the one named" in logged[0]
+        assert not list((tmp_path / "node-b").glob("taken-*/*")), "not marked taken: a later run fetches it again"
+        assert not list((tmp_path / "node-b").glob(".*.part"))
+        assert b.take({LA.SHARED + h: at + "/chunked"}, logged.append) == 0 and "could not be fetched (IncompleteRead)" in logged[2]
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 3, "the next run fetches it whole and takes it"
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and asked == ["/bundle", "/chunked", "/bundle"]
+        other = LA.LakeArtifacts(tmp_path / "node-c")
+        for _ in range(2):
+            assert other.take({LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0 and "is not the one named" in logged[-2]
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_takes_and_another_node_takes_them_all(tmp_path):

@@ -111,6 +111,7 @@ import fnmatch
 import functools
 import gzip
 import hashlib
+import http.client
 import importlib.util
 import itertools
 import json
@@ -1306,8 +1307,10 @@ class LakeArtifacts:
     def take(self, urls: dict[str, str], log=print, budget: int | None = None) -> int:
         """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
         sha256, and unpacked member by member (`_unpack`). The number of entries added. A bundle that fails is skipped,
-        and its modules are built; one whose bytes fail (not the sha256 named, or not unpackable) is marked taken, since they
-        never change. The URL is never logged: it grants a read until it expires.
+        and its modules are built. One whose bytes are the ones named and can't be unpacked is marked taken, since they
+        never change. One whose download gave other bytes is not: a response that ends early, with an error or without
+        one, gives those too, so a later run fetches it again, for as long as the launcher lists it (`shared_bundles`).
+        The URL is never logged: it grants a read until it expires.
 
         The bundles are unpacked one at a time in the order ``urls`` names them, which is the launcher's, newest first
         (`shared_bundles`), until the bytes written to the cache reach ``budget``: a quarter of the cap unless given. A
@@ -1341,9 +1344,9 @@ class LakeArtifacts:
                         f.write(chunk)
                 if d.hexdigest() == h:
                     return part
-                log(f"lean-audit: artifact bundle {h[:12]} is not the one named; skipped")
-                (taken / h).touch()
-            except OSError as e:
+                log(f"lean-audit: artifact bundle {h[:12]}: what was fetched is not the one named (other bytes, or a download "
+                    f"that ended early); skipped, and a later run fetches it again")
+            except (OSError, http.client.HTTPException) as e:
                 log(f"lean-audit: artifact bundle {h[:12]} could not be fetched ({getattr(e, 'code', None) or type(e).__name__})")
             part.unlink(missing_ok=True)
             return None
