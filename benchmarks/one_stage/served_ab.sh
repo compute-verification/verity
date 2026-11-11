@@ -36,7 +36,9 @@
 # The card's start check is gpu_lease.sh's, taken without --wait: a card whose lock is held, or with another's compute
 # process on it, ends the run (exit 75) instead of waiting. The container's CPU throttle count is written at each round's
 # start and end (served_ab.txt), since another lane's timed row on this node is void when it moves. With NOT_AFTER (a UTC
-# time, `date -d` syntax) no round starts after it, so the run stays inside its booked hours.
+# time, `date -d` syntax) no round starts after it, so the run stays inside its booked hours. The REPS rounds are numbered
+# from FIRST_REP (1), so a second run into the same OUT adds its rounds to the first's table: two trees' runs interleaved,
+# each tree into an OUT of its own, give each tree's table over all its rounds.
 #   research run --on vy-spot-glm53 --project verity --source TREE --cwd clone --timeout 240m -- \
 #     env CARD=1 CORES=0-11 NOT_AFTER=2026-11-11T07:05Z bash benchmarks/one_stage/served_ab.sh
 set -uo pipefail
@@ -52,7 +54,7 @@ REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796a
 VENV=${VENV:-/workspace/venv312}
 PORT=${PORT:-18195} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-32:32} WINDOW_STEPS=${WINDOW_STEPS:-4} SEED=${SEED:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} T=${T:-512} DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
-ARMS=${ARMS:-stock commit pearl} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1}
+ARMS=${ARMS:-stock commit pearl} REPS=${REPS:-5} LOADS=${LOADS:-3} WARM=${WARM:-1} FIRST_REP=${FIRST_REP:-1}
 LEASE_MIN=${LEASE_MIN:-25} LEASE_MEM_GB=${LEASE_MEM_GB:-128} TAP_HDIMS=${TAP_HDIMS:-64}
 PEARL_ARM=pouw:pearl-c-h100-v1-h3
 first_dir() { local d; for d in "$@"; do [ -x "$d/bin/nvcc" ] && [ -x "$d/bin/cuobjdump" ] && { echo "$d"; return; }; done; }
@@ -214,7 +216,7 @@ prep || { rc=$?; say "STOP at prep (exit $rc); throttle count $(throttled), $t0 
 say "prep done; throttle count $(throttled), $t0 at the start"
 export OUT
 k=0 bad=0
-for name in $(seq -f 'warm-%g' 1 "$WARM") $(seq -f 'rep-%g' 1 "$REPS"); do
+for name in $(seq -f 'warm-%g' 1 "$WARM") $(seq -f 'rep-%g' "$FIRST_REP" $((FIRST_REP + REPS - 1))); do
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
     say "$name: not started, past NOT_AFTER $NOT_AFTER"; bad=11; break
   fi
