@@ -893,7 +893,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         os.execvp(cmd[0], cmd)
     listed = parse(SLOTS.read_text())
     if not listed:
-        sys.exit(f"slot: {SLOTS} lists no slots")
+        pools = ", ".join(p.parent.name for p in lane_pools(SLOTS)) or "none"
+        print(f"slot: not started: {SLOTS} lists no check slots, so nothing ran. A run here takes one of this machine's pools by "
+              f"name (`research run --on MACHINE --pool NAME --as LANE`): {pools}; `research queue ready N --on auto` places a "
+              f"quick tier itself; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
     # already inside a slot this machine's lock still holds (a `research run --pool` job that wraps its own command in slot.py,
     # whose inner waiter would queue behind its own outer lock and stop the machine's research pool): run CMD in that slot
     if (held := os.environ.get("CHECK_SLOT")) and any(s["name"] == held for s in listed) and locked(SLOTS.parent / f"check-{held}.lock"):

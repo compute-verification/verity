@@ -399,6 +399,32 @@ def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, m
     assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
+def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(tmp_path, monkeypatch, capsys):
+    """A machine with pools and no check slots (its slots file is there and lists none) runs nothing and says so with
+    NOT_STARTED, which a caller reads as a check that never ran, not as one that failed; the message names the pools a run
+    may take there."""
+    (tmp_path / "slots").write_text("# this machine has pools and no check slots\n\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "execvp", lambda f, argv: pytest.fail(f"ran {argv}"))
+
+    def not_started() -> str:
+        assert SLOT.main(["--", "true"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED == 75
+        return capsys.readouterr().err
+
+    err = not_started()
+    assert f"{tmp_path / 'slots'} lists no check slots, so nothing ran" in err
+    assert err.rstrip().endswith(f"exit {SLOT.NOT_STARTED}") and "): none; " in err
+    for name, text in (("research", "r0 0-1\n"), ("proofs", "p0 2-3\n"), ("trains", "t 4 only=trains\n"),
+                       ("research.bak-old", "b 5\n")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "slots").write_text(text)
+    err = not_started()
+    assert "`research run --on MACHINE --pool NAME --as LANE`): proofs, research; " in err
+    assert "trains" not in err and ".bak-" not in err
+    assert "`research queue ready N --on auto` places a quick tier itself" in err
+    assert not list(tmp_path.glob("check-*"))   # no lock taken and no line joined
+
+
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
     """A check that waits in the line until its run's timeout is reported failed: --wait-max ends the
     wait first, with an exit that says nothing ran."""
