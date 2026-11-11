@@ -113,8 +113,8 @@ def phi_of(meta: dict, hf_config: dict, rank: int):
 
 def window_coin(run: Path, window: int) -> dict | None:
     """Window K's seed coin as its ``windows.jsonl`` line names it (``seed_coin``: its hex, its index and its source), which
-    `compile_steps` derives an unseeded stochastic request's seed from, as serving did; None when the line names none (a
-    server that filled a seed in), and the compile then refuses such a request by name."""
+    `compile_steps` takes as the window's seed salt (``salt``) and derives an unseeded stochastic request's seed from, as serving
+    did; None when the line names none (a server that filled a seed in), and the compile then refuses such a request by name."""
     path = run / "windows.jsonl"
     lines = path.read_text().splitlines() if path.exists() else []
     got = [d for d in map(json.loads, filter(str.strip, lines)) if int(d["window"]) == int(window)]
@@ -229,7 +229,7 @@ def main() -> int:
         return 2
     reg = Registered.of(phi, default_seed=seed, cap_bits=cap)
     try:
-        compiled = compile_steps(reg, data, ingress, coin=bytes.fromhex(coin["coin"]) if coin else None, partial=a.partial)
+        compiled = compile_steps(reg, data, ingress, salt=bytes.fromhex(coin["coin"]) if coin else None, partial=a.partial)
     except Unexpressible as e:
         (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"[advice-compile] compile_steps refuses the advice: {e}", flush=True)
