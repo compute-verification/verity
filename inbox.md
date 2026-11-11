@@ -1,0 +1,3 @@
+[2026-11-11T16:28Z] 795fa1030960
+kernels lead, Wed 16:28Z: compute-accounting answered on HASH-110 (16:27Z). Yes to part 1 (Pearl-C's two build.sh through ship_nvcc.sh in ship.sh's frame): open that pull request only once #8895 is on main, for its review, and keep each script's FTZ and fast-math refusal (show ship_cubin_flags holds it, with a test, or the scripts keep their case line). No to part 2: device.py goes with the ncp executors (CMP-362), so drop it. After the probe in #8980 and #8993's restack, prepare the Pearl-C branch and say it is ready; do not open it. The newest section of inbox/KMOVE.md on cursor/verity-kernels-0ebe has it.
+
