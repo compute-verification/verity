@@ -11,7 +11,7 @@ order of every frame are fixed by the declared Program.
   named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
   `verity/protocols/spot/verifier/README.md`, with the coins' path in `verity/composite/device/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
-  (`Security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
+  (`security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
   boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
   read on one clock; on two devices, within 1.03 s of each other), prose only. The certifier program's Lean reads
   neither.
@@ -21,8 +21,8 @@ order of every frame are fixed by the declared Program.
   values Σ_sync, the certifier's key id and session, and the execution phases audited.
 
 Where each part is stated in Lean:
-- the timing analysis `NetTiming`, its guarantees and its modelling choices: `Security/Definitions/NetworkCertifier` and
-  `Security/Proofs/NetworkCertifier` (whose `README.md` has the modelling choices), with each bound's guarantee in
+- the timing analysis `NetTiming`, its guarantees and its modelling choices: `security/Definitions/NetworkCertifier` and
+  `security/Proofs/NetworkCertifier` (whose `README.md` has the modelling choices), with each bound's guarantee in
   "Capacity";
 - the certifier program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
   charges as code, proved equal to the analysis's definitions and held to this package by its difftests;
@@ -925,7 +925,7 @@ The Program fixes each real frame's content, its **anchor** (the recorded bucket
 `ClockSync(δ, ρ)` from the public set Σ_sync (`SyncSet`; 16 offsets × 8 rates is 7 bits). A frame is **eligible** at
 `anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's window, the shaper **hands** it to the certifier in canonical order at
 `h(k) = max(eligible(k), h(k−1))`, and the certifier's grid **releases** it. Stated in Lean:
-`Security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
+`security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
 `constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the certifier
 program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python. The
 certifier signs each egress window's sync, salted, beside its record:
@@ -959,7 +959,7 @@ advice gives it.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
-channel (`Security/Proofs/NetworkCertifier/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
+channel (`security/Proofs/NetworkCertifier/README.md`, modelling choice 6). An ingress link's rows are the Program's input, which it reads rather
 than predicts, so no grid is compared. An ingress execution phase is accepted if it has exactly one record, present by
 the deadline, and its status is complete; otherwise it is a `no-verdict`, `duplicate` or `status:<reason>` violation, as
 on egress. A committed record's status is read in the clear, and the digest binds it. The verifier has no Program grid
@@ -996,14 +996,14 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 
 **The advice's charge.** The advice string is the circuit's Program's content advice, so its charge is the sampled row's
 `c`. The sampled leak bound takes `c` as declared and public, with the premise that at most `2^c` advice values are
-charged `c` bits or fewer (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), as for any
+charged `c` bits or fewer (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), as for any
 prefix-free code (Kraft). Advice v1's charge is `code_v1`'s length for the whole window: its segment, every count and
 value inside the arithmetic coder, then its length terms' fixed-width tail while the registration sends them. Its
 strings are prefix-free, so at most `2^c` advice values (each window's decisions, hits, order entries and length terms)
 are charged `c` bits or fewer (`protocol/charge-chain.md`, "The bound"). Lean mirrors the
 charge's references one for one: `ChargeCount_v1{N}`'s (`arith_encode.py`'s `reference_charge`,
-`Security/Definitions/NetworkCertifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O, L}`'s (`window_charge.py`'s
-`reference_window`, `Security/Definitions/NetworkCertifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
+`security/Definitions/NetworkCertifier/AdviceV1.lean`) and `ChargeCount_v2{N, H, O, L}`'s (`window_charge.py`'s
+`reference_window`, `security/Definitions/NetworkCertifier/WindowCharge.lean`). Which slots ask (`en`) is not charged
 because it is not advice: the compile slice, its charge included, is proved on every advised window and never sampled,
 so `en` is pinned by that slice's scan, and the carry across windows is chained from the book's priors
 (`charge_chain.check_chain`). That the circuits compute Lean's windows (`ChargeCount_v1`'s `AdviceV1.window`,
@@ -1024,13 +1024,13 @@ Charging a window only for the windows up to it would need a causality assumptio
 doesn't take.
 
 **The network certifier's row.** The network certifier terminates both connections and sends every cell in its bucket: a connection admitted
-at bucket `s` sends its egress cell `j` in bucket `s + D + ⌊j/r⌋` (`Security/Definitions/NetworkCertifier/Warden.lean`).
+at bucket `s` sends its egress cell `j` in bucket `s + D + ⌊j/r⌋` (`security/Definitions/NetworkCertifier/Warden.lean`).
 Admission is the network certifier's decision on its own schedule. A cell, or the end of the stream, that reaches the network certifier after
 its bucket fails the connection there with one fail cell that carries no reason, and the lane stays held to its
 scheduled end. So the client's view of the server side is the schedule, each connection's fail cell or none, and the
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network certifier's code gives both the cells the client receives and its record of them
-(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). The inference-only policy's transfer gates are these cells' bits,
+(`security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). The inference-only policy's transfer gates are these cells' bits,
 whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
 `SecurityProofs.PeriodLeakAccepted` composes each window's sampled leak bound at the network certifier's rows with the
@@ -1043,14 +1043,14 @@ plus what survived that wipe. `capacity.k_share` expresses bits as a share of K,
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
 
-Every statement in the table's Lean column is a guarantee in `Security/lean-audit.json`, frozen as no-function: each is
-stated over the model, not the network check's code (`Security/Proofs/NetworkCertifier/README.md`, "The records"). Four
+Every statement in the table's Lean column is a guarantee in `security/lean-audit.json`, frozen as no-function: each is
+stated over the model, not the network check's code (`security/Proofs/NetworkCertifier/README.md`, "The records"). Four
 are the bounds `calibration.calibrate` reports: egress over a monitoring period
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
 (`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a monitoring period (the
 K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
 per execution phase (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
-is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
+is any link's). The steps of their proofs are lemmas (`security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
 audited, with no record.
 
 The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
@@ -1083,7 +1083,7 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the spec: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
+the spec: the last section of `security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
 link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
@@ -1120,7 +1120,7 @@ The notation is for one audit of W windows:
 
 and the audit accepts a run whose sequence lies outside it with probability at most δ_audit. Here Φ is the influence
 of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + ε_bind + δ_in is the error of
-`audit_influence` (`Security/Proofs/Flock/Soundness/Audit/Influence.lean`).
+`audit_influence` (`security/Proofs/Flock/Soundness/Audit/Influence.lean`).
 
 **Why it holds.**
 1. **Fix a.** Then every proof block's circuit is fixed, because `compile` is a function of the registered items and of
@@ -1164,7 +1164,7 @@ Each assumption, and what breaks without it:
   digest before the run. It reads nothing the prover chooses later.
   - The row's pin and the device pin (`predict.compiled`'s kernel configurations, autotune winners, cuBLAS routes and
     fused-MoE configurations) are registered items. The prover chooses them before the run, so they cost their size
-    once, like a hidden profile list (`Security/Definitions/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
+    once, like a hidden profile list (`security/Definitions/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
     auditor fixes them from a reference device of its own.
   - The circuits are the exact silicon semantics. There is no tolerance: a band of t accepted values on a checked value
     frees log2 t bits there. No input names a reduction order, an atomic's interleaving or an autotune choice.
@@ -1777,7 +1777,7 @@ them.
     open cells (`Accounting.Attribution.openCells`, the record minus those slots) are the grids, and what
     the certifier sends into the block, the salt frame's release included, is a function of its record, the sealed
     slots included, and its jitter, as
-    `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `Security/Definitions/Accounting/Physical.lean`.
+    `Accounting.TrustedUnits` (W2) asks of a certifier's sends, in `security/Definitions/Accounting/Physical.lean`.
   - **The weights before the salt.** PoUW's noise seed reads the weights' root, so a credited window needs the
     weights fixed before its salt. A second sealed record cell per PoUW window, `_weights[p]`, holds that order: the
     prover's registration path hands `Proxy.commit_weights(p, root, signature)` the 64-byte frame-v3-sha512 root
@@ -1854,7 +1854,7 @@ them.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the spec makes for the
-    challenger's coins (D7, `Security/Definitions/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
+    challenger's coins (D7, `security/Definitions/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
     openings on a coin link, and doesn't name the certifier's salt yet.
 - **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and
   verdict is as above.
@@ -1870,7 +1870,7 @@ them.
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
   - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
     syncs. The certifier's Lean device port (`verity/protocols/certifier/device/lean/`) models the restart (`initAt`), the
-    salt, a served link's admission, ordinal headers and compact records; the device's Lean properties (`Security/Properties/NetworkCertifier/Device.lean`) are
+    salt, a served link's admission, ordinal headers and compact records; the device's Lean properties (`security/Properties/NetworkCertifier/Device.lean`) are
     stated from window 0 (`init`), so they don't cover a proxy back from maintenance yet.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
@@ -1982,7 +1982,7 @@ sealed under an AEAD built from SHA-512 alone.
   ciphertext off the two certifiers. So the export charge (λ_out) applies at the facility boundary only. In
   `benchmarks/datacenter` this switches at `Datacenter(sealed=True)` (off by default), which `Placement._exported`
   reads to count only the crossings to a reader off every block.
-- **The analysis.** `Security/` doesn't change. The egress model's A1 (EgressMediated(s))
+- **The analysis.** `security/` doesn't change. The egress model's A1 (EgressMediated(s))
   restated with encryption as its premise is a claim, not a proof:
   - **The restatement (A1 at the facility boundary, sealed):** every bit that leaves the facility is an egress slot
     value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
@@ -2078,7 +2078,7 @@ the cut gives one event a `DATA` cell and the `END` holds the trailer; any other
 n is content, not transport: it is the length of the protocol's output, which the proofs bind. It is charged with the
 content, at ε times the output bits of unproved proof blocks at δ. So on a run in which no connection failed, the transport
 leaks log2 of the schedule's parameters, and each failed connection adds log2(cells + 1). Lean states the bound over
-the network certifier's schedule as `Security/Definitions/NetworkCertifier/Warden.lean` models it, for a decoder of the
+the network certifier's schedule as `security/Definitions/NetworkCertifier/Warden.lean` models it, for a decoder of the
 client's view read back from the certifier's record (`SecurityProofs.PeriodLeakAccepted`; "Capacity"), not over
 `warden.py`'s code.
 
