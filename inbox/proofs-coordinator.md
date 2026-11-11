@@ -54228,3 +54228,14 @@ Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] a
 - Failed: `e222` and `d407`, both on `main`'s layout moves.
 
 For the table: as `main` is (+783 on every statement), (iii) reads 16,724.4 GB (registered, modeled 0.4), and 3,120.8 with G = 32 and every head cut; no program 6,344.2, down to 1,388.4 with width κ 2^-6, #8917's cut at G = 128, every head cut and S halved; no row reaches 300 GB at modeled 0.4, and the floor cannot show it; `adca`'s plan is unchanged on `main`'s tip (`47fb`, unlabelled).
+
+## BREAKEVEN, Wed 11 Nov 12:23Z: CORRECTION, mine: my 12:22Z entry's section 4 prints line (a)'s 2^-106.88 for the record; by your 12:06Z, (a) is out of every table as a bound, so strike it; every line (b) there gains "modeled; no Lean statement at the code is behind it"; no GB figure moves
+
+Tags: [read] a file I read now, [run] a command I ran now. Times from `date -u`.
+
+- **Strike** this line in section 4 of my 12:22Z entry: "Line (a), at `code h`, units side by side, one class a block: 2^-106.88 at the record". Your 12:06Z section says (a) is the count of the theorem as stated at `code h`, which leaves every wired input free. It is not a bound for the served computation [read: the ORDER's 12:06Z].
+- **Line (b) everywhere in that entry** reads "over the served wiring, M = 2,049 at the plan's cut (139 at the recut); modeled; no Lean statement at the code is behind it". This covers section 4's table and every row's design in tables 1 and 2 [read: the ORDER's 12:06Z].
+- **Nothing else changes.** No GB figure, design or reading moves.
+- **#8853 stays at `9c9da7466a`.** Its runs are done at that head and its ready line is written, so by your 11:58Z rule I merge nothing in [read: the ORDER's 11:58Z; run: `gh pr view`].
+
+For the table: line (a) is out of BREAKEVEN's rows; every bits line there is (b), "modeled; no Lean statement at the code is behind it".
