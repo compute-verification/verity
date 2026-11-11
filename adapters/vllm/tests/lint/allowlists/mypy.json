@@ -654,7 +654,6 @@
     {"file": "tests/pipeline/test_tp_match_routed_allreduce.py", "kind": "name-defined", "symbol": "f32_once", "detail": ""},
     {"file": "tests/pipeline/test_tp_match_routed_allreduce.py", "kind": "var-annotated", "symbol": "_make", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "attr-defined", "symbol": "test_the_target_check_at_one_rank_reads_that_ranks_engine_and_names_it_when_it_differs", "detail": "", "count": 4},
-    {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "attr-defined", "symbol": "test_the_warm_up_instrumented_run_at_one_rank_learns_on_that_rank_and_records_nothing_of_it", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "func-returns-value", "symbol": "test_the_target_check_at_one_rank_reads_that_ranks_engine_and_names_it_when_it_differs", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "var-annotated", "symbol": "_InProcess.__init__", "detail": ""},
     {"file": "tests/pipeline/test_tp_post_load_tensors.py", "kind": "name-defined", "symbol": "_Layer", "detail": ""},
