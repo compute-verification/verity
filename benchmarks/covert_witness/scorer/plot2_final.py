@@ -4,7 +4,8 @@ point and every other reached search row, on te_core.algorithm_policy's columns 
 (`figure`). node_loop.py's `finish` PUTs each refresh's algorithm-policy through it.
 
     python plot2_final.py build --finals FINALS_JSON --policy TABLES_JSON --out DIR
-    python plot2_final.py put DIR
+    python plot2_final.py put DIR [--note FILE] [--dry]
+    python plot2_final.py put-fit BODY [--dry]
 
 Run from benchmarks/covert_witness of te_core's checkout (node_loop's RESCORE). FINALS_JSON is
 islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON a search table (te_core.algorithm_policy's
@@ -35,9 +36,17 @@ DIR/algorithm-policy.png (`figure`, both axes log at the same length per decade)
 console's copy drops DETAIL's cells, then only overlay rows off the headline data, then other overlay rows (`cut`);
 `put` stores DIR/tables/ in the evidence store, cuts again with its art id in the note and PUTs the cut. It PUTs
 nothing where the route serves algorithm-policy rows priced by a newer te_core (te_core.algorithm_policy's
-`kept_data`). training/frontier-fit stays the search refresh's.
+`kept_data`). With `--note`, the note is FILE's text, the stored tables' art id where it says `ART`; a text without
+it, or over the route's limit with it, is refused before anything is stored. training/frontier-fit stays the search
+refresh's unless `put-fit` PUTs it: BODY is the console body a search build wrote (te_core.algorithm_policy's
+console/frontier-fit.json), sent as it is, under the same rule for a newer te_core's rows.
+
+`--dry` stores nothing and PUTs nothing: it prints the sha256, bytes, rows and note length of the body the put would
+send, and what te_core.console's `put` would refuse it for. `put --dry` has no art id, so its body carries `NO_ART`
+in its place, as long as one: the body the put sends differs from it in those characters alone.
 """
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -83,6 +92,9 @@ ROTATIONS = ("Rotations are at the TF32 product; a part mixing a cut's rotation 
              "traced shares, measured at the f32 price.")
 #: the figure's inches per decade, on both axes, so an iso-S line S = p·rho_own runs at 45 degrees
 DECADE_IN = 1.5
+#: where a `--note` text names the stored tables' art id, and what a dry run puts there
+ART = "{art}"
+NO_ART = "art:" + "0" * 64
 #: the figure's strip under each panel, the rows with p and no finite rho_own, each kind's marker
 STRIP_IN, NO_RHO = 0.4, {"untraced": ("x", "reached, not yet traced"),
                          "refused": ("+", "refused (data- or batch-dependent program)"),
@@ -264,18 +276,18 @@ def bare(rows: list[list]) -> list[list]:
     return [[None if i in off else x for i, x in enumerate(r)] for r in rows]
 
 
-def cut(p: dict, cells: list[dict], art: str | None = None) -> dict:
+def cut(p: dict, cells: list[dict], art: str | None = None, text: str | None = None) -> dict:
     """The console's copy with this table's note, the first that fits the route: every row whole; every row without
     DETAIL's cells; without them, every finals row and the headline data's overlay rows (`OVERLAY`; every move-right
     run is on its starts) with the other data's overlay rows te_core.algorithm_policy's `kept` at the first of its tiers
     that fits; the same on every data's overlay rows. No cut drops a finals point for a search row whose p reads
-    another H."""
+    another H. With `text`, that is the note of every cut, whichever it is."""
     rows, head = p["rows"], ap.headline(p)
 
     def body(rs: list[list], slim: bool, said: str = "", brief: str = "") -> dict:
         on = ap.console_rows(rs)
         return ap.checked(p | {"columns": ap.CONSOLE_COLUMNS, "rows": bare(on) if slim else on,
-                               "note": note(cells, art, said, brief)})
+                               "note": note(cells, art, said, brief) if text is None else text})
 
     def fits(q: dict) -> bool:
         return len(console.body(q)) <= console.BODY_MAX
@@ -459,6 +471,44 @@ def summary(p: dict, cells: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def dry(q: dict) -> str:
+    """What `--dry` prints of the body `q`: nothing is stored and nothing PUT."""
+    body = console.body(q)
+    return (f"dry: {q['id']}: sha256 {hashlib.sha256(body).hexdigest()}, {len(body)} bytes, {len(q['rows'])} rows, note "
+            f"{len(q['note'])} characters; console.put would refuse: {console.refusal(q) or 'nothing'}; nothing stored, "
+            f"nothing PUT")
+
+
+def put_fit(path: Path, dry_run: bool) -> int:
+    """PUT a search build's console body of te_core.frontier_fit's panel as it is (module docstring); then GET the
+    panel, which must be the body. 0 where the route serves it, else 1."""
+    from te_core import frontier_fit
+
+    q = json.loads(path.read_text())
+    if q.get("id") != frontier_fit.PANEL:
+        raise SystemExit(f"plot2_final: {path} is {q.get('id')}'s body, not {frontier_fit.PANEL}'s")
+    if bad := console.refused(q):
+        raise SystemExit(f"plot2_final: the route refuses {path}: {bad}")
+    if keep := ap.kept_data(q, console.served().get(frontier_fit.PANEL)):
+        print(f"not PUT: the route serves {frontier_fit.PANEL} rows on {', '.join(keep)} priced by a newer te_core than "
+              f"{VERSION}")
+        return 1
+    if dry_run:
+        print(dry(q))
+        return 0
+    status = console.put(q)
+    print(f"{datetime.now(UTC).strftime('%H:%M:%SZ')} PUT {console.PANELS_URL}/{frontier_fit.PANEL}: {status} "
+          f"({len(q['rows'])} rows, {len(console.body(q))} bytes)")
+    if not status.startswith("2"):
+        return 1
+    back = console.served().get(frontier_fit.PANEL) or {}
+    if differ := sorted(k for k in {*q, *back} if back.get(k) != q.get(k)):
+        print(f"GET {frontier_fit.PANEL}: the route serves another panel than the body ({', '.join(differ)} differ)")
+        return 1
+    print(f"GET {frontier_fit.PANEL}: the body, {len(back['rows'])} rows, updated_at {back['updated_at']}")
+    return 0
+
+
 def main(argv=None) -> int:
     a = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = a.add_subparsers(dest="cmd", required=True)
@@ -468,7 +518,14 @@ def main(argv=None) -> int:
     b.add_argument("--out", type=Path, required=True)
     u = sub.add_parser("put")
     u.add_argument("out", type=Path)
+    u.add_argument("--note", type=Path, default=None, help=f"the note's text, {ART} where the tables' art id goes")
+    u.add_argument("--dry", action="store_true", help="store nothing and PUT nothing: what the put would send")
+    f = sub.add_parser("put-fit")
+    f.add_argument("body", type=Path, help="a search build's console/frontier-fit.json")
+    f.add_argument("--dry", action="store_true", help="PUT nothing: what the put would send")
     args = a.parse_args(argv)
+    if args.cmd == "put-fit":
+        return put_fit(args.body, args.dry)
     tables = args.out / "tables"
     if args.cmd == "build":
         fin, search = json.loads(args.finals.read_text()), json.loads(args.policy.read_text())
@@ -498,10 +555,25 @@ def main(argv=None) -> int:
     if keep := ap.kept_data(p, served.get(ap.PANEL)):
         print(f"not PUT: the route serves {ap.PANEL} rows on {', '.join(keep)} priced by a newer te_core than {VERSION}")
         return 1
+    text = " ".join(args.note.read_text().split()) if args.note else None
+    if text is not None and ART not in text:
+        raise SystemExit(f"plot2_final: {args.note} cites no stored tables: write {ART} where their art id goes")
+
+    def body(art: str) -> dict:
+        q = cut(p, cells, art, None if text is None else text.replace(ART, art))
+        if len(q["note"]) > console.NOTE_MAX or console.refused(q):
+            raise SystemExit(f"plot2_final: the route refuses the cut: note {len(q['note'])} characters of "
+                             f"{console.NOTE_MAX}; {console.refused(q)}")
+        return q
+    q = body(NO_ART)
+    if args.dry:
+        print(dry(q))
+        return 0
     art = ap.store(tables, {"what": f"{ap.PANEL}'s overlay (scorer/plot2_final.py), the finals table over a search "
                                     "table, uncut, and the finals table it read",
                             "rows": len(p["rows"]), "source": p["source"]})
-    q = cut(p, cells, art)
+    q = body(art)
+    (args.out / "console").mkdir(exist_ok=True)
     (args.out / "console" / f"{ap.NAME}.json").write_bytes(console.body(q))
     status = console.put(q)
     print(f"{datetime.now(UTC).strftime('%H:%M:%SZ')} PUT {console.PANELS_URL}/{ap.PANEL}: {status} ({art}; "

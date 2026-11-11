@@ -1,7 +1,8 @@
 """training/algorithm-policy rebuilt from the scorer's state, with runs' steps traced again, and what moved.
 
     python scorer/replot.py node --state K --inputs IN --scratch S --out OUT \\
-        [--layer NAME=CHECKOUT=TRACED ...] [--publish NAME]                       # on the scorer's node
+        [--layer NAME=CHECKOUT=TRACED ...] [--publish NAME] \\
+        [--size-scaling STEPS [--size-scaling-runs NAME=RUN,...] [--size-scaling-art ART]]   # on the scorer's node
     python scorer/replot.py check --run OUT --out FILE [--same NAME ...] [--expect LEAF ...]
     python scorer/replot.py diff --out FILE LABEL=PANEL.json LABEL=PANEL.json [...]
 
@@ -19,21 +20,27 @@ overlay's stored tables and the console's two panels as served) and the finals' 
    (trace40.py's `take`) into a trace cache under S that links K's;
 3. per build, a copy of that ledger with each rotating run's rows as te_core.ledger's ingest writes them now
    (`rotations.repriced`, from the run's record in K/state: the ledger's rows were ingested before te_core.rotations
-   named a rotation product `tf32`). Which runs rotate is read from every row's program and stored arguments, and a
-   record te_core.rotations refuses (`Unread`) keeps its rows, listed with why;
+   named a rotation product `tf32`). A row whose log already names its rotations (a layer's, ingested by a te_core
+   that names them) is that row already and is kept. Which runs rotate is read from every row's program and stored
+   arguments, and a record te_core.rotations refuses (`Unread`), or one whose rows only a view this interpreter can't
+   form would give, keeps its rows, listed with why;
 4. per build, te_core.algorithm_policy on that copy (v1cycle's POLICY_IO, the last refresh's pins, ladder fit, gate
    factors and failed traces);
 5. the finals table from its own inputs (islands/integrator/finals_table.py: the reruns' records fetched from the
    store and ingested afresh), and the overlay (plot2_final.py) of a finals table over each build's search table: the
    one the served overlay read over the control's, the rebuilt one over each layer's. The overlay of `--publish` (the
    last layer unless named) is OUT/overlay, the one to publish;
-6. each panel's rows, cell by cell, across the published tables and the builds (`compare`), under OUT/diff.
+6. each panel's rows, cell by cell, across the published tables and the builds (`compare`), under OUT/diff;
+7. with `--size-scaling`, training/size-scaling from the build of `--publish` (islands/ladder-v3/size_scaling.py
+   `build`, OUT/size-scaling): the build's search tables, its ledger's records, the rows as the tables read them
+   (te_core.rescore's formalism.jsonl on that ledger, with the build's own options) and standard training's traced
+   steps (STEPS, size_scaling.py `trace`'s directory).
 
 Every build's tables, console copies and logs go to OUT, so nothing is read back from the node.
 
 `check` reads `node`'s OUT and says whether the rebuild may be published (`verdict`): the control is the published
 search table and the served overlay in every cell; the fit, its points and the refused rows are the published ones in
-every build, and every build rewrites the same rotating rows; in a layer's build no row of a run the layer didn't trace
+every build, and every build prices the same rotating rows; in a layer's build no row of a run the layer didn't trace
 moves; a build named by `--same` (a layer traced as the published one was) is the control in every cell; and in every
 other layer's build a traced run's row moves only in the leaves `--expect` names (a column, or a path into a cell that
 holds a JSON object, `kinds/sensitivity/update`; `*` matches within a name). Every move is listed, leaf by leaf, with
@@ -244,6 +251,14 @@ def cells(was: dict, now: dict) -> dict:
             "rows_in_one_only": len(was.keys() ^ now.keys())}
 
 
+def priced_rows(rot: dict) -> dict:
+    """What a build's re-pricing (`reprice`) priced, whether it rewrote a row or found its rotations named: each
+    rotating run's rows (run@checkpoint) with their rotation MACs, and each run it left apart with the list it is in."""
+    rows = {f"{run}@{cp}": v["rotation_macs"] for run, r in rot["runs"].items()
+            for cp, v in r.get("checkpoints", {}).items()}
+    return rows | {run: why for why in ("unread", "no_record", "no_arguments", "unknown_program") for run in rot[why]}
+
+
 def verdict(OUT: Path, same: tuple[str, ...] = (), expect: tuple[str, ...] = ()) -> dict:
     """What `node`'s OUT says, as checks that each hold or name their rows (module docstring)."""
     def load(*parts: str) -> dict:
@@ -270,7 +285,13 @@ def verdict(OUT: Path, same: tuple[str, ...] = (), expect: tuple[str, ...] = ())
     lists["finals table: leaves that differ from the one the served overlay read"] = diff["finals-table"]["differ"]
     checks["the finals table rebuilt is the one the served overlay read"] = not diff["finals-table"]["differ"]
     rot = {n: load("rotations", f"{n}.json") for n in names}
-    checks["every build rewrites the same rotating rows"] = all(r == rot["control"] for r in rot.values())
+    priced = {n: priced_rows(r) for n, r in rot.items()}
+    lists["rotating rows a build prices otherwise than the control"] = {
+        n: {k: {"control": priced["control"].get(k), n: got.get(k)}
+            for k in sorted(priced["control"].keys() | got.keys()) if priced["control"].get(k) != got.get(k)}
+        for n, got in priced.items() if n != "control"}
+    checks["every build prices the same rotating rows"] = not any(
+        lists["rotating rows a build prices otherwise than the control"].values())
     shown = {k[0] for t in tabs.values() for tab in t.values() for k in tab}
     named = json.dumps([load("search", n, TABLES[4]) for n in names])
     apart = {why: sorted(rot["control"][why]) for why in ("unread", "no_record", "no_arguments", "unknown_program")}
@@ -468,9 +489,12 @@ def built(name: str, proc: subprocess.Popen, out: Path) -> dict[str, dict]:
 
 
 def reprice(measured: Path, priced: Path, K: Path) -> dict:
-    """Step 3 (module docstring): `measured`'s records under `priced`, a rotating run's rows rewritten and every other
-    file linked; what it found, per run."""
+    """Step 3 (module docstring): `measured`'s records under `priced`, a rotating run's rows rewritten, unless their
+    log names the rotations already, and every other file linked; what it found, per run."""
     from te_core import gates, rotations
+
+    def named(row: dict) -> bool:
+        return any(k.endswith(" " + rotations.TF32) for k in (row.get("macs_log") or {}).get("ops") or {})
 
     by_run: dict[str, list[Path]] = collections.defaultdict(list)
     first: dict[str, dict] = {}
@@ -507,7 +531,7 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
 
     price = gates.per_mac(f"gemm/{rotations.TF32}") - gates.per_mac("gemm/bf16")
     out = {"runs": {}, "unread": {}, "unknown_program": {}, "no_record": [], "no_arguments": [],
-           "gates_added_per_mac": price, "rewritten": []}
+           "gates_added_per_mac": price, "rewritten": [], "named": []}
     for run_id, paths in by_run.items():
         head, record, art = first[run_id], None, None
         if not head["said"]:
@@ -533,12 +557,13 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
                     steps = collections.Counter(s.get("struct") for s in record["steps"])
                     for p in paths:
                         row = json.loads(p.read_text())
-                        new[p] = (row, rotations.repriced(row, record))
+                        new[p] = (row, row if named(row) else rotations.repriced(row, record))
                     cps = {}
                     for row, now in new.values():
                         macs = sum(m for k, (_, m) in now["macs_log"]["ops"].items() if k.endswith(" " + rotations.TF32))
                         cps[str(row["checkpoint_step"])] = {"rotation_macs": macs, "gates_added": macs * price,
-                                                           "C_before": gates_of(row), "C_after": gates_of(now)}
+                                                           "C_before": None if named(row) else gates_of(row),
+                                                           "C_after": gates_of(now)}
                     out["runs"][run_id] = {
                         "rules": found, "record": f"art:{art}", "island": list(rotations.island(record)),
                         "start": (record.get("start") or {}).get("name"), "rows": len(paths),
@@ -547,6 +572,12 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
                 except rotations.Unread as e:
                     out["unread"][run_id] = str(e)
                     new = {}
+                except ModuleNotFoundError as e:
+                    if e.name != "torch":
+                        raise
+                    out["unread"][run_id] = ("no view of its record gives its rows without the starts' lookups, which "
+                                             "this interpreter, holding no torch, can't read")
+                    new = {}
         for p in paths:
             d = priced / "records" / p.parent.name / p.name
             d.parent.mkdir(parents=True, exist_ok=True)
@@ -554,6 +585,10 @@ def reprice(measured: Path, priced: Path, K: Path) -> dict:
                 d.write_text(json.dumps(new[p][1], sort_keys=True) + "\n")
                 out["rewritten"].append(str(d.relative_to(priced)))
                 n["rows rewritten"] += 1
+            elif p in new and named(new[p][0]):
+                os.link(p, d)
+                out["named"].append(str(d.relative_to(priced)))
+                n["rows named when ingested"] += 1
             else:
                 os.link(p, d)
                 n["rows linked"] += 1
@@ -567,7 +602,7 @@ def build(name: str, more: tuple[Path, ...], K: Path, S: Path, OUT: Path, meta: 
     led = measured_ledger(K, S, meta, S / name / "measured", OUT / "logs" / f"{name}-ledger.log", more)
     say(f"{name}: the measured ledger: {led['built']}")
     rot = reprice(S / name / "measured", S / name / "priced", K)
-    rot["rewritten"] = len(rot["rewritten"])
+    rot["rewritten"], rot["named"] = len(rot["rewritten"]), len(rot["named"])
     say(f"{name}: {rot['rotating_runs']} rotating runs of {rot['runs_in_ledger']}: {rot['counts']}; unread "
         f"{len(rot['unread'])}, unknown programs {len(rot['unknown_program'])}, no record {len(rot['no_record'])}, no "
         f"arguments {len(rot['no_arguments'])}")
@@ -606,6 +641,33 @@ def overlay(finals_table: Path, search: Path, out: Path, log: Path) -> dict:
     run([sys.executable, HERE / "plot2_final.py", "build", "--finals", finals_table, "--policy", search, "--out", out],
         log)
     return json.loads((out / "tables" / "algorithm-policy.json").read_text())
+
+
+def size_scaling(name: str, steps: Path, runs: str | None, art: str | None, K: Path, S: Path, OUT: Path, meta: dict,
+                 cap: Path, logs: Path) -> dict:
+    """Step 7 for the build `name`: what size_scaling.py's `build` said and how it exited (1: a row it priced isn't
+    the table's, or the route would refuse the body). Its panel and its check are in OUT/size-scaling."""
+    work, ledger = S / name / "size-scaling", S / name / "priced"
+    tables = work / "algorithm-policy" / "tables"
+    tables.mkdir(parents=True)
+    for n in TABLES[:2]:
+        shutil.copyfile(S / name / "out" / "tables" / n, tables / n)
+    rescore = work / "rescore"
+    rescore.mkdir()
+    shutil.copyfile(gate_factors(K, meta["stamp"].replace(":", "")), rescore / "analysis-gates.json")
+    run([sys.executable, "-m", "te_core.rescore", "--out", rescore, "--root", ledger, "--scorer", K / "state",
+         *(x for p in meta["pins"] for x in ("--pin", p)), "--ladder-fit", cap], logs / "size-scaling-rescore.log")
+    os.link(rescore / "formalism.jsonl", work / "formalism.jsonl")
+    r = run([sys.executable, CW / "islands" / "ladder-v3" / "size_scaling.py", "build", "--tables", work, "--ledger",
+             ledger, "--steps", steps, "--out", OUT / "size-scaling", *(("--trace-runs", runs) if runs else ()),
+             *(("--art", art) if art else ())], logs / "size-scaling.log", check=False)
+    said = (r.stdout.strip().splitlines() or [r.stderr.strip()[-600:]])[-1]
+    if not (OUT / "size-scaling" / "size-scaling.json").exists():
+        raise SystemExit(f"replot: size_scaling.py build exited {r.returncode} with no panel: {said}")
+    return {"build": name, "rc": r.returncode, "said": said,
+            "formalism_jsonl": {"bytes": (rescore / "formalism.jsonl").stat().st_size,
+                                "sha256": sha256(rescore / "formalism.jsonl")},
+            "steps": {p.name: sha256(p) for p in sorted(steps.glob("*.products.json"))}}
 
 
 def node(a) -> int:
@@ -715,6 +777,12 @@ def node(a) -> int:
           "rows_the_rebuild_adds": sorted(map(list, rebuilt - served)),
           "bytes": len((OUT / "overlay" / "console" / ap).read_bytes()), "note": now["note"],
           "rows": compare({"served": was, "rebuilt": now}, rotating)})
+    if a.size_scaling:
+        say("size-scaling")
+        panel = size_scaling(publish, a.size_scaling, a.size_scaling_runs, a.size_scaling_art, K, S, OUT, meta, cap,
+                             logs)
+        dump(OUT / "size-scaling" / "build.json", panel)
+        say(f"size-scaling: rc {panel['rc']}: {panel['said']}")
     say("done")
     return 0
 
@@ -731,6 +799,10 @@ def main(argv=None) -> int:
                    help="a build with a trace40.py node run's out/ (TRACED), traced by CHECKOUT's te_core, over the "
                         "last refresh's capture layers; repeatable")
     n.add_argument("--publish", default=None, help="the build whose overlay is OUT/overlay (default: the last layer)")
+    n.add_argument("--size-scaling", type=Path, default=None, metavar="STEPS",
+                   help="build training/size-scaling too, from the build of --publish and size_scaling.py trace's STEPS")
+    n.add_argument("--size-scaling-runs", default=None, metavar="NAME=RUN,...", help="the run that traced each size")
+    n.add_argument("--size-scaling-art", default=None, metavar="ART", help="the search tables' art id, for its source")
     c = sub.add_parser("check", help="what a rebuild moved, and whether it may be published")
     c.add_argument("--run", type=Path, required=True, help="`node`'s OUT")
     c.add_argument("--same", action="append", default=[], metavar="NAME",

@@ -16,6 +16,7 @@ python scorer.py final dispatch [--nodes N1,N2,...] [--deadline HH:MM] [--dry-ru
 python scorer.py final collect|table                   # final-set reruns (below)
 python node_loop.py init|once|loop|finish RUN          # the refresh (v1cycle.py) as a research run on a CPU node
 python plot2_final.py build --finals F --policy T --out D | put D  # algorithm-policy from the finals table (its docstring)
+python plot2_final.py put-fit BODY                     # frontier-fit: a search build's console body, as it is
 ~~~
 
 The refresh runs on a CPU node (`refresh-node.sh`, its state kept there; the agent VM only edits): `node_loop.py` on
@@ -141,3 +142,57 @@ lock, so the two never collide.
   there for a GPU slot (slot.py's `slot.json` not `held`), and nothing is launched that would end after `--deadline`
   (its record's GPU seconds plus 5 minutes). A `--smoke` launch checks
   the pipeline and never enters the table.
+
+## Rebuilding the published tables
+
+`replot.py` rebuilds training/algorithm-policy from the scorer's state on its node, with runs' steps traced again as
+layers (its docstring). `restate.py` restates a search record's tokens a step: its docstring says what a record
+states, what reads it and the rule. `correct.sh` is the one command that rebuilds the tables from the stored records
+with every restated record traced again; it runs as a research run's workload on the scorer's node with its inputs
+sent beside it (its header lists them), and publishes nothing:
+
+~~~text
+research run --pool research --on NODE --mem-gb 128 --send scorer/correct.sh --send scorer/restate.py \
+    --send scorer/restate.json --send scorer/replot.py --send scorer/trace40.py --send replot.bundle \
+    --send replot-code.tar --send replot-inputs.tar --send layers.tar --send meta.json \
+    -- bash -c 'TE=COMMIT exec bash "$RESEARCH_RUN_DIR/inputs/correct.sh"'
+~~~
+
+With `SIZE_SCALING=1` each build makes training/size-scaling from its own tables too (`correct.sh`'s header). The
+rebuilt panels are PUT from the agent VM, one command a panel, in `benchmarks/covert_witness`. Each takes `--dry`,
+which stores nothing and PUTs nothing: it prints the body's sha256, bytes, rows and note length, and what
+te_core.console's `put` would refuse it for.
+
+~~~text
+python scorer/plot2_final.py put DIR [--note FILE]        # training/algorithm-policy: DIR/tables, the overlay's
+python scorer/plot2_final.py put-fit BODY                 # training/frontier-fit: the search build's console body
+python islands/standard-workloads/standard_workloads.py --put BODY --served FILE
+python islands/ladder-v3/size_scaling.py put FILE
+~~~
+
+The rules a rebuild follows:
+
+- **A step's tokens.** A step structure whose steps each read one value of every weight, and that has a head forward,
+  states its own head forwards x rows; every other structure keeps the run's factor, the tokens the traced step
+  consumed over the count its record states. The case left at the factor is a step that reads two values of a weight,
+  the validation after the update: the factor counts its batch and its validation windows once each, where forwards x
+  rows would count the windows once per weight value they were read at.
+- **What a build is compared with.** A corrected or as-if build is compared with the published layer's rebuild
+  (`correct.sh`'s `fixed`), never with replot.py's control. The control is the state as the last refresh left it, and
+  the published layer already moves rows against it, so a comparison with the control counts those rows as the
+  build's.
+- **One layer of a te_core tree a state.** Layers traced by one te_core tree share a trace cache's name, so each build
+  is a `replot.py node` on a scratch state of its own.
+- **A run whose restated record does not trace** keeps its record as it is and the published trace of it; `correct.sh`
+  lists those runs. A record whose step takes longer to trace than `TRACE_TIMEOUT` gets a run of its own with the
+  timeout raised, where `LEAVE` names the restated runs that run does not trace and `TRACED` names the out/ of the
+  earlier runs, whose traces are laid over rather than made again. A run `LEAVE` names is kept as one that did not
+  trace.
+- **A run stays under the memory it declares.** `MEM_GB` is what the run declared (`--mem-gb`): the job stops itself
+  when its processes hold that much. Every run writes the most they held (`memory-peak-gb.txt`), which the next
+  declaration is made from.
+
+The standard-workloads panel reads two of the search's records through its own stored traces. Its builder takes the
+plan `correct.sh` wrote and reads those runs restated, each stored trace against the restated count of its step
+(`islands/standard-workloads/standard_workloads.py --out DIR --base REV --restated PLAN.json`, its docstring); a
+build without `--restated` beside it is what the correction is compared with.
