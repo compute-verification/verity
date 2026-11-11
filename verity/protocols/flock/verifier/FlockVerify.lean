@@ -925,7 +925,8 @@ plain multi-table claims cover; the check is the one without `--registered F` (`
 public file is refused. Without it a plain session has at most one table. Not with `--zk`.
 With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts.
 `readers` gives the program's digest and readings from the bytes `--program` names (`ProgramRead.Readers`), and is all the
-call takes besides its arguments: `verify` reads its own program once (`verifyCmd`). -/
+call takes besides its arguments: `verify` reads its own program once (`verifyCmd`), and a member of `verify-members`
+reads through the kept program's readers (`verifyMember`), which are the same functions (`verifyMember_eq`). -/
 def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List String) (upstream : Option Lean.Json := none) :
     IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
@@ -1201,6 +1202,30 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List Strin
 /-- `verify`: `verifyCmdBy` reading its own program, once a call (`ProgramRead.of`). -/
 def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 :=
   verifyCmdBy (fun program => (ProgramRead.of program).readers) args upstream
+
+/-- One member of `verify-members`: `verify` on the member's argument list `args`, its program read through `kept`'s
+readers. It takes the kept program and that member's arguments and nothing else: no other member's arguments, files,
+sessions, coins, tables, registered reads or verdict reach it, and all it reads of `kept` is `kept.readers`, which
+compare the member's own program bytes with `kept`'s and return on them what the readers anew return. -/
+def verifyMember (kept : ProgramRead) (args : List String) : IO UInt32 := verifyCmdBy (fun _ => kept.readers) args
+
+/-- **A member's check is `verify`**: whatever program is kept, `verifyMember` on a member's arguments is `verifyCmd` on
+them, the same action: the same files read, the same lines printed, the same exit status. -/
+theorem verifyMember_eq (kept : ByteArray) : verifyMember (ProgramRead.of kept) = fun args => verifyCmd args := by
+  have h : (fun _ : ByteArray => (ProgramRead.of kept).readers) = fun program => (ProgramRead.of program).readers :=
+    funext fun program => (ProgramRead.readers_of kept).trans (ProgramRead.readers_of program).symm
+  funext args
+  exact congrArg (fun readers => verifyCmdBy readers args) h
+
+/-- `verify-members [--archive DIR] --program F`, the members' argument lists on standard input (`Flock.VerifyMembers`):
+`verify` for each member of a run in turn, the run's registered program `F` read once, as `verify` reads its own
+(`programInput`), and kept for every member (`verifyMember`). Exit 2 before any member when `F` is not given or cannot
+be read. -/
+def verifyMembersCmd (args : List String) : IO UInt32 := do
+  match ← programInput args with
+  | .ok (some program) => VerifyMembers.run (verifyMember (ProgramRead.of program))
+  | .ok none => IO.eprintln VerifyMembers.USAGE; return 2
+  | .error e => IO.eprintln e; return 2
 
 /-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
 (`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
@@ -1938,6 +1963,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "verify-members" :: rest => verifyMembersCmd rest
   | "agree" :: rest => agreeCmd rest
   | "ks-form" :: rest => ksFormCmd rest
   | "rec-inner" :: rest => recInnerCmd rest

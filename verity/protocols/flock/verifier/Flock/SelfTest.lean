@@ -5,7 +5,7 @@ public import Flock.Bytes
 public import Flock.Comp
 
 /-!
-`flock-verify`'s tests on vector files, each a command of its own (`field-test`, `hash-test`, `comp-check`): the field's
+The verifier's tests on vector files, each a command of its own (`field-test`, `hash-test`, `comp-check`): the field's
 product and inverse, the hashes, and the pinned compression circuit's load. No check of a session reads them.
 -/
 
