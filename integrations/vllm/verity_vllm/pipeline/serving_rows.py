@@ -291,7 +291,8 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
 
 def unit_member(t: str, n: int, base: int = 0, name: str = "", table_reads: bool = False) -> CS.Member:
     """``n`` units of template ``t`` from unit ``base`` on bit rows, as Flock's `UnitStager` stages a unit: its
-    `chunk_rows.unit_rows` (under ``table_reads``) in and out."""
+    `chunk_rows.unit_rows` in, its outputs' v2 rows out (under ``table_reads``, a history table row's output row-seg:
+    `chunk_rows.TABLE_ROWS`)."""
     in_rows, out_rows = CR.unit_rows(template(t), table_reads)
     outs = (("o0", 1),) if template(t).layout == "s8" else IF.layout(template(t).fn).outs
     schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, s) for (p, _w), (s, _ps) in zip(outs, out_rows, strict=True))
@@ -313,10 +314,6 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
         _rid, _pi, r, d = rs[0]
         layout = template(t).layout
         n = sum(row_units(t, x[3]) for x in rs) if layout != "gemm" else 0
-        if table_reads and spec_base(template(t).word) in CR.TABLE_ROWS and not chunked(t, caps):
-            raise ValueError(f"{t}: under dsa_table_reads its output rows are its history table's row-seg rows, which only a "
-                             f"bit-row member commits: name it in the partition file's chunk_cap, at "
-                             f"chunk_rows.chunk_cap(template, table_reads=True)")
         if chunked(t, caps):
             cap = (caps or {}).get(t)
             if not isinstance(cap, int) or cap < 1:
@@ -327,6 +324,10 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             out += [unit_member(t, min(cap, n - lo), base + lo, f"{t}/c{j}", table_reads) for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
+        if table_reads and spec_base(template(t).word) in CR.TABLE_ROWS:
+            raise ValueError(f"{t}: under dsa_table_reads its output rows are its history table's row-seg rows, which only a "
+                             f"bit-row member commits: chunk it in the partition file, at the size chunk_rows gives it with "
+                             f"table_reads=True")
         if layout == "rope":
             D = int(d["statics"]["D"])
             m = CS.Member(t, (("x", D), ("cs", D)), (("out", D),), n, base)
