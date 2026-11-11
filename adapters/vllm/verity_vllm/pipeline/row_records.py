@@ -17,6 +17,7 @@ from typing import Any
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.target_family import declared_profile
 
 
 def read_json(path: str) -> Any:
@@ -73,7 +74,6 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
     """The row's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none: the workload's, over
     the device-class profile of ``row``'s id (`target_family.declared_profile`); ``protocols`` (the row's set,
     `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
-    from verity_vllm.target_family import declared_profile
     t = declared_profile(row, read_json(wl)) or None
     if protocols:
         t = {**(t or {}), "protocols": list(protocols)}
