@@ -6,7 +6,8 @@
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity ci ls [--hours H]        recent check runs, running and ended, from their live records on the store (check/live.py)
     verity ci inspect RUN           a check's steps: state, elapsed, an ETA from each step's recorded median, and its reds so far
-    verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
+    verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh), or a calculator's that lives beside
+                                    its protocol (`BENCH_ELSEWHERE`)
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
@@ -45,6 +46,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
+#: the runners `verity bench NAME` reaches outside `benchmarks/`, each by its directory from the root: a calculator that
+#: lives beside the protocol it prices, and keeps the command its documents give
+BENCH_ELSEWHERE = {"rho": "verity/protocols/inference_only/rho"}
 USAGE = "verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]"
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
@@ -60,15 +64,16 @@ def _check(args: list[str]) -> int:
     return _run([sys.executable, str(HERE / "check" / "check.py"), *args])
 
 
-def _runner(top: str, command: str, args: list[str]) -> int:
-    """Run ``top/NAME``'s run.py or run.sh with the rest of ``args``."""
-    here = ROOT / top
-    names = sorted(p.name for p in here.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))) if here.is_dir() else []
+def _runner(top: str, command: str, args: list[str], elsewhere: dict[str, str] | None = None) -> int:
+    """Run ``top/NAME``'s run.py or run.sh with the rest of ``args``; a NAME of ``elsewhere`` is that directory's."""
+    here, elsewhere = ROOT / top, elsewhere or {}
+    found = [p.name for p in here.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))] if here.is_dir() else []
+    names = sorted({*found, *elsewhere})
     if args:
         args = [args[0].replace("-", "_"), *args[1:]]
     if not args or args[0] not in names:
         raise SystemExit(f"verity {command} NAME [ARGS] (a - in NAME is a _): NAME is one of " + (", ".join(names) or "none"))
-    d = here / args[0]
+    d = ROOT / elsewhere[args[0]] if args[0] in elsewhere else here / args[0]
     for runner, argv in (("run.py", [sys.executable]), ("run.sh", ["bash"])):
         if (d / runner).exists():
             return _run([*argv, str(d / runner), *args[1:]])
@@ -237,7 +242,7 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] == "ci":
         return _run([sys.executable, str(HERE / "check" / "live.py"), *args[1:]])
     if args[0] == "bench":
-        return _runner("benchmarks", "bench", args[1:])
+        return _runner("benchmarks", "bench", args[1:], BENCH_ELSEWHERE)
     if args[0] == "tasks":
         return _run([sys.executable, str(HERE / "check" / "tasks.py"), *args[1:]])
     if args[0] == "graph":

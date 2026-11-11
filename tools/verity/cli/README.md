@@ -9,7 +9,7 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity check tests\|circuits\|lean` | only those parts of it, with the jobs `check/ci.toml` puts in each |
 | `verity check --record [ARGS]` | the check of a clean commit, recorded as an Attempt |
 | `verity check move BASE HEAD` | the certificate that BASE..HEAD is a pure move (`check/move_check.py`) |
-| `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
+| `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh`; for a NAME of `BENCH_ELSEWHERE`, the runner of the directory it names (the slowdown calculator, beside its protocol) |
 | `verity demo NAME [ARGS]` | `demos/<NAME>/`'s command: `verity run` on its `config.toml`, else its runner |
 | `verity demo --status` | every demo's place on its two axes, how far it runs and how far its guarantee is proved, and what each next step needs |
 | `verity run CONFIG` | the parties a deployment configuration places on this machine, and its verdict |
