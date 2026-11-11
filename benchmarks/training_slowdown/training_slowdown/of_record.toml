@@ -3,6 +3,12 @@
 #
 # An entry: `run` is the run, `art` the store artifact holding its record, `path` the record's file there and `sha256`
 # that file's.
+#
+# `record_only`, where an entry has it, lists the lines of the record's own program that the route rightly does not
+# compute, each a table `[[held."ENTRY".record_only]]`: `phase`, `kind`, `op`, `shapes`, `count` and `macs` as the
+# command prints the line among the record's step's alone, and `why` the route does not compute it. The command prints
+# such a line as named and counts the entry equal; a line named here that the record's step does not have alone is a
+# difference.
 
 [held."s-t20-1.1x-ref-optim-fullmuon-758"]
 run = "r20261103-151852-c62c"

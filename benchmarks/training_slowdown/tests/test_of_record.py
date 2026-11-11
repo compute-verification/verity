@@ -139,7 +139,73 @@ def test_every_held_entry_is_an_entry_of_the_library_with_its_record_named():
     runs = of_record.held()
     assert set(runs) <= {p.stem for p in library.entries()}
     for h in runs.values():
-        assert set(h) == {"run", "art", "path", "sha256"} and len(h["sha256"]) == 64 and h["art"].startswith("art:")
+        assert set(h) - {"record_only"} == {"run", "art", "path", "sha256"}
+        assert len(h["sha256"]) == 64 and h["art"].startswith("art:")
+        assert all(set(line) == {"phase", "kind", "op", "shapes", "count", "macs", "why"}
+                   for line in h.get("record_only", []))
+
+
+#: a line of a record's own program: a scale times a multiplier, scalars both
+SCALE = {"phase": "fwd", "kind": "act", "op": "mul", "shapes": [[], []], "count": 3, "macs": 3,
+         "why": "its multiplier is 1"}
+
+
+def test_a_line_the_entry_names_is_the_records_alone_and_one_the_record_lacks_is_a_difference():
+    record = log(*BOTH, ("fwd", "act", "mul", [[], []], 3, 3))
+    got = of_record.compare(step(log(*BOTH)), step(record), SHAPE, [SCALE])
+    assert got["differences"] == [] and got["expected"] == [] and got["products"] == 2
+    assert got["named"] == [{"line": "fwd/act mul [[] x2] x3, 3 MACs", "why": "its multiplier is 1"}]
+    # unnamed, the line is a difference; named with another count, or where the config computes it too, the name is
+    assert of_record.compare(step(log(*BOTH)), step(record), SHAPE)["differences"] == [
+        "log, the record's step only: fwd/act mul [[] x2] x3, 3 MACs"]
+    stale = "of_record.toml names a line that is not the record's step's alone: fwd/act mul [[] x2] x"
+    got = of_record.compare(step(log(*BOTH)), step(record), SHAPE, [SCALE | {"count": 2, "macs": 2}])
+    assert got["named"] == [] and got["differences"] == [
+        stale + "2, 2 MACs", "log, the record's step only: fwd/act mul [[] x2] x3, 3 MACs"]
+    got = of_record.compare(step(record), step(record), SHAPE, [SCALE])
+    assert got["named"] == [] and got["differences"] == [stale + "3, 3 MACs"] and got["products"] == 3
+
+
+def count(*more, updated=((D * D, D),), macs=None) -> dict:
+    """A config's counted record made up here: every step of one structure, `BOTH` and `more` its log."""
+    entries = (*BOTH, *more)
+    struct = {"updated": [[p, u, CTX * p, CTX, 16] for p, u in updated],
+              "log": [[*e[:3], json.dumps(e[3]), *e[4:]] for e in entries]}
+    total = sum(e[5] for e in entries) if macs is None else macs
+    return {"invalid": [], "trace": {"data_dependent": [], "carried_scalars": []}, "checkpoints": [{"e_bytes": 10}],
+            "steps": [{"struct": "s", "macs": total}] * of_record.STEPS, "structures": {"s": struct}}
+
+
+def test_the_position_tables_are_expected_where_the_two_counts_differ_in_the_weights_kind_alone(tmp_path, monkeypatch):
+    """The harness's rule on counts made up here: the harness's own count has a product with a table as an updated
+    weight's and more uses; the count as the records' harness took it has that product as θ's."""
+    cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
+    rope = [[1, 2, CTX, 4], [CTX, 4]]
+    own = count(("fwd", "updated", "mul", rope, 8, 8 * CTX * 8), updated=((D * D, D), (8, 0), (8, D)))
+    as_recorded = count(("fwd", "theta", "mul", rope, 8, 8 * CTX * 8))
+    asked = []
+
+    def counted(cfg, rows, out, harness, trace):
+        asked.append((rows, out, harness, trace))
+        return as_recorded
+
+    monkeypatch.setattr(of_record, "counted", counted)
+    again, found, differences = of_record.tables(cfg, 1, tmp_path / "a", own)
+    assert again is as_recorded and differences == []
+    assert asked == [(1, tmp_path / "a" / "tables", of_record.AsRecorded, own["trace"])]
+    assert found["rule"] == "tables" and (
+        "8 of the forward's products (65,536 MACs a step at one row a forward) are an updated weight's in the "
+        "harness's own count and θ's here, and its own count has 3 uses of an updated weight for these 1; the step's "
+        "MACs are 2,162,688 on both counts") in found["what"]
+    # counts that agree: nothing to name; counts that differ in another product, or in the step's MACs: a difference
+    assert of_record.tables(cfg, 1, tmp_path / "a", as_recorded) == (as_recorded, None, [])
+    for other in (count(("fwd", "act", "mul", rope, 8, 8 * CTX * 8)),
+                  count(("fwd", "updated", "mul", rope, 8, 8 * CTX * 8), macs=1)):
+        again, found, differences = of_record.tables(cfg, 1, tmp_path / "a", other)
+        assert found is None and len(differences) == 1 and differences[0].startswith(
+            "the position tables: the harness's own count and the count with them checked like θ's weights differ in "
+            "more than which of the forward's products are an updated weight's (the step's MACs: ")
+    assert of_record.HARNESS == (of_record.tables,)
 
 
 def as_cuda(struct: dict, rows: int, gains: int) -> dict:
@@ -163,30 +229,34 @@ def as_cuda(struct: dict, rows: int, gains: int) -> dict:
     return {"updated": [[*u[:4], 16] for u in struct["updated"]], "log": out}
 
 
-def held_to(root, entry: str, rec: dict):
-    """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it."""
+def held_to(root, entry: str, rec: dict, record_only=()):
+    """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it and the
+    lines `record_only` of its program."""
     run, path = "r-made-up", "out/run/run.json"
     (root / "records" / run / "out" / "run").mkdir(parents=True)
     raw = json.dumps(rec).encode()
     (root / "records" / run / path).write_bytes(raw)
+    lines = "".join(f'[[held."{entry}".record_only]]\n' + "".join(f"{k} = {json.dumps(v)}\n" for k, v in line.items())
+                    for line in record_only)
     (root / "held.toml").write_text(f'[held."{entry}"]\nrun = "{run}"\nart = "art:{"0" * 64}"\npath = "{path}"\n'
-                                    f'sha256 = "{hashlib.sha256(raw).hexdigest()}"\n')
+                                    f'sha256 = "{hashlib.sha256(raw).hexdigest()}"\n{lines}')
     return root / "records", root / "held.toml"
 
 
 @pytest.mark.slow
 def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp_path, capsys):
-    """A made-up run of record: the config's own counted step at two rows a forward, written as CUDA's counter
-    writes it. The command divides its rows out, counts the config at one row a forward and names the four expected
-    differences; a config that trains another set, beside a record of another start and length, differs and exits 1.
-    It counts and traces three steps, so slow; what the rules' own tests can't show is that a route's real step
-    produces the entries each rule names and that the command reads a record the way a job writes one."""
+    """A made-up run of record: the config's own counted step at two rows a forward, counted as the records' harness
+    counted and written as CUDA's counter writes it. The command divides its rows out, counts the config at one row a
+    forward and names the five expected differences; a config that trains another set, beside a record of another
+    start and length, differs and exits 1. It counts and traces a route's steps, so slow; what the rules' own tests
+    can't show is that a route's real step produces the entries each rule names and that the command reads a record
+    the way a job writes one."""
     reg = tiny_registry(tmp_path / "reg")
     budget, dials = {"steps": 3, "batch": 4}, {"trainable": "blocks.*,norm", "opt": "muon", "lr": 1e-2,
                                                "micro_batches": 2}
     path = write_config(tmp_path / "a.toml", budget=budget, dials=dials)
     cfg = config.load(path, starts.registry(reg))
-    cpu = of_record.counted(cfg, 1, tmp_path / "count")
+    cpu = of_record.counted(cfg, 1, tmp_path / "count", of_record.AsRecorded)
     assert cpu["invalid"] == [] and cpu["checkpoints"][-1]["step"] == 1
     first, second = cpu["steps"]
     tables = [kind for _, kind, op, shapes, *_ in cpu["structures"][second["struct"]]["log"]
@@ -199,14 +269,18 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     argv = ["--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main([str(path), *argv, "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 4 expected differences\n")
-    for rule in ("width: ", "attention: ", "norm: ", "adamw: "):
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 5 expected differences\n")
+    for rule in ("tables: ", "width: ", "attention: ", "norm: ", "adamw: "):
         assert f"  expected  {rule}" in out
+    assert "are an updated weight's in the harness's own count and θ's here" in out
     assert "2 forwards of one row" in out and "2 of its 3 steps have, 2 rows a forward divided out" in out
     assert "DIFFERS" not in out and out.rstrip().endswith(of_record.FAIR) and "1 entry: 1 equal, 0 differ" in out
     kept = json.loads((tmp_path / "out" / "of_record.json").read_text())
     assert kept["schema"] == of_record.SCHEMA and kept["rows"][0]["differences"] == []
-    assert json.loads((tmp_path / "out" / "a" / "run.json").read_text())["trace"]["tokens"] == 4 * CTX
+    own, compared = (json.loads((tmp_path / "out" / "a" / at / "run.json").read_text()) for at in ("", "tables"))
+    assert own["trace"] == compared["trace"] and own["trace"]["tokens"] == 4 * CTX
+    own, compared = own["steps"][1], compared["steps"][1]
+    assert own["macs"] == compared["macs"] and own["by"] != compared["by"]
 
     other = write_config(tmp_path / "b" / "a.toml", budget=budget, dials=dials | {"trainable": "blocks.*"})
     rec["start_record"]["digest"] = "e" * 64
@@ -221,21 +295,15 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
 
 
 def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):
-    """The command on a count made up here, so no step is counted: a step equal to its record's exits 0; a product
-    the record lacks, which no rule names, is printed as a difference and exits 1; so does a step the capture
-    refused, which is compared with nothing."""
+    """The command on a count made up here, so no step is counted: a step equal to its record's exits 0, and so does
+    one whose record has a line more that the data file names; a product the record lacks, which no rule names, is
+    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing."""
     reg = tiny_registry(tmp_path / "reg")
     path = write_config(tmp_path / "a.toml")
     cfg = config.load(path, starts.registry(reg))
-
-    def struct(*more) -> dict:
-        return {"updated": [[D * D, D, CTX * D * D, CTX, 16]],
-                "log": [[*e[:3], json.dumps(e[3]), *e[4:]] for e in (*BOTH, *more)]}
-
-    count = {"invalid": [], "trace": {"data_dependent": [], "carried_scalars": []}, "checkpoints": [{"e_bytes": 10}],
-             "steps": [{"struct": "s"}] * of_record.STEPS, "structures": {"s": struct()}}
-    monkeypatch.setattr(of_record, "counted", lambda cfg, rows, out: count)
-    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": {"s": struct()},
+    mine = count()
+    monkeypatch.setattr(of_record, "counted", lambda *a: mine)
+    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": dict(mine["structures"]),
            "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
     records, held = held_to(tmp_path, "a", rec)
     argv = [str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]
@@ -247,14 +315,23 @@ def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path,
     assert "  updated   1 of the record's 1 uses" in out and "  log       2 of the record's 2 products" in out
     assert "  E         identity, 10 B after 2 steps; the record's full, 20 B after 3" in out
 
-    count["structures"]["s"] = struct(("fwd", "act", "matmul", [[CTX, D], [D, D]], 1, CTX * D * D))
+    scaled = rec | {"structures": count(("fwd", "act", "mul", [[], []], 3, 3))["structures"]}
+    records, named = held_to(tmp_path / "named", "a", scaled, [SCALE])
+    assert of_record.main([str(path), "--records", str(records), "--held", str(named), "--starts", str(reg)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 1 named line of the record's program "
+                          "alone\n") and "DIFFERS" not in out and "1 entry: 1 equal, 0 differ, 0 refused." in out
+    assert ("  named     the record's step only: fwd/act mul [[] x2] x3, 3 MACs; of_record.toml names it: its "
+            "multiplier is 1\n") in out and "  log       2 of the record's 3 products" in out
+
+    mine["structures"] = count(("fwd", "act", "matmul", [[CTX, D], [D, D]], 1, CTX * D * D))["structures"]
     assert of_record.main(argv) == 1
     out = capsys.readouterr().out
     assert out.startswith("a, held to r-made-up (out/run/run.json): differs, 1 difference\n")
     assert "  DIFFERS   log, the config's step only: fwd/act matmul [[1024,16], [16,16]] x1, 262,144 MACs" in out
     assert "1 entry: 0 equal, 1 differ, 0 refused." in out
 
-    count["trace"] = {"refused": {"reason": "dynamic_control_flow", "op": "aten.item", "message": "why"}}
+    mine["trace"] = {"refused": {"reason": "dynamic_control_flow", "op": "aten.item", "message": "why"}}
     assert of_record.main(argv) == 1
     out = capsys.readouterr().out
     assert out.startswith("a, held to r-made-up (out/run/run.json): refused: the capture refused the step")

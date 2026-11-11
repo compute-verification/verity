@@ -26,12 +26,20 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
 - **Expected differences.** A CPU count differs from a CUDA record in ways that are the device's, each named by a
   rule that fires only on its own exact case (`width`, `RULES`); the output names each one that fired with the MACs
   on both sides. Anything else is printed as a difference, and the command exits 1.
-- **The position tables.** The records' harness checked the model's buffers that θ doesn't hold, the position
-  tables, like θ's weights, so a product with one is θ's. The config's step is counted the same way (`AsRecorded`).
+- **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
+  model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
+  `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
+  harness did, and that count is the one compared; the output says how many products and uses that moves and that
+  the step's MACs are the same on both counts.
+- **A line of the record's own program.** A product the record's program computes and a route rightly doesn't (a
+  logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line as the
+  command prints it, and why), and it is printed as named and taken out of the differences. A named line that is
+  not the record's step's alone is a difference.
 - **The encoding.** The config's plan must be of the record's kind (`E_KINDS`: the record's `format` beside the
   codecs of that kind); E's size after the counted steps is printed beside the record's last checkpoint's.
 
-`--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
+`--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted records: the harness's own count
+(`DIR/ENTRY/run.json`) and the count compared (`DIR/ENTRY/tables/run.json`).
 """
 from __future__ import annotations
 
@@ -61,8 +69,8 @@ STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
         "traced the step as one fixed graph that reads no value back, so it is the step a job of the config takes on "
-        "the start's weights and data. An expected difference is the device's, named by a rule that fires on its "
-        "exact case alone. Not held: the weights, E's bytes and the loss, which only a run has.")
+        "the start's weights and data. An expected difference is the device's or the harness's, named by a rule "
+        "that fires on its exact case alone. Not held: the weights, E's bytes and the loss, which only a run has.")
 #: CUDA's attention kernels beside the CPU's, which the counter prices alike (`flops.FLOP_FORMULAS`)
 ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_attention_for_cpu",
              "_scaled_dot_product_flash_attention_backward": "_scaled_dot_product_flash_attention_for_cpu_backward"}
@@ -73,7 +81,8 @@ UNFUSED_ADAMW = (("lerp_", 2), ("mul_", 1), ("addcmul_", 3), ("div", 1), ("addcd
 
 
 def held(path: Path = HELD) -> dict:
-    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`."""
+    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`, and where its record's program
+    computes lines the route rightly doesn't, `"record_only"`, those lines (`named`)."""
     return tomllib.loads(Path(path).read_text())["held"]
 
 
@@ -262,10 +271,28 @@ def _entry(key: tuple, value: list) -> str:
     return f"{key[0]}/{key[1]} {key[2]} {_shapes(key[3])} x{value[0]}, {value[1]:,} MACs"
 
 
-def compare(mine: dict, theirs: dict, shape: dict) -> dict:
+def named(lines: list[dict], rec: dict) -> tuple[list[dict], list[str]]:
+    """The lines of the record's own program that its entry of `of_record.toml` names (`record_only`), out of the
+    record's unequal entries `rec`: products the route rightly doesn't compute, each `phase`, `kind`, `op`, `shapes`,
+    `count` and `macs` as the command prints the line, and `why`. No rule in code knows them. A named line that is
+    not there as named is a difference, so a name outlives neither its line nor a route that computes it."""
+    found, differences = [], []
+    for line in lines:
+        key = (line["phase"], line["kind"], line["op"], json.dumps(line["shapes"]))
+        value = [line["count"], line["macs"]]
+        if rec.get(key) == value:
+            del rec[key]
+            found.append({"line": _entry(key, value), "why": line["why"]})
+        else:
+            differences.append(f"{HELD.name} names a line that is not the record's step's alone: {_entry(key, value)}")
+    return found, differences
+
+
+def compare(mine: dict, theirs: dict, shape: dict, lines=()) -> dict:
     """The config's step (`mine`) beside the record's (`theirs`), each `per_row`'s: how many `uses` of an updated
     weight and `products` of the log are equal, the `expected` differences (`width`, `RULES`: each with what it
-    covers and the MACs on each side) and the `differences`, everything else."""
+    covers and the MACs on each side), the `named` lines of the record's own program (`lines`: the entry's
+    `record_only`) and the `differences`, everything else."""
     wide, differences = width(mine["updated"], theirs["updated"])
     cfg, rec = dict(mine["log"]), dict(theirs["log"])
     same = [k for k in cfg if rec.get(k) == cfg[k]]
@@ -273,6 +300,8 @@ def compare(mine: dict, theirs: dict, shape: dict) -> dict:
         del cfg[k], rec[k]
     expected = [wide] if wide else []
     expected += [found for rule in RULES if (found := rule(cfg, rec, shape))]
+    only, unnamed = named(lines, rec)
+    differences += unnamed
     for k in sorted(set(cfg) | set(rec)):
         if k in cfg and k in rec:
             differences.append(f"log, unequal: {_entry(k, cfg[k])} in the config's step, x{rec[k][0]}, "
@@ -281,7 +310,7 @@ def compare(mine: dict, theirs: dict, shape: dict) -> dict:
             differences.append(f"log, the {'config' if k in cfg else 'record'}'s step only: "
                                f"{_entry(k, (cfg if k in cfg else rec)[k])}")
     return {"uses": len(mine["updated"]) if not differences or not differences[0].startswith("updated") else 0,
-            "products": len(same), "expected": expected, "differences": differences}
+            "products": len(same), "expected": expected, "named": only, "differences": differences}
 
 
 # -- the config's counted step
@@ -300,9 +329,8 @@ class Tokens:
 
 
 class AsRecorded(run.Harness):
-    """The harness as the records' was: a buffer of the model that θ doesn't hold (the position tables) is checked
-    like θ's weights, so a product with one is θ's. `run.Harness` names θ's weights alone, and its counter then takes
-    such a buffer for a weight the route made."""
+    """The harness as the records' was (`tables`): a buffer of the model that θ doesn't hold is checked like θ's
+    weights, so a product with one is θ's."""
 
     def register(self, model: torch.nn.Module) -> torch.nn.Module:
         tables = {k: b for k, b in model.named_buffers() if k not in self.theta}
@@ -313,17 +341,62 @@ class AsRecorded(run.Harness):
         return model
 
 
-def counted(cfg: config.Config, rows: int, out: Path) -> dict:
-    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train`, with the job's trace), θ the
-    model's own initialisation and the stream `Tokens` at the record's `rows` a forward. Written to `out/run.json`."""
+def counted(cfg: config.Config, rows: int, out: Path, harness=run.Harness, trace: dict | None = None) -> dict:
+    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train` under `harness`, with the job's
+    trace, taken here unless `trace` is given), θ the model's own initialisation and the stream `Tokens` at the
+    record's `rows` a forward. Written to `out/run.json`."""
     route, shape = config.route(cfg.route), cfg.start.shape
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(shape).state_dict().items()}
-    te = AsRecorded(theta, out, start={"shape": dict(shape)}, digests=False)
+    te = harness(theta, out, start={"shape": dict(shape)}, digests=False)
     with te.counter:
         model, optimizers = route.build(shape, cfg.dials)
         run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=STEPS)
-    return te.finish({"trace": run.trace_step(cfg, route, model, optimizers, "cpu")})
+    return te.finish({"trace": trace or run.trace_step(cfg, route, model, optimizers, "cpu")})
+
+
+def _weights_as_one(log: dict) -> dict:
+    """A step's log with the forward's products of an updated weight and of θ's as one kind."""
+    out: dict[tuple, list] = {}
+    for (phase, kind, op, shapes), (count, macs) in log.items():
+        e = out.setdefault((phase, "weight" if (phase, kind) in (("fwd", "updated"), ("fwd", "theta")) else kind, op,
+                            shapes), [0, 0])
+        e[0] += count
+        e[1] += macs
+    return out
+
+
+def tables(cfg: config.Config, rows: int, out: Path, own: dict) -> tuple[dict, dict | None, list[str]]:
+    """The position tables. `run.Harness` names θ's weights alone, so its counter takes a buffer of the model that θ
+    doesn't hold for a weight the route made, and a product with one for an updated weight's; the records' harness
+    checked such a buffer like θ's weights, so in a record that product is θ's. Counts the step again as the records'
+    harness did (`AsRecorded`, into `out/tables`): the count the comparison then reads, the expected difference if it
+    fired, and the differences. Fires when the two counts differ. Its exact case: they differ in the forward's
+    products alone, some an updated weight's in the harness's own count (`own`) that are θ's in the other, the same
+    op, shapes, count and MACs over the two kinds together, so the step's MACs are equal."""
+    again = counted(cfg, rows, out / "tables", AsRecorded, own["trace"])
+    a, b = (per_row(c["structures"][c["steps"][STEPS - 1]["struct"]], cfg.start.shape["ctx"]) for c in (own, again))
+    if a == b:
+        return again, None, []
+    macs = [c["steps"][STEPS - 1]["macs"] for c in (own, again)]
+    if _weights_as_one(a["log"]) != _weights_as_one(b["log"]) or macs[0] != macs[1]:
+        return again, None, [
+            "the position tables: the harness's own count and the count with them checked like θ's weights differ "
+            f"in more than which of the forward's products are an updated weight's (the step's MACs: {macs[0]:,} "
+            f"and {macs[1]:,})"]
+    moved = [(v[0] - b["log"].get(k, [0, 0])[0], v[1] - b["log"].get(k, [0, 0])[1])
+             for k, v in a["log"].items() if k[:2] == ("fwd", "updated") and b["log"].get(k) != v]
+    return again, {"rule": "tables", "what": (
+        "the model's position tables checked like θ's weights, as the records' harness checked them, where the "
+        f"harness takes them for weights the route made: {sum(n for n, _ in moved):,} of the forward's products "
+        f"({sum(m for _, m in moved):,} MACs a step at one row a forward) are an updated weight's in the harness's own "
+        f"count and θ's here, and its own count has {len(a['updated'])} uses of an updated weight for these "
+        f"{len(b['updated'])}; the step's MACs are {macs[0]:,} on both counts")}, []
+
+
+#: what `run.Harness` counts otherwise than the records' harness did. Each entry counts the config's step again as
+#: theirs did, and the comparison reads that count; an entry goes when `run.Harness` counts its case as the records do
+HARNESS = (tables,)
 
 
 def refusal(rec: dict) -> str | None:
@@ -342,9 +415,11 @@ def refusal(rec: dict) -> str | None:
 
 def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     """An entry beside its run of record `rec`: `facts` (what was read, as printed), the `expected` differences, the
-    `differences`, and `refused`, why the entry's count stands for no run, in which case nothing else was compared."""
+    `named` lines of the record's own program, the `differences`, and `refused`, why the entry's count stands for no
+    run, in which case nothing else was compared."""
     route, shape = config.route(cfg.route), cfg.start.shape
-    r = {"entry": cfg.name, "run": h["run"], "record": h["path"], "expected": [], "differences": [], "refused": None}
+    r = {"entry": cfg.name, "run": h["run"], "record": h["path"], "expected": [], "named": [], "differences": [],
+         "refused": None}
     struct, n = modal(rec)
     theirs = per_row(struct, shape["ctx"])
     batch, rows = cfg.budget["batch"], theirs["rows"]
@@ -353,20 +428,28 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                                 "rows a forward")
         return r
     mine = counted(cfg, rows, out)
+    for rule in HARNESS:
+        if refusal(mine):
+            break
+        mine, found, differences = rule(cfg, rows, out, mine)
+        r["expected"] += [found] if found else []
+        r["differences"] += differences
     if why := refusal(mine):
-        return r | {"refused": why}
+        return r | {"refused": why, "expected": [], "differences": []}
     start, cp, last = rec.get("start_record") or rec["start"], mine["checkpoints"][-1], rec["checkpoints"][-1]
     if start["digest"] != cfg.start.digest:
         r["differences"].append(f"the start: the config's is {cfg.start.name} ({cfg.start.digest[:12]}), the "
                                 f"record's {start['name']} ({start['digest'][:12]})")
     if len(rec["steps"]) != cfg.budget["steps"]:
         r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {len(rec['steps'])}")
-    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape["ctx"]), theirs, shape)
+    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape["ctx"]), theirs, shape,
+                    h.get("record_only", []))
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
     if tuple(kinds) != E_KINDS.get(last["format"]):
         found["differences"].append(f"E's kind: the config's plan is {', '.join(kinds)}, the record's format "
                                     f"{last['format']} ({', '.join(E_KINDS.get(last['format'], ['none known here']))})")
-    r["expected"] = found["expected"]
+    r["expected"] += found["expected"]
+    r["named"] = found["named"]
     r["differences"] += found["differences"]
     r["facts"] = [
         ("start", f"{cfg.start.name} ({cfg.start.digest[:12]})"),
@@ -388,13 +471,15 @@ def verdict(r: dict) -> str:
         return f"refused: {r['refused']}"
     if r["differences"]:
         return f"differs, {_plural(len(r['differences']), 'difference')}"
-    return "equal" + (f", {_plural(len(r['expected']), 'expected difference')}" if r["expected"] else "")
+    also = [_plural(len(r["expected"]), "expected difference")] if r["expected"] else []
+    also += [f"{_plural(len(r['named']), 'named line')} of the record's program alone"] if r["named"] else []
+    return ", ".join(["equal", *also])
 
 
 def text(rows: list[dict]) -> str:
     """The rows as the command prints them: each entry with its run of record and its verdict, what was read, each
-    expected difference by its rule with the MACs on both sides, and each difference; then the count of each verdict
-    and what makes the comparison fair."""
+    expected difference by its rule with the MACs on both sides, each line its entry of the data file names, and each
+    difference; then the count of each verdict and what makes the comparison fair."""
     out = []
     for r in rows:
         out.append(f"{r['entry']}, held to {r['run']} ({r['record']}): {verdict(r)}")
@@ -403,6 +488,8 @@ def text(rows: list[dict]) -> str:
             macs = f"; MACs a step at one row a forward: the record's {e['record_macs']:,}, the config's " \
                    f"{e['config_macs']:,}" if "record_macs" in e else ""
             lines.append(("expected", f"{e['rule']}: {e['what']}{macs}"))
+        lines += [("named", f"the record's step only: {e['line']}; {HELD.name} names it: {e['why']}")
+                  for e in r["named"]]
         lines += [("DIFFERS", d) for d in r["differences"]]
         out += [f"  {k:<9} {v}" for k, v in lines] + [""]
     n = collections.Counter(verdict(r).split(",")[0].split(":")[0] for r in rows)
@@ -418,7 +505,7 @@ def main(argv=None) -> int:
     ap.add_argument("--records", type=Path, required=True, help="where the runs' records are, each at RUN/PATH")
     ap.add_argument("--held", type=Path, default=HELD, help="the data file: each entry's run of record")
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry")
-    ap.add_argument("--out", type=Path, default=None, help="where of_record.json and each entry's counted record go")
+    ap.add_argument("--out", type=Path, default=None, help="where of_record.json and each entry's counted records go")
     a = ap.parse_args(argv)
     runs, reg = held(a.held), starts.registry(a.starts)
     paths = library.entries(a.entry or sorted(runs))
