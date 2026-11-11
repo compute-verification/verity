@@ -61,7 +61,7 @@ from fractions import Fraction
 from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt
 from pathlib import Path
 
-from verity.protocols.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
+from verity.protocols.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum, neg_log_escape
 from verity.protocols.spot.verifier.consumers import exfiltration_bound
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
@@ -293,6 +293,10 @@ class PlanBounds:
     exact: bool = True
 
 
+#: `_log_miss` sums this many of its terms before it takes their closed form: a planner asks it a million times
+MISS_TERMS = 64
+
+
 @dataclass(frozen=True)
 class Plan:
     """A cut per op type (`choice`: op -> its alternative), a statement size and a sample size per subcircuit, the subcircuits
@@ -312,19 +316,12 @@ class Plan:
 
 
 def _log_miss(n: int, m: int, k: int) -> float:
-    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given proof blocks: the product
-    prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), summed when t is small, by `lgamma` up to 2^25 proof blocks
-    and past that, where `lgamma`'s differences lose their digits, by its midpoint (either within about 1e-7 relative)."""
-    if k > n - m:
-        return -inf
-    if m == 0 or k == 0:
-        return 0.0
-    t, s = min(m, k), max(m, k)
-    if t <= 64:
-        return fsum(log1p(-s / (n - i)) for i in range(t))
-    if n <= 1 << 25:
-        return lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1)
-    return t * log1p(-s / (n - (t - 1) / 2))
+    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given proof blocks: minus core's risk
+    (`neg_log_escape`), which sums its t = min(m, k) terms while t <= `MISS_TERMS` and past that takes their closed form.
+    The closed form puts the log over its exact value by less than s / (8 (n - t + 1)(n - s - t + 1)) at s = max(m, k),
+    under 1 / (100 n) of it wherever the miss is at least 2^-40.  It prices a plan and steers `max_harm`'s search; no
+    bound reads it."""
+    return -inf if k > n - m else -neg_log_escape(n, k, m, MISS_TERMS)
 
 
 def _miss(n: int, m: int, k: int) -> float:

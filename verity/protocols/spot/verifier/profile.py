@@ -345,14 +345,15 @@ def _log1p_less(y: float) -> float:
     return 2 * z * w * series - y * y / (2 + y)
 
 
-def neg_log_escape(n: int, k: int, m: int) -> float:
+def neg_log_escape(n: int, k: int, m: int, terms: int = ESCAPE_TERMS) -> float:
     """-ln(C(n - m, k) / C(n, k)) in floats, for 0 <= k, 0 <= m and m + k <= n: the risk of m incorrect proof blocks
     among n when k are sampled.  It is never above the exact value by more than 2^-38 of it, at any size.
 
     The ratio is prod_{i < t} (1 - s / (n - i)) at t = min(m, k), s = max(m, k) (it is symmetric in m and k).  While
-    t <= `ESCAPE_TERMS` the t terms are summed, each to a few units in the last place (`neg_log_ratio`'s, its log1p
-    taken directly where every term's ratio is at least 1/2), and a sum of 2^14 floats of one sign is within 2^-39 of
-    itself however it rounds.
+    t <= `terms` the t terms are summed, each to a few units in the last place (`neg_log_ratio`'s, its log1p taken
+    directly where every term's ratio is at least 1/2), and a sum of 2^14 floats of one sign is within 2^-39 of itself
+    however it rounds.  (A caller that only prices may sum fewer `terms`: the closed form is then as far under the exact
+    value as stated below, which need not be small beside it.)
 
     Beyond, the sum of f(i) = ln(n - i) - ln(n - s - i) over i < t is taken from below by the trapezoid rule: f is
     convex, so the sum is at least the integral of f over [0, t - 1] plus (f(0) + f(t - 1)) / 2, and exceeds it by at
@@ -367,7 +368,7 @@ def neg_log_escape(n: int, k: int, m: int) -> float:
     t, s = min(m, k), max(m, k)
     if t == 0:
         return 0.0
-    if t <= ESCAPE_TERMS:
+    if t <= terms:
         if n >= 2 * s + t - 1:
             return -sum(log1p(-s / (n - i)) for i in range(t))
         return sum(neg_log_ratio(n - s - i, n - i) for i in range(t))
