@@ -1,10 +1,10 @@
-"""Only the vLLM integration imports vLLM: outside ``integrations/vllm/``, no tracked Python file imports ``vllm``.
+"""Only the vLLM integration imports vLLM: outside ``adapters/vllm/``, no tracked Python file imports ``vllm``.
 
 Code that touches vLLM goes through ``verity_vllm``'s interfaces, the public modules ``PUBLIC`` in
 ``tests/test_vllm_public_api.py`` lists: the pinned engine (``verity_vllm.LLM``), a built engine's vLLM objects
 (``verity_vllm.engine.handle``), the scheduler's step trace (``verity_vllm.engine.step_trace``).  A plugin, a patch, a
-stock kernel or a private vLLM internal that a benchmark needs goes into ``integrations/vllm/`` behind a public module:
-the integration's ``vllm.general_plugins`` entry points (``integrations/vllm/pyproject.toml``) load it, its patches are
+stock kernel or a private vLLM internal that a benchmark needs goes into ``adapters/vllm/`` behind a public module:
+the integration's ``vllm.general_plugins`` entry points (``adapters/vllm/pyproject.toml``) load it, its patches are
 installed through ``verity_vllm.engine.hooks``, and one place answers for each vLLM version the integration pins.
 
 ``ALLOWED`` lists every file outside the integration that imports vLLM today, each with its owner and what it takes from
@@ -24,12 +24,12 @@ import subprocess
 from test_boundaries import _imports
 from test_repository import ROOT
 
-INTEGRATION = "integrations/vllm/"
+INTEGRATION = "adapters/vllm/"
 #: The fix a failure names.
 ROUTE = ("route the code through verity_vllm's interface (PUBLIC in tests/test_vllm_public_api.py): verity_vllm.LLM builds "
          "and drives the pinned engine, verity_vllm.engine.handle hands over a built engine's vLLM objects and "
          "verity_vllm.engine.step_trace its scheduler's steps; a plugin, a patch, a stock kernel or a private vLLM internal "
-         "goes into integrations/vllm/ behind a public module you import (a vllm.general_plugins entry point in its "
+         "goes into adapters/vllm/ behind a public module you import (a vllm.general_plugins entry point in its "
          "pyproject.toml, patches through verity_vllm.engine.hooks)")
 
 #: Every file outside the integration that imports vLLM, with its owner and what it takes.  Move it behind verity_vllm's
@@ -38,7 +38,7 @@ ALLOWED = {
     # stock engines a benchmark builds and drives beside the integration's
     "benchmarks/harness/verity_bench/vllm/runner.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
     "benchmarks/served_commit/tp_decode.py": "circuits: a stock vllm.LLM at TP8 against a Commit arm in the same engine",
-    "benchmarks/pouw/np_kernel/stock_decode.py": "compute-accounting: a stock vllm.LLM step, T2's denominator",
+    "archive/benchmarks/pouw/np_kernel/stock_decode.py": "compute-accounting: a stock vllm.LLM step, T2's denominator",
     **dict.fromkeys(("benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/profile_decode.py",
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
                     "compute-accounting: Pearl-C served through verity_vllm.LLM, with vLLM's SamplingParams and a stock "
@@ -152,7 +152,7 @@ def test_a_vllm_import_is_found() -> None:
                        "from verity_vllm import LLM\nfrom verity_vllm.engine import vllm_adapter\n"
                        "ok = importlib.util.find_spec('vllm') is not None\nNOTE = 'from vllm import LLM'\n"
                        "STEPS = 'vllm:iteration_tokens_total_count'\n"),
-        "integrations/vllm/verity_vllm/x.py": "import vllm\n",
+        "adapters/vllm/verity_vllm/x.py": "import vllm\n",
     }
     assert _importers(texts) == {
         "b/top.py": ["1: vllm", "2: vllm.v1.core.sched.scheduler"],

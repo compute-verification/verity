@@ -1,6 +1,6 @@
 # units: the H200 demo's non-matmul proof blocks on the H200 and the RTX PRO 6000
 
-GPU kernels for the proof blocks between the matmuls of the H200 demo's model (`examples/h200/`: MQA decoder, width
+GPU kernels for the proof blocks between the matmuls of the H200 demo's model (`archive/examples/h200/`: MQA decoder, width
 16384, 52 layers, 256 query heads of 64, one KV head, MLP 65536, byte vocabulary, context 32), each word for word its CPU
 twin, both in circuits' forms (the CPU replay's templates, `ops.quant`'s quantizer, `ops.rows`' row Definitions).
 `build.sh` builds `units.cu` for sm_90a (the H200) and sm_120a (the RTX PRO 6000), and `lib.py` loads the cubin of the
@@ -17,7 +17,7 @@ device's arch.
 
 Each module's docstring states its OPS: every f32 operation an IEEE round-to-nearest-even instruction with no flush, every
 reduction sequential in ascending order from +0, no atomics. The one approximate operation is softmax's exponential,
-`ex2.approx.ftz.f32` (MUFU.EX2, `verity.ml.circuits.ops.mufu.MufuEx2Ftz`). `words.py` holds the word operations the twins
+`ex2.approx.ftz.f32` (MUFU.EX2, `verity.definitions.ops.mufu.MufuEx2Ftz`). `words.py` holds the word operations the twins
 are made of; `gpu()` in each module launches its kernel on torch tensors through `lib.py`, and with `units=True` also
 returns the intermediate proof blocks' outputs (chunk sums, rs, the absmax tree, m, r, chunk bests).
 
@@ -49,7 +49,7 @@ SWEEP_ONLY=1 OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh
 ```
 
 The fixture holds every pool word of the twins to circuits' references and refuses to write on a disagreement:
-`--replay` to the CPU replay's (`examples/h200/replay.py`, which `build.sh` passes unless REPLAY names another),
+`--replay` to the CPU replay's (`archive/examples/h200/replay.py`, which `build.sh` passes unless REPLAY names another),
 and `--rows` to `ops.rows`' `argmax` and `add_row` (ROWS names a file to load in its place). `tests/` run on a
 CPU: the word operations against the fp32 primitives' evaluators, each twin against a scalar composition of them, the
 sweep digests and models, and `build_check.py`.

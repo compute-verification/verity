@@ -81,9 +81,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "tools" / "config"))
+sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
 import boundary as B  # noqa: E402 (beside this file)
 import restore as R  # noqa: E402
 import serve_tax as S  # noqa: E402
@@ -1102,7 +1102,7 @@ def shape_report(target: str, shape: Dummies, w: dict[str, Any], steps: dict[int
 def run(a: argparse.Namespace) -> dict[str, Any]:
     import torch
 
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     sys.path.insert(0, str(HERE))
     from servetax_plugin import step_outputs_hook
     from verity_vllm.engine.hooks import Hooks
@@ -1399,7 +1399,7 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
     import tp_edge as E
     import tp_restore as TR
 
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     sys.path.insert(0, str(HERE))
     from servetax_plugin import step_outputs_hook
     from verity_vllm.engine.hooks import Hooks

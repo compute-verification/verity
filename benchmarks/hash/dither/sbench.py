@@ -250,7 +250,7 @@ CT_CONFIG = {
 
 
 def prompts(n: int) -> list[str]:
-    sys.path.insert(0, str(ROOT / "integrations" / "vllm"))
+    sys.path.insert(0, str(ROOT / "adapters" / "vllm"))
     from tests.engine.int8_exact_gpu import PROMPTS
     return [PROMPTS[i % len(PROMPTS)] for i in range(n)]
 
@@ -473,7 +473,7 @@ def build(arm: str, scratch: Path, gpu_mem: float) -> LLM:
         llm.dither_stats = percall.summary
         return llm
     if arm == "exact-eager":
-        vllm_dir = ROOT / "integrations" / "vllm"
+        vllm_dir = ROOT / "adapters" / "vllm"
         sys.path.insert(0, str(vllm_dir))
         from tests.engine import int8_exact_gpu as G
         from verity_vllm import TargetProfile
