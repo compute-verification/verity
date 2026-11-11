@@ -53,7 +53,6 @@ class _V1AndV2:
         return r
 
 
-
 class _Ref:
     @staticmethod
     def bot(w):
@@ -397,18 +396,17 @@ def test_activity_prefix_reads_only_active_members_of_the_set():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the S-migration hook: which value counts a live sampler row?
+# which value counts a live sampler row?
 # ---------------------------------------------------------------------------------------------------------
 
 
-def test_the_live_count_hook_must_read_the_steps_input_token_not_the_previous_output():
-    """The spec's §5 writes `n_live_t = Σ_r LIsActive(out_r[t−1])`.  At step `a_r` (the step after the committed EOS) the previous
+def test_a_live_sampler_row_is_read_off_the_steps_input_token_not_the_previous_output():
+    """The spec's §5 writes `live_{r,t} = LIsActive(out_r[t−1])`.  At step `a_r` (the step after the committed EOS) the previous
     output IS the EOS — an Active token — so `LIsActive(out[a_r−1]) = 1` although the request has no sampler row at `a_r`
     (vLLM removes a finished request before the next step; `LStepLive(EOS) = Active(0)`; under `GUARD=in` `tok_in_{a_r} = ⊥`).
-    The hook over-counts every EOS-stopped request by exactly one engine step, which changes `S_t` for its batch-mates at that
-    step.  Measured here on TINY-PAD with the EOS at event 3 (`a_r = 4`): the per-step liveness the Program itself computes
-    (`live_s`, equivalently `LIsActive(tok_in_s)`) is the value that agrees with the served length `n_r = a_r`; the §5 formula
-    does not.  A test that PASSES = the discrepancy is real; it names the hook that must replace it."""
+    It over-counts every EOS-stopped request by exactly one engine step.  Measured here on TINY-PAD with the EOS at event 3
+    (`a_r = 4`): the per-step liveness the Program itself computes (`live_s`, equivalently `LIsActive(tok_in_s)`) is the value that
+    agrees with the served length `n_r = a_r`; the §5 formula does not."""
     prog, t, out = T._lserve((EOS_FOR[3],))
     a_r = L.activity_prefix(out, (EOS_FOR[3],), D_MAX + 1)
     assert a_r == 4 and L.served_count(out) == a_r
@@ -421,60 +419,6 @@ def test_the_live_count_hook_must_read_the_steps_input_token_not_the_previous_ou
     assert live_from_program == input_hook == served
     assert spec_hook != served and spec_hook[a_r] == 1 and served[a_r] == 0 and spec_hook[:a_r] == served[:a_r] and spec_hook[a_r + 1:] == served[a_r + 1:]
     assert sum(spec_hook) == sum(served) + 1  # one phantom live row per EOS-stopped request, at its step a_r
-
-
-# ---------------------------------------------------------------------------------------------------------
-# the S-migration candidate — LSplitsFor against an independent reading of vLLM's doubling loop; the input-token hook end to end
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _splits_ref(n: int, sms: int) -> int:
-    """The largest power of two S ≤ 32 with S·n ≤ num_SMs; the loop doubles while the NEXT S still fits."""
-    s = 1
-    while s * 2 <= 32 and (s * 2) * n <= sms:
-        s *= 2
-    return s
-
-
-@pytest.mark.parametrize("sms", [142, 132, 108, 8, 1])
-def test_lsplitsfor_equals_the_doubling_loop_on_the_whole_domain_and_is_bot_only_at_zero(sms):
-    if not hasattr(L, "l_splits_for"):
-        pytest.skip("PAD-04 candidate not on this tree")
-    ls = L.l_splits_for(sms)
-    assert getattr(ls, "lift_class", None) == "specified" and getattr(ls, "candidate", None) == "PAD-04"
-    for n in range(1, 65):
-        got = ls.evaluate(n)
-        assert L.tag(6, got) == 0 and got == _splits_ref(n, sms), (sms, n, got)
-        assert got in (1, 2, 4, 8, 16, 32)
-    assert ls.evaluate(0) == L.enc_bot(6)  # the specified rule: no live row, no sampling event
-    assert ls.evaluate(L.enc_bot(7)) == L.enc_bot(6) and ls.evaluate(L.inv(7)) == L.inv(6) and ls.evaluate((1 << 7) | 5) == L.inv(6)
-    for n in (65, 100, 127):  # outside the split pipeline: refused by name, never an invented S, never INV
-        with pytest.raises(ValueError, match="not the split pipeline"):
-            ls.evaluate(n)
-    for bad in (0, 65):
-        with pytest.raises(ValueError):
-            L.assert_splits_domain(bad)
-    assert L.assert_splits_domain(64) == 64
-    if sms == 142:  # vLLM's split table, spot-checked independently
-        assert [ls.evaluate(n) for n in (4, 5, 8, 9, 17, 18, 35, 36, 64)] == [32, 16, 16, 8, 8, 4, 4, 2, 2]
-    if sms == 132:
-        assert [ls.evaluate(n) for n in (16, 17, 33, 34, 66 if False else 64)] == [8, 4, 4, 2, 2]
-
-
-def test_the_s_operand_fed_from_the_input_token_hook_is_bot_exactly_at_the_phantom_step():
-    """The input-token hook end to end on TINY (one request, EOS at event 3): with the corrected hook `Σ LIsActive(tok_in_s)` the S operand is
-    Active(32) for live steps and ⊥ from `a_r` on; the retired hook `Σ LIsActive(out[s−1])` would have produced S = 32 at `a_r`."""
-    if not hasattr(L, "l_splits_for"):
-        pytest.skip("PAD-04 candidate not on this tree")
-    prog, t, out = T._lserve((EOS_FOR[3],))
-    named = T._root_named(prog)
-    ia, ls = L.l_is_active(32), L.l_splits_for(142)
-    for s in range(1, D_MAX + 1):
-        n_live = ia.evaluate(t[named[f"s={s}/tok_in"].lo])          # the corrected hook (one request)
-        n_phantom = ia.evaluate(out[s - 1])                           # the retired hook
-        assert ls.evaluate(n_live) == (32 if s < 4 else L.enc_bot(6))
-        if s == 4:
-            assert n_phantom == 1 and ls.evaluate(n_phantom) == 32  # the phantom S the retired hook would have committed
 
 
 # ---------------------------------------------------------------------------------------------------------

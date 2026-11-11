@@ -1,6 +1,6 @@
 """The served arm: the Commit at rows-sha512's 4 KiB rows timed against stock as vLLM serves it (compiled) and against the
 batch-invariant eager stock every eager row is timed against, in one interleaved run on one GPU (`served_arm.sh`, the specs
-`*-rtx-served-arm`). Measurement only; `benchmarks/g2/served.py` renders its runs.
+`*-rtx-served-arm`). Measurement only.
 
 - ``served-commit-rows-4k`` (`ROWS_4K`, `ROWS_4K_FP8`): the compiled Commit arm (`prof_arm.Rows4kArm`, the served compiled
   source under CUDA graphs), built at vLLM's serving defaults compiled whatever the spec's ``eager`` (its ``execution``), with

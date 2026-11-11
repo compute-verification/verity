@@ -17,8 +17,8 @@ norm), SiluMul, the fused-MoE block in its indexed-read construction (router Gem
 MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the embedding's normalizer scale, GemmaRMSNorm's unfused (1 +
 w) chain (every norm, the two extra MLP norms included), AttentionSoftcap, GeluTanhMul and the final logits' tanh soft-cap; and the
 token select: greedy TokenSelect, or the seeded temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split
-count a `splits` Input entry, or the single request's constant S). Anything φ asks for outside it raises `Unexpressible` naming the
-fact (a result, never a silent approximation).
+count among them, the registered S). Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a
+silent approximation).
 
 Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
 `Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
@@ -627,7 +627,7 @@ class _Model:
         for fn in S.cap if self.C.final_cap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
         return select_token(lambda fn, *refs: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs))), kind, lg.refs, self.C.V,
-                            S.tp, event, pos, policy)
+                            pos, policy)
 
 
 def decoder(phi: Phi, M: int = 1, history: int = 0):
@@ -720,12 +720,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense, bool(edge))
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
-    events = sum(sampled)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
         params += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
-        if phi.sampling["splits"] == "derived":
-            params.append(("splits", Array(events, I32)))
     history = len(params)
     if C:
         params += net.prefix_params(C)   # `vllm_meta.prefix_input`
@@ -746,9 +743,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
-        s, at = phi.sampling, [p for p, _ in params].index("splits") if phi.sampling["splits"] == "derived" else None
-        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=None if at is None else Coll(params[at][1], Affine("p", at, 0, events)),
-                             S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
+        s = phi.sampling
+        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
+                             top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched = True

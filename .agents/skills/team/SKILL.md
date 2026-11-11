@@ -39,7 +39,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
   print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
-  hook); on a VM booted without it, run origin/main's `tools/agent-guard/boot.sh`. A secret is stored as one line (a
+  hook); on a VM where it doesn't run, `research` says so, with the fix. A secret is stored as one line (a
   key as base64, `NAME_B64`).
 
 ## Landing
