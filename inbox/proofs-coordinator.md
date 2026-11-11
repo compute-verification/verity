@@ -36812,3 +36812,86 @@ To your 02:02Z job (top's question on TOP-389). Each sentence or bullet carries 
 3. ci's answer on the three lines. The branch needs neither answer.
 4. After the move is on `main`: TRN-83's line as its own PR from the moved `main`. If the move is late, the diff and the command go in my last entry.
 5. The remote merge's crossing of the move is lean's (its 02:23Z). My preview run `r20261111-020220-f99b` stands if the landed map and script are the staged ones.
+
+## EXTFORM, Wed 11 Nov 02:36Z: TWO-STAGE FINDER: HOLDS by position (second-stage-only rerun for interior positions, constant 2, count `W <= K`, one clause added); FAILS AT step B3 by block with no new clause (interior positions); `KSRegTwoX` is the statement, with the `N sqrt(Pr[B_conf])` error twice
+
+TWO-STAGE FINDER: HOLDS by position (constant 2, count `W <= K`, same formula as one stage, one clause added); FAILS AT step B3 by block with no new clause (interior positions only: the two-stage `opens` does not force a session to open the interior gates its block reads).
+
+Posted on PRF-528 at 02:35Z; note `note:proofs/20261111T0236Z-finding-extform-two-stage-finder` (the derivation, `wtwo.py`, `wtwo_bits.py` and their output).
+
+EXTFORM, PRF-528, third task. Paper derivation and two toys; no Lean built, nothing edited. Tags: [read] = I read the Lean named; [derived] = my argument; [run] = script output (`wtwo.py`, `wtwo_bits.py`, in the note); [relayed] = another lane's figure; [guess]. `main` is `a930252c49`; REGX's branch is `origin/cursor/proofs-regx2-78c4` at `fe391c772c`, read and not built. Every bit count below is for one audit, with T = 2^80 SHA-512 compressions a run.
+
+**1. What the two-stage contract on `main` gives a finder (`CompiledTwo.Sessions`, `Security/Definitions/Claims/SamplingTwo.lean:276-318`)**
+
+| Clause | What it gives a finder for an interior position |
+|---|---|
+| `interior` (:296) | The one it stands on: at every prover, tape and coins, redrawing the coins on `stage2 x` leaves `iroots x seen ρ` unchanged for every replay block [read]. So the coins the finder may redraw are exactly those on `stage2`, and both openings of an interior position then sit under one root. At SPOT[Flock]'s code `stage2` is every round after the first coin (`Claims/Sampling/Reg.lean:124`), and the interior roots are read off the round-1 message, which reads only round 0's coin (`SpotFlock/Code.lean:586-590`, `interiorFixed` at `SpotFlock/Facts.lean:131-145`) [read]. |
+| `fixed` (:298) | A session's rounds are inside `stage2`, so a session's own rewinding also keeps the first coins [read]. |
+| `opens` (:308) | At any accepted run, at any coins: values `val` and interior values `ι` that agree with the passing revealed openings (under the statement's roots, and under the interior roots the run showed for the block's replay block) make the proof block correct [read]. It is quantified over all coins, so it holds at a run with redrawn second-stage coins [derived]. |
+| `secondDraws` (:280) | The second stage's sample at fixed first coins is a function of the redrawn coins [read]. The finder needs only that, to skip passes by their coins. |
+| `replayDraws`, `slots`, `shared`, `unions`, `refuses`, `runs`, `keys` | Nothing about openings [read]. No clause says the replay sample is the same at redrawn second-stage coins; the finder does not need it, a cap on K would [derived]. |
+
+- **Extraction at fresh second-stage coins is neither a clause nor an addition** [derived]: the extractor of record already does it (`E`'s inner wait runs `runExt` at `forkOn (L.stage2 x) r c`, `SamplingGeneric.lean:379-394`) [read], and `opens`, `runs` and the session's KS hold at every coins.
+- **The committed object for the interior on `main` is only the roots** `iroots x seen ρ` [read]. `main` has no committed interior trace: `RTwo` lets the relation pick the interiors, and `opensAt` and `regVal` read openings under the statement's roots only (`SamplingGeneric.lean:564-579`) [read]. On REGX's branch it is `iregVal ω r ρ g`: the value the extractions open at `g` under `ρ`'s interior roots most often, over the second stage's coins and the extractor's, at the tape and the first coins (`SamplingTwoReg.lean`) [read].
+
+**2. The two-stage finder by position, step by step**
+
+Notation: a pass is (tape ω, first coins r1, second-stage coins r2, extractor coins c). A gate is one position: interior if its replay block's boundary does not commit it, else boundary (`Prog.Boundary`, `Prog.refIn`, `Sampling.lean:158-182`); each gate is in one replay block, so it has one kind [derived].
+
+1. **Traces** [read, REGX's branch]. Boundary: `regVal` at the tape (or `regValX` at the statement), fixed before any coin. Interior: `iregVal ω r1`, fixed after the first coins and before the second.
+2. **A bad pass opens a position off its trace** [read]: `regTwo_split` (`TwoReg.lean:373`): an accepted run that samples a block incorrect at both traces has a session unfound, or disagrees with itself, or opens a boundary gate off the boundary trace, or opens an interior gate off `iregVal`. Call the last three Bad.
+3. **Boundary position g, opened by the first pass z0** [derived]: draw fresh (r1, r2, c) at the same tape, execute only passes whose sample reads g, stop at the first that opens g, compare. Both openings are under the statement's roots. If z0 was off, the other is the plurality value with chance at least 1/2.
+4. **Interior position g of replay block ρ, opened by z0** [derived]: keep ω and r1, draw fresh (r2, c), execute only passes whose sample reads g, stop at the first that opens g under ρ's interior roots, compare. By `interior` the two openings are under one root, so two values are a collision. Given (ω, r1) the fresh passes are independent draws from the distribution `iregVal ω r1` is the plurality of, so again chance at least 1/2. The average over (ω, r1) is linear: no square root, no Jensen step.
+5. **Success** [derived]: `Pr[collision] >= Pr[Bad]/2`. A pass that disagrees with itself is a collision outright.
+6. **Expected cost** [derived]: a wait at g starts with the chance p_g that a pass opens g and then executes π_g/p_g passes in expectation, π_g the chance a sample reads g; so each position costs π_g executed passes. Boundary positions sum to `W_bd = E|boundary positions a sample reads|`; interior ones, at each r1, to `E[|interior positions the second stage reads| given r1]`, which averages to `W_int`. `W = W_bd + W_int = E|reads| <= K`, and K is summed over every sampled replay block, not one. Each executed pass is one run and the extraction of the d sessions holding the position: `E[cost] <= T[(1 + sbar e_s) + W + W' e_s]`, `W' <= d W`. A draw the finder skips costs no SHA-512 call (`checked` reads the coins only), so the cap on draws can be so large that its term is below 2^-200.
+7. **Bound** [derived]: `Pr[Bad] <= 2 T [(1 + sbar e_s) + W + W' e_s] / 2^256` under the linear premise. It replaces `N sqrt(Pr[B_conf]) + Pr[B_conf] + N sqrt(Pr[B_conf,2])`. Same formula and constant as at one stage; ATTACK's "the count is the same" is confirmed.
+
+What step 6 needs and `main` lacks: a pass opens g only if its sample reads g. The ten clauses do not give it (a code may reveal more), at one stage or two. The two-stage clause is in section 4.
+
+Toy 1 [run]: interior root different for each first coin, one interior gate equivocated. Second stage only: Pr[catch | off] = 0.506, 1.00 executed passes after z0 (5 positions read). Whole rerun: the same catch only by waiting for the same first coin again, 517.5 executed passes at 64 first coins; at a real coin it never returns.
+
+**The trace and the guarantee.** The interior miss is against a trace fixed per tape and first coins, that is, per first-stage transcript. That is a different committed object from one stage's, and the difference is the two-stage design's, not the finder's [derived]. In the draft's words: at one stage the prover is bound, before any coin, to one value at every position the audit can open, and the incorrect proof blocks are a set fixed before the audit. At two stages it is bound before the coins only to the values that cross replay-block boundaries; after the first coins name the sampled replay blocks it commits each one's interior, and may commit a different one for each first coin. What is fixed before the coins is which replay blocks are wrong at their boundary (no interior makes all their proof blocks correct). The conclusion is therefore stated at the boundary trace "at its best interiors", as `RTwo` on `main` already does for the extracted trace [read].
+
+**REGX's part 2** [read, not built]: `MissTwoX` is exactly the sampling half of this statement: at every tape, the sample misses `FregTwoX ω r` (boundary read at the statement, interior `iregVal ω r`) with probability at most `(1 - r1 r2)^|W|`, W the replay blocks wrong at the boundary; it has no error term. `KSRegTwoX` is the binding half at the same trace, and its `B_conf,2` is step 4's comparison in its two-run form (two second stages at one tape and one first stage). Its error is `kappa_s + sqrt(k gamma_s Pr[B]) + N sqrt(Pr[B_conf,X]) + Pr[B_conf,X] + N sqrt(Pr[B_conf,2])`: **`N sqrt(Pr[B_conf])`-shaped, twice** [read]. So the statement is already there; the error term is the old one.
+
+| `KSRegTwoX`'s two square-root terms [run; N relayed from SCALE and ATTACK] | k = 1507 | largest k |
+|---|---|---|
+| B, N = 2^59.0 to 2^59.8 gates (2^61.1 by ATTACK's card count) | 2^-18.4 to 2^-17.6 (2^-16.3) | 2^-11.9 to 2^-11.1 (2^-9.8) |
+| A, N = 2^69.9 to 2^70.7 gates | 2^-7.5 to 2^-6.7 | 2^-1.0 to 2^-0.2 |
+| at the swarm's earlier sizes (B 2^47.9, A 2^58.8) | 2^-29.5, 2^-18.6 | 2^-23.0, 2^-12.1 |
+
+**3. `W` and `W'` at the three designs (the 02:26Z ask)**
+
+`W <= K` and `W' <= d W` [derived]; I did not recount W from the card, so the cells are at `W = K` with REPBREAK's K [relayed] and sbar = 1 [run]; sbar up to m moves no cell by 0.1, since m is far below K [derived]:
+
+| Design (REPBREAK's count of `main`'s rule on the card) | m | K | k 1507, d 1 | k 1507, d 30 | largest k, d 1 | largest k, d 167 |
+|---|---|---|---|---|---|---|
+| uncapped, size-class strata | 15 to 55 | 2^25.5 | 131.2 | 126.3 | 118.2 | 110.8 |
+| capped sets | up to 1,331 | 2^30.3 | 126.4 | 121.5 | 113.4 | 106.0 |
+| capped patterns | up to 1,144,826 | 2^40.1 | 116.6 | 111.7 | 103.6 | 96.2 |
+| the coin's cap (58,254 blocks) | | 2^42.8 | 113.9 | 109.0 | 100.9 | 93.5 |
+
+100 bits needs `W <= 2^56.7` (k 1507, d 1), `2^51.8` (k 1507, d 30), `2^43.7` (largest k, d 1), `2^36.3` (largest k, d 167) [run]. A period of Q audits at 2^80 each: subtract 10.0 (week), 12.1 (month), 15.7 (year) [relayed: ATTACK's Q]. T in calls on 64 KiB rows: subtract 9.0 [relayed].
+
+**4. The by-block count at two stages (no new clause), step by step**
+
+- **B1. A bad pass opens a gate of its own block's needs off its trace** [derived]. Apply `opens` at the run's own openings, with every unopened interior gate set to `iregVal`; `opens` allows that, because it holds for every `ι` that agrees with what was opened. If the opened gates of `Needs b_u` all sat on the traces, the block would be correct at the traces: `Prog.correct_of_needs` (`ProgReads.lean:251-263`, on `main`) is stated for any two references that agree on `Needs` [read].
+- **B2. Boundary gates: the cover holds, so this part stands as it is** [derived]. `val` is an `Option` and `Correct` fails on an unopened read (`Sampling.lean:174-177`), so `opens` still forces a found session to open every boundary gate its block needs. Whole reruns, a wait for each block, as at one stage.
+- **B3. Interior gates: FAILS HERE** [derived]. The two-stage `opens` takes the interior as a total function `ι : ℕ → Bool`, and `refIn` returns `some (ι g)` at an interior gate (`Sampling.lean:181-182`), so an unopened interior input never makes `Correct` fail. A session may leave unopened any interior input its block's gates are insensitive to (an AND whose other input is opened as 0). The block's wait then has no stopping event that both holds at every bad pass and opens the off gate. (A block's own gates that other blocks of the replay block read are still forced open; the gap is at its interior inputs.)
+  - Toy 2 [run]: a block that is the AND of M interior inputs; a pass opens the output as 1 with every input as 1, or the output as 0 with one input as 0 and no other; every pass is Bad. The by-block finder collides with chance 2M/(M+1)^2 = 0.375, 0.117, 0.031 at M = 3, 15, 63, where the bound needs 1/2. By position: 0.57, 0.53, 0.51. By block with the interior covered: 0.75, 0.94, 0.99.
+  - The loss is up to log2(M/4) bits, M a block's interior inputs. The by-block bound may still be true; this proof does not show it.
+
+**So at two stages each count needs a clause** (recommendation; adding either is a locked-record change and Daniel's) [derived]:
+- by position, `RevealsWithinTwo`: a passing revealed opening of unit u under the statement's roots lies at a boundary gate of `Needs b_u`; one under `iroots x v ρ` lies at an interior gate of `Needs b_u` when ρ is u's replay block, and there is none for any other ρ;
+- by block, interior cover: at an accepted run, a found session's reveal holds a passing opening under its replay block's interior roots at every interior gate of `Needs b_u`. Then the second-stage-only rerun gives `2 (1 + 2 n_PU) T (1 + sbar e_s) / 2^256`: 119.3 / 106.3 bits at B and 108.4 / 95.4 at A (n_PU 2^36.4, 2^47.3; k 1507 / largest; sbar 1), 4.9 less at sbar 30 [run; n_PU relayed].
+- Both hold at SPOT[Flock]'s code: its reveal is one opening per needed value, each under `rootsAt` (`SpotFlock/Reveals.lean:45-55`, `Code.lean:593-598`) [read]; SCALE's `pos_mem_needs` is the per-unit fact [relayed; REPBREAK: not yet stated at the deployed code].
+
+**5. The trace over non-refused coins**
+
+No definition I use changes if refused passes stay in the rerun: a refused pass reads every gate, which adds `p_ref N < 2^-229` to W [derived, p_ref relayed from ATTACK]. If the trace is instead taken over non-refused coins, `regVal` and `iregVal` change (the plurality's domain) and the fresh passes are drawn among non-refused coins, a function of the coins; W, W', the constant and the event (`acc` and off, which step 2 already has) do not [derived].
+
+**Not checked**
+
+W at any design (cells are at W = K); d at GLM-5.3; that a cap on K is public; REGX's and #8512's Lean (read, not built); `pr_unfound_le_at` for the session term; SCALE's entry (not read, as asked). The finder is in no Lean, and its trace and deterministic half are on REGX's branch, not `main`.
+
+For Daniel: at two stages the 100-bit finder still works, with the same formula and constant 2, if for values committed after the first coins it reruns only the second stage; the count is the bits one audit's sample reads, about 2^25 to 2^40 depending on which sampling design is registered, giving 131 to 96 bits for one audit [derived, run; K relayed]. Two things it needs are not on `main`: one new clause saying a session opens only what its sampled blocks need (true of our code), and the committed trace for the interior, which REGX's branch already states and proves with the old square-root error (2^-18 at B, 2^-7 at A) [read, run]. My earlier count by block with no new clause does not carry over to two stages [derived, run].
