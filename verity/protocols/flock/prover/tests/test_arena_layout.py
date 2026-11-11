@@ -72,8 +72,8 @@ def test_every_shape_fits_with_margin(lib: ctypes.CDLL) -> None:
 def test_the_level_walk_takes_idle_room(lib: ctypes.CDLL) -> None:
     """The unit's level walk's working arrays come from the arena while a rep's witness is built, when z, a and b (and for
     rep 1 the level 0 that rep 0 kept) are all it holds. At the head block's statement (m 35, K 2^27, M1; a unit of 31,981,569
-    rows) the arena is no larger for them and the session fits as before; a unit of a whole block's rows in a statement of
-    eight blocks grows it, and the session fits that too."""
+    rows) the arena is no larger for them and the session fits as before; a unit of a whole block's rows there needs more
+    than the lincheck does, so the arena grows, and the session fits that too."""
     head = Shape(35, 27, True)
     walk = replace(head, walk_bytes=32 * 31_981_569)
     assert arena(lib, walk) == arena(lib, head)
@@ -82,9 +82,8 @@ def test_the_level_walk_takes_idle_room(lib: ctypes.CDLL) -> None:
         assert [e[1] for e in ev if e[0] == "a"].count("walk_z") == 2
         assert replay(ev, arena(lib, walk)).fits
         assert need(ev, arena(lib, walk) // MIB) == need(session_events(head, keep), arena(lib, head) // MIB)
-    small = Shape(30, 27, True)
-    wide = replace(small, walk_bytes=32 << 27)
-    assert arena(lib, wide) > arena(lib, small) and not replay(session_events(wide, True), arena(lib, small)).fits
+    wide = replace(head, walk_bytes=32 << 27)
+    assert arena(lib, wide) > arena(lib, head) and not replay(session_events(wide, True), arena(lib, head)).fits
     assert replay(session_events(wide, True), arena(lib, wide)).fits
 
 
