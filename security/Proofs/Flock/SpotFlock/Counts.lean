@@ -74,8 +74,10 @@ theorem code_ex_le (x : Msg) (G : List ℕ → ℝ) (w : ℕ → ℕ) (M : ℕ) 
             (((h.reg.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
               (src (r (order h x).first)) (src (r (order h x).second))).map w).sum : ℝ)) :=
           Ex_mono fun r => by rw [h1]; exact hG _
-      _ ≤ _ := h.reg.ex_sum_checked_le _ (fun r => src (r (order h x).first)) (fun r => src (r (order h x).second))
-          w M (K * h.reg.ks.toList.sum) hM fun _ _ _ hsel => h.reg.proved_size_le _ _ hsel hK
+      _ ≤ _ := h.reg.ex_sum_checked_le (Ω := Fin ((code h).V.k x) → FlockDeploy.Coin)
+          (SamplingDeploy.units ((base h).atOrder (order h)) x) (fun r => src (r (order h x).first))
+          (fun r => src (r (order h x).second)) w M (K * h.reg.ks.toList.sum) hM fun _ _ _ hsel =>
+            h.reg.proved_size_le _ _ hsel hK
 
 /-- **A function of the checked proof blocks at SPOT[Flock]'s code, in expectation, by template**: a function `G` at
 most a weight `w` summed over its blocks, with `w` at most `M t` on template `t`'s blocks, averages at most the
@@ -109,8 +111,9 @@ theorem code_ex_le_strata (x : Msg) (G : List ℕ → ℝ) (w M : ℕ → ℕ)
             (((h.reg.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
               (src (r (order h x).first)) (src (r (order h x).second))).map w).sum : ℝ)) :=
           Ex_mono fun r => by rw [h1]; exact hG _
-      _ ≤ _ := h.reg.ex_checked_le _ (fun r => src (r (order h x).first)) (fun r => src (r (order h x).second))
-          (fun l => ((l.map w).sum : ℝ)) (Nat.cast_nonneg _) fun r _ _ hsel => by
+      _ ≤ _ := h.reg.ex_checked_le (Ω := Fin ((code h).V.k x) → FlockDeploy.Coin)
+          (SamplingDeploy.units ((base h).atOrder (order h)) x) (fun r => src (r (order h x).first))
+          (fun r => src (r (order h x).second)) (fun l => ((l.map w).sum : ℝ)) (Nat.cast_nonneg _) fun r _ _ hsel => by
             exact_mod_cast h.reg.sum_checked_le_strata _ _ _ hsel w M hM (h.reg.sample_size_le hK _)
 
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
@@ -133,7 +136,7 @@ theorem code_hNs (x : Msg) {K : ℕ} (hK : firstK h.reg.first = some K) :
       exact_mod_cast ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.card_firstSlots_le x
         (l.take (Claims.Sampling.nPU (deployOf F (code h)) x))
         ((compiledTwo F (code h) iroots (two h) (rs h) (cap h)).toCompiled.nPU x)).trans
-        (List.length_take_le _ _)) hK
+        (List.length_take_le' _ _)) hK
   rw [sum_map_one, sum_map_one, List.length_range, mul_one] at this
   exact this
 
