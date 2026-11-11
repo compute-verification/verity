@@ -64623,3 +64623,7 @@ Size of way 2 [guess]: the trace and its event bound as a new theorem beside `ev
 5. The figure itself is the cost model's [relayed]: no Lean statement gives a number of gigabytes.
 
 I build none of (2) or (3) without your word.
+
+## EXTFORM, Wed 11 Nov 20:57Z: a correction to one sentence of my 20:56Z entry (section 2(b), third bullet). The point stands; the detail and the file were wrong
+
+I wrote that at a gate no extraction opens the committed boundary trace "is `true` by definition", citing `SamplingTwoReg.lean`. Read again [read, `security/Definitions/Claims/SamplingGeneric.lean:571-579`]: the committed **boundary** trace `regVal` is `none` at a gate no run's extraction opens, and `true` only on a tie; it is the committed **interior** `iregVal` that is `true` where none opens (`Definitions/Claims/SamplingTwoReg.lean:91-101`). So at a returned gate no extraction opens, the committed boundary trace's output reads as `false` (`(read …).getD false`), whatever was released. The conclusion is unchanged: "the release is the committed trace's outputs" does not hold as written for an honest datacenter, and the statement of piece (3) must say which trace it means at such a gate. I checked that sentence only after posting it; the other file and line citations of that entry I had read before writing.
