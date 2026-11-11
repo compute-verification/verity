@@ -55,6 +55,10 @@
    "digest": "36546a7c38e65c525a4f4b8db6da802965f6664707603f801b0c17145ff31f16",
    "why": "The proof system for proof blocks is complete: `CompilerComplete` is stated for such a system and says the compiled verifier inherits its completeness. (met by `compilerComplete_honest`)"
   },
+  "Accounting.JointBridge.PhaseLeaks": {
+   "owner": "@lean",
+   "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
+  },
   "Claims.Encodings.CodeScheme.ColBinds": {
    "owner": "@proofs",
    "digest": "157433c3e83ee999a64f3d452ed973c2ad40a38b813725cf713498dc884b573a",
@@ -4478,6 +4482,10 @@
    "honest": ["NetTiming.Witness.PeriodLeakAccepted_honest"],
    "nontrivial": "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial"
   },
+  "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": {
+   "honest": ["Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted_nontrivial"
+  },
   "Flock.SecurityProofs.EndToEndRegistered": {
    "honest": ["Flock.SecurityProofs.EndToEndRegistered_honest"],
    "nontrivial": "Flock.SecurityProofs.EndToEndRegistered_nontrivial"
@@ -5762,7 +5770,11 @@
     "Definitions.Claims",
     "Definitions.Accounting"
    ],
-   "except": ["Definitions.Accounting.Bandwidth.Game", "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted"],
+   "except": [
+    "Definitions.Accounting.Bandwidth.Game",
+    "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted",
+    "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted"
+   ],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash); a period of the causal game reads its subprotocols' collision finders and their success (Definitions.Claims' Finder, Finder.Pr), as the claims state them"
   },
   "Definitions.Accounting.Guarantees": {
@@ -5874,6 +5886,17 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
+  },
+  "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
+   "imports": [
+    "Definitions.Accounting.JointPeriod",
+    "Definitions.NetworkCertifier.PooledLeak",
+    "Definitions.NetworkCertifier.Checked",
+    "Definitions.NetworkCertifier.Tap",
+    "Definitions.Core.Assumptions"
+   ],
+   "except": [],
+   "why": "the network certifier's pooled bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the monitoring period's good event and leak relation (Definitions.NetworkCertifier.PooledLeak), the named input for the miss probability given the earlier phases' coins (Definitions.NetworkCertifier.Checked), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
   },
   "Definitions.WeightSecurity": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.Spot.Dataflow"],
@@ -6771,6 +6794,12 @@
     "reads": []
    },
    "type_hash": "c1b7923fe9ff1dfff3cbf7b4d6a79d0cf258959cd51aa8320806b66047fbf9e3"
+  },
+  "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": {
+   "owner": "@lean"
+  },
+  "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest": {
+   "owner": "@lean"
   },
   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
    "owner": "@lean",
@@ -26920,6 +26949,7 @@
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block with carried state (Flock.Guarantees.IntegrityBlockCarried) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a monitoring period of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_certifier: RLeakCertifier, the observations the network certifier registers at the transfer gates under the statement's roots, CertifierRegisters, with Claims.SamplingGeneric.Compiled.KS and CommitmentScheme.Binds at each compiled verifier) with the read-back of its record (certifier_cells_read), over the network certifier's code (recordingCode: the active warden's code certifierCode and the record of its cells, in any record format RecordFormat whose cells read back on the schedules it holds, RecordFormat.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.recordFormat) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (CertifierRegisters, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakCertifier at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's monitoring period of sampled audits, pooled (RealizesCommOfPooledLeakAccepted), from PooledLeakAccepted's first conjunct at the run's coins: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Pous.SecurityProofs.StreamedWipeMeetsFamily": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
