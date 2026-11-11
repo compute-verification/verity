@@ -1,6 +1,6 @@
 # f32 reference primitives, on every input
 
-`run.py` evaluates a primitive of `verity.ml.definitions.registry.ref_prims` on all 2^32 binary32 words, in one of two modes.
+`run.py` evaluates a primitive of `verity.definitions.registry.ref_prims` on all 2^32 binary32 words, in one of two modes.
 A pass is 0 mismatches over `[0, 2^32)`.
 
 - `log`, `exp`: the correctly rounded evaluator against MPFR's correctly rounded result (gmpy2 at 24 bits, emin -148, emax
