@@ -649,3 +649,10 @@ Fri 13 Nov 02:00Z, for each directory, whether it is in the store, regenerates, 
   18:15Z to Thu 00:00Z if the order is not finished.
 - **It also means:** rows not timed on this node by Sat 08:07Z are not timed on it at all. Keep to benchmarks'
   order, and say in your final message what of it is left.
+
+## Wed 11 Nov 03:16Z: another timed neighbour, 07:30Z to 11:45Z
+
+memory-accounting runs on card 0 with cores 0-7 from 07:30Z to 11:45Z (its calendar row; HASH-113, 03:15Z). From
+07:30Z keep everything of yours, staging included, inside your own cores 24-95 (72), so that with its 8 the node is
+at 80 of 81.6; name it among what ran beside each row timed then. Before 07:30Z the rule of 60 cores beside
+compute-accounting and KMOVE stands.

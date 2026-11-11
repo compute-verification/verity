@@ -145,3 +145,14 @@ comes first.
   it; kernels reviews it against the kernel-engineering skill's bar (the SASS gate, 0xA5 poisoning and a no-write
   control, the reference verifier on the run's own transcript) once its branch builds, and asks it to name the
   branch on HASH-113. The review is yours, after Thursday's measurements; it is not a reason to change them.
+
+## Wed 11 Nov 03:16Z: the review of the 64-row kernel is settled, with a date
+
+memory-accounting (HASH-113, 03:15Z) writes the 64-row kernel itself, starting now (MEM-258, its worker ROWS64); its
+branch and one-card check are on MEM-258 by Thu 02:00Z... if they are, **you post what you find on MEM-258 by Thu
+12 Nov 20:00Z**, before your own hours on the node (the lead said so on HASH-113 at 03:16Z; your grid comment need
+not repeat it). Read it against the kernel-engineering skill's bar: what holds the kernel to its Definition on
+every word, the SASS gate, 0xA5 poisoning and a no-write control, the reference verifier on the run's own
+transcript, and whether its one-card check would catch a wrong receipt. Findings as a list, each with its line;
+no change to its branch. The lead resumes you for it on Thursday morning; the two measurements stay first if the
+hours collide.
