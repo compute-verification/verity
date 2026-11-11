@@ -87,6 +87,27 @@ def test_a_pid_is_read_whatever_its_name_and_the_lines_say_what_names_each_run(m
     assert S.render_procs(S.procs(["nothing"], [], proc, root, now=NOW)) == ""
 
 
+def test_what_it_cannot_read_is_named_on_the_process_s_line_and_an_unlistable_proc_raises(machine, tmp_path):
+    proc, root = machine
+    alone = "/user.slice/user-1001.slice/session-138000.scope"
+    _proc(proc, 60, 61, "lake", alone)
+    _proc(proc, 61, 1, "python3", alone, ("run", "--id", DIRECT))
+    (proc / "61" / "cmdline").unlink()                                                               # its parent's command line is gone
+    _proc(proc, 70, 1, "lake", CHECK_SCOPE.replace(CHECK, OTHER))                                   # a run with no records here
+    doc = S.procs([], [60, 70], proc, root, now=NOW)
+    got = {r["pid"]: r for r in doc["procs"]}
+    assert (got[60]["run"], got[60]["unread"]) == (None, ["61/cmdline (No such file or directory)"])
+    assert (got[70]["run"], got[70]["via"], got[70]["state"], got[70]["by"]) == (OTHER, "cgroup", None, None)
+    assert got[70]["unread"] == [f"requests/{OTHER}/request.json (No such file or directory)",
+                                 f"runs/{OTHER}/status.json (No such file or directory)"]
+    lines = {int(line.split()[0]): line for line in S.render_procs(doc).splitlines()}
+    assert "no run: " in lines[60] and "; couldn't read 61/cmdline (No such file or directory): what only they say is missing here" in lines[60]
+    assert f"run {OTHER} (no status.json here), sent by nobody recorded" in lines[70] and "couldn't read requests/" in lines[70]
+    assert "unread" not in S.procs(["lake"], [], proc, root, now=NOW)["procs"][0], "a process read whole carries no such list"
+    with pytest.raises(OSError):
+        S.procs(["lake"], [], tmp_path / "absent", root, now=NOW)
+
+
 def test_the_command_refuses_to_list_a_whole_process_table_and_sends_the_reader_itself(machine, monkeypatch, capsys):
     proc, root = machine
     assert connect.main_procs(["vy-nebius-cpu-7"]) == 2

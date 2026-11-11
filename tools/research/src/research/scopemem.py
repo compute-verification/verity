@@ -259,25 +259,29 @@ def node(run_dirs: list[str], proc: Path | None = None, cg_root: Path | None = N
 
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 RESEARCH_ROOT = "/workspace/research"                     # a node's runs/ and requests/ (monitors.RUNS, monitors.REQUESTS)
+UNREAD_SHOWN = 3                                          # how many of a process's unread files its line names
 
 
-def _runner_of(proc: Path, pid: int) -> str | None:
-    """The run whose runner ``pid`` is: the RUN of its `research run --id RUN` command."""
+def _runner_of(proc: Path, pid: int, unread: list[str]) -> str | None:
+    """The run whose runner ``pid`` is: the RUN of its `research run --id RUN` command.  A command line that can't be read (the
+    process is gone, or is another user's) is named in ``unread``, since nothing then says whether it was a runner."""
     try:
         argv = (proc / str(pid) / "cmdline").read_bytes().decode(errors="replace").split("\0")
-    except OSError:
+    except OSError as e:
+        unread.append(f"{pid}/cmdline ({e.strerror or type(e).__name__})")
         return None
     return argv[argv.index("--id") + 1] if "--id" in argv[:-1] and RUN_ID.fullmatch(argv[argv.index("--id") + 1]) else None
 
 
-def _cwd(proc: Path, pid: int) -> str | None:
+def _cwd(proc: Path, pid: int, unread: list[str]) -> str | None:
     try:
         return os.readlink(proc / str(pid) / "cwd")
-    except OSError:
+    except OSError as e:
+        unread.append(f"{pid}/cwd ({e.strerror or type(e).__name__})")
         return None
 
 
-def run_of(proc: Path, pid: int, scopes: dict[str, list[int]]) -> dict[str, Any]:
+def run_of(proc: Path, pid: int, scopes: dict[str, list[int]], unread: list[str]) -> dict[str, Any]:
     """The run process ``pid`` belongs to, by the strongest thing that names one (`via`):
 
         cgroup     its cgroup's name carries the run id: a check's `check-<slot>-RUN.scope`, a queued run's `cluster-RUN.scope`
@@ -286,28 +290,30 @@ def run_of(proc: Path, pid: int, scopes: dict[str, list[int]]) -> dict[str, Any]
                    (``scopes``: each `.scope` cgroup's pids) holds exactly one run's runner
         cwd        only its working directory names a run, which a process started by hand inside a run's tree also does
 
-    `run` is None where nothing names one, and `runs` lists the candidates where its scope holds several runs' runners."""
+    `run` is None where nothing names one, and `runs` lists the candidates where its scope holds several runs' runners.  What it
+    couldn't read on the way goes in ``unread``: a run that only an unread command line names is missed, and the caller says so."""
     cg = _cgroup_of(proc, pid) or ""
     if m := RUN_ID.search(cg):
         return {"run": m[0], "via": "cgroup"}
     seen, p = set(), pid
     while p and p > 1 and p not in seen:
         seen.add(p)
-        if rid := _runner_of(proc, p):
+        if rid := _runner_of(proc, p, unread):
             return {"run": rid, "via": "ancestor", "runner": p}
         p = int(f[1]) if (f := _stat(proc, p)) and f[1].isdigit() else 0
-    runners = sorted({rid for q in scopes.get(cg, ()) if (rid := _runner_of(proc, q))})
+    runners = sorted({rid for q in scopes.get(cg, ()) if (rid := _runner_of(proc, q, unread))})
     if len(runners) == 1:
         return {"run": runners[0], "via": "scope"}
-    if m := RUN_ID.search(_cwd(proc, pid) or ""):
+    if m := RUN_ID.search(_cwd(proc, pid, unread) or ""):
         return {"run": m[0], "via": "cwd"} | ({"runs": runners} if runners else {})
     return {"run": None, "via": None} | ({"runs": runners} if runners else {})
 
 
-def _json(p: Path) -> dict[str, Any]:
+def _json(p: Path, unread: list[str]) -> dict[str, Any]:
     try:
         doc = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        unread.append(f"{p.parent.parent.name}/{p.parent.name}/{p.name} ({getattr(e, 'strerror', None) or type(e).__name__})")
         return {}
     return doc if isinstance(doc, dict) else {}
 
@@ -316,14 +322,12 @@ def procs(comms: list[str], pids: list[int], proc: Path | None = None, root: Pat
           now: float | None = None) -> dict[str, Any]:
     """Every live process named one of ``comms`` or numbered one of ``pids``: its run and what names it (`run_of`), the run's
     state (``root``/runs/RUN/status.json) and who sent it (its request's `submitted_by`, else the `--by` of its command, as
-    `monitors.submitter`), when it started, its cgroup and its working directory."""
+    `monitors.submitter`), when it started, its cgroup and its working directory, and under `unread` what of those it couldn't
+    read and why.  A /proc that can't be listed raises: it has nothing to say of the machine."""
     import time
 
     proc, root = _roots(proc, None)[0], Path(root)
-    try:
-        every = sorted(int(e) for e in os.listdir(proc) if e.isdigit())
-    except OSError:
-        every = []
+    every = sorted(int(e) for e in os.listdir(proc) if e.isdigit())
     scopes: dict[str, list[int]] = {}
     for p in every:
         if (cg := _cgroup_of(proc, p)) and cg.endswith(".scope"):
@@ -334,14 +338,16 @@ def procs(comms: list[str], pids: list[int], proc: Path | None = None, root: Pat
         comm = _text(proc / str(p) / "comm")
         if p not in pids and comm not in comms:
             continue
-        f = _stat(proc, p) or []
-        row = {"pid": p, "comm": comm, "cgroup": _cgroup_of(proc, p), "cwd": _cwd(proc, p), **run_of(proc, p, scopes),
+        f, unread = _stat(proc, p) or [], []
+        row = {"pid": p, "comm": comm, "cgroup": _cgroup_of(proc, p), "cwd": _cwd(proc, p, unread), **run_of(proc, p, scopes, unread),
                "started": int(boot[1]) + int(f[19]) / os.sysconf("SC_CLK_TCK") if boot and len(f) > 19 and f[19].isdigit() else None}
         if row["run"]:
-            req = _json(root / "requests" / row["run"] / "request.json")
+            req = _json(root / "requests" / row["run"] / "request.json", unread)
             cmd = req.get("command") if isinstance(req.get("command"), list) else []
-            row["state"] = _json(root / "runs" / row["run"] / "status.json").get("state")
+            row["state"] = _json(root / "runs" / row["run"] / "status.json", unread).get("state")
             row["by"] = req.get("submitted_by") or (cmd[cmd.index("--by") + 1] if "--by" in cmd[:-1] else None)
+        if unread:
+            row["unread"] = sorted(set(unread))
         out.append(row)
     return {"now": time.time() if now is None else now, "procs": out}
 
@@ -362,6 +368,9 @@ def render_procs(doc: dict[str, Any]) -> str:
             what = "no run: neither its cgroup, an ancestor, its session scope nor its working directory names one"
         if r.get("runs"):
             what += f"; its session scope holds the runners of {', '.join(r['runs'])}"
+        if un := r.get("unread"):
+            what += (f"; couldn't read {', '.join(un[:UNREAD_SHOWN])}" + (f" and {len(un) - UNREAD_SHOWN} more" if len(un) > UNREAD_SHOWN else "")
+                     + ": what only they say is missing here")
         lines.append(f"{r['pid']} {r['comm']}  {up}  {what}  [cwd {r.get('cwd') or '?'}; cgroup {r.get('cgroup') or '?'}]")
     return "\n".join(lines)
 
