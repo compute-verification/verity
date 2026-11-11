@@ -5,25 +5,29 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tools" / "research" / "src"))
 
+from research import result as R  # noqa: E402
 from research.store import derivation as D  # noqa: E402
 from research.store import tools_registry  # noqa: E402
-from research import result as R  # noqa: E402
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 
-def _measure():
+def _measure() -> ModuleType:
     spec = importlib.util.spec_from_file_location("native_peak_measure", REPO / "benchmarks" / "native_peak" / "measure.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-def test_declaration_is_registered_and_keys_what_is_measured():
+def test_declaration_is_registered_and_keys_what_is_measured() -> None:
     t = tools_registry.load("native_peak", REPO)
     assert t.name == "native_peak" and t.spec == "benchmarks.native_peak.tool:NATIVE_PEAK" and "hw.family" in t.key_conditions
     assert "native-peak/v1" in t.produces
@@ -37,7 +41,7 @@ def test_declaration_is_registered_and_keys_what_is_measured():
     assert D.derivation_id(t, {}, key, conds, t.key_conditions) != D.derivation_id(t, {}, key, {"hw.family": "a100"}, t.key_conditions)
 
 
-def test_spec_table_and_size_parsing():
+def test_spec_table_and_size_parsing() -> None:
     m = _measure()
     assert m.spec_peak("NVIDIA GeForce RTX 4090", "bf16") == (165.2e12, m.SPEC_PEAKS[0][2])
     assert m.spec_peak("NVIDIA GeForce RTX 4090", "e4m3")[0] == 330.3e12
@@ -59,7 +63,7 @@ def test_spec_table_and_size_parsing():
         m.parse_sizes("100")
 
 
-def test_smi_samples_parse_and_summarise():
+def test_smi_samples_parse_and_summarise() -> None:
     m = _measure()
     rows = m.parse_smi_csv("2026/09/22 21:00:00.100, 2520, 10501, 412.3, 61, 0x0000000000000004\n2026/09/22 21:00:00.200, 2505, 10501, 449.9, 62, 0x0000000000000004\nbad line\n")
     assert len(rows) == 2 and rows[0]["clocks_sm_mhz"] == 2520 and rows[1]["power_w"] == 449.9 and rows[0]["t"] is not None and rows[1]["t"] > rows[0]["t"]
@@ -68,7 +72,7 @@ def test_smi_samples_parse_and_summarise():
     assert m.summarize_samples([])["clocks_sm_mhz"] is None
 
 
-def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path):
+def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path: Path) -> None:
     m = _measure()
     envd = {"device": "NVIDIA GeForce RTX 4090", "sm": "8.9", "driver": "570.1", "cuda": "12.4", "torch": "2.4.1+cu124"}
     size = {"n": 8192, "m": 8192, "k": 8192, "flop": 2.0 * 8192 ** 3, "warmup": 3, "reps": 5, "seconds_all": [0.0080, 0.0079, 0.0081, 0.0080, 0.0082],
@@ -96,7 +100,7 @@ def test_result_document_is_a_valid_envelope_with_headline_fields(tmp_path):
     assert skipped["validation"]["status"] == "not_run" and skipped["flop_per_second"] is None and skipped["spec_flop_per_second"] is None
 
 
-def test_nvfp4_instruction_result_document(tmp_path):
+def test_nvfp4_instruction_result_document(tmp_path: Path) -> None:
     """--dtype nvfp4 records the instruction microbenchmark as the headline (label instead of n^3), the SASS from cuobjdump,
     and the cuBLASLt GEMM attempt beside it; the envelope stays valid."""
     m = _measure()
@@ -127,7 +131,7 @@ def test_nvfp4_instruction_result_document(tmp_path):
     json.dumps(doc)
 
 
-def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
+def test_measure_bf16_small_on_cuda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
         pytest.skip("no CUDA device")
@@ -140,7 +144,7 @@ def test_measure_bf16_small_on_cuda(tmp_path, monkeypatch):
     assert doc["flop_per_second"] > 0 and "1024^3" in doc["sizes"] and doc["sizes"]["1024^3"]["check_ok"]
 
 
-def test_spec_peaks_agree_with_every_census_line():
+def test_spec_peaks_agree_with_every_census_line() -> None:
     """The pod-side table stays standalone (nothing to read on a pod); it must quote benchmarks/census/hardware.json's peak for every line."""
     m = _measure()
     hardware = json.loads((REPO / "benchmarks" / "census" / "hardware.json").read_text(encoding="utf-8"))

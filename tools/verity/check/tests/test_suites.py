@@ -196,7 +196,7 @@ def test_resync_installs_the_workspace_and_runs_the_command_again_marked_synced(
 
 def test_only_the_trees_own_environment_without_the_workspace_or_torch_is_fresh(tmp_path, monkeypatch):
     """Probed as `foreign` probes, under the tests' PYTHONPATH: a launcher's shim of the root package doesn't make a fresh tree's
-    environment look installed (r20261109-053655-afb9: research's pyshim held a `verity`)."""
+    environment look installed (research's pyshim held a `verity`)."""
     (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/rootpkg"]\n')
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S.shutil, "which", lambda name: "/usr/bin/uv")

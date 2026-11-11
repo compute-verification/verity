@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["NetworkCertifier"],
  "exempt": {
   "NetworkCertifier.ChargeDifftestMain": "the charge difftest against arith_encode.reference_charge, under `runs`: compiled evaluation of NetworkCertifier.AdviceV1.ChargeDifftest.main, audited under NetworkCertifier, a test and not a proof",
@@ -25,11 +26,11 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NetworkCertifier.WindowDifftestMain": {
-   "why": "4,000 random instances on which advice v1's whole window charged (WindowCharge.window from a carry, and WindowCharge.charges from the book's first carry) gives what window_charge.reference_window gives, window by window and chained",
+   "why": "4,000 instances, random but for the charge's edge at 2^CW, on which advice v1's whole window charged with its length terms (WindowCharge.window from a carry, and WindowCharge.charges from the book's first carry) gives what window_charge.reference_window gives, window by window and chained",
    "args": ["{window/instances.jsonl}", "{window/python.jsonl}", "4000"],
    "data": {
-    "window/instances.jsonl": "30e1bb0c246b19cb532f2016797fb017599ea706dc27de7575af55859201e6a3",
-    "window/python.jsonl": "a1adfd8cec5e431d1ca2f3ec1f33581128ce761a187650ffaf6ebdb02fd4e74a"
+    "window/instances.jsonl": "d00c44e320929428d2b179a7649840f710b2061216245bca245b94e775c4ebc5",
+    "window/python.jsonl": "bed42048094c491ebfa8cad73ec96efb4f69fd14876dfefad1d4f3dc685b4e01"
    },
    "generate": ["python3", "scripts/window_vectors.py", "{repo}", "--out", "{out}"]
   }

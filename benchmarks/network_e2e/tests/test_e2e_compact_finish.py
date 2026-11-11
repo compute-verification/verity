@@ -25,8 +25,9 @@ def _load(name: str, path: Path):
 e2e = _load("network_e2e", HERE / "e2e.py")
 chain = e2e.chain
 NG = chain.NG
-gate_compact = _load("network_traces_test_certifier_serve",
-                     HERE.parent / "network_traces" / "tests" / "test_certifier_serve.py").gate_compact
+gate_compact = _load(
+    "network_traces_test_certifier_serve",
+    Path(__file__).resolve().parents[3] / "benchmarks/network_traces/tests/test_certifier_serve.py").gate_compact
 
 
 def _parse(cell: bytes):
