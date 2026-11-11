@@ -1,4 +1,4 @@
-"""The slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: the one module here that names it.
+"""The slowdown calculator (`verity/protocols/inference_only/slowdown`) as this package reads it: the one module here that names it.
 
 What the calculator states is read from it through its public functions, never restated here:
 
@@ -23,7 +23,7 @@ from pathlib import Path
 from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
-CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho"
+CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "slowdown"
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
@@ -38,7 +38,7 @@ def _calculator():
     if sys.path[0] != str(CALCULATOR):
         sys.path.insert(0, str(CALCULATOR))
     import periods
-    from rho import envelopes, hardware, params
+    from slowdown import envelopes, hardware, params
 
     return periods, envelopes, hardware, params, params.Registry.load()
 
@@ -88,7 +88,7 @@ def _min_cut():
     _calculator()
     if not (CALCULATOR / CALCULATOR.name / "min_cut.py").exists():
         return None
-    from rho import min_cut
+    from slowdown import min_cut
 
     return min_cut
 

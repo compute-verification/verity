@@ -10,7 +10,7 @@ word maps of `tools/move/`, which name the words they retire; and of a `.lean` f
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
-the next line (behind a comment marker or not). Every file under `verity/protocols/inference_only/rho/`, `benchmarks/network_traces/` and the
+the next line (behind a comment marker or not). Every file under `verity/protocols/inference_only/slowdown/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -49,7 +49,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("verity/protocols/inference_only/rho/", "benchmarks/network_traces/", "verity/protocols/certifier/verifier/network/tests/")
+INCORRECT = ("verity/protocols/inference_only/slowdown/", "benchmarks/network_traces/", "verity/protocols/certifier/verifier/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -222,7 +222,7 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `verity/protocols/inference_only/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `verity/protocols/inference_only/slowdown/slowdown/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -525,20 +525,20 @@ def test_the_scan_reads_each_form():
 
 
 def test_the_scan_reads_rho_terms():
-    """`verity/protocols/inference_only/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    """`verity/protocols/inference_only/slowdown`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "verity/protocols/inference_only/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "verity/protocols/inference_only/slowdown/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "verity/protocols/inference_only/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "verity/protocols/inference_only/slowdown/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("verity/protocols/inference_only/rho/a.py", 1, "faulty-outputs"), ("verity/protocols/inference_only/rho/a.py", 1, "faulty step"),
-        ("verity/protocols/inference_only/rho/a.py", 2, "faulty ingress unit"), ("verity/protocols/inference_only/rho/a.py", 2, "faulty set"),
-        ("verity/protocols/inference_only/rho/data/b.toml", 1, "Faulty outputs"), ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty proof block"),
-        ("verity/protocols/inference_only/rho/data/b.toml", 1, "faulty blocks")]
+        ("verity/protocols/inference_only/slowdown/a.py", 1, "faulty-outputs"), ("verity/protocols/inference_only/slowdown/a.py", 1, "faulty step"),
+        ("verity/protocols/inference_only/slowdown/a.py", 2, "faulty ingress unit"), ("verity/protocols/inference_only/slowdown/a.py", 2, "faulty set"),
+        ("verity/protocols/inference_only/slowdown/data/b.toml", 1, "Faulty outputs"), ("verity/protocols/inference_only/slowdown/data/b.toml", 1, "faulty proof block"),
+        ("verity/protocols/inference_only/slowdown/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
