@@ -10,9 +10,9 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
     """`DsaWaksmanOrder_v1`'s settings are 21 one-bit words, which `boolean.bit_type` leaves one 21-bit element on bits, so
     `evaluate_words` refuses the word Definition's vectors: the word view compares `DsaWaksmanOrder_v2` with it bit by bit, and a
     Boolean version that flips one bit of every output word is caught."""
-    import verity.ml.circuits.evaluation.bits as EB
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import boolean_dsa_topk as BT
+    import verity.circuits.evaluation.bits as EB
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk as BT
 
     t = bind(BT.DsaWaksmanOrderV2, N=9, TOPK=8)
     F = CK.Findings()
@@ -35,10 +35,10 @@ def test_a_port_of_single_bits_is_compared_through_its_bits(monkeypatch):
 def _xor_bits(word: bool | str):
     """x ^ y on four bits, with ``x ^ y`` on 4-bit words as its word Definition when ``word``: a primitive, or an unbound
     composite calling it when ``word == "composite"``."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-    from verity.ml.circuits.refs import Coll, concat
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits import boolean as BL
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.circuits.refs import Coll, concat
+    from verity.circuits.types import Array, Value
 
     nib = Array(4, BL.BIT)
 

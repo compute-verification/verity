@@ -227,16 +227,16 @@ def suite(path, status, **more):
 
 STEPS_OK = [("pytest", "passed"), ("lean-build", "passed"), ("lean-audit", "passed")]
 STEPS_RED = [("pytest", "failed"), ("lean-build", "passed"), ("lean-audit", "failed"), ("flock", "skipped")]
-SAID = [{"suite": "verity/ml/circuits", "contradicts": ["tests/test_ops.py::test_add", "tests/test_ops.py::test_mul"]}]
+SAID = [{"suite": "verity/circuits", "contradicts": ["tests/test_ops.py::test_add", "tests/test_ops.py::test_mul"]}]
 RECORDS = {
     "passed": dict(status={"state": "done", "rc": 0, "wall_s": 14520.4}, result=result("passed", STEPS_OK),
                    suites=[suite("tools/research", "passed"), suite("infra/ops", "cached")]),
     "failed": dict(status={"state": "failed", "rc": 1, "wall_s": 5700}, result=result("failed", STEPS_RED),
-                   suites=[suite("tools/research", "failed"), suite("verity/ml/circuits", "passed")],
-                   lean=[suite("verity/core/service/flock", "failed")]),
+                   suites=[suite("tools/research", "failed"), suite("verity/circuits", "passed")],
+                   lean=[suite("verity/protocols/flock/verifier", "failed")]),
     "contradicted": dict(status={"state": "failed", "rc": 1, "wall_s": 5700},
                          result=result("failed", STEPS_RED[:2], cache_contradictions=SAID),
-                         suites=[suite("verity/ml/circuits", "failed", contradicts=SAID[0]["contradicts"])]),
+                         suites=[suite("verity/circuits", "failed", contradicts=SAID[0]["contradicts"])]),
     "never-started": dict(status={"state": "failed", "rc": 75, "wall_s": 3.0}),
     "timed-out": dict(status={"state": "cancelled", "rc": None, "signal": "SIGTERM", "wall_s": 7200.0},
                       failure={"class": "STAGE_TIMEOUT", "why": "the run's --timeout"}),
@@ -279,15 +279,15 @@ def test_a_passed_check_with_nothing_contradicted_is_passed(tmp_path):
 def test_a_failed_check_names_each_failed_step_and_suite(tmp_path):
     got = read(tmp_path, "failed")
     assert got == N.Read("failed", "failed steps: `pytest`, `lean-audit`; failed suites: `tools/research`, "
-                         "`verity/core/service/flock`. Its result names no cached pass it contradicts.", 95)
+                         "`verity/protocols/flock/verifier`. Its result names no cached pass it contradicts.", 95)
 
 
 def test_a_cached_pass_the_run_contradicts_outranks_the_verdict(tmp_path):
     got = read(tmp_path, "contradicted")
     assert got.outcome == "contradicted" and got.minutes == 95
     assert got.detail == ("the uncached check failed, and a cached pass answers for what it failed, so a cache key misses an "
-                          "input or a test isn't a function of its inputs: `verity/ml/circuits`: tests/test_ops.py::test_add, "
-                          "tests/test_ops.py::test_mul. Its failed steps: `pytest`; failed suites: `verity/ml/circuits`.")
+                          "input or a test isn't a function of its inputs: `verity/circuits`: tests/test_ops.py::test_add, "
+                          "tests/test_ops.py::test_mul. Its failed steps: `pytest`; failed suites: `verity/circuits`.")
     cfg = settings(tmp_path)
     passed = N.judge({"state": "done", "rc": 0, "validation": "passed", "result_valid": True, "wall_s": 60},
                      result("passed", STEPS_OK, cache_contradictions=SAID), [], cfg)
