@@ -481,6 +481,21 @@ def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one
         grain_costs([Grain("g", 4, 1.0, 1, 0.0, 1.0)], 0.5, h=0.0)
 
 
+def test_leak_count_is_certified_at_any_population():
+    """A world year's proof blocks, and targets that allow so few incorrect ones that the float 1 - K / n is 1: the
+    count meets the target, and one more block does not, under the entropy in 50-digit decimals."""
+    for n, b, ell in ((3348 * 10 ** 18, 16, 1e7), (10 ** 18, 64, 1e6), (10 ** 17, 1, 500.0), (10 ** 21, 4096, 1e9)):
+        k = leak_count(Grain("g", n, 1.0, b, 0.0, 1.0), ell)
+        with localcontext() as context:
+            context.prec = 50
+
+            def exact(count: int) -> Decimal:
+                entropy = count * (Decimal(n) / count).ln() + (n - count) * (Decimal(n) / (n - count)).ln()
+                return b * count + entropy / Decimal(2).ln()
+
+            assert 0 < k and exact(k) <= Decimal(ell) * (1 + Decimal(2) ** -45) < exact(k + 1) * (1 + Decimal(2) ** -44)
+
+
 def test_leak_costs_keep_the_refinement_rule():
     """`RefinementRule`: splitting each proof block into r of width b' with b + log2(K+2)/(K+1) <= b' + log2 r costs at least
     (1 - K/n)(1 - Λ/(2(K+1))) of the unsplit partition's c(s) n Λ/(K+1); a split that cuts the width by much more than

@@ -60,6 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import h200 as H  # noqa: E402
 
 from verity.protocols.pouw.verifier.window import eps_at  # noqa: E402
+from verity.protocols.spot.verifier.consumers import entropy_bits
 from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum  # noqa: E402
 from verity.protocols.spot.optimize import (  # noqa: E402
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
@@ -262,8 +263,7 @@ def location(n: int, count: int) -> float:
         return 0.0
     if 2 * count >= n:
         return float(n)
-    x = count / n
-    return min(float(n), nextafter(n * (-x * log2(x) - (1 - x) * log2(1 - x)) * (1 + MARGIN), inf))
+    return min(float(n), nextafter(entropy_bits(n, count) * (1 + MARGIN), inf))
 
 
 def certificate(sizes: dict[str, int], cands: list[Candidate], objective: Objective) -> PlanBounds:

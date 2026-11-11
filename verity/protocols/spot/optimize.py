@@ -62,7 +62,7 @@ from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, n
 from pathlib import Path
 
 from verity.protocols.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum, neg_log_escape
-from verity.protocols.spot.verifier.consumers import exfiltration_bound
+from verity.protocols.spot.verifier.consumers import entropy_bits, exfiltration_bound
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 
@@ -970,14 +970,13 @@ class Grain:
 
 
 def loc_bits(n: int, k: int) -> float:
-    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j): 0 at K = 0, n H2(K/n) up to K = n/2 and n past it
-    (`consumers.location_bits`' bound)."""
+    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j), to the floats' rounding: 0 at K = 0, n H2(K/n) up to
+    K = n/2 (`consumers.entropy_bits`) and n past it (`consumers.location_bits`' bound, before its margin)."""
     if k <= 0:
         return 0.0
     if 2 * k >= n:
         return float(n)
-    x = k / n
-    return n * (-x * log2(x) - (1 - x) * log2(1 - x))
+    return entropy_bits(n, k)
 
 
 def leak_count(g: Grain, ell: float) -> int:
