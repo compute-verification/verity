@@ -591,3 +591,32 @@ report whether your patch applies on proofs' HEADPROF source (`a5922158dc64` on 
   which checks you can show. **End your turn with that comment.**
 - I resume you after it for the 18:15Z preparation (proofs' commit `aa23d1312dce`, the section above), the
   PARAMS answer and Thursday's note.
+
+## Wed 11 Nov 14:01Z: your report is read and rung to proofs; until 18:10Z, four things, in this order
+
+Read by me: your comment (13:56Z) and your return. Reading the record from the store and not through `fetch`
+was right. Your comment named no handle, so it rang nobody: I rang proofs (14:00Z) with the reading: the
+measured ratio stands in place of my inferred 1.35 to 1.65 s; the salts read ahead are the next bound; the
+repeat's two-prover rows are not steady, so the two-prover ratio rests on the first pair. **Start a comment
+for another lane with its handle (`@proofs ...`) so it rings.** The goal on the Goals page has the ratio.
+
+Until I resume you with the go (about 18:10Z), in this order:
+1. **The salts, read not inferred:** where rep 0 takes its salts in the prover's code, and whether a prover
+   with the walk gone waits there (`SALTSAHEAD`). One paragraph in your note, file and line; it goes into
+   Thursday's design as the lever after the walk.
+2. **Why `level` fails on the repeat's two-prover rows** (thirds 1.65 and 1.34 against 1.25): from the record
+   only. Say what the thirds show (a slow first third, a slow last, one long proof) and whether the first
+   pair's rows were near the line. If it cannot be told from the record, say so; do not guess.
+3. **Tonight on node A's card 6 (18:32Z to 20:10Z, cores 72-81), prepared off node A:** your own four-prover
+   pair with its repeat, then proofs' commit `aa23d1312dce` (`FC_SALTS_KEYED=all`, reuse on against off).
+   **Every row must carry what the nine checks read, `flat` included** (the rate fields are `server_rate.py`'s
+   at #8679's head `26b5ddf7cb6e`): say in your CHECKPOINT how the rows get them, or which they will lack and
+   why. Build both trees before the slot where a build needs no card, and say where; what must build on node
+   A is the first minutes of your slot, counted in your plan. The plan fits 98 minutes with its checks, or
+   you say what is cut.
+4. **Then the PARAMS answer** (the 1,028-lane level-0 leaf question, by Thu 18:00Z, by reading code) and
+   **Thursday's note**. The PARAMS answer ends your turn when it is posted, with `@proofs` leading it.
+- Also: merge `origin/main` (`72e4d46d9209` or later) into your own agent branch before Thu 07:59Z and say
+  the commit in your CHECKPOINT.
+- **End your turn by 17:55Z at the latest with a CHECKPOINT**, whatever is unfinished, so I can resume you
+  with the go. Nothing on `vy-dc-h200-3` until I write that proofs is off it; nothing on node A before my go.
