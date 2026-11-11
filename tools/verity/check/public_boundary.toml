@@ -47,7 +47,6 @@ ml = [
     "verity/commitments/{__init__.py,advice.py,coin_tree.py,crypto,domains.py,frame_v3,gates,history.py,hm96}",
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
-    "verity/protocols/poub/verifier/commitments/gates",
     "verity/{circuits,definitions}",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
@@ -178,6 +177,9 @@ protocols = [
     "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
+    # PoUB's plan unit and memory-map unit, with their test
+    "verity/definitions/circuits/requirement_units*",
+    "verity/circuits/tests/test_requirement_units.py",
 ]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
