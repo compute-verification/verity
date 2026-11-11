@@ -60,6 +60,8 @@ from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
+#: the filler rule a KV pool registers under: a page's filler payload is its bytes as allocated
+KV_FILLER = "as-allocated"
 
 FillerPlan = Callable[["NodeMemory", int], Sequence[tuple[str, Sequence[int]]]]
 
@@ -214,7 +216,6 @@ class _Pool:
     dirty: np.ndarray            # (pages, per_page): not registered: written and not complete, or released
     epoch: np.ndarray            # (pages, per_page): the block's registrations since the pool's
     step: np.ndarray             # (pages, per_page): the step that registered it, -1 for filler
-    filler: str
     page_of: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))   # region block -> page
     slot_of: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))   # region block -> block of its page
 
@@ -296,11 +297,10 @@ class _Pass:
 
 class NodeMemory:
     """The node's memory.  ``filler_plan(store, pass_index)`` returns the filler a pass reads after the weights and the
-    KV, as ``(region, blocks)`` pairs (region block indices in read order); ``chaining`` derives each pass's seed
-    (`chain`); ``salt_key`` keys the leaves' salts (`salt`), fresh by default."""
+    KV, as ``(region, blocks)`` pairs (region block indices in read order); ``salt_key`` keys the leaves' salts
+    (`salt`), fresh by default.  Each pass's seed is `chain`'s."""
 
-    def __init__(self, *, filler_plan: FillerPlan | None = None,
-                 chaining: Callable[[bytes, bytes, int], bytes] = chain, salt_key: bytes | None = None) -> None:
+    def __init__(self, *, filler_plan: FillerPlan | None = None, salt_key: bytes | None = None) -> None:
         self._salt_key = secrets.token_bytes(32) if salt_key is None else salt_key
         self._regions: list[_Region] = []
         self._by_name: dict[str, _Region] = {}
@@ -313,7 +313,7 @@ class NodeMemory:
         self._window = self._pass_step = -1
         self._retained: dict[tuple[int, int], _Pass] = {}
         self._open_pass: _Pass | None = None
-        self.filler_plan, self.chaining = filler_plan, chaining
+        self.filler_plan = filler_plan
         self.counters = Counters()
         self.memory_map: mm.MemoryMap | None = None
 
@@ -373,34 +373,25 @@ class NodeMemory:
         r.backing.write(offset, r.codec.encode(r.backing.read(offset, n), r.info.first_word + offset // wb))
 
     def register_kv_pool(self, name: str, layers: Sequence[Backing], layout: PageLayout, *, block_bytes: int,
-                         codec: Codec, receipt: Receipt, tier: str = "hbm",
-                         filler: Callable[[int, int], bytes] | None = None, filler_name: str = "as-allocated",
-                         encode: bool = True) -> tuple[RegionInfo, ...]:
-        """Register a KV pool: one region per layer, every page filler.  ``filler(layer, page)`` gives a page's filler
-        payload (its planes in order); without it the pool's bytes as allocated are the filler payload, named
-        ``filler_name``.  With ``encode`` the filler is encoded here, in place."""
+                         codec: Codec, receipt: Receipt, encode: bool = True) -> tuple[RegionInfo, ...]:
+        """Register a KV pool: one region per layer in HBM, every page filler, whose payload is the pool's bytes as
+        allocated (`KV_FILLER`).  With ``encode`` the filler is encoded here, in place."""
         if self._pool is not None:
             raise ValueError("the store holds one KV pool")
         ids, lo, hi = _page_blocks(layout, block_bytes)
         names = []
         for li, b in enumerate(layers):
             rn = f"{name}/{li}"
-            r = self._add(rn, tier, "kv", b, block_bytes, codec, receipt, f"filler:{filler_name}")
+            r = self._add(rn, "hbm", "kv", b, block_bytes, codec, receipt, f"filler:{KV_FILLER}")
             if r.info.blocks <= int(ids.max()):
                 raise ValueError(f"layer {li}: {b.nbytes} bytes don't hold the pool's pages")
             r.layer = li
             names.append(rn)
-            if filler is not None:
-                ps, ks = layout.strides()
-                for p in range(layout.pages):
-                    data = filler(li, p)
-                    for k in range(layout.planes):
-                        b.write(p * ps + k * ks, data[k * layout.plane_bytes:(k + 1) * layout.plane_bytes])
             if encode:
                 self.encode_range(rn, 0, b.nbytes)
         shape = ids.shape
         pool = _Pool(name, names, layout, ids, lo, hi, np.zeros(layout.pages, bool), np.zeros(layout.pages, np.int64),
-                     np.zeros(shape, bool), np.zeros(shape, np.uint32), np.full(shape, -1, np.int64), filler_name)
+                     np.zeros(shape, bool), np.zeros(shape, np.uint32), np.full(shape, -1, np.int64))
         nb = self._by_name[names[0]].info.blocks if names else 0
         pool.page_of, pool.slot_of = np.full(nb, -1, np.int64), np.full(nb, -1, np.int64)
         pool.page_of[ids.ravel()] = np.repeat(np.arange(layout.pages), ids.shape[1])
@@ -411,7 +402,7 @@ class NodeMemory:
         self._log({"event": "kv-pool", "name": name, "layers": [self._region_record(self._by_name[n]) for n in names],
                    "pages": layout.pages, "slots": layout.slots, "slot_bytes": layout.slot_bytes,
                    "planes": layout.planes, "strides": list(layout.strides()), "slot_major": layout.slot_major,
-                   "filler": filler_name})
+                   "filler": KV_FILLER})
         return tuple(self._by_name[n].info for n in names)
 
     def registration(self) -> Registration:
@@ -606,7 +597,7 @@ class NodeMemory:
         j = len(self._passes)
         seed = None
         if self._challenge is not None:
-            seed = self.chaining(self._challenge, self._last_root, j)
+            seed = chain(self._challenge, self._last_root, j)
         ps = _Pass(j, seed, [], [], step=step)
         parts = [(r.info.name, 0, r.info.blocks, None, None) for r in self._regions if r.info.kind == "weights"]
         if self._pool is not None and live_pages is None:
@@ -734,7 +725,7 @@ class NodeMemory:
         p = r.pool
         page, c = int(p.page_of[block]), int(p.slot_of[block])
         st = int(p.step[page, c])
-        return Source("kv" if st >= 0 else "filler", f"step:{st}" if st >= 0 else f"filler:{p.filler}",
+        return Source("kv" if st >= 0 else "filler", f"step:{st}" if st >= 0 else f"filler:{KV_FILLER}",
                       int(p.epoch[page, c]))
 
     def kind_now(self, region: str, block: int) -> str:

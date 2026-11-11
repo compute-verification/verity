@@ -26,13 +26,11 @@ Tensor = Any
 
 @dataclass(frozen=True)
 class Shard:
-    """``axis`` ``n`` is column-parallel (qkv, gate_up), ``k`` row-parallel (o, down), None replicated; vLLM adds a
-    row-parallel layer's bias on rank 0 only (``bias_here``)."""
+    """``axis`` ``n`` is column-parallel (qkv, gate_up), ``k`` row-parallel (o, down), None replicated."""
 
     rank: int = 0
     world: int = 1
     axis: str | None = None
-    bias_here: bool = True
 
 
 @dataclass(frozen=True)
