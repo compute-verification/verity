@@ -688,7 +688,7 @@ theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live 
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
     exact eA
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
-    _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad)))
+    _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
   have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
