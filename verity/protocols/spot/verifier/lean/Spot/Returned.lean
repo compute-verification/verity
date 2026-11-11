@@ -7,7 +7,8 @@ A replay block returns, to the boundary, the output fields of its templates' uni
 the design's return links (`returnLinks`). The second stage's files lay each returned field on 16-bit words of its own,
 the last word's high bits padding (`Bits.wordsOf`, `Bits.retWords`), and every bit of those words is a computed gate
 (`Bits.check`). So a field of `b` bits returns `16 ⌈b / 16⌉` gates: an 18-bit value two words, eight of them in one
-field nine.
+field nine. It is the count `OneStageZk.returnedBits` makes of one template instance from its circuit file, 16 bits an
+output word, taken over the fields a replay block returns and read from the Definition.
 -/
 module
 
