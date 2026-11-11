@@ -512,7 +512,9 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     is given each field it digests, its raw words row-major as digested."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
-    tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
+    tp = res.get("tp")
+    if not isinstance(tp, dict):
+        tp = {}
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
     fields = program_weight_fields(inst) if fields is None else fields
     if prefix is None:
@@ -958,13 +960,14 @@ def main(a: Options) -> int:
             print(f"  host-only {x['field']}: analytic.inv_freq_sha256 {x['a']}.. vs {x['b']}.. (the deriving host's numpy value; not in the v2 root)")
         print(f"  re-root under {SCHEMA}: {d['reroot'][0][:16]} / {d['reroot'][1][:16]} -> same weights of record: {d['same_weights_of_record']}")
         return 0 if d["same_weights_of_record"] else 1
-    if not a.program_dir and not a.programs_root:
+    given = a.program_dir or a.programs_root
+    if not given:
         raise UsageError("one of --program-dir / --programs-root is required")
     if not a.checkpoint_dir:
         raise UsageError("--checkpoint-dir is required to derive a record")
     pdir = a.program_dir
     if not pdir:
-        cands = component_program_dirs(a.programs_root)
+        cands = component_program_dirs(given)
         if not cands:
             print(f"weights_of_record: no component Program (build_request*/instances.json.gz) under {a.programs_root}")
             return 2

@@ -281,6 +281,7 @@ def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
     if errs_n is None:
         errs_n = 0
     failure = ex.get("collector_failure")
+    diffs: list[dict[str, Any]]
     if failure:
         out, diffs, reason = FAIL, [{"name": "collector_failure", "first": str(failure)[:200]}], f"collector failed: {str(failure)[:200]}"
     elif _int(errs_n) > 0:

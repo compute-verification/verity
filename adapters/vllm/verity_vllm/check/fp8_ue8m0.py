@@ -98,7 +98,8 @@ class Rewrites:
     (shard included), `config` the checkpoint's config.json."""
 
     def __init__(self, fields: list[str], roles: dict[str, dict[str, Any]], raw: Callable[[str], tuple[np.ndarray, dict]], config: dict):
-        self.raw, self.config, self._pair = raw, config, {}
+        self.raw, self.config = raw, config
+        self._pair: dict[str, tuple[np.ndarray, np.ndarray, dict]] = {}
         bs = (config.get("quantization_config") or {}).get("weight_block_size") or [0]
         self.G = int(bs[0])
         names = set(fields)

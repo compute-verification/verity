@@ -550,9 +550,9 @@ def gate_G1(run: RunArtifacts) -> GateResult:
         exp_layers = int(exp_layers)
         if ni.get("layers") != exp_layers:
             problems.append(f"layers={ni.get('layers')!r} != expected_layers={exp_layers}")
-        counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
-        if rows and counts != [(exp_layers, exp_layers)]:
-            problems.append(f"per-step layer counts {counts} != expected_layers={exp_layers} in both variants")
+        layer_counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
+        if rows and layer_counts != [(exp_layers, exp_layers)]:
+            problems.append(f"per-step layer counts {layer_counts} != expected_layers={exp_layers} in both variants")
         try:
             C = run.C
         except ArtifactError as e:
@@ -987,7 +987,9 @@ def gate_G8(run: RunArtifacts) -> GateResult:
         raise ArtifactError(f"{what}: not a JSON object")
     if doc.get("schema") != QUERY_USE_SCHEMA:
         raise ArtifactError(f"{what}: schema {doc.get('schema')!r} != {QUERY_USE_SCHEMA!r}")
-    use = doc.get("use") if isinstance(doc.get("use"), dict) else {}
+    use = doc.get("use")
+    if not isinstance(use, dict):
+        use = {}
     v = _get(doc, "verdict", what)
     part = _get(v, "partition", f"{what}.verdict")
     width = _get(v, "width", f"{what}.verdict")
@@ -1035,7 +1037,9 @@ def gate_G8(run: RunArtifacts) -> GateResult:
             problems.append("binding: query.json binding_id != query_use.json binding_id")
         if digest is not None and qdoc.get("program_digest") != digest:
             problems.append("binding: query.json program_digest != the run's fold digest")
-    rd = v.get("readiness_32") if isinstance(v.get("readiness_32"), dict) else {}
+    rd = v.get("readiness_32")
+    if not isinstance(rd, dict):
+        rd = {}
     detail: dict[str, Any] = {
         "schema": doc.get("schema"), "binding_id": doc.get("binding_id"), "use": {"kind": use.get("kind"), "w_max": use.get("w_max")},
         "status": v_status,                          # the document's verdict.status, verbatim
@@ -1110,8 +1114,9 @@ def fold_integrity(fold_summary: Any, fold_summary_2: Any = None, resolution: An
         per_step = fs.get("per_step")
         if isinstance(per_step, list) and per_step and n_err is not None:
             vals = [s.get("errors") for s in per_step if isinstance(s, dict)]
-            if all(isinstance(v, int) and not isinstance(v, bool) for v in vals) and len(vals) == len(per_step) and sum(vals) != n_err:
-                unverified.append(f"{what}.per_step errors sum to {sum(vals)}, errors = {n_err}")
+            ints = [v for v in vals if isinstance(v, int) and not isinstance(v, bool)]
+            if len(ints) == len(vals) == len(per_step) and sum(ints) != n_err:
+                unverified.append(f"{what}.per_step errors sum to {sum(ints)}, errors = {n_err}")
         detail[what] = {**counts, "error_classes": classes if isinstance(classes, dict) else None, "digest": fs.get("digest"),
                         "with_program": fs.get("with_program"), "n_instances": fs.get("n_instances")}
     if resolution is not None:

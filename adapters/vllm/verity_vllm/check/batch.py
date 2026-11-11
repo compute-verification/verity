@@ -265,14 +265,13 @@ def check(templates: Iterable[Template], *, liveness: Liveness | None = None) ->
 
 def report(verdicts: Sequence[TemplateInvariance]) -> str:
     """The verdicts as a Markdown table: each template, (a) and (b) with their first witness, and whether each is the one declared."""
-    def cell(got: bool | None, witness: tuple | None) -> str:
-        if got is None:
+    def cell(witness: tuple | None) -> str:
+        if witness is None:
             return "—"
-        return "pass" if got else f"**fail**: {witness[0]}"
+        return f"**fail**: {witness[0]}" if witness else "pass"
 
     rows = ["| template | (a) separable | (b) shape-invariant | shapes | as declared |", "|---|---|---|---|---|"]
     for v in verdicts:
-        a, b = v.got
-        rows.append(f"| `{v.template.name}` | {cell(a, v.crossings)} | {cell(b, v.splits)} | {v.shapes or '—'} | "
+        rows.append(f"| `{v.template.name}` | {cell(v.crossings)} | {cell(v.splits)} | {v.shapes or '—'} | "
                     f"{'yes' if v.ok else '**NO**'} |")
     return "\n".join(rows)

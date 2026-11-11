@@ -100,13 +100,16 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
         # name the FAILING component's own cause: the oracle's `why` only when the ORACLE failed (a partial-coverage note
         # on a None oracle result is not the cause of a root-compare failure); else the composite's `why` (root_compare / replay), else generic.
         oc = vc.get("oracle_compare") or {}
-        oc_top = commit.get("oracle_compare") if isinstance(commit.get("oracle_compare"), dict) else {}
+        oc_top = commit.get("oracle_compare")
+        if not isinstance(oc_top, dict):
+            oc_top = {}
         comps = vc.get("components") or {}
         failing = [(k, c) for k, c in comps.items() if isinstance(c, dict) and c.get("result") is False]
         if oc.get("result") is False and oc.get("why"):
             return False, oc["why"]
-        if oc_top.get("result") is False and (oc_top.get("why") or oc.get("why")):
-            return False, oc_top.get("why") or oc.get("why")
+        why = oc_top.get("why") or oc.get("why")
+        if oc_top.get("result") is False and why:
+            return False, why
         if failing:
             return False, "; ".join(f"{k}: {c.get('why') or 'FAIL'}" for k, c in failing)
         return False, (vc.get("why") or f"value correspondence FAIL ({vc.get('method')})")

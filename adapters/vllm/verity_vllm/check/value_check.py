@@ -127,8 +127,8 @@ class ValueChecker:
         """After finalize(): committed bytes (opened and verified against the run root by `reader`, an `commit.opened.OpenedReader`) vs
         (T) tap clones and (R) re-execution.  A tensor whose opening does not verify is `not_verified` (FAIL)."""
         t0 = time.perf_counter()
-        res = {"steps": len(self.steps), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0, "reexec_equal": 0,
-               "reexec_mismatch": [], "reexec_skipped": {}, "repeated_calls": 0, "missing_in_commit": [], "not_verified": [], "by_class": {}}
+        res: dict[str, Any] = {"steps": len(self.steps), "tensors": 0, "tap_equal": 0, "tap_mismatch": [], "reexec_tensors": 0, "reexec_equal": 0,
+                               "reexec_mismatch": [], "reexec_skipped": {}, "repeated_calls": 0, "missing_in_commit": [], "not_verified": [], "by_class": {}}
         for step, taps in enumerate(self.steps):
             metas_by: dict[str, list] = {}
             for m in sorted(self.c._layouts.get(step, []), key=lambda m: m.ordinal):

@@ -242,7 +242,7 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
             continue
         one = _commit_link_request(rid, rec, es[0], opened=opened, workload_id=wid.get(rid, rid), arrive=int(arrivals.get(rid, 0)),
                                    served=None if served_tokens is None else served_tokens.get(rid), finish=(finish_reasons or {}).get(rid),
-                                   eos_set=eos_set, lag=(int(decl) if lag_attested else None), family=family)
+                                   eos_set=eos_set, lag=(int(decl) if lag_attested and decl is not None else None), family=family)
         problems += one["problems"]
         committed[rid], served_n[rid], executed_n[rid] = one["committed"], one["served"], one["executed"]
     if not isinstance(past, dict) or past.get("ok") is not True or int(past.get("entries_n") or 0):
@@ -331,9 +331,9 @@ def account_links(com: Any, rc: Any, bmap: dict[str, Any], epr: dict[str, Any], 
     match = EP.link_to_match_account(epr, EP.load_match_account(match_dir), order=order, declared_lag=stop.get("declared_lag"), served_tokens=served)
     reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
     if match_dir and not sampled_ids_committed(bmap):
-        commit = {"rule": COMMIT_LINK_RULE, "required": False, "reduced_requests": reduced, "record": None, "lag_attested": None, "problems": [],
-                  "ok": None, "not_applied": f"no committed {FAMILY[0]}/{FAMILY[1]} in the binding map: the Match link alone decides",
-                  "classification": ACTIVE_REFERENCE_ONLY}
+        commit: dict[str, Any] = {"rule": COMMIT_LINK_RULE, "required": False, "reduced_requests": reduced, "record": None, "lag_attested": None, "problems": [],
+                                  "ok": None, "not_applied": f"no committed {FAMILY[0]}/{FAMILY[1]} in the binding map: the Match link alone decides",
+                                  "classification": ACTIVE_REFERENCE_ONLY}
     else:
         try:
             commit = commit_link(com, rc, bmap, epr, out_dir=out_dir, pair=pair, order=order, arrivals=arrivals, stop=stop, served=served,

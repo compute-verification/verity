@@ -137,8 +137,11 @@ class CheckpointIndex:
         for fn in shard_names(ckpt_dir):
             hdr, base = read_safetensors_header(os.path.join(ckpt_dir, fn))
             self.shards.append(fn)
-            for name, meta in hdr.items():
-                if name == "__metadata__" or (rules and (name := renamed(name, rules)) is None):
+            for key, meta in hdr.items():
+                if key == "__metadata__":
+                    continue
+                name = renamed(key, rules) if rules else key
+                if name is None:
                     continue
                 lo, hi = meta["data_offsets"]
                 self.tensors[name] = (fn, meta["dtype"], [int(x) for x in meta["shape"]], base + int(lo), base + int(hi))

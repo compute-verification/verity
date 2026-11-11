@@ -624,7 +624,7 @@ def producers_of_programs(programs: dict[str, dict[str, Any]], aliases: dict[str
         res = prog.get("result") or {}
         P = from_instances(inst)
         corr = Correspondence.of(P, prog.get("dir"), implementation_paths=Correspondence.implementation_paths_of(res))
-        tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
+        tpinfo = t if isinstance(t := res.get("tp"), dict) else {}
         world = int(tpinfo.get("world") or 1)
         program_producer_facts(P, corr, tp=({"world": world, "rank": int(tpinfo.get("rank") or 0)} if world > 1 else None), aliases=aliases, into=out, query=query)
         del P, corr
@@ -722,12 +722,12 @@ def promote_handed_down(manifest: dict[str, Any] | None, derived: dict[tuple[str
         if r.get("family") != "instance_outputs" or r.get("promoted"):
             continue
         key = (str(r.get("op_path")), str(r.get("output_member")))
-        cons = picked.get(key)
-        if cons is None or str(derived[key].get("spec") or "") != str(r.get("spec") or "").split("{", 1)[0].strip():
+        consumers = picked.get(key)
+        if consumers is None or str(derived[key].get("spec") or "") != str(r.get("spec") or "").split("{", 1)[0].strip():
             continue
         r["promoted"] = True
-        r["consumers"] = list(cons)
-        members[f"{key[0]}/{key[1]}"] = list(cons)
+        r["consumers"] = list(consumers)
+        members[f"{key[0]}/{key[1]}"] = list(consumers)
         rows += 1
     return {"members": members, "rows": rows}
 
@@ -847,7 +847,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             continue
         # the Program op of THIS invocation: 0 = the op_path itself; k >= 1 = the alias table's path, else not compared
         inv_k = int(ident.get("invocation") or 0)
-        op_k = str(ident.get("op_path"))
+        op_k: str | None = str(ident.get("op_path"))
         if inv_k > 0:
             op_k = inv_alias.get((op_k, inv_k))
             if op_k is None:
