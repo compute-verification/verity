@@ -1537,7 +1537,7 @@ def test_a_land_at_an_older_head_carries_to_its_merge_of_main_as_drive_toml_s_ve
 
 @pytest.mark.parametrize("change, because", [
     ("a.txt", "authored: {new} changes a.txt"),
-    ("Security/Proofs/P.lean", "authored: {new} changes Security/Proofs/P.lean"),
+    ("security/Proofs/P.lean", "authored: {new} changes security/Proofs/P.lean"),
     ("held", "held by other (the merge breaks a) at {new}")])
 def test_a_head_that_changes_more_than_its_merge_of_main_or_is_held_carries_no_land(env, change, because):
     """drive's safety checks carry over: a commit of the PR's own since the land (a Lean one too) or a hold at the head keeps
@@ -1700,8 +1700,8 @@ def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/lean-audit.json": '{"records": 1}\n'})
     env.put(2, {"pkg/A.lean": "-- b\n"})
-    env.put(3, {"Security/Definitions/D.lean": "-- d\n"})
-    env.put(4, {"pkg/lean-audit.json": '{"records": 2}\n', "Security/Proofs/P.lean": "-- p\n"})
+    env.put(3, {"security/Definitions/D.lean": "-- d\n"})
+    env.put(4, {"pkg/lean-audit.json": '{"records": 2}\n', "security/Proofs/P.lean": "-- p\n"})
     env.put(5, {"a.txt": "5\n"})
     seen: list[Snapshot] = []
     env.loop(lambda s: seen.append(s) or []).tick()
@@ -1715,7 +1715,7 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     A wide PR fills its batch's cap."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
-    env.put(2, {"Security/Definitions/D.lean": "-- d\n"})
+    env.put(2, {"security/Definitions/D.lean": "-- d\n"})
     env.put(3, {"a.txt": "3\n"})
     seen: list[Snapshot] = []
     loop = env.loop(lambda s: seen.append(s) or [], lean=3)
@@ -3157,7 +3157,7 @@ def test_under_gate_check_a_step_killed_while_the_shards_run_is_no_early_red(env
     _, built, _ = loop.tick()
     sha = built["sha"]
     runs.end(main)
-    log = f"replay of Security: {KILLED_SAYS} (exit 137)\n" if killed else "error: Security/Foo.lean:3:0: type mismatch\n"
+    log = f"replay of Security: {KILLED_SAYS} (exit 137)\n" if killed else "error: security/Foo.lean:3:0: type mismatch\n"
     runs.fail(sha, 1, step="lean-audit", log=log, at=T0 + 60)
     env.clock = T0 + 300
     logged = loop.tick()
