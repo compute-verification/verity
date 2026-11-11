@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Nci.LeafWidthsBody
 public import Proofs.Properties.Nci.LeafWidthsDecoded
 public import Proofs.Properties.Nci.LeafWidthsResolve
+public import Proofs.Properties.Nci.RecordBlockGates
 public import Proofs.Properties.Nci.RecordCircuit
 public import Proofs.Properties.Nci.RecordFields
 public import Proofs.Properties.Nci.RecordFreshRows
@@ -47,5 +48,6 @@ is its writer's (`RecordAligned`). Every unit has a slot, and a wired circuit ha
 Of the count: a gate a block reads from outside itself, that θ does not hold, is one a read of a row of the block's
 slot lands on (`RecordReads`); every wire of the text has a step for each digit and no digit of radix zero
 (`RecordWireRead`); a row of kind theta is held, and a row of kind inside has a writer in its own slot
-(`RecordKinds`); and what the summary's fresh bits count of a slot's rows is stated (`RecordFreshRows`).
+(`RecordKinds`); what the summary's fresh bits count of a slot's rows is stated (`RecordFreshRows`); and a block
+that is not empty has the summary's gates (`RecordBlockGates`).
 -/
