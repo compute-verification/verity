@@ -2719,7 +2719,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("a lock's alone", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("no Lean change waits", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
