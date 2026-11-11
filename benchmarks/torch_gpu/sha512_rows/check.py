@@ -1,4 +1,4 @@
-"""The engine against the CPU reference (``verity.ml.commitments``), bit for bit: row digests on random rows at edge sizes
+"""The engine against the CPU reference (``verity.commitments``), bit for bit: row digests on random rows at edge sizes
 (every variant), hm96 leaves under both salt forms and fused with their units' frame leaves, frame leaves, unit frame
 tables, levels (a front child, strided trees), pads and roots, and on a CUDA device the frozen H200
 layout's rows (``bench.h200_rows``) on sampled slots. ``python check.py --out DIR`` runs it on the current CUDA device (or
@@ -20,16 +20,16 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import engine as E
-from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
-from verity.ml.commitments.rowleaf import (
+from verity.commitments import hm96
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, tree_levels
+from verity.commitments.rowleaf import (
     SCHEMA_HM96_SHA512_ROW_V2,
     sha512_row_v2_digest,
     sha512_row_v2_prefix,
 )
-from verity.ml.crypto.chacha20 import keystream
+from verity.commitments.crypto.chacha20 import keystream
 
 INST = hm96.SHA512
 KEY = INST.default_key
