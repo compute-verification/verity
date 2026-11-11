@@ -65968,3 +65968,46 @@ Next: the run's result, appended here; then `second-return`'s build once the vLL
 **The post's two places, as they stand now.** SUITES: "running (`r20261111-214358-7ad3`); on the head before the last two commits, 53 of 64 suites are done and none failed (`r20261111-213506-bcc7`)". LINE: "launched as `r20261111-215928-f178` at V = 640, waiting for a node; its verdict follows in this thread". I replace both when the runs end, and edit #9075's body to match [guess until then].
 
 **Next.** I end my turn here on `r20261111-213506-bcc7` (ETA 22:30Z), `r20261111-214358-7ad3` (22:50Z) and `r20261111-215928-f178` (23:30Z). When resumed: fetch the three, fix anything red that is mine, fill the post, edit the body.
+
+## HEADTIME, Wed 11 Nov 22:10Z: the values statement's Lean check at 128 and 32 columns is 12.8 and 5.8 core-seconds a session (measured), beside 7.9 at 64; with the scores statement's 47.1, the two statements that cover 256 head blocks cost 59.9, 55.0 and 52.9 core-seconds at 128, 64 and 32 columns, where the cost model charges 500. With each statement's own check and prover seconds the cost model's figures at the three widths are 978.5, 912.0 and 883.5 GB, from 1,697.4, 1,373.6 and 1,213.7 (modeled). All four timing runs ended with exit 0; branch trees, nothing on the served engine. The staged head statement on `vy-dc-h200-3` hashes to its pin; I cannot read node A's copy today
+
+**Mailbox, 21:44Z, read.** The read of kernels' `cursor/kernels-unit-walk-0242` at `714ceff065` is my next job; entry by Thu 12 Nov 20:00Z. I remove nothing under `proofs-prf502-row1-4b31e7caba011398` on either machine.
+
+**The Lean check a session, all four statements of the split head** (the same runner and trees as my 21:44Z entry; one pinned core; every session checked whole, then refused only for want of a Program):
+
+| statement | blocks | circuit bytes | matrix entries | a session, core-s (each) | one block, s | read once a call, s | peak | run, machine, end |
+|---|---|---|---|---|---|---|---|---|
+| scores | 256 | 5,254,568,106 | 610,979,164 | 47.086 (47.303, 47.086, 47.064) | 46.74 | 48.96 | 19.90 GiB | `r20261111-211713-1e63`, `vy-nebius-cpu-2`, 21:55:21Z, rc 0 |
+| values, 128 columns | 1,024 | 1,178,193,960 | 142,826,734 | 12.811 (16.033, 13.502, 12.798, 12.811, 12.777) | 12.92 | 12.19 | 4.93 GiB | `r20261111-214534-17ab`, `vy-nebius-cpu-10`, 22:03:37Z, rc 0 |
+| values, 64 columns | 2,048 | 598,075,121 | 71,423,662 | 7.949 (8.083, 7.949, 7.921, 8.006, 7.771) | 6.94 | 6.87 | 2.58 GiB | `r20261111-211639-20e3`, `vy-nebius-cpu-4`, 21:34:03Z, rc 0 |
+| values, 32 columns | 4,096 | 308,374,174 | 35,722,126 | 5.768 (5.710, 5.866, 5.768, 5.781, 5.655) | 3.96 | 4.46 | 1.45 GiB | `r20261111-214610-bdd6`, `vy-nebius-cpu-7`, 21:52:54Z, rc 0 |
+
+- [run] The kept sessions: at 128 columns `fcd7`'s (card walk) and `88e7`'s (host walk), 1,024 of 1,024 blocks; at 32 columns `9130`'s and `64ca`'s, 4,096 of 4,096. Each proof file's SHA-512 matches its `session.json`. Pins `bb02b38e3489b9a9` and `60e0ede74e2f6ba6` matched after restaging (3:14 and 1:49).
+- [run] At 128 columns the first call's two sessions took 16.0 and 13.5 s and the next three 12.8 s; the median is 12.811. I take the first call as the node's load, not the statement.
+- [run] A session is one fixed cost a statement: one block proved on the CPU checks in the seconds of the whole statement (scores 46.74 against 47.09; values 12.92 / 6.94 / 3.96 against 12.81 / 7.95 / 5.77). So the check's seconds follow the circuit, 77 to 161 ns a matrix entry, not the blocks drawn.
+- [run] The two statements for 256 head blocks: 59.9 (128 columns), 55.0 (64), 52.9 (32) core-s, against the head block's 250.0 and the 500 charged. The scores statement is 79% to 89% of each.
+
+**The cost model at the three widths with own seconds** (modeled; the same script and rows as my 21:44Z entry; world year, modeled 0.4, registered engine, GB at the 10% point; the stored keys are `g128_widths_k6`, `g64_widths_k6`, `g32_widths_k6`):
+
+| columns | every head change: as stored | own check | own check and prover | the same at the best weight | head as today: as stored | own check and prover |
+|---|---|---|---|---|---|---|
+| 128 | 1,697.4 | 1,138.7 | **978.5** | 1,322.2 to 562.4 | 1,943.8 | 1,212.5 |
+| 64 | 1,373.6 | 1,014.4 | **912.0** | 960.1 to 488.5 | 1,527.9 | 998.4 |
+| 32 | 1,213.7 | 957.2 | **883.5** | 779.6 to 455.5 | 1,322.1 | 942.1 |
+
+- [run] The first model run `r20261111-214039-946a` (`vy-nebius-cpu-3`, tree `a5e4e56a11`) ended rc 0 and its output equals the VM's value for value: 912.0 GB at 64 columns. The run at the three widths, `r20261111-220240-9052` (`vy-nebius-cpu-10`, the same tree), ended rc 0 at 22:09:05Z and equals the VM's output too, all 60 variants.
+- [run] With ratios 1 and the head's own check the script returns each stored key at each width and on all four of `f8bd`'s variants I ran (twelve of twelve).
+- [run] Prover ratios at two provers on `vy-dc-h200-3`, values statement over the head statement: with tonight's changes and the host walking the values, 0.445 / 0.423 / 0.388 at 128 / 64 / 32 columns (0.9524, 0.9072, 0.8306 s against 2.1425 s); today's binary as the code walks, 0.707 / 0.449 / 0.380 (2.2027, 1.4010, 1.1861 s against 3.1174 s). Scores 0.610 and 0.643.
+- [guess] With own seconds the three widths sit within 11% of each other (978.5, 912.0, 883.5), where the stored figures spread 40%: most of the stored spread was the 250 core-s charged to a values statement whose check costs 6 to 13. The assumptions are those of my 21:44Z entry.
+- With the read paid in every statement's own call: 1,031.0 / 948.8 / 916.2 GB.
+
+**The staged head statement** (`proofs-prf502-row1-4b31e7caba011398`):
+- [run] On `vy-dc-h200-3` the directory is `/workspace/cache/proofs-headprof/staged/proofs-prf502-row1-4b31e7caba011398` (not `staged/prf502-row1`): `circuit.txt` 12,191,652,715 bytes, `inst.bin` 21,006,746, `pub.bin` 335,406, `pin.txt` 128, `stage.json` 2,252. I hashed `circuit.txt` now (17.8 s, the node idle): its SHA-512 is `4b31e7caba011398…acb6b0b5`, equal to `pin.txt` and to `stage.json`'s `circuit_sha512`, the digest the staging on node A recorded. The byte counts of `inst.bin` and `pub.bin` equal `stage.json`'s.
+- [read] The copy was made from node A's directory on 11 Nov, ending 09:33Z (`xfer.sh` in my notes): the circuit in four streams, checked against `pin.txt` at the end; the four small files in one compressed tar stream, with no digest compared.
+- BLOCKED on node A's side, by the RunPod API's daily limit (infra's): `research pods ssh vy-spot-glm53` answers `HTTP 429: rate limit exceeded for the day window` (22:05Z, 22:06Z), so I cannot list or hash `/dev/shm/proofs-prf502-row1-4b31e7caba011398` from here today. What I can say without it: the circuit file on `vy-dc-h200-3` is the bytes node A's staging hashed; whether node A's `/dev/shm` still holds them, and whether the four small files are equal, is open. To close it, on node A: `cd /dev/shm/proofs-prf502-row1-4b31e7caba011398 && sha512sum circuit.txt && sha256sum inst.bin pub.bin pin.txt stage.json`, against `4b31e7ca…` and `66ff564b…cb8937`, `90ec28f7…08454f`, `a9a73a21…55259c`, `fabebf6f…d3282c`. I run it when the limit lifts.
+- [read] Restaging on node A after a reboot: the staging itself took 4,583 s (76 minutes; build 4,299 s, rounding 284 s) and peaked at 202.6 GB of memory (`stage.json`). [guess] Copying the 12 GB back from `vy-dc-h200-3` is about ten minutes through a VM (the first copy, four streams on cores 8 to 11 of node A, started after 09:24Z and ended 09:33Z), if both machines answer; the copy on `vy-dc-h200-3` is kept until Wed 18 Nov by your retention record.
+
+State: nothing of mine runs. Runs since the resume, all rc 0: `1e63`, `20e3`, `17ab`, `bdd6` (timing), `946a` (model) and `9052` (model, three widths).
+
+For BREAKEVEN: the split head's Lean check a statement, measured: scores 47.086 core-s; values 12.811 / 7.949 / 5.768 core-s at 128 / 64 / 32 columns (0.5755 and 0.1566 / 0.0972 / 0.0705 GPU-s at 81.82 cores a GPU), against the 250.0 `cutg` keeps on each. With own check and prover seconds: `g128_widths_k6` 978.5, `g64_widths_k6` 912.0, `g32_widths_k6` 883.5 GB on `hffv250allreg` at modeled 0.4 (stored: 1,697.4, 1,373.6, 1,213.7). Script, variants and the ratios: notes, `lanes/proofs/20261111T2118Z-headtime/` (`own_seconds.py`, `variants.json`, `variants-widths.json`).
+For the table: split head, Lean check a statement (measured, one pinned core, whole kept sessions, branch trees, not `main`, not the served engine): scores 47.1 core-s; values 12.8 / 7.9 / 5.8 core-s at 128 / 64 / 32 columns; the pair 59.9 / 55.0 / 52.9 against 500 charged and the head block's 250.0 (`r20261111-211713-1e63`, `-214534-17ab`, `-211639-20e3`, `-214610-bdd6`). Cost model, every head change, registered engine, world year, own check and prover seconds: 978.5 / 912.0 / 883.5 GB against 1,697.4 / 1,373.6 / 1,213.7 as stored (modeled from `f8bd`'s rows).
