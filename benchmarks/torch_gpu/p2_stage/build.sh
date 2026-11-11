@@ -3,7 +3,7 @@
 #
 #   research run --on auto --cwd source -- bash benchmarks/torch_gpu/p2_stage/build.sh
 #
-# benchmarks/pous/p2_v1's libp2v1.so, unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
+# P2's prover's libp2v1.so (p2_store's), unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
 # Karatsuba squaring), at ARCH (default sm_90a) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
 #   lib/libp2v1.so, lib/libp2v1.so.ptxas   the library and ptxas's report (registers, spills)
 #   lib/libp2v1.so.cubins/                 the library's cubins (ship.sh's ship_cubins)

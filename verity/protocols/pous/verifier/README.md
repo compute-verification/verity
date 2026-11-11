@@ -232,6 +232,6 @@ authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 suc
 `SHA-512("verity/pous/p2/transcript/v4\0" ‖ AUDIT_OPEN ‖ every challenge and response frame)`.
 
 The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
-beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
+beside `p2_v1/reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
 `NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
-`cd benchmarks/pous && uv run python -m verity.protocols.pous.verifier.p2_v1.vectors` regenerates them and rewrites their pins.
+`uv run python -m verity.protocols.pous.verifier.p2_v1.vectors` regenerates them and rewrites their pins.
