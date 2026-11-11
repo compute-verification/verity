@@ -286,7 +286,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
     have h3 : u.val = s := Option.some.inj h1
     omega
 
-/-- **P1. A block has the summary's gates, or none**: in a circuit a record the check reads lays out, every block
+/-- **A block has the summary's gates, or none**: in a circuit a record the check reads lays out, every block
 has the gates the summary counts, or no gate. -/
 theorem block_gates {j tr : Json} {c : NciCheck.Record.Case} (h : NciCheck.Record.read j tr = .ok c)
     {d : Verity.RegisteredCircuit} (hd : Served form c d) :
