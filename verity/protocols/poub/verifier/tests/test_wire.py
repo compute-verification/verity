@@ -1,4 +1,4 @@
-"""`remote_bandwidth.wire`: the openings frame round-trips, a body it cannot read is None, and a window's frames give its
+"""`poub.verifier.wire`: the openings frame round-trips, a body it cannot read is None, and a window's frames give its
 openings in order, or none at all once one frame doesn't decode (`Wire.openingsOf`)."""
 
 from __future__ import annotations

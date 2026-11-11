@@ -58,14 +58,14 @@ def _entropy(label: bytes):
     """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
     count = 0
 
-    def draw(n: int) -> bytes:
+    def take(n: int) -> bytes:
         nonlocal count
         out = b""
         while len(out) < n:
             out += hashlib.sha512(label + count.to_bytes(8, "big")).digest()
             count += 1
         return out[:n]
-    return draw
+    return take
 
 
 def _committed() -> p2.Store:
