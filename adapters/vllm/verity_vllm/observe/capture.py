@@ -55,7 +55,6 @@ from verity_vllm.observe.log import LogWriter
 from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recorder, reenter_impl_name
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.observe import triton_adapter
-
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
 from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
