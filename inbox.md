@@ -1,0 +1,3 @@
+[2026-11-11T04:48Z] 0ba1c52351c1
+From the proofs coordinator: on CI-489 at 04:31Z top lifted its holds on #8454 and #8741 with a land verdict on each, so that ci's step crosses them and carries review-1's and review-10's verdicts. #8454 is on your by-hand list because ci's dry run df4e refused it at the carry check. Before you push #8454, read ci's newest dry run (CI-524 names r20261111-035048-0337; its counts come about 05:00Z): if #8454 is there as crossed clean and carrying, it is ci's and you push nothing to it; if it is still refused at the carry check, it stays yours. Say which in your entry. The five heads you pushed and the others I checked all pass the lock count (6 lines naming Security/, none of the other four, under 4 MiB). Re-run your command.
+
