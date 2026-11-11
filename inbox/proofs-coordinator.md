@@ -41384,3 +41384,51 @@ For SCALE: at the deployed second stage the number of drawn proof blocks is exac
 For the table:
 1. (A) of #8363's instance is proved in Lean at `ec022ecf7c`: 27 + 11 theorems on the three axioms [run: b652]. It is parked unopened, and it moves no term of the bound.
 2. The count `Kfirst·Σ_t k_t` of sampled blocks is being proved as an equality at SPOT[Flock]'s second stage. With #8836 it makes `K ≤ Kfirst·Σ_t k_t·M` a Lean theorem [read: the plan above; ready line about 11:30Z, guess].
+
+## SERVEDCARD, Wed 11 Nov 08:07Z: the cut is #8859, open and unmarked. `FC_VERIFIER_CPUS` runs the loopback verifier on its own cores and leaves the provers theirs, default as today, and no guarantee's statement or premise moves. HEADPROF's branch is up. FUSED: `c6cadd0e325f` cannot stage the fused cut
+
+**The PR** [run]
+- #8859 (https://github.com/compute-verification/verity/pull/8859): branch `cursor/proofs-verifier-cpus-5d1e`, head `f458b7ba946fcfbfe0f8f9156094b78602d0cac0`, off `main` at `8201dacff26e`. It is unmarked and `Refs PRF-502`.
+- What it does: with `FC_VERIFIER_CPUS` in the proof server's environment (a CPU list within its affinity, as `taskset -c` takes it), every verifier runs on those CPUs and every prover on the server's other CPUs, through a `taskset -c` prefix in `ProofServer._start`. The provers' thread share is computed over their own CPUs. Unset, nothing changes.
+- `server_rate.py`: each row keeps `verifier_cpus` and `verifier_cpu_s_per_statement` (the verifiers' CPU-s over the timed sessions, a statement) beside the provers'.
+- Tested locally:
+  - Both test files pass, 16 tests, two of them new.
+  - On this 4-CPU VM with the real `taskset` and the tests' stand-in `flock-circuit`, `/proc/PID/status` reads `Cpus_allowed_list` 0-1 for both provers and 2-3 for all three verifiers. Unset, all five read 0-3. All sessions were accepted either way.
+- It merges with `main` and with the open PRs it touches: `git merge-tree` is clean against `main` (`8201dacff26e`), #8679 (`9a8abc0814b8`), #8771 (`4b3b557b8c46`) and #8425 (`d4967690acd5`). Both test files pass on its merge with #8771 (20 tests) and with #8679 (21 tests).
+- Quick tier: `r20261111-080116-0667` on cpu-1, running at 08:05Z. My ready line follows in its own entry when the run ends.
+- `research queue open` warned that PRF-502's labels name `proofs/spot-overhead-measured`, not `proofs/exfiltration-under-300gb`, the goal line the order gives. I kept the order's line. Say if you want PRF-502's goal or another issue instead.
+
+**Why it is sound: it moves the check and drops nothing** [read]
+- Every session still gets the same verifier, coins and Finish check, so every verdict is unchanged. Only the CPUs it runs on move.
+- No guarantee reads this check anyway. Only the Lean verifier runs in an audit; upstream's Rust verifier is "a cross-check (the agreement job), not a second verifier" (`security/Proofs/Flock/Soundness/assumption-notes/trusted-components.md:12-14`; `verity/protocols/flock/agreement/README.md:7`; ARCHITECTURE.md:150, Verifier).
+- No firewall rule requires a proof to verify before it leaves. Release is the ZK server's, under `FC_FIREWALL`, which this loopback verifier is not.
+- So nothing requires today's shared placement either. I kept it as the default only so that every existing row and harness reads as before.
+
+**For HEADPROF: branch `cursor/proofs-verifier-cpus-headprof-5d1e` at `5c12d7d4e86a232bfee39f292d41f3dc188340b7`**
+- It is kernels' profile tree `c6cadd0e325f` (old layout) plus #8859's commit, cherry-picked onto the old paths. Both test files pass there (16 tests), and the real-`taskset` check gives the prover CPUs 0-2 and the verifier CPU 3 [run]. It is a launch branch with no PR, so mark nothing.
+- Kernels' profile `r20261111-061047-6773` ran pinned to CPUs 34-43 (NUMA node 1), with the statement in `/dev/shm`, on one H200 [read: its `out/host.json`].
+- The same row with the cut: pin the run to 34-47 and set `FC_VERIFIER_CPUS=44-47`. The provers keep the same ten cores, and the verifier gets four more. First check with `lscpu` that 44-47 are on node 1 [guess: I did not read the node's map].
+- Four cores [derived]: 5.68 CPU-s a statement every 2.5654 s needs at least 2.2 cores. The row's `verifier_cpu_s_per_statement` shows whether those cores bind.
+- The verifier also needs its 26.6 GiB of RAM, as before [read: my 07:48Z entry].
+
+**FUSED: my 04:03Z and 05:12Z entries are out of date on two points** [run unless tagged]
+- `c6cadd0e325f` stages PRF-502's served rows, rows 1 and 2's head blocks among them. It stages vLLM's unfused MoE launches as `MoeExpertFp8Gemm` (w13), `MoeExpertFp8GemmW` (w2) and `MoeSum_v1` [read: `benchmarks/spot_proved/stage.py:387-388, 487` at that tree]. It names neither the fused cut's partition (`glm53_fused_tp8`) nor its tables (`SERVING_ROWS_TABLES`): no file in that tree does. So it cannot stage the fused cut's members.
+- Those members come from #8454 (`benchmarks/one_stage/glm53_fused_tp8.py`, `row_driver.py`). #8454 is still OPEN at `4d87c7899a6d` (`gh pr view`). My 04:03Z entry expected ci to cross it at about 05:00Z, and it has not landed.
+- To time the fused kinds tonight, FUSED needs #8454's head and fused statements. Those are either staged from a TP8 Commit (steps 1-4 of my 05:12Z plan: eight H200s for the Commit, then about 10 min of CPU at a 28 GB peak), or G2's statements from Tue, if they still exist [guess: I did not look for them].
+- Which card can take the proving is unchanged: one H200 fits, at 33 GiB of host memory at one prover and 127-133 GiB at four [read: 04:03Z, KSTEADY].
+- What is staged from `c6cadd0e325f` is rows 1 and 2 in node A's `/dev/shm`, as 04:03Z says. Kernels' 06:10Z profile still read row 1 from there [read: its `host.json`, `statement_on: tmpfs /dev/shm`].
+
+**Cheaper forms, sized again for the record** [read: my 07:48Z entry; guesses as tagged there]
+- Each still checks every session:
+  - The templated statement saves nothing on the head block, which is one unit net.
+  - One check a batch would need a joint fold across sessions, which doesn't exist; maybe 1.5-2× [guess].
+- Dropping the Rust Finish check or sampling it (1 in N saves 5.68 × (1 − 1/N)) is a Rust change to `serve`. No guarantee is affected, but the loopback session then has no verdict of its own. I would do it only on your word, after HEADPROF's number.
+
+For the table:
+- The loopback check's 5.68 CPU-s a head-block statement buy a Rust cross-check that no guarantee reads. #8859 moves it off the provers' ten cores (a switch, default unchanged). HEADPROF times what that saves, at most 0.62 of the row's 2.5654 GPU-s a statement [guess].
+
+For BREAKEVEN:
+- Before: 23.3 CPU-s a head-block statement on the provers' ten cores, 17.6 prover and 5.68 verifier, which keep them 91% busy at 2.5654 GPU-s a statement [read: `r20261111-061047-6773`, as in my 07:48Z entry].
+- After (#8859, four verifier cores): 17.6 CPU-s on the provers' ten and 5.68 on the verifier's four [guess: the same work, moved]. The GPU-s a statement fall by at most 0.62 [guess], which HEADPROF measures. If the auditor pays the 5.68, they are about 0.07 GPU-s at 81.8 core-s a GPU-s [derived]. They are not a prover's cost, since Lean's verifier term is the one of record.
+
+Next: the ready line for #8859 when `r20261111-080116-0667` passes; then PRF-548's questions 1 to 3 (question 2 partly sized, from 561 members' Lean records on cpu-3).
