@@ -15,8 +15,13 @@ first-hit finder (`Proofs.Core.SamplingGeneric.FirstHit`), at each tape of the p
 * `pr_offReg_le_firstHit`: `Pr[a run opens a gate off the committed trace] ≤ 2·Pr[Found] + N/(K + 1)`, where `Found`
   is the first-hit finder's event at `K` further runs' coins and `N` the program's gates.
 
-It turns no found pair into a collision and builds no `Finder`: `Found` is two runs' extractions that open one gate two
-ways, the event `Conflict` reads at a pair of runs.
+* `pr_offReg_le_sample`: over the prover's tape, under `ExpectedCR` at one finder whose seed holds the tape and whose
+  output is `B_conf`'s at two runs (`collAt`), `Pr[a run opens a gate off the committed trace] ≤
+  2·(1 + w)·E[c]/2^256 + N/(K + 1)`, where `w` bounds the gates one run's sample holds (`chk`, a function of the run's
+  coins) and `c` is a run's calls (`runCost`).
+
+`pr_offReg_le_firstHit` turns no found pair into a collision and builds no `Finder`: `Found` is two runs' extractions
+that open one gate two ways, the event `Conflict` reads at a pair of runs. `pr_offReg_le_sample` does both.
 -/
 
 @[expose] public section
@@ -79,6 +84,85 @@ theorem pr_offReg_le_firstHit (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type
     exact_mod_cast h
   have h3 := div_le_div_of_nonneg_right hw hK.le
   linarith
+
+/-! ## The finder at the committed trace, with the prover's tape in its seed -/
+
+/-- **The pair two runs' extractions give** at one tape: the first collision among the calls the two runs' extractions
+make themselves, `B_conf`'s output at the two runs. -/
+noncomputable def collAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
+    (ω : Ω) (rc rc' : (Fin (L.V.k x) → Coin) × L.SlotEC x) : Option (Msg × Msg) :=
+  findColl (ownLog H (run H P L.V x ω) (L.runExt x s rc.1 (run H P L.V x ω rc.1).seen rc.2) ++
+    ownLog H (run H P L.V x ω) (L.runExt x s rc'.1 (run H P L.V x ω rc'.1).seen rc'.2))
+
+/-- **A run's calls**: both parties', and its extractions', their reruns' included; one run's share of `B_conf`'s
+cost. -/
+noncomputable def runCost (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
+    (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) : ℕ :=
+  (run H P L.V x ω rc.1).pLog.length + (run H P L.V x ω rc.1).vLog.length +
+    ((L.runExt x s rc.1 (run H P L.V x ω rc.1).seen rc.2).eval H (run H P L.V x ω)).2.1
+
+/-- What `collAt` outputs is a collision of `H`. -/
+theorem collAt_collision (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement)
+    (ω : Ω) (rc rc' : (Fin (L.V.k x) → Coin) × L.SlotEC x) {u v : Msg} (h : L.collAt H P x s ω rc rc' = some (u, v)) :
+    Collision H u v :=
+  findColl_spec H _
+    (fun p hp => (List.mem_append.1 hp).elim (Sampling.ownLog_valid H _ _ p) (Sampling.ownLog_valid H _ _ p)) u v h
+
+/-- Two runs whose extractions open a gate two ways give `collAt` a pair (`bconf_of_disagree`). -/
+theorem collAt_of_conflictAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (rc rc' : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x))
+    (h : FlockSoundness.Rewinding.ConflictAt (L.opTable H P x ω) (rc, rc') g) :
+    (L.collAt H P x s ω rc rc').isSome := by
+  obtain ⟨h1', h2', hne'⟩ := h
+  have h1 : (L.opensAt H P x ω rc.1 rc.2 g).isSome := h1'
+  have h2 : (L.opensAt H P x ω rc'.1 rc'.2 g).isSome := h2'
+  have hne : L.opensAt H P x ω rc.1 rc.2 g ≠ L.opensAt H P x ω rc'.1 rc'.2 g := hne'
+  obtain ⟨b1, hb1⟩ := Option.isSome_iff_exists.1 h1
+  obtain ⟨b2, hb2⟩ := Option.isSome_iff_exists.1 h2
+  rw [hb1, hb2] at hne
+  rw [L.opensAt_eq H P x ω hs] at hb1
+  rw [L.opensAt_eq H P x ω hs] at hb2
+  obtain ⟨a, ha, ha1, ha2, ha3, -⟩ := val_some_mem hb1
+  obtain ⟨a', ha', ha1', ha2', ha3', -⟩ := val_some_mem hb2
+  obtain ⟨u, v, huv, -⟩ := bconf_of_disagree hbind s P ω rc rc' (Or.inl ha) (Or.inr ha') (ha1.trans ha1'.symm)
+    (ha2.trans ha2'.symm) (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
+  exact Option.isSome_iff_exists.2 ⟨(u, v), huv⟩
+
+/-- **The off-trace mass at the sample's size, under `ExpectedCR` at one finder.** `chk` reads a run's coins and says
+which gates its sample holds, at most `w` of them at any coins. The finder draws the prover's tape and a first run,
+then further runs' coins, and makes a further run only when its sample holds a gate the first run opened that no
+further run has opened yet; it outputs `collAt` at the first run and a further run that is the first to open such a
+gate. If it meets the linear expected-time bound, a run at a uniform tape opens a gate of the program off the committed
+trace with probability at most `2·(1 + w)·E[c]/2^256 + N/(K + 1)`: `c` a run's calls (`runCost`), `N` the program's
+gates, `K` the finder's cap. -/
+theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool) {w : ℕ}
+    (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w) (K : ℕ)
+    (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+      fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+        Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
+      2 * ((1 + (w : ℝ)) *
+          Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (L.runCost H P x s q.1 q.2 : ℝ))) /
+          2 ^ (256 : ℝ) +
+        (L.nG x : ℝ) / ((K : ℝ) + 1) := by
+  have hoff : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
+      Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => ∃ g,
+        FlockSoundness.Rewinding.Off (L.opTable H P x q.1) (fun g => L.plur H P x q.1 g) q.2 g) :=
+    Pr_mono fun q hq => by
+      obtain ⟨g, hg, b, hb, hne⟩ := hq
+      refine ⟨⟨g, hg⟩, Option.isSome_iff_exists.2 ⟨b, hb⟩, fun h => hne ?_⟩
+      rw [L.regVal_eq_plur H P x q.1 hb]
+      exact (hb.symm.trans h).symm
+  have h := Verity.FirstHit.pr_off_sample_le_of_coll H (L.opTable H P x)
+    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω) chk hw
+    (L.runCost H P x s) K (L.collAt H P x s)
+    (fun ω rc rc' g hg => collAt_of_conflictAt hbind hs P ω rc rc' g hg)
+    (fun ω rc rc' u v huv => L.collAt_collision H P x s ω rc rc' huv) hCR
+  rw [Fintype.card_fin] at h
+  exact hoff.trans h
 
 end Compiled
 
