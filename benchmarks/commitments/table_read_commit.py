@@ -3,8 +3,8 @@ r"""Serve-time hashing of DSA long rows' table reads: what serving's row-table c
 ``hm96-sha512/row-seg/v1`` rows a step commits on a side stream) costs for one decode step's reads at batch ``--batch``, on one
 GPU, and its CPU twin's rate on one thread.
 
-    research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd integrations/vllm && export PATH=/usr/local/cuda/bin:$PATH \
-        PYTHONPATH=.:../..:../../tools/research/src:../../tools/config && /workspace/jobs/venv312/bin/python3 \
+    research run --on NODE --gpus 1 --cwd source -- bash -lc 'cd adapters/vllm && export PATH=/usr/local/cuda/bin:$PATH \
+        PYTHONPATH=.:../..:../../tools/research/src:../../verity/configuration/config && /workspace/jobs/venv312/bin/python3 \
         ../../benchmarks/commitments/table_read_commit.py --batch 1,16'
 
 A long row reads ``--reads`` history rows a layer from its request's table for the layer (``EmbeddingRead_v1{V=2^17,H=576}``),
@@ -251,7 +251,7 @@ def table(kind: str, rows: int, reps: int) -> dict[str, Any]:
     """One history table as ``kind`` (``python``, ``twin`` or ``device``): its creation, ``rows`` rows appended at once, one
     row at a time and 2048 reads' paths, with its root and whether `history.check` finds it over the table's strings; the
     device table's also whether the CPU twin over its rows under its salts has its root (``twin``)."""
-    from verity.ml.commitments import history as HT
+    from verity.commitments import history as HT
     from verity_vllm.commit import history_tables as H
     from verity_vllm.commit import history_tables_device as HTD
 
