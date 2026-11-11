@@ -438,9 +438,9 @@ namespace LeanRelease
 
 open Loop Ranked
 
-set_option maxHeartbeats 400000 in
-
 variable {wideLeaf : Bool}
+
+set_option maxHeartbeats 400000 in
 /-- **A rep's rank check holds where the loop is in its inner proof**: at a `Live` statement the loop serves, on at most
 `refK x` openings that reach table `j`'s rep `r`'s inner round `e`, where the loop's state on the coins before that
 round and any coins `d` there is inside the inner proof or owes coins, the rep's rank check holds at the opened coins.

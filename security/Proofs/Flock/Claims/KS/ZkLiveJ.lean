@@ -320,7 +320,7 @@ theorem zk_tableBoundJAt_of_liveJ {K D Sl : Type} [Field K] [Fintype K] [Decidab
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
         (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
@@ -385,7 +385,7 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
       Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length →
       (∀ j < (tables true x).length, (tables true x)[j]? = some (spec, stJ h0 j)) →
       (∀ j < (tables true x).length, 25 ≤ (stJ h0 j).m ∧ (stJ h0 j).m ≤ 35 ∧
-        (T j).sch = Accounting.m1Schedule (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).m ∧ (T j).e = 2 ∧
+        (T j).sch = Accounting.m1Schedule (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).e = 2 ∧
         (T j).S.shape spec.mPts = acct spec (stJ h0 j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
         (T j).N ≤ Claims.Flock.Numbers.padDomain
           (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).wideLeaf (stJ h0 j).m).1.k0)) →
@@ -440,7 +440,7 @@ theorem zk_atTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
       Claims.Flock.nTab (deployZk Readable.relation) x = (tables true x).length →
       (∀ j < (tables true x).length, (tables true x)[j]? = some (spec, stJ h0 j)) →
       (∀ j < (tables true x).length, 25 ≤ (stJ h0 j).m ∧ (stJ h0 j).m ≤ 35 ∧
-        (T j).sch = Accounting.m1Schedule (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).m ∧ (T j).e = 2 ∧
+        (T j).sch = Accounting.m1Schedule (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).t = Accounting.m1Pad (stJ h0 j).wideLeaf (stJ h0 j).m ∧ (T j).e = 2 ∧
         (T j).S.shape spec.mPts = acct spec (stJ h0 j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
         (T j).N ≤ Claims.Flock.Numbers.padDomain
           (Zk.PadLayout.new (stJ h0 j).m (stJ h0 j).c.kLog (Claims.Flock.zkSched (stJ h0 j).wideLeaf (stJ h0 j).m).1.k0)) →
