@@ -107,15 +107,13 @@ below P. The served bits and the unit's ANDs are the same at every G: a block's 
 
 **Cost** (`size`): the cache calls dominate where there is a cache. A unit walked costs about CN·(2·(B·CTW + EW) + 2·IW)
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
-units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class (CN 24, CU 25, B 16) a step's calls are 1.06M
-ANDs and the unit about 7.6M, past circuit-check's lowering: its circuit = reference tests, sidecar and ZK run
-(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at the
-served vLLM run's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s
-97,159 and its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus
-class the run's staged verdict words are the reference's. That run's engine class is AS = 1, its AsyncScheduler, where
-the ZK run proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a
-step in place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; its async window 1 at its own statics,
-314,936, and at its engine class 1,021,302, of them 123,120 the map's).
+units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class the unit is past circuit-check's lowering:
+its circuit = reference tests, sidecar and ZK run (`benchmarks/network_traces/compile_slice_zk.py`) are at the
+demonstration classes (`demo`, `demo_async`) and at the served vLLM run's sizes. At AS = 1 ``rows`` is ``map``'s: R²
+products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in place of the slot-for-slot comparison.
+
+**The charge** is `CODE`, v1's `charge_chain.SliceCharge`; a version of the slice (`compile_slice_v7`) brings its own,
+with its fields for ``pub``, ``cin``, ``cout`` and ``cert``'s tail, its circuit and its reference.
 """
 from __future__ import annotations
 
@@ -172,25 +170,27 @@ def row_names(S) -> tuple[str, ...]:
     return ROWS[:3] + srv_names(S) + ROWS[4:]
 
 
-def fields(S) -> dict[str, list[tuple[str, int, int]]]:
+def fields(S, code=None) -> dict[str, list[tuple[str, int, int]]]:
+    """The unit's rows' fields, ``pub``, ``cert``'s tail and the carry rows its charge's (`code`, default v1's)."""
+    code = code or CODE
     if not S.PC and (S.CN or S.CTW or S.CU):
         raise ValueError(f"statics {dict(S.__dict__)}: without prefix caching CN, CTW and CU are 0")
     Sc = chain(S)
     Z = RC.widths(Sc)
     cached = [("hit", S.P * (S.W + S.A), RS.widths(step_statics(S)).HW), ("cache", S.P + 1, CST.cache_width(S))]
-    return {"pub": [("c", 1, CW)] + CC.book_fields(S.D),
+    return {"pub": [("c", 1, CW)] + code.pub_fields(S),
             "adv": [("dec", S.D, 1), ("count", 1, Z.DW), ("steps", 1, Z.PW)],
-            "cert": RC.arrival_fields(Sc) + ([("tok", S.K * S.CU * S.B, S.CTW)] if S.PC else []),
+            "cert": RC.arrival_fields(Sc) + ([("tok", S.K * S.CU * S.B, S.CTW)] if S.PC else []) + code.cert_fields(S),
             **{r: [("rows", block(S), step_row_bits(S))] for r in srv_names(S)},
-            "cin": [("carry", 1, CC.ROW_BITS)],
-            "cout": [("carry", 1, CC.ROW_BITS)],
+            "cin": [("carry", 1, code.carry_bits)],
+            "cout": [("carry", 1, code.carry_bits)],
             "wit": [("state", S.P + 1, RC.width(Sc)), ("window", 1, RC.window_width(Sc)),
                     ("arr", S.P, RC._bits_of(RC.front_fields(Sc))), ("bits", S.P, S.A)] + (cached if S.PC else [])
                    + ([("map", S.P * S.R, S.R)] if S.AS else [])}
 
 
-def row_bits(S) -> dict[str, int]:
-    return {r: _words_of(RC._bits_of(fs)) for r, fs in fields(S).items()}
+def row_bits(S, code=None) -> dict[str, int]:
+    return {r: _words_of(RC._bits_of(fs)) for r, fs in fields(S, code).items()}
 
 
 def _words_of(n: int) -> int:
@@ -253,12 +253,13 @@ def _build_map(C, S, rep: Sequence, srv: Sequence, m: Sequence[Sequence]) -> lis
     return bad
 
 
-def _build(C, S, *ins):
+def _build(C, S, *ins, code=None):
+    code = code or CODE
     Sc, St = chain(S), step_statics(S)
     ZS = RS.widths(St)
-    F = fields(S)
+    F = fields(S, code)
     split = {r: RC._split(x, F[r]) for x, r in zip(ins, row_names(S))}
-    p, a, c, ci, co, w = (split[r] for r in ("pub", "adv", "cert", "cin", "cout", "wit"))
+    p, a, c, w = (split[r] for r in ("pub", "adv", "cert", "wit"))
     served = [e for r in srv_names(S) for e in split[r]["rows"]]
     states, win = w["state"], w["window"][0]
     load_ok = RC._build_load(C, Sc, _consts(RC.encode(RC.empty(Sc), Sc)), _consts(RC.encode_window(RC.QueueRow(), Sc)),
@@ -309,8 +310,7 @@ def _build(C, S, *ins):
 
     count = a["count"][0]
     en = [RC._lt(C, const_bits(k, len(count)), count) for k in range(S.D)]
-    book = [e for name, _n, _w in CC.book_fields(S.D) for e in p[name]]
-    code_ok, charged = CC.build_link(C, S.D, book, ci["carry"][0], co["carry"][0], en, [e[0] for e in a["dec"]])
+    code_ok, charged = code.link(C, S, split, en)
     charge_ok = RC._lt(C, p["c"][0], charged).inv()
 
     rows_ok = RC._zero(C, mism) if S.AS else RC._eq(C, rows, [x for e in served for x in e])
@@ -319,8 +319,8 @@ def _build(C, S, *ins):
     return [flags + [ZERO] * (16 - len(flags))]
 
 
-def _sig(S):
-    bits = row_bits(S)
+def _sig(S, code=None):
+    bits = row_bits(S, code)
     return tuple((r, Array(bits[r], BIT)) for r in row_names(S)), Array(16, BIT)
 
 
@@ -514,9 +514,9 @@ def _bits(v: int, w: int) -> list[int]:
     return [(v >> j) & 1 for j in range(w)]
 
 
-def _pack(S, r: str, vals: dict) -> list[int]:
-    out = [b for name, n, wd in fields(S)[r] for v in vals[name] for b in _bits(v, wd)]
-    return out + [0] * (row_bits(S)[r] - len(out))
+def _pack(S, r: str, vals: dict, code=None) -> list[int]:
+    out = [b for name, n, wd in fields(S, code)[r] for v in vals[name] for b in _bits(v, wd)]
+    return out + [0] * (row_bits(S, code)[r] - len(out))
 
 
 def _inputs(S, arr: Sequence[RC.Arrival], bits: Sequence[int], hit: Sequence[int] | None = None) -> RS.Inputs:
@@ -614,11 +614,14 @@ def _cert_tokens(S, bits: Sequence[int]) -> dict[int, tuple[int, ...]]:
 
 def _book(S, p: dict) -> AE.ChargeBook:
     """The ``pub`` row's book (`charge_chain.book_fields`), as `arith_encode.charge_book` gives it."""
-    v = {name: [_int(e) for e in p[name]] for name, _n, _w in CC.book_fields(S.D)}
-    return AE.ChargeBook(tuple(v["arrived"]), v["total"][0], tuple(zip(v["zfreq"], v["ztotal"])))
+    return CC.book_of(S.D, {name: [_int(e) for e in p[name]] for name, _n, _w in CC.book_fields(S.D)})
 
 
-def check(S, rows: dict) -> dict[str, bool | None]:
+#: v1's charge (`charge_chain.SliceCharge`); a version of the slice brings its own
+CODE = CC.SliceCharge()
+
+
+def check(S, rows: dict, code: CC.SliceCharge | None = None) -> dict[str, bool | None]:
     """The circuit's flags on a unit's rows (`fields`' layouts), by its pieces' references: ReplayLoad's `load` from the
     session's empty rows; per active step `replay_step.reference` on the witness state row with the witness arrivals,
     bits and hits (the evictable and returned counts 0) and `advance` with that step's own taken and used, against the
@@ -630,8 +633,9 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     For well-formed rows (`replay_chain.decode`'s, each field in range, and `cache_step.decode_cache`'s); `MalformedRow`
     otherwise. A flag is None where a step's ReplayStep refuses and the circuit's later outputs are its own: ``steps``
     is then False; and ``charge`` is None where the charge refuses its carry-in or its count."""
+    code = code or CODE
     Sc, St = chain(S), step_statics(S)
-    F = fields(S)
+    F = fields(S, code)
     p, a, w = (RC._split(rows[r], F[r]) for r in ("pub", "adv", "wit"))
     states = [RC.decode(e, Sc) for e in w["state"]]
     win = RC.decode_window(w["window"][0], Sc)
@@ -646,9 +650,8 @@ def check(S, rows: dict) -> dict[str, bool | None]:
         raise RC.MalformedRow(f"the advice's count {count} with a decision past it")
     loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), cert, dec[:count], _int(a["steps"][0]))
     flags: dict[str, bool | None] = {"load": loaded == (states[0], win)}
-    ok, length, carried = AE.reference_charge(S.D, _book(S, p), CC.carry_of([int(b) for b in rows["cin"]]),
-                                              [int(k < count) for k in range(S.D)], dec)
-    flags.update(code=bool(ok) and tuple(int(b) for b in rows["cout"]) == CC.encode(carried),
+    ok, length, carried = code.reference(S, rows, count, dec)
+    flags.update(code=bool(ok) and tuple(int(b) for b in rows["cout"]) == tuple(carried),
                  charge=length <= _int(p["c"][0]) if ok else None)
     steps_ok, out_rows = True, []
     for u in range(S.P):
@@ -686,10 +689,10 @@ def verdict(flags: dict[str, bool | None]) -> int | None:
     return sum(int(flags[f]) << k for k, f in enumerate(FLAGS))
 
 
-def pub(S, charge: int, book: dict) -> list[int]:
+def pub(S, charge: int, book: dict, code: CC.SliceCharge | None = None) -> list[int]:
     """The verifier's own ``pub`` row (u16 words): the declared charge and the registered book's tables (its JSON,
     `code_v1.Book.to_json()`'s form)."""
-    return words(_pack(S, "pub", {"c": [charge], **CC.book_values(AE.charge_book(book, S.D)[0])}))
+    return words(_pack(S, "pub", {"c": [charge], **(code or CODE).book(S, book)[0]}, code))
 
 
 def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Carry | None = None,
@@ -697,38 +700,39 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
          window: Sequence[int] | None = None, cert: Sequence[RC.Arrival] | None = None,
          hits: dict[int, Sequence[int]] | None = None, consume: dict[int, tuple[int, int]] | None = None,
          tokens: Sequence[Sequence[int]] | None = None, fabricate: dict[int, Sequence[CST.Entry]] | None = None,
-         maps: dict[int, Sequence[Sequence[int]]] | None = None) -> Case:
+         maps: dict[int, Sequence[Sequence[int]]] | None = None, code: CC.SliceCharge | None = None) -> Case:
     """A unit's rows for the prover's run of `sl` (`scan`'s, with `window`, `cert`, `hits`, `consume`, `tokens` and
     `fabricate`) under the registered `book` (its JSON), and `check`'s verdict on them. `carry` is the carry-in it puts
     in ``cin`` (default the book's priors, the session's first window's), `advice` the decisions it commits in ``adv``
     (default `sl`'s), `cout` the carry-out it puts in ``cout`` (default the charge's carry' on the advice from `carry`),
     `served` the window's step rows it puts in ``srv`` (default the run's own), `charge` ``pub``'s (default the
     advice's charge, ``length``) and, at AS = 1, `maps` step u -> the map it puts in ``map`` for step u (default
-    `slot_map`'s)."""
-    Sc = chain(S)
-    cb, first = AE.charge_book(book, S.D)
+    `slot_map`'s); `code` the slice's charge (default v1's, `CODE`)."""
+    Sc, code = chain(S), code or CODE
+    vals, first = code.book(S, book)
     carry = first if carry is None else carry
     dec = tuple(sl.decisions if advice is None else advice)
     if len(dec) > S.D:
         raise ValueError(f"{len(dec)} decisions over D = {S.D}")
     padded = list(dec) + [0] * (S.D - len(dec))
-    ok, length, nxt = AE.reference_charge(S.D, cb, carry, [1] * len(dec) + [0] * (S.D - len(dec)), padded)
+    sc = scan(S, sl, window, cert, hits=hits, consume=consume, tokens=tokens, fabricate=fabricate)
+    ok, length, nxt = code.charge(S, book, carry, sl, dec, sc.arrivals)
     if not ok:
         raise ValueError("the charge refuses the advice from the carry-in")
     cout = nxt if cout is None else cout
-    sc = scan(S, sl, window, cert, hits=hits, consume=consume, tokens=tokens, fabricate=fabricate)
     served = sc.steps if served is None else served
-    width = row_bits(S)
-    rows = {"pub": _pack(S, "pub", {"c": [length if charge is None else charge], **CC.book_values(cb)}),
-            "adv": _pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
+    width = row_bits(S, code)
+    rows = {"pub": _pack(S, "pub", {"c": [length if charge is None else charge], **vals}, code),
+            "adv": _pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}, code),
             **srv_rows(S, served),
-            "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
+            "cin": list(code.encode(carry)), "cout": list(code.encode(cout))}
     cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.QueueRow(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
     if S.PC:
         n = S.CU * S.B
         held = [tuple(sc.tokens[x[0]])[:n] for x in sc.arrivals] + [()] * (S.K - len(sc.arrivals))
         cert_bits += [b for t in held for v in list(t) + [0] * (n - len(t)) for b in _bits(v, S.CTW)]
+    cert_bits += code.cert(S, sl, sc.arrivals)
     rows["cert"] = cert_bits + [0] * (width["cert"] - len(cert_bits))
     wit = [b for st in sc.states for b in RC.encode(st, Sc)] + list(RC.encode_window(sc.window, Sc))
     wit += [b for arr, _b in sc.fronts for b in RC.front_bits(Sc, arr)]
@@ -741,7 +745,7 @@ def case(S, sl: Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE.Ca
         wit += [b for u in range(S.P) for r in (maps or {}).get(u, slot_map(S, mine[u], theirs[u])) for b in r]
     rows["wit"] = wit + [0] * (width["wit"] - len(wit))
     assert set(rows) == set(width) and all(len(rows[r]) == width[r] for r in width)
-    flags = check(S, rows)
+    flags = check(S, rows, code)
     return Case(rows, verdict(flags), flags, tuple(sc.steps), tuple(sc.asks), length, cout, tuple(sc.hits))
 
 
