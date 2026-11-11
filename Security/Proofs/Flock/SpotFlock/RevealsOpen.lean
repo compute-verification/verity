@@ -62,7 +62,7 @@ theorem pos_mem_opensSet (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.
 theorem card_opensSet_le (s : AuditStatement) :
     (opensSet part s).card ≤
       ∑ u ∈ Finset.range (((part s).map fun P => P.blocks.length).getD 0), (needs part s u).length :=
-  Finset.card_biUnion_le.trans (Finset.sum_le_sum fun u _ => List.toFinset_card_le _)
+  Finset.card_biUnion_le.trans (Finset.sum_le_sum fun _ _ => List.toFinset_card_le _)
 
 /-- A gate's roots are the statement's or some replay block's interior roots. -/
 theorem rootsAt_cases (s : AuditStatement) (u : ℕ) (v : Seen) (g : ℕ) :
@@ -219,7 +219,7 @@ theorem code_reveal_roots (x : Msg) {s : AuditStatement} {P : Partition} {d : De
   obtain ⟨hn, hr⟩ := code_reveal_at h x s u v w p hp
   rw [Reveal.rootsAt_eq (partition h) (two h) (iroots x) hP hd hρ hrb] at hr
   refine ⟨hn, fun hint => ?_⟩
-  rw [if_pos hint] at hr
+  rw [ite_eq_left hint] at hr
   exact hr.symm.trans hroot
 
 /-- **An opening under replay block `ρ'`'s interior roots is at a gate `u`'s proof block needs, and is either at an
@@ -245,9 +245,9 @@ theorem code_reveal_iroots (x : Msg) {s : AuditStatement} {P : Partition} {d : D
     | some rb =>
       rw [Reveal.rootsAt_eq (partition h) (two h) (iroots x) hP hd hρ hrb] at hr
       by_cases hint : p.2.pos ∈ rb ∧ s.prog.Boundary rb p.2.pos = false
-      · rw [if_pos hint] at hr
-        exact Or.inl ⟨ρ, rb, rfl, rfl, hint.1, hint.2, hr.symm.trans hroot⟩
-      · rw [if_neg hint] at hr
+      · rw [ite_eq_left hint] at hr
+        exact Or.inl ⟨ρ, rb, by simp [hρ], hrb, hint.1, hint.2, hr.symm.trans hroot⟩
+      · rw [ite_eq_right hint] at hr
         exact Or.inr (hr.symm.trans hroot)
 
 end SpotFlock
