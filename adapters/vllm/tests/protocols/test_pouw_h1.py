@@ -1265,6 +1265,29 @@ def test_a_session_whose_tunnel_never_listens_is_refused_by_name_once_its_wait_i
     assert tries == [("vy-challenger-1:7811", bytes.fromhex("ab" * 32))] * (2 * R.TUNNEL_WAIT_S + 1)
 
 
+def test_an_open_whose_challenger_signed_no_commitment_is_refused_without_its_secret():
+    """The gate answers an open with the hello's secret even when its challenger signed no commitment, and ``status``
+    then has none either: `pouw_h1_window.opened` refuses the answer naming the session and what it lacks, and neither
+    that refusal nor `session_of`'s own holds the secret, which a kept log would otherwise publish."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    sid, root, secret, calls = CH.session_id(1), PS.epoch_open_root(bytes(range(64)), 0), "5e" * 32, []
+
+    def call(*words):
+        calls.append(words[0])
+        return {"session": sid, "seq": 3, "root": root.hex(), "commitment": None, "port": 7811, "secret": secret,
+                "ignored": 1} if words[0] == "open" else {"commitment": None}
+    with pytest.raises(ValueError, match=f"pouw:test: the gate's answer to opening session {sid}: ") as e:
+        PHW.opened("pouw:test", "vy-challenger-1:1", 0, PHW.gate_of(call), sid, root, "salt epoch 0's root")
+    said = str(e.value)
+    assert calls == ["open", "status"] and secret not in said
+    assert "'commitment': None" in said and "'port': 7811" in said and said.endswith("with a secret (not quoted)")
+    with pytest.raises(ValueError, match="'session': 7}$"):
+        PHC.session_of({"session": 7})
+    with pytest.raises(ValueError, match="not 'a string'$"):
+        PHC.session_of("a string")
+
+
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
     """A window's open root binds the challenge phase the auditor's signed reserve entry names (S, `core_check.salt`), so
     a challenge phase the ledger opened on the window's own open root without reserving it first is refused, its salt and every
