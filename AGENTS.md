@@ -24,7 +24,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     are on the soundness path: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which
     only shrinks); core reaches neither the catalog (`ml.circuits.ops`, `ml.circuits.silicon`) nor the kernels. The rest
     can't affect soundness.
-- `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
+- `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving stack, holding only what attaches Verity to it. `adapters/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
 - `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
@@ -218,23 +218,23 @@ rule for each case: the team skill's Landing.
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
-- **Lean is code or security analysis.** Code stays with its subsystem and never requires `Security/`: Flock's
+- **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/flock/verifier/`, with the release side in
   `verity/protocols/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
-  hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
+  hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
   statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
-  or properties trees reads the proofs tree (`trees` in `Security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
+  or properties trees reads the proofs tree (`trees` in `security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
   `Pouw`, `Pous`, `NetworkCertifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
-  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean` or a module under it, and
+  named assumption (`assumptions`) is declared in `security/Definitions/Assumptions.lean` or a module under it, and
   every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
   `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
   witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
