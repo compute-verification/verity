@@ -238,7 +238,7 @@ def _tokens_row(check: dict) -> dict:
     return {"switch": "tokens", "cheat": "ids of the server's own choosing, the frame counts honest's",
             "expected": "refused by the I/O tie (io_tie.content) at the sample's delta",
             "actual": err or (f"refused: {_codes(check)}" if caught else
-                      "accepted by count-only N2 (not caught) — waits on the I/O tie (NET-297)"),
+                      "accepted by count-only N2 (not caught) — waits on the I/O tie, not yet landed"),
             "caught": caught, "charged": False}
 
 
@@ -300,7 +300,7 @@ def main(argv=None) -> int:
     (tmp / "rows.json").write_text(json.dumps(rows, indent=1))
     print(table(rows), flush=True)
     # Only the honest baseline gates: if honest serving isn't accepted the stand-in or the recipe is broken. Each
-    # cheat's verdict is a finding the table reports (tokens is not caught until the I/O tie, NET-297).
+    # cheat's verdict is a finding the table reports (tokens is not caught until the I/O tie lands).
     base = rows.get("baseline")
     if base is not None and not base.get("ok"):
         print("\nbaseline honest run NOT accepted — stand-in or recipe broken", flush=True)
