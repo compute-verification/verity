@@ -10,9 +10,10 @@
 # are inline (`AttnBlockFirst_v1` at 1 and 2 keys, `AttnHeadEnd_v1`), and their Boolean versions, which read no table
 # (`AttnBlockFirst_v3` at 1 and 35 keys flat, at 35 and 192 keys structural, `AttnHeadEnd_v2`).  The 192-key block flat
 # needs more memory than the default: give it in MF_CASES with MF_MEM_GB=128.
-# Prints "M1F {json}" a case, kept in $OUT/forms.jsonl: circuit_bytes and program_bytes (the files Lean reads); ands; the
-# unit's block: unit_rows, the cells it fills of its slot of 2^unit_log, block_bits, where the block's last range ends, of
-# the 2^k_log it is padded to, vus_per_block, and block_share, a unit's share of Flock's largest block (2^27 bits);
+# Prints "M1F {json}" a case, kept in $OUT/forms.jsonl: circuit_bytes and program_bytes (the files Lean reads); ands and
+# unit_rows; the unit's block: unit_cells, the cells its layout takes of its slot of 2^unit_log (a template's with its
+# copies aligned), block_bits, where the block's last range ends, of the 2^k_log it is padded to, vus_per_block, and
+# block_share, a unit's share of Flock's largest block (2^27 bits);
 # build_s and build_rss_gb; prove_s, the prove call's wall; and the Lean verify call's lean_s, lean_rss_gb and lean
 # (accepted, or its refusal).  Records: $OUT/<tag>/m1.log.
 # env: MF_CASES  MF_MEM_GB=64 (the job's --mem-gb)  MF_CACHE
@@ -64,7 +65,8 @@ t = json.load(open(timed)) if os.path.exists(timed) else {}
 prog = f"{out}/stage/program.json"
 print(json.dumps({
     "case": tag, "circuit_bytes": b.get("circuit_bytes"), "program_bytes": os.path.getsize(prog) if os.path.exists(prog) else None,
-    "ands": b.get("ands"), "unit_rows": b.get("unit_rows"), "unit_log": b.get("unit_log"), "block_bits": b.get("block_bits"),
+    "ands": b.get("ands"), "unit_rows": b.get("unit_rows"), "unit_cells": b.get("unit_cells"), "unit_log": b.get("unit_log"),
+    "block_bits": b.get("block_bits"),
     "k_log": b.get("k_log"), "vus_per_block": b.get("vus_per_block"),
     "block_share": 2.0 ** (b["k_log"] - 27) / b["vus_per_block"] if "k_log" in b else None, "build_s": b.get("seconds"), "build_rss_gb": b.get("rss_gb"), "prove_s": p.get("seconds"), "lean_s": t.get("wall_s"),
     "lean_rss_gb": round(t["maxrss_kb"] / 2**20, 2) if t else None,
