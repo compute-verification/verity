@@ -1318,7 +1318,7 @@ class Run:
                     if isinstance(node, ast.ImportFrom) else _replace_names(src, old_mod, new_mod)
             else:
                 indent = " " * node.col_offset
-                # each statement a one-line import splits into keeps the comment that ended the line (`# noqa: E402`), which
+                # each statement a one-line import splits into keeps the comment that ended the line (a linter's `noqa`), which
                 # the last already has; the lines an import went on over stay with the statement that has their names
                 comment = re.match(r"[ \t]*#[^\n]*", text[b:]) if "\n" not in src else None
                 parts = _continued(src, rep, indent) or [_wrap(s, indent) for s in rep]
