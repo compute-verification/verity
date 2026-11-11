@@ -20,7 +20,7 @@ versions, the consistency gate. It uses the CUDA primary context through ctypes,
 | `ieee_pin.py`, `ieee_pin.cu` | the gate's numeric pin, and where its pins come from: builds `ieee_pin.cu` with each pinned toolkit and flag set and three negative controls, checks each toolkit's `sass_pins.json` entry is what its builds pin, gates them, runs them under `gpu-lease 1` (rcp and sqrt on all 2^32 inputs, div on 2^32 pairs weighted to subnormals, integer division exhaustively or weighted, every subnormal input against the host too) and writes `ieee-pin.json`; its run is each toolkit's `numeric` |
 | `verify.py` | the verify step, after the lease in the same run: each arm's reference verifier, a replay, on the transcripts its timed code emitted; writes the verifier's commit, its accept line and the transcript (`<run id>:<path> sha256:<hex>`) beside each panel row, and prints `panel.py append`'s arguments. An accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck) |
 | `ledger.py` | the attempt ledger: `verify.py` writes one `kernel-attempt/v1` record per arm and shape under the run's `ledger/` (the variant, parent, tier, gate version, metrics, step times, γ, the verifier's lines, the hypothesis) and publishes it with `--publish`; `ledger.py publish RUN_DIR` later, `ledger.py outcome ART OUTCOME --reason ...`, and `ledger.py rows`, what `panel.py` reads beside `attempts.jsonl` |
-| `price_twins.py`, `price_twins.json` | the gap's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `Security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
+| `price_twins.py`, `price_twins.json` | the gap's Lean-pinned price twins, read from the POUS Project store's pins (`python price_twins.py STORE_ROOT`, or `--repository-only` when only `security/lean-audit.json` changed): the ledger looks an attempt's γ up at both FP32 prices on the priced path its variant declares, at its cube or its linear (n, k) (`lookup(..., layout=)` for a served layout's), and never takes one typed in |
 | `schedule.py`, `report.py`, `shapes.py`, `identity.py`, `fill.py` | the rules as pure functions (tested on CPU in `../tests/test_harness.py`) |
 | `native/` | `libpouw_harness.so`: fills, flushes, events, graphs, cuBLASLt (`lt.cu`), the CUTLASS kernels (`build.sh`, CUTLASS pinned at v4.8.0) and `../nvfp4_sm120/nvf4_plain.cu`'s in the same registry (`cutlass_api.h`; `PH_NO_CUTLASS=1` builds only these); optionally `libpouw_lt2.so`, `lt.cu` alone against a second cuBLASLt |
 
@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES=5 CUDA_DEVICE_ORDER=PCI_BUS_ID python characterize.py --gpu
 Where there is no CUDA 12.8+ toolkit, or it isn't the build's (the RTX PRO 6000 node has 13.0), `jobs/env.sh BUILD`
 gives the run NVIDIA's cuBLASLt and runtime wheels, a library built elsewhere (a build directory, or `art:<id>` of one
 preserved with `research data put --kind pouw-harness-build/v1 --tree DIR --preserve`), and this tree's `verity` and
-`verity.core.protocols.pouw` on `PYTHONPATH`. On that node, `gpu-lease 1` picks the GPU, so the run names it
+`verity.protocols.pouw.verifier` on `PYTHONPATH`. On that node, `gpu-lease 1` picks the GPU, so the run names it
 `--gpu lease` (the one index the lease set, checked against `server.md`'s GPU table); a timed run holds the node with
 `gpu-lease 8 --wait --timed` and times on its first GPU (`--timed` pauses the fill queue: without it, fill jobs keep
 running beside the timed run). A timed run also passes `research run --no-sampler`, so `research`'s own telemetry
@@ -104,9 +104,9 @@ Decode rows count on the panel only as a dependent chain, which needs a library 
 `--decode-method independent` times the old independent graph with any library. An arm (`arm.BenchArm`, arm interface
 v0.6) gets the split when its calls expose
 `phases` named by the step groups the executor schedules, `arm.GROUPS` (`a_tree`, `forming`, `gemm`, `cleanup`,
-`tile_hash`, `screen`, as `verity.core.protocols.pouw.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
+`tile_hash`, `screen`, as `verity.protocols.pouw.verifier.serving`'s): the chain times before (a_tree, forming), during (gemm, cleanup) and
 after (tile_hash, screen, the movable groups), and the report's `split_groups` names the groups each time covers. The
-side-stream variant times the served `deferred` schedule (`verity.core.protocols.pouw.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
+side-stream variant times the served `deferred` schedule (`verity.protocols.pouw.verifier.serving.DEFERRED`): tile hashing (`arm.DEFERRED`)
 off the main lane, the screen on it. v0.4's `before`, `gemm` and `after` still work, each as its part, and are deprecated;
 their one `after` can't be split that way, so they get no side-stream variant. `arm.py` has the contract.
 

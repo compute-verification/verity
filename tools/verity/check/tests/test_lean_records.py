@@ -182,10 +182,11 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
 
 
-def test_in_a_run_what_its_passing_builds_added_to_the_artifact_cache_goes_into_its_reports_as_one_bundle(repo, tmp_path,
-                                                                                                         monkeypatch):
-    """At the path `shared_bundles` lists, holding only what `LakeArtifacts.put` added, which it does only after a build
-    passed (and `put` itself only for a sandboxed one). Outside a run, or with nothing added, there is no bundle."""
+def test_in_a_run_what_its_builds_added_to_the_artifact_cache_goes_into_its_reports_as_one_bundle(repo, tmp_path,
+                                                                                                 monkeypatch):
+    """At the path `shared_bundles` lists, holding only what `LakeArtifacts.put` added, which it does after every build,
+    passed or failed (and `put` itself only for a sandboxed one). Outside a run, or with nothing added, there is no
+    bundle."""
     import tarfile
 
     entry, art = f"{LC.LA.MK.INDEX}/{'a' * 128}.json", "0123456789abcdef.olean"
@@ -206,9 +207,6 @@ def test_in_a_run_what_its_passing_builds_added_to_the_artifact_cache_goes_into_
         monkeypatch.setenv("AUDIT_RC", rc)
         assert LC.audit_records("a", tmp_path / "deps", tree) == int(rc)
         got = sorted(str(f.relative_to(run)) for f in run.rglob("lean-artifacts*"))
-        if rc == "1":
-            assert got == [], "a failed build adds nothing to the artifact cache, so nothing to bundle"
-            continue
         assert got == ["lean-audit/lean-artifacts.tar.gz"] and LC.LA.BUNDLE_FILE.fullmatch(got[0])
         with tarfile.open(run / got[0]) as t:
             assert t.getnames() == [entry, f"artifacts/{art}"] and all(LC.LA.MEMBER.fullmatch(n) for n in t.getnames())
@@ -290,7 +288,7 @@ def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, c
 
 
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
-    """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
+    """`--records Security` left `security/Properties`' records, which read `security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check. `a` requires `p` by path and lists a guarantee, so
     `--records p` audits `a` after it, never with `--update`; `c`, which doesn't require `p`, and a package that lists no
     guarantee are not audited."""
@@ -502,9 +500,9 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
 
 
 def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse, tmp_path, monkeypatch, capsys):
-    """`Security` and `Security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
-    `--records Security`, whose requirer `Security/Properties` failed, is not that requirer's: taken as its, `--records
-    Security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
+    """`security` and `security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
+    `--records Security`, whose requirer `security/Properties` failed, is not that requirer's: taken as its, `--records
+    security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
     path and `p` is proved in `a`."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')

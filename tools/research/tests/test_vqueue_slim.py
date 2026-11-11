@@ -3,22 +3,28 @@ launches its run beside the executor's check (`Driver._start_slim`) and judged a
 drive's own fakes: `Harness`'s launches, run states, evidence and clock, `_slim`'s ended run, and the lint log drive names a
 culprit by.  Pending while it launches or runs, infra when it registered no run, never ran, was lost or was killed, fail on a
 step on the gate it failed, pass on every one it passed; each failure keyed by the content the step reads at the candidate
-and at its base, so `vqueue.decide` takes one its base fails too as inherited; and `combine`'s table."""
+and at its base, so `vqueue.decide` takes one its base fails too as inherited; `combine`'s table; and the check that gates:
+drive's after-landing run as shards, judged on the steps `main` waits for at the base, each failure by the tests it names."""
 from __future__ import annotations
 
 import json
+import shutil
+import signal
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from research import merge
-from research.drive import ACTIVE, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, step_paths, step_records, touches
+from research.drive import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S, SIGTERM_RC,
+                            shard_machines, step_paths, step_records, touches)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
-                             Red, Snapshot, Verdict, decide, meets)
-from research.vqueue_slim import BUILD, WHOLE, based, combine, judge, key, reads, start, step_test
+                             Red, Snapshot, Verdict, _inherited, decide, meets)
+from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, abandon, audit_failures, based, combine, failures,
+                                  judge, key, reads, shard_count, start, step_test, unnamed)
 from test_drive_executor import PREFLIGHTS, _slim
-from test_drive_policy import _policy
-from test_drive_review import GATED_TREE, _main, _move_main
+from test_drive_policy import LIVE, TEST, _policy
+from test_drive_review import GATED_TREE, _main, _move_main, _plan_doc
 from test_queue import World, _git
 from test_queue_drive import LINT_LOG, Harness
 
@@ -27,20 +33,20 @@ OFF = ("circuit-check", "ratchet-gate")
 #: what drive's naming finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
 #: a graph build family declaring lean-agreement's reads in the shape the tree's does
-BUILD_SRC = ('VERIFIER = "verity/ml/flock/verifier"\nLEAN = "verity/core/service/flock"\n'
+BUILD_SRC = ('VERIFIER = "verity/protocols/flock/agreement"\nLEAN = "verity/protocols/flock/verifier"\n'
              'CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "settings.py")),\n'
              '               ".agents/skills/using-slack/registry.json")\n')
 ART = "art:" + "ab" * 32
 #: a `main` whose files each bounded step reads, beside one none of them does (docs/notes.md)
 KEYED = {BUILD: BUILD_SRC, "tools/verity/check/check.py": "# check\n", "tools/verity/check/settings.py": "# settings\n",
          ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
-         "tools/x/pyproject.toml": "[project]\n", "verity/ml/flock/verifier/ci.py": "# ci\n",
-         "verity/core/service/flock/Main.lean": "-- main\n", "fixtures/artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
+         "tools/x/pyproject.toml": "[project]\n", "verity/protocols/flock/agreement/ci.py": "# ci\n",
+         "verity/protocols/flock/verifier/Main.lean": "-- main\n", "fixtures/artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
          "fixtures/golden/a.json": "{}\n", "docs/notes.md": "notes\n"}
 #: each step the run judges whose reads are bounded, with files of `KEYED` it reads and files it doesn't
 BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verity/check/check.py", ".python-version"),
-                              ("verity/ml/flock/verifier/ci.py", "fixtures/golden/a.json")),
-           "lean-agreement": (("verity/ml/flock/verifier/ci.py", "verity/core/service/flock/Main.lean",
+                              ("verity/protocols/flock/agreement/ci.py", "fixtures/golden/a.json")),
+           "lean-agreement": (("verity/protocols/flock/agreement/ci.py", "verity/protocols/flock/verifier/Main.lean",
                                "tools/verity/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
                               ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/verity/check/other.py")),
            "preflight-fixtures": (("fixtures/artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
@@ -72,7 +78,7 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/ml/flock/"]} if agreement else {}))
+        {"lean-agreement": ["verity/protocols/flock/prover/"]} if agreement else {}))
     h = Drive(world, monkeypatch, **kw)
     h.q._clone()
     base, sha = _main(world), world.change(change or {"f.txt": "1\n"})
@@ -102,6 +108,34 @@ def _down(rid: str, sha: str, why: str) -> Verdict:
     return Verdict(INFRA, (), (Failed(f"the run beside its check ({rid}) {why}", f"{sha}:{rid}", frozenset()),))
 
 
+class Plans:
+    """Drive's auto plans (`Driver.plan_shards`, `Driver.planned`) on ``d``: each one asked for gets a job's directory and a
+    plan's (``tmp``'s job-K and plan-K, the plan's file in it), and is being made until ``answers`` holds what its plan's
+    directory answers.  An answer is read once, as `drive._job_end` reads a job's end: its job's directory goes, and a job
+    with none is gone with no exit."""
+
+    def __init__(self, d, tmp: Path):
+        self.asked: list[tuple[str, str, int | None, int | None]] = []
+        self.answers: dict[str, tuple[dict | None, str | None]] = {}
+        self.tmp = tmp
+        d.plan_shards, d.planned = self.plan, self.planned
+
+    def plan(self, repo, tip, steps, max_shards=None, n=None) -> dict:
+        self.asked.append((tip, steps, max_shards, n))
+        job, out = (self.tmp / f"{x}-{len(self.asked)}" for x in ("job", "plan"))
+        job.mkdir(parents=True)
+        out.mkdir()
+        (out / AUTO_PLAN).write_text("{}\n")
+        return {"dir": str(job), "pid": 7000 + len(self.asked), "out": str(out)}
+
+    def planned(self, rec: dict) -> tuple[dict | None, str | None]:
+        if not Path(rec["dir"]).is_dir():
+            return None, "its process is gone with no exit written (a restart of the pod)"
+        if (got := self.answers.get(rec["out"], (None, None))) != (None, None):
+            shutil.rmtree(rec["dir"])
+        return got
+
+
 # -- start
 
 
@@ -114,7 +148,7 @@ def test_start_launches_what_drive_launches_beside_the_executors_check_with_main
     rec = start(h.d, sha, base)
     steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
     assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False,
-                                                "no_regenerate": True})]
+                                                "no_regenerate": True, "train_from": OWN_TRAIN})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     assert asked == [(base, sha, "check")]
@@ -123,7 +157,8 @@ def test_start_launches_what_drive_launches_beside_the_executors_check_with_main
                for x in world.logs), world.logs
     pl = {"verified": base}
     h.d._start_slim({}, pl, sha, False)
-    assert h.posted[1] == h.posted[0], "drive's own launch of the same run"
+    assert h.posted[1] == (sha, ",".join(steps), {k: v for k, v in h.posted[0][2].items() if k != "train_from"}), \
+        "drive's own launch of the same run, from the clone's train.sh"
     assert pl["slim"]["ratchet_base"] == base
     assert {k: v for k, v in pl["slim"].items() if k not in ("ids", "ratchet_base")} == \
         {k: v for k, v in rec.items() if k not in ("ids", "base")}
@@ -164,7 +199,27 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     h.clock += LAUNCH_LOST_S
     assert judge(h.d, rec) == Verdict(PENDING)
     h.clock += 1
-    assert judge(h.d, rec).infra[0].task.startswith("the run beside its check registered no run: no run ids 60 min after its launch")
+    lost = judge(h.d, rec).infra[0]
+    assert lost.task.startswith(f"the run beside its check registered no run: no run ids "
+                            f"{LAUNCH_LOST_S // 60} min after its launch") and lost.launch
+    assert judge(h.d, rec).infra == (lost,), "the record keeps it, launch and all"
+
+
+@pytest.mark.parametrize("tail, launch", [
+    ("train: no run launched in the wait; stopped its launcher (pid 7), so none launches later; see /l/log", True),
+    ("train: 0e4f on m1 (its process is gone with no exit written: a restart of the pod)", True),
+    ('Traceback (most recent call last):\n  File "tools/verity/check/check.py", line 9, in <module>\nImportError: boom\n'
+     "train: no run launched; see /l/log", False),
+    ("train.sh: refused", False)])
+def test_only_a_launch_that_outran_its_wait_or_that_the_pod_lost_is_launch_only_infra(world, monkeypatch, tmp_path, tail,
+                                                                                         launch):
+    """train.sh runs the candidate's own check.py, so a launcher that exited without a run may be the tree's doing: only a
+    launcher stopped in its wait, or one the pod lost, is `Failed.launch`, which the loop retries before blaming anyone."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.got = {"dir": str(tmp_path / "launch"), "pid": 1}
+    h.d.launched = lambda got: ([], tail)
+    got = judge(h.d, start(h.d, sha, base))
+    assert got.state == INFRA and got.infra[0].launch is launch, got
 
 
 @pytest.mark.parametrize("how", ["dry_run", "shadow"])
@@ -331,6 +386,378 @@ def test_start_and_judge_write_nothing_of_drives(world, monkeypatch, tmp_path):
     _slim(h, tmp_path, preflight_lints=LINT_LOG)
     assert judge(h.d, rec).state == FAIL
     assert h.q.load_state() == before and h.posts == [] and h.cancelled == []
+
+
+# -- the check that gates
+
+#: lean-audit's log of a package that failed its build, in the scratch tree ``n``, and one more failure it may print
+AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+         "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n  closure: {n} modules checked, 2 reused\n"
+         "  trust gap: 2 premises outside their trust\n    G: 2 (a, b)\n")
+RECORD = "  record: the statement of G changed\n"
+
+
+@pytest.mark.parametrize("shards", [1, 3])
+def test_start_launches_each_shard_with_the_loops_own_train_sh(world, monkeypatch, shards):
+    """A candidate's tree doesn't decide how long its launch is waited for: every launch runs the loop's own train.sh, this
+    tree's, which the loop's pin deploys."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, given, launch = "m1,m2,m3", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, train_from=None, **kw: given.append(train_from) or launch(
+        repo, commit, machine, steps, **kw)
+    start(h.d, sha, base, shards=shards)
+    assert given == [OWN_TRAIN] * shards and OWN_TRAIN.is_file()
+    assert OWN_TRAIN == Path(__file__).resolve().parents[3] / "tools" / "verity" / "check" / "train.sh"
+
+
+@pytest.mark.parametrize("agreement", [False, True])
+def test_start_with_shards_launches_drives_after_landing_run_of_every_step_a_shard_a_launch(world, monkeypatch, agreement):
+    """The check that gates is drive's after-landing run of the candidate above ``base``: every step sent, with the keywords
+    drive gives its own, `--shard K/N` on shard K's machines, the record holding each shard's run ids and its ``gate``."""
+    h, base, sha, _ = _harness(world, monkeypatch, agreement)
+    h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    rec = start(h.d, sha, base, shards=3)
+    kw = h.d._postland_args({"verified": base}, sha, False)[0]
+    assert kw == {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False, "no_regenerate": True}
+    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3", "train_from": OWN_TRAIN}) for k in (1, 2, 3)]
+    assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4", "m2", "m3"]
+    assert rec == {"ids": ["r-post-0", "r-post-1", "r-post-2"], "groups": [["r-post-0"], ["r-post-1"], ["r-post-2"]],
+                   "tip": sha, "base": base, "at": h.clock, "gate": CHECK,
+                   "steps": [s for s in AFTER_LANDING if agreement or s != "lean-agreement"],
+                   **({} if agreement else {"skip": ["lean-agreement"]})}
+    whole = start(h.d, sha, base, shards=1)
+    assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "train_from": OWN_TRAIN}) and machines[3] == "m1,m2,m3,m4"
+    assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
+
+
+def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
+    """The loop's deselect list, read at each launch: every shard is sent the node ids it names (`train.sh --deselect`), written
+    beside it; a line that is no node id is logged and left out, so a typo drops no test and reds no candidate; no list, or one
+    naming none, sends none."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
+    ids = ["tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
+           "verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py::test_remote_agrees"]
+    listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{ids[0]}\n")
+    start(h.d, sha, base, shards=3, deselect=listed)
+    sent = tmp_path / "deselect.sent"
+    assert [kw.get("deselect") for _commit, _steps, kw in h.posted] == [str(sent)] * 3
+    assert sent.read_text().splitlines() == ids
+    assert any("2 line(s) not a test's node id" in x and "not a node id; /abs/test_x.py::t" in x for x in world.logs), world.logs
+    assert any(f"--deselect {sent} (2 tests) as 3 shards" in x for x in world.logs), world.logs
+    for text in (None, "# none yet\n"):
+        listed.unlink(missing_ok=True)
+        if text is not None:
+            listed.write_text(text)
+        h.posted.clear()
+        start(h.d, sha, base, shards=3, deselect=listed)
+        assert len(h.posted) == 3 and not any("deselect" in kw for _commit, _steps, kw in h.posted)
+
+
+@pytest.mark.parametrize("second", [["r-2"], []])
+def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_registered_no_run_stops_the_others(
+        world, monkeypatch, tmp_path, second):
+    """Each shard's train.sh runs detached: pending until every one printed its run ids, none read before (a launch read
+    once is gone, and the record is saved between), then the run's ids are every shard's.  One that printed none is infra,
+    the shards that registered a run cancelled."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, printed = "m1,m2", {}
+    launches = [{"dir": str(tmp_path / f"launch-{k}"), "pid": 1} for k in (1, 2)]
+    h.d.launch_postland = lambda *a, **kw: launches[int(kw["shard"][0]) - 1]
+    h.d.launched = lambda got: (printed.get(got["dir"]), "train.sh: no slot")
+    rec = start(h.d, sha, base, shards=2)
+    assert rec["ids"] == [] and rec["shards"] == [{"ids": [], "launch": x} for x in launches]
+    assert judge(h.d, rec) == Verdict(PENDING)
+    printed[launches[0]["dir"]] = ["r-1"]
+    assert judge(h.d, rec) == Verdict(PENDING) and [r["launch"] for r in rec["shards"]] == launches
+    printed[launches[1]["dir"]], h.run_state["r-1"], h.run_state["r-2"] = second, ("running", None, None), ("running", None, None)
+    got = judge(h.d, json.loads(json.dumps(rec)) if second else rec)
+    if second:
+        assert got == Verdict(PENDING) and h.cancelled == []
+        assert judge(h.d, rec) == Verdict(PENDING) and (rec["ids"], rec["groups"]) == (["r-1", "r-2"], [["r-1"], ["r-2"]])
+        assert "shards" not in rec and "verdict" not in rec
+    else:
+        assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
+        assert not got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
+
+
+def test_a_shard_whose_train_sh_printed_no_run_at_once_stops_the_others_and_start_gives_no_record(world, monkeypatch):
+    """A shard launched at once whose train.sh printed no run ids: the shards that registered a run are cancelled, and `start`
+    logs that shard's tail and gives no record, which `judge` takes as infra."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, launch = "m1,m2,m3", h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: (
+        ([], "train.sh: no slot") if kw["shard"] == "2/3" else launch(repo, commit, machine, steps, **kw))
+    assert start(h.d, sha, base, shards=3) is None and h.cancelled == ["r-post-0", "r-post-1"]
+    assert world.logs[-1].endswith(f"as 3 shards as candidate {sha[:12]}'s check registered no run: train.sh: no slot")
+
+
+def test_shards_are_n_of_ci_tomls_plan_or_auto_n_of_an_auto_plan():
+    assert [shard_count(s) for s in (0, 3, "auto:6", "auto:12")] == [(0, False), (3, False), (6, True), (12, True)]
+    for bad in ("auto:0", "auto:", "auto:6x", "auto:-1", " auto:6", "6", "x:6"):
+        with pytest.raises(ValueError, match="or auto:N"):
+            shard_count(bad)
+
+
+@pytest.mark.parametrize("detached", [False, True])
+def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_finds_it_launches_its_n_shards(
+        world, monkeypatch, tmp_path, detached):
+    """`auto:N`: `start` launches no shard but has the auto plan of the candidate's tree made, of every after-landing step and
+    exactly N shards (`check.py --shard-plan --deferred STEPS --n N`); pending while it is made, and the first `judge` that
+    finds it made launches each shard `--shard auto:K/N` with its file on shard K's machines, the plan read once.  The file
+    goes once every shard has its run ids, each having sent it with its run."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, printed, launches, post = "m1,m2,m3,m4,m5,m6", [], {}, [], h.d.launch_postland
+    plans = Plans(h.d, tmp_path)
+
+    def launch(repo, commit, machine, steps, **kw):
+        machines.append(machine)
+        if not detached:
+            return post(repo, commit, machine, steps, **kw)
+        h.posted.append((commit, steps, kw))
+        launches.append(got := {"dir": str(tmp_path / f"launch-{len(launches) + 1}"), "pid": 1})
+        return got
+
+    h.d.launch_postland, h.d.launched = launch, lambda got: (printed.get(got["dir"]), "")
+    rec = start(h.d, sha, base, shards="auto:6")
+    kw, out = h.d._postland_args({"verified": base}, sha, False)[0], tmp_path / "plan-1"
+    assert plans.asked == [(sha, ",".join(AFTER_LANDING), None, 6)] and h.posted == []
+    assert rec == {"ids": [], "plan": {"dir": str(tmp_path / "job-1"), "pid": 7001, "out": str(out), "n": 6,
+                                       "deferred": ",".join(AFTER_LANDING), "kw": kw},
+                   "tip": sha, "base": base, "at": h.clock, "gate": CHECK, "skip": ["lean-agreement"],
+                   "steps": [s for s in AFTER_LANDING if s != "lean-agreement"]}
+    assert any(x.endswith(f"as an auto plan's 6 shards as candidate {sha[:12]}'s check: planning") for x in world.logs)
+    h.clock += PLAN_WAIT_S
+    assert judge(h.d, rec) == Verdict(PENDING) and h.posted == [] and "made" not in rec["plan"]
+    rec = json.loads(json.dumps(rec))
+    plans.answers[str(out)] = (_plan_doc(6), None)
+    h.clock += 60
+    assert judge(h.d, rec) == Verdict(PENDING)
+    assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"auto:{k}/6", "shard_plan": str(out / AUTO_PLAN),
+                                                        "train_from": OWN_TRAIN}) for k in range(1, 7)]
+    assert machines == shard_machines(h.d.on, 6) == [f"m{k}" for k in range(1, 7)]
+    assert rec["plan"]["made"] == {"digest": "d" * 64, "predicted_s": 3600.0} and rec["at"] == h.clock
+    ids = [f"r-{k}" for k in range(1, 7)] if detached else [f"r-post-{k}" for k in range(6)]
+    said = "launching" if detached else " ".join(ids)
+    assert any(x.endswith(f": auto plan {'d' * 12}, predicted wall 60 min: {said}") for x in world.logs), world.logs
+    if detached:
+        assert rec["ids"] == [] and [r["launch"] for r in rec["shards"]] == launches and (out / AUTO_PLAN).is_file()
+        rec = json.loads(json.dumps(rec))
+        printed.update({x["dir"]: [f"r-{k}"] for k, x in enumerate(launches, 1)})
+        h.run_state.update({f"r-{k}": ("running", None, None) for k in range(1, 7)})
+        assert judge(h.d, rec) == Verdict(PENDING)
+    assert (rec["ids"], rec["groups"], "shards" in rec) == (ids, [[i] for i in ids], False)
+    assert not out.exists() and not (tmp_path / "job-1").exists()
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and len(h.posted) == 6, "its shards launch once"
+
+
+def test_a_shard_of_an_auto_plan_that_registered_no_run_stops_the_others_and_the_plans_file_goes(world, monkeypatch, tmp_path):
+    """As a shard of ci.toml's plan does, one of an auto plan's that printed no run ids stops the others, and no shard sends the
+    plan's file any more."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, printed = "m1,m2", {}
+    plans = Plans(h.d, tmp_path)
+    launches = [{"dir": str(tmp_path / f"launch-{k}"), "pid": 1} for k in (1, 2)]
+    h.d.launch_postland = lambda *a, **kw: launches[int(kw["shard"].removeprefix("auto:").split("/")[0]) - 1]
+    h.d.launched = lambda got: (printed.get(got["dir"]), "train.sh: no slot")
+    rec = start(h.d, sha, base, shards="auto:2")
+    plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+    assert judge(h.d, rec) == Verdict(PENDING) and (Path(rec["plan"]["out"]) / AUTO_PLAN).is_file()
+    printed.update({launches[0]["dir"]: ["r-1"], launches[1]["dir"]: []})
+    h.run_state["r-1"] = ("running", None, None)
+    got = judge(h.d, rec)
+    assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
+    assert h.cancelled == ["r-1"] and not Path(rec["plan"]["out"]).exists()
+
+
+@pytest.mark.parametrize("how", ["failed", "lost", "late", "another n"])
+def test_an_auto_plan_that_failed_or_was_not_made_in_time_is_infra_its_directories_gone(world, monkeypatch, tmp_path, how):
+    """A plan that failed (`check.py --shard-plan` exited nonzero, or the pod lost its job), has another N than asked, or wasn't
+    made `PLAN_WAIT_S` after the start (its job stopped): infra, kept, no shard launched, the plan's directories removed.  Only
+    a lost job points at the machines (`Failed.launch`): the planner runs the candidate's own check.py."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, stopped = "m1,m2", []
+    plans = Plans(h.d, tmp_path)
+    monkeypatch.setattr("research.vqueue_slim.os.killpg", lambda pid, sig: stopped.append((pid, sig)))
+    rec = start(h.d, sha, base, shards="auto:2")
+    gone = "its process is gone with no exit written (a restart of the pod)"
+    plans.answers[rec["plan"]["out"]] = {"failed": (None, "`check.py --shard-plan` exited 2: no costs"), "lost": (None, gone),
+                                         "late": (None, None), "another n": (_plan_doc(3), None)}[how]
+    h.clock += PLAN_WAIT_S
+    if how == "late":
+        assert judge(h.d, rec) == Verdict(PENDING) and stopped == []
+        h.clock += 1
+    got = judge(h.d, rec)
+    why = {"failed": "failed: `check.py --shard-plan` exited 2: no costs", "lost": f"failed: {gone}",
+           "late": f"was not made in {PLAN_WAIT_S // 60} min (stopped)", "another n": "has 3 shards, not 2"}[how]
+    assert got == Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: its auto plan {why}", f"{sha}:no run",
+                                             frozenset(), launch=how == "lost"),))
+    assert stopped == ([(7001, signal.SIGTERM)] if how == "late" else []) and h.posted == []
+    assert not Path(rec["plan"]["out"]).exists() and not Path(rec["plan"]["dir"]).exists()
+    assert judge(h.d, json.loads(json.dumps(rec))) == got and rec["verdict"]["state"] == INFRA
+
+
+@pytest.mark.parametrize("made", [False, True])
+def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_shards_send(world, monkeypatch, tmp_path, made):
+    """A candidate dropped while its plan is made launches no shard: the plan's directories go, so its job writes no plan.  Once
+    made, its shards' launches send its file, which stays until each has its run ids."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, h.got = "m1,m2", {"dir": str(tmp_path / "launch"), "pid": 1}
+    plans = Plans(h.d, tmp_path)
+    rec = start(h.d, sha, base, shards="auto:2")
+    if made:
+        plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+        assert judge(h.d, rec) == Verdict(PENDING) and len(h.posted) == 2 and "made" in rec["plan"]
+    abandon(rec)
+    assert (Path(rec["plan"]["out"]) / AUTO_PLAN).is_file() == made and not Path(rec["plan"]["dir"]).exists()
+    abandon({"ids": ["r-1"], "tip": sha})
+
+
+@pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
+                                        ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
+def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
+    """Every step `main` waits for at the base gates, the preflights among them: not one policy.toml takes off the gate there
+    (circuit-check), drive.toml's warn step (ratchet-gate) or one a run may skip by name (lean-changed).  The candidate's
+    own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
+    h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
+        "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
+    h.d.warn_steps = ("ratchet-gate",)
+    rec = start(h.d, sha, base, shards=1)
+    _slim(h, tmp_path, **{red.replace("-", "_"): "error: it failed\n"})
+    got = judge(h.d, rec)
+    assert got.state == state and [f.task for f in got.failed] == [f"step {red}"] * (state == FAIL)
+    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-changed", "lean-agreement", "circuit-check", "ratchet-gate")]
+    if red not in PREFLIGHTS:
+        assert sorted(rec["verdict"]["passed"]) == sorted(s for s in gates if s != red or state == PASS)
+
+
+def test_the_check_that_gates_names_each_test_of_a_logs_short_summary_by_its_whole_id(world, monkeypatch, tmp_path):
+    """pytest's short summary prints a test's whole id, a parametrized one's spaces among it, then ` - ` and its error: the
+    failure names each test by all of it, so two cases of one test that differ past a space are two tests."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=1)
+    _slim(h, tmp_path, preflight_lints="FAILED tests/test_x.py::test_y[a b] - KeyError: 'k'\nFAILED tests/test_x.py::test_y[a c]\n"
+                                       "ERROR tests/test_z.py - ImportError: no module named z\n")
+    (f,) = judge(h.d, rec).failed
+    assert (f.task, f.tests) == ("step preflight-lints", {"tests/test_x.py::test_y[a b]", "tests/test_x.py::test_y[a c]",
+                                                          "tests/test_z.py"})
+
+
+#: suite pkg's report row: one test failed, and nothing more
+PKG = {"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [TEST], "beyond_tests": False, "log": "/x/suites/pkg.log"}
+
+
+@pytest.mark.parametrize("at", ["base", "candidate", "unbased"])
+def test_the_check_that_gates_passes_a_failure_only_an_allowance_at_its_base_covers(world, monkeypatch, tmp_path, at):
+    """An unexpired allowance of policy.toml at the base covers a suite's failure as drive's covers it on `checked`, but the
+    candidate's own (it adds the allowance) never covers its own failure: that fails it, on the suite's test.  A record
+    with no base reads the candidate's."""
+    allowing = {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=allowing if at == "base" else None,
+                               change=None if at == "base" else allowing)
+    rec = start(h.d, sha, base, shards=1)
+    if at == "unbased":
+        rec["base"] = None
+    (_slim(h, tmp_path, pytest="") / "suites.json").write_text(json.dumps([PKG]))
+    got = judge(h.d, rec)
+    if at == "candidate":
+        (f,) = got.failed
+        assert (got.state, f.task, f.tests) == (FAIL, "step pytest", {f"pkg::{TEST}"})
+        assert not h.d._only_allowed(rec, base) and h.d._only_allowed(rec)
+    else:
+        assert got == Verdict(PASS)
+
+
+@pytest.mark.parametrize("own", [False, True])
+def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infra(world, monkeypatch, tmp_path, own):
+    """A kill (a step's exit 137, on a suite that names no test) is the machine's fault unless an allowance at the base covers
+    every failure: then the check passes; covered only by the candidate's own allowance, it is infra, to run again."""
+    allowing = {"tools/verity/check/policy.toml": _policy(("suite pkg", "ci", LIVE), off_gate=OFF)}
+    h, base, sha, _ = _harness(world, monkeypatch, tree=None if own else allowing, change=allowing if own else None)
+    rec = start(h.d, sha, base, shards=1)
+    d = _slim(h, tmp_path, pytest="Killed\n")
+    _rewrite(d, pytest={"rc": 137})
+    (d / "suites.json").write_text(json.dumps([{**PKG, "failed_tests": []}]))
+    got = judge(h.d, rec)
+    if own:
+        assert got.state == INFRA and got.infra[0].task.endswith("was killed (done rc=1)"), got
+    else:
+        assert got == Verdict(PASS)
+
+
+def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
+    log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
+           + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/security: PASS  12 declarations\n  note: fine\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (security/Proofs, Flock); reports in /out\n"
+           "lean-audit: FAIL: unread: Core grew\n")
+    named = {"security/Proofs::build: exit 1", "security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",
+             "security/Proofs::tamper: security/Proofs/A.olean changed", "Flock::rest", "lean-audit: FAIL: unread: Core grew"}
+    assert audit_failures(log, "rest") == named == audit_failures(log.replace("scratch-1-x", "scratch-22-y"), "rest")
+    assert audit_failures("AUDIT: PASS; reports in /out\n", "rest") == set()
+
+
+@pytest.mark.parametrize("more", ["", RECORD])
+def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the_base_s(world, monkeypatch, tmp_path, more):
+    """The base's check and the candidate's fail lean-audit on the same error of the same package, each in its own scratch
+    tree: inherited by what the audit printed.  One more failure under the package is the candidate's own."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec_base = start(h.d, base, base, shards=1)
+    _slim(h, tmp_path, lean_audit=AUDIT.format(n=1))
+    assert judge(h.d, rec_base).state == FAIL
+    rec = start(h.d, sha, base, shards=1)
+    _slim(h, tmp_path, lean_audit=AUDIT.format(n=2) + more)
+    (f,) = based(judge(h.d, rec), rec_base).failed
+    assert f.key != f.base_key and f.inputs == {"security/Proofs/A.lean"} and _inherited(f) is (not more)
+    assert f.tests - f.base_tests == ({"security/Proofs::record: the statement of G changed"} if more else set())
+    assert unnamed(f.key) not in f.tests
+
+
+def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(
+        world, monkeypatch, tmp_path):
+    """`failures` reads a step `judge` leaves out (circuit-check, ratchet-gate), once the run's verdict is kept: each failure
+    its log names, the step itself where it names none, none where it passed; None while the run runs, of a record with no
+    run, and where the step didn't run to its end (skipped, stopped, killed, or absent from every shard)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=1)
+    assert failures(h.d, rec, "circuit-check") is None and failures(h.d, None, "circuit-check") is None
+    d = _slim(h, tmp_path, circuit_check="FAIL lowering/dead Callee_v1\n", ratchet_gate="  #4 (000000000004): failed: grows\n",
+              lean_build="error: it failed\n")
+    assert failures(h.d, rec, "circuit-check") is None                    # its verdict isn't kept yet
+    assert judge(h.d, rec).state == FAIL
+    assert failures(h.d, rec, "circuit-check") == {"lowering/dead Callee_v1": "lowering/dead Callee_v1"}
+    assert failures(h.d, rec, "ratchet-gate") == {"#4": "#4 (000000000004): grows"}
+    assert failures(h.d, rec, "lean-build") == {"lean-build": "lean-build failed, its log naming no failure"}
+    assert failures(h.d, rec, "pytest") == {} and failures(h.d, {**rec, "ids": []}, "pytest") is None
+    for how in ({"rc": 137}, {"rc": -9}, {"rc": SIGTERM_RC}, {"status": "skipped"}, {"status": "stopped"}, None):
+        _rewrite(d, circuit_check=how)
+        assert failures(h.d, rec, "circuit-check") is None, how
+    assert failures(h.d, rec, "ratchet-gate") == {"#4": "#4 (000000000004): grows"}
+
+
+def test_failures_of_a_sharded_run_are_those_of_each_shard_that_failed_the_step_which_a_twin_s_pass_answers_for(
+        world, monkeypatch, tmp_path):
+    """Of the check that gates, a step is failed in a shard where no twin passed it, and what it failed is what each twin
+    that failed it to its end names (not one that skipped it, or that a SIGTERM stopped); with no live record a shard's steps
+    are those its steps.jsonl names, every shard having ended."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    twins = {"r-1": ({"status": "failed", "rc": 1}, "A_v1"), "r-1b": ({"status": "passed"}, None),
+             "r-2": ({"status": "failed", "rc": 1}, "B_v1"), "r-2b": ({"status": "skipped"}, None),
+             "r-2c": ({"status": "failed", "rc": SIGTERM_RC}, "C_v1")}
+    h.evidence = []
+    for rid, (st, target) in twins.items():
+        (d := tmp_path / rid).mkdir()
+        (d / "steps.jsonl").write_text(json.dumps({"step": "circuit-check", **st, "log": "circuit-check.log"}) + "\n")
+        (d / "circuit-check.log").write_text(f"FAIL lowering/dead {target}\n" if target else "")
+        h.evidence.append(d)
+    rec = {"ids": list(twins), "groups": [["r-1", "r-1b"], ["r-2", "r-2b", "r-2c"]], "tip": sha, "base": base, "gate": CHECK,
+           "verdict": {"state": PASS}}
+    assert failures(h.d, rec, "circuit-check") == {"lowering/dead B_v1": "lowering/dead B_v1"}
+    rec = {**rec, "groups": [["r-1"], ["r-2", "r-2b", "r-2c"]]}
+    assert failures(h.d, rec, "circuit-check") == {"lowering/dead A_v1": "lowering/dead A_v1",
+                                                   "lowering/dead B_v1": "lowering/dead B_v1"}
 
 
 # -- content keys

@@ -19,12 +19,14 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut; `with_structures`, its traced steps' measured quantities |
 | `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_fn` a function, `capture_run` a run of them): |C|, the update's dependence and the cuts (`capture.circuit`), the step's matrix products as rows (`capture.products`) and its lowering to the training-step frontend (`capture.lower`) |
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
-| `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model |
+| `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
+| `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
+| `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a program's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, seed replay and their composition |
 | `starts.py` | a start's entry in the starts registry the run command reads |
 
-The reference shapes are the lf model's (`integrations/vllm/tests/program/train_step_lf.py`), which the suite checks.
+The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
 ## Running a program
 
@@ -44,6 +46,36 @@ checkpoint, encoding) isn't. A program that names the harness's internals or a r
 (`run.FORBIDDEN`) is refused, and one that uses an op the counter can't price, reads token data out of torch, starts a
 thread or a process, or imports a module the screen refuses makes its run invalid (`run.py`'s docstring has the
 screen).
+
+## Grading a config
+
+~~~text
+python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \
+    [--also NAME=DIR ...] [--out OUT]
+~~~
+
+A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
+config's records, `DIR/<seed>/<split>/run.json` (`split` is `search` or `final`), a traced record as its rows
+(`rows.jsonl[.gz]`) where it has them. The grade reads no file of a served run. It prints one block and writes
+`OUT/slowdown.json` (`slowdown/v1`):
+
+- **the gain** each seed reached, through the fit of the starts on the start's data (loss to effective compute);
+- **H**, the least counted |C| reaching the target gain: over the honest config's records, and over every config's
+  given (`--also` adds configs at the same start and gain);
+- **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
+- **ρ**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the traced search record;
+- **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
+- **the bound of record** at the same policy, what every partition of the attack's traced circuit must pay, beside S
+  (what this attack pays) and never mixed into it; "not available", with what is missing, where the calculator has
+  no function that gives it;
+- **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over a
+  window, a week, a month and a year, with the measured, proved and scaled parts named.
+
+A config's `policy` is a name, and `policy.named` resolves it: `console` is the rule relative to the start (c one
+session of the reference model of the start's size, k the session's input ids), and any other name is a fixed policy
+of the calculator's registry (`verity/protocols/inference_only/rho/data`, its `[policy.*]` tables). The block says which kind it was, and a
+name that is neither is refused. p is read on the final set where the attack and its honest config each have a final
+record, else on the search split, and the block says which. Without a traced search record there is no ρ and no S.
 
 ## Limits of the count
 
