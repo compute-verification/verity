@@ -64,9 +64,10 @@ uv run python verity/protocols/inference_only/rho/periods.py --bounds min-cut --
   never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
   incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
   16 to 262,144 bits (`verity.circuits.partition_v2`); the per-window δ (`verity.protocols.spot.verifier.profile`), once
-  for a window's coins and for SPOT's sample and twice for the window's cryptography; and the reporting δs
-  the incorrect-outputs row reports at. From `verity/protocols/inference_only/nci/calibrations.json`: the calibrated policy's `K`, with
-  the least and the greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
+  for a window's coins and for SPOT's sample and, assumed, twice for the window's cryptography (PoUW's binding and
+  knowledge soundness, neither with a bound); and the reporting δs the incorrect-outputs row reports at. From
+  `verity/protocols/inference_only/nci/calibrations.json`: the calibrated policy's `K`, with the least and the
+  greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
   `data/reference.toml` states, and only its range is read (`params.ranges`). The census's numbers are the exception:
   `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
   machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
