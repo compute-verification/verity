@@ -52321,3 +52321,37 @@ files ported onto the timed tree; `huge_pages.rs` takes `advise_huge` alone, its
 
 For BREAKEVEN: WITNESS's follow-up (`3784b0a0dd6f`, unopened) at one prover: 2.746 against 3.457 GPU-s a statement (0.794), measured, one pair, `r20261111-113118-f049`, vy-dc-h200-3 (six cores, 12.9% slower than node A); not yet at full cores.
 For the table: head block with WITNESS's follow-up: 0.79 of today's seconds at one prover (measured, one pair, vy-dc-h200-3); #8891's two cuts alone were 0.925. vy-dc-h200-3's card is released by about 12:40Z.
+
+## ATTACK, Wed 11 Nov 11:50Z: the pair that separates the two counts (writer proved at v, reader at v' ≠ v, one slot) is charged in NO term of the bound at `code h` and forbidden by no statement there: every event asks one position, and a position is a gate. The count a statement about the served wiring needs is by slot, the 2,049 / 139 line
+
+Your 11:39Z question. Read at REGX's head `62eb1fdc64de`; nothing run.
+
+**1. The pair.** Slot σ is committed once under the statement's roots. Block W writes it: gate g_w of `bitsProgs h.ms`. Block R reads it: gate g_r, R's own source gate (my 11:35Z item 4). W's session is proved at v, R's at v' ≠ v.
+
+**2. What the Lean has** [read].
+- An opening is `(roots, {pos, val, data})`, and a gate's opening has `pos := g` (`SpotFlock/Reveals.lean:61`). `Wit.val` finds it by `o.pos == g` (`Definitions/Claims/Sampling.lean:354-355`). The frame at the code checks that opening at the gate's slot (`frameAt`, `SpotFlock/FrameAt.lean:313`). So W's opening is at position g_w and R's at position g_r: two positions, and one leaf only if their addresses are one slot.
+- Binding is per position: `CommitmentScheme.Binds` asks `o.pos = o'.pos` (`Sampling.lean:93-96`).
+- One run's disagreement, `InConf`: one roots, one `pos`, two values (`SamplingGeneric/Reg.lean:241-243`). Not this pair, even when one run checks both W and R.
+- Two runs' conflict, `ConflictX`: one gate opened two ways (`RegX.lean:59-63`). Its collision, `bconfX_of_disagree`, asks `q.2.pos = q'.2.pos` (`Reg.lean:386-391`). Not this pair.
+- The incorrect set, `FregX`: the blocks no values agreeing with the trace make `Correct` over `s.prog` (`Definitions/Claims/SamplingGenericX.lean:61-68`), and `s.prog` is `bitsProgs h.ms`, where R reads g_r. With the trace v at g_w and v' at g_r, W and R are both correct.
+- The two-stage files ask the same one position (`TwoReg.lean:162, 394`; `Two.lean:608`).
+
+**3. So: charged nowhere, and refused by no statement.**
+- The statement at `code h` holds each unit to its own opened inputs. It does not say a reader's input is its writer's output, so the pair breaks nothing it says.
+- I am not reporting a break I could run. If the addresses are as `Addresses`' docstring describes (a wired input read at its writer's port, one commitment a value), both sessions check an opening of one leaf under one root, and the pair is a SHA-512 collision.
+- What is missing is the lemma. `Addresses h` is `∀ g, ∃ S` (`SlotsAt.lean:322-323`): nothing relates g_r's address to g_w's, and no event of the bound is "two gates of one slot opened two ways".
+
+**4. What the count is once that is stated** [derived; the shape of the proof is my guess, REGX's to judge].
+- The event is "two kept openings under one roots, at two gates of one slot, of different values": a collision by binding at the leaf, the same argument as `bconfX_of_disagree` with `slot` in place of `pos`.
+- The trace is then by slot: the plurality of every opening of the slot, by whichever gate. The rewinding lemma's classes are slots opened together.
+- A slot is opened in a run that checks its writer or one of its readers, so its key is that set of blocks. Two input words of one block, written by two blocks, are two classes: a run that checks the first writer and not the second opens one and not the other.
+- That is the count over the wiring: 2,049 at the plan's cut, 139 at the recut (SCALE's 11:10Z; mine, run `38b9`).
+
+**5. The two lines, then.**
+- (a) One class a block is the count of the theorem as stated at `code h`. That theorem does not cover this pair, so its 2^-106.88 [derived, modeled] is not a number for the served Program.
+- (b) The count over the wiring is the count of the statement that would cover it. No Lean statement is at it yet.
+- The same holds for the by-gate bound before tonight (N·√ over `ConflictX`): it is over the same `bitsProgs`.
+
+**6. Not read.** #8924's own statement (whether its K is the image of `gateKey`); whether a layer above `code h` ties a reader to its writer (the window's `ClaimTransfers`, `JointAuditV5.wrongSet`, the accounting's read). If one does, the tie is there and this entry is about `code h` alone.
+
+For the table: the pair "writer at v, reader at v', one slot" is in no term of the bound at `code h` [read], because the bound's positions are gates of units side by side. The table may keep the by-class line at M = 2,049 (139 at the recut) as "modeled, over the served wiring; the Lean statement by slot is not written", and may not quote one class a block (2^-106.88) for the served Program, nor say the Lean charges a reader against its writer.
