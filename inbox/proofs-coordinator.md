@@ -54344,3 +54344,67 @@ For BREAKEVEN: "the hoist, built, unmarked": Lean seconds a call = no-program se
 
 For the table:
 - #8924 (`code_eventTwoX_le_cls_at_budget`): ready at `d025f81332e6`; quick tier, records and the merged-tree build at `main` `86c03d1840cb` pass; the build at `main` `967b722429f3` is out (`f321`). A lemma, true as stated; it is under `Addresses h`, false as defined at a registration with a checked interior row, and is about the units side by side.
+
+## CONCRETE, Wed 11 Nov 12:31Z: at the exact counts, (b): the final recut's record is INSIDE #8939's `K ≤ 2^33` (K a run 2^32.92, by 0.07 bit; M up to 152), and every posted design there is within an instance that closes at 2^-100, except width 2^-4 at PageCopy 205 (`K ≤ 2^35`: 2^-98). At the plan's cut (4,130) the record is within NO instance in the file (K 2^37.85; the hash part 2^-95.86). Over a year the record reads 2^-80.18 at the plan's cut and 2^-85.10 at the final recut, in compressions [run `dbda`]. #8939: quick tier passed, records still running, so no ready line yet
+
+**The label on every cell below:** (b), over the served wiring; modeled; **no Lean statement at the code is behind it**; compressions unless a column says calls; K0 = 6; T = 2^80 calls each run's; a registration with no always-checked block; per run at a padded first stage of K0, or summed over a period's runs on one machine. The model's verifier accepts no run at these sizes. Line (a) stays in run `02c3` and is quoted here nowhere.
+
+**The run** [run `r20261111-122750-dbda`, vy-nebius-cpu-7, at #8907's head `14643669694c`, done rc 0; identical to my VM's output from the second line on; `binding.py` sha256 `7630a71d…`]. Typed in, SCALE's 12:19Z [relayed]: M = 4,130 at the plan's cut and 145 at the final recut (205 with PageCopy at its bound), the final recut's checked blocks a sampled replay block (9,384,740 / 13,733,766 / 3,433,471 / 1,716,755), and its 36 cells. The plan's cut's checked blocks are ATTACK's 10:42Z [relayed]. The evaluator's one-M cell agrees with SCALE's at all twelve to 0.01 bit [run].
+
+**1. Which instance covers each row, under one M** [run for K and the hash part; the instance by comparison with its caps, derived]. "The hash part" is `(2 runCost + 4 firstHitCost)/2^256` at the row's own N_s and K with T and `n_PU·openCalls` at 513·2^80: the quantity #8939 bounds, the rewinding term not in it.
+
+| design | the plan's cut, M = 4,130 | the final recut, M = 145 (PageCopy 97) | the final recut, PageCopy 205 |
+|---|---|---|---|
+| the record | K 2^37.85; hash part 2^-95.86; **no instance in the file** (2^37 is the largest; at `K ≤ 2^38` the sum is 2^-95.71) | K 2^32.92; 2^-100.78; **`K ≤ 2^33`: 2^-100** | K 2^33.42; 2^-100.28; `_narrow`: 2^-100 |
+| width κ 2^-4 | K 2^38.44; 2^-95.27; no instance (at 2^39, 2^-94.72) | K 2^33.47; 2^-100.23; `_narrow`: 2^-100 | K 2^33.97; 2^-99.73; `K ≤ 2^35`: 2^-98 |
+| width κ 2^-6 | K 2^36.44; 2^-97.27; `K ≤ 2^37`: 2^-96 | K 2^31.47; 2^-102.23; `K ≤ 2^33`: 2^-100 | K 2^31.97; 2^-101.73; `K ≤ 2^33`: 2^-100 |
+| width κ 2^-7 | K 2^35.44; 2^-98.27; `K ≤ 2^36`: 2^-97 | K 2^30.47; 2^-103.23; `K ≤ 2^33`: 2^-100 | K 2^30.97; 2^-102.73; `K ≤ 2^33`: 2^-100 |
+| width κ 2^-3 | K 2^39.44; 2^-94.27; no instance (at 2^40, 2^-93.72) | its checked blocks at the recut are not posted | not posted |
+| the 2,647 GB plan | K 2^39.94; 2^-93.77; no instance (at 2^40, 2^-93.72) | not posted | not posted |
+
+- **The asked three:** `K ≤ 2^33` (2^-100) covers the final recut's record, width 2^-6 and width 2^-7 at both PageCopy counts except the record at 205; `K ≤ 2^35` (2^-98) is what width 2^-4 at PageCopy 205 is within; `K ≤ 2^37` (2^-96) is what width 2^-6 is within at the plan's cut. The record at the plan's cut is over all three.
+- `_narrow` (N_s ≤ 2^27, K ≤ 14·10^9, 2^-100) is the fourth instance and it is what holds width 2^-4 at 145 and the record at 205. The `2^36` and `2^37` ones are the rational facts, applied through `eventTwoX_le_cls_of_caps`.
+- **How much room** [derived from the checked blocks: the largest M with K0 × checked × M within the cap]: at the final recut the record stays inside `K ≤ 2^33` up to M = 152 and inside `_narrow` up to 248; width 2^-4 inside `K ≤ 2^33` up to 104 and inside `_narrow` up to 169; width 2^-6 up to 416 and 679; width 2^-7 up to 833 and 1,359. So the nine-writer recut's 273 puts the record outside both, as SCALE's 2^-99.88 says, if its checked blocks are near these (not posted).
+- By the mean and by stratum (SCALE's cells inverted to the K they imply) [run]: at the final recut every posted design is within `K ≤ 2^33`, except width 2^-4 by stratum (K 2^33.20), which is within `_narrow`. At the plan's cut the record is within `K ≤ 2^35` by the mean (K 2^34.63: 2^-98) and `K ≤ 2^37` by stratum (2^36.24: 2^-96); width 2^-4 within `K ≤ 2^36` by both (2^-97); width 2^-6 within `_narrow` by both; width 2^-7 within `K ≤ 2^33` by both.
+- For the record at the plan's cut an instance at `K ≤ 2^38` would close at 2^-95. It is one `norm_num` line; adding it moves #8939's head, so it is not added.
+
+**2. The year table's lines at those counts** [run `dbda`]. The bound's sum (rewinding under the strict birthday bound, conflict, first hit), one M; log2, bold at most -100.
+
+(b) the plan's cut, M = 4,130:
+
+| design | calls: a run | a week | a month | a year | compressions: a run | a week | a month | a year |
+|---|---|---|---|---|---|---|---|---|
+| the record | **-104.87** | -94.89 | -92.79 | -89.18 | -95.86 | -85.89 | -83.79 | -80.18 |
+| width κ 2^-3 | **-103.27** | -93.30 | -91.20 | -87.59 | -94.27 | -84.29 | -82.19 | -78.59 |
+| width κ 2^-4 | **-104.27** | -94.30 | -92.20 | -88.59 | -95.27 | -85.29 | -83.19 | -79.59 |
+| width κ 2^-6 | **-106.27** | -96.30 | -94.20 | -90.59 | -97.27 | -87.29 | -85.19 | -81.59 |
+| width κ 2^-7 | **-107.27** | -97.30 | -95.20 | -91.59 | -98.27 | -88.29 | -86.19 | -82.59 |
+| the 2,647 GB plan | **-102.77** | -92.80 | -90.70 | -87.09 | -93.77 | -83.79 | -81.69 | -78.09 |
+
+(b) the final recut, M = 145 (PageCopy at 97); the record and width 2^-4 again at PageCopy 205:
+
+| design | calls: a run | a week | a month | a year | compressions: a run | a week | a month | a year |
+|---|---|---|---|---|---|---|---|---|
+| the record | **-109.78** | -99.80 | -97.71 | -94.10 | **-100.78** | -90.80 | -88.70 | -85.10 |
+| width κ 2^-4 | **-109.23** | -99.26 | -97.16 | -93.55 | **-100.23** | -90.25 | -88.15 | -84.55 |
+| width κ 2^-6 | **-111.23** | **-101.26** | -99.16 | -95.55 | **-102.23** | -92.25 | -90.15 | -86.55 |
+| width κ 2^-7 | **-112.23** | **-102.26** | **-100.16** | -96.55 | **-103.23** | -93.25 | -91.15 | -87.55 |
+| the record, PageCopy 205 | **-109.29** | -99.31 | -97.21 | -93.60 | **-100.28** | -90.31 | -88.21 | -84.60 |
+| width κ 2^-4, PageCopy 205 | **-108.74** | -98.76 | -96.66 | -93.06 | -99.73 | -89.76 | -87.66 | -84.05 |
+
+- Nothing holds 2^-100 over a year at either cut, in calls or in compressions; in compressions nothing holds it over a week.
+- If 2^80 is the year's budget, split evenly (T = 2^64.31 calls a run), the year is the run's cell: the record 2^-95.86 at the plan's cut and 2^-100.78 at the final recut, in compressions [run].
+- By the mean, the record's year in compressions reads 2^-83.40 at the plan's cut and 2^-85.58 at the final recut [run: SCALE's mean cells inverted].
+
+**3. #8939** [run unless tagged].
+- Quick tier of the head, `r20261111-113939-3bb2` (cpu-1): done rc 0, **8 suites passed, 0 failed** (`repository` 292 passed among them) [read: its stdout].
+- Records, `r20261111-113928-b556` (cpu-1): running, 50 min in its slot at 12:29Z (earlier ones took about 38). The ready line follows its verdict.
+- The merged tree at the present `main`: this head + `main` `86c03d1840cb` + #8836, #8871, #8874 (the marked heads that touch `SamplingGeneric.lean` and are not in the stack or on `main`; local merge, no conflict): `verity lean try security/Proofs/Flock/SamplingGeneric.lean`, `r20261111-121514-d0a9` (cpu-11), `lean exit 0` in 237 s, this module built, 15 theorems on the three axioms.
+- With #8941's `code_eventTwoX_le_cls_at_cap` (`b29929d015e4`): a scratch theorem, that theorem then `.trans (εclsAt_le_table1_513 …)` with the three closed forms within the caps as hypotheses, elaborates in the tree merging the three heads: `r20261111-120406-a2c3` (cpu-11), `lean exit 0`, the three axioms. In no branch; the file is at `/cursor/stores/self/concrete/ScratchCapsClosed.lean` on my VM.
+- The body is edited (`research queue edit`, the head does not move): the coverage at the exact counts with your label, line (a) out, and your 12:06Z line for anything made with these lemmas at `code h`.
+
+**Not established.** The final recut's checked blocks for width 2^-3 and the 2,647 GB plan (so no cell for them); the nine-writer recut's checked blocks; `n_PU·openCalls`'s number (taken at its cap); that any design is within a cap, which stays a hypothesis; and no second reader has read #8939's module.
+
+For the table: (b), over the served wiring; modeled; no Lean statement at the code is behind it; one M; compressions; K0 = 6; T = 2^80 calls each run's [run `r20261111-122750-dbda`]: the final recut (145) the record 2^-100.78 a run, 2^-90.80 a week, 2^-88.70 a month, 2^-85.10 a year; the plan's cut (4,130) the record 2^-95.86, 2^-85.89, 2^-83.79, 2^-80.18.
+For the table: #8939's instances at those K [run, derived]: the final recut's record is within `K ≤ 2^33` (2^-100; M up to 152), width 2^-4 within `_narrow` (2^-100; M up to 169), and at PageCopy 205 within `K ≤ 2^35` (2^-98); the plan's cut's record is within none in the file (2^-95.71 at `K ≤ 2^38`).
+For the table: #8939 at `6b2922ce5b5e`: quick tier `3bb2` passed, records `b556` running; no ready line yet.
