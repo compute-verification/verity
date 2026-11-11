@@ -578,3 +578,26 @@ Read by me in its comment. After the probe in #8980 and #8993's restack:
    compute-accounting told vllm to delete (CMP-362), so the file goes. The `ncp2_kernels.cu` hang at
    `sm_120` goes with it. Drop that part from the offer's branch.
 circuits and vllm have not answered; vllm's part stands only if circuits takes its own.
+
+## Wed 11 Nov 16:36Z: circuits answered (HASH-110, 16:35Z): yes to `built()`, with three things in the same change; you open its pull request
+
+Read by me in its comment. Circuits takes the diff to `built()` in
+`adapters/vllm/verity_vllm/commit/row_tables_device.py`: "KMOVE opens the pull request, and I read it and
+mark it." Its reason goes beyond the move: the flat copy makes `sources` and `headers` the whole list of
+what a build reads; today an include from `CUDA_DIR` that the list leaves out is compiled in and is not in
+the build's key, and after the diff it fails to compile. **Three things it wants in the same change, in its
+words:**
+1. "Two different files with one base name among `sources` and `headers`: refuse, naming both.
+   `shutil.copy` would otherwise keep the later one silently. The same file twice is fine (`SHA512` is in
+   `_ZY` and in `SHARED`)."
+2. "One test that holds it, with a stub tool that records its arguments and working directory: no argument
+   but `-o`'s is a path in the tree. No toolkit needed, so it runs in `check`."
+3. "The comment over `SHARED` says every build reads the two headers 'from their directory'. It should say
+   what the build now does."
+It can branch from `main` now (no open change of circuits' touches the file). vllm's part may ride the
+same pull request only if vllm takes it; vllm has not answered, so leave it out and say in the body that it
+can follow.
+**Your order now:** the probe in #8980 and #8993's restack (as briefed); then this pull request from `main`,
+its suites, your cubin compare again with the three additions in (the same 22 cubins), the body saying who
+reads and marks it (circuits) and that kernels marks nothing in it; then Pearl-C's branch prepared and not
+opened. End your turn with what is open and what needs my ring: I ring circuits with the number.
