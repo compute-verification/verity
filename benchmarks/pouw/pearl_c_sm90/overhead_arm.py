@@ -89,7 +89,7 @@ def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
                           f"(window.eps_at), and {PINNED.name} states no window of record")
     if w["card"] != card:
         raise ValueError(f"the window of record ({w['basis']}) ran on the {w['card']}, not the {card}")
-    from verity.core.protocols.pouw import window as Wd
+    from verity.protocols.pouw.verifier import window as Wd
 
     eps = Wd.eps_at(w["k"], Fraction(delta), w["credited"], w["work"], 1)
     return {"epsilon": float(eps), "delta": float(delta),
@@ -199,7 +199,7 @@ class PearlPlus:
         rows (FP32 words) and the tile leaves (C̃ and U, FP32 words, over the m₁₆ rows a partial row tile has) the call
         hashes, and B's rows its weight side does."""
         from arm import Work
-        from verity.core.protocols.pouw.protocol import Shape as Unit
+        from verity.protocols.pouw.verifier.protocol import Shape as Unit
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         s, m = PPD.scheme_of(SERVED), m16(shape.m)
@@ -284,9 +284,9 @@ class _Held:
 
     def __init__(self, arm: PearlPlus, key: tuple, operands, shape):
         import torch
-        from verity.core.protocols.pouw import verifier as PV
-        from verity.core.protocols.pouw.audit import weights_root
-        from verity.core.protocols.pouw.coins import Challenger
+        from verity.protocols.pouw.verifier import verifier as PV
+        from verity.protocols.pouw.verifier.audit import weights_root
+        from verity.protocols.pouw.verifier.coins import Challenger
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         self.arm, self.key, self.users = arm, key, 0
@@ -409,8 +409,8 @@ class _Call:
         """The pass the launch wrote, ended as a retained served pass ends, into `out`, and the epoch's coin commitment
         beside it."""
         import torch
-        from verity.core.protocols.pouw.protocol import Matmul
-        from verity.core.protocols.pouw.protocol import Shape as Unit
+        from verity.protocols.pouw.verifier.protocol import Matmul
+        from verity.protocols.pouw.verifier.protocol import Shape as Unit
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         if not self.hashing:
