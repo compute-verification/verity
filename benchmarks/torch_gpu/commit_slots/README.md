@@ -77,4 +77,6 @@ blocks.
 `tests/` is the directory's suite: the reference against the fixture, Flock's salts and an independent tree build;
 openings and their refusals; layouts written and loaded back; the host twin against the reference; the streamed slot
 trees; a step's memory and a row-slot's compressions, counted; planning at scale; and, with a GPU, the device against the
-host twin.
+host twin. Two say why they skip where they can't run: the FAMILIES layout's round trip where its fetched fixture is
+absent (`research data fetch-fixtures verity/commitments/tests/fixtures/layouts`; the suites' runner and `gpu.sh` fetch
+it), and the plan on some SMs where this Python's torch has no driver bindings (`slots_gpu.driver_bindings`).
