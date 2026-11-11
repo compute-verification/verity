@@ -104,6 +104,47 @@ theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange} (h : Fl
             · simp only [Bool.or_eq_true, Bool.not_eq_true', Bool.not_eq_false, not_or, beq_iff_eq] at hc
               exact ⟨rfl, hc.1, rfl⟩
 
+/-- **Every range's template is one the query was asked for**: a node that is no input and whose callee's id is not
+among the ids asked for is refused. -/
+theorem evaluate_asked {d : Desc} {ts : Array String} {rs : Array TRange}
+    (h : Flock.TemplateQuery.evaluate d ts = .ok rs) : ∀ r ∈ rs.toList, ts.contains r.template = true := by
+  unfold Flock.TemplateQuery.evaluate at h
+  cases hroot : d.def? d.root with
+  | none =>
+    simp only [hroot] at h
+    cases h
+  | some root =>
+    simp only [hroot] at h
+    obtain ⟨r, hloop, h⟩ := Json.bind_ok h
+    rw [Std.Legacy.Range.forIn_eq_forIn_range'] at hloop
+    have hinv := forIn_done
+      (fun _ (s : Array TRange × Nat) => ∀ r ∈ s.1.toList, ts.contains r.template = true)
+      ?_ _ [] (#[], 0) r (fun _ hr => by simp at hr) hloop
+    · have hrs : rs = r.1 := by
+        simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+        split at h
+        · cases h
+        · cases h
+          rfl
+      rw [hrs]
+      exact hinv
+    · clear hloop
+      intro k s x done hi hx
+      simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at hx
+      split at hx
+      · cases hx
+        exact ⟨_, rfl, hi⟩
+      · split at hx
+        · cases hx
+        · cases hx
+          rename_i hc
+          refine ⟨_, rfl, fun r hr => ?_⟩
+          simp only [Array.toList_push, List.mem_append, List.mem_singleton] at hr
+          rcases hr with hr | rfl
+          · exact hi r hr
+          · simp only [Bool.or_eq_true, Bool.not_eq_true', Bool.not_eq_false, not_or, beq_iff_eq] at hc
+            exact hc.2
+
 open Flock.Program (Prog Form Node isInputId) in
 /-- No Definition before the root has the root's key: the root's ranges are read from the first Definition with its
 key (`Desc.def?`). -/
