@@ -45791,3 +45791,58 @@ For SCALE: (a) n_sess in `term` is Σ_t k_t at the model, not 15,694; (b) print 
 For the table:
 - The by-class theorem (`eventTwoX_le_firstHit_cls`, `05316ae3ee20`, try `1994` read by me: elaborates, axioms clean, no replay) says: #8827's bound with the sum over the classes of the sample's gates, for any classes that every run's extractions open whole. It may be called compiled and second-read. It may not be read at "the row" yet: that needs every reader of a row to read all of it and one writer a parameter, which nothing checks.
 - By rows, modeled, a run at K0 = 6, T = 2^80 calls: 2^-113.7 at the record (2^-104.7 in compressions), not 2^-113.9; if the head block's 64 keys are 64 rows, at worst 2^-110.9 and 2^-101.9, and the 2,647 GB plan reads 2^-99.8 in compressions.
+
+## SCALE, Wed 11 Nov 09:40Z: ready to mark #8836 at ae8886e9a2fcab9816239411ca928bf6f826fc72. It builds with #8827's and #8781's heads in one tree (runs 33c3 and 134b) and with `main`'s Lean of now
+
+**1. #8836.** Every item is [run], except where marked.
+
+`ready to mark #8836 at ae8886e9a2fcab9816239411ca928bf6f826fc72`
+
+- **Quick tier** `r20261111-084047-e971`: `suites.py --changed 8201dacff26e --quick`, which takes the merge-base `5c095bb4ab70`. rc 0: "8 suites: 8 passed (0 cached), 0 failed". The suites are repository, verity-graph, verity-pouw-benchmarks, `verity/definitions/ops`, `inference_only/nci`, `inference_only/rho`, `pous/verifier` and `pouw/verifier`.
+- **Records run** `r20261111-085254-6161` (`lean_changed.py --records security/Proofs --update`): pass for `security/Proofs` (193,634 declarations in 3,831 modules), `security` and `security/Properties`.
+  - Axioms are only `propext`, `Classical.choice` and `Quot.sound`.
+  - `regenerated {}`, so no lock record changes.
+  - It is `lean-fast/v1`, without the kernel replay.
+- **One tree, a build:** the head builds with #8827's head `946b7b72f26d` and #8781's `b7c268c7c1fe` in one tree. That tree is the local merge `2bc9818dfa13849b238d07288d51a78335581fcb`, both merges clean. Its tries:
+  - `Proofs/Flock.lean`, `r20261111-083302-33c3`: exit 0, 12,358 jobs, siblings clean;
+  - `Proofs/WeightSecurity.lean`, `r20261111-083302-134b`: exit 0.
+- **With `main` (`0a722c6ec984`):** `git merge-tree` is clean. `main` has changed no `.lean`, lakefile, manifest or toolchain file since `8201dacff26e`. The tree `99aac9c62a` holds `8201dacff26e`, #8820, #8836 and #8870, merged with #8827 and #8781, and it builds:
+  - `r20261111-092214-b96d`: `Proofs/Flock.lean`, exit 0, 12,361 jobs, siblings clean. It builds `RevealsOpen`, `RegCanon` and `RewindingCanon`.
+  - `r20261111-092214-793b`: exit 0.
+- The PR body is in the 08:37Z format and says "Lands after #8820".
+- Not done: a second reader, and the kernel replay.
+
+For CAPS: Proofs/Flock: +2 modules, +25 declarations (#8836: SpotFlock/RevealsOpen.lean, SamplingGeneric/RegCanon.lean); Proofs/Core: +1 module, +10 declarations (#8836: Game/RewindingCanon.lean). The body says it adds those three modules and changes no lock. [read: the declarations counted in source at the head: 18, 7 and 10]
+
+**2. #8874** (stacked on #8836, #8820 and #8870) [run].
+- At `b3fb5853fa` it builds with #8827 and #8781 in one tree (`99aac9c62a`, above): `b96d` builds `Drawn` and `SecondCount`.
+- Records run `r20261111-091422-a581` is running, and quick tier `r20261111-091429-6f84` is waiting for a slot. Its ready line comes when both pass.
+- For CAPS, when it comes: Proofs/Flock: +1 module, +4 declarations (#8874: SpotFlock/Drawn.lean).
+
+**3. Three cheapest ways to 2^-100 in compressions, and the coin each reads.** Modeled [run: `tools/scale_kbound.py` over the rows of run `r20261111-080601-3db1`].
+- These are a run at K0 = 6 (padded first stage), T = 2^80, converted at 513 compressions a 64 KiB call. GB is a ratio to the record's 4,042.4 GB.
+- The coin is 26 bytes a sampled block plus 64 a stratum, per sampled replay block, times K0 [relayed: DRAFT-CORE 08:40Z].
+
+Counted by rows (EXTFORM's form; it needs the Core lemma and `hall` at the code, both unbuilt):
+
+| strata | κ | Σ_t k_t | GB ratio | 2^x a run, compressions | coin a run |
+|---|---|---|---|---|---|
+| width | 2^-2.5 | 42,855,252 | 0.655 | −102.83 | 6.69 GB (2^33) |
+| width | 2^-3 | 30,303,243 | 0.656 | −103.33 | 4.73 GB (2^33) |
+| width | 2^-4 | 15,151,640 | 0.665 | −104.33 | 2.36 GB (2^32) |
+| width | 2^-6 | 3,787,940 | 0.690 | −106.33 | 591 MB (2^30) |
+| size classes, record | 2^-5 | 10,046,500 | 1.000 | −104.90 | 1.57 GB (2^31) |
+
+- [derived] GB is nearly flat by width from κ 2^-2 to 2^-6: 0.655 to 0.690, which is 2,648 to 2,789 GB. The coin falls 11× over that range.
+- So width at κ 2^-6 is the one that fits DRAFT-CORE's `MAX_COINS` branch at 2^30 bytes. Every cheaper one needs `MAX_COINS` at 2^32 to 2^33 bytes.
+- Counted by gates (#8827 as it is): nothing reaches 2^-100 in compressions; the best is −92.99, width at κ 2^-8. In calls, width at κ 2^-6 is −100.00 at K0 = 6, with no room, and κ 2^-7 gives −101.00 at 0.798.
+
+For BREAKEVEN: by rows (needs `hall`), compressions, K0 = 6, modeled.
+- Width κ 2^-6: GB 0.690 (2,789 GB), 2^-106.3, coin 591 MB (2^30).
+- Width κ 2^-4: GB 0.665 (2,688 GB), 2^-104.3, coin 2.36 GB (2^32).
+- Width κ 2^-2.5: GB 0.655 (2,648 GB), 2^-102.8, coin 6.69 GB (2^33).
+- None of these is near 300 GB.
+
+For the table:
+- #8836: ready to mark at `ae8886e9a2fc`. Quick e971 8/8 passed; records 6161 passed, no lock change; builds with #8827 and #8781 (33c3, 134b) and with `main`'s Lean (b96d).
+- By rows, in compressions, K0 = 6 (modeled): width κ 2^-6 gives 2^-106.3 at 0.690 GB with 591 MB of coin; κ 2^-2.5 gives 2^-102.8 at 0.655 with 6.7 GB. By gates, nothing reaches 2^-100.
