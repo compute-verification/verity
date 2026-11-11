@@ -26,6 +26,9 @@ from typing import Any
 from verity_vllm.commit import challenge as CH
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 
 def rss_kb() -> tuple[int | None, int | None]:
@@ -134,7 +137,7 @@ def cache_key(s: ReplaySources) -> str | None:
                            "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []), "k": args.replay_k,
                            "code": s.versions.get("git_head"), "weights_root": _w_ref_k, "committer": s.com.name, "retain": getattr(args, "retain", None)}, sort_keys=True)
     except Exception as _ke:  # noqa: BLE001  -- no key, no reuse
-        print(f"[delta] replay cache: no key for pair {s.pair} ({_ke!r}); replay runs", flush=True)
+        logger.warning("[delta] replay cache: no key for pair %s (%r); replay runs", s.pair, _ke)
         return None
 
 
@@ -150,7 +153,8 @@ def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     if _rc_key is not None and _cached is None and replay_cache:
         _k0, _v0 = next(iter(replay_cache.items()))
         _d0 = sorted(k for k in json.loads(_k0) if json.loads(_k0)[k] != json.loads(_rc_key).get(k))
-        print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
+        logger.info("[delta] replay cache: pair %s key differs from pair %s's in %s: own replay (root %s vs %s)", pair, _v0["pair"], _d0,
+                    rc.run_root.hex()[:16], _v0["run_root"][:16])
     s.tl.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
     held: dict[str, Any] = {}
     if _cached is not None and _rc_key is not None:
@@ -191,8 +195,8 @@ def reused(s: ReplaySources, _cached: dict[str, Any], _rc_key: str) -> tuple[dic
         sr["sample"]["evaluated_here"] = 0
     _cached.setdefault("shared_by", []).append({"pair": pair, "run_root": rc.run_root.hex(), "root_equal": True,
                                                 "artifact": str(s.out / f"sampled_replay_p{pair}.json")})
-    print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): REUSED pair {_cached['pair']}'s record (identical key: run root {rc.run_root.hex()[:16]}, "
-          f"seed {_cached['seed']}, code {str(_cached['code'])[:9]}); no VU evaluated here", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY (pair %s): REUSED pair %s's record (identical key: run root %s, seed %s, code %s); no VU evaluated here",
+                pair, _cached["pair"], rc.run_root.hex()[:16], _cached["seed"], str(_cached["code"])[:9])
     return sr, lk
 
 
@@ -515,8 +519,8 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": freed_mib(_rss_c2a, _rss_c2b),
                             "freed_by_gc_mib": freed_mib(_rss_c2a, _rss_c2g), "freed_by_malloc_trim_mib": freed_mib(_rss_c2g, _rss_c2b), "malloc_trim": _trim,
                             "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
-    print(f"[delta] C2 PROGRAMS FREED (pair {pair}): RSS {mib(_rss_c2a)} -> {mib(_rss_c2g)} (gc) -> {mib(_rss_c2b)} MiB (malloc_trim {_trim}): "
-          f"{freed_mib(_rss_c2a, _rss_c2b)} MiB back before the openings-after-release replay", flush=True)
+    logger.info("[delta] C2 PROGRAMS FREED (pair %s): RSS %s -> %s (gc) -> %s MiB (malloc_trim %s): %s MiB back before the openings-after-release "
+                "replay", pair, mib(_rss_c2a), mib(_rss_c2g), mib(_rss_c2b), _trim, freed_mib(_rss_c2a, _rss_c2b))
 
 
 def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
@@ -549,19 +553,22 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
             vc["result"] = False
     if vc["result"] is None and sr.get("result") is True and lk.get("result") is True and s.vc_result in (None, True):
         vc["result"] = True
-    print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): {str(sr.get('grade')).upper()} evaluated {_smp.get('evaluated')} equal {_smp.get('equal')} "
-          f"mismatch {_smp.get('mismatch_n')} not-evaluated {_smp.get('not_evaluated_n')} of population {(sr.get('population') or {}).get('vus')} VUs in "
-          f"{(sr.get('population') or {}).get('strata_n')} strata (per-stratum {_smp.get('per_stratum')}, seed {_smp.get('seed')}); "
-          f"not-evaluable {(sr.get('population') or {}).get('not_evaluable')}{(' -- ' + str(sr.get('why'))) if sr.get('why') else ''}", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY (pair %s): %s evaluated %s equal %s mismatch %s not-evaluated %s of population %s VUs in %s strata "
+                "(per-stratum %s, seed %s); not-evaluable %s%s", pair, str(sr.get("grade")).upper(), _smp.get("evaluated"), _smp.get("equal"),
+                _smp.get("mismatch_n"), _smp.get("not_evaluated_n"), (sr.get("population") or {}).get("vus"),
+                (sr.get("population") or {}).get("strata_n"), _smp.get("per_stratum"), _smp.get("seed"),
+                (sr.get("population") or {}).get("not_evaluable"), (" -- " + str(sr.get("why"))) if sr.get("why") else "")
     if _smp.get("mismatch_n") and isinstance(sr.get("mismatch_by"), dict):        # every mismatch by name
-        print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): mismatches by family|request|phase {sr['mismatch_by'].get('by_family_request_phase')}", flush=True)
-    print(f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair {pair}): {'OK' if lk.get('result') else ('FAIL' if lk.get('result') is False else 'NOT RUN')} "
-          f"{lk.get('linked')}/{lk.get('pairs')} (step, request) boundaries linked{(' -- ' + str(lk.get('why'))) if lk.get('why') else ''}", flush=True)
+        logger.warning("[delta] C2 SAMPLED REPLAY (pair %s): mismatches by family|request|phase %s", pair,
+                       sr["mismatch_by"].get("by_family_request_phase"))
+    logger.info("[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair %s): %s %s/%s (step, request) boundaries linked%s", pair,
+                "OK" if lk.get("result") else ("FAIL" if lk.get("result") is False else "NOT RUN"), lk.get("linked"), lk.get("pairs"),
+                (" -- " + str(lk.get("why"))) if lk.get("why") else "")
     # one line: the committed up plane != the committed down plane, per (request, step, layer)
     _ac = (sr.get("moe_planes") or {}).get("alias_check") or {}
     if _ac.get("compared"):
-        print(f"[delta] C2 MOE PLANE ALIAS CHECK (pair {pair}): {'OK' if _ac.get('result') else 'ALIAS'} up != down bytes on "
-              f"{int(_ac.get('compared', 0)) - int(_ac.get('identical_n', 0))}/{_ac.get('compared')} (request, step, layer) triples, "
-              f"{len(_ac.get('per_layer') or {})} layers, plane words {_ac.get('plane_words')}"
-              f"{(' -- ' + str(_ac.get('why'))) if _ac.get('why') else ''}"
-              f"{(' (read errors ' + str(_ac.get('read_errors_n')) + ')') if _ac.get('read_errors_n') else ''}", flush=True)
+        logger.info("[delta] C2 MOE PLANE ALIAS CHECK (pair %s): %s up != down bytes on %s/%s (request, step, layer) triples, %s layers, plane words "
+                    "%s%s%s", pair, "OK" if _ac.get("result") else "ALIAS", int(_ac.get("compared", 0)) - int(_ac.get("identical_n", 0)),
+                    _ac.get("compared"), len(_ac.get("per_layer") or {}), _ac.get("plane_words"),
+                    (" -- " + str(_ac.get("why"))) if _ac.get("why") else "",
+                    (" (read errors " + str(_ac.get("read_errors_n")) + ")") if _ac.get("read_errors_n") else "")

@@ -1,9 +1,11 @@
 """`c2_replay.run`, the replay and linkage of one instrumented run, on a stubbed evaluation: what it records when the replay
 cannot run, when this host cannot hold it and when an earlier pair's record is reused, and what `free_programs` and `record`
-put on the run's row.  CPU only; the replay itself is `tests/check/test_sampled_replay.py`."""
+put on the run's row, with the lines each logs.  CPU only; the replay itself is `tests/check/test_sampled_replay.py`."""
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -19,6 +21,14 @@ CACHED: dict[str, Any] = {"replay_cache": True, "replay_seed": 7, "replay_per_st
 
 Record = dict[str, Any]
 Cache = dict[str, Record]
+Lines = Callable[[], list[str]]
+
+
+@pytest.fixture
+def logged(caplog: pytest.LogCaptureFixture) -> Lines:
+    """The lines `c2_replay` has logged so far in this test."""
+    caplog.set_level(logging.INFO, logger=C2.__name__)
+    return lambda: [r.getMessage() for r in caplog.records if r.name == C2.__name__]
 
 
 class Spans:
@@ -64,8 +74,10 @@ def evaluates(monkeypatch: pytest.MonkeyPatch, outcome: Any) -> list[int]:
     return pairs
 
 
-def test_a_replay_that_cannot_run_is_recorded_as_not_evaluated_and_never_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_replay_that_cannot_run_is_recorded_as_not_evaluated_and_never_passes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                                logged: Lines) -> None:
     evaluates(monkeypatch, RuntimeError("no Programs of record"))
+    readings(monkeypatch, 4096, 2048, 1024)
     s = sources(tmp_path)
     C2.run(s, {})
     art = tmp_path / "sampled_replay_p0.json"
@@ -85,6 +97,14 @@ def test_a_replay_that_cannot_run_is_recorded_as_not_evaluated_and_never_passes(
     assert (s.components["boundary_linkage"]["result"], s.components["boundary_linkage"]["checked"]) == (None, 0)
     assert s.tl.calls == [("start", "validate.sampled_replay", {"pair": 0, "cached": False}),
                           ("end", "validate.sampled_replay", {"pair": 0, "ok": None, "n": None, "linkage": None, "reused": False})]
+    freed_line, replay_line, linkage_line = logged()
+    assert freed_line.startswith("[delta] C2 PROGRAMS FREED (pair 0): RSS 4 -> 2 (gc) -> 1 MiB (malloc_trim ")
+    assert freed_line.endswith("): 3 MiB back before the openings-after-release replay")
+    assert replay_line == ("[delta] C2 SAMPLED REPLAY (pair 0): NOT-EVALUATED evaluated None equal None mismatch None not-evaluated None of "
+                           "population None VUs in None strata (per-stratum None, seed None); not-evaluable None -- sampled replay not run: "
+                           f"{why}")
+    assert linkage_line == ("[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair 0): NOT RUN 0/0 (step, request) boundaries linked -- "
+                            f"boundary linkage not run: {why}")
 
 
 def test_a_replay_this_host_cannot_hold_is_raised_and_nothing_is_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -97,8 +117,8 @@ def test_a_replay_this_host_cannot_hold_is_raised_and_nothing_is_recorded(tmp_pa
     assert s.tl.calls == [("start", "validate.sampled_replay", {"pair": 0, "cached": False})]
 
 
-def test_a_later_pair_with_the_same_key_reuses_the_record_and_one_with_another_seed_replays(tmp_path: Path,
-                                                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_later_pair_with_the_same_key_reuses_the_record_and_one_with_another_seed_replays(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, logged: Lines) -> None:
     pairs, cache = evaluates(monkeypatch, evaluated()), Cache()
     first, second, third = (sources(tmp_path, 0, **CACHED), sources(tmp_path, 1, **CACHED),
                             sources(tmp_path, 2, **CACHED | {"replay_seed": 8}))
@@ -118,13 +138,21 @@ def test_a_later_pair_with_the_same_key_reuses_the_record_and_one_with_another_s
     assert second.row["commit"]["value_correspondence"]["result"] is True
     C2.run(third, cache)
     assert pairs == [0, 2] and len(cache) == 2 and "reused_from" not in third.row["commit"]["sampled_replay"]
+    said = logged()
+    assert ("[delta] C2 SAMPLED REPLAY (pair 1): REUSED pair 0's record (identical key: run root 0000000000000000, seed 7, code 000000000); "
+            "no VU evaluated here") in said
+    assert "[delta] replay cache: pair 2 key differs from pair 0's in ['seed']: own replay (root 0000000000000000 vs 0000000000000000)" in said
+    assert ("[delta] C2 SAMPLED REPLAY (pair 2): EXACT evaluated 3 equal None mismatch None not-evaluated None of population None VUs in "
+            "None strata (per-stratum None, seed 7); not-evaluable None") in said
+    assert "[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair 2): OK 2/2 (step, request) boundaries linked" in said
 
 
-def test_a_run_with_no_cache_key_replays_and_keeps_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_run_with_no_cache_key_replays_and_keeps_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, logged: Lines) -> None:
     pairs, cache = evaluates(monkeypatch, evaluated()), Cache()
     s = sources(tmp_path, **CACHED)
     (tmp_path / "binding_map_p0.json").unlink()
     assert C2.cache_key(s) is None
+    assert logged() == ["[delta] replay cache: no key for pair 0 (FileNotFoundError(2, 'No such file or directory')); replay runs"]
     C2.run(s, cache)
     assert pairs == [0] and cache == {}
     assert C2.cache_key(sources(tmp_path)) is None, "the cache is off unless asked for"
@@ -167,7 +195,7 @@ def test_the_programs_are_freed_where_the_resident_set_cannot_be_read(monkeypatc
     (True, True, None, True), (True, True, True, True), (True, True, False, None), (False, True, None, False), (True, False, None, False),
     (None, True, None, None), (True, None, None, None)])
 def test_the_value_correspondence_passes_only_when_the_replay_the_linkage_and_what_came_before_do(
-        tmp_path: Path, replay: bool | None, linkage: bool | None, before: bool | None, after: bool | None) -> None:
+        tmp_path: Path, logged: Lines, replay: bool | None, linkage: bool | None, before: bool | None, after: bool | None) -> None:
     s = sources(tmp_path, vc_result=before)
     sr, lk = evaluated(replay)
     sr |= {"sample": {"evaluated": 3, "equal": 2, "mismatch_n": 1}, "mismatch_by": {"by_family_request_phase": {"attention|r0|decode": 1}},
@@ -177,3 +205,11 @@ def test_the_value_correspondence_passes_only_when_the_replay_the_linkage_and_wh
     assert "strata" not in s.row["commit"]["sampled_replay"] and s.row["commit"]["sampled_replay"]["strata_n"] == 2
     assert (s.components["sampled_replay"]["n"], s.components["sampled_replay"]["equal"], s.components["sampled_replay"]["mismatch_n"]) == (3, 2, 1)
     assert (s.components["boundary_linkage"]["result"], s.components["boundary_linkage"]["linked"]) == (linkage, 2)
+    linked = "OK" if linkage else "NOT RUN" if linkage is None else "FAIL"
+    assert logged() == [
+        ("[delta] C2 SAMPLED REPLAY (pair 0): EXACT evaluated 3 equal 2 mismatch 1 not-evaluated None of population None VUs in None strata "
+         "(per-stratum None, seed None); not-evaluable None"),
+        "[delta] C2 SAMPLED REPLAY (pair 0): mismatches by family|request|phase {'attention|r0|decode': 1}",
+        f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair 0): {linked} 2/2 (step, request) boundaries linked",
+        ("[delta] C2 MOE PLANE ALIAS CHECK (pair 0): ALIAS up != down bytes on 3/4 (request, step, layer) triples, 1 layers, plane words None"
+         " -- one triple aliases")]
