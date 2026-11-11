@@ -486,18 +486,23 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
     weights' root when the arm is made ready, each reserve before its open; the window's open asks the gate nothing (the
     gate's next word after the session's open is its close, at the window's close), and the next window's session
     follows at that close, the old epoch freed.  The one made ahead that no window takes is closed at the drain, unused.
-    The arm logs one line when it makes a session ahead and one when it closes one unused."""
+    The arm logs one line when it makes a session ahead and one when it closes one unused.  While the lane has no
+    open period, which a session reserved then would join none of, none is made ahead: the gate is asked its ledger
+    alone, and the window's open reserves its session as without ``ahead``, joining the period opened meanwhile."""
     caplog.set_level(logging.INFO, logger="verity_vllm")
     period = [{"kind": "period-open", "session": None, "body": {"period": "p7", "lane": LANE}}]
     reserve = lambda k: ["reserve", "--epoch", str(k)]  # noqa: E731
-    for name, ahead in (("at-open", None), ("ahead", True)):
+    for name, ahead in (("at-open", None), ("ahead", True), ("no-period-yet", True)):
         asked: list = []
+        ledger = [] if name == "no-period-yet" else period
         RUNS.clear()
         caplog.clear()
         (tmp_path / name).mkdir()
         monkeypatch.setattr(PHW, "salt_session", _salt_session(asked))
-        with _serving(tmp_path / name, Forward(Model()), SPL.live(GATE, PEER, LANE, _gate(period, asked)), ahead) as s:
+        with _serving(tmp_path / name, Forward(Model()), SPL.live(GATE, PEER, LANE, _gate(ledger, asked)), ahead) as s:
             ready = _calls(asked)
+            if ledger == []:
+                ledger += period
             _serve(s, PROMPTS[:1])
         arm = s.windows.arm
         served = _calls(asked)
@@ -506,8 +511,15 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
         coins = json.loads((tmp_path / name / SPL.DIR / "w0" / "served.json").read_text())["coins"]
         assert "error" not in line and line["coin_source"] == pouw.PH.CHALLENGER
         assert coins["reserved"] == _reserved("0", "p7") and coins["session"]["session"] == "s-0"
-        assert asked[2][2] == RUNS[0].epoch.weights_root.hex()
-        if not ahead:
+        assert next(a for a in asked if a[:2] == ["open", "s-0"])[2] == RUNS[0].epoch.weights_root.hex()
+        if name == "no-period-yet":
+            assert ready == [["ledger"]] and "ahead" not in line["seconds"]
+            assert served[:5] == [*ready, ["ledger"], reserve(0), ["open", "s-0"], ["close", "s-0"]]
+            assert arm.summary()["ahead"] == {"made": 1, "taken": 0, "unused": 1, "failed": []}
+            said = [r.getMessage() for r in caplog.records if r.name == SPL.logger.name]
+            assert said[0] == ("window 0: its epoch is left to its open: its lane has no open period for a session "
+                               "reserved now to join")
+        elif not ahead:
             assert ready == [] and served == [["ledger"], reserve(0), ["open", "s-0"], ["close", "s-0"]]
             assert _calls(asked) == served and len(RUNS) == 1 and not {"ahead", "next"} & set(line["seconds"])
             assert "made ahead" not in caplog.text

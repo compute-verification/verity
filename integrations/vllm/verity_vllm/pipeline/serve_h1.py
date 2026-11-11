@@ -146,7 +146,8 @@ class GateOptions:
                                     help="with --challenger-gate under Pearl+'s arm: each window's epoch is made ahead of "
                                          "the window, its salt-only session reserved, opened and its salt coin drawn before "
                                          "the server listens (window 0's) or at the window before's close, so the window's "
-                                         "open reaches no gate; the window must close within its session's minutes of that "
+                                         "open reaches no gate; none is made ahead while the lane has no open period for "
+                                         "it to join; the window must close within its session's minutes of that "
                                          "open, and the one session ahead when the server stops is closed unused, which "
                                          "refuses its lane's open period unless the period's cap refused its reserve; "
                                          "without it a window's session is reserved at its open (serve_pearl)")

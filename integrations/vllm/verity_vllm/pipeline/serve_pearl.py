@@ -35,9 +35,10 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   k+1's at window k's close, on the loop, once window k's epoch is freed; the window's open then only hooks the model
   onto it (the pouw setting ``prepared``). With a live session the same happens under ``--challenger-ahead`` alone,
   since a session made ahead that no window takes is closed unused when the server stops, and an unused session of a
-  lane's period refuses the period: without the flag a live window's epoch is made at its open. At most one epoch is
-  ever ahead, and a window must close within its session's minutes of the session's open. An epoch that can't be made
-  ahead is its window's visible failure at its open, as when the open made it, and is not made again.
+  lane's period refuses the period: without the flag a live window's epoch is made at its open. No session is made
+  ahead while the lane has no open period, which it would join none of: that window's epoch is left to its open. At
+  most one epoch is ever ahead, and a window must close within its session's minutes of the session's open. An epoch
+  that can't be made ahead is its window's visible failure at its open, as when the open made it, and is not made again.
 
 Each window's outcome (`PearlWindows.close`) is its ``windows.jsonl`` line's ``pouw_pearl`` (`PearlWindows.outcome_key`),
 ``serve.json``'s ``protocols`` `PearlWindows.describe`, ``summary.json``'s ``commit.pouw_pearl`` `PearlWindows.summary`.
@@ -165,17 +166,25 @@ def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], di
     open period, refused before reserving while that period is H1's), which the install opens on its salt epoch's root and
     draws the salt coin from (`pouw_h1_window.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the
     reserve answer), ``gate`` and ``period``. ``run`` replaces the gate's subprocess (tests). A refusal is `CoinError`
-    (a ValueError), the window's failure."""
+    (a ValueError), the window's failure.  Its ``ahead`` gives a window's coins for an epoch made ahead of the window
+    (`PearlWindows.make_ahead`), or None while the lane has no open period: a session reserved then would join none,
+    where the one its window's open reserves joins the period opened meanwhile."""
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     g = ChallengerGate(gate, run)
 
-    def coins(window: int) -> dict[str, Any]:
-        reserved, period = PHW.reserve_salt(g.call, g.ledger, lane, peer, window)
+    def coins(window: int, ledger: list[str] | None = None) -> dict[str, Any]:
+        reserved, period = PHW.reserve_salt(g.call, g.ledger if ledger is None else lambda: ledger, lane, peer, window)
         print(f"[serve-pearl] window {window}: reserved salt-only session {reserved.get('session')} on {peer} "
               f"(lane {lane}, period {(period or {}).get('period')})", flush=True)
         return {"challenger": AT, "session": reserved, "gate": PHW.gate_of(g.call), "period": period}
+
+    def ahead(window: int) -> dict[str, Any] | None:
+        ledger = g.ledger()
+        return None if PHW.open_period(ledger, lane) is None else coins(window, ledger)
+
+    coins.ahead = ahead
     return coins
 
 
@@ -282,15 +291,19 @@ class PearlWindows:
             p.chmod(0o700)
         return d
 
-    def make(self, window: int) -> Made:
+    def make(self, window: int, ahead: bool = False) -> Made | None:
         """Window ``window``'s epoch made, the model untouched (`pouw.prepare`): its coins (``coins``: a live session
         reserved, or the in-process challenger), then the weights committed under its key, the salt coin after their
-        root and the device run under that salt, with each part's seconds."""
+        root and the device run under that salt, with each part's seconds.  None, with nothing made, where it is asked
+        for ``ahead`` of the window and its coins are not to be had ahead yet (`live`'s ``ahead``)."""
         from verity_vllm import protocols as PO
         from verity_vllm.protocols import pouw
 
         t0 = self.clock()
-        coins = dict(self.coins(window))
+        coins = (getattr(self.coins, "ahead", self.coins) if ahead else self.coins)(window)
+        if coins is None:
+            return None
+        coins = dict(coins)
         t1 = self.clock()
         kept = {} if self.rows is None else {"kept_rows": self.rows}
         epoch = pouw.prepare(SCHEME, PO.Target(self.model, context(self.config, {**kept, **coins})))
@@ -298,13 +311,18 @@ class PearlWindows:
 
     def make_ahead(self, window: int) -> float:
         """Window ``window``'s epoch made now, ahead of its open, which takes it (``made``); the seconds it took. One it
-        can't make is kept as that window's failure, raised at its open as when the open made it."""
+        can't make is kept as that window's failure, raised at its open as when the open made it; one whose coins are
+        not to be had ahead yet (`make`) is left to that open."""
         self.drop()
         t0 = self.clock()
         try:
-            self.made = self.make(window)
-            self.aheads["made"] += 1
-            logger.info("window %d: its epoch made ahead in %.1f s%s", window, self.clock() - t0, _session(self.made))
+            self.made = self.make(window, ahead=True)
+            if self.made is None:
+                logger.info("window %d: its epoch is left to its open: its lane has no open period for a session "
+                            "reserved now to join", window)
+            else:
+                self.aheads["made"] += 1
+                logger.info("window %d: its epoch made ahead in %.1f s%s", window, self.clock() - t0, _session(self.made))
         except (ValueError, RuntimeError, OSError) as e:
             self.made = Made(window, t0, error=e)
             self.aheads["failed"] = [*self.aheads["failed"], window][:20]
