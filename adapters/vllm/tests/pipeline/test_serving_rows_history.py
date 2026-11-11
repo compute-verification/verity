@@ -9,7 +9,7 @@ five tokens and then a decode step of one, and in each window long rows of TOPK 
   window's from the first's, and each read opens its table's root at its key, to the latent row there (the placeholder past
   the table's length);
 * the reads' roots, domain ids and verdicts are committed by reference to the tables' supplied values, the writer's rows as
-  their table's strings (hashed once), and the verifier of record recomputes each table's root from the writer's public
+  their table's strings (hashed once), and the verifier recomputes each table's root from the writer's public
   strings, the second window's after the first window's held strings, and holds the root the window registers to it.
 """
 from __future__ import annotations
@@ -225,11 +225,12 @@ def test_every_latent_row_is_appended_from_its_edge_and_each_read_opens_its_tabl
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_HISTORY_E2E"),
                     reason="VERITY_VLLM_HISTORY_E2E=1: about 5 minutes on a CPU, building the Boolean DsaLatentRow_v2 and the "
                            "V = 2^17 read's population program")
+@pytest.mark.slow
 def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root(served):
     """The cheaper test recomputes each root from the declared runs over the strings `window_values` gives `rows.commit`;
     this one commits the window (`rows.commit`, its strings given and not), pins each table at the root the window
     registers (`history.pins`) and holds that root to the one over its writers' public bodies and the strings held of its
-    earlier windows (`history.params`, `history.roots_of`), as the verifier of record does."""
+    earlier windows (`history.params`, `history.roots_of`), as the verifier does."""
     held: dict[str, list[bytes]] = {}
 
     def check(rows, ms, data, roots, salts_of, strings_of, hreg):
