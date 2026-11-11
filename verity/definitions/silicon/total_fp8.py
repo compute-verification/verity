@@ -1,0 +1,206 @@
+"""Total semantics of one Hopper FP8 tensor-core step: ``veritor.tensor-core.hopper_e4m3_wgmma_k32@1``.
+
+The instruction is one accumulator coordinate of ``wgmma.mma_async.sync.aligned.m64n{N}k32.f32.e4m3.e4m3``
+(SASS ``QGMMA.64x{N}x32.F32.E4M3.E4M3``), the step vLLM's CUTLASS ``cutlass_scaled_mm`` (sm90 FP8, the
+``--quantization fp8`` linear of port ``b1-fp8``) executes on an H100.  :mod:`verity.definitions.silicon.models` carries
+Hawkeye's *finite* H100 FP8 pipeline (:data:`~verity.definitions.silicon.models.HOPPER_E4M3_K32`: one group of 32 exact
+E4M3 products plus the accumulator, a 14-bit truncating adder, exponent floor ``-139``), validated by Hawkeye
+with a zero accumulator only.  This module gives the **total function on every encoding** of the gate's
+signature, by the same rules as :mod:`verity.definitions.silicon.total` (R1-R8 for BF16) restricted to what
+E4M3 can encode:
+
+* an E4M3 byte is a NaN (``0x7F``, ``0xFF``: exponent and mantissa all ones -- OCP E4M3 has *no* infinities),
+  a zero (``0x00``, ``0x80``), or a finite value (subnormals ``0x01..0x07`` included);
+* the **product** of two bytes is NaN if either is a NaN, else the exact finite product of
+  :func:`~verity.definitions.silicon.term.e4m3_product` (a product never overflows: ``448 * 448 < 2^18``);
+* the **accumulator** word decodes as in the BF16 module (NaN, ``±inf``, or a finite term);
+* one **group step** is :func:`~verity.definitions.silicon.total.group_step_total`: NaN if any term is NaN; the
+  accumulator's infinity if it is one (products are finite, so the two-sign NaN rule can only fire through the
+  accumulator); otherwise the finite :func:`~verity.definitions.silicon.models.group_sum`, which saturates to an infinity of
+  its sign above the FP32 range;
+* the **result word** is ``0x7FFFFFFF`` for NaN, ``±0x7F800000`` for the infinities, :func:`~verity.definitions.silicon.term.pack_fp32`
+  otherwise -- zero is always ``+0``.
+
+On finite operands this is :func:`verity.definitions.silicon.models.tc_dot` on the same pipeline.  The special-value rules and
+the *pipeline parameters* (groups, adder width, exponent floor -- in particular the behaviour with a NON-ZERO
+accumulator, which Hawkeye did not validate and which every k32 step after the first of a K=1536..8960 chain
+exercises) are what a hardware campaign measured on the device.  The registry primitive that wraps it
+(``verity.definitions.ops.prims.HopperE4m3QgmmaDot32``) carries the campaign's outcome in its conformance status.  The
+store ids and datasets each pipeline's ``validated`` string cites are :data:`EVIDENCE_IDS` (``total_fp8_evidence.json``),
+keyed by pipeline name and then by role, which the string names in backticks.
+
+E5M2 (:func:`tc_dot_total_e5m2`) differs only in its operand classes: it is IEEE-like, so exponent field 31 is an
+infinity (fraction 0) or a NaN, and the product rules are BF16's (:func:`~verity.definitions.silicon.total.bf16_product_total`):
+NaN if either operand is a NaN or an infinity meets a zero, else an infinity of the sign XOR if either is one, else
+the exact finite product.  An infinite product enters :func:`~verity.definitions.silicon.total.group_step_total` like an infinite
+accumulator, so infinities of both signs in one group are a NaN.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Sequence
+from pathlib import Path
+
+from .errors import InvalidArtifact
+from .models import HOPPER_E4M3_K32, GroupSum
+from .term import e4m3_product, e5m2_product
+from .total import NAN, Inf, Value, fp32_value, group_step_total, pack_value
+
+__all__ = [
+    "EVIDENCE_IDS",
+    "HOPPER_E4M3_MMAV2_K32",
+    "HOPPER_E4M3_WGMMA_K32",
+    "HOPPER_E4M3_FAMILY_VERSION",
+    "MMAV2_E4M3_K_ORDER",
+    "e4m3_class",
+    "e4m3_product_total",
+    "e5m2_class",
+    "e5m2_product_total",
+    "in_mmav2_e4m3_k_order",
+    "tc_dot_total_e4m3",
+    "tc_dot_total_e5m2",
+]
+
+#: GroupSum name -> role -> the run id or dataset its ``validated`` string names by that role.
+EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("total_fp8_evidence.json").read_text())
+
+
+def e4m3_class(byte: int) -> str:
+    """``"nan"``, ``"zero"`` or ``"finite"`` (subnormals included); E4M3 has no infinities."""
+
+    if not 0 <= byte < 1 << 8:
+        raise InvalidArtifact("E4M3 operand outside 8 bits")
+    if (byte & 0x7F) == 0x7F:
+        return "nan"
+    return "zero" if (byte & 0x7F) == 0 else "finite"
+
+
+def e4m3_product_total(a: int, b: int) -> Value:
+    """The product of two E4M3 bytes as a :data:`~verity.definitions.silicon.total.Value`."""
+
+    if e4m3_class(a) == "nan" or e4m3_class(b) == "nan":
+        return NAN
+    return e4m3_product(a, b)
+
+
+def tc_dot_total_e4m3(pipeline: GroupSum, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
+    """``D = acc + sum_k a[k] * b[k]`` on every encoding, as ``pipeline``'s FP8 silicon computes it."""
+
+    if pipeline.dtype != "e4m3":
+        raise InvalidArtifact("the FP8 total semantics are defined for E4M3 pipelines")
+    if len(a) != pipeline.k or len(b) != pipeline.k:
+        raise InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
+    acc: Value = fp32_value(acc_bits)
+    start = 0
+    for size in pipeline.groups:
+        products = [e4m3_product_total(a[i], b[i]) for i in range(start, start + size)]
+        acc = group_step_total(acc, products, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
+        start += size
+    return pack_value(acc)
+
+
+def e5m2_class(byte: int) -> str:
+    """``"nan"``, ``"inf"``, ``"zero"`` or ``"finite"`` (subnormals included)."""
+
+    if not 0 <= byte < 1 << 8:
+        raise InvalidArtifact("E5M2 operand outside 8 bits")
+    exponent, mantissa = (byte >> 2) & 0x1F, byte & 0x3
+    if exponent == 0x1F:
+        return "nan" if mantissa else "inf"
+    return "zero" if exponent == 0 and mantissa == 0 else "finite"
+
+
+def e5m2_product_total(a: int, b: int) -> Value:
+    """The product of two E5M2 bytes as a :data:`~verity.definitions.silicon.total.Value`."""
+
+    ca, cb = e5m2_class(a), e5m2_class(b)
+    if ca == "nan" or cb == "nan":
+        return NAN
+    if ca == "inf" or cb == "inf":
+        if ca == "zero" or cb == "zero":
+            return NAN
+        return Inf(((a ^ b) >> 7) & 1 == 1)
+    return e5m2_product(a, b)
+
+
+def tc_dot_total_e5m2(pipeline: GroupSum, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
+    """``D = acc + sum_k a[k] * b[k]`` on every encoding, as ``pipeline``'s E5M2 silicon computes it."""
+
+    if pipeline.dtype != "e5m2":
+        raise InvalidArtifact("tc_dot_total_e5m2 takes an E5M2 pipeline")
+    if len(a) != pipeline.k or len(b) != pipeline.k:
+        raise InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
+    acc: Value = fp32_value(acc_bits)
+    start = 0
+    for size in pipeline.groups:
+        products = [e5m2_product_total(a[i], b[i]) for i in range(start, start + size)]
+        acc = group_step_total(acc, products, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
+        start += size
+    return pack_value(acc)
+
+
+#: One accumulator coordinate of ``wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3`` (SASS
+#: ``QGMMA.64x64x32.F32.E4M3.E4M3``), PINNED on an H100 80GB HBM3 (driver 580.126.09) by a hardware campaign:
+#: 16 case families (the BF16 campaign's, with E4M3 operand classes and FP32 accumulator classes incl. subnormal / huge / ±inf /
+#: NaN accumulators), 35,289 tiles x 3 repetitions (every tile bit-identical across repetitions), 144,543,744 output
+#: words compared against this total function -- **0 mismatches**.  The fit grid over groups x width x floor
+#: (3,060 candidates, 6,000 records + the ``accid`` family) leaves ``groups = (32,)`` and ``width = 14`` unique;
+#: the floor is determined only to ``-152 <= floor <= -126`` -- E4M3 products are never below ``2^-18`` and the FP32
+#: accumulator's decoded exponent is never below ``-126``, so every floor at or below ``-126`` computes the same
+#: word on every reachable input.  Hawkeye's ``-139`` is kept.  The 32 products of one step and the accumulator are
+#: summed in ONE group (no intra-step partial rounding); the accumulator is truncated to the 14-bit adder like a
+#: product (``accid``: 261,900 of 262,144 random finite accumulators do NOT pass through a zero-product step
+#: unchanged -- the "FP8 accumulation precision loss" DeepSeek-V3 reports, here word-exact).
+HOPPER_E4M3_WGMMA_K32 = GroupSum(
+    name="hopper_e4m3_wgmma_k32",
+    arch="sm_90",
+    dtype="e4m3",
+    operand_bits=8,
+    groups=HOPPER_E4M3_K32.groups,
+    width=HOPPER_E4M3_K32.width,
+    zero_exponent=HOPPER_E4M3_K32.zero_exponent,
+    validated="pinned (H100 80GB HBM3, driver 580.126.09, triton 3.7.1 probe "
+              "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / QGMMA.64x64x32.F32.E4M3.E4M3): 16 families, "
+              "35,289 tiles x3, 144,543,744 words, 0 mismatches; groups=(32,) and width=14 unique in the fit grid, "
+              "floor bounded to [-152, -126] (indistinguishable below -126 for E4M3 operands; -139 kept) -- `dataset`",
+)
+
+HOPPER_E4M3_FAMILY_VERSION = "1"
+
+
+def in_mmav2_e4m3_k_order(xs) -> list:
+    """`xs`, one 32-wide k block, in :data:`MMAV2_E4M3_K_ORDER`: computed, so an evaluator that calls it reads no table."""
+    return [xs[k] for k in range(32) if k % 4 < 2] + [xs[k] for k in range(32) if k % 4 >= 2]
+
+
+#: The k order in which Triton 3.7.1's MMAv2 lowering of an e4m3 ``tl.dot`` on sm_90 feeds one 32-wide k block to its two
+#: ``mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32``: the operands are promoted to f16 (``cvt.rn.f16x2.e4m3x2``, exact; Triton
+#: promotes FP8 for MMAv2 on every cc but 8.9 and 12.0, AccelerateMatmul.cpp ``mmav2SupportsFp8Operands``), and the kWidth = 4 dot
+#: operand layout hands the first mma the k with k mod 4 in {0, 1} and the second those with k mod 4 in {2, 3} (MMAv2.cpp
+#: ``getValuesFromDotOperandLayoutStruct``), the accumulator chained from the first into the second.
+MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(in_mmav2_e4m3_k_order(range(32)))
+
+#: One accumulator coordinate of that k block, in :data:`MMAV2_E4M3_K_ORDER`: two groups of 16 exact products, the accumulator
+#: joining the first and the first's result the second, each through ``HMMA.16816.F32``'s 26-bit truncating adder, floor ``-133``
+#: (unobservable on E4M3 operands, like every floor at or below ``-126``).  Carrying a group's result to the next unpacked is the
+#: same word as packing it to FP32 between the two mma (a group result is an FP32 value or a sticky infinity).  Measured: the f16
+#: HMMA with zero accumulators is this pipeline per group (on the H100: ptxas's own sm_90 lowering of ``mma.sync.m16n8k32`` FP8 to two HMMA.16816.F32 over the same k halves
+#: from +0 plus FADDs, 25,040,128 words each, 0 mismatches), the bf16 HMMA with nonzero accumulators is, and the chained f16 pair with its nonzero accumulator is, inside vLLM's
+#: ``fused_moe_kernel`` at GLM-5.3's MMAv2 tiles on the H200 (``adapters/vllm/tests/properties/glm53_block_fp8_capture_gpu.py``,
+#: 638,976 words, 0 mismatches, on an operand probe that adder widths 24, 25, 27 and 28 and the other
+#: k orders each miss).
+HOPPER_E4M3_MMAV2_K32 = GroupSum(
+    name="hopper_e4m3_mmav2_k32",
+    arch="sm_90",
+    dtype="e4m3",
+    operand_bits=8,
+    groups=(16, 16),
+    width=26,
+    zero_exponent=-133,
+    validated="Triton 3.7.1's MMAv2 e4m3 dot on sm_90 (two chained f16 HMMA.16816.F32 per k32, the operands in "
+              "MMAV2_E4M3_K_ORDER); HMMA.16816.F32 from +0 measured on the H100 (`h100`), "
+              "the chain with its nonzero f16 accumulator in fused_moe_kernel on the H200 (`h200`, 638,976 words, "
+              "0 mismatches)",
+    executes="f16",
+)
