@@ -459,9 +459,9 @@ def test_a_store_read_key_reaches_the_unit_and_without_one_no_aws_name_passes(lo
     env = jobuser.job_env(got["env"], passed)
     assert {k: env[k] for k in key} == key and env["RESEARCH_STORE_CONFIG"] == str(runs_root / "q1" / "control" / "store.toml")
     assert not (runs_root / "q1" / "control" / "store.toml").exists() and not (read / CU.CRED_FILE).exists(), "gone with the workload"
-    assert os.environ["RESEARCH_STORE_CONFIG"] == str(read / CU.STORE_TOML), "the runner's own environment is back"
     assert cli.main([*base, "--id", "q2", "--", "true"]) == 0
     assert "--pass" not in got["cmd"] and got["store_config"] is None
+    assert got["env"]["RESEARCH_STORE_CONFIG"] == str(read / CU.STORE_TOML), "the runner's own environment came back after the first run"
     assert not [k for k in jobuser.job_env(got["env"], []) if k.startswith("AWS_")], "what the runner holds stays the runner's"
 
 
