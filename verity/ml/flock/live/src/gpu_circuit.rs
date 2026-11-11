@@ -628,6 +628,49 @@ pub struct HostSlots {
     pub hm96_rows: Vec<F128>,
 }
 
+/// A measurement switch, off by default (`FC_UNIT_REUSE=1`): what a statement costs when the host does not walk the units.
+/// The process keeps the first statement's unit words as [`HostSlots::pack_units`] wrote them (circuit, words a unit, every
+/// slot's input words, the a, b words), and a later statement with the same input words takes a copy of them in place of
+/// `unit_ab_into`'s walk. A statement with other inputs is walked. The statement that is kept is compared with
+/// `host_slots`' packed, as `FC_UNIT_CHECK=1` compares every statement. One `UNITREUSE` line a statement on stderr.
+struct UnitsKept {
+    ni: usize,
+    uw: usize,
+    ins: Vec<Vec<u64>>,
+    ab: Vec<u64>,
+}
+
+static UNITS_KEPT: Mutex<Option<std::sync::Arc<UnitsKept>>> = Mutex::new(None);
+
+fn f128_words(v: &[F128]) -> &[u64] {
+    // SAFETY: an F128 is two u64 words (lo, hi)
+    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u64, 2 * v.len()) }
+}
+
+/// The kept unit words copied into `u`, if a statement's are kept and its inputs are `ins`.
+fn units_kept_into(ni: usize, uw: usize, ins: &[Vec<F128>], u: &mut [u64]) -> bool {
+    let t = Instant::now();
+    let Some(k) = UNITS_KEPT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone() else { return false };
+    let same = k.ni == ni && k.uw == uw && k.ab.len() == u.len() && k.ins.len() == ins.len()
+        && k.ins.par_iter().zip(ins.par_iter()).all(|(a, b)| a[..] == *f128_words(b));
+    let same_s = t.elapsed().as_secs_f64();
+    if same {
+        u.par_chunks_mut(1 << 21).zip(k.ab.par_chunks(1 << 21)).for_each(|(d, s)| d.copy_from_slice(s));
+    }
+    eprintln!("UNITREUSE\t{}", serde_json::json!({"reused": same, "slots": ins.len(), "bytes": 8 * u.len(), "same_inputs_s": same_s,
+        "copy_s": t.elapsed().as_secs_f64() - same_s}));
+    same
+}
+
+/// Keeps a walked statement's unit words (`u`, as `unit_ab_into` wrote them for `ins`) for the statements after it.
+fn units_keep(ni: usize, uw: usize, ins: &[Vec<F128>], u: &[u64]) {
+    let t = Instant::now();
+    let k = UnitsKept { ni, uw, ins: ins.par_iter().map(|v| f128_words(v).to_vec()).collect(), ab: u.to_vec() };
+    *UNITS_KEPT.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::sync::Arc::new(k));
+    eprintln!("UNITREUSE\t{}", serde_json::json!({"reused": false, "kept": true, "slots": ins.len(), "bytes": 8 * u.len(),
+        "keep_s": t.elapsed().as_secs_f64()}));
+}
+
 impl Clone for HostSlots {
     /// The host words only: a clone may be changed, so it takes no device copy
     fn clone(&self) -> Self {
@@ -712,18 +755,27 @@ impl HostSlots {
             .chain((0..ins.len()).map(|x| ((x / r.count) * wpb + r.slot(x % r.count) / 128) as i64)).collect();
         let Some(mut zab) = HostBuf::mapped(4 * (hw + uw * ins.len())) else { return unfused() };
         let (h, u) = zab.split_at_mut(4 * hw);
-        if !(Self::fill(h, &words[..head.len()], head, true) && crate::circuit::unit_ab_into(&st.c.nets[ni].1, ni, uw, ins, u)) {
+        let reuse = std::env::var("FC_UNIT_REUSE").as_deref() == Ok("1");
+        let reused = reuse && units_kept_into(ni, uw, ins, u);
+        if !(Self::fill(h, &words[..head.len()], head, true) && (reused || crate::circuit::unit_ab_into(&st.c.nets[ni].1, ni, uw, ins, u))) {
             drop(zab);
             return unfused();
+        }
+        let walked_first = reuse && !reused;
+        if walked_first {
+            units_keep(ni, uw, ins, u);
         }
         let got = HostSlots::of(at, words, zab, true);
         if crate::circuit::unit_profile() {
             eprintln!("UNITPROF\t{}", serde_json::json!({"part": "pack_units", "slots": got.words.len(), "layout": got.layout(), "wall_s": t.elapsed().as_secs_f64()}));
         }
-        if std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1") {
+        if walked_first || std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1") {
             let want = unfused();
             assert!(want.at == got.at && want.words == got.words && want.ab == got.ab && want.zab[..] == got.zab[..],
                     "circuit {ni}: the fused host slots are not host_slots' packed");
+            if walked_first {
+                eprintln!("UNITREUSE\t{}", serde_json::json!({"kept_is_host_slots_packed": true, "words": got.zab.len()}));
+            }
         }
         got
     }
