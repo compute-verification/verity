@@ -93,8 +93,8 @@ published) and the inference-only policy each meet their target at remote, then 
 verifier accepts files that passed the commit phase's check while one of their claims fails is at most their three
 errors at that strategy summed. Discharging `V.PouwSound .remote` reads Pearl+'s properties in
 `Properties.Pouw.PearlPlus` (`AcceptMeans`, `WorkIsTheCredit`, `DrawIsOnItsStreams` and `CoinBytesGiveUniformTickets`,
-proved as `acceptMeans`, `workIsTheCredit`, `drawIsOnItsStreams` and `coinBytesGiveUniformTickets`); that is the Pearl+
-target's proof, not this statement's. -/
+each proved under its name in lower camel case, `workIsTheCredit` among them); that is the Pearl+ target's proof, not
+this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
