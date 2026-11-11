@@ -63,6 +63,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
   canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
   is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
+- ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
+  function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
+  and like every tick arm the corpus's client serves it, standing in for the certifier.
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -236,6 +239,7 @@ ARMS = {
                      "layer's history tables in the boundary commitment",
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
 }
+ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
 #: what a part of a model's target (`Part`) is of
 CHANGES: dict[str, Callable[[Arm], bool]] = {

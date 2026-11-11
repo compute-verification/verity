@@ -89,6 +89,8 @@ def test_plugin_site_declares_the_arms_plugins_the_tick_after_this_one(tmp_path:
     topk = "verity_dsa_topk = dsa_topk:register"
     assert site_entries(tmp_path, "canonical-topk") == [ep[0], topk]
     assert site_entries(tmp_path, "two-stage") == [*ep[:2], topk]
+    # the launch line under the tick loads all three: this module's, the tick's after it, then the top-k's
+    assert site_entries(tmp_path, "two-stage-tick") == [*ep[:3], topk]
 
 
 def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: Path):
@@ -236,6 +238,29 @@ def test_the_boundary_rows_arm_holds_the_server_until_its_commits_account_for_ev
         fh.write('{"window":2,"spans":3,"tables":{"layers":[0],"capacity":131072}}\n'
                  '{"window":2,"spans":2,"tables":{"layers":[0]},"error":"ValueError: rank 0 built no history tables"}\n')
     assert S.await_commits(tmp_path, 21, 5.0, clock=lambda: 0.0)["tables"] == 3
+
+
+def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Path):
+    """The launch line under the certified tick is the two-stage arm's data with the tick: its flags with the tick's
+    middleware, its boundary commitment and top-k, and τ in the server's environment. Its engine has the launch line's
+    changes and the tick, so of the target's parts only the edge snapshot's is off; and vLLM's own client, which sends
+    no certified feed, can't drive it."""
+    glm, two, tick = S.MODELS["glm53"], S.ARMS["two-stage"], S.ARMS["two-stage-tick"]
+    assert replace(tick, parent=two.parent, what=two.what, tick=False) == two and tick.parent == "two-stage"
+    assert S.server_argv(tick, glm, Path("/ck"), 8000) == [*S.server_argv(two, glm, Path("/ck"), 8000), "--middleware",
+                                                          S.TICK_MIDDLEWARE]
+    tau, private = {"bucket_us": 100000, "sat_us": 9000, "free_us": 11000}, tmp_path / "private"
+    env = S.server_env(tick, tmp_path, tmp_path / "site", tau, 600.0, 600.0, check=glm.check, private=private)
+    plain = S.server_env(two, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
+    assert {k: v for k, v in env.items() if k != "VERITY_TICK"} == plain
+    assert {k: json.loads(env["VERITY_TICK"])[k] for k in tau} == tau
+    with pytest.raises(SystemExit, match="the tick arms need τ"):
+        S.server_env(tick, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
+    assert S.changes_of("two-stage-tick") == [*S.changes_of("two-stage"), "admission on the certified tick"]
+    assert [(x["name"], x["off"]) for x in S.target_parts(glm, "two-stage-tick")] == [
+        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", ["the edge snapshot"])]
+    with pytest.raises(SystemExit, match="two-stage-tick needs the corpus client"):
+        S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
 
 
 def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
