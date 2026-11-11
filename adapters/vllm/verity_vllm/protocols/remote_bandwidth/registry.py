@@ -57,6 +57,8 @@ from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Appe
                                          Stale, WindowRecord)
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 
+__all__ = ["NodeMemory"]
+
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
