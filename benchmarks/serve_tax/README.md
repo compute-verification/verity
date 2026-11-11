@@ -95,7 +95,11 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   it. A pass sends the load's prompts whatever its rung, so a rung near or past them is held for part of the pass
   only: `PASS_PROMPTS=chat=N` makes a pass of `chat` send N prompts at every rung, for a ladder that climbs past
   them. Every rung sends the same N, since passes of two sizes differ in tokens a second by their size alone, and
-  the cost refuses two arms whose passes sent different numbers of prompts.
+  the cost refuses two arms whose passes sent different numbers of prompts. Under one N the pass's draining end, its
+  last requests finishing a few at a time, is a larger share of the pass the higher the rung. `PASS_PROMPTS=chat=Kx`
+  sizes each rung's pass by the rung instead, K prompts for each request it holds in flight and the load's own at
+  least, which makes that end the same share at every rung: for a ladder read for the rung where tokens a second
+  stop rising.
 - **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
@@ -108,7 +112,12 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 - **A pass** is a load at a rung, `<load>@<rung>`. An arm serves each pass REPS times (six by default) in one server
   lifetime, each from an empty prefix cache, every request greedy and decoding to its length (`--ignore-eos`), the same
   prompts under one seed. `<load>@<rung>/rep-<r>/result.json` is the result the client saved, and the table's figures
-  for a pass are the client's own.
+  for a pass are the client's own. It is the client's detailed result, with each request's prompt and output lengths,
+  start, time to first token and latency in the order sent, less each request's generated text and inter-token
+  times, which no run keeps: the client saves it outside the run's directory and the runner keeps the rest.
+  `STOP_AT=TIME` is the time the job's GPUs are another's: an arm starts no pass it can't expect to finish by then,
+  going by the same pass's longest so far, so the job ends between two passes with every pass it served, and the
+  arm's `meta.json` says where it stopped (`stopped`).
 - **The cost** of an arm over `compiled` at a load (`serve_tax.serving_cost`) is the arm's tax where stock is
   saturated: stock's output tokens a second over the arm's, less one. Every arm serves the same prompts, each decoded
   to its length, so both sides serve the same tokens, and at a rung where stock's GPUs have no idle time the ratio is

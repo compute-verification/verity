@@ -534,6 +534,25 @@ def test_reps_that_fit_count_the_startup_the_warm_up_and_the_longest_rep():
     assert S.reps_that_fit({"loads": []}, 50.0, 10.0, 3) == 3 == S.reps_that_fit(dict(meta, startup_s=None), 0, 1, 3)
 
 
+def test_an_arm_starts_no_pass_it_cannot_expect_to_finish_by_its_stop_time():
+    """`stop_before` goes by the pass's own longest wall time, or any pass's where it has none, with the pause
+    between passes and the server's stop; an arm with no stop time, and one with enough left, serve on."""
+    served = [{"load": "chat@4", "rep": 1, "wall_s": 600.0}, {"load": "chat@8", "rep": 1, "wall_s": 300.0},
+              {"load": "chat@4", "rep": 2, "wall_s": 620.0}]
+    assert S.stop_before(served, "chat@4", None) is None
+    # chat@4's own: (620 + 5) * 1.1 + 60 = 747.5 s; chat@8's own: (300 + 5) * 1.1 + 60 = 395.5 s
+    assert [S.stop_before(served, "chat@4", left) for left in (748.0, 747.0)] == [None, 747.5]
+    assert [S.stop_before(served, "chat@8", left) for left in (396.0, 395.0)] == [None, 395.5]
+    # a pass not served yet goes by the longest of any, and an arm's first by the stop alone
+    assert S.stop_before(served, "long@1", 700.0) == 747.5 and S.stop_before(served, "long@1", 800.0) is None
+    assert S.stop_before([], "chat@4", 61.0) is None and S.stop_before([], "chat@4", 59.0) == 60.0
+    assert S.parse_stop_at(None) is None
+    assert S.parse_stop_at("2030-01-01T00:00:00Z") == S.parse_stop_at("2030-01-01T01:00:00+01:00") == 1893456000.0
+    for bad in ("2030-01-01T00:00:00", "soon", "1893456000"):
+        with pytest.raises(SystemExit, match="a time with its zone"):
+            S.parse_stop_at(bad)
+
+
 def test_fit_prints_the_reps_left_for_the_next_arm(tmp_path: Path, capsys: pytest.CaptureFixture):
     (tmp_path / "warm").mkdir()
     (tmp_path / "meta.json").write_text(json.dumps({"startup_s": 500.0, "loads": [{"rep": 1, "wall_s": 310.0}]}))
@@ -674,7 +693,7 @@ def test_a_pass_of_vllms_client_holds_a_concurrency_and_counts_goodput_against_t
         "--request-rate", "inf", "--max-concurrency", "16", "--ignore-eos", "--temperature", "0",
         "--goodput", "ttft:2000", "tpot:80", "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
         "--request-id-prefix", "chat@16-r2-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
-        "--save-result", "--result-dir", str(tmp_path), "--result-filename", "result.json"]
+        "--save-result", "--save-detailed", "--result-dir", str(tmp_path), "--result-filename", "result.json"]
     # the client's tokenizer loads as the server's does, and a load with no file names none; long context is the
     # client's synthetic dataset at one long length, its goodput against the time per output token alone
     moon = S.bench_argv(S.MODELS["moonlight"], Path("/ck"), 1, S.LOADS["long"], 4, tmp_path, "warm", prompts=8)
@@ -789,12 +808,17 @@ def test_a_table_of_planned_requests_is_checked_and_sent_as_its_requests_arrive(
     assert [S.pass_prompts(chat, c, None, prompts=1024) for c in (8, 96, 256, 384)] == [1024] * 4
     assert [S.pass_prompts(chat, c, None, 20.0, 1024) for c in (8, 96, 256)] == [16, 192, 200]
     assert S.pass_prompts(chat, 96, None, 20.0, 100) == 100
+    # Kx: K prompts for each request the rung holds, the load's own at least; its warm-up is the load's
+    assert [S.pass_prompts(chat, c, None, prompts="8x") for c in (4, 25, 26, 96, 256)] == [200, 200, 208, 768, 2048]
+    assert [S.pass_prompts(chat, c, None, 20.0, "8x") for c in (8, 96, 256)] == [16, 192, 200]
     both = {"chat": (96, 256), "long": (1, 2)}
     assert S.parse_pass_prompts("chat=1024, long=64", both) == {"chat": 1024, "long": 64}
+    assert S.parse_pass_prompts("chat=08x,long=64", both) == {"chat": "8x", "long": 64}
     assert S.parse_pass_prompts(None, both) == {} == S.parse_pass_prompts("", both)
     for text, given, why in (("chat=1024", {"long": (1,)}, "'chat' is not a load of --loads"),
                              ("prefix=8", {"prefix": (1,)}, "sent as planned"), ("chat=0", both, "1 or more"),
-                             ("chat", both, "NAME=N"), ("chat=4x", both, "NAME=N")):
+                             ("chat", both, "NAME=N"), ("chat=0x", both, "NAME=Kx"), ("chat=x4", both, "NAME=N"),
+                             ("chat=4xx", both, "NAME=N")):
         with pytest.raises(SystemExit, match=why):
             S.parse_pass_prompts(text, given)
     # the client then sends each at its arrival: nothing holds a concurrency, and nothing turns the file's times off;
@@ -971,6 +995,9 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
     assert (f"; 1,024 prompts a pass at concurrency 256, 384, 96 (--pass-prompts: the load's own are 200), from {at} "
             in text)
     assert "24 prompts a pass at concurrency 1, 2\n" in text
+    # sized by the rung, each rung's is printed
+    assert S.main(["passes", "--loads", "chat=12+48+96", "--pass-prompts", "chat=8x"]) == 0
+    assert "; 200, 384, 768 prompts a pass at concurrency 12, 48, 96 (--pass-prompts: " in capsys.readouterr().out
     with pytest.raises(SystemExit, match="'long' is not a load of --loads"):
         S.main(["passes", "--loads", "chat", "--pass-prompts", "long=64"])
     assert S.main(["dataset", "chat"]) == 0 and capsys.readouterr().out == f"{at}\n"
@@ -997,15 +1024,26 @@ def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long", "prefix"]
 
 
-def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path):
-    now, calls, seeds = [0.0], [], []
+def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path,
+                                                                             monkeypatch: pytest.MonkeyPatch):
+    """The run keeps the client's detailed result, each request's own figures, without the generated texts and the
+    inter-token times, which the client saved outside the run's directory, in a directory gone when the pass ends."""
+    now, calls, seeds, saved = [0.0], [], [], []
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
+    tmp_path = tmp_path / "run"
+    detail = {"input_lens": [8192] * 197, "output_lens": [128] * 197, "ttfts": [0.4] * 197, "start_times": [1.0] * 197,
+              "errors": [None] * 197}
 
     def run(argv, stdout, stderr, env):
         calls.append(argv)
         seeds.append((env.get("PYTHONHASHSEED"), "PATH" in env))
         stdout.write(b"Starting main benchmark run...\n")
         d = Path(argv[argv.index("--result-dir") + 1])
-        (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(result(completed=197, failed=3)))
+        saved.append(d)
+        (d / argv[argv.index("--result-filename") + 1]).write_text(json.dumps(
+            result(completed=197, failed=3) | detail | {"generated_texts": ["a served answer"] * 197,
+                                                         "itls": [[0.03] * 127] * 197}))
         now[0] += 64.25
         return NS(returncode=0)
 
@@ -1013,7 +1051,11 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
                       run=run, clock=lambda: now[0], now=lambda: 1700.0)
     assert (m["requests"], m["unfinished"], m["unserved"], m["concurrency"], m["rate"]) == (200, 3, 3, 8, None)
     assert (m["wall_s"], m["t0_unix"], m["client"], m["tag"]) == (64.25, 1700.0, "vllm-bench", "long@8-r1")
-    assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["long"], 8, tmp_path / "rep-1", "long@8-r1")]
+    assert calls == [S.bench_argv(S.MODELS["glm53"], Path("/ck"), 8000, S.LOADS["long"], 8, saved[0], "long@8-r1")]
+    assert not saved[0].exists() and saved[0].parent == (tmp_path.parent / "tmp").resolve()
+    kept = json.loads((tmp_path / "rep-1" / "result.json").read_text())
+    assert kept == result(completed=197, failed=3) | detail and not S.UNKEPT & kept.keys()
+    assert "a served answer" not in "".join(f.read_text() for f in (tmp_path / "rep-1").iterdir())
     assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are drawn under
     assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
     assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
@@ -1022,6 +1064,11 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
             S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["long"], 8, "x", tmp_path / f"bad-{rc}",
                           run=lambda argv, stdout, stderr, env, rc=rc: NS(returncode=rc), clock=lambda: 0.0,
                           now=lambda: 0.0)
+    # a temporary directory inside the run's would leave the texts there if the pass were stopped: refused, unsent
+    monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "rep-1"))
+    with pytest.raises(RuntimeError, match="inside the run's directory"):
+        S.drive_bench(8000, S.MODELS["glm53"], Path("/ck"), S.LOADS["long"], 8, "x", tmp_path / "rep-1",
+                      run=lambda *a, **k: pytest.fail("sent"), clock=lambda: 0.0, now=lambda: 0.0)
 
 
 def test_a_pass_metrics_are_the_clients_own_figures():

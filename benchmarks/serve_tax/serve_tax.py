@@ -144,6 +144,7 @@ import time
 import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -1006,34 +1007,42 @@ def passes_of(loads: dict[str, tuple[int, ...]],
 
 
 def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None,
-                 prompts: int | None = None) -> int:
-    """The prompts a pass of ``load`` at ``rung`` sends: ``prompts`` (``--pass-prompts``, `parse_pass_prompts`) or the
-    load's, the same at every rung, or every line of its file where they leave as they arrive (`ARRIVING`). A warm-up
+                 prompts: int | str | None = None) -> int:
+    """The prompts a pass of ``load`` at ``rung`` sends: ``prompts`` (``--pass-prompts``, `parse_pass_prompts`: a
+    number, the same at every rung, or ``Kx``, K for each request the rung holds in flight and the load's own at
+    least) or the load's, or every line of its file where they leave as they arrive (`ARRIVING`). A warm-up
     (``warm_s``) sends two for each request held in flight, the load's own prompts at most, or the lines that arrive
     in its first ``warm_s`` seconds, one at least."""
     if rung == ARRIVING:
         return len(lines) if warm_s is None else max(1, sum(x["timestamp"] <= warm_s for x in lines))
-    return (prompts or load.prompts) if warm_s is None else min(load.prompts, prompts or load.prompts, 2 * rung)
+    n = max(load.prompts, int(prompts[:-1]) * rung) if isinstance(prompts, str) else prompts or load.prompts
+    return n if warm_s is None else min(load.prompts, n, 2 * rung)
 
 
-def parse_pass_prompts(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
+def parse_pass_prompts(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int | str]:
     """``NAME=N,...`` (``--pass-prompts``): the prompts a pass of load NAME sends, in place of the load's own, at
-    every rung alike. A load's own prompts are few for a high rung: the client starts a pass with ``rung`` requests
+    every rung alike; or ``NAME=Kx``, K prompts for each request the rung holds in flight, the load's own at least
+    (`pass_prompts`). A load's own prompts are few for a high rung: the client starts a pass with ``rung`` requests
     and ends it with its last ones draining a few at a time, so 200 prompts at rung 96 hold 96 for part of the pass
     only, and no rung shows more than the load's prompts in flight. A ladder that climbs past them needs longer
-    passes, and the same length at every rung: the draining end is a smaller share of a longer pass, so passes of two
-    sizes differ in tokens a second by their size alone. Refused for a load that is not of ``loads`` or that is sent
-    as planned, whose passes are its plan's."""
-    out: dict[str, int] = {}
+    passes. N is the same length at every rung: the draining end is a smaller share of a longer pass, so passes of two
+    sizes at one rung differ in tokens a second by their size alone, and under one N that share grows with the rung.
+    ``Kx`` sizes each rung's pass by the rung, so that the draining end is the same share of the pass at every rung:
+    for a ladder read for the rung where tokens a second stop rising, at a fraction of the time one N large enough
+    for its top rung takes at its low ones. Either way a rung has one size, the same for every arm. Refused for a
+    load that is not of ``loads`` or that is sent as planned, whose passes are its plan's."""
+    out: dict[str, int | str] = {}
     for part in filter(None, (p.strip() for p in (text or "").split(","))):
         name, _, n = part.partition("=")
         if name not in loads:
             raise SystemExit(f"--pass-prompts: {name!r} is not a load of --loads ({', '.join(loads)})")
         if LOADS[name].plan:
             raise SystemExit(f"--pass-prompts: {name}'s requests are sent as planned: a pass of it is its plan's")
-        if not n.isdigit() or int(n) < 1:
-            raise SystemExit(f"--pass-prompts: {part!r}: NAME=N, the prompts a pass of the load sends, 1 or more")
-        out[name] = int(n)
+        k = n.removesuffix("x")
+        if not k.isdigit() or int(k) < 1:
+            raise SystemExit(f"--pass-prompts: {part!r}: NAME=N, the prompts a pass of the load sends, or NAME=Kx, K "
+                             "for each request its rung holds in flight, 1 or more")
+        out[name] = int(n) if n == k else f"{int(k)}x"
     return out
 
 
@@ -1103,7 +1112,12 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
             "--goodput", *(f"{k}:{round(slo[k] * 1e3)}" for k in load.slo),
             "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
             "--request-id-prefix", f"{tag}-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
-            "--save-result", "--result-dir", str(d), "--result-filename", RESULT]
+            "--save-result", "--save-detailed", "--result-dir", str(d), "--result-filename", RESULT]
+
+
+#: what the client's detailed result holds that no run keeps: each request's generated text, which is a served
+#: request's content, and its inter-token times, a number for every token, which the client's percentiles summarize
+UNKEPT = frozenset({"generated_texts", "itls"})
 
 
 def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int, tag: str, d: Path,
@@ -1111,16 +1125,25 @@ def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int
                 run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                 clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> dict:
     """One pass sent by vLLM's client (`bench_argv`): its output in d/bench.log, the result it saved in d/result.json,
-    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved)."""
+    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved). The
+    result is the client's detailed one, each request's lengths, start, first-token time and latency in the order
+    sent, less what no run keeps (`UNKEPT`): the client saves it in a directory outside the run's, removed when the
+    pass ends, so that the generated texts never lie under ``d`` whatever stops the pass."""
     d.mkdir(parents=True, exist_ok=True)
-    argv = bench_argv(model, checkpoint, port, load, rung, d, tag, dataset, prompts, seed)
-    t, t0 = clock(), now()
-    with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy, open(d / "bench.log", "wb") as log:
-        rc = run(argv, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **CLIENT_ENV}).returncode
-    wall = clock() - t
-    if rc or not (d / RESULT).exists():
-        raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {d / 'bench.log'}")
-    r = json.loads((d / RESULT).read_text())
+    with tempfile.TemporaryDirectory(prefix="serve-tax-result.") as tmp:
+        saved, held = Path(tmp).resolve(), SHARED.RESEARCH_RUN_DIR
+        if any(saved.is_relative_to(p) for p in (d.resolve(), *([Path(held).resolve()] if held else []))):
+            raise RuntimeError(f"the client's result would be saved in {saved}, inside the run's directory, which leaves "
+                               "the node with each request's generated text: TMPDIR, outside every run's directory")
+        argv = bench_argv(model, checkpoint, port, load, rung, saved, tag, dataset, prompts, seed)
+        t, t0 = clock(), now()
+        with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy, open(d / "bench.log", "wb") as log:
+            rc = run(argv, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **CLIENT_ENV}).returncode
+        wall = clock() - t
+        if rc or not (saved / RESULT).exists():
+            raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {d / 'bench.log'}")
+        r = {k: v for k, v in json.loads((saved / RESULT).read_text()).items() if k not in UNKEPT}
+    (d / RESULT).write_text(json.dumps(r))
     failed = int(r.get("failed") or 0)
     meta = {"tag": tag, "client": BENCH, "concurrency": rung, "rate": None, "requests": r["completed"] + failed,
             "unfinished": failed, "unserved": failed, "wall_s": round(wall, 3), "t0_unix": t0, "argv": argv[1:],
@@ -1272,6 +1295,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
 
     signal.signal(signal.SIGTERM, on_term)
     nofile = open_files()
+    stop_at = parse_stop_at(a.stop_at)
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     out = Path(a.out)
@@ -1363,22 +1387,27 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
             finished += w["requests"] - w["unfinished"]
             print(f"[serve-tax] warm-up: {w['requests']} requests, unfinished {w['unfinished']}", flush=True)
-        for rep in range(1, a.reps + 1):
-            for name in passes or rates:
-                ok = reset_prefix_cache(port)
-                d = out / name / f"rep-{rep}"
-                before = scrape(port)
-                m = send(name, load_tag(name, rep, bench), d, lib)
-                after = scrape(port)
-                m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
-                      "schedule": {k: after[k] - before[k] for k in after}}
-                (d / "meta.json").write_text(json.dumps(m, indent=1))
-                meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
-                (out / "meta.json").write_text(json.dumps(meta, indent=1))
-                at = at_rung(m["concurrency"]) if bench else f"at {m['rate']:g}/s"
-                print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests {at}, wall {m['wall_s']} s, "
-                      f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
-                finished += m["requests"] - m["unfinished"]
+        for rep, name in ((r, n) for r in range(1, a.reps + 1) for n in passes or rates):
+            need = stop_before(meta["loads"], name, None if stop_at is None else stop_at - time.time())
+            if need is not None:
+                meta["stopped"] = {"before": name, "rep": rep, "need_s": round(need, 1), "stop_at": a.stop_at}
+                print(f"[serve-tax] {a.arm}: stopped before {name} rep {rep}: the pass and the server's stop need "
+                      f"{need:.0f} s, more than is left to --stop-at {a.stop_at}", flush=True)
+                break
+            ok = reset_prefix_cache(port)
+            d = out / name / f"rep-{rep}"
+            before = scrape(port)
+            m = send(name, load_tag(name, rep, bench), d, lib)
+            after = scrape(port)
+            m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
+                  "schedule": {k: after[k] - before[k] for k in after}}
+            (d / "meta.json").write_text(json.dumps(m, indent=1))
+            meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
+            (out / "meta.json").write_text(json.dumps(meta, indent=1))
+            at = at_rung(m["concurrency"]) if bench else f"at {m['rate']:g}/s"
+            print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests {at}, wall {m['wall_s']} s, "
+                  f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
+            finished += m["requests"] - m["unfinished"]
         if "boundary_rows" in arm.plugin:
             meta["boundary_commits"] = await_commits(srv, finished, a.commit_wait_s)
             print(f"[serve-tax] boundary commits: {meta['boundary_commits']}", flush=True)
@@ -2474,6 +2503,33 @@ def _gb(x: float | None) -> float | None:
 LOAD_OVERHEAD_S, STOP_S = 5.0, 60.0
 
 
+def parse_stop_at(text: str | None) -> float | None:
+    """``--stop-at``: a time with its zone, as ``2030-01-01T00:00:00Z``, in seconds since the epoch."""
+    if text is None:
+        return None
+    try:
+        at = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        at = None
+    if at is None or at.tzinfo is None:
+        raise SystemExit(f"--stop-at {text!r}: a time with its zone, as 2030-01-01T00:00:00Z (run.sh: STOP_AT)")
+    return at.timestamp()
+
+
+def stop_before(served: Sequence[dict], name: str, left_s: float | None, margin: float = 1.1) -> float | None:
+    """Whether an arm with ``left_s`` seconds to the time it stops by (``--stop-at``; None: it has none) starts no
+    further pass, ``name`` being its next: the seconds that pass and the server's stop need where ``left_s`` is fewer,
+    else None. A pass needs its own longest wall time among the passes ``served`` (the arm's ``meta["loads"]``), or
+    where it has none yet the longest of any pass, ``margin`` times as long. An arm's first pass has nothing to go by
+    and starts whenever the stop alone fits. The arm then stops between two passes and keeps every pass it served,
+    where a signal at the time itself would lose the pass in flight."""
+    if left_s is None:
+        return None
+    walls = [x["wall_s"] for x in served if x["load"] == name] or [x["wall_s"] for x in served]
+    need = ((max(walls) + LOAD_OVERHEAD_S) * margin if walls else 0.0) + STOP_S
+    return need if need > left_s else None
+
+
 def reps_that_fit(meta: dict, warm_wall_s: float, budget_s: float, reps: int, margin: float = 1.1) -> int:
     """How many of ``reps`` reps an arm like the one ``meta`` records fits in ``budget_s`` seconds: its startup, its
     warm-up's ``warm_wall_s`` and its longest rep's loads, each ``margin`` times as long; ``reps`` when ``meta`` has no
@@ -2503,10 +2559,13 @@ def main(argv: list[str] | None = None) -> int:
                    help=f"vLLM's client: the loads ({', '.join(sorted(LOADS))}) in the order each rep serves them, each at "
                         "its rungs (concurrencies) or the ones given")
     r.add_argument("--dataset", action="append", metavar="NAME=FILE", help="vLLM's client: a load's dataset file")
-    r.add_argument("--pass-prompts", metavar="NAME=N,...",
-                   help="vLLM's client: the prompts a pass of a load sends at every rung, in place of the load's own "
-                        "(parse_pass_prompts)")
+    r.add_argument("--pass-prompts", metavar="NAME=N|Kx,...",
+                   help="vLLM's client: the prompts a pass of a load sends in place of the load's own: N at every rung, "
+                        "or Kx, K for each request its rung holds in flight (parse_pass_prompts)")
     r.add_argument("--reps", type=int, default=3)
+    r.add_argument("--stop-at", metavar="TIME",
+                   help="the time the arm stops by, with its zone (2030-01-01T00:00:00Z): it starts no pass that it "
+                        "can't expect to finish by then, and keeps the passes it served (stop_before)")
     r.add_argument("--span-s", type=float, default=90.0, help="each load's arrivals span")
     r.add_argument("--requests", type=int, help="each load's request count instead of --span-s's")
     r.add_argument("--warm-s", type=float, default=20.0,
@@ -2557,7 +2616,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "checked, before any GPU is held")
     ps.add_argument("--loads", required=True)
     ps.add_argument("--dataset", action="append")
-    ps.add_argument("--pass-prompts", metavar="NAME=N,...")
+    ps.add_argument("--pass-prompts", metavar="NAME=N|Kx,...")
     ps.add_argument("--fetch", action="store_true", help="download a pinned dataset file the node's cache doesn't hold")
     ps.add_argument("--arms", default="", help="the arms that will serve them, each checked against --model-id")
     ps.add_argument("--model-id", choices=sorted(MODELS))
@@ -2644,8 +2703,9 @@ def main(argv: list[str] | None = None) -> int:
             arriving = rungs == (ARRIVING,)
             digest = (None if n not in files else f"SHA-512 {LOADS[n].file.sha512[:16]}" if LOADS[n].file else
                       f"SHA-256 {file_digest(Path(files[n]))[:16]}")
+            each = [pass_prompts(LOADS[n], c, lines.get(n), prompts=sizes.get(n)) for c in rungs]
             print(f"[serve-tax] load {n}: {GIVEN if arriving else LOADS[n].what}; "
-                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n), prompts=sizes.get(n)):,} prompts a pass "
+                  f"{', '.join(f'{x:,}' for x in (each if len(set(each)) > 1 else each[:1]))} prompts a pass "
                   f"{at_rung(ARRIVING) if arriving else 'at concurrency ' + ', '.join(map(str, rungs))}"
                   + (f" (--pass-prompts: the load's own are {LOADS[n].prompts:,})" if n in sizes else "")
                   + (f", from {files[n]} ({digest}...)" if digest else "")
