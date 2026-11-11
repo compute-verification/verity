@@ -88,7 +88,7 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     from verity.circuits.types import RecordType
 
     from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
-    hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
+    hints = {int(k): v for k, v in desc.get("annotations", {}).get("node_hints", {}).items()}
     params = []
     for n, t in program.fn.body.params:
         if n == WEIGHTS and isinstance(t, RecordType):
@@ -107,13 +107,13 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     from verity_vllm.correspondence.runtime import correspondence_digest
     from verity_vllm.pipeline.build import write_instances
     res = json.loads(Path(trace, "result.json").read_text())
-    traced = res.get("program") or {}
+    traced = res.get("program")    # a derive that failed wrote none
     r = predict(phi, wrapper, M=M, pos0=pos0, LP=LP, T=T)
-    if r.digest != traced.get("digest"):
-        raise UsageError(f"{trace}: the trace's Program {str(traced.get('digest'))[:16]}… is not the predicted {r.digest[:16]}…: what it "
+    if not traced or r.digest != traced.get("digest"):
+        raise UsageError(f"{trace}: the trace's Program {str(traced.get('digest') if traced else None)[:16]}… is not the predicted {r.digest[:16]}…: what it "
                          f"holds is about another Program (the row's comparison no longer holds: `verity-vllm predict compare` on a "
                          f"fresh trace, `verity-vllm neutrality --tier heavy`)")
-    desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations") or {}}
+    desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz"))["annotations"]}
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
         raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {got[1][:16]}…), "

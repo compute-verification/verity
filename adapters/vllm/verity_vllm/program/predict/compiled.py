@@ -150,7 +150,7 @@ class _Pieces:
     def launch(self, kind: str, name: str, template: str, binds: dict[str, dict[str, Any]], outs: dict[str, str]) -> list[dict[str, Any]]:
         """Kernel `name` of the pin's `kind` pieces as template `template` at the model's literals and its pinned launch config, its
         parameters bound to `binds` and each write hooked as `outs`; the written values in `outs`' order."""
-        sha = (self.pin["kernels"].get(kind) or {}).get(name)
+        sha = self.pin["kernels"][kind].get(name)
         if sha is None:
             raise Unmodelled(f"the pin has no kernel {name} in its {kind} pieces: {self.pin['kernels'].get(kind)}")
         t = T.TEMPLATE[template]
@@ -254,7 +254,8 @@ class _Pieces:
         if not self.layers:
             return None
         pieces = {str(c["piece"]): f"{self.backbone}.layers.{c['piece'] - 1}.mlp.experts" for c in self.calls if c["op"] == "moe_forward"}
-        return {"layers": self.layers, "pieces": pieces, "configs": (self.pin.get("moe") or {}).get("configs") or {}, "cc": list(cc)}
+        configs = self.pin["moe"]["configs"] if "moe" in self.pin else {}    # a pin made with no fused-MoE record: every launch refused
+        return {"layers": self.layers, "pieces": pieces, "configs": configs, "cc": list(cc)}
 
 
 def pin_file(role: str, device: str) -> str:
@@ -294,8 +295,9 @@ def differences(predicted: dict[str, Any], traced: dict[str, Any]) -> list[str]:
     """Where a predicted Build differs from a traced one: its digests, then the first differing call, attention op or step plan."""
     out = [f"{k}: predicted {predicted[k][:16]}, traced {str(traced.get(k))[:16]}" for k in ("program_digest", "manifest_digest")
            if predicted[k] != traced.get(k)]
-    if predicted["artifact"]["digest"] != (traced.get("artifact") or {}).get("digest"):
-        out += [f"artifact: {d}" for d in SA.differences(traced.get("artifact") or {}, predicted["artifact"])] or ["artifact digest"]
+    artifact = traced.get("artifact", {})    # a Build traced before the artifact was recorded has none
+    if predicted["artifact"]["digest"] != artifact.get("digest"):
+        out += [f"artifact: {d}" for d in SA.differences(artifact, predicted["artifact"])] or ["artifact digest"]
     for key, a, b in (("call", predicted["program"]["calls"], traced["program"]["calls"]),
                       ("attention", predicted["program"]["attention"], traced["program"]["attention"]),
                       ("step plan", predicted["steps_plan"], traced["steps_plan"])):
