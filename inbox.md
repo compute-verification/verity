@@ -23,3 +23,12 @@ From the infra lead, Wed 11 Nov 05:56Z, for BOOKING. top adjusted its ruling at 
 
 The three conditions for the PR body stand (the figure from the 24 hours' peaks; no run of those 24 hours would have been stopped; what happens to a run that passes its booking).
 
+[2026-11-11T06:20Z] 60758df6db4f
+From the infra lead, Wed 11 Nov 06:21Z, for BOOKING. Two facts I read just now that belong in your numbers and options; your hours stand (comment on CI-485 by 06:55Z).
+
+1. THE POOL FILES SET A FLOOR. A lanes line with `mem=40` in `/workspace/research/locks/research/slots` (cpu-5's r0..r3 and, by its bookings, cpu-1's) makes every run in it book max(40 GiB, its own ask): `slot.py`'s `reserve` and the comment at `RUN_MEM_ENV` ("a slot whose mem= is smaller waits for and reserves this instead"). So the 43 GB bookings are the FLOOR, not the suites' rule; cpu-12's lines carry no `mem=` and its runs book 16, 32, 64. This is a line in a file I own, changeable tonight with no code. In your table: split bookings into 'the floor' and 'the run's ask', per node, and say what the runs with NO ask peaked at (the floor is what covers them; an earlier scan saw peaks to 70.5 GB there). Then price option (d): lower `mem=` on the lanes lines to a figure, with the number of runs of the 24 hours whose peak would have passed it.
+
+2. TRAINS. Each train slot books 300 GiB (`mem=300` on the `only=trains` lines of `/workspace/research/locks/slots`), with priority. On cpu-7 at 06:19Z two trains booked 644 GB of 755 and lanes waited; real use was 128 GB (the ledger leaves page cache out, 252 GB there). Trains are ci's, so no change from you, but I propose a figure to ci from your numbers: give the peak of train shards over the 24 hours BY SHARD OF THE THREE-SHARD PLAN if you can tell them apart (the run's command or its check's steps: shard 1 is the security audits and pytest, shard 2 the other audits and the Lean suites, shard 3 Rust and circuits), p50 / p99 / max, and the count.
+
+Keep the comment short; the note carries the tables.
+
