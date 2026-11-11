@@ -282,7 +282,7 @@ def _check_main(args) -> int:
     # ---- 3. tokens: instrumented == control, per request
     tk: dict[str, Any] = {"pass": None}
     if (ctl / "tokens.json").exists():
-        c = json.load(open(ctl / "tokens.json"))
+        c = json.loads((ctl / "tokens.json").read_text())
         A = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in tok["requests"]]
         B = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in c["requests"]]
         tk = {"pass": A == B and len(A) > 0, "n_requests": len(A), "generated_lengths": gens,
