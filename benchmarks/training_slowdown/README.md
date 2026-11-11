@@ -12,7 +12,8 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 
 | module | what it does |
 |---|---|
-| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
+| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace taken again (`retrace`); `block_c`, a start's c |
+| `traced.py` | a config's step as the capture measures it: the trace a job records (`trace_step`) and, with the capture's graph, what the library reads (`traced_step`) |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `screen.py` | the screen of a route's source: the names a route may not contain (`FORBIDDEN`), read before the route is imported |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set, over /run and over the user's tmux directory (`enter`), and what a process can still reach of them (`refusals`) |
@@ -59,7 +60,7 @@ longer has two operands the update reaches. Frozen layers (`last-blocks`) leave 
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
-shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors), and reads the
+shape, traces its step on a CPU as a job does after its last step (`traced.traced_step`, on fake tensors), and reads the
 calculator's bound of record on the traced step (`calculator.bound`): the least slowdown of any partition of that
 step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its

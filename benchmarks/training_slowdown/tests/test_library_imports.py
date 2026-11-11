@@ -23,6 +23,7 @@ def machinery(path: Path) -> set[str]:
 def test_no_module_but_the_job_imports_the_jobs_machinery():
     library = sorted(set(PACKAGE.rglob("*.py")) - JOB)
     names = {p.relative_to(PACKAGE).as_posix() for p in library}
-    assert names >= {"config.py", "screen.py", "grade.py", "calculator.py", "codecs/__init__.py", "routes/subset.py"}
+    assert names >= {"config.py", "screen.py", "grade.py", "calculator.py", "library.py", "traced.py",
+                     "codecs/__init__.py", "routes/subset.py"}
     assert {(p.relative_to(PACKAGE).as_posix(), n) for p in library for n in machinery(p)} == set()
     assert machinery(PACKAGE / "run.py") == {"sandbox"}

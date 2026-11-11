@@ -69,7 +69,7 @@ def job(losses: list, seed: int = 0, split: str = "final", **kw) -> dict:
 
 
 def trace(**over) -> dict:
-    """A job's trace of the 45M dense step (`run.trace_step`), the keys the grade reads and no other: the stated rows
+    """A job's trace of the 45M dense step (`traced.trace_step`), the keys the grade reads and no other: the stated rows
     unpriced, each operand's dtype its passed width's, at each k of the dial; `over` its fields."""
     def raw(b: dict) -> dict:
         return {"k": b["k"], "p_match": b["p_match"],
