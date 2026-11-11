@@ -227,8 +227,8 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
                for row in P.periods(p["work"]["N"], p["bound"]["macs_a_block"])]
     print("\nOver a monitoring period, all of a fleet's compute in the policy's blocks at capacity: the training the blocks "
           "hold at most, in MACs and as a share of that compute")
-    print("  (the slowdown calculator's fleets and periods, verity/protocols/inference_only/rho; a fleet's rate is its cards' data-sheet dense "
-          "int8 rate)")
+    print("  (the slowdown calculator's fleets and periods, verity/protocols/inference_only/rho; a fleet's rate is its "
+          "cards' data-sheet dense int8 rate)")
     head = ("policy", "where", "period", "blocks", "training MACs at most", "share of the compute at most")
     table = [head] + [(r["policy"], r["where"], r["period"], _g(r["blocks"]), _g(r["training_macs"]),
                        _g(100 * r["share"]) + "%") for r in periods]
