@@ -302,14 +302,19 @@ def test_a_scope_that_isn_t_one_makes_no_graph(tmp_path, monkeypatch):
 def test_this_tree_s_modules_and_imports_are_those_the_lean_build_cache_keys():
     """On this checkout, whose packages no toy stands in for: the modules listed are those `module_keys.keys` keys from each
     package's default targets and lock roots, each importing what its key reads, so a task and the cache see one module
-    one way."""
-    pkgs, _owner, direct, _system, _env = lean_module.imports(ROOT, graph.tracked(ROOT))
+    one way. The cache alone keys no module that targets with different settings own (`module_keys.Package.owner`), nor
+    what imports one."""
+    pkgs, owner, direct, _system, _env = lean_module.imports(ROOT, graph.tracked(ROOT))
     keyed = {}
     for d in pkgs:
         ks = lean_module.mk.keys(ROOT / d, lean_module.mk.policy_roots(ROOT / d))
         keyed |= {os.path.relpath(k.package.file(m), ROOT): sorted(os.path.relpath(ks[i].package.file(i), ROOT)
                                                                    for i in k.imports) for m, k in ks.items()}
-    assert keyed == {f: list(edges) for f, edges in direct.items()}
+    unowned = {f for f, (d, mod) in owner.items() if f in direct and pkgs[d].lake.owner(mod) is None}
+    while more := {f for f, edges in direct.items() if f not in unowned and unowned & set(edges)}:
+        unowned |= more
+    assert keyed == {f: list(edges) for f, edges in direct.items() if f not in unowned}
+    assert len(unowned) < len(direct) // 100, "few enough that the cache still restores a build"
 
 
 @pytest.mark.slow
