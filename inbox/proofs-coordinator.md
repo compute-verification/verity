@@ -49545,3 +49545,49 @@ For BREAKEVEN:
 For the table:
 - Everything measured tonight, together: Lean verify 250 core-s (measured), width plan at κ ≤ 2^-6, the cut, the head at four provers with every cut (1.357 s, relayed): 2,270 GB at modeled 0.4, world year; 81 to 87 at the measured engine rate on node A (a floor); under 300 only while the engine serves at most 660 tokens a GPU-second. The composition is unsupported (the cut was not timed at four provers) and salts `all` is Daniel's.
 - #8853 at `2e47293cc645`: second reading holds (`40ee` equals `d670` on every number they share).
+
+
+## EXTFORM, Wed 11 Nov 10:50Z: #8906's head passes its own try at its own tree (`6a1d`: lean exit 0, siblings clean, 18 theorems on the three axioms) and has not moved; records and quick tier still running, so no ready line yet. The count of classes at the code that nobody had compiles as 8 small lemmas on KILIAN's head: by class, K_s and K_m are the by-gate counts at other needs, so TWOWITNESS's `code_hKs` and `code_hKm` give them by stratum. Not pushed: say who takes it
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another worker's statement I did not check, [derived] my arithmetic, [guess] mine. Times from `date -u`.
+
+**1. #8906 at `e7b2e51d928b1b02e63531c2b849493c6abd2367`: open, unmarked, the head unmoved** [run: `gh pr view`].
+- **The head's own try passed** [run `r20261111-094823-6a1d`, rc 0, source tree `2a8eb198e4ff`, which is the head's tree; it waited 54 minutes for a slot on cpu-2]:
+  - `lean exit 0 in 136 s`, after building its dependencies, the Core file among them (`✔ Built Proofs.Core.SamplingGeneric.FirstHitClass`).
+  - siblings: "no built module of its package that doesn't import `Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass` declares a name it does (2338 imported)".
+  - axiom probe: "none of its 18 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- A second try of the same file at the head [run `r20261111-103951-07b0`, cpu-8]: `lean exit 0 in 18 s`, the same probe line. Its exit is 1 only because the siblings stub could not load a module of another area that cpu-8's build tree has not built (`Proofs/Accounting/ReadUnit/Witnesses.olean … does not exist`); nothing of this PR.
+- `_wit` at `9c0cc34d8507` [run `r20261111-094600-314e`, rc 0]: `lean exit 0 in 40 s`, siblings clean, 17 theorems on the three axioms.
+- **No verdict yet** [run: `research status`, 10:49Z]: records `r20261111-094935-d3c3` (in its check slot since 09:58Z) and quick tier `r20261111-094939-bdf4` (in its slot since 10:21Z) are running.
+- The body is current [run: `research queue edit`, three times since 10:17Z; the head did not move]: `6a1d`, `07b0`, `314e`; the second reading of both files whole (ATTACK 10:25Z); ATTACK's line (`hneeds` at both orders says gates of one key are needed by the same proof blocks, so a class has the block that writes a gate among them); the count 132 as SCALE's run `cf31` counts it, and 67 as not a bound.
+- Your 10:46Z word is read: the ready line follows when `d3c3` and `bdf4` pass, with a build of the merged tree. I do not move the head.
+
+**2. The count of classes at the code** (ATTACK 10:19Z and 10:25Z: nobody had it).
+- **What I wrote** [run]: `Proofs/Flock/SamplingGeneric/TwoFirstHitClassCount.lean`, 112 lines, 1 definition and 8 theorems, on KILIAN's `c6412ff63497` (it reads #8905's `sampleNeeds`, `sessCount` and `sessCountIn`).
+  - Try `r20261111-103839-a44b` [run]: `lean exit 0 in 18 s`; axiom probe: "none of its 8 theorems uses an axiom beyond" the three. The siblings stub failed there for the same unbuilt module of another area as in `07b0`; `rg` finds no second declaration of its nine names under `security/` or `verity/` [run].
+  - The text since differs by two `omit` lines for unused instances; its try `r20261111-104232-3aba` waits for a slot on cpu-12.
+- **What it says** [read: the file].
+  - `Compiled.clsNeeds N cls needs u` is proof block `u`'s needs with each gate replaced by its class's representative. It has as many members as there are classes among `u`'s gates (`card_clsNeeds`), never more than `|needs u|` (`card_clsNeeds_le`).
+  - `image_sampleNeeds_subset`: the classes of the gates a sample needs are among the gates it needs under `clsNeeds`.
+  - `sessCountIn_cls_le`: the representatives the sample's sessions need, session by session, are at most `sessCount` under `clsNeeds`. It asks that a representative represents itself, `cls (cls g) = cls g`, which holds of `clsOf key` (`clsOf_idem`).
+  - `ex_cls_le` and `ex_sessCountIn_cls_le`: `eventTwoX_le_cls_at_budget`'s `hKs` and `hKm` follow from the by-gate `hKs` and `hKm` taken at `clsNeeds`.
+- **What follows at `code h`, not written** [read: `SpotFlock/Counts.lean` at `5e1baad46126`, TWOWITNESS's branch]. `code_hKs` and `code_hKm` take any `needs`. At `needs := clsNeeds nG cls needs` they read
+  `K_s, K_m ≤ Σ_always w(u) + K·Σ_t k_t·M_t + Pr[refused]·Σ_{u<N} w(u)`,
+  with `w(u)` the classes among `u`'s gates and `hM : w ≤ M_t` on template `t`'s blocks. With my two lemmas that is `hKs` and `hKm` of KILIAN's by-class bound. So **the Lean's count by classes is by stratum**, the middle column of SCALE's 10:29Z table, with no new count lemma: two lines of composition in `Counts.lean` once its branch holds #8905.
+- **What it does not give** [read]: `hM` itself (that a block of template `t` has at most `M_t` classes is a fact of the registered circuits; 132 for a later head block is SCALE's run, a hypothesis in Lean) and `hwit` at the code (REGX).
+- **Where it is** [run]: a patch, `lanes/proofs/tools/extform_class_count.patch` in the lane's notes (113 lines added in two files; `git apply` on `c6412ff63497`). It is on no branch: my one branch is #8906's head, which does not move. It adds no premise and no statement a lock reads.
+  - Say who takes it: TWOWITNESS into the PR that holds `Counts.lean`, or KILIAN beside #8905. If you want it as a PR of mine, name the branch I may push; without a word I leave it as the patch.
+
+**3. Nothing else moved.** The factor table of 08:51Z and the candidates of 10:11Z stand: K is the one factor slack by proof alone, and by classes it stops at the gates needed by the same proof blocks, the writer among them [ATTACK's toy, 10:25Z, relayed: the bound is met exactly at those classes and fails with the writer dropped].
+
+For REGX, KILIAN, TWOPROVE: #8906's head `e7b2e51d928b` has not moved and builds (`6a1d` at its own tree; `83d5` and `a44b` build it under KILIAN's `c6412ff63497`).
+
+For TWOWITNESS: the two lines are `ex_cls_le L.toCompiled x needs cls (code_hKs h x (clsNeeds nG cls needs) M hM hK)` and `ex_sessCountIn_cls_le L.toCompiled x needs cls (fun g => clsOf_idem key g) (code_hKm h x (clsNeeds nG cls needs) M hM hK)`, with `L` the `compiledTwo` of `Counts.lean` and `cls = clsOf key` [derived from the two statements; not compiled together].
+
+For SCALE: your "by stratum" column is the one the Lean's count becomes by classes; "one M" is no longer the only count a lemma gives.
+
+For CAPS: #8906 is unchanged: `Proofs/Core: +1 modules, +19 declarations; Proofs/Flock: +1 modules, +21 declarations (#8906: Core/SamplingGeneric/FirstHitClass.lean, Flock/SamplingGeneric/TwoRegFirstHitClass.lean)`. The coordinator's 10:46Z word says Core's is over 6 / 144, so #8906 waits for your third number. If the count file lands in someone's PR: `Proofs/Flock: +1 modules, +9 declarations (SamplingGeneric/TwoFirstHitClassCount.lean)`.
+
+For the table:
+- #8906 (the first-hit bound by class of gates, a lemma, unmarked): its head `e7b2e51d928b` passes its own try (`6a1d`: lean exit 0, siblings clean, 18 theorems on the three axioms); records `d3c3` and quick tier `bdf4` are running; the ready line follows them.
+- By classes the count the Lean gives is by stratum once two lines are composed (my 8 lemmas compile on KILIAN's head, try `a44b`; the composition at the code is not written). Modeled; the first-hit term of #8827's lemma by classes of gates; a run at K0 = 6, T = 2^80 calls in every run; at a registration with no always-checked block; the model's verifier accepts no run at these sizes: the record reads 2^-101.57 in compressions by stratum at 132 classes a later head block, against 2^-100.83 with one M [relayed: SCALE 10:29Z]. It still rests on `hwit` at the code (REGX) and on the class count of each template as a hypothesis.
