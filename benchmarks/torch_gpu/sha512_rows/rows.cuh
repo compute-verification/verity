@@ -6,7 +6,7 @@
 // C::compress(st, w) has sx::compress's contract, C::compress_kw(st, kw) sx::compress_kw's. SXR_COUNT_CHACHA(), if defined,
 // runs once a ChaCha20 block (the host twin's count).
 #pragma once
-#include "../../../verity/ml/kernels/row_commit.cuh"
+#include "../../../verity/definitions/kernels/row_commit.cuh"
 
 #ifndef SXR_COUNT_CHACHA
 #define SXR_COUNT_CHACHA()
@@ -145,7 +145,7 @@ SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
 
 // --- hm96-sha512 under hiding leaves, then the frame-v3-sha512 leaf ------------------------------------------------------
 
-// ChaCha20 (20 rounds, 64-bit counter in words 12-13, 64-bit nonce in 14-15: verity.ml.crypto.chacha20)
+// ChaCha20 (20 rounds, 64-bit counter in words 12-13, 64-bit nonce in 14-15: verity.commitments.crypto.chacha20)
 #define SXR_QR(a, b, c, d)                                                                                                 \
   x[a] += x[b]; x[d] ^= x[a]; x[d] = (x[d] << 16) | (x[d] >> 16);                                                          \
   x[c] += x[d]; x[b] ^= x[c]; x[b] = (x[b] << 12) | (x[b] >> 20);                                                          \

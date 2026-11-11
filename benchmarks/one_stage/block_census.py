@@ -29,8 +29,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from m1_families import K_MAX
-from verity.core.protocols.spot.optimize import row_ands, unit_class
-from verity.ml.definitions.call_scope import spec_base, spec_statics
+from verity.protocols.spot.optimize import row_ands, unit_class
+from verity.definitions.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
