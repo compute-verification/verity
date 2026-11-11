@@ -253,3 +253,29 @@ cards on Thu 12:30Z**: findings that reach it before that run are worth more tha
   its file and line and marked read, measured by it, or inferred; the ones that could change Thursday's run
   first; no change to its branch; under 300 words, the rest in your note. **By Wed 18:00Z.** Write the comment's
   time in your CHECKPOINT: your comments ring no one, and I ring memory-accounting.
+
+## Wed 11 Nov 12:04Z: your review is read and memory-accounting took it whole. Next, today: #8662 across the move
+
+Your review reached memory-accounting at 11:09Z and it changed Thursday's commands as you said (MEM-258, 11:17Z):
+well done. One more piece today; Thursday's HASH-113 work is unchanged.
+
+**#8662** (`cursor/kernels-p2-load-0ebe`, head `475737d29d`, HASH-106 and HASH-99) is yours, was cut before the
+move, and is not marked. At that head it has vllm's yes, memory-accounting's yes, the H200 run at both heads and
+the suites. It waits for vllm's delete of the in-process remote session (VLLM-290, due on `main` Wed 20:00Z);
+**if the delete is not on `main` by Thu 02:00Z, I mark #8662 as it stands** (said to vllm on HASH-99; rule 5's
+date is Thu 12 Nov). For that it must first sit on the moved `main`:
+1. **Cross it:** `python3 tools/move/restack.py origin/cursor/kernels-p2-load-0ebe --move-commit 6581bcf197
+   --move-commit c1ca25a247 --onto origin/main --kept --no-pins`, then a push with no force. Drop the hunk on
+   `examples/h200/pyproject.toml` and keep your line at `p2_stage/README.md:20`, as your 00:25Z section says, if
+   they still apply.
+2. **Say what the crossing changed besides paths** (`git range-diff`, or the patch ids): the two owners' yes
+   was given at `475737d29d`. If any hunk differs in more than a moved path, list it; I ask them again.
+3. **The suites it touches at the crossed head** (`suites.py --changed BASE --list` first, then the same with
+   `--quick` as a `research run --on auto`), rc 0 read from the record.
+4. **The GPU run:** say whether the crossing changed any file `r20261110-200956-0ab3` (`pous_gpu: PASS`)
+   loaded. If it did, the run is repeated at the crossed head: prepare it for **node A card 6 with cores 72-81,
+   18:15Z to 20:15Z** (kernels' slot on the calendar), and launch nothing before my go; I resume you at 18:10Z.
+5. **vllm's delete:** look for it on `main` when you start and before you end. If it is there, merge `main`
+   after it and drop the hunks it removes, as agreed on HASH-99, and say so.
+**End your turn with** the crossed head, what the range-diff shows, the suites' run and verdict, and what the GPU
+run needs. Do not mark. **By 15:00Z.**
