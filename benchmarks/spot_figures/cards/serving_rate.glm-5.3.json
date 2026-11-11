@@ -1,0 +1,18 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "serving_rate",
+ "model": "GLM-5.3",
+ "status": "measured",
+ "provisional": true,
+ "source": "a lower bound, not the engine's rate: vLLM at TP8 on 8 H200s with a 131,072-token context limit, sent the 128k plan's first 651 requests at the plan's own 0.4 a second (the run's `record` arm); it kept up and served every one, so nothing shows what a higher rate would compute. Computed tokens are the engine's own count, prompt tokens less those its prefix cache served plus output tokens (2,174,492), over the pass's wall seconds on 8 GPUs (1,494.9 s); benchmarks/serve_tax's schedule record",
+ "runs": [
+  "r20261109-185220-0dea"
+ ],
+ "owner": "@vllm",
+ "value": {
+  "tokens_per_gpu_second": 181.83,
+  "plan": "art:41baec9bfb2c9631eaa999d66fd74fffbfe319f31de3b6f57054ce3f27afb0fb",
+  "saturated": false,
+  "bound": "unknown"
+ }
+}
