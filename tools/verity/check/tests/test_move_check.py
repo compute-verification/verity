@@ -252,6 +252,29 @@ def test_a_list_of_paths_that_holds_more_or_less_than_its_old_entries_held_is_re
     assert [f["path"] for f in r["refusals"]] == ["job.sh"] and r["rules"]["cover"] == ["gates.toml"]
 
 
+def test_a_covered_lists_comment_and_its_entry_that_is_no_path_change_as_a_line_may(tmp_path):
+    """A list the range covers also holds a comment that names a moved file and an entry the tree does not have, below a
+    directory that moved whole. Both follow the move as they would on any line, and the list is a cover. Refused: a
+    comment whose other word changed, and the made-up entry sent anywhere else."""
+    core = '    # read beside {c}, {why}\n    "verity/config/",\n    "verity/protocols/proto/",\n    "{made}",\n'
+    for case, c, why, made in (("follows", "verity/commit/c.py", "the verifiers", "verity/commit/made.json"),
+                               ("word", "verity/commit/c.py", "the checkers", "verity/commit/made.json"),
+                               ("elsewhere", "verity/commit/c.py", "the verifiers", "verity/config/made.json")):
+        gates = 'core = [\n    # read beside lib/commit/c.py, the verifiers\n    "lib/core/",\n    "lib/commit/made.json",\n]\n'
+        repo, base = _repo(tmp_path / case, {**COVERED, "gates.toml": gates, "job.sh": "#!/bin/sh\n"})
+        for old, new in (("lib/core/wire", "verity/config/wire"), ("lib/core/proto", "verity/protocols/proto"),
+                         ("lib/core/claims.py", "verity/config/claims.py"), ("lib/commit", "verity/commit")):
+            _move(repo, old, new)
+        _git(repo, "rm", "-q", "lib/core/__init__.py")
+        _write(repo, {"verity/__init__.py": "", "verity/config/__init__.py": "",
+                      "gates.toml": f"core = [\n{core.format(c=c, why=why, made=made)}]\n"})
+        r = _check(repo, base)
+        if case == "follows":
+            assert r["certified"] and r["rules"] == {"cover": ["gates.toml"]}, r["refusals"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
+
+
 def _levels(tmp_path: Path, low_risk: str, marks: str) -> dict:
     """`_covered`'s range, which also moves `other/notes.md` into `docs/` and makes `verity/commit/` a package, on a
     `gates.toml` whose `low_risk` names `docs/` and `lib/core/` and whose `marks` names `lib/core/`'s own `__init__.py`

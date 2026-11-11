@@ -722,11 +722,11 @@ def list_addition(old: str, new: str, entry) -> bool:
     return stripped == old
 
 
-def between(text: str, span: tuple[int, int], entries: list[tuple[int, int]]) -> str:
-    """A list's text (`span`) without its entries, the quotes around them, commas and white space: its brackets, its
-    comments and a command's other words."""
+def between(text: str, span: tuple[int, int], entries: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Where each word of a list's text (`span`) outside `entries` is: its brackets, its comments' words, a command's
+    other words and the entries that are no path, without the quotes, commas and white space around them."""
     cuts = [span[0], *(i for s, t in entries for i in (s, t)), span[1]]
-    return re.sub(r"[\s,\"']+", "", "".join(text[i:j] for i, j in zip(cuts[::2], cuts[1::2])))
+    return [(i + m.start(), i + m.end()) for i, j in zip(cuts[::2], cuts[1::2]) for m in re.finditer(r"[^\s,\"']+", text[i:j])]
 
 
 def lean_import_rewrite(old: str, new: str, lmods: dict[str, str], extra: dict[str, str]) -> bool:
@@ -1696,11 +1696,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         entry as its row of the maps sends it (`Rows`: `[tokens]`, or this file's `[split]` row). A part: of HEAD's files
         that the range did not add it holds only ones the old list's paths held at BASE, one of them a file of an old
         entry that the new list no longer has, whose prefix and suffix (`HEAD:`, `/`, `/**`) it bears; an entry the list
-        has as its row sends it, and every other file of it too, is one it no longer has, and the row's part is a part. A level: the
-        `__init__.py` of a package directory above an entry the old list did not have, itself in a package, where the old
-        list named a package's `__init__.py` that the range deleted with its package. And the new list still holds every
-        file of each old entry it no longer has, one at least or a level. Entries that are no path, and the list's text
-        between its entries, stay as they were."""
+        has as its row sends it, and every other file of it too, is one it no longer has, and the row's part is a part.
+        A level: the `__init__.py` of a package directory above an entry the old list did not have, itself in a package,
+        where the old list named a package's `__init__.py` that the range deleted with its package. And the new list
+        still holds every file of each old entry it no longer has, one at least or a level. The list's other words (its
+        comments', a command's, the entries that are no path) stay `a`'s, one for one, so a change to one is judged as
+        any line's is; a list with more or fewer of them is no cover."""
         lists, entry = _rename().L.lists, _rename().L.ENTRY
         took: set[str] = set()
 
@@ -1708,11 +1709,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             return m["pre"], p, m["post"] or ""
         la, lb = lists(old, a), lists(new, b)
         for (_, (a0, a1), ea), (_, (b0, b1), eb) in reversed(list(zip(la, lb))) if len(la) == len(lb) else ():
-            xs = [m if (m := entry.fullmatch(a, s, t)) and (m["p"] in B.set or B.has_dir(m["p"])) else a[s:t] for s, t in ea]
-            ys = [m if (m := entry.fullmatch(b, s, t)) and (m["p"] in H.set or H.has_dir(m["p"])) else b[s:t] for s, t in eb]
-            px, py = [x for x in xs if not isinstance(x, str)], [y for y in ys if not isinstance(y, str)]
-            if ([x for x in xs if isinstance(x, str)] != [y for y in ys if isinstance(y, str)]
-                    or between(a, (a0, a1), ea) != between(b, (b0, b1), eb)):
+            px = [m for s, t in ea if (m := entry.fullmatch(a, s, t)) and (m["p"] in B.set or B.has_dir(m["p"]))]
+            py = [m for s, t in eb if (m := entry.fullmatch(b, s, t)) and (m["p"] in H.set or H.has_dir(m["p"]))]
+            wa, wb = between(a, (a0, a1), [m.span() for m in px]), between(b, (b0, b1), [m.span() for m in py])
+            if len(wa) != len(wb):
                 continue
             if all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
                 continue
@@ -1742,7 +1742,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             kinds = ["whole" if (f := form(y, y["p"])) in whole else "level" if level(y) else "part" if part(y) else by.get(f)
                      for y in py]
             if None not in kinds and (any(gone) or "level" in kinds) and all(fs <= has for fs, g in zip(files, gone) if g):
-                a = a[:a0] + b[b0:b1] + a[a1:]
+                as_b = b[b0:b1]
+                for (s, t), (u, v) in zip(reversed(wb), reversed(wa)):
+                    as_b = as_b[:s - b0] + a[u:v] + as_b[t - b0:]
+                a = a[:a0] + as_b + a[a1:]
                 took |= {"cover", *kinds} - {"whole", "part", "level"}
         return a, took
 
