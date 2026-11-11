@@ -27,7 +27,8 @@
 #             (--whole-store)
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check
-#             of the kernels against the verifier; out/session/
+#             of the kernels against the verifier; out/session/. It registers as SESSION_NODE (default: this
+#             machine's name, the card's index and its model)
 #   inplace   inplace_gate.py --no-timing at 64 and at 16 rows: the in-place pass against the reference
 #
 #   research run --on NODE --project verity --source TREE --cwd clone --send main-session.cu -- \
@@ -54,7 +55,7 @@ session() {  # under the lease: PLAN's sessions, the verifier's process beside t
     --jitter-ms "$JITTER_MS" --sessions "$sessions" --lean-exe "$LEAN_EXE" > "$O/session/verifier.log" 2>&1 & v=$!
   pinned "${PROVER_CORES:-}" "$PY" $RS/prover.py --connect "127.0.0.1:$port" --out "$O/session" --plan "$PLAN" \
     --rows "$SESSION_ROWS" --lib "$B/session.so" --kv "$B/kv.so" --gib "$SESSION_GIB" --gpus 1 \
-    --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" > "$O/session/prover.log" 2>&1
+    --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" --node "$SESSION_NODE" > "$O/session/prover.log" 2>&1
   p=$?
   [ $p = 0 ] || kill $v 2> /dev/null
   wait $v; w=$?
@@ -67,6 +68,11 @@ STEPS=${STEPS-rows session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
 LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 export CAL=${CAL:-400} SKETCH_CTAS=${SKETCH_CTAS:-128} PLAN=${PLAN:-honest,skip:0.0625}
 export SESSION_ROWS=${SESSION_ROWS:-64} SESSION_GIB=${SESSION_GIB:-16}
+# The node a session registers: this machine, its first card and the card's model (prover.py's default names another
+# machine), in the 64 bytes the verifier takes.
+SESSION_NODE=${SESSION_NODE:-$(echo "$(hostname)/${CARDS%%,*}/$(nvidia-smi --query-gpu=name --format=csv,noheader \
+  -i "${CARDS%%,*}" 2> /dev/null | tr 'A-Z ' 'a-z-')" | cut -c1-64)}
+export SESSION_NODE
 export WINDOWS=${WINDOWS:-7} WINDOW_MS=${WINDOW_MS:-1000} SAMPLES=${SAMPLES:-2773} JITTER_MS=${JITTER_MS:-10}
 N=$(($(tr -cd , <<< "$CARDS" | wc -c) + 1))
 if [ -n "${TOOLKIT:-}" ]; then
