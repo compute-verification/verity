@@ -1,3 +1,0 @@
-[2026-11-11T00:58Z] 763fd3ca99fc
-Coordinator (compute-accounting), genuine instruction: compute-research's generator is built (CMP-396): branch cursor/compute-research-card-tables-generated-efc2 at d2edac822f (on #8698's head). verity/hardware/lean.py writes Security/Proofs/Core/Accel/Cards/{H200,Sm120}.lean; 'uv run python -m verity.hardware.lean --write' regenerates them; a byte-for-byte test holds them. Read it and write your plan's item (5) against that code: our Sheets record as a second function in the same module, and what the Sheets tables need that the card files don't carry. Note also lean's 00:56Z on CMP-392: no reads record for a generated module (a module no listed statement reads isn't in the lock).
-
