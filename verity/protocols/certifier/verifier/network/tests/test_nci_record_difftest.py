@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 666 cases (600 random circuits,
-two in five broken in one way, and 66 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 670 cases (600 random circuits,
+two in five broken in one way, and 70 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `Record` and `RecordCount` give Python's results on every case, and unless SPOT's reader reads the
@@ -24,7 +24,9 @@ and input bits apart by exactly the rows no gate reads. The tenth holds the refe
 slot, and `input_count`'s totals. The eleventh is that a row is declared once: the served shape's record with one
 declaration more into a row it already declares is refused, whatever the two declarations are, and the second alone
 is taken. The twelfth is that an output has a bit: a template that returns no field, or a field of no bit, is refused
-with its templates, and the interface lays out no unit of it.
+with its templates, and the interface lays out no unit of it. The thirteenth is that a root node of a composite is no
+input, whatever its key reads as: a template keyed as an input id is refused with its templates, its record alone and
+a unit of it at the root that the record does not list.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -43,6 +45,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+from verity.circuits.program import input_id, is_input
 
 LEAN = Path(__file__).resolve().parents[4] / "inference_only" / "verifier" / "nci" / "lean"
 
@@ -76,6 +80,9 @@ TEXT = {LISTED: "wires", BARE: "templates"}
 TWICE = {f"2x3 {what}": stage for what, (stage, *_) in vectors.TWICE.items()}
 #: the cases on a template with an output that has no bit, each with the stage that refuses it
 BITLESS = {f"2x3 {what}": "templates" for what in vectors.BITLESS}
+#: the cases on a template keyed as an input id, its record alone and a unit of it the record does not list, each
+#: with the stage that refuses it
+KEYED = {f"2x3 {what}, {how}": "templates" for what in vectors.KEYED for how in ("alone", "unlisted")}
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +97,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 666 cases and the reference's results, byte for byte as the record pins them."""
+    """All 670 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -133,7 +140,7 @@ def test_the_served_shape(shaped):
     block's fresh bits then its scan state's alone; refused by the rate rule, and by the count on its fresh bits,
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
-    got = {what: vectors.results(m["case"]) for what, m in shaped.items() if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS}
+    got = {what: vectors.results(m["case"]) for what, m in shaped.items() if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -196,7 +203,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-        what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS).items() if isinstance(v, str)}
+        what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED).items() if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
         detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
@@ -640,6 +647,37 @@ def test_an_output_has_a_bit(shaped):
         assert [sum(t.leaf_widths()) for t in fields] == [*(16 for _ in outs[:-1]), 0], what
         with pytest.raises(ValueError, match=f"o{len(fields) - 1}: its leaves are .* 0 in all"):
             IF.layout(fn)
+
+
+def test_a_root_node_of_a_composite_is_no_input(shaped):
+    """An input node is a root node of an input primitive. A composite's gates are computed whatever its key reads
+    as, so a root node of a composite keyed as an input id is no input, and a record that left it out would count
+    none of its gates. Such a Program is refused with its templates: the record of that one template, which lists
+    it, and the accepted record beside a Program whose root has a unit of it more, which the record does not list.
+    The key alone decides the first: the same template under a key that is no input id is read past its
+    templates. Unlisted it is refused under either key."""
+    held = shaped["2x3 registered"]
+    gate = [[("op", 16, [(0, 0)])]]
+    for what, name in vectors.KEYED.items():
+        fn = vectors.template(name, [("p", vectors.Value(16))], [vectors.Value(16)], gate)
+        tid = codec.descriptor_id(fn)
+        assert input_id(tid) is not None and not is_input(fn), what
+        for how in ("alone", "unlisted"):
+            m = shaped[f"2x3 {what}, {how}"]
+            r = vectors.results(m["case"])
+            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == {"error": "templates"}, what
+            program = json.loads(m["case"]["instance"]["program"])
+            assert program["definitions"][tid]["form"] == "composite", what
+            root = program["definitions"][program["root"]]["body"]["nodes"]
+            assert [n["form"] for n in root if program["callees"][n["fn"]] == tid] == ["batch"], what
+            listed = [t for t, _ in json.loads(m["case"]["instance"]["record"])["templates"]]
+            assert (tid in listed) == (how == "alone"), what
+    plain = vectors.template("Plain7", [("p", vectors.Value(16))], [vectors.Value(16)], gate)
+    assert input_id(codec.descriptor_id(plain)) is None
+    for edit, stage in ((vectors._alone, "wires"), (vectors._unlisted, "templates")):
+        case = copy.deepcopy(held["case"])
+        edit(case, held["circuit"], plain)
+        assert ref.check_detail(case["instance"], case["trusted"]) == {"error": stage}
 
 
 def _interface(made: dict):
