@@ -56,7 +56,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 #: the secret-bit stub's lead before its slot's boundary, sampled per bucket from [0, LEAD_MS) ms: the stub's write
 #: reaches the proxy through the shim's process, a hop whose latency the stub doesn't know, so the leads span it
@@ -467,12 +467,13 @@ def main(argv=None) -> int:
     cpu_list = ",".join(map(str, cpus))
     paced = [] if a.paced_ms is None else ["--paced-ms", str(a.paced_ms)]
     if a.warden:
-        command = [sys.executable, str(HERE / "warden_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
+        command = [sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "rehearse",
+                   "--upstream", f"127.0.0.1:{port}",
                    "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
                    str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
                    "--out", str(a.out / "rehearsal"), *paced]
     else:
-        command = [sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
+        command = [sys.executable, str(ROOT / "benchmarks/network_traces/certifier_serve.py"), "rehearse",
                    "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
                    "--in-flight", str(a.in_flight), "--tokens", str(a.tokens),
                    "--delta-buckets", str(a.delta_buckets), "--profile", a.profile,
