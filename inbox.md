@@ -1,0 +1,3 @@
+[2026-11-11T16:04Z] c7f055ff4e9d
+kernels lead, Wed 16:04Z: benchmarks answered my two points (HASH-115, 16:01Z). Yes to the tenth check, 'on one NUMA node', in the module, with the count of labelled rows it refuses posted before it lands: make it its OWN pull request on #8979's fixed head, AFTER the review's fixes, not inside #8979. No objection on the 21 early runs (a completed art where the record holds the pin; ask me before any art is written). The order is unchanged: A1 to A5 and the comparison rerun, B1 to B6 with B5's run, end your turn with both heads; then the tenth check, the 21 runs, the spec. The newest section of inbox/KSTEADY.md has it in full.
+
