@@ -47,6 +47,8 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
   coins and says which nodes its sample holds, and a run opens only nodes of its sample. The finder makes a further
   run only when its sample holds a node still waited for (`loopCostOn`), and `w` is then a bound on the size of one
   run's sample, over all coins (`ex_costOn_le`): for each node, the wait's runs are the tapes whose sample holds it.
+  With no bound on the sample, the count is an expectation, `E[(1 + |sample|)·c]` (`ex_costOn_le_ex`,
+  `pr_off_sample_le_ex`).
 
 `finder`, `tapeFinder` and `sampleFinder` take their output `out` as a function of the whole seed and charge the runs
 the loop makes. The statements under `ExpectedCR` say what they read when `out` reads only those runs, as `outOf`
@@ -1119,5 +1121,111 @@ theorem pr_off_sample_le_of_forall_coll {T : Type} [Fintype T] [Nonempty T] [Fin
     Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
       2 * ((1 + (w : ℝ)) * Ex (fun q : T × Ω => (c q.1 q.2 : ℝ))) / 2 ^ (256 : ℝ) :=
   le_of_forall_cap fun K => pr_off_sample_le_of_coll H op hv chk hchk hw c K coll hc hs (hCR K)
+
+/-! ## The sample's size as an expectation
+
+No bound on a sample's size is assumed: coins whose sample is large, such as coins at which the sample is every node,
+count by their probability and their run's calls. -/
+
+/-- **Cost, by the sample, as an expectation**: the finder's expected calls are at most the expectation of a run's
+calls times one more than the size of its coins' sample. -/
+theorem ex_costOn_le_ex [Fintype Ω] [Nonempty Ω] [Fintype P] (op : Ω → P → Option V) (chk : Ω → P → Bool) (c : Ω → ℕ)
+    (K : ℕ) :
+    Ex (fun s : Ω × (Fin K → Ω) =>
+        ((c s.1 + loopCostOn op chk c K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) ≤
+      Ex (fun ω : Ω => (((1 + #(univ.filter fun p : P => chk ω p)) * c ω : ℕ) : ℝ)) := by
+  have hM : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast Fintype.card_pos
+  have hMK : (0 : ℝ) < (Fintype.card Ω : ℝ) ^ K := pow_pos hM K
+  have hcard : (Fintype.card (Ω × (Fin K → Ω)) : ℝ) = (Fintype.card Ω : ℝ) * (Fintype.card Ω : ℝ) ^ K := by
+    rw [Fintype.card_prod, Fintype.card_pi_const, Nat.cast_mul, Nat.cast_pow]
+  have hN : ∑ s : Ω × (Fin K → Ω), (c s.1 + loopCostOn op chk c K (univ.filter fun p => (op s.1 p).isSome) s.2) ≤
+      Fintype.card Ω ^ K * ∑ ω, (1 + #(univ.filter fun p : P => chk ω p)) * c ω :=
+    calc ∑ s : Ω × (Fin K → Ω), (c s.1 + loopCostOn op chk c K (univ.filter fun p => (op s.1 p).isSome) s.2)
+        = ∑ ω : Ω, ∑ ρ : Fin K → Ω, (c ω + loopCostOn op chk c K (univ.filter fun p => (op ω p).isSome) ρ) :=
+          Fintype.sum_prod_type' fun (ω : Ω) (ρ : Fin K → Ω) =>
+            c ω + loopCostOn op chk c K (univ.filter fun p => (op ω p).isSome) ρ
+      _ ≤ Fintype.card Ω ^ K * (∑ ω, c ω + ∑ ω, #(univ.filter fun p : P => chk ω p) * c ω) :=
+          sum_costOn_le op chk c K
+      _ = Fintype.card Ω ^ K * ∑ ω, (1 + #(univ.filter fun p : P => chk ω p)) * c ω := by
+          rw [← Finset.sum_add_distrib]
+          exact congrArg (fun z => Fintype.card Ω ^ K * z) (Finset.sum_congr rfl fun ω _ => by ring)
+  have hR : (∑ s : Ω × (Fin K → Ω),
+        ((c s.1 + loopCostOn op chk c K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) ≤
+      (Fintype.card Ω : ℝ) ^ K * ∑ ω, (((1 + #(univ.filter fun p : P => chk ω p)) * c ω : ℕ) : ℝ) := by
+    exact_mod_cast hN
+  unfold Ex
+  rw [hcard]
+  calc (∑ s : Ω × (Fin K → Ω),
+          ((c s.1 + loopCostOn op chk c K (univ.filter fun p => (op s.1 p).isSome) s.2 : ℕ) : ℝ)) /
+        ((Fintype.card Ω : ℝ) * (Fintype.card Ω : ℝ) ^ K)
+      ≤ ((Fintype.card Ω : ℝ) ^ K * ∑ ω, (((1 + #(univ.filter fun p : P => chk ω p)) * c ω : ℕ) : ℝ)) /
+          ((Fintype.card Ω : ℝ) * (Fintype.card Ω : ℝ) ^ K) :=
+        div_le_div_of_nonneg_right hR (mul_pos hM hMK).le
+    _ = (∑ ω, (((1 + #(univ.filter fun p : P => chk ω p)) * c ω : ℕ) : ℝ)) / (Fintype.card Ω : ℝ) := by
+        rw [mul_comm ((Fintype.card Ω : ℝ) ^ K), mul_div_mul_right _ _ hMK.ne']
+
+/-- **Cost, by the sample, as an expectation, over the tape.** -/
+theorem ex_costOn_tape_le_ex {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] [Fintype P] (op : T → Ω → P → Option V)
+    (chk : Ω → P → Bool) (c : T → Ω → ℕ) (K : ℕ) :
+    Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 +
+          loopCostOn (op q.1) chk (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ)) ≤
+      Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) :=
+  calc Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 +
+          loopCostOn (op q.1) chk (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ))
+      = Ex fun t => Ex fun s : Ω × (Fin K → Ω) =>
+          ((c t s.1 + loopCostOn (op t) chk (c t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ) :=
+        ex_tape fun t (s : Ω × (Fin K → Ω)) =>
+          ((c t s.1 + loopCostOn (op t) chk (c t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ)
+    _ ≤ Ex fun t => Ex fun ω : Ω => (((1 + #(univ.filter fun p : P => chk ω p)) * c t ω : ℕ) : ℝ) :=
+        Ex_mono fun t => ex_costOn_le_ex (op t) chk (c t) K
+    _ = Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) :=
+        (ex_tape fun t ω => (((1 + #(univ.filter fun p : P => chk ω p)) * c t ω : ℕ) : ℝ)).symm
+
+/-- The off-plurality mass at the sample's expected size, under `ExpectedCR` at one finder, with the cap's term. -/
+theorem pr_off_sample_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : Ω → P → Bool) (c : T → Ω → ℕ) (K : ℕ)
+    (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg))
+    (hout : ∀ q : T × (Ω × (Fin K → Ω)),
+      Found (op q.1) K q.2.1 q.2.2 → ∃ u v, out q = some (u, v) ∧ Collision H u v)
+    (hCR : ExpectedCR H (sampleFinder op chk c K out)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) +
+        (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+  have h1 := pr_off_tape_le op hv K
+  have h2 : Pr (fun q : T × (Ω × (Fin K → Ω)) => Found (op q.1) K q.2.1 q.2.2) ≤
+      Pr (fun q : T × (Ω × (Fin K → Ω)) => ∃ u v, out q = some (u, v) ∧ Collision H u v) := Pr_mono hout
+  have h3 : Pr (fun q : T × (Ω × (Fin K → Ω)) => ∃ u v, out q = some (u, v) ∧ Collision H u v) ≤
+      Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 +
+          loopCostOn (op q.1) chk (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) := hCR
+  have h4 := div_le_div_of_nonneg_right (ex_costOn_tape_le_ex op chk c K)
+    (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
+  have h5 := pr_miss_tape_le op K
+  rw [mul_div_assoc]
+  linarith
+
+/-- **The off-plurality mass at the sample's expected size, under `ExpectedCR` at the finder of every cap**:
+`2·E[(1 + |sample|)·c]/2^256`, the expectation over the tape and a run's coins of the run's calls times one more than
+the size of its coins' sample. The finder's output is `outOf`; a run opens only nodes of its sample (`hchk`, which
+the proof doesn't read and which makes the cost the calls of every run the output reads, `le_loopCostOn`). -/
+theorem pr_off_sample_le_ex {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : Ω → P → Bool)
+    (_hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk ω p = true) (c : T → Ω → ℕ)
+    (coll : T → Ω → Ω → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω').isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (u v : Msg), coll t ω ω' = some (u, v) → Collision H u v)
+    (hCR : ∀ K : ℕ, ExpectedCR H
+      (sampleFinder op chk c K fun q : T × (Ω × (Fin K → Ω)) => outOf (op q.1) (coll q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) /
+        2 ^ (256 : ℝ) :=
+  le_of_forall_cap fun K => pr_off_sample_le_ex_cap H op hv chk c K _
+    (fun q h => outOf_collision H (op q.1) (coll q.1) (hc q.1) (hs q.1) h) (hCR K)
 
 end Verity.FirstHit
