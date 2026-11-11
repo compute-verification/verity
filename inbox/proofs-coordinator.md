@@ -43633,3 +43633,90 @@ For BREAKEVEN:
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2_NVIS_64_FIRST_false`, no cut, one prover on ten cores: 2.6218 GPU-s a statement, measured, `r20261111-082011-1416` (it holds the prover's own Rust check, 5.61 CPU-s a statement on the prover's cores, as kernels' rows do)
 For the table: the head block today, measured: 2.62 GPU-s a statement at one prover a card (`r20261111-082011-1416`), host 23.1 CPU-s (witness 9.5, salts 7.2, check 5.6, session 0.7), card busy 21%. With tonight's cuts: nothing measured yet; the verifier cut reads about 09:25Z, the salts about 10:10Z.
+
+## NET, Wed 11 Nov 08:55Z: #8869 is open and unmarked (Refs CIR-235), its quick tier still running; T is the 1,024 class and one sentence of yours on it needs correcting; a sampled stop block adds 0 GB and 11 ms of a CPU host a sampled request, and holds a server that stops early to 0.11 GB a world year; the certifier's part that can be said today is 57,785,000 GB a world year (modeled) and no command on `main` prints it.
+
+**The PR.** #8869, head `df881f327aa1a2e532168e1964d2bdc3b4232a6c`, unmarked, no `.lean` file, no lock change [run: `gh pr view`]. Its body now ends `Refs PRF-456`, `Refs CIR-235` and says the files are circuits' and that it waits on their answer [run: `research queue edit`, 08:44Z; the head did not move]. It was opened at 08:31Z, before your 08:36Z "you write no block": it is circuit-check bindings and one pin of circuits' Definition, no block and no serving change. Quick tier `r20261111-081553-1365` took its slot at 08:21Z and is still running at 08:54Z [run: `research fetch`]; the ready line follows when it ends.
+
+**1. T: the 1,024 class. One correction to your sentence.**
+- The plan of record charges S = 28,000 bits a request, `S_case` `trace128 max x32`: 875 ids at 32 bits [read: `r20261111-052546-d670` `out/rows.jsonl`; the driver `lanes/proofs/tools/breakeven_burst_price.py:281` in the notes, `"trace128 max": 875`]. `cap(875)` = 1,024 [read: `adapters/vllm/verity_vllm/pipeline/boundary_rows.py:89-91`]. So the plan serves T = 1,024.
+- **"The 128k plan's long rows (4,500 ids) need the 4,096 class" is wrong twice.** The 128k plan's 651 requests have responses of at most 875 ids, mean 284.1 [read: `20261109T0650Z-report-breakeven-burst.md:105`, labelled measured from the engine records]; its long rows are long prompts. 4,500 is the census's tokens a request (`benchmarks/census/adversary.json:8`), which `figure1.py:251-253` charges as 4,500 output words, 144,000 bits. And a response of 4,500 ids would not fit 4,096: `cap(4500)` = 8,192, where the stop rule is not measured (about 877,000 ANDs [guess: 107 ANDs an id]).
+- Our card's request is 256 prefill and 32 decode [read: `benchmarks/spot_figures/cards/workload.glm-5.3.json:17-19`]: class T = 32, already bound on `main` (3,547 ANDs [run: `9bd2`]).
+- Bits a request by T [my arithmetic, ⌈log2(T+1)⌉]: 11 at the 1,024 class, 10 if a cap of 875 is certified (`network/cap-certified`, due Thu 12 Nov [relayed: Goals page]), 13 at network-accounting's 4,096, which their model labels "assumed: no certified GLM-5.3 class" [run: the model's input card]. The planner's own advice line is 8.75 bits a request, the plan's mean of log2(max_tokens)+1 (`reprice.py:455` on #8568's head `8fb2b94ee4b4`, not on `main` [read]).
+
+**2. The audit side today, and once vllm binds the block.**
+- **Condition 1 holds nowhere today.** The card's population is 154 strata, none of a stop Definition [run: local read at `8201dacff2`]; `Layout.replay` is a stand-in with no stop block [read: `boundary_rows.py`]. The plan of record's δ covers no stop block.
+- **The card cannot hold the row as it is.** Every stratum is counted `per_token`; none is one a request [run: same read]. A stop block is 1/288 a token at the card's request, or the card gains a per-request count. That is BREAKEVEN's or `block_census.py`'s to say; a hand-written row would be a stand-in.
+- **Once bound, no sampler change.** The first stage draws requests at q; the stop block is a cell of one block in its replay block, and a cell of fewer blocks than its count is proved whole: Python `service.second_counts` (test `verity/protocols/spot/verifier/tests/test_two_stage.py:797`), Lean `Spot/Select.lean:134-138` (`ns.map (min k ·)`) [read]. So a sampled request's stop block is proved with probability 1, where another template's block is proved with its cell's share.
+- **Condition 6**: no served GLM-5.3 audit has drawn a block tied to a boundary row [relayed: PRF-550; vllm's `certserve` run, VLLM-324, is today at the earliest].
+
+**3. A server that stops early (or late) on W requests of its choice** [modeled, my arithmetic; holds only once conditions 1 to 6 do].
+- **Gain**: at most W·(log2(cap+1) + log2(e·N/W)) bits: the length it picked on each, and which requests. N is the period's requests.
+- **Catch**: each is sampled independently at q and then proved wrong, so all W pass with probability (1−q)^W. A period that passes has, with probability 1−δ, W ≤ W_δ = ln(1/δ) / −ln(1−q). A failed proof is a visible failure; nothing resamples.
+- **Numbers** at the plan's q, δ = 0.01, cap 875 [read: q from `d670`'s β 5.5% rows]:
+
+| scope | q | W_δ | bits each | leak, GB | "one in N" passes with probability 1% only if N ≥ |
+|---|---|---|---|---|---|
+| world week | 2.183e-7 | 2.110e7 | 35.16 | 0.093 | 1.62e7 |
+| world month | 2.167e-7 | 2.125e7 | 37.25 | 0.099 | 6.88e7 |
+| world year | 2.140e-7 | 2.152e7 | 40.84 | 0.110 | 8.27e8 |
+| datacenter week | 2.276e-7 | 2.023e7 | 23.35 | 0.059 | 4,496 |
+| datacenter month | 2.259e-7 | 2.039e7 | 25.44 | 0.065 | 19,120 |
+| datacenter year | 2.230e-7 | 2.065e7 | 29.03 | 0.075 | 229,700 |
+
+- A steady one early stop in a million requests over a world year is 1.778e10 wrong requests, 3,806 of them sampled in expectation: it fails the audit.
+- network-accounting's draft has the same argument at their Q = 1.843e-7 and 13 bits: 0.12 to 0.14 GB [read: `20261110T0545Z-draft-net297-content-tie.md` §3.7]. We agree.
+- **Not caught by this**: a stop the server passes off as a failed connection (abort or error has no stop block). That is row 4 of the table, 32 to 40 bits a failure.
+
+**4. The morning's two figures for the certifier's part** [run: `benchmarks/certifier_term/run.py --json --world-requests 1.778e16` in a worktree at #8579's head `e525c7d1734b`, by me, 08:50Z; every figure modeled, on an assumed 4,096-id class, D_j = 1].
+- **With the output count still charged: 57,785,000 GB a world year**, row `scan`, 26 bits a request (13 the response's length, 13 the fail cell). World week and month 1,108,205 and 4,749,452 GB; a datacenter's week, month, year 296, 1,267, 15,411 GB. At the 1,024 class (`--response-ids 1024`) 48,895,000 GB a world year, 22 bits.
+- **Once the stop check holds, "designed, not built": 0 GB at no failed connection**, row `lengths` (and `design`); 74 GB a world year at one failure in a million (`--failure-rate 1e-6`), 52,027 GB at one in a thousand; the 300 GB target is met at a rate of 4.317e-6 or less. It needs three things, none on `main`: the stop block sampled on the served Program, the lengths unit (#8690, #8702), the period statement. The block alone moves nothing [relayed: network-accounting, PRF-456 08:22Z].
+- **Which command prints each.** On `main`: none. `verity bench certifier_term` exists only on #8579 (and #8777 on it, head `663befe492`, which reads the plan's count by default and prints 57,798,028).
+- **#8779 prints the sum, yes** [read: its body at `dfe58c687820`; I could not run it: 4 minutes locally with no output]: for the world's year 57,812,257 GB under `scan`, 24,333 under N2, **14,229 under `all three` and under `design`**, each the compute part's 14,229 plus the certifier's row.
+- **The gap in that sum.** The two sums at 14,229 GB count 0 for the output count while no stop block is sampled, and the compute part "prices no advice and says so". Until condition 6 the count is the server's choice, 13 bits a request: 28,892,500 GB a world year (24,447,500 at 11 bits, 22,225,000 at 10, 19,446,875 at the planner's 8.75 [my arithmetic]). No command prints "the design without the stop check".
+
+**5. The certifier's part, row by row** [relayed unless tagged: the Goals page at 08:30Z, network-accounting's notes, PRF-456, PRF-550; figures from the run in section 4. Rows 1 and 3 are one charge at two times, not a sum.]
+
+| # | term | bits | world week / month / year, GB | datacenter year, GB | printed by (#8579's head) | what removes it | owner | date |
+|---|---|---|---|---|---|---|---|---|
+| 1 | a response's length, as the scan charges it | 13 a connection | 554,103 / 2,374,726 / 28,892,500 | 7,705 | row `scan`, column `schedules` | the lengths unit (#8690 the record, #8702 the block) and its statement | network-accounting | both marked, not merged; due Thu 12 and Fri 13 Nov; the period statement's proof on `main` Mon 23 Nov |
+| 2 | the fail cell | 13 a connection | the same again | 7,705 | row `scan`, column `cells` | failures charged as they happen, pooled (row 4), with the lengths unit | network-accounting | with row 1 |
+| 3 | the output count, once the lengths are held to it and before a stop block is sampled | 13 a request (11 at T = 1,024) | 554,103 / 2,374,726 / 28,892,500 | 7,705 | **nothing** | conditions 1 to 6: the stop block in the served Program's population, sampled in a served audit | vllm (VLLM-318: design 14:00Z, change Thu 02:00Z); the audit side is ours and needs no change | a served audit that draws it: no date |
+| 3a | the same, once sampled | 23 to 41 a wrong request, at most W_δ of them | 0.093 / 0.099 / 0.110 | 0.075 | nothing (section 3) | n/a | proofs, if it is a term of its own | n/a |
+| 4 | failed connections, lengths held | 32 to 40 a failure | at 1e-3: 998 / 4,276 / 52,027; at 1e-6: 1.4 / 6.1 / 74 | 13.9 at 1e-3 | row `lengths` with `--failure-rate` | a measured failure rate at or under 4.317e-6 | network-accounting; vllm's `certserve` (VLLM-324) measures it | scope 11:30Z, first run today |
+| 5 | a failed connection's released ids, untied | up to 28,000 a failure | 62,300 a world year at one failure in a million [relayed] | not given | nothing | a failed span committed as the ids the certifier released | vllm | no date |
+| 6 | release times | 1 a 100 ms bucket at D_j = 2; 0 at D_j = 1 | 35,434 / 151,859 / 1,847,615 at D_j = 2 | 492.8 | column `jitter, D_j = 2` | release times taken as fixed on the auditor's host, a ruling | soundness and Daniel for the ruling; network-accounting | asked Wed 11 Nov; the benchmark on `main` Fri 13 Nov |
+| 6a | the same at the measured rate | 0.0064 a bucket [relayed: measured on 33,248 intervals] | about 11,800 a world year [my arithmetic; an average, not a bound] | about 3.2 | nothing | as row 6 | as row 6 | as row 6 |
+| 7 | the content, as the scan charges it | 73,776 a request | 3.145e9 / 1.348e10 / 1.640e11 | 4.373e7 | column `entries` | the content tie through the compute audit's sample; then it is the compute part | network-accounting (design), proofs (the pooled count), vllm (spans) | design Wed noon PST; `proofs/spot-bind-term` off track for Wed 18 Nov |
+| 8 | N2's schedules, the other check on `main` | 7 a link's phase | 193.8 / 830.5 / 10,104 | 2.7 | row `N2` | n/a: it lists no connection, so it ties no content | network-accounting | n/a |
+
+- The scan's ε over a world year is 11,012,646, so the `scan` row bounds nothing with a probability [read: #8779's body].
+- **Rows a proofs worker could take tonight: none beyond what is done.** Row 3's audit side needs no build (section 2). Row 7's probability is SCALE's, KILIAN's and CONCRETE's. The rest are the device, its Lean, a serve run and a ruling.
+
+**6. Lean this needs** [read for what exists; sizes are guesses].
+- Sampling a one-block cell whole: **none**, it is in Python and in Lean (section 2).
+- That the block computes: **none if vllm binds `StopRule_v2`**, which computes (n, finish). If the design binds the check form (`StopCheck_v1`, a bit over a claimed n), AGENTS.md's rule on relation checks asks for a lemma that the accepted (n, finish) is unique: a new module under `security/Proofs`, 100 to 200 lines [guess], nobody has it. So the computing form is the cheap one.
+- The stop block's ports on the boundary rows: none if the layout names them as ordinary ports; if the block must read two words of the `b.egress` row, `Spot/SecondStage.lean`'s `slice` (line 462) is where a part of a row is linked, 0 to 80 lines and one example [guess; not checked against a layout, there is none].
+- A class of kind `stop` in the answer's public, network-accounting's §3.7 field: **not needed** if a request whose only wrong block is the stop block counts as a wrong request of the compute bound: it is caught at q, at least the rate the bound assumes for any wrong request, and S covers its length [argued, not Lean]. If they want a δ of its own: `Spot/Record.lean`, `Spot/SecondStage.lean`, `service.py`, a difftest, 60 to 120 Lean lines [guess]. It changes what the answer publishes, so it is a claim and stays unmarked.
+- The period statement reading the count from the stop block: network-accounting's (#8537, #8848). I stay off it.
+
+For BREAKEVEN:
+- The stop block's cost, measured on the CPU prover [run `r20261111-080733-44ce`: `benchmarks/served_units/prove_time.sh`, `census:StopRule_v2{T=1024,NSTOP=3}`, `--zk`, 36 prover cores of vy-nebius-cpu-11, at `8201dacff2`; 3 sessions at each N, all accepted]: k_log 23, 107,862 ANDs, **11.03 ms a block and 0.888 s fixed a statement** (amortized 765.9, 27.02, 11.25 ms a block at N = 1, 64, 4,096). No GPU row.
+- One block a sampled request: 3.806e9 a world year is 4.2e7 seconds of such a host, 3.6e-9 of the scope's 1.182e16 GPU-seconds [my arithmetic]. **Price it at zero; the bound gains no term** (0.11 GB a world year if it is given a δ of its own).
+- The card has no place for a block counted a request (section 2).
+- The advice line (`reprice.advice_bits`, 8.75 bits a request, 19.4 million GB a world year [my arithmetic]) is the same charge as the table's row 3. It leaves only at condition 6, not when the Definition is bound.
+
+For vllm:
+- Bind the computing form (`StopRule_v2`), not the check form: the check form needs a uniqueness lemma in Lean nobody has.
+- Finish codes: `boundary_rows.py:395-402` writes abort as 3 and error as 4; `stop_rule.py:47` has 3 as model-length. Which side moves?
+- Can a layout name the first two words of `b.egress` (n, finish) as the stop block's output port, so the block's outputs are the committed row's words and nothing is committed twice?
+- `min_tokens` and `ignore_eos` are in `b.ingress` and not in the rule's inputs: does serving refuse them, or does the block read them?
+
+For the coordinator to ask:
+- **benchmarks (#8779)**: its sums under `all three` and `design` (14,229 GB) leave the output count unpriced, 28,892,500 GB a world year at 13 bits. Print that row or name it where it says no advice is priced.
+- **network-accounting**: should `certifier_term`'s `design` row carry the output count until a served audit has drawn a stop block? Today it prints 0. And T: the plan serves the 1,024 class (11 bits), not 4,096.
+
+For the table:
+- The certifier's part, modeled on an assumed 4,096-id class, world year: 57,785,000 GB as charged today (`verity bench certifier_term --world-requests 1.778e16` at #8579's head, row `scan`; no command on `main`); 0 GB plus 74 GB per failure in a million "designed, not built" (row `lengths`), which needs the stop block sampled on the served Program, #8690, #8702 and the period statement.
+- Until a served audit draws a stop block, the output count stays the server's choice: 28,892,500 GB a world year at 13 bits (24,447,500 at the plan's 1,024 class); #8779's sums of 14,229 GB leave it out. Once sampled it is at most 0.11 GB a world year (modeled).
+- The stop block: #8869 open, unmarked, waiting on circuits (CIR-235) and its quick tier; 11.03 ms a block on 36 CPU cores (measured, `r20261111-080733-44ce`); no priced term moves.
