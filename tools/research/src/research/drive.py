@@ -169,7 +169,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy, vqueue_records
+from . import policy, vqueue_records
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
 from .gates import git_env
@@ -179,7 +179,7 @@ from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, CI, CIRCUIT_RED, INFRA, 
                       killed, merge_thread_post, not_run, run_states, shard_machines, shard_passed, shard_steps, step_paths,
                       step_records, suite_paths, suite_pyproject, suite_rows, train_launch)
 from .landing import JOB_OF_KIND as JOB_OF_KIND, KILLED_RC as KILLED_RC, LAUNCH_LOST_S as LAUNCH_LOST_S, gating as gating
-from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, RESTACKING, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git,
+from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, RESTACKING, Entry, Member, Queue, QueueError, _brought, _git,
                     _out, _who, built_on, changed, forces_cold, label_target, lean_change, move_of, on_first_parents, queue_commit,
                     unreviewed)
 from .queue_stats import ts
@@ -548,12 +548,9 @@ class Driver(Landing):
                  verdict_carry: str = "off", bottom_ring: tuple[str, ...] = (CI, TOP),
                  bottom_wait_min: int = BOTTOM_WAIT_S // 60):
         super().__init__(q, on=on, launch=launch, states=states, post=post, now=now, cancel=cancel, evidence=evidence,
-                         warn_steps=warn_steps)
+                         warn_steps=warn_steps, reviews=reviews, ready_by=ready_by)
         #: drive.toml's `verdict_carry` (`_carry_verdicts`): "off", "shadow" (logged only) or "on" (written as `CI`'s verdict)
         self.verdict_carry = verdict_carry
-        #: `carry.delta` of a new head over an older one, trusting the landed tips and the heads given (`_carried_from`)
-        self.delta: Callable[[str, str, list[str], set[str]], carry.Delta] = (
-            lambda old, new, landed, trusted: carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted)))
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place, but
         #: for `SLIM_STEPS`, a run of them alone beside it: `_follow_tasks`, `_follow_slim`); ``tasks``, the executor (default:
         #: the task executor's queue, `QueueTransport` running ``executor_enqueue``)
@@ -561,7 +558,7 @@ class Driver(Landing):
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
         self.lowrisk_lane, self.lowrisk_per_tick, self.lowrisk_excludes = lowrisk_lane, lowrisk_per_tick, lowrisk_excludes
         #: the after-landing run as this many runs at once, shard K of ci.toml's plan with N shards each (`start_postland`);
-        #: "auto" or "auto:MAX", as the shard planner's N, made once a tip (`_plan`, `plan_shards` and `planned`)
+        #: "auto" or "auto:MAX", as the shard planner's N, made once a tip (`_plan`, `Landing.plan_shards` and `planned`)
         self.after_landing_shards = after_landing_shards
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
@@ -575,10 +572,6 @@ class Driver(Landing):
         #: (`_review`, `_promote`), reusing no pass with ``after_landing_no_cache`` but circuit-check's per-target ones
         #: (`--circuit-cache`)
         self.after_landing_no_cache = after_landing_no_cache
-        #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
-        self.reviews: Callable[[int, str], list] = reviews or (lambda pr, head: StoreLabels(q.store, q.log).reviews(pr, head))
-        #: who wrote the ready mark on a PR's head (`StoreLabels.ready_by`), one of those whose verdict doesn't count (`_owners`)
-        self.ready_by: Callable[[int, str], str | None] = ready_by or (lambda pr, head: StoreLabels(q.store, q.log).ready_by(pr, head))
         #: after a landing that changes Lean, a lock or the spec, run the lock run and commit the records it regenerated
         #: (`_start_locks`, `_commit_locks`)
         self.regenerate_locks = regenerate_locks
@@ -2042,12 +2035,6 @@ class Driver(Landing):
             return done("", f"{_ids(rec)} gave no artifact in {RECORDS_WAIT_S // 60} min; the shards build the records themselves")
         return None
 
-    def _owner(self, m: Member) -> str | None:
-        """The owning lane of a PR the queue landed: its open PR's (`_handle`), else the one its merge's `Owner` names."""
-        from .queue import PR
-
-        return self._handle(m.pr) or self.q.handle(PR(m.pr, m.head, body=f"Lane {m.owner}"))
-
     # -- the lock run (`regenerate_locks`, the module's docstring).  `postland["locks"]`: {"ids" ([] with "launch", `detach`'s
     #    record, while its train.sh runs detached: `_resolve`), "tip", "at", "resend" on its one resend after a machine's fault,
     #    "state": None while it runs, else "passed" (with "run", the id that passed) until its records are committed, then
@@ -3176,37 +3163,6 @@ class Driver(Landing):
                 q.log(f"research queue drive: {line}")
         drive["verdict_carry"] = said
 
-    def _carried_from(self, m: Member, heads: list[str], why: str, landed: list[str],
-                      trusted: set[str]) -> tuple[str, str, bool] | None:
-        """(the older head whose land verdict `_carry_verdicts` judges for ``m``, why it carries or not, whether it does), or None
-        when there is none.  Of each reviewer's newest verdict at each of ``heads``, a hold by anyone or a land by none of
-        `_owners` nor that head's ready mark's author, the newest decides: a hold keeps ``m``, as one at its head does (``why``,
-        `queue.unreviewed`'s of its head, says so), and a land at a head with no hold carries when `carry.delta` says so,
-        trusting ``landed`` (the tips of `checked` and `main`) and the ``trusted`` heads."""
-        owners = self._owners(m)
-        labels = {h: self.reviews(m.pr, h) for h in heads}
-        verdicts = []                                   # (when, a hold, the head, the label)
-        for h, labs in labels.items():
-            newest = {}
-            for lab in sorted(labs, key=lambda lab: lab.ts):
-                newest[_who(lab.by)] = lab
-            mine = {_who(o) for o in (*owners, self.ready_by(m.pr, h)) if o}
-            verdicts += [(lab.ts, lab.value == "hold", h, lab) for by, lab in newest.items()
-                         if lab.value == "hold" or by not in mine]
-        if not (lands := [v for v in verdicts if not v[1]]):
-            return None
-        old = max(lands, key=lambda v: v[0])[2]
-        if why.startswith("held"):
-            return old, f"{why} at {m.head[:12]}", False
-        if (v := max(verdicts, key=lambda v: v[:2]))[1]:
-            return old, f"{v[3].by.lstrip('@')}'s hold at {v[2][:12]} ({v[3].ref or 'no reason'}) is newer", False
-        if held := unreviewed(labels[old], (*owners, self.ready_by(m.pr, old))):
-            return old, f"{held} at {old[:12]}", False
-        if _who(CI) in {_who(o) for o in owners if o}:
-            return old, f"{CI} is among its owners, so its verdict wouldn't count", False
-        d = self.delta(old, m.head, landed, trusted)
-        return old, d.why if d.carries else f"{d.kind}: {d.why}", d.carries
-
     def _write_carried(self, m: Member, old: str, why: str) -> str:
         """Write the land verdict at ``m``'s head as `CI`'s, carried from ``old`` (`_carry_verdicts`), at drive's clock, through
         to the store's remote; what the store said.  A store that refuses it is said, never raised: the next tick tries again."""
@@ -3261,11 +3217,6 @@ class Driver(Landing):
         if (p := self._open().get(m.pr)) and re.search(r"\bfixes\s+step\s+`?circuit-check(?![\w/.-])", p.body or "", re.I):
             return None
         return f"circuit-check is red on `{self.q.into}`, and its change touches circuit-check's inputs: it lands once that passes"
-
-    def _owners(self, m: Member) -> set[str | None]:
-        """Whose verdict on ``m`` doesn't count (`queue.review_owners`): its merge's `Owner`, that owner's handle (`_owner`), and
-        who wrote its ready mark."""
-        return {m.owner, self._owner(m), self.ready_by(m.pr, m.head)}
 
     def _compiles(self, drive: dict, chain: list[Member], base: str, t: int) -> int:
         """The highest index at or below ``t`` whose landing compiles: every .py file ``base``..``chain[t]`` leaves, compiled as

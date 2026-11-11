@@ -274,15 +274,15 @@ def launched(launch: dict) -> tuple[list[str] | None, str]:
     return None, tail
 
 
-#: how long an auto plan (`plan_shards`) may take before it is stopped (gathering the newest checks' verdict packs to price it
-#: takes minutes on the control pod): a candidate's check is then infra (`vqueue_slim._planned`), and drive's sharded
-#: after-landing run of `after_landing_shards = "auto"` launches unsharded (`Driver._plan`)
+#: how long an auto plan (`plan_shards`: gathering the newest checks' verdict packs to price it takes minutes on the control
+#: pod) may take before it is stopped: a candidate's `auto:N` check is then infra (`vqueue_slim._planned`), and a sharded
+#: check of `after_landing_shards = "auto"` launches unsharded
 PLAN_WAIT_S = 2400
 #: the plan's file in its directory (check.py's `AUTO_PLAN`), which each shard sends as its run's input
 AUTO_PLAN = "check-shard-plan.json"
-#: an auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES as train.sh's are when set,
-#: `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1), the worktree
-#: removed after; its venv kept between plans
+#: a sharded check's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES as train.sh's
+#: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
+#: the worktree removed after; its venv kept between plans
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
             'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
@@ -290,7 +290,7 @@ PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkd
 
 
 def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None, n: int | None = None) -> dict:
-    """The auto plan of ``tip``'s after-landing ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
+    """The auto plan of ``tip``'s check of ``steps`` (`PLAN_JOB`: `check.py --shard-plan --deferred STEPS`, at most
     ``max_shards`` shards, or ``n`` exactly), made in the background (`detach`) into a directory of its own under `LAUNCHES`:
     the record `planned` reads."""
     root = Path(tempfile.gettempdir()) / LAUNCHES
@@ -718,6 +718,9 @@ class Landing:
         #: `carry.delta` of a new head over an older one, trusting the landed tips and the heads given (`_carried_from`)
         self.delta: Callable[[str, str, list[str], set[str]], carry.Delta] = (
             lambda old, new, landed, trusted: carry.delta(self.repo, old, new, carry.trust(self.repo, landed, trusted)))
+        #: a sharded check's auto plan, made in the background (`plan_shards`), and what it made once it ended (`planned`)
+        self.plan_shards: Callable[..., dict] = plan_shards
+        self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
@@ -738,10 +741,6 @@ class Landing:
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
-        #: an auto plan made in the background, and what it wrote (`plan_shards`, `planned`): a candidate's `auto:N` check
-        #: (`vqueue_slim.start`), and drive's after-landing run of `after_landing_shards = "auto"`
-        self.plan_shards: Callable[..., dict] = plan_shards
-        self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence

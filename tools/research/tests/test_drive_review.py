@@ -254,7 +254,7 @@ class Planner:
         h.d.planned = lambda rec: self.answer
 
     def plan(self, repo, tip, steps, max_shards=None) -> dict:
-        from research.drive import AUTO_PLAN
+        from research.landing import AUTO_PLAN
 
         self.asked.append((tip, steps, max_shards))
         out = self.tmp / f"plan-{len(self.asked)}"
@@ -269,7 +269,7 @@ def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_af
     tip beside circuit-check's records step, and the run launches once both are done: the plan's N shards, each `--shard
     auto:K/N` with the plan's file and the records' artifact.  A shard that never started launches the run again on the same
     plan, or on a new one when its file is gone (a restart of the pod); `main` is verified once every shard passed."""
-    from research.drive import AUTO_PLAN
+    from research.landing import AUTO_PLAN
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = "auto:4"
@@ -311,7 +311,7 @@ def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_af
 def test_a_run_ci_adds_to_an_auto_shard_counts_only_as_a_shard_of_its_plan(world, monkeypatch):
     """`drive-shard-add` to an auto run: the run's record must be `--shard auto:K/N` and its inputs must hold the run's plan
     (`AUTO_PLAN`), so a hand run of another plan's shard K, which ran other parts, verifies nothing."""
-    from research.drive import AUTO_PLAN
+    from research.landing import AUTO_PLAN
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = "auto"
@@ -350,7 +350,7 @@ def test_a_run_ci_adds_to_an_auto_shard_counts_only_as_a_shard_of_its_plan(world
 def test_an_auto_after_landing_run_with_no_plan_runs_unsharded_and_says_so(world, monkeypatch, ends):
     """A plan that failed, or that is still being made `PLAN_WAIT_S` after it started (stopped then), never holds the run: ci is
     told once and the run launches unsharded, one run of every step, its plan's directory removed."""
-    from research.drive import PLAN_WAIT_S
+    from research.landing import PLAN_WAIT_S
 
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = "auto"
@@ -364,8 +364,9 @@ def test_an_auto_after_landing_run_with_no_plan_runs_unsharded_and_says_so(world
     if ends == "failed":
         planner.answer = (None, "`check.py --shard-plan` exited 2: no store")
     else:
+        h.clock += 60
         h.tick()
-        assert len(h.posted) == 1, "it waits for the plan"
+        assert len(h.posted) == 1, "it waits for a plan a minute old"
         h.clock += PLAN_WAIT_S + 1
     h.tick()
     [(_, steps, kw)] = h.posted[1:]
