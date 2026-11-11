@@ -547,7 +547,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += ["", "Refused (not read):", ""]
         lines += [f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"]]
     if doc["unread"]:
-        lines += ["", "Unread (steady-state rows of record whose staged Definition is no block type of this census under "
+        lines += ["", "Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
                   "its cut; they are in no figure above):", ""]
         lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else ', run ' + x['run']}: `{x['type']}` at "
                   f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "

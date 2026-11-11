@@ -257,7 +257,7 @@ def test_a_steady_row_of_no_block_type_of_the_census_is_unread_not_dropped():
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
     assert text.endswith(
-        "\nUnread (steady-state rows of record whose staged Definition is no block type of this census under its cut; "
+        "\nUnread (labelled steady-state rows whose staged Definition is no block type of this census under its cut; "
         "they are in no figure above):\n\n"
         f"- r20260102-000000-0002: `norm` at 1 prover, `{norm}`: measured at steady state, 3,000 ms per block\n"
         "- art:cdcdcdcdcdcd, run r20260103-000000-0003: `old-linear` at 2 provers, `Linear_v0{K=64}`: measured at steady "
@@ -774,7 +774,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- served MACs inside a proof block: 98.8%; the rest are served rows no cut fits" in text
     assert "- prover GPU-seconds per token: 88,303 (range 27,644 to 88,303)" in text
     assert "the proof server's own verifier" in text and "Refused" not in text
-    assert doc["unread"] == [] and "Unread" not in text                                # every row of record is a block type's
+    assert doc["unread"] == [] and "Unread" not in text                                # every labelled row is a block type's
     assert (f"- {R.STEADY}: {', '.join(RUNS[::-1])} (`prove-glm53-flock-steady`): 8 staged types measured at steady state "
             "at 1 prover\n") in text
     assert "- prover count (`--provers`, a stated input): 1;" in text
@@ -855,7 +855,7 @@ def test_an_unlabelled_or_superseded_input_is_refused_by_name(tmp_path):
     # the plan names the two fused block types by their staged types, which only a steady-state row ties to a Definition
     with pytest.raises(ValueError, match=rf"the sampling plan {mix} and the census don't cover each other: the plan has no "
                                          r"cell for 2 block type\(s\) \(MoeExpertFp8ReadGemm_v1.*no block type for 2 "
-                                         r"cell\(s\) \(Fused\[.*or no steady-state row of record names"):
+                                         r"cell\(s\) \(Fused\[.*or no labelled steady-state row names"):
         build("spot")
     s.ran(RUNS[-1], run_files(tmp_path, RUNS[-1]))
     s.record(RUNS[-1], R.STEADY)

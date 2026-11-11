@@ -475,7 +475,7 @@ class Spot:
             raise ValueError(
                 f"the sampling plan {self.plan.record} and the census don't cover each other: the plan has no cell for "
                 f"{len(bare)} block type(s){_some(bare)}, and the census no block type for {len(unread)} cell(s)"
-                f"{_some(unread)}. It is another census's or cut's plan, or no steady-state row of record names "
+                f"{_some(unread)}. It is another census's or cut's plan, or no labelled steady-state row names "
                 "those cells' staged types")
         return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread)
 
