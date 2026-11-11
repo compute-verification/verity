@@ -220,7 +220,7 @@ COIN_BYTES = 64
 HM96 = hm96.SHA512
 KEY = HM96.default_key
 #: the most coins one commitment holds
-MAX_COINS = 1 << 23
+MAX_COINS = 1 << 24
 _NAME = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-/")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 COMMITMENT_FORM = ("a live coin commitment is {epoch, families, root, scheme}: families a list of [label, count], root "
