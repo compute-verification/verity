@@ -13,7 +13,6 @@ public import Definitions.Core.Structure
 public import Definitions.Core.Rec
 public import Definitions.Nci
 public import Definitions.Nci.Reads
-public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
