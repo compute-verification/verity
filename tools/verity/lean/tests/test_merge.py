@@ -1374,6 +1374,43 @@ def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_name
             in capsys.readouterr().err)
 
 
+def test_a_merge_writes_unwitnessed_and_shape_inline_s_guarantees_in_the_order_check_py_update_writes(tmp_path):
+    """Two sides that each add an `unwitnessed` entry and a guarantee under `shape.inline`, theirs' sorting before ours'
+    and the base's own out of order: the merged record has both sections in the order `check.py --update` writes them
+    (`unwitnessed_kept` and `inline_failures`: by guarantee, sorted), so `--update` on the merged lock moves no entry and
+    its record is the merged lock byte for byte. In ours' order with theirs' new entries after it, a records run's
+    `--update` wrote a record that said what the lock said in another order. A guarantee's premises keep ours' order with
+    theirs' new one after it: `check.py` writes them in the order the statement takes them, which only the build gives.
+    A guarantee whose premises `held` puts back takes its sorted place too."""
+    why = "inline when the rule came"
+    rec = {"owner": "@lean", "signature": ["P.t : P.T"], "assumptions": [], "type_hash": "a" * 64}
+    base = {"guarantees": {g: rec for g in ("P.b", "P.m")}, "unwitnessed": {"P.m": "2" * 64, "P.b": "1" * 64},
+            "shape": {"inline": {"P.m": {"p": why}, "P.b": {"z": why, "a": why}}}}
+    ours = {"guarantees": base["guarantees"] | {"P.z": rec}, "unwitnessed": base["unwitnessed"] | {"P.z": "3" * 64},
+            "shape": {"inline": base["shape"]["inline"] | {"P.z": {"q": why}}}}
+    theirs = {"guarantees": base["guarantees"] | {"P.a": rec}, "unwitnessed": base["unwitnessed"] | {"P.a": "4" * 64},
+              "shape": {"inline": {"P.m": {"p": why}, "P.b": {"z": why, "a": why, "c": why}, "P.a": {"r": why}}}}
+    merged, clashes = M.merge(base, ours, theirs, candidate := [])
+    assert clashes == [] and candidate == []
+    assert list(merged["unwitnessed"]) == list(merged["shape"]["inline"]) == ["P.a", "P.b", "P.m", "P.z"]
+    assert list(merged["shape"]["inline"]["P.b"]) == ["z", "a", "c"], "a guarantee's premises: ours' order, theirs' new one last"
+    written = merged | {"unwitnessed": A.unwitnessed_kept({"unwitnessed": merged["unwitnessed"]}, {"pins": {}}, {}),
+                        "shape": {"inline": A.inline_failures(merged, {"pins": {}, "own_modules": []})[1]}}
+    assert A.text(written) == A.text(merged), "check.py --update's writers leave both sections of the merged record as they are"
+    for n, d in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp_path / n).write_text(A.text(d))
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/lean-audit.json"]) == 0
+    assert (tmp_path / "ours").read_text() == A.text(written), "and so does the record the driver writes"
+
+    dropped = ours | {"shape": {"inline": {g: ps for g, ps in ours["shape"]["inline"].items() if g != "P.b"}}}
+    restated = theirs | {"guarantees": theirs["guarantees"] | {"P.b": rec | {"type_hash": "b" * 64}},
+                         "shape": {"inline": theirs["shape"]["inline"] | {"P.b": base["shape"]["inline"]["P.b"]}}}
+    merged, clashes = M.merge(base, dropped, restated, candidate := [])
+    assert clashes == [] and candidate == [f"shape[inline][P.b][{p}] (kept)" for p in ("z", "a")]
+    assert list(merged["shape"]["inline"].items()) == [("P.a", {"r": why}), ("P.b", {"z": why, "a": why}), ("P.m", {"p": why}),
+                                                       ("P.z", {"q": why})]
+
+
 SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/flock/verifier", "verity/protocols/pous"
 
 

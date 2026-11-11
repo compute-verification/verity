@@ -451,7 +451,10 @@ Two branches that each add guarantees both change `lean-audit.json`, usually in 
 conflicts. `.gitattributes` gives the file to `merge.py` instead, registered by `merge.py --install`. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency or a policy entry applies.
 Within a module both sides changed, the definitions merge the same way, and the digest is recomputed; an older lock's
 readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of its entry, so one side's new
-owner and the other side's restatement both apply.
+owner and the other side's restatement both apply. The merged record is in the order `check.py --update` writes one:
+each section it sorts by name (`SORTED`, `unwitnessed` and the guarantees of `shape.inline` among them) comes out sorted,
+so `--update` on a merged lock moves no entry. A guarantee's premises under `shape.inline`, which `check.py` writes in
+its statement's order, and the sections a person orders keep ours' order, with theirs' new entries after it.
 
 Apart from the guards below, the merge never conflicts. What the build determines (a guarantee's record, `reads`,
 assumption digests) merges as the union or theirs' value, and the lock run regenerates it. What a person

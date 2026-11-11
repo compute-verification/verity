@@ -46,6 +46,12 @@ theirs only when theirs alone holds the hashes of its guarantee's merged record,
 which no record keys, always), so an incoming side's stale value can't re-key the entry silently, and a kept one the
 merged tree doesn't state fails that Lean check as a witness failure (`judged`).
 
+The merged record is in the order `check.py --update` writes one, as far as a record alone gives it: each section it
+sorts by name (`SORTED`: `unwitnessed` and the guarantees of `shape.inline` among them) is sorted whole, whichever side an
+entry came from, so a merge leaves `check.py --update` no entry to move. A guarantee's premises under `shape.inline`,
+which `check.py` writes in the order its statement takes them, keep ours' order with theirs' new ones after it, as every
+other section does.
+
 Every entry taken from one side where the sides disagree is named on stderr, one line per key. A side that is not a
 record (not JSON, not an object, or holding both `pins` and `guarantees`) is the other side's record, named; only when
 neither side is one, or a guard below refuses, does the merge leave git's text merge of the file, as a conflict. Exit 0: merged, the record written
@@ -131,8 +137,12 @@ CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
-#: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap"}
+#: the sections `check.py --update` writes in sorted order, each named as `entries` names it (`shape[inline]`: the
+#: guarantees of `shape.inline`); the others keep ours' order, with theirs' new entries after it. A guarantee's premises
+#: under `shape.inline` are among the others: `check.py` writes them in the order its statement takes them
+#: (`inline_failures`), which only the build gives
+SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap", "unwitnessed",
+          "shape[inline]"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
 #: (`trust_gap`'s premises, so a side's discharge and the other's new premise both apply)
@@ -595,7 +605,7 @@ def held(base: dict, ours: dict, theirs: dict, out: dict, candidate: list[str]) 
             merged[g] = m | keep
             candidate.extend(f"shape[inline][{g}][{p}] (kept)" for p in keep)
     if merged != spec.get("inline", {}):
-        spec["inline"] = merged
+        spec["inline"] = {g: merged[g] for g in keys("shape[inline]", merged, {})}
 
 
 def kept(o: set, a: set, b: set) -> set:
