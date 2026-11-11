@@ -198,8 +198,8 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     instance's row, and refuses the same read under the check's id or the bare parameter. A class with no tables names
     no port with a ``/``. What a cheaper test cannot show: the names on the serve's own layout, whose table rows are the
     served 576 words."""
-    reads, cap, prompt, outputs = 2, 8, 4, 2
-    rd = E.read(cap, BT.WORDS)
+    reads, capacity, prompt, outputs = 2, 8, 4, 2
+    rd = E.read(capacity, BT.WORDS)
     params, ret = rd.signature()
     check = bind(CompositeDefinition(
         "TwoStageDriverTestReads", 0, (),
@@ -207,15 +207,15 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
         lambda B, S_, *args: B.batch(rd, *args, axes=tuple(None if n in IR.TABLE else 0 for n, _t in params)),
         register=False))
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, i), "length") for i in range(N)]
-    layout = BR.Layout(check, 0, 1, prompt, outputs, N, BR.run_root("test-serve", 0), inline=True, layers=(0,), capacity=cap)
-    key, tid, c = descriptor_id(layout.replay), P.template_id(rd), BT.class_rows(prompt, outputs, cap)
+    layout = BR.Layout(check, 0, 1, prompt, outputs, N, BR.run_root("test-serve", 0), inline=True, layers=(0,), capacity=capacity)
+    key, tid, c = descriptor_id(layout.replay), P.template_id(rd), BT.class_rows(prompt, outputs, capacity)
     cells = P.units(Program(layout.replay), layout.query)
     assert (layout.n_rho, cells, c) == (2, 4, 6) and key != descriptor_id(check) and layout.templates == (rd,)
     rng = np.random.default_rng(0)
     hs = {}
     for t in layout.tables:
-        hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, cap)
-        hs[t].append(BT.fill(rng.integers(0, 1 << 16, (3, BT.WORDS), dtype=np.uint16), prompt, outputs, cap))
+        hs[t] = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, capacity)
+        hs[t].append(BT.fill(rng.integers(0, 1 << 16, (3, BT.WORDS), dtype=np.uint16), prompt, outputs, capacity))
     member = IR.named(CR.unit_member(SRW.template(tid), cells))
     table = tuple(IR.Supply(tid, p, f"{key}/{p}", layout.n_rho, (0, 0, 1, 1)) for p in IR.TABLE)
     opening = tuple(IR.Operand(tid, p, f"{key}/{p}", cells, tuple(range(cells)), w) for p, w in member.rows
@@ -241,11 +241,11 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in links}
 
     names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.draw.units]
-    drawn = [hs[n] for n in names]
+    sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(drawn)], cells, got.registration.digest, got.draw.units,
-                     row="two-stage-driver-test", tables=drawn, served=got.record, positions=c, links=links)
+                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.draw.units,
+                     row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
     com = it.committed
@@ -255,7 +255,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     assert roots == {n: (bytes.fromhex(round1[n]["root"]), bytes.fromhex(round1[n]["domain"])) for n in names}
     src = IR.sources(links, Q, names)
     assert src == {x.value: [[{"history": f"{n}/{x.port}"}] for n in names for _ in range(layout.n_rho)] for x in table}
-    sup = IR.supplied(P.program_digest(com.window.program), table, Q, [t.entry() for t in drawn],
+    sup = IR.supplied(P.program_digest(com.window.program), table, Q, [t.entry() for t in sampled],
                       IR.link_schemas(member, table))
     for v in sup:
         assert {k: entries[v.value][k] for k in v.entry()} == v.entry()

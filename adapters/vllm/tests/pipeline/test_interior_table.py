@@ -157,7 +157,7 @@ def _first(tables):
 @pytest.fixture(scope="module")
 def staged():
     """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and
-    sampled units. None has its stream accept an interior: a stream takes one a first-stage sample, so the test that does
+    sampled proof blocks. None has its stream accept an interior: a stream takes one a first-stage sample, so the test that does
     stages its own."""
     tables = _tables()
     return (*_first(tables), tables)
