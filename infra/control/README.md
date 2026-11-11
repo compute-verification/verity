@@ -19,7 +19,7 @@ editing on the pod.
     sqlite3's `.backup`;
   - stop the old pod (never start it again: its `/post_start.sh` would start a second guard), copy the caches into the new
     pod's `/root`, and run `sh /data/boot/post_start.sh`, then `drive.sh start`;
-  - `research pods register vy-control --pod-id NEW --replace --any-name`, and terminate the old pod, since two pods of one
+  - `research pods register vy-control --pod-id NEW --project verity --replace --any-name`, and terminate the old pod, since two pods of one
     name make `research pods ssh vy-control-verity` and the guard host's lookup refuse.
 - **After a reset, run `sh /data/boot/post_start.sh` once.** It relinks every path below, installs rsync, sqlite3, git and psql when
   they're missing, and starts each service detached (`setsid -f`). It also puts `/post_start.sh` back as a link to itself.
@@ -92,7 +92,11 @@ its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log
 | `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`, `challenger/` with `publish.sh` and its `state`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked, on every loop's `PATH`; it reads `relay.env`'s `GH_TOKEN`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
-Secrets stay on the volume and never in git: this README names the files, never their contents.
+Secrets stay on the volume and never in git: this README names the files, never their contents. To see which variables an env
+file here sets, run `research pods ssh vy-control-verity -- python3 - FILE... < tools/agent-guard/envnames.py` from a checkout: it
+prints the names and nothing of a file that isn't an env file, so `'/root/.config/verity/*'`, which also matches `panels.key`, is
+safe to pass. Never `cat`, `sed` or `cut` these files, which the shell hook refuses; check a key with `stat`, `sha256sum` or
+`openssl pkey -in FILE -pubout`.
 
 ## Deploy
 

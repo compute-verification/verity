@@ -16,9 +16,9 @@ import runpy
 import shutil
 import sys
 
-here = pathlib.Path(__file__).resolve().parent
+root = pathlib.Path(__file__).resolve().parents[3]
 try:
-    runpy.run_path(str(here / "cuda_live_patch.py"))
+    runpy.run_path(str(root / "verity/ml/flock/cuda_live_patch.py"))
 except AssertionError as e:
     if "g128_patch" not in str(e):
         raise
@@ -27,7 +27,7 @@ except AssertionError as e:
 assert "live_cb" in pathlib.Path("cuda-ghash/challenger.hpp").read_text(), "live hook missing"
 for f in ("async_copies.cuh", "prove_chunk.cuh", "pure_sha256.cuh", "ring_switch.cuh", "zc_round1.cuh", "zerocheck_fused.cuh",
           "zlin_transpose.cuh"):
-    shutil.copy(here / "cuda" / f, f"cuda-ghash/{f}")
+    shutil.copy(root / "verity/ml/flock/cuda" / f, f"cuda-ghash/{f}")
 pf = pathlib.Path("cuda-ghash/prove_ffi.cu")
 s = pf.read_text()
 if '#include "prove_chunk.cuh"' not in s:
@@ -147,7 +147,7 @@ if "reduce_zerocheck_gf8_wide" not in s:
 
 # The NTT's shared-memory chunks run ntt_tile.cuh's kernel (FC_NTT_REGS=0: the tile kernel), up to 8 layers a pass
 # (FC_NTT_KMAX lowers it); the register kernels' chunks (4, 2 and 1 layers) and ntt_can_fuse_source are unchanged.
-shutil.copy(here / "cuda" / "ntt_tile.cuh", "cuda-ghash/ntt_tile.cuh")
+shutil.copy(root / "verity/ml/flock/cuda/ntt_tile.cuh", "cuda-ghash/ntt_tile.cuh")
 nt = pathlib.Path("cuda-ghash/ntt_f128.cuh")
 s = nt.read_text()
 if '#include "ntt_tile.cuh"' not in s:
