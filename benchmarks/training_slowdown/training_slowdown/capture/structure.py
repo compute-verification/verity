@@ -302,16 +302,6 @@ class Matmul:
     #: the narrowest width of its update-dependent operands (0: none)
     width: int = 0
 
-    def to_json(self) -> dict:
-        d = {k: getattr(self, k) for k in ("node", "op", "part", "phase", "macs", "dims", "operands", "weight", "result", "role",
-                                           "upstream", "upstream_fwd", "step", "tokens", "width")}
-        d["token_dims"] = {k: list(v) for k, v in self.token_dims.items()}
-        d["params"] = list(self.params)
-        d["dtypes"] = list(self.dtypes)
-        d["per_token"] = str(self.per_token)
-        d["upstream_macs"] = str(self.upstream_macs)
-        return d
-
 
 def _phases(gm) -> dict:
     """Each node's phase: a recorded program's (``meta["te_phase"]``, `trace.record_program`), else from the
@@ -996,42 +986,9 @@ class StepGraph:
                "cut_bits": self.cut_bits, "beta": self.beta}
         return out | ({"formalism": self.formalism} if self.formalism is not None else {})
 
-    def role_macs(self, role: str) -> int:
-        return sum(m.macs for m in self.matmuls if m.role == role)
-
-    def phase_macs(self) -> dict:
-        out: dict[str, int] = {}
-        for m in self.matmuls:
-            out[m.phase] = out.get(m.phase, 0) + m.macs
-        return out
-
     def updated_macs(self) -> int:
         """The forward's updated MACs, GEMMs and elementwise."""
         return sum(m.macs for m in self._updated())
-
-    def depth_profile(self, unit: str = "macs") -> list[tuple[Fraction | int, int]]:
-        """(upstream, MACs) of every updated MAC node of the forward, upstream in per-token MACs (``unit="macs"``) or
-        updated GEMM nodes (``"matmuls"``)."""
-        key = {"macs": lambda m: m.upstream_macs, "matmuls": lambda m: m.upstream}[unit]
-        return sorted((key(m), m.macs) for m in self._updated())
-
-    def deep_macs(self, D, unit: str = "macs") -> int:
-        return sum(macs for up, macs in self.depth_profile(unit) if up >= D)
-
-    def phi(self, D, unit: str = "macs") -> Fraction:
-        """The share of the step's |C| (`c_macs`) in updated MACs with at least D upstream (`depth_profile`'s unit)."""
-        return Fraction(self.deep_macs(D, unit), self.c_macs) if self.c_macs else Fraction(0)
-
-    def summary(self) -> dict:
-        roles = {r: self.role_macs(r) for r in ("updated", "producing", "neither")}
-        return {"name": self.name, "digest": self.digest, "tokens": self.tokens, "axes": self.axes, "macs": self.macs,
-                "elementwise_macs": self.elementwise_macs, "approx_macs": self.approx_macs, "c_macs": self.c_macs,
-                "macs_per_token": str(Fraction(self.macs, self.tokens)), "roles": roles, "phases": self.phase_macs(),
-                "updated_macs": self.updated_macs(),
-                "depth_max": str(max((m.upstream_macs for m in self._updated()), default=0)),
-                "updated": sorted(self.updated), "trained": sorted(self.trained), "dependent": self.dependent,
-                "sinks": self.sinks, "cut_bits": self.cut_bits, "beta": self.beta, "cut": self.cut[:12],
-                "params": self.params, "step_crossing": self.step_crossing, "matmuls": [m.to_json() for m in self.matmuls]}
 
 
 def _walks(a) -> bool:

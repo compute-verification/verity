@@ -24,6 +24,11 @@ def trainable(m):
     return [p for p in m.parameters() if p.requires_grad]
 
 
+def deep(g, d) -> int:
+    """The MACs of the forward's updated nodes with at least `d` updated MACs per token upstream of them."""
+    return sum(macs for _, upstream, macs, _, _ in g.structure()["updated"] if upstream >= d)
+
+
 # --- T2: dependence ----------------------------------------------------------------------------------------------------
 
 class Merged(nn.Module):
@@ -65,11 +70,11 @@ def test_merged_and_unmerged_lora_agree():
     assert weight_differs(me) > 10 * weight_differs(um)
     adapters = L * 2 * (2 * r * H + H)   # x·Aᵀ, (xA)·Bᵀ and the scaling by s, per token, q and v of each layer
     assert um.updated_macs() - me.updated_macs() == T * adapters
-    d_u, d_m = max(u for u, _ in um.depth_profile()), max(u for u, _ in me.depth_profile())
+    d_u, d_m = (max(row[1] for row in g.structure()["updated"]) for g in (um, me))
     assert 0 <= d_u - d_m <= adapters and (d_u - d_m) / d_m < 2 * r / H
     for D in (0, H, d_m // 2, d_m):
-        assert 0 <= um.deep_macs(D) - me.deep_macs(D) <= T * adapters
-        assert um.deep_macs(D) / me.deep_macs(D) - 1 < 2 * r / H + 1e-9
+        assert 0 <= deep(um, D) - deep(me, D) <= T * adapters
+        assert deep(um, D) / deep(me, D) - 1 < 2 * r / H + 1e-9
 
 
 def test_tied_lookup_only_update_is_deep():
@@ -88,7 +93,7 @@ def test_tied_lookup_only_update_is_deep():
     per_layer = 4 * h2 + 2 * H + 2 * att + 2 * hi   # q k v o, SDPA's scalings of q and k, QK and PV, up and down
     head = fwd[-1]
     assert head.params[1] == "emb.weight" and head.upstream_macs == L * per_layer
-    assert g.phi(L * per_layer) == pytest.approx(T * H * Vt / g.c_macs) and g.phi(L * per_layer) > 0
+    assert deep(g, L * per_layer) == T * H * Vt   # the head, under every block
     assert g.cut_bits == 32 * Vt * H
 
 

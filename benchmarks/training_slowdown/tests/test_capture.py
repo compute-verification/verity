@@ -34,6 +34,13 @@ def macs_of(g, role: str) -> int:
     return sum(m.macs for m in g.matmuls if m.role == role)
 
 
+def deep(g, d, by: str = "upstream_macs") -> int:
+    """The MACs of the forward's updated nodes, GEMMs and elementwise, with at least `d` updated MACs per token upstream
+    of them (by "upstream": updated GEMMs)."""
+    return sum(m.macs for m in g.matmuls + g.updated_elementwise
+               if m.role == "updated" and m.phase == "forward" and getattr(m, by) >= d)
+
+
 def fwd_layer(role: str) -> Counter:
     """One block's forward: q, k, v, o (T·H² each), up and down (T·H·I), QK and PV (T·S·H), all with role `role`."""
     return Counter({("forward", role, T * H * H): 4, ("forward", role, T * H * I): 2, ("forward", role, T * S * H): 2})
@@ -70,9 +77,9 @@ def test_mlp_full_training():
     assert fc1.per_token == Fi * Hh
     assert fc1.token_dims == {"m": ("batch",)} and dw1.token_dims == {"k": ("batch",)}
     assert dw1.result == "parameter" and fc1.result == "token"
-    # φ at D = 1 updated GEMM upstream: fc2, over the step's |C|
-    assert g.phi(1, "matmuls") == Fraction(N * Hh * O, g.c_macs) and g.phi(0) == Fraction(N * (Fi + O) * Hh, g.c_macs)
-    assert g.phi(Fi * Hh) == g.phi(1, "matmuls") and g.phi(Fi * Hh + 1) == 0
+    # the updated MACs with an updated GEMM upstream are fc2's
+    assert deep(g, 1, "upstream") == N * Hh * O and deep(g, 0) == N * (Fi + O) * Hh == g.updated_macs()
+    assert deep(g, Fi * Hh) == deep(g, 1, "upstream") and deep(g, Fi * Hh + 1) == 0
     assert g.trained == g.updated == {"0.weight", "0.bias", "2.weight", "2.bias"} == set(g.dependent) == set(g.sinks)
     assert g.cut_bits == 32 * (Fi * Hh + Hh + Hh * O + O)   # a dense update: every parameter at its width
     kinds = Counter(c["kind"] for c in g.step_crossing)
@@ -123,8 +130,8 @@ def test_transformer_full_training():
     dw = [m for m in g.matmuls if m.role == "producing"]
     assert all(m.token_dims == {"k": ("batch", "seq")} and m.result == "parameter" for m in dw)
     assert g.updated_macs() == T * (L * LAYER + H + H * V)
-    assert g.phi(1, "matmuls") == Fraction(g.updated_macs() - T * (3 * H2 + H), g.c_macs)   # all but layer 0's ln1, q, k, v
-    assert g.phi(0) == Fraction(g.updated_macs(), g.c_macs)
+    assert deep(g, 1, "upstream") == g.updated_macs() - T * (3 * H2 + H)   # all but layer 0's ln1, q, k, v
+    assert deep(g, 0) == g.updated_macs()
 
 
 def test_transformer_lora():
@@ -179,7 +186,7 @@ def test_transformer_top_layer_only():
     fwd = [m for m in g.matmuls if m.phase == "forward" and m.role == "updated"]
     assert [m.upstream for m in fwd] == [0, 0, 0, 2, 4, 5, 6, 7, 8]
     assert [m.upstream_macs for m in fwd] == layer_upstream(0) + [LAYER]   # ln_f's gains are θ's: no MAC
-    assert g.phi(1, "matmuls") == Fraction(g.updated_macs() - T * (3 * H2 + H), g.c_macs)
+    assert deep(g, 1, "upstream") == g.updated_macs() - T * (3 * H2 + H)
 
 
 def test_transformer_mezo_forward_only():
@@ -208,7 +215,7 @@ def test_transformer_mezo_forward_only():
     for _ in range(L):
         one += fwd_layer("updated")
     assert roles(g) == one + one
-    assert g.role_macs("producing") == 0
+    assert macs_of(g, "producing") == 0
     assert g.trained == g.updated == {n for n, _ in model.named_parameters()}
     fwd = [m.upstream for m in g.matmuls if m.role == "updated"]
     assert fwd == [0, 0, 0, 2, 4, 5, 6, 7, 8, 8, 8, 10, 12, 13, 14, 15, 16] * 2   # the second pass reads no product of the first
