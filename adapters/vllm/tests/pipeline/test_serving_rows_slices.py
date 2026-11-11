@@ -53,7 +53,8 @@ CAP = 4
 
 
 def test_every_family_of_the_table_is_tested():
-    assert set(ROWS) == set(SRW.SLICES) and set(WIDE) == set(SRW.WIDE_SLICES)
+    """But a family whose slice is another Definition (``ELEMENTS``): test_serving_rows_elements.py."""
+    assert set(ROWS) == set(SRW.SLICES) - set(SRW.ELEMENTS) and set(WIDE) == set(SRW.WIDE_SLICES)
 
 
 def statics(family: str, st: dict | None = None) -> dict:

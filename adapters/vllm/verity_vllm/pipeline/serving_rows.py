@@ -106,6 +106,9 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
                                    row's output element; packed ports, one index entry per row; chunked (``chunk_cap``), v2
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
+  ``DsaIndexerQHead_v1{NH=H,..}``  every head of the rows of ``DsaIndexerQ_v1{H,..}``, the Definition that row's body calls once a
+                                   head (``ELEMENTS``): as a slice, head h reading ``q[h]``, the RoPE row whole and ``w[h]`` ->
+                                   ``out.<member>`` per field the row returns, its element h
   ``BatchedGemm_v1{B=1,N=c,..}``,  every slice c wide of the rows of that Definition (``WIDE_SLICES``, c a power of two that
   ``EmbeddingShard_v1{H=c,..}``, .. divides the row's extent along the wide axis): as a slice, with elements [jc, (j + 1)c)
                                    along the wide axis (``x[b]`` whole, ``w[b, jc:(j + 1)c]``; the shard's columns) -> the
@@ -152,9 +155,9 @@ from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, STAGES, WIDE_COORDS, WIDE_SLICES, Template, _bind, coord_width,
-                                                    part, slice_width, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, ELEMENTS, KCHUNKS, LAYOUTS, PACKED,  # noqa: F401
+                                                    PART_OF, PARTS, SLICES, STAGES, WIDE_COORDS, WIDE_SLICES, Template, _bind,
+                                                    coord_width, part, slice_width, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -341,10 +344,10 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                           tables=(("x", rx), ("w", rw)))
         elif layout in ("coord", "cols", "slice") or (layout == "part" and part(template(t).word, r["spec"]) is not None):
             params, ret = template(t).fn.signature()
-            p = part(template(t).word, r["spec"])
+            p, fields = part(template(t).word, r["spec"]), getattr(ret, "fields", None) or (ret,)
             m = CS.Member(t, tuple((f"in{g}", sum(ty.leaf_widths()) // 16) for g, (_n, ty) in enumerate(params)),
                           tuple((f"out.{PR.output_name(d, j)}", sum(ty.leaf_widths()) // 16)
-                                for j, ty in zip(p[2] if p else (0,), getattr(ret, "fields", None) or (ret,), strict=True)), n, base)
+                                for j, ty in zip(p[2] if p else range(len(fields)), fields, strict=True)), n, base)
         else:
             ins = [sum(int(sl[3]) - int(sl[2]) for sl in runs_from_file_items(grp)) for grp in r["args"]]
             outs = [int(mm[1]) for mm in d["members"]]

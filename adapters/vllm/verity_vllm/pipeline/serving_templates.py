@@ -39,12 +39,19 @@ COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1":
 #: its dimension of each axis (None: it doesn't carry it).  The GEMMs of one token row into W's rows (vLLM's router GEMM, the LM
 #: head, cuBLAS's split-K), torch.bmm into each member's coordinates, DSA's logits into keys, the vocabulary shard's embedding
 #: into columns (every unit reads the token and gathers its column) and the all-gather into its ranks' shards; cuBLAS's GEMMs
-#: at an f32 output too, split-K or not (the MoE router gate)
+#: at an f32 output too, split-K or not (the MoE router gate); DSA's indexer query into its heads.  A row that returns several
+#: fields is its units' fields, each field's leading dimensions the axes
 SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",), ((None,), (0,))),
           "CublasSplitKGemm_v1": (("N",), ((None,), (0,))), "BatchedGemm_v1": (("B", "N"), ((0, None), (0, 1))),
           "DsaMqaLogits_v3": (("N",), ((None,), (None,), (0,), (0,))), "EmbeddingShard_v1": (("H",), ((None,), (1,))),
           "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,))),
-          "GemmF32Out_v1": (("N",), ((None,), (0,)))}
+          "GemmF32Out_v1": (("N",), ((None,), (0,))), "DsaIndexerQ_v1": (("H",), ((0,), (None,), (0,)))}
+#: the ``SLICES`` families whose slice of one element is not their own Definition at every axis 1 but the Definition their body
+#: calls once an element: that family, and the statics it takes from the row's, by the row's name for each (its others are the
+#: row's of the same name).  `dsa.DsaIndexerQ`'s head, whose NH is the row's H: a head's weight is scaled by NH^-0.5, so the
+#: row's Definition at H = 1 is another function
+ELEMENTS = {"DsaIndexerQ_v1": ("DsaIndexerQHead_v1", {"NH": "H"})}
+ELEMENT_OF = {u: f for f, (u, _s) in ELEMENTS.items()}
 #: the ``SLICES`` families whose slices may also be c elements wide along one of their axes, by that axis (`slice_widths`): a
 #: slice is then the family's Definition at that axis c and every other axis 1, unit (.., j) reading elements [jc, (j + 1)c)
 #: along it of each parameter that carries it, and returning the row's output elements there (torch.bmm's member in blocks of
@@ -272,12 +279,14 @@ def coord_widths(fam: str, statics: dict[str, Any]) -> list[int]:
 
 
 def slice_width(word: str) -> int:
-    """The elements template ``word`` holds along its family's wide axis as a slice: 1 for a ``SLICES`` family at every axis 1,
-    and c for a ``WIDE_SLICES`` family at a power of two c > 1 along its wide axis and every other axis 1; else 0 (it is no
-    slice)."""
+    """The elements template ``word`` holds along its family's wide axis as a slice: 1 for a ``SLICES`` family at every axis 1
+    or an ``ELEMENTS`` family's element, and c for a ``WIDE_SLICES`` family at a power of two c > 1 along its wide axis and
+    every other axis 1; else 0 (it is no slice)."""
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     base = spec_base(word)
+    if base in ELEMENT_OF:
+        return 1
     if base not in SLICES:
         return 0
     S, wide = spec_statics(word), WIDE_SLICES.get(base)
@@ -285,6 +294,25 @@ def slice_width(word: str) -> int:
         return 0
     c = int(S[wide]) if wide is not None else 1
     return c if c >= 1 and c & (c - 1) == 0 else 0
+
+
+def slice_family(word: str) -> str:
+    """The ``SLICES`` family slice template ``word`` is a slice of: its own, or the one it is the element of (``ELEMENTS``)."""
+    from verity_vllm.query.program_view import spec_base
+
+    return ELEMENT_OF.get(spec_base(word), spec_base(word))
+
+
+def slice_unit(spec: str) -> Any:
+    """The slice of one element of ``SLICES`` row ``spec``: its Definition at every axis 1, or its ``ELEMENTS`` family at the
+    row's statics.  None when it does not bind."""
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    base, S = spec_base(spec), spec_statics(spec)
+    if base in ELEMENTS:
+        fam, take = ELEMENTS[base]
+        return _bind(spec, fam, **{k: S[v] for k, v in take.items()})
+    return _bind(spec, **dict.fromkeys(SLICES[base][0], 1))
 
 
 def slice_widths(fam: str, statics: dict[str, Any]) -> list[int]:
@@ -322,7 +350,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     `coord_widths`, N / c of them, coarse to fine, then every family's at N = 1, N of them), for a ``COLS`` family,
     its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
     at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also in coordinates), for
-    a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), then a ``WIDE_SLICES`` family's
+    a ``SLICES`` family, its Definition at every axis 1 or its ``ELEMENTS`` family (the product of its extents of them), then a ``WIDE_SLICES`` family's
     at each width c of `slice_widths` (that product over c of them), coarse to fine and after the slice of one element, which a
     reader taking a row's first fitting unit so keeps, for a ``KCHUNKS`` row family, at
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
@@ -356,7 +384,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
             hit += ((descriptor_id(c), n),)
         axes = SLICES.get(spec_base(spec), ((),))[0]
         n = math.prod(int(spec_statics(spec)[a]) for a in axes)
-        if n > 1 and (c := _bind(spec, **dict.fromkeys(axes, 1))) is not None:
+        if n > 1 and (c := slice_unit(spec)) is not None:
             hit += ((descriptor_id(c), n),)
         for w in slice_widths(spec_base(spec), spec_statics(spec)):
             if (c := _bind(spec, **{**dict.fromkeys(axes, 1), WIDE_SLICES[spec_base(spec)]: w})) is not None:
@@ -433,7 +461,7 @@ def coordinate(spec: str) -> tuple[Any, int] | None:
     if base in COORDS and (c := _bind(spec, N=1)) is not None:
         return c, 0
     axes = SLICES.get(base, ((),))[0]
-    if len(axes) == 1 and (c := _bind(spec, **{axes[0]: 1})) is not None:
+    if len(axes) == 1 and base not in ELEMENTS and (c := _bind(spec, **{axes[0]: 1})) is not None:
         return c, 0
     return None
 

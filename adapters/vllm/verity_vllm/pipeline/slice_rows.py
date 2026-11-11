@@ -1,8 +1,8 @@
 """A ``SLICES`` template's units (`serving_rows`' ``slice`` layout, `serving_templates.SLICES`): a batched row split along its
 family's axes, unit (i_0, i_1, ..) reading element i_k along axis k of each parameter that carries it and the others whole, and
-returning the row's output element (i_0, i_1, ..); along a ``WIDE_SLICES`` family's wide axis a unit c wide (`slice_width`)
-reads and returns elements [ic, (i + 1)c) (`spans`).  `serving_rows.read` reads a slice member through :func:`read`, with its
-own reader of a row's argument groups."""
+returning the row's output element (i_0, i_1, ..), of each field the row returns; along a ``WIDE_SLICES`` family's wide axis a
+unit c wide (`slice_width`) reads and returns elements [ic, (i + 1)c) (`spans`).  `serving_rows.read` reads a slice member
+through :func:`read`, with its own reader of a row's argument groups."""
 from __future__ import annotations
 
 import math
@@ -13,21 +13,24 @@ from typing import Any
 import numpy as np
 
 from verity.commitments.windows import rows as CS
-from verity_vllm.pipeline.serving_templates import SLICES, WIDE_SLICES, Template, _bind, slice_width, template
+from verity_vllm.pipeline.serving_templates import (ELEMENT_OF, SLICES, WIDE_SLICES, Template, _bind, slice_family, slice_width,
+                                                    template)
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 
 
 def spans(tp: Template, statics: Mapping[str, Any]) -> list[tuple[int, int]]:
     """Per axis of slice template ``tp``'s family, a row's units along it and the elements a unit holds of it: the row's extent
-    and 1, or, along a ``WIDE_SLICES`` family's wide axis, the extent over the template's width c and c.  Refused (ValueError)
-    for a row that is not whole slices of c."""
+    and 1, or, along a ``WIDE_SLICES`` family's wide axis, the extent over the template's width c and c.  A row of an
+    ``ELEMENTS`` unit's own family, which has none of the axes, is one unit.  Refused (ValueError) for a row that is not whole
+    slices of c."""
     from verity_vllm.query.program_view import spec_base
 
-    base = spec_base(tp.word)
+    base = slice_family(tp.word)
+    own = spec_base(tp.word) in ELEMENT_OF and not any(a in statics for a in SLICES[base][0])
     out = []
     for a in SLICES[base][0]:
-        n, c = int(statics[a]), slice_width(tp.word) if a == WIDE_SLICES.get(base) else 1
+        n, c = 1 if own else int(statics[a]), slice_width(tp.word) if a == WIDE_SLICES.get(base) else 1
         if c < 1 or n % c:
             raise ValueError(f"{tp.id}: a row of {n} along {a} is not whole slices of its width there")
         out.append((n // c, c))
@@ -44,16 +47,16 @@ def read(m: CS.Member, rows: Sequence[tuple[str, Any, dict, dict]], store: Any, 
     """Member ``m``'s units, row by row, then unit (i_0, i_1, ..) in row-major order of the row's units along the template's
     axes (`spans`): each argument group (``slices(pi, store, weights, rid, arrive, group, bits=b)``, `serving_rows._slices`) its
     parameter's elements [i_k c_k, (i_k + 1) c_k) along each axis it carries (c_k the unit's elements along it, 1 but along a
-    wide axis) and whole along the others, and the output the row's output elements there, the
+    wide axis) and whole along the others, and each output port the row's elements there of the output field in its place, the
     parameters' dimensions those of the row's Definition; every port its elements' bytes in u16 words (``Template.packed``).  One
-    index entry per row, the range of its units."""
+    index entry per row, the range of its units.  A row of the template's own family that is no row of its axes' (an
+    ``ELEMENTS`` unit's) is its one unit, every port whole."""
     from verity_vllm.query.program_view import spec_base
 
     tp = template(m.template)
-    axes, carry = SLICES[spec_base(tp.word)]
-    bits = tp.packed or (16,) * (len(m.rows) + 1)
+    axes, carry = SLICES[slice_family(tp.word)]
+    bits = tp.packed or (16,) * (len(m.rows) + len(m.outs))
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
-    (port, _w), = m.outs
     entries: list[list[Any]] = []
     lo = m.base
     for rid, pi, r, d in rows:
@@ -62,26 +65,27 @@ def read(m: CS.Member, rows: Sequence[tuple[str, Any, dict, dict]], store: Any, 
         ext, wide = [x for x, _c in sp], [c for _x, c in sp]
         n, fn = math.prod(ext), _bind(r["spec"])
         params = fn.signature()[0] if fn is not None else ()
-        if not len(r["args"]) == len(params) == len(carry) == len(m.rows):
-            raise ValueError(f"{what}: {len(r['args'])} argument groups of {len(params)} parameters, not member {m.key}'s "
-                             f"{len(m.rows)} ports")
-        (member, width, _dt), = d["members"]
-        y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
-        if y is None:
-            raise LookupError(f"row {r['i']} output {member}: {why}")
+        if not len(r["args"]) == len(params) == len(carry) == len(m.rows) or len(d["members"]) != len(m.outs):
+            raise ValueError(f"{what}: {len(r['args'])} argument groups of {len(params)} parameters and {len(d['members'])} "
+                             f"outputs, not member {m.key}'s {len(m.rows)} and {len(m.outs)} ports")
+        held = carry if spec_base(r["spec"]) in SLICES else ((None,) * len(axes),) * len(params)
         got = [per_unit(elements(slices(pi, store, weights, rid, arrive, g, bits=b), b, f"{what} argument {k}"), dims(ty), c, ext,
-                        f"{what} argument {k}", wide) for k, (g, b, (_nm, ty), c) in enumerate(zip(r["args"], bits, params, carry))]
-        ys = elements([np.asarray(y)], bits[-1], f"{what} output {member}")
+                        f"{what} argument {k}", wide) for k, (g, b, (_nm, ty), c) in enumerate(zip(r["args"], bits, params, held))]
         full = [x * c for x, c in sp]
-        got.append(per_unit(ys, [*full, ys.size // math.prod(full)], range(len(ext)), ext, f"{what} output {member}", wide))
+        for (member, width, _dt), b in zip(d["members"], bits[len(params):], strict=True):
+            y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
+            if y is None:
+                raise LookupError(f"row {r['i']} output {member}: {why}")
+            ys = elements([np.asarray(y)], b, f"{what} output {member}")
+            got.append(per_unit(ys, [*full, ys.size // math.prod(full)], range(len(ext)), ext, f"{what} output {member}", wide))
         if [a.shape[1] for a in got] != [w for _, w in m.rows + m.outs]:
             raise ValueError(f"{what}: a unit's ports of {[a.shape[1] for a in got]} words, not member {m.key}'s {list(m.rows)} and "
                              f"{list(m.outs)}")
-        for p, a in zip([p for p, _ in m.rows] + [port], got, strict=True):
+        for (p, _w), a in zip(m.rows + m.outs, got, strict=True):
             cols[p].append(a)
         layer = _LAYER.search(d["op_path"])
-        entries.append([lo, lo + n, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
-                        int(d["row"]), int(r["i"])])
+        entries.append([lo, lo + n, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"],
+                        ",".join(str(member) for member, _width, _dt in d["members"]), int(d["row"]), int(r["i"])])
         lo += n
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, "

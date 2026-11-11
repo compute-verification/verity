@@ -21,7 +21,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.pipeline.serving_templates import SLICES, _bind, template
+from verity_vllm.pipeline.serving_templates import SLICES, _bind, slice_family, template
 from verity_vllm.pipeline.slice_rows import dims, spans
 from verity_vllm.program.compact import runs_from_file_items
 from verity_vllm.query.program_view import spec_base
@@ -52,7 +52,9 @@ def _row_reads(t: str, pi: Any, r: Mapping[str, Any], d: Mapping[str, Any], at: 
     the weight's words (None where its elements aren't whole words): an argument whose whole weight the row reads and whose
     dimensions carry the template's axes first, in order, so unit i's element is the weight's row i; a unit c wide along its
     last carried axis (`slice_rows.spans`) reads c of them in a run, a row of c times the words."""
-    _axes, carry = SLICES[spec_base(template(t).word)]
+    _axes, carry = SLICES[slice_family(template(t).word)]
+    if spec_base(r["spec"]) not in SLICES:
+        return []
     sp = spans(template(t), d["statics"])
     ext, out = tuple(x for x, _c in sp), []
     for k, (g, (_nm, ty), carried) in enumerate(zip(r["args"], _bind(r["spec"]).signature()[0], carry, strict=True)):
