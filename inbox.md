@@ -1,8 +1,0 @@
-[2026-11-11T02:35Z] c0aa7ba4056a
-TIE, Tue 10 Nov 06:35 PM PST, job 4, the answer first; the write-up follows. NO figure published tonight is above what lean's form gives. [read] bound_on_rows, bound_on_budgets_he, outOn at d5bc5d162559; [run] lean's right side evaluated by a script that does not call bound_charged, at the crossed #8703 (67bdbbbe5eec), CPU.
-(1) All three readings ARE lean's form: the outputs pooled, once, against the whole Q. One beta_x (with w, or at the top budget) is bound_on_budgets_he; a beta_x a block is bound_on_rows at beta_x(u) = the table's row for kappa_u. None pairs a block's budget with its own outputs. The calculator puts O for O_G (lean's outOn_le) and takes H and Q each at its most.
-(2) My script reproduces every cell to the decimal: fleet 1,614.1 / 4,787.8 / 20,422.0; 52.8 / 202.2 / 1,336.6; 53.2 / 209.6 / 1,844.3; 1,694.1 / 5,779.8 / 24,820.5; and the nine one-node rows. Lean's form at the developer's best split (H and Q not both at their most) is HIGHER with a threshold: 2,758 / 6,932 / 20,729 at our w (one beta_x), 3,017 / 9,447 / 29,705 (a beta_x a block); equal with no threshold. So ours is at or under lean's in every cell.
-(3) So the ranges 202 to 210 and 1,337 to 1,844 are not pooled-against-own-share: both ends are lean's pooled form, and differ in (H) only (once at the top budget, or at each block's own row). Lean's 'lower end' holds for this morning's 15,995 to 17,714, which the page already replaced; I did not re-derive that range.
-(4) The crossing commit already pins lean's form; no change.
-The records run is started: r20261111-023046-96bd on cpu-1's research pool, at 67bdbbbe5eec.
-
