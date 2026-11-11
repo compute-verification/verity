@@ -194,9 +194,9 @@ def declared(tree, suite):
             "default_gb": float(default.group(1)) if default else None}
 
 def parallel(d):
-    """The parallel suites running in the cgroup ``d``, each with its workers' anonymous memory in GiB (``own``) and the same
-    with the processes a worker started (``tree``). A suite's pytest is the process the runner started in the suite's
-    directory; its children are its workers, and with fewer than two it runs the tests itself."""
+    """The parallel suites running in the cgroup ``d``, each with its workers' anonymous memory in GiB (``own``, RssAnon) and
+    the same with the processes a worker started (``tree``, each page once: Pss_Anon). A suite's pytest is the process the
+    runner started in the suite's directory; its children are its workers, and with fewer than two it runs the tests itself."""
     pids = []
     for base, _, files in os.walk(d):
         if "cgroup.procs" in files:
@@ -206,8 +206,21 @@ def parallel(d):
     for p, s in ps.items():
         kids.setdefault(s["ppid"], []).append(p)
 
+    def shared(p):
+        # a forked process maps its parent's pages, which RssAnon counts once for each; Pss_Anon counts each in proportion
+        try:
+            for l in open("/proc/%s/smaps_rollup" % p):
+                if l.startswith("Pss_Anon:"):
+                    return int(l.split()[1]) / 2 ** 20
+        except (OSError, ValueError, IndexError):
+            pass
+        return ps[p]["anon"]
+
+    def below(p):
+        return [p] + [x for k in kids.get(p, []) for x in below(k)]
+
     def tree(p):
-        return ps[p]["anon"] + sum(tree(k) for k in kids.get(p, []))
+        return sum(map(shared, below(p))) if kids.get(p) else ps[p]["anon"]
 
     out = []
     for p, s in ps.items():
@@ -943,7 +956,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "only the parallel suites running in a shard when this command read it: a suite that ran between two readings is not "
         "seen. Each process of a running shard's cgroup, grouped by the working directory of the pytest the runner started for "
         "a suite; a worker is a child of that pytest, its memory `RssAnon` of `/proc/PID/status` (no page cache, no shared "
-        "memory); the declaration is `worker_gb` of `[tool.verity.tests]` in the suite's `pyproject.toml` at the candidate's "
+        "memory); with the processes it started, each page once (`Pss_Anon` of `smaps_rollup`); the declaration is `worker_gb` of `[tool.verity.tests]` in the suite's `pyproject.toml` at the candidate's "
         "commit, else `TEST_PROCESS_GB` of `suites.py`, which the runner divides the slot's GiB by; the hour and the 24 hours: the same "
         "over this machine's saved readings")
     for kind, name in (("tier", "a quick tier"), ("worker", "an executor run")):
