@@ -22,6 +22,8 @@ from verity.protocols.pous.verifier.primitives import (
     OverwriteChain,
     Primitives,
     XorSponge,
+    _bit_reach,
+    _schedule,
     bit_diffusion_stages,
     diffusion_stages,
     key_program,
@@ -140,7 +142,7 @@ def test_arx_diffusion():
     the ideal never-flipped fraction from 16 stages (the unrotated §2c butterfly needed 20)."""
     assert diffusion_stages(1 << 14) == 14 and diffusion_stages(16390) == 29
     assert bit_diffusion_stages("arx-pi/heuristic-v2", 20) == max(
-        __import__("verity.protocols.pous.verifier.primitives", fromlist=["_bit_reach"])._bit_reach("arx-pi/heuristic-v2", 20, b, 200)
+        _bit_reach("arx-pi/heuristic-v2", 20, b, 200)
         for b in range(640)), "the sampled bits find the exact count"
     assert ArxButterfly(32 * 256).stages == 40
 
@@ -151,7 +153,7 @@ def test_arx_rotates_word_zero():
     diffs = {perm.forward(x) ^ perm.forward(x ^ (1 << 31)) for x in (RNG.getrandbits(512) for _ in range(4))}
     assert len(diffs) == 4
     two = ArxButterfly(64)
-    st = __import__("verity.protocols.pous.verifier.primitives", fromlist=["_schedule"])._schedule(two.name, 2, two.stages)[0]
+    st = _schedule(two.name, 2, two.stages)[0]
     a, c = 0x80000000, 0
     rotl = lambda v, r: ((v << r) | (v >> (32 - r))) & 0xFFFFFFFF  # noqa: E731
     assert st.rotl(a + c, st.rot_a) == rotl(a, st.rot_a) != a

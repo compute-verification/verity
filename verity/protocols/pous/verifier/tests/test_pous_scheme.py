@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import random
+from pathlib import Path
 
+import pous_vectors
 import pytest
 import settings
 
@@ -113,10 +116,7 @@ def test_parameters():
 
 def test_vectors():
     """Known-answer vectors pinned in `fixtures/vectors.json` (regenerate with `verifier/tests/pous_vectors.py`)."""
-    import json
-    from pathlib import Path
 
-    import pous_vectors
 
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())
     slow = {"segment_64kb", "band/64kb/segment"}
@@ -127,10 +127,7 @@ def test_vectors():
 @pytest.mark.skipif(not settings.SLOW, reason="about a minute: set VERITY_POUS_SLOW=1")
 def test_operating_point_segment():
     """One whole 64 KB-label segment: its pinned digest and a bit-exact decode (about a minute)."""
-    import json
-    from pathlib import Path
 
-    import pous_vectors
 
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())
     params, prims = OPERATING_POINT, reference(OPERATING_POINT)
