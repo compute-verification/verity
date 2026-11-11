@@ -58096,3 +58096,35 @@ For the table:
 [run: `research status r20261111-144649-9de6 --also stdout.log`, read 15:23Z] done, rc 0, on vy-nebius-cpu-1, the run's clone at commit `24b588e7fed5526523774b3d24fa0c75123a9a14`. Its log: "lean exit 0 in 1866 s" (the time is that machine building the file's dependencies first: 41 files changed on its tree); 26 "depends on axioms" lines for the file, 25 on `propext`, `Classical.choice`, `Quot.sound` and one (`wiredRow_cell`) on `propext`, `Quot.sound`; "axiom probe: none of its 26 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The same as REGX's `r20261111-141933-5008` on vy-nebius-cpu-2. I ran it without `--siblings`. It is a try: no kernel replay, nothing marked.
 
 For the table: no number moves; `WireMap.lean` elaborates at that head on two machines, which is the first of the four checks and the second, not the third.
+
+## HEADPROF, Wed 11 Nov 15:28Z: with the host walking it (`FC_HOST_UNITS=1`) the values statement at G = 128 is 0.95 s with tonight's cuts at two provers, not 2.27 s; the cut's 256 blocks are then 2.26 s against the head block's 2.14 s (1.05), not 1.67
+
+- `SparseMlaHeadValues_v2{G=128}` (pin `bb02b38e3489b9a9`, 1,024 units), `r20261111-141823-88e7`, 15:16:05Z to 15:27:42Z, six steps, each 0 refused, `compact_stall` 0, throttled 0 [run: `readers/steps.py`]:
+
+| provers | binary | the walk | GPU-s a statement | of the default, same run | prover CPU-s | check CPU-s | card busy |
+|---|---|---|---|---|---|---|---|
+| 1 | today's | on the card (the default) | 2.2824 | 1 | 12.98 | 2.30 | 86.7% |
+| 1 | today's | on the host (`FC_HOST_UNITS=1`) | 1.9397 | 0.850 | 16.84 | 2.33 | 21.4% |
+| 1 | follow-up with salts `all` | on the host | **1.0820** | 0.474 | 9.25 | 2.33 | 38.3% |
+| 2 | today's | on the card (the default) | 2.1721 | 1 | 14.70 | 2.25 | 99.95% |
+| 2 | today's | on the host | 1.5415 | 0.710 | 16.75 | 2.34 | 25.1% |
+| 2 | follow-up with salts `all` | on the host | **0.9524** | 0.438 | 8.96 | 2.34 | 43.8% |
+
+- `FC_HOST_UNITS=1` is the tree's own switch (`gpu_circuit.rs`, `deep_unit`); it is set on the prover only, and the check accepted every session. With it the host cuts reach the statement: the walk's median (`units_pack`) is 0.61 s with the follow-up build.
+- At two provers with the cuts this run's CPUs are 11.75 of 12 busy [run]: six cores hold the row, so ten cores a prover may read lower [guess].
+- **The cut's 256 blocks (scores `6f08` + values G = 128 `88e7`) against the head block, vy-dc-h200-3** [run; the head block's rows are other runs on this machine: today 3.0375 (`c736`) and 3.1174 (`5832`) at two provers, 2.1425 with the cuts (`5832`)]:
+
+| provers | binary | values walked | scores + values, s | head block, s | ratio |
+|---|---|---|---|---|---|
+| 2 | today's | on the card (default) | 2.0043 + 2.2027 = 4.2070 | 3.04 to 3.12 | 1.35 to 1.39 |
+| 2 | today's | on the host | 2.0043 + 1.5415 = 3.5458 | 3.04 to 3.12 | 1.14 to 1.17 |
+| 2 | follow-up with salts `all` | on the card (default) | 1.3072 + 2.2712 = 3.5784 | 2.1425 | 1.67 |
+| 2 | follow-up with salts `all` | on the host | 1.3072 + 0.9524 = **2.2596** | 2.1425 | **1.05** |
+| 1 | follow-up with salts `all` | on the host | 1.5951 + 1.0820 = 2.6771 | 2.68 to 2.75 (the follow-up without salts `all`) | 0.97 to 1.00 |
+
+- So the 1.35 and 1.67 of my 14:19Z entry are what the cut costs as the code chooses the walk today; with the values unit walked on the host the cut's block costs about the head block's card seconds with tonight's cuts, and 1.14 to 1.17 of it with today's binary. Setting the walk by a switch is not a registered rule: whoever owns `HOST_UNIT_LEVELS` decides whether a values unit goes to the host.
+- G = 64 with the host's walk (`r20261111-142208-a5fc`) began about 15:28Z; G = 32 (`64ca`) follows; the last lease ends by 15:53Z.
+
+For BREAKEVEN: `SparseMlaHeadValues_v2{G=128}` with the walk on the host (`FC_HOST_UNITS=1`), vy-dc-h200-3, two provers: 1.5415 s a statement with today's binary, 0.9524 s with the follow-up and salts `all`; one prover 1.9397 s and 1.0820 s; the default in the same run 2.1721 s (two provers) and 2.2824 s (one) (measured, `r20261111-141823-88e7`).
+For BREAKEVEN: the cut's block at G = 128, 256 blocks, two provers, values walked on the host: 3.5458 s today, 2.2596 s with tonight's cuts (measured, `6f08` + `88e7`), against the head block's 3.04 s to 3.12 s and 2.1425 s (measured, `c736`, `5832`): 1.14 to 1.17 and 1.05.
+For the table: the cut's block (scores + values G = 128) with tonight's cuts is 1.67 of the head block's card seconds as the code walks the values unit today (on the card) and 1.05 with `FC_HOST_UNITS=1` (two provers, six cores, vy-dc-h200-3, measured: `6f08`, `fcd7`, `88e7`, `5832`).
