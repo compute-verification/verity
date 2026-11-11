@@ -11,11 +11,11 @@ memory slot.py finds free there (`free_gb`, read once a pool). `choose` then tak
 
   - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
     trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
-    there (`_need`: the larger of the slot's mem= and the job's ask, which no cgroup enforces) once the waiters ahead have
-    taken their own slots and memory, each by the ask its ticket names, as slot.py admits them (`_pool`). Idle slots are
-    places only as far as the free memory goes, since every run that starts reserves its own. The most places, not the
-    first pool that has one: a launch's read and its run's joining the line are half a minute apart, so the launches of one
-    half minute read the same lines, and sent to one place all but one of them wait;
+    there (`_need`: the larger of the slot's mem=, or its book=, and the job's ask, which no cgroup enforces) once the
+    waiters ahead have taken their own slots and memory, each by the ask its ticket names, as slot.py admits them (`_pool`).
+    Idle slots are places only as far as the free memory goes, since every run that starts reserves its own. The most
+    places, not the first pool that has one: a launch's read and its run's joining the line are half a minute apart, so the
+    launches of one half minute read the same lines, and sent to one place all but one of them wait;
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
   - else the pool with the shortest wait, as the waiters the job stays behind per slot that runs, leaving out a pool whose

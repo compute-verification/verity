@@ -350,6 +350,12 @@ def test_idle_slots_are_places_only_as_far_as_the_free_memory_goes_once_the_line
     assert auto._pool(cpu1(400, asks=(64, 64, 16, 16))["research"], 4, 128)[1] == 1, "or one that reserves 120"
     assert auto.choose({**docs, CPU1: cpu1(400, asks=(64, 64, 16, 16))}, 4, 16)[0] == (CPU1, "research"), "five places beat one"
     assert auto._pool(cpu1(-20)["research"], 4, 0)[1] == 0, "reserved past what is free: no slot with a mem= starts a run"
+    booked = [{**slot(f"r{i}"), "book": 15} for i in range(10)]                                     # `mem=40 book=15`, all idle
+    assert auto._pool(pool(*booked, free_gb=60)["research"], 4, 16)[1] == 4, "a slot with book= is a place at what it books: 15 each"
+    assert auto._pool(pool(*booked, free_gb=60, asks=(16, 16))["research"], 4, 16)[:3] == (2, 2, 0), \
+        "and the line ahead takes what it books there too: 15 each of the 60, where their mem= of 40 would start one and no job"
+    assert auto._pool(pool(*booked, free_gb=60, asks=(64,))["research"], 4, 16)[:3] == (1, 0, 0), \
+        "a waiter asking over book= takes its ask, 60: it starts, and nothing is left for the job"
 
 
 def test_the_pool_with_the_most_places_takes_the_job_not_the_first_that_has_one():
@@ -373,14 +379,25 @@ def test_the_pool_with_the_most_places_takes_the_job_not_the_first_that_has_one(
     assert auto.choose(both, 4, 16, lean_pool="build")[0] == (cpu3, "research"), "for a Lean run, among the pools with a Lean slot free too"
 
 
-def test_the_placer_counts_the_line_ahead_as_slot_py_does(tmp_path, monkeypatch):
-    """A place is slot.py's to give, so the placer reads a line as slot.py does: who waits is `waiting`'s answer, each with
-    the ask its ticket names, and who a run joining now stays behind is `ahead`'s, with the pass a small run gets
-    (BACKFILL_MAX_GB) over the lane waiters that only memory keeps from starting."""
+def _slot_py():
+    """The tree's slot.py, loaded as the probe's copy of it is."""
     spec = importlib.util.spec_from_file_location("check_slot_of_the_tree", REPO / auto.SLOT_PY)
     slot_py = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(slot_py)
+    return slot_py
+
+
+def test_the_placer_counts_the_line_ahead_as_slot_py_does(tmp_path, monkeypatch):
+    """A place is slot.py's to give, so the placer reads a line as slot.py does: who waits is `waiting`'s answer, each with
+    the ask its ticket names, and who a run joining now stays behind is `ahead`'s, with the pass a small run gets
+    (BACKFILL_MAX_GB) over the lane waiters that only memory keeps from starting. What a run reserves in a slot is slot.py's
+    too: `booked`, of the slot as `asking` raised it to the run's ask."""
+    slot_py = _slot_py()
     assert auto.BACKFILL_MAX_GB == slot_py.BACKFILL_MAX_GB
+    for s in ({"mem": None}, {"mem": 40}, {"mem": 40, "book": 15}, {"mem": 40, "book": 40}):
+        for ask in (0, 12, 16, 32, 40, 43, 64):
+            monkeypatch.setenv(slot_py.RUN_MEM_ENV, str(ask))
+            assert auto._need(s, ask) == (slot_py.booked(slot_py.asking([s])[0]) or 0), (s, ask)
 
     def join(ask: int, priority: bool = False) -> tuple[Path, int]:
         if ask:
@@ -621,6 +638,51 @@ def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monke
     assert "--mem-gb 150 goes to the slot" in capsys.readouterr().err
 
 
+def _suites_repo(tmp_path: Path) -> Path:
+    """A repository whose one suite's test processes take 16 GB each, with the tree's slot.py: a run of all its suites plans
+    its 4 processes on 64 GB and reserves 32 of it in a pool's slot (research.suite_size)."""
+    repo = _auto_repo(tmp_path)
+    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
+                       "a": '[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 16\n'}.items():
+        (repo / path).mkdir(exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    (repo / auto.SLOT_PY).parent.mkdir(parents=True)
+    (repo / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text())
+    return repo
+
+
+def test_a_run_of_many_suites_is_placed_and_counted_in_a_line_by_what_it_reserves(tmp_path, monkeypatch, capsys):
+    """A run of many suites holds half of what it plans on in a pool's slot, so half is what a place for it takes of the
+    machine's free memory, and what it takes from the runs behind it while it waits in a line. Counted by the whole figure,
+    it would be sent past a pool with room for three of it to one with room for two."""
+    roomy = pool(*(slot(f"r{i}", mem=24) for i in range(4)), free_gb=100)       # 32 GB reserves 30 GiB there, 64 GB 60
+    docs = {N2: share(waiters=56), CPU1: roomy, CPU5: pool(slot("r0", mem=24), slot("r1", mem=24), free_gb=300)}
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: docs)
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_suites_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    slot_py = _slot_py()
+    assert main([*runs, "--", *suites]) == 3
+    assert main([*runs, "--mem-gb", "64", "--", *suites]) == 3
+    halved, whole = launched
+    assert (halved["machine_name"], halved["env"][slot_py.RUN_MEM_ENV]) == (CPU1, "32"), "three places of 30 GiB in the 100 free"
+    assert (whole["machine_name"], whole["env"][slot_py.RUN_MEM_ENV]) == (CPU5, "64"), \
+        "a --mem-gb given is reserved whole: 60 GiB is one place of the 100, and the other pool has two"
+    err = capsys.readouterr().err
+    assert f"{CPU1}'s research pool has the most places for it (3)" in err and f"{CPU5}'s research pool has the most places for it (2)" in err
+    monkeypatch.setenv(slot_py.RUN_MEM_ENV, halved["env"][slot_py.RUN_MEM_ENV])                     # the run, joining its slot's line
+    _ticket, fd = slot_py.join(tmp_path, priority=False, who=slot_py.asker())
+    line = [{**w, "minutes": 0} for w in slot_py.waiting(tmp_path / slot_py.LINE, datetime(2030, 1, 1, tzinfo=UTC))]
+    os.close(fd)
+    assert [w["mem_gb"] for w in line] == [32], "its ticket names what it reserves"
+    assert auto._pool({**roomy["research"], "waiters": line}, 4, 32)[:3] == (1, 2, 0), \
+        "ahead in the line it takes 30 GiB of the 100, which leaves two places for a run like it; 60 would leave one"
+
+
 def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites_plans_on(tmp_path, monkeypatch, capsys):
     """A pool's slot holds a run's reservation against the node for as long as the run holds the slot. A sized run of many
     suites (research.suite_size) asks the slot for its `reserve_gb` and hands slot.py the whole figure as `--budget-gb`, which
@@ -630,14 +692,7 @@ def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites
     monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=40))})
     monkeypatch.setattr(remote, "launch", _refusing(launched))
     monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
-    repo = _auto_repo(tmp_path)
-    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
-                       "a": '[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 16\n'}.items():
-        (repo / path).mkdir(exist_ok=True)
-        (repo / path / "pyproject.toml").write_text(body)
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-    (repo / auto.SLOT_PY).parent.mkdir(parents=True)
-    (repo / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text())
+    repo = _suites_repo(tmp_path)
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
