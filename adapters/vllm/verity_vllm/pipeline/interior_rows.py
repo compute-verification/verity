@@ -205,7 +205,8 @@ def gather(pm: Mapping[str, Any], store: Any, weights: Callable) -> list[dict[st
 def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> Span:
     """Request ``rid``'s span of the capture's token-select template (`sampler_capture.write`): unit j reads logits row j and
     outputs token j, laid out as `span` reads a token select's units from a Program. ``served``: the ids serving emitted,
-    which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed."""
+    which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed: the refusal
+    names the request and how many ids differ, never an id, which is a served value."""
     cap = LogitsCapture.of(json.loads((directory / CAPTURE).read_text()), str(directory / CAPTURE))
     s, t = cap.spans[rid], cap.template
     params, ret = SRW.template(t).fn.signature()
@@ -218,8 +219,9 @@ def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> 
         raise ValueError(f"request {rid}: {s['file']} is not the capture's ({s['sha256'][:16]})")
     tokens = np.asarray(s["tokens"], dtype="<u4")
     if served is not None and [int(x) for x in served] != tokens.tolist():
-        raise ValueError(f"request {rid}: the replay selected {tokens.tolist()[:8]}..., serving emitted {list(served)[:8]}...: "
-                         "it didn't reproduce the span")
+        differ = sum(int(a) != b for a, b in zip(served, tokens.tolist())) + abs(len(served) - len(tokens))
+        raise ValueError(f"request {rid}: the replay selected {len(tokens)} ids and serving emitted {len(served)}, "
+                         f"{differ} of them different: it didn't reproduce the span")
     n = len(tokens)
     m = CS.Member(t, (("in0", ins[0]),), ((f"out.{SAMPLED_MEMBER}", 2),), n, 0)
     data = {"rows": {"in0": np.frombuffer(raw, dtype="<u2").reshape(n, ins[0]).astype(np.uint16)},
@@ -275,7 +277,8 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     best, idx = token_select_chunk_bests(x.reshape(n * k, c))
     tok, want = _combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
     if not np.array_equal(tok, want):
-        raise ValueError(f"request {s.rid}: its chunks and combine select {tok.tolist()[:8]}..., its span {want.tolist()[:8]}...")
+        raise ValueError(f"request {s.rid}: its chunks and combine select other ids than its span's at "
+                         f"{int(np.count_nonzero(tok != want))} of its {n} tokens")
     i32 = idx.astype("<u4").view("<u2")
     split = ((f"TokenSelectChunk_v2{{C={c}}}", n * k, [x.reshape(n * k, c)], [best[:, None], i32.reshape(n * k, 2)]),
              (f"TokenSelectCombine_v2{{V={V},C={c}}}", n, [x[:, :1], best.reshape(n, k), i32.reshape(n, 2 * k)],
