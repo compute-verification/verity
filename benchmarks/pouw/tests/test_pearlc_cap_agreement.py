@@ -1,9 +1,9 @@
-"""The hidden cap (`circuit.cap`'s `Pc8TileCap` at `cap.row_rho`'s ρr, the template `cap.served` serves) and the clear
-path's (`clear_work.cap_failure`) on the same tile of the H100 record: one verdict on every tile, accepted and refused,
-under -h3's per-row cap (4ρ at its census k = 256, ρ at k = 1,024) and -h0's tile cap alone.  The clear path's forming
-term (`pearl_c_debit.forming_elements`) reads each row's forming, here α = β = 1 and x = 0, which has no salt-dead
-element, and the tiles have no atom block that every word of a row flags, so it is 0, as the circuit's is on no
-salt-dead bits."""
+"""The hidden inert-work bound (`circuit.cap`'s `Pc8TileCap` at `cap.row_rho`'s ρr, the template `cap.served` serves)
+and the clear path's (`clear_work.cap_failure`) on the same tile of the H100 record: one verdict on every tile, accepted
+and refused, under -h3's bound on a row (4ρ at its census k = 256, ρ at k = 1,024) and -h0's bound on the tile alone.
+The clear path's forming term (`pearl_c_debit.forming_elements`) reads each row's forming, here α = β = 1 and x = 0,
+which has no salt-dead element, and the tiles have no atom block that every word of a row flags, so it is 0, as the
+circuit's is on no salt-dead bits."""
 from __future__ import annotations
 
 import itertools
@@ -27,17 +27,18 @@ from verity.protocols.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 H100 = DEVICES["h100"]
 H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100, hashing="h0")
-#: GLM-5.3's down projection's n, in tiles of 8 rows and 16 columns: a flagged atom-word debits 40 units, a cell earns 420
-#: at k = 256 and 1,392 at k = 1,024, so a row's cap at k = 256 is 16.8 at ρ = 1/400 and 67.2 at 4ρ, and 55.68 at ρ at
-#: k = 1,024; the tile's is 134.4 at k = 256
+#: GLM-5.3's down projection's n, in tiles of 8 rows and 16 columns: a flagged atom-word is 40 units of inert work, a
+#: cell earns 420 at k = 256 and 1,392 at k = 1,024, so a row's bound at k = 256 is 16.8 at ρ = 1/400 and 67.2 at 4ρ,
+#: and 55.68 at ρ at k = 1,024; the tile's is 134.4 at k = 256
 N, TILE = 6144, (8, 16)
 ONE = 0x3F800000
 
 
 def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]:
     """(the hidden verdict, the clear verdict, the clear reason) on the first unflagged random tile on which `T.flag_words`
-    flags the words of ``at`` and no other (zeroing an atom can flag a later one of its word), the hidden cap's credited
-    rows the record's (`UnitRecord.credited`: a ``voluntary`` row's band of 64 has none, so the tile has none)."""
+    flags the words of ``at`` and no other (zeroing an atom can flag a later one of its word), the hidden bound's
+    credited rows the record's (`UnitRecord.credited`: a ``voluntary`` row's band of 64 has none, so the tile has
+    none)."""
     tm, tn = TILE
     d = scheme.device
     want = [0] * tm
@@ -76,9 +77,9 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
 ], ids=["h3-256-none", "h3-256-one", "h3-256-two-over-4rho", "h3-256-two-voluntary", "h3-256-three-rows",
         "h3-256-tile-over-rho", "h3-1024-one", "h3-1024-two-over-rho", "h0-1024-two"])
 def test_the_hidden_and_clear_caps_agree(scheme, k, at, voluntary, accepted, why):
-    """Each case's verdict is the hidden cap's and the clear path's, and the clear reason names the cap that refuses it:
-    a row over 4ρ at k = 256 (or over ρ at k = 1,024) under -h3 is refused by both and accepted once given up as
-    voluntary, a row within 4ρ but over ρ is accepted by both, a tile over ρ is refused by both, and -h0 caps the tile
+    """Each case's verdict is the hidden bound's and the clear path's, and the clear reason names the bound that refuses
+    it: a row over 4ρ at k = 256 (or over ρ at k = 1,024) under -h3 is refused by both and accepted once given up as
+    voluntary, a row within 4ρ but over ρ is accepted by both, a tile over ρ is refused by both, and -h0 bounds the tile
     alone."""
     hidden, clear, reason = _verdicts(scheme, k, at, voluntary)
     assert hidden == clear == accepted, reason
