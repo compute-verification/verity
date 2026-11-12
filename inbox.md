@@ -73,3 +73,62 @@ ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 6:39 AM PT. Your 6:
 - **The label and the result's first line** will say: the onsite line's workers on the kept window, from `1aba053782b2`; no run of `main` or of the port; the port's two added tasks are not in it.
 - **#9319's body** has the new heading, "What of the port no run has exercised on a served window": the whole on `main`'s layout, and the two added tasks. One fact added there [ran, `git merge-base --is-ancestor`]: the pool's four commits stand under the commit that served and audited the kept window, so that audit ran with the pool on the onsite line's layout. How many Lean checks it ran at once I have not read.
 
+[2026-11-12T14:48Z] 98dc80c268d2
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 6:52 AM PST. **NET-366's baseline ended and holds: 141.1 proving seconds and 31.2 Lean verifier CPU seconds on one core, for each second of execution phase.** The head and the suites run for your mark follow apart.
+
+**The run**
+- `r20261112-135528-7404`: done, exit 0, class SUCCESS, result valid, preserved [status, `result.json` and `out/scan_cost.json` read by me].
+- 44.8 min, 5:55:50 to 6:40:37 AM PST, network-pool slot `n0`, 21 of its 23 cores pinned, the tree at `4d784714a84d`.
+- The guard holds: the scan exited 0, and the execution phase's answer accepts with `public.json`'s public part, 64 of 64 blocks, bound 0.
+
+**The two numbers** [read], at `w63k4`, T = 32 ticks of 100 ms, G = 1, so a round covers 3.2 s:
+- **Proving: 141.069 s a second of execution phase** (14.107 s a tick). A round is 436.62 s of sessions and 14.8 s of staging.
+- **The Lean verifier: 31.231 CPU s a second of execution phase, on one core.** A round is 99.94 CPU s. Its wall beside it: 31.281 (100.1 s a round).
+- Beside them: the largest prover process peaked at 22.61 GiB (the ingress session's). Lowering, once a run: 40.6 + 62.2 + 2.2 s.
+
+**The round by stage at every block**, seconds [read: `result.py table`; each session's five stages sum to its process]:
+
+| member | blocks | session | staging | to Register | Register to reps | level 0 | reps | tail | Lean CPU | Lean inputs, setup, checks |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| first | 1 | 70.9 | 3.9 | 3.5 | 24.6 | 5.6 | 36.9 | 0.3 | 24.9 | 9.8, 10.5, 3.5 |
+| ingress-0 | 30 | 210.6 | 6.7 | 5.6 | 26.1 | 24.0 | 154.5 | 0.4 | 26.5 | 10.3, 11.0, 4.2 |
+| last | 1 | 96.1 | 3.6 | 5.4 | 25.6 | 8.3 | 56.3 | 0.4 | 26.3 | 10.4, 10.6, 4.3 |
+| egress-0 | 32 | 59.0 | 0.6 | 1.6 | 23.2 | 5.4 | 28.6 | 0.3 | 22.2 | 8.6, 10.4, 2.2 |
+| the round | 64 | 436.6 | 14.8 | 16.1 (4%) | 99.5 (23%) | 43.3 (10%) | 276.4 (63%) | 1.5 | 99.9 | 39.1, 42.5, 14.2 |
+
+- The reps split in the log into the prover's own, 165.7 s a round, and its ZK inner, 110.1 s.
+
+**Which of the five gaps the logs close**
+- **1, the every-block round's stages: closed.** The table above.
+- **5, staging at every block: closed.** 14.8 s a round: 3.9, 6.7, 3.6 and 0.6.
+- **3, the 50 to 56 s before the repetitions: sized, not named.** It is 23.2 to 26.1 s in every session, at 1 block or 32, at k_log 23 or 26. So it is paid once a session: 99.5 s a round, 23% of the sessions' seconds. No field says what fills it. The witness is 0.15 to 0.75 s of it. The prover's `wait_e2e_s` covers the whole session, reps included (13 to 82 s), so it does not split it.
+- **2, the ZK server's share of the wall: open.** The log still times it only at `t.lean_finish` and `t.firewall_recheck`, under 0.2 s a rep.
+- **4, composing as a stage: open.** No field has that name.
+
+**These are lower than my proposal's figures, and I have not found why.** The proposal's every-block rounds were 669 to 763 s of sessions, on 48 and 180 cores, on trees of 28 Oct and 9 Nov; this one is 436.6 s on 21. The Lean verifier was 265 to 340 s of wall a round there, unpinned; here it is 99.9 CPU s on one core. The trees and the machines differ, so I draw nothing from the gap. The proposal's section E arithmetic stands on the old figures and is stale.
+
+**The run's `out/` by part: 2,091 MB in 310 files** [ran]
+
+| part | MB | share |
+| --- | --- | --- |
+| `sczk/ROUND/verifier/NAME-circuit.txt`, the verifier's copy of each circuit, 11 files | 1,697.3 | 81.2% |
+| `sczk/ROUND/verifier/program.json`, 5 files | 210.8 | 10.1% |
+| `sczk/joint` and `sczk/solo`, the lowered Definitions' kept files | 82.2 | 3.9% |
+| `sczk/` top and each round's draw, audit and registration | 48.0 | 2.3% |
+| each session's `sessions/` files | 24.9 | 1.2% |
+| `sczk/ROUND/verifier/*-circuit.repN.bin` | 18.9 | 0.9% |
+| the rest of `verifier/`, the session logs, staging's files, the top-level logs | 8.8 | 0.4% |
+
+- By round: honest 778, chain 778, unread 327, joint 81, tampered 65, block 60.
+- A correction: the rehearsal's "891 MB" was `du`'s MiB; in MB it is 932, of which the circuit text is 815.
+
+**What the scan allows: removal after the scan. It takes no directory for those files.**
+- `scan_zk.py` writes what the verifier received under `ROUND/verifier/` of its `--out`, which `scan_zk.sh` sets to the job's scratch. `scan_zk.sh` then copies the scratch tree into `$OUT/sczk`, leaving out only the prover's `circuit.txt`, the instances, the archives and the signer's state [read: `scan_zk.sh` line 117, `scan_zk.py` 1290]. The verifier's `NAME-circuit.txt` is not left out.
+- Built, commit `87ac3145dcb1` (local; pushed with the final head): `run.sh` deletes `sczk/ROUND/verifier/NAME-circuit.txt` once the scan has ended, whatever its exit, before the result is written. With a test, 24 in the file [ran]. `scan_zk.sh` and `scan_zk.py` are untouched, so nothing the scan proves or verifies changes.
+- Each file's SHA-512 stays in its session's `prove.log` (`circuit_sha512`) [ran: equal for the rehearsal's four honest sessions].
+- With it this run's `out/` would be 394 MB. `program.json` (211 MB) is then the largest part. I left it: say if it goes too.
+
+**Tonight's order of tries:** my read has not changed. None of the six can lose a release; only our deviating process dying before the relay writes can. The order stays.
+
+**Next, for your mark of #9290:** `baseline.json` locked to this run, `main` merged in, the changed suites once at the final head, the body. Then the head and the run.
+
