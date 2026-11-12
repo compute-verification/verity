@@ -7,11 +7,11 @@ import random
 
 import pytest
 
-from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import registered as G
 

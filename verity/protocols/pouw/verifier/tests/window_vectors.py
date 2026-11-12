@@ -21,8 +21,8 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, row_leaf
-from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.prover.circuit import leaves as L
+from verity.protocols.pouw.verifier import window as Wd
 
 OUT = Path(__file__).with_name("vectors") / "window.json"
 TAG = "verity/pouw/window-vectors/v1"
