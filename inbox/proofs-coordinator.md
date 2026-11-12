@@ -76149,3 +76149,24 @@ time; and medians of parts do not add to the median of the whole.
 
 The scripts and the checkpoint are in `lanes/proofs/20261112T0450Z-fixedcost/` and
 `lanes/proofs/20261112T0513Z-report-fixedcost.md` of the notes, synced 07:30Z (notes commit `8d4d19030d`).
+
+## COUNT, Thu 12 Nov 07:31Z: the card's pull request is open, #9185 at `d5b8ad2f528c` on #9112's head; the control passes on the tree (2,635.9 GB, no planner input differs); its suites are running, so this is not the ready line
+
+- **Open, not marked** [run by me: `research queue open`, 07:28Z]. Branch `cursor/proofs-count-4d1e`, three commits on `c454bb683c8e`, all under `benchmarks/spot_figures/`. Body has `Lane proofs`, the goal's line and `Refs PRF-577`.
+- **The control** [run `r20261112-072030-0564`, exit 0, at `d5b8ad2f528c`]: the driver's second row with benchmarks' prices handed in gives 193 block types, every one of the planner's seven inputs equal to the plan of record's to 1e-9, and 2,635.9 GB (2,767.7 with the 1.05), modeled, at a datacenter's 600 s (12,500 machines). The 128k factors are computed from the card and the serve plan and equal the plan of record's on 84 block types to 1.9e-16.
+- **What the control does not hold:** prices for 178 of the 193 block types are handed in, so it holds the card, the factors, the row's levers and the tree's price of the other 15, not the tree's price tables.
+- **The card's artifact to label:** `art:be39ec1ff595f1de7955bdc747ffcf7bdbf41f425fa37139c9e71c443ee765e1` (kind `spot-card/v1`, ref census `art:471350fa…`). The tree's generator writes the same bytes from the census file.
+- **The driver's rows move** (10% point, world year, with the 1.05, GB, modeled) [before: run `r20261112-072120-453d`, exit 0, at `c454bb683c8e`; after: run `0564`]:
+
+| the driver's row | before | after | proving at the assumed default price: before | after |
+|---|---:|---:|---:|---:|
+| first | 11,712.7 | 6,770.4 | 91% | 98% |
+| second | 5,907.5 | 4,887.1 | 80% | 95% |
+| third | 1,722.1 | 1,452.5 | 73% | 88% |
+
+- **Correction to my 06:55Z entry:** it gave the after shares without the before ones. The default price already carried 91%, 80% and 73% of these rows' proving seconds at #9112's head.
+- **The run of record moves a second time** when this lands: 6,770.4 GB expected at the first row, "with 98% of its proving seconds at the planner's assumed default price". The body says so.
+- **Lean's merge** [run by me, at `d5b8ad2f528c`]: `git merge-tree` against `cursor/lean-remote-merge-landing-fc8d` stops in the three files #9112 stops in and in none of this pull request's own.
+- **Waiting on:** `r20261112-072155-f420` (quick suites at `d5b8ad2f528c`), started about 07:31Z after waiting for a slot; about 08:10Z [guess]. Then the body's suites line and the ready line.
+- **#9112** is not on `main` (`bcaf58a45d`) at 07:29Z; I check hourly and launch the driver's run when it is.
+- Mailbox read: 25 sections, through 07:17Z.
