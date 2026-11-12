@@ -88,11 +88,16 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
-    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment at serve: each finished request's "
-                                          "b.ingress and b.egress rows by size class, committed as the engine core serves "
-                                          "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
-                                          "layout, record and files (Layout, record, reopen), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
+                                          "and b.egress rows by size class, a class's layout, record and files (Layout, "
+                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
+                                          "computes where a response ends, and a stop class's stop record "
+                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
+                                          "registers under the verifier's own rule",
+    "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
+                                             "scheduler that commits each window's finished requests by class "
+                                             "(BoundaryWindows), which benchmarks/serve_tax's plugin installs",
     "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
                                             "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
