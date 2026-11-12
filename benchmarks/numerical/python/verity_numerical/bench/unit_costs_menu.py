@@ -137,7 +137,7 @@ def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHEC
     out = []
     for w in dict.fromkeys(r["workload"] for r in inv["rows"]):
         N, units, _skipped = P.units_of(inv, w)
-        rho, nets = U.rhos(inv, w), U.netlists(inv, w)
+        rho, nets = U.rhos(inv, w), U.descriptions(inv, w)
         r0 = min((rho.get(u.label, U.RHO_TABLE) for u in P.tail_split(units)[0]), default=U.RHO_TABLE)
         cap = U.cap(r0, coef, U.NODE_GIB, nets=[nets[u.label]["bytes"] for u in units if u.label in nets], slot=slot)
         bs = buckets(N, K, units, nets, cap if cap is not None and any(u.z > cap for u in units) else None)

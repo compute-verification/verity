@@ -1,5 +1,5 @@
 """F6's prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
-coefficients, the range and memory caps, the slot sumcheck's term, netlists, staging, a tiny audit unsplit and split
+coefficients, the range and memory caps, the slot sumcheck's term, descriptions, staging, a tiny audit unsplit and split
 exactly, and token-select's argmax tree."""
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def test_a_session_from_fixed_coefficients():
     assert PR.cap(16, COEF, math.inf, **TINY) == 2 ** 28
     assert PR.cap(16, COEF, 53, **TINY) == 2 ** 28 and PR.cap(16, COEF, 52.9, **TINY) == 2 ** 27
     assert PR.cap(16, COEF, 1, **TINY) is None
-    # netlists: the largest 16, each at most Z's; a block term
+    # descriptions: the largest 16, each at most Z's; a block term
     s = PR.session(2 ** 20, 16, COEF, nets=[2 ** 10, 2 ** 30, 5], **TINY)
     assert s["circuit_bytes"] == 2 ** 22 + 2 ** 10 + 5
     blk = dict(COEF, rss_gib=(0.0, 0.0, 0.0, 16.0))
@@ -113,7 +113,7 @@ def test_dp4t_keys_buckets_by_template():
                                                  / sum(160 * u.n / 1000 * u.z_mean for u in units))
 
 
-def test_netlists_and_staging():
+def test_descriptions_and_staging():
     per = {"nnz": 1000, "ands": 50, "committed": 10}
     inv = {"rows": [
         {"workload": "w", "unit_type": "r", "source": "registered", "subcircuit": {"per_unit": per},
@@ -123,7 +123,7 @@ def test_netlists_and_staging():
                               {"member": "n", "nnz": 9, "ands": 2}]}},
         {"workload": "w", "unit_type": "g", "source": "generic", "subcircuit": {"per_unit": per}},
         {"workload": "v", "unit_type": "x", "source": "generic", "subcircuit": {"per_unit": per}}]}
-    n = PR.netlists(inv, "w", bytes_per_nnz=2)
+    n = PR.descriptions(inv, "w", bytes_per_nnz=2)
     assert n == {"r": {"kind": "registered", "nnz": 8, "bytes": 16, "ands": 2},
                  "t": {"kind": "tree", "nnz": 16, "bytes": 32, "ands": 3},
                  "g": {"kind": "generic", "nnz": 1000, "bytes": 2000, "ands": 50}}

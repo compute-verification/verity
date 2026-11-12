@@ -5,9 +5,9 @@ bound, fitted from recorded prover runs, and where a session stops fitting on on
 
 **Source runs** (:data:`SOURCE`): every ``flock-circuit prove --zk`` record of ``benchmarks/pouw/hidden_zk`` on the Nebius
 nodes (CPU prover, Rust, upstream Flock b684b12 with Flock's patches; Intel Xeon 6776P, 192 CPUs, 1,716 GiB): the session's
-instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in all, the circuit text's bytes (one unit
-netlist shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's wall time
-(circuit load included) and peak RSS (GiB), and the prover's threads.
+instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in all, the circuit text's bytes (one
+unit's description shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's
+wall time (circuit load included) and peak RSS (GiB), and the prover's threads.
 
 **The fit** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB, one
 block's bits 2^k_log / 2^30), prove time without the circuit bytes (:data:`FITS`), by least squares: RSS over every record,
@@ -17,8 +17,8 @@ every residual are in the output.
 **A session** (:func:`session`) of B slots at bound Z, each slot one unit of at most Z nonzeros with ρ nonzeros per row:
 rows = Z / ρ; ``k_log`` = max(22, ceil(log2(rows + 1)) + 2), the slot rounded up to a power of two and at most doubled again
 by the SHA-512, hm96 and lookup ranges (every recorded block is at least 2^22); D = B 2^k_log; circuit bytes =
-:data:`GLUE_BYTES` + the netlists of the session's distinct unit types (at most B; a session's slots may hold different
-types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`netlists`): a registered type's one
+:data:`GLUE_BYTES` + the descriptions of the session's distinct unit types (at most B; a session's slots may hold different
+types), each at :data:`BYTES_PER_NNZ` per nonzero of what the circuit text holds (:func:`descriptions`): a registered type's one
 unit (GEMM's tc-step: 263,933 nonzeros, shared by its K/16 units), a token-select tree's distinct members, a generic type's
 whole subcircuit; never more than Z nonzeros. ρ is the least nonzeros per committed row among the bucket's types (the
 inventory's ``nnz / committed``). A block is at most 2^:data:`K_MAX` bits (``Stmt.InRange``), so a session needing more
@@ -49,7 +49,7 @@ staging ladder (:data:`STAGING`); a registered type lowers one unit, at least th
 **The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3): V* runs
 the slot sumcheck's verifier and opens the committed bits, so each session's prover adds, apart from Flock's prove, K1 ns
 per entry per rep x entries x reps seconds. A slot's entries are its type's *template*, the registered table: the
-nonzeros of what the circuit text holds for the type (:func:`netlists`: a registered type's one unit, a tree's distinct
+nonzeros of what the circuit text holds for the type (:func:`descriptions`: a registered type's one unit, a tree's distinct
 members, a generic type's whole subcircuit), at most Z. A session's entries are slots x its largest template's (the 16
 slots run as one sumcheck and the type is hidden, so every slot is padded to the session's largest; F4's table pads a
 template to n = 2^ν slots, whose padding pairs the kernel skips; proofs' ``vstar_c3.py`` takes the same shape). K1 is
@@ -76,10 +76,10 @@ NODE_GIB = 1716
 #: one NVIDIA RTX PRO 6000 Blackwell Server Edition: 97,887 MiB
 GPU_GIB = 97_887 / 1024
 SLOTS = 16
-#: flock-ir-unit/v2 netlist text per nonzero: the largest of four registered units' (``ir_lower.netlist``: GEMM tc-step 4.93,
+#: bytes of flock-ir-unit/v2 text per nonzero: the largest of four registered units' (``ir_lower.netlist``: GEMM tc-step 4.93,
 #: RoPE pair 4.73, SiLU element 4.33, RMSNorm-Triton N=128 6.04)
 BYTES_PER_NNZ = 6.04
-#: the circuit text that is not a unit's netlist (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,
+#: the circuit text that is not a unit's description (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
 POW2 = tuple(range(16, 33))
@@ -166,7 +166,7 @@ HIDDEN_ZK: tuple[tuple[str, str, int, int, int, int, float, float, float, int], 
     ('r20261004-230455-eac8', 'Pc4RowAForm_v1{K=14336,KS=2048,J=5}', 16, 26, 30, 10328215509, 14.938, 222.25, 38.13, 16),
     ('r20261004-230501-ceb4', 'Pc4RowAForm_v1{K=14336,KS=2048,J=6}', 16, 26, 30, 10328215509, 15.1235, 221.66, 37.97, 16),
 )
-#: one GEMM tc-step unit's netlist (rows + A and B nonzeros), the registered unit of every gemm-coordinate K
+#: one GEMM tc-step unit's description (rows + A and B nonzeros), the registered unit of every gemm-coordinate K
 TC_STEP_NNZ = 9473 + 120_833 + 133_627
 #: registered GEMM-coordinate sessions, the column's check (``benchmarks/pouw/hidden_zk/registered.sh``, 16 instances, sm80
 #: bf16, vy-nebius-1): K (each slot K / 16 tc-step units) and the session in :data:`HIDDEN_ZK`'s form. The verifier checks
@@ -268,8 +268,8 @@ def fit(source: Sequence[tuple] = SOURCE, fits: Mapping[str, Sequence[int]] = FI
 
 def check(coef: Mapping[str, Sequence[float]], before: Sequence[tuple] = HIDDEN_ZK) -> list[dict[str, Any]]:
     """Each registered session against what the column predicted for it: the fit on ``before`` (the column as posted) at its
-    measured D and circuit bytes, and its bound Z under the posted session model (each slot its own netlist of Z nonzeros,
-    ρ = :data:`RHO_TABLE`), next to this model's prediction (one tc-step netlist, ``coef``)."""
+    measured D and circuit bytes, and its bound Z under the posted session model (each slot its own description of Z
+    nonzeros, ρ = :data:`RHO_TABLE`), next to this model's prediction (one tc-step description, ``coef``)."""
     old = fit(before, POSTED_FITS)["coef"]
     out = []
     for K, r in REGISTERED_SESSIONS:
@@ -295,8 +295,8 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
             glue: float = GLUE_BYTES, nets: Sequence[float] | None = None,
             slot: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One session of ``slots`` slots at bound Z (the module docstring): its rows per slot, k_log, whether it is in range, D,
-    circuit bytes, and the fits' RSS (GiB), prove and process wall seconds. ``nets``: the netlist bytes of the unit types
-    it may hold (None: each slot a netlist of its own Z nonzeros). ``slot``: the slot sumcheck's coefficients
+    circuit bytes, and the fits' RSS (GiB), prove and process wall seconds. ``nets``: the description bytes of the unit
+    types it may hold (None: each slot a description of its own Z nonzeros). ``slot``: the slot sumcheck's coefficients
     (:data:`SLOT_SUMCHECK`; None: no slot sumcheck), adding its entries, seconds and GiB, and the session's total seconds
     and peak GiB."""
     rows = Z / rho
@@ -338,8 +338,8 @@ def cap(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int 
     return max(fits) if fits else None
 
 
-def netlists(inv: Mapping[str, Any], workload: str, bytes_per_nnz: float = BYTES_PER_NNZ) -> dict[str, dict[str, Any]]:
-    """Each unit type's netlist in the circuit text (the module docstring): its kind, nonzeros, bytes and the ANDs staging
+def descriptions(inv: Mapping[str, Any], workload: str, bytes_per_nnz: float = BYTES_PER_NNZ) -> dict[str, dict[str, Any]]:
+    """Each unit type's description in the circuit text (the module docstring): its kind, nonzeros, bytes and the ANDs staging
     lowers."""
     out = {}
     for r in inv["rows"]:
@@ -390,7 +390,7 @@ def rhos(inv: Mapping[str, Any], workload: str) -> dict[str, float]:
 
 
 def _held(us: Sequence[P.Unit], nets: Mapping[str, Mapping[str, Any]] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """``session``'s netlists for a bucket of ``us`` (none without ``nets``), and the bucket's largest staging."""
+    """``session``'s descriptions for a bucket of ``us`` (none without ``nets``), and the bucket's largest staging."""
     if nets is None:
         return {}, None
     st = [dict(nets[u.label]["staging"], unit_type=u.label, kind=nets[u.label]["kind"]) for u in us
@@ -558,7 +558,7 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)
     rho = rhos(inv, name)
-    nets = netlists(inv, name, kw.get("bytes_per_nnz", BYTES_PER_NNZ))
+    nets = descriptions(inv, name, kw.get("bytes_per_nnz", BYTES_PER_NNZ))
     body, _tail, _thr = P.tail_split(units)
     registered = []
     if register_bulk:
@@ -746,7 +746,7 @@ def render(pr: Mapping[str, Any]) -> str:
     line = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
          "Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
-         "the session's bits (slots x 2^k_log); cb: its circuit text, the netlists of its distinct unit types at "
+         "the session's bits (slots x 2^k_log); cb: its circuit text, the descriptions of its distinct unit types at "
          f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
          f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
          "(Stmt.InRange): flock-circuit refuses a session needing more.", "",
@@ -761,7 +761,7 @@ def render(pr: Mapping[str, Any]) -> str:
          "a bound)", *_slot_lines(pr.get("slot_sumcheck")), "",
          "## Check: registered GEMM-coordinate sessions", "",
          "Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
-         "bound Z: each slot its own netlist of Z nonzeros) and against this model.", "",
+         "bound Z: each slot its own description of Z nonzeros) and against this model.", "",
          "| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted fit at measured D, cb | this model | "
          "prove | posted model | posted fit | this model |", "|" + "---|" * 14]
     for r in pr["check"]:
@@ -795,7 +795,8 @@ def render(pr: Mapping[str, Any]) -> str:
     if pr.get("workloads_dp4t"):
         L += _menu_table(pr)
     L += ["", f"## Power-of-two bounds (ρ = {RHO_TABLE} nonzeros per row)", "",
-          "Registered: 16 distinct types, each one GEMM tc-step netlist. Generic: each slot its own netlist of Z nonzeros.", "",
+          ("Registered: 16 distinct types, each one GEMM tc-step description. Generic: each slot its own description of Z "
+           "nonzeros."), "",
           "| Z | rows per slot | k_log | in range | D | registered: circuit text | peak RSS | prove | generic: circuit text | "
           "peak RSS | prove | slot sumcheck | its memory | fits GPU: registered / generic |", "|" + "---|" * 14]
     for q in pr["pow2"]:
