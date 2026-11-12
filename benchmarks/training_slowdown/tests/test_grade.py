@@ -24,7 +24,8 @@ PER_MAC = gates.per_mac("gemm/bf16")
 LOG, STEP_GATES = [["fwd", "theta", "mm", "[[8]]", 1, 80]], 80 * PER_MAC
 #: a traced job's steps a checkpoint: past the first steps the products term leaves out, those a block of k bits holds
 PER = 16
-#: the 45M dense step's product rows as the capture states them, priced: what a job's trace of that step prices to
+#: the 45M dense step's product rows as the capture that traced the stored records (`STATED["capture"]`) states them,
+#: priced: what a job's trace of that step by that capture prices to
 STATED = json.loads((FIXTURES / "dense_45m.products.json").read_text())
 #: a raw row's keys beside its `dtypes` (`capture.products.raw_on_dial`), and the dtype an operand passed at a width has
 RAW = ("count", "phase", "op", "dims", "token_dims", "affected", "widths", "self", "gathered", "rates")
@@ -69,13 +70,14 @@ def job(losses: list, seed: int = 0, split: str = "final", **kw) -> dict:
 
 
 def trace(**over) -> dict:
-    """A job's trace of the 45M dense step (`traced.trace_step`), the keys the grade reads and no other: the stated rows
-    unpriced, each operand's dtype its passed width's, at each k of the dial; `over` its fields."""
+    """A job's trace of the 45M dense step (`traced.trace_step`) by the stored records' capture, the keys the grade
+    reads and no other: the stated rows unpriced, each operand's dtype its passed width's (attention's float32, as
+    that capture traced it), at each k of the dial; `over` its fields."""
     def raw(b: dict) -> dict:
         return {"k": b["k"], "p_match": b["p_match"],
                 "rows": [{k: r[k] for k in RAW} | {"dtypes": [DTYPE[w] for w in r["widths"]]} for r in b["rows"]]}
 
-    return raw(STATED) | {"capture": products.CAPTURE, "tokens": STATED["tokens"], "data_dependent": [],
+    return raw(STATED) | {"capture": STATED["capture"], "tokens": STATED["tokens"], "data_dependent": [],
                           "carried_scalars": [], "at": {k: raw(b) for k, b in STATED["at"].items()}} | over
 
 
@@ -269,22 +271,26 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
 
 
 def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
-    """What ρ reads of a record's trace: each raw row priced by `capture.products.priced`, which gives back the row
-    the capture states, at the rows' k and at each k of the dial; over the steps through the checkpoint that read a
-    changed weight, by their tokens over the traced step's. The grade holds no price: the products are the
-    formalism's of the stated rows."""
+    """What ρ reads of a record's trace: each raw row priced by `capture.products.priced` by the rule of the capture
+    that traced it, which gives back the row that capture states (a stored record's float32 attention products in
+    bf16), at the rows' k and at each k of the dial; over the steps through the checkpoint that read a changed
+    weight, by their tokens over the traced step's. The grade holds no price: the products are the formalism's of
+    the stated rows."""
     rec = traced([OVER, UNDER])["record"]
     row = G.traced(rec, G.rows_of(rec)[1])["formalism"]
     block, got = row["trace"]["products"], row["products"]
     stated = [{k: v for k, v in r.items() if k not in ("P", "fed", "k_whole")} for r in STATED["rows"]]
-    assert block["rows"] == stated and block["rows"] == [products.priced(r) for r in rec["trace"]["rows"]]
+    assert STATED["capture"] == products.READS[0] != products.CAPTURE
+    assert any(r["dtypes"][0] == "float32" and r["phase"] != "optimizer" for r in rec["trace"]["rows"])
+    assert block["rows"] == stated and block["rows"] == [products.priced(r, STATED["capture"])
+                                                         for r in rec["trace"]["rows"]]
     assert set(block["at"]) == set(STATED["at"]) and all(
         [r["cell_gates"] for r in b["rows"]] == [r["cell_gates"] for r in STATED["at"][k]["rows"]]
         for k, b in block["at"].items())
-    assert (block["k"], block["tokens"], block["capture"]) == (STATED["k"], STATED["tokens"], products.CAPTURE)
+    assert (block["k"], block["tokens"], block["capture"]) == (STATED["k"], STATED["tokens"], STATED["capture"])
     assert "capture_code" not in block
     steps = (2 * PER - 1) * 512 / STATED["tokens"]
-    want = work.products_of_trace(STATED | {"capture": products.CAPTURE}, steps)
+    want = work.products_of_trace(STATED, steps)
     assert got["he"]["steps"] == steps and {k: got[k] for k in want} == want
     assert got["stand_in"] == {"structures": ["a"], "step_tokens": [512], "traced_tokens": STATED["tokens"],
                                "why": F.STAND_IN}
@@ -410,8 +416,8 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
         f"refused: the capture refused the search record's step (unsupported, aten::foo: foo has no trace), and ρ "
         f"reads a traced step; {again}")
     assert why(traced([OVER, UNDER], capture="0.1"), **here) == (
-        f"refused: the search record's trace is capture 0.1's, and this grade reads capture {products.CAPTURE}'s; "
-        f"{again}")
+        f"refused: the search record's trace is capture 0.1's, and this grade reads capture 4.12.9's and "
+        f"{products.CAPTURE}'s; {again}")
     lacking = traced([OVER, UNDER])
     del lacking["record"]["trace"]["at"], lacking["record"]["trace"]["carried_scalars"]
     assert why(lacking, **here) == (f"refused: the search record's trace has no at, carried_scalars, which ρ reads; "
@@ -483,7 +489,7 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
     assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"] == {}
     f = G.traced(ran, G.rows_of(ran)[-1])["formalism"]
-    assert f["trace"]["products"]["rows"] == [products.priced(r) for r in ran["trace"]["rows"]]
+    assert f["trace"]["products"]["rows"] == [products.priced(r, products.CAPTURE) for r in ran["trace"]["rows"]]
     assert f["products"]["he"]["steps"] == 2 and "stand_in" not in f["products"] and f["trace"]["affected_share"] > 0
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     starts = registry("tiny", synthetic.SHAPE)

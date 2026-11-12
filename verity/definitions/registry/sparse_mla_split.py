@@ -504,34 +504,41 @@ def combine_cols(DV: int) -> int:
     return G
 
 
-def split_chain(row) -> list[tuple[object, int]]:
+def split_chain(row, cols: int | None = None) -> list[tuple[object, int]]:
     """The units a `SparseMlaSplit_v1` binding ``row`` (or a `SparseMlaHeadSplit_v1`'s, one head) is cut into, each Definition
     bound and how many of it.  Per head, each non-empty split's key blocks (`split_blocks`) as a head's are
     (`sparse_mla.head_chain`): its first visited block `SparseMlaHeadBlock_v1{FIRST}` at its key count, each later one at BN.
     At NS = 1 the one split is the head, ended by `SparseMlaHeadEnd_v1`; above it, each split is ended in its DV / G column
     blocks (`SparseMlaSplitEndCols_v1{G, C}`, G = `combine_cols(DV)`), and `SparseMlaCombine_v1{NSPLIT, DV = G}` combines
-    each column block of the splits.  What `serving_templates` stages a row as, and what circuit-check holds to the block in its
-    place."""
+    each column block of the splits.  With ``cols``, each key block is its scores unit and its values units of G = ``cols``
+    columns (`sparse_mla.block_units`), so a chain's O is in column blocks already: at NS = 1 the head ends on each
+    (`SparseMlaHeadEnd_v1{DV = G}`), and above it each split ends on each (`SparseMlaSplitEnd_v1{DV = G}`, the last scores
+    unit's max and lanes and that column block's last values unit's O) before the same combines.  What `serving_templates`
+    stages a row as; the chain of whole blocks is what circuit-check holds to the block in its place."""
     if getattr(row, "defn", None) not in (SparseMlaSplit, SparseMlaHeadSplit):
         raise ValueError(f"split_chain cuts a SparseMlaSplit_v1 or SparseMlaHeadSplit_v1 binding, not {row!r}")
     S = row.bindings
     T, NS, BN, DV = (int(S[k]) for k in ("T", "NS", "BN", "DV"))
     NH = int(S["NH"]) if "NH" in S else 1
     check_split_statics(T, NS)
-    blk = {k: S[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
     splits = split_blocks(T, NS, BN)
     first: dict[int, int] = {}
     for _b0, b1 in splits:
         nvis = min(T, b1 * BN) - (b1 - 1) * BN
         first[nvis] = first.get(nvis, 0) + NH
-    out = [(bind(M.SparseMlaHeadBlock, NVIS=n, FIRST=True, **blk), k) for n, k in first.items()]
+    out = [u for n, k in first.items() for u in M.block_units(S, cols, n, True, k)]
     if later := NH * sum(b1 - b0 - 1 for b0, b1 in splits):
-        out.append((bind(M.SparseMlaHeadBlock, NVIS=BN, FIRST=False, **blk), later))
+        out += M.block_units(S, cols, BN, False, later)
     if NS == 1:
-        return out + [(bind(M.SparseMlaHeadEnd, DV=DV, INV=S["INV"]), NH)]
-    G = combine_cols(DV)
-    out += [(bind(SparseMlaSplitEndCols, DV=DV, G=G, C=c, INV=S["INV"], SCALE=S["SCALE"]), NH * len(splits))
-            for c in range(DV // G)]
+        G = M.chain_cols(DV, cols)
+        return out + [(bind(M.SparseMlaHeadEnd, DV=G, INV=S["INV"]), NH * (DV // G))]
+    if cols is None:
+        G = combine_cols(DV)
+        out += [(bind(SparseMlaSplitEndCols, DV=DV, G=G, C=c, INV=S["INV"], SCALE=S["SCALE"]), NH * len(splits))
+                for c in range(DV // G)]
+    else:
+        G = M.chain_cols(DV, cols)
+        out.append((bind(SparseMlaSplitEnd, DV=G, INV=S["INV"], SCALE=S["SCALE"]), NH * len(splits) * (DV // G)))
     return out + [(bind(SparseMlaCombine, NSPLIT=len(splits), DV=G, INV=S["INV"]), NH * (DV // G))]
 
 
