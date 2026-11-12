@@ -89,7 +89,7 @@ def start(tmp_path: Path, stage: str = "job", lease: str = GRANT, left: int = 45
         (stubs / name).chmod(0o755)
     env = {**{k: v for k, v in os.environ.items() if k not in KNOBS},
            "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_RUN_ID": "r-tiers", "STUBS": str(stubs), "NOW": str(NOW),
-           "END": f"@{NOW + left}", "NOT_BEFORE": f"@{NOW}", "NAMES": "ahead2 feed8", "GRANTED": EIGHT,
+           "END": f"@{NOW + left}", "NOT_BEFORE": f"@{NOW}", "CTAS": "8 32", "GRANTED": EIGHT,
            "PY": str(stubs / "python"), "SMI": str(stubs / "nvidia-smi"), "GPU_LEASE": str(stubs / "gpu-lease"),
            "CUDA_HOME": str(stubs / "cuda"), "DRIVER_CPUS": str(min(os.sched_getaffinity(0))), "CLEAR_WAIT_S": "0",
            "GPU_LEASE_DIR": str(tmp_path / "gl"), "GPU_LEASE_COUNT": "8", "GPU_LEASE_WHO": "tiers-test",
@@ -124,7 +124,7 @@ def test_a_dry_run_prints_the_lease_and_each_size_and_touches_nothing(tmp_path):
     asked = [line for line in p.stdout.splitlines() if "--host-gib" in line]
     assert [line.split("--host-gib ")[1].split()[0] for line in asked] == ["8", "12", "16"]
     assert all("timeout -k 20 580 taskset -c" in line and line.endswith(
-        "--gib 700 --host-gib " + size + " --gpus 8 --chunk-blocks 65536 --budget-s 490 --names ahead2 feed8")
+        "--gib 700 --host-gib " + size + " --gpus 8 --chunk-blocks 65536 --budget-s 490 --ctas 8 32")
         for line, size in zip(asked, ["8", "12", "16"]))
     assert calls == {"build": [], "lease": [], "driver": []} and not out.exists()
 

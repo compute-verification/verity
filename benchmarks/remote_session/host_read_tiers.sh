@@ -32,8 +32,8 @@
 # no core of its own where that pin does not run.
 #
 # NOT_BEFORE and END (`date -d` syntax, UTC) are the hours: nothing starts before the one, and no lease is held at
-# the other. NAMES are host_read.py's rows after `pass` (its own default without it), GIB the store on the cards,
-# CHUNK_BLOCKS the tier's step in blocks, ARGS more arguments of host_read.py. DRY=1 builds nothing and touches no
+# the other. CTAS are host_read.py's rows after `pass`, each a host segment's receipt CTAs (none: `pass` alone), GIB
+# the store on the cards, CHUNK_BLOCKS the tier's step in blocks, ARGS more arguments of host_read.py. DRY=1 builds nothing and touches no
 # card: it prints the lease's line and each size's command, on a clock that jumps a size's share at each. NOW (epoch
 # seconds) stands in for the clock, for a dry run of other hours and for the tests.
 #
@@ -42,7 +42,7 @@
 # 9 outside the hours, nothing started; 8 the tree is not EXPECT_COMMIT; 3, 4, 5 host_read.sh's build; 13 the pin does
 # not run here; 75 no lease by END; 143 ended by a signal. out/tiers.txt is the run's account, its last line the verdict.
 #
-#   END=2031-05-01T23:30Z NOT_BEFORE=2031-05-01T22:15Z MACHINE=node BY=lane SIZES='8 12 16' NAMES=ahead2 \
+#   END=2031-05-01T23:30Z NOT_BEFORE=2031-05-01T22:15Z MACHINE=node BY=lane SIZES='8 12 16' \
 #     bash benchmarks/remote_session/host_read_tiers.sh launch
 set -uo pipefail
 STAGE=${1:-job}
@@ -77,7 +77,7 @@ if [ "$STAGE" = launch ]; then
   [ "$(git rev-parse -q --verify "origin/$branch")" = "$EXPECT_COMMIT" ] || refuse "$EXPECT_COMMIT is not origin/$branch"
   BASE_REV=${BASE_REV:-$(git merge-base HEAD origin/main)} || refuse "no BASE_REV, and no merge base with origin/main"
   E=()
-  for v in END NOT_BEFORE EXPECT_COMMIT BASE_REV SIZES NAMES GIB CHUNK_BLOCKS GPUS DRIVER_CPUS LEASE_MIN GRANT_S MEM_GB \
+  for v in END NOT_BEFORE EXPECT_COMMIT BASE_REV SIZES CTAS GIB CHUNK_BLOCKS GPUS DRIVER_CPUS LEASE_MIN GRANT_S MEM_GB \
     CLEAR_MIB CLEAR_WAIT_S SIZE_MIN_S TAIL_S SAMPLE_MS SAMPLE_CPUS ARCH CUDA_HOME PY GPU_LEASE SMI ARGS GPU_LEASE_WHO; do
     [ -z "${!v+x}" ] || { E+=(--env "$v=${!v}"); export "${v?}"; }
   done
@@ -128,7 +128,7 @@ watch() {  # watch CMD...: CMD, ended with this stage when a signal ends the sta
 if [ "$STAGE" = job ]; then
   COMMIT=${RESEARCH_SOURCE_SHA:-$(git -C "$TREE" rev-parse HEAD 2> /dev/null || echo unknown)}
   say "host tiers of $SIZES GiB in chunks of $CHUNK_BLOCKS blocks, beside $GIB GiB on $GPUS cards; rows: pass" \
-    "${NAMES:-and the default of host_read.py}; tree $COMMIT on $(hostname); not before $(utc "$FROM_S"), no lease at $(utc "$END_S")"
+    "${CTAS:+and at $CTAS receipt CTAs }(host_read.py); tree $COMMIT on $(hostname); not before $(utc "$FROM_S"), no lease at $(utc "$END_S")"
   t=$(now)
   if [ "$t" -lt "$FROM_S" ] && [ $((FROM_S - t)) -le 600 ] && [ -z "${DRY:-}${NOW:-}" ]; then
     say "waiting $((FROM_S - t)) s for NOT_BEFORE, holding no card"
@@ -280,7 +280,7 @@ for size in "${S[@]}"; do
   RUN=(timeout -k 20 "$share" taskset -c "$DRIVER_CPUS" "$PY" "$RS/host_read.py" --lib "$B/session.so" --kv "$B/kv.so"
     --out "$D" --gib "$GIB" --host-gib "$size" --gpus "$GPUS" --chunk-blocks "$CHUNK_BLOCKS"
     --budget-s "$((share - TAIL_S))")
-  [ -z "${NAMES:-}" ] || { read -ra W <<< "$NAMES"; RUN+=(--names "${W[@]}"); }
+  [ -z "${CTAS:-}" ] || { read -ra W <<< "$CTAS"; RUN+=(--ctas "${W[@]}"); }
   [ -z "${ARGS:-}" ] || { read -ra W <<< "$ARGS"; RUN+=("${W[@]}"); }
   say "$size GiB, over by $(utc $((t + share))): ${RUN[*]}"
   ran+=("$size")

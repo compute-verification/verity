@@ -85,12 +85,12 @@ def ptxas(kernels: dict[str, tuple[int, int]]) -> str:
 
 def test_a_kernel_only_the_new_build_has_is_recorded_as_built_and_refused_when_it_spills(tmp_path, monkeypatch, capsys):
     read = ["LDC R1, c[0x0][0x28]", "EXIT"]
-    one, two = "_ZN2rb25sketch16_host_pass_kernelILi1EEEvv", "_ZN2rb25sketch16_host_pass_kernelILi3EEEvv"
+    one, two = "_ZN2rb12fresh_kernelILi1EEEvv", "_ZN2rb12fresh_kernelILi3EEEvv"
     new = {"_ZN2rb11read_kernelEv": read, one: ["MOV R2, R4", "EXIT"], two: ["MOV R2, R5", "EXIT"]}
     doc, said = compare(tmp_path, monkeypatch, capsys, {"_ZN2rb11read_kernelEv": read}, new,
                         ptxas=ptxas({"_ZN2rb11read_kernelEv": (20, 8), one: (124, 0), two: (128, 0)}))
     assert doc["only_new_built"] == {one: {"registers": 124, "spill_bytes": 0}, two: {"registers": 128, "spill_bytes": 0}}
-    assert "sketch16_host_pass_kernel<1> 124 registers, 0 spilled bytes" in said and "refused" not in said
+    assert "fresh_kernel<1> 124 registers, 0 spilled bytes" in said and "refused" not in said
     doc, said = compare(tmp_path, monkeypatch, capsys, {"_ZN2rb11read_kernelEv": read}, new, exits=1,
                         ptxas=ptxas({one: (124, 0), two: (128, 16)}))
     assert doc["changed"] == [] and doc["only_new_built"][two] == {"registers": 128, "spill_bytes": 32}

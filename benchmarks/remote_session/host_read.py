@@ -1,13 +1,13 @@
-"""How a host segment's bytes are asked for inside a pass (`device.host_read_plan`), each way in turn on one store
-with a host tier on the visible GPUs, with no verifier: that every way gives the pass's receipts and tree byte for
-byte, then what each costs (`host_read.sh` builds the libraries and runs it under one lease). The store's bytes are
-random and not encoded: a pass hashes whatever is stored.
+"""A host segment's part of a pass (`DeviceStore.host_pass`, `rs_pass` as it reads a shard) on one store with a host
+tier on the visible GPUs, with no verifier: that it gives the pass's receipts and tree byte for byte, then what it
+costs alone, beside the shards' reads and inside chained passes (`host_read.sh` builds the libraries and runs it under
+one lease; `host_read_tiers.sh` runs it at several tier sizes on a whole node). The store's bytes are random and not
+encoded: a pass hashes whatever is stored.
 
-A row is a name of `device.host_read_plan` (`pass`: the host segment read as a shard is), with @N for N receipt CTAs
-on a host segment in place of --host-ctas (`ahead2@8`). `pass` runs first whatever --names says: the others are held
-to it. For each row in turn, before anything is timed:
+A row is the host segment's receipt CTAs: `pass` at --host-ctas, then `pass@N` at each N of --ctas, held to `pass`.
+For each row in turn, before anything is timed:
 
-    gate     the device's gates with the gate store's host segment read that way (`GpuBackend.gate`): a pass's root
+    gate     the device's gates with the gate store's host segment read at the row's CTAs (`GpuBackend.gate`): a root
              against the reference's, a session accepted, one that skips a sixteenth and one that skips a quarter of
              the host tier each refused at a receipt
     equal    one pass over the store itself at one seed, every buffer a pass writes filled with 0xA5 first: its root
@@ -15,9 +15,9 @@ to it. For each row in turn, before anything is timed:
              does not run), and every receipt, kept level and top level against `pass`'s. `pass`'s own host receipts
              are held to the reference's definition, which runs none of the kernels' code (`reference`)
 
-and once, under `pass` and under the first other row: `control`, the same poisoned pass with the host segments' part
-launching nothing (`NoHostWrite`), which must not be the same root, receipts or kept levels. A row whose gate or
-equality fails is not timed. Then, the rows in turn rep by rep (--reps), `pass` first, after one untimed rep:
+and once, under `pass` and under the first other row if there is one: `control`, the same poisoned pass with the
+host segments' part launching nothing (`NoHostWrite`), which must not be the same root, receipts or kept levels. A
+row whose gate or equality fails is not timed. Then, the rows in turn rep by rep (--reps), `pass` first, after one untimed rep:
 
     alone    the host segments' part of that pass with nothing else on the device (`DeviceStore.host_pass`, by CUDA
              events on the host stream), its receipts and kept levels equal to the pass's after every rep
@@ -27,11 +27,11 @@ equality fails is not timed. Then, the rows in turn rep by rep (--reps), `pass` 
 
 Writes OUT/host_read.json after each step: the chunk (the tier's step) and the tier's size, each host segment's
 address in its page, the bare reads, and each row's gate, equality and times. Nothing new starts after --budget-s
-seconds, and the record says what was cut. Exits 0 when every row passed its gate and equality and both controls
-were refused, 6 when not.
+seconds, and the record says what was cut. Exits 0 when every row passed its gate and equality and every control
+was refused, 6 when not.
 
     python host_read.py --lib session.so --kv kv.so --out OUT --gib 32 --host-gib 1 --gpus 1 --chunk-blocks 65536 \\
-        --names ahead1 ahead2 ahead3 ahead4 ahead2-keep ahead2-prefetch feed8 feed8-keep ahead2-feed8
+        --ctas 32
 """
 from __future__ import annotations
 
@@ -54,19 +54,9 @@ import sketching  # noqa: E402
 from device import BLOCK, audit, rb, skr  # noqa: E402
 
 
-def row_of(word: str, host_ctas: int) -> tuple[str, int]:
-    """A row's name and its host receipt CTAs from NAME[@N]."""
-    name, _, ctas = word.partition("@")
-    device.host_read_plan(name)
-    if ctas and not (ctas.isdigit() and int(ctas)):
-        raise ValueError(f"a row is NAME or NAME@N, N a host segment's receipt CTAs, not {word!r}")
-    return name, int(ctas) if ctas else host_ctas
-
-
-def use(b: device.GpuBackend, row: tuple[str, int]) -> None:
-    """The backend's host segments, its store's and its gate stores', read as `row` says from here on."""
-    s = b.store
-    s.host_read, s.host_ctas = b.host["host_read"], b.host["host_ctas"] = row
+def use(b: device.GpuBackend, ctas: int) -> None:
+    """The backend's host segments, its store's and its gate stores', read with `ctas` receipt CTAs from here on."""
+    b.store.host_ctas = b.host["host_ctas"] = ctas
 
 
 def poison(s: device.DeviceStore) -> None:
@@ -112,8 +102,6 @@ class NoHostWrite:
 
     def __getattr__(self, name: str):
         f = getattr(self._so, name)
-        if name == "rs_host_pass":
-            return lambda *args: 0
         if name == "rs_pass":
             return lambda *args: 0 if args[-1] else f(*args)
         return f
@@ -193,7 +181,7 @@ def host_part(b: device.GpuBackend, base: tuple, slot: int, reads: int) -> tuple
             for q in host:
                 rc = s.host_pass(q, pk, slot)
                 if rc:
-                    raise RuntimeError(f"the host pass {s.host_read!r} on GPU {gpu.index}: {rc}")
+                    raise RuntimeError(f"the host pass at {s.host_ctas} receipt CTAs on GPU {gpu.index}: {rc}")
             e1.record(stream)
         spans.append((e0, e1))
         if reads:
@@ -221,8 +209,8 @@ def unbind() -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--names", nargs="+", default=["ahead1", "ahead2", "ahead3"], metavar="NAME[@N]",
-                    help="the rows after `pass`, in the order they are gated and timed")
+    ap.add_argument("--ctas", nargs="*", type=int, default=[], metavar="N",
+                    help="the rows after `pass`: a host segment's receipt CTAs, in the order they are gated and timed")
     ap.add_argument("--reps", type=int, default=20, help="the timed reps of `alone` and of `beside`, a row")
     ap.add_argument("--chain-passes", type=int, default=100, help="a chain's passes, a row and round")
     ap.add_argument("--chain-rounds", type=int, default=2, help="the rounds of `chain`, each row once a round")
@@ -235,13 +223,15 @@ def main() -> int:
     device.add_arguments(ap)
     a = ap.parse_args()
     t_start = time.monotonic()
-    rows = [("pass", a.host_ctas)] + [row_of(w, a.host_ctas) for w in a.names if w != "pass"]
+    if any(n < 1 for n in a.ctas):
+        raise SystemExit(f"--ctas: a host segment's receipt CTAs are at least 1, not {a.ctas}")
+    rows = list(dict.fromkeys([a.host_ctas, *a.ctas]))
 
     def left() -> float:
         return a.budget_s - (time.monotonic() - t_start)
 
-    def label(row: tuple[str, int]) -> str:
-        return row[0] if row[1] == a.host_ctas else f"{row[0]}@{row[1]}"
+    def label(ctas: int) -> str:
+        return "pass" if ctas == a.host_ctas else f"pass@{ctas}"
 
     if a.host_gib <= 0:
         raise SystemExit("--host-gib: the store needs a host tier")
@@ -292,7 +282,7 @@ def main() -> int:
         if left() <= 0:
             out["cut"].append(f"gate and equal: {label(row)}")
             continue
-        r = out["rows"][label(row)] = {"host_read": row[0], "host_ctas": row[1]}
+        r = out["rows"][label(row)] = {"host_ctas": row}
         use(b, row)
         try:
             r["gate"] = b.gate(reg)

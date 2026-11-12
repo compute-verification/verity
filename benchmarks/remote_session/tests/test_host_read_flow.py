@@ -20,7 +20,6 @@ sys.path.insert(0, str(HERE.parent))
 
 torch = pytest.importorskip("torch")
 
-import device  # noqa: E402
 import host_read  # noqa: E402
 from device import BLOCK, SLOTS, rb  # noqa: E402
 
@@ -38,7 +37,7 @@ class Store:
         self.torch, self.n, self.base, self.on_host = torch, [32, 16], [0, 32], [False, True]
         self.gpus = [SimpleNamespace(index=0, numa=0, sms=4, host_main=None)]
         self.seg_gpu, self.gpu_segs, self.blocks, self.hbm_blocks = [0, 0], [[0, 1]], 48, 32
-        self.chunk, self.h0, self.hc, self.host_read, self.host_ctas = 16, 1, 1, "pass", 16
+        self.chunk, self.h0, self.hc, self.host_ctas = 16, 1, 1, 16
         gen = torch.Generator().manual_seed(7)
         self.data_g = [torch.randint(0, 256, (n * BLOCK,), dtype=torch.uint8, generator=gen) for n in self.n]
         self.ring = [{"roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64),
@@ -80,10 +79,8 @@ class Store:
                             for k in range(0, ys.shape[0], 16)])
 
     def host_pass(self, q: int, pk, slot: int) -> int:
-        self.host_calls.append((self.host_read, self.host_ctas))
-        if device.host_read_plan(self.host_read) is None:
-            return self.lib.so.rs_pass(q, slot, 8)
-        return self.lib.so.rs_host_pass(q, slot)
+        self.host_calls.append(self.host_ctas)
+        return self.lib.so.rs_pass(q, slot, 8)
 
     def root(self, slot: int) -> bytes:
         return hashlib.sha512(b"".join(x["kept"][slot].numpy().tobytes() for x in self.seg_ring)).digest()
@@ -115,15 +112,15 @@ class Store:
 
 
 class Library:
-    """The store's session library: a segment's part of a pass, with one receipt wrong on a host segment read as
-    one of `wrong` says."""
+    """The store's session library: a segment's part of a pass, with one receipt wrong on a host segment read at
+    one of `wrong`'s receipt CTAs."""
 
-    def __init__(self, store: Store, wrong: tuple[str, ...]) -> None:
+    def __init__(self, store: Store, wrong: tuple[int, ...]) -> None:
         self.store, self.wrong = store, wrong
 
     def write(self, q: int, slot: int) -> int:
         s, ys = self.store, self.store.receipts(q)
-        if s.on_host[q] and s.host_read in self.wrong:
+        if s.on_host[q] and s.host_ctas in self.wrong:
             ys = ys.clone()
             ys[3, 0] ^= 1
         s.seg_ring[q]["ys"].copy_(ys)
@@ -133,15 +130,12 @@ class Library:
     def rs_pass(self, q: int, slot: int, consumers: int) -> int:
         return self.write(q, slot)
 
-    def rs_host_pass(self, q: int, slot: int) -> int:
-        return self.write(q, slot)
-
 
 class Backend:
-    def __init__(self, wrong: tuple[str, ...] = ()) -> None:
+    def __init__(self, wrong: tuple[int, ...] = ()) -> None:
         self.torch, self.store, self.gated = torch, Store(), []
         self.lib = self.store.lib = SimpleNamespace(so=Library(self.store, wrong), call=lambda *args: None)
-        self.host = {"host_ctas": 16, "host_consumers": 8, "host_read": "pass"}
+        self.host = {"host_ctas": 16, "host_consumers": 8}
         self.blocks = self.store.blocks
 
     def set_payload_key(self, key: bytes) -> None:
@@ -151,7 +145,7 @@ class Backend:
         return bytes(rb.DIGEST_BYTES)
 
     def gate(self, registration) -> dict:
-        self.gated.append((self.host["host_read"], self.host["host_ctas"]))
+        self.gated.append(self.host["host_ctas"])
         return {"ok": True}
 
     def read_ms(self, segments: list[int]) -> float:
@@ -174,7 +168,7 @@ def run(tmp_path, monkeypatch, backend: Backend) -> tuple[int, dict]:
     monkeypatch.setattr(torch.cuda, "Event", Event)
     monkeypatch.setattr(torch.cuda, "get_device_name", lambda index: "no device")
     monkeypatch.setattr(sys, "argv", ["host_read.py", "--lib", "session.so", "--kv", "kv.so", "--out", str(tmp_path),
-                                      "--host-gib", "1", "--names", "ahead2", "feed4-keep@8", "--reps", "2",
+                                      "--host-gib", "1", "--ctas", "8", "16", "32", "--reps", "2",
                                       "--chain-passes", "4", "--budget-s", "1e9"])
     rc = host_read.main()
     return rc, json.loads((tmp_path / "host_read.json").read_text())
@@ -184,14 +178,14 @@ def test_every_row_is_gated_and_held_to_pass_then_timed(tmp_path, monkeypatch):
     backend = Backend()
     rc, doc = run(tmp_path, monkeypatch, backend)
     assert rc == 0 and doc["ok"] and doc["cut"] == []
-    assert list(doc["rows"]) == ["pass", "ahead2", "feed4-keep@8"] and all(r["ok"] for r in doc["rows"].values())
-    assert backend.gated == [("pass", 16), ("ahead2", 16), ("feed4-keep", 8)]
+    assert list(doc["rows"]) == ["pass", "pass@8", "pass@32"] and all(r["ok"] for r in doc["rows"].values())
+    assert backend.gated == [16, 8, 32]
     assert doc["rows"]["pass"]["equal"]["host_receipts_reference"] == [True]
-    assert doc["rows"]["ahead2"]["equal"] == {"plain_root": True, "plain_levels": True, "root": True, "top": True,
+    assert doc["rows"]["pass@8"]["equal"] == {"plain_root": True, "plain_levels": True, "root": True, "top": True,
                                               "receipts": [True, True], "kept": [True, True],
                                               "kept_host": [True, True], "ok": True}
     assert doc["control"] == {k: {"root_same": False, "host_receipts_same": [False], "host_kept_same": [False],
-                                  "refused": True} for k in ("pass", "ahead2")}
+                                  "refused": True} for k in ("pass", "pass@8")}
     for arm in ("alone", "beside"):
         assert list(doc[arm]) == list(doc["rows"])
         assert all(x["wrong"] == 0 and x["ms"]["n"] == 2 and x["bytes_per_s"] == 16 * BLOCK / 1.5e-3
@@ -201,21 +195,21 @@ def test_every_row_is_gated_and_held_to_pass_then_timed(tmp_path, monkeypatch):
     assert (doc["chunk_blocks"], doc["step_bytes"], doc["host_bytes"], doc["hbm_bytes"]) == (
         16, 16 * BLOCK, 16 * BLOCK, 32 * BLOCK)
     assert doc["host_segments"][0]["bytes"] == 16 * BLOCK and not doc["encoded"]
-    # a timed rep runs the row's own read at the row's own CTA count
-    assert set(backend.store.host_calls[-3:]) == {("pass", 16), ("ahead2", 16), ("feed4-keep", 8)}
+    # a timed rep runs each row at its own CTA count
+    assert set(backend.store.host_calls[-3:]) == {16, 8, 32}
 
 
 def test_a_row_with_one_wrong_receipt_is_named_and_not_timed(tmp_path, monkeypatch):
-    rc, doc = run(tmp_path, monkeypatch, Backend(wrong=("ahead2",)))
+    rc, doc = run(tmp_path, monkeypatch, Backend(wrong=(8,)))
     assert rc == 6 and not doc["ok"]
-    bad = doc["rows"]["ahead2"]
+    bad = doc["rows"]["pass@8"]
     assert not bad["ok"] and bad["equal"]["receipts"] == [True, False] and bad["equal"]["kept"] == [True, False]
     assert not bad["equal"]["plain_root"] and not bad["equal"]["root"]
-    assert doc["rows"]["feed4-keep@8"]["ok"] and list(doc["alone"]) == ["pass", "feed4-keep@8"] == list(doc["chain"])
+    assert doc["rows"]["pass@32"]["ok"] and list(doc["alone"]) == ["pass", "pass@32"] == list(doc["chain"])
 
 
 def test_a_pass_that_is_wrong_itself_times_nothing(tmp_path, monkeypatch):
-    rc, doc = run(tmp_path, monkeypatch, Backend(wrong=("pass",)))
+    rc, doc = run(tmp_path, monkeypatch, Backend(wrong=(16,)))
     assert rc == 6 and list(doc["rows"]) == ["pass"] and "alone" not in doc and "control" not in doc
     assert doc["rows"]["pass"]["equal"]["host_receipts_reference"] == [False]
 

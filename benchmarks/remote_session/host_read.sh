@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# How a host segment's bytes are asked for inside a pass (`device.host_read_plan`), each way gated and then timed on
-# CARDS of one node (cwd = the tree, `research run --cwd clone`). The whole script runs under `taskset -c CORES` when
-# CORES is given.
+# A host segment's part of a pass (`host_read.py`), gated and then timed on CARDS of one node (cwd = the tree,
+# `research run --cwd clone`). The whole script runs under `taskset -c CORES` when CORES is given.
 #
 # Holding no card, it builds session.cu and kv.cu (p1024, masked) for ARCH, and BASE_REV's session.cu beside them
 # (default: the commit this one's branch left `origin/main` at), and writes which of the base's kernels the new build
@@ -16,7 +15,8 @@
 # lock is held, or with a compute process or more than a GiB in use on it, ends the run (exit 75) with nothing
 # started there, and so does a start after NOT_AFTER (`date -d` syntax; exit 11), so a run stays inside its booked
 # hours. The store is GIB GiB on the cards and a host tier of HOST_GIB GiB, in chunks of CHUNK_BLOCKS blocks (the
-# tier's step); NAMES are the rows after `pass`; BUDGET_S is host_read.py's --budget-s and ARGS its other arguments.
+# tier's step); CTAS are the rows after `pass`, each a host segment's receipt CTAs (none: `pass` alone); BUDGET_S is
+# host_read.py's --budget-s and ARGS its other arguments.
 # out/host_read.node.txt lists the compute processes on every card of the machine as the lease starts and as it ends.
 #
 #   research run --on NODE --project verity --source TREE --cwd clone -- \
@@ -33,7 +33,7 @@ say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/host_read.txt"; }
 first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done; }
 
 GIB=${GIB:-32} HOST_GIB=${HOST_GIB:-1} CHUNK_BLOCKS=${CHUNK_BLOCKS:-65536} BUDGET_S=${BUDGET_S:-1080}
-NAMES=${NAMES:-ahead1 ahead2 ahead3 ahead4 ahead2-keep ahead2-prefetch feed8 feed8-keep ahead2-feed8}
+CTAS=${CTAS:-}
 LEASE_MIN=${LEASE_MIN:-25} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 N=$(($(tr -cd , <<< "$CARDS" | wc -c) + 1))
 if [ -n "${TOOLKIT:-}" ]; then
@@ -126,7 +126,7 @@ others start
 # shellcheck disable=SC2086
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting-rows64} bash "$LEASE" "$N" --on "$CARDS" --max-min "$LEASE_MIN" \
   --mem-gb "$LEASE_MEM_GB" -- "$PY" $RS/host_read.py --lib "$B/session.so" --kv "$B/kv.so" --out "$O" --gib "$GIB" \
-  --host-gib "$HOST_GIB" --gpus "$N" --chunk-blocks "$CHUNK_BLOCKS" --budget-s "$BUDGET_S" --names $NAMES \
+  --host-gib "$HOST_GIB" --gpus "$N" --chunk-blocks "$CHUNK_BLOCKS" --budget-s "$BUDGET_S" --ctas $CTAS \
   ${ARGS:-} > "$O/host_read.log" 2>&1
 rc=$?
 others end

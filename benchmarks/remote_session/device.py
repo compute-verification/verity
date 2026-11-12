@@ -198,7 +198,6 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_payload_leaves": [_v, _u64, _u64, _v, _v],
     "rs_gather64": [_v, _u64, _v, _v],
     "rs_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
-    "rs_host_pass": [_v, _u64, _u64, _v, _v, _v, _v, _i, _u64, _i, _i, _i, _i, _v, _i, ctypes.c_uint, _v, _v, _v],
     "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
     "rs_enable_peers": [],
     "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
@@ -300,7 +299,6 @@ class Gpu:
             self.copy = torch.cuda.Stream()
             self.host_main = torch.cuda.Stream()
             self.host_side = torch.cuda.Stream(priority=-1)
-            self.host_feed = torch.cuda.Stream()
         props = torch.cuda.get_device_properties(index)
         self.sms = props.multi_processor_count
         self.numa = gpu_numa(props)
@@ -353,52 +351,6 @@ def release(torch, t) -> None:
         raise RuntimeError(f"cudaHostUnregister: {rc}")
 
 
-HOST_FORMS = {"load": 0, "keep": 1, "prefetch": 2}   # session.cu's HOST_LOAD, HOST_KEEP, HOST_PREFETCH
-HOST_AHEAD_MAX = 4
-
-
-@dataclass(frozen=True, slots=True)
-class HostRead:
-    """How a host segment's bytes are asked for ahead of its receipts (`rs_host_pass`): `ahead` fetches ahead by each
-    receipt warp, asked as `form` says; `feed` CTAs of the feed grid, at most `lead` tiles ahead of the receipts."""
-
-    ahead: int = 0
-    form: int = HOST_FORMS["load"]
-    feed: int = 0
-    lead: int = 0
-
-
-def host_read_plan(name: str) -> HostRead | None:
-    """A host segment's read by name. `pass` is None: `rs_pass`, as it reads a shard. Otherwise terms joined by `-`:
-    `aheadA` (A = 1 … 4), `feedF` (F feed CTAs) with `leadT` (T tiles, 128 unless given), and one of `keep` and
-    `prefetch` for how what is ahead is asked for (`prefetch` only with `aheadA`). `ahead2`, `ahead2-keep`,
-    `feed4-lead8`, `ahead1-feed4`. A name is one word of letters, digits and `-`, so it can be a field of a list."""
-    if name == "pass":
-        return None
-    got: dict = {}
-    for term in name.split("-"):
-        key, digits = term.rstrip("0123456789"), term[len(term.rstrip("0123456789")):]
-        if key in ("keep", "prefetch") and not digits:
-            key, value = "form", HOST_FORMS[term]
-        elif key in ("ahead", "feed", "lead") and digits:
-            value = int(digits)
-        else:
-            raise ValueError(f"a host read is `pass` or terms aheadA, feedF, leadT, keep, prefetch joined by -, not "
-                             f"{name!r} (at {term!r})")
-        if key in got:
-            raise ValueError(f"the host read {name!r} gives {key} twice")
-        got[key] = value
-    plan = HostRead(got.get("ahead", 0), got.get("form", HOST_FORMS["load"]), got.get("feed", 0),
-                    got.get("lead", 128 if "feed" in got else 0))
-    if not 0 < plan.ahead + plan.feed or not 0 <= plan.ahead <= HOST_AHEAD_MAX or ("ahead" in got and not plan.ahead):
-        raise ValueError(f"the host read {name!r}: aheadA with A = 1 … {HOST_AHEAD_MAX}, or feedF with F > 0")
-    if ("feed" in got and not plan.feed) or ("lead" in got and not (plan.feed and plan.lead)):
-        raise ValueError(f"the host read {name!r}: feedF with F > 0, and leadT only with it, T > 0")
-    if plan.form == HOST_FORMS["prefetch"] and not plan.ahead:
-        raise ValueError(f"the host read {name!r}: prefetch is how aheadA asks, so it needs one")
-    return plan
-
-
 class OffloadedHandle:
     """A pass's handle, (seed, packed signs, each segment's levels h0 … hc, the levels above hc) in host memory, once the
     store's offloader has copied it out of the pinned ring (`DeviceStore.ready`)."""
@@ -421,8 +373,7 @@ class DeviceStore:
     """N blocks in segments of whole chunks, their payload tree on the CPU, then the encoded store and the passes over
     it: `blocks` in HBM, a shard a GPU across `gpus` (the current GPU if none), then `host_blocks` in host memory
     (`host_tier`, each GPU's share on its NUMA node), a segment a GPU, which that GPU reads over its own PCIe link in
-    the same pass, beside its shard (`host_ctas` receipt CTAs and `host_consumers` consumer CTAs, its bytes asked for
-    as `host_read` says, `host_read_plan`; the receipts and the tree are the same whatever it says). Segment s holds the
+    the same pass, beside its shard (`host_ctas` receipt CTAs and `host_consumers` consumer CTAs). Segment s holds the
     store's blocks base_s … base_s + n_s − 1 in that order, so every position, leaf and node index is the store's
     whatever the tier. `generator` seeds each segment's blocks: an int (segment s's from seed + s), or for one GPU and
     no host tier a torch generator on it. With `hbm` (a uint8 buffer a GPU, on it, whole chunks, such as a serving
@@ -435,8 +386,7 @@ class DeviceStore:
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, host_read: str = "pass",
-                 hbm=None) -> None:
+                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, hbm=None) -> None:
         gpus = gpus or [Gpu(torch, torch.cuda.current_device(), own=False)]
         G = len(gpus)
         if blocks % PER_LEAF or blocks % chunk or blocks // chunk < G or G > 16 or host_blocks % chunk:
@@ -448,8 +398,7 @@ class DeviceStore:
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
         self.payload_key = key
         self.gpus, self.hbm_blocks = gpus, blocks
-        self.host_ctas, self.host_consumers, self.host_read = host_ctas, host_consumers, host_read
-        host_read_plan(host_read)
+        self.host_ctas, self.host_consumers = host_ctas, host_consumers
         chunks, hchunks = blocks // chunk, host_blocks // chunk
         per = [chunks // G + (g < chunks % G) for g in range(G)]
         if hbm is not None:
@@ -604,7 +553,6 @@ class DeviceStore:
             with self.on(self.gpus[g]):
                 x = {"ctr": torch.empty(3 + n // ready_blocks + n // chunk, dtype=torch.int32, device=dev),
                      "ys": torch.empty((n, 8), dtype=torch.int64, device=dev),
-                     "feed": torch.empty(2, dtype=torch.int32, device=dev),
                      "dig": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
                      "up": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
                      "kept": torch.empty((SLOTS, self.kept_at[s][hc + 1], 8), dtype=torch.int64, device=dev)}
@@ -716,19 +664,13 @@ class DeviceStore:
 
     def host_pass(self, q: int, pk, slot: int) -> int:
         """Host segment q's part of a pass under the packed signs pk, what it keeps into `slot`, queued on its GPU's
-        host streams (that GPU current): `rs_pass` as it reads a shard, or `rs_host_pass` as `host_read` says
-        (`host_read_plan`). The library's return code."""
-        gpu, x, plan = self.gpus[self.seg_gpu[q]], self.seg_ring[q], host_read_plan(self.host_read)
-        so, sa, sb = self.lib.so, gpu.host_main.cuda_stream, gpu.host_side.cuda_stream
-        shard = (self.data_g[q].data_ptr(), self.n[q], self.base[q], pk.data_ptr(), x["ctr"].data_ptr(),
-                 x["ys"].data_ptr())
-        kept = x["kept"][slot].data_ptr()
-        if plan is None:
-            return so.rs_pass(*shard, x["dig"].data_ptr(), x["up"].data_ptr(), kept, self.h0, self.chunk,
-                              self.host_ctas, 0, 0, None, None, sa, sb, self.host_consumers)
-        return so.rs_host_pass(*shard, kept, self.h0, self.chunk, self.host_ctas, self.host_consumers, plan.ahead,
-                               plan.form, x["feed"].data_ptr(), plan.feed, plan.lead, sa, sb,
-                               gpu.host_feed.cuda_stream)
+        host streams (that GPU current): `rs_pass` as it reads a shard, with `host_ctas` receipt CTAs and
+        `host_consumers` consumer CTAs. The library's return code."""
+        gpu, x = self.gpus[self.seg_gpu[q]], self.seg_ring[q]
+        return self.lib.so.rs_pass(self.data_g[q].data_ptr(), self.n[q], self.base[q], pk.data_ptr(),
+                                   x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(), x["up"].data_ptr(),
+                                   x["kept"][slot].data_ptr(), self.h0, self.chunk, self.host_ctas, 0, 0, None, None,
+                                   gpu.host_main.cuda_stream, gpu.host_side.cuda_stream, self.host_consumers)
 
     def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
@@ -778,9 +720,7 @@ class DeviceStore:
                                       self.sketch_ctas, first * lc, count * lc, ring["pad"].data_ptr(),
                                       ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
                 if rc:
-                    raise RuntimeError(f"rs_pass on GPU {gpu.index}: {rc}" + (
-                        f" (the host read {self.host_read!r} takes h0 <= 8 and at least one consumer CTA)"
-                        if host and self.host_read != "pass" else ""))
+                    raise RuntimeError(f"rs_pass on GPU {gpu.index}: {rc}")
                 if host:
                     s.wait_event(self.host_done[g][slot])
                 self.ended[g][slot].record(s)
@@ -1164,9 +1104,9 @@ class GpuBackend:
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
                  trace_allocator: bool = False, host_blocks: int = 0, host_ctas: int = 16,
-                 host_consumers: int = 8, host_read: str = "pass", hbm=None) -> None:
+                 host_consumers: int = 8, hbm=None) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
-        self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers, "host_read": host_read}
+        self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers}
         self.trace_allocator, self.calibration_trace = trace_allocator, None
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
         self.calibration_passes, self.warm_passes = calibration_passes, warm_passes
@@ -1482,9 +1422,6 @@ def add_arguments(ap) -> None:
                          "share on its NUMA node, read in the same pass over that GPU's PCIe link")
     ap.add_argument("--host-ctas", type=int, default=16, help="a host segment's receipt CTAs")
     ap.add_argument("--host-consumers", type=int, default=8, help="a host segment's consumer CTAs")
-    ap.add_argument("--host-read", default="pass",
-                    help="how a host segment's bytes are asked for (`host_read_plan`): pass, as a shard's; aheadA, "
-                         "feedF, leadT, keep, prefetch joined by -")
 
 
 def from_arguments(a, log=print) -> GpuBackend:
@@ -1498,4 +1435,4 @@ def from_arguments(a, log=print) -> GpuBackend:
                       warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
                       sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                       trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
-                      host_consumers=a.host_consumers, host_read=a.host_read)
+                      host_consumers=a.host_consumers)
