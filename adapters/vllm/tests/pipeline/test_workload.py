@@ -259,3 +259,45 @@ def test_every_tp_row_disables_p2p_and_the_custom_all_reduce_exactly_on_a_sys_ta
         sys_box = row_target(p.stem) in P2P_SYS_TARGETS
         assert eng.env.get("NCCL_P2P_DISABLE") == ("1" if sys_box else None), p.name
         assert eng.args["disable_custom_all_reduce"] is sys_box, p.name
+
+
+def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_exit_codes(tmp_path, monkeypatch, caplog):
+    """What `verity_vllm.pipeline.workload` says goes to the log: the `--check` line and the written file's note at INFO, a failed
+    self-check without `--check` at WARNING (the file is still written), and a refusal at ERROR beside its exit code."""
+    row = "x__bf16__h100__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    opts = dict(row_id=row, hf_repo="org/x", revision="0" * 40, batch=1, max_input=256, max_output=32, case="X", out=str(tmp_path / "w.json"))
+    a = W.Options(**opts)
+    plan = W.plan(row, 1, 256, 32, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=0)
+    bad = ["a request never arrives", "a request has no output"]
+
+    def said() -> list[tuple[str, str]]:
+        got = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.pipeline.workload"]
+        caplog.clear()
+        return got
+
+    def checked(record: tuple[str, str], verdict: str) -> bool:
+        """The `--check` line: the row and its plan's lengths first, the verdict last."""
+        level, line = record
+        return (level == "INFO" and line.startswith(f"[check] {row}: B=1 lens={plan['input_lengths']} ")
+                and line.endswith(f" steps={plan['arrive_steps']} -> {verdict}"))
+
+    doc = _generate(tmp_path, row)
+    note = ("INFO", f"{tmp_path / 'w.json'}: {doc['note'][:220]}")
+    check, wrote = said()
+    assert checked(check, "PASS") and wrote == note
+    _generate(tmp_path, row, rc=2, reason=["moe_backend"])
+    check, refused = said()
+    assert checked(check, "PASS")
+    assert refused == ("ERROR", f"--reason ['moe_backend']: a reason is SWITCH=TEXT for a switch of {sorted(W.served.DEFAULTS)}")
+    _generate(tmp_path, "x-eager", rc=3, target=json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}))
+    assert said()[-1] == ("ERROR", "row id execution suffix 'x-eager' != the target's execution label 'eager'")
+    monkeypatch.setattr(W, "find_tokenizer", lambda repo, revision: None)
+    assert W.main(W.Options(**opts)) == 2
+    assert said() == [("ERROR", f"tokenizer.json for org/x@{'0' * 40} not found under {W.hf_home()} — pass --tokenizer or use --lengths-only")]
+    monkeypatch.setattr(W, "check_plan", lambda plan: bad)
+    (tmp_path / "w.json").unlink()
+    _generate(tmp_path, row, rc=1)
+    (check,) = said()
+    assert checked(check, "FAIL: " + "; ".join(bad)) and not (tmp_path / "w.json").exists()
+    assert W.main(W.Options(**opts, lengths_only=True)) == 0 and (tmp_path / "w.json").exists()
+    assert said() == [("WARNING", "§12 self-check: " + "; ".join(bad)), note]

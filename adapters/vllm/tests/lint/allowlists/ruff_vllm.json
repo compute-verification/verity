@@ -1862,7 +1862,6 @@
     {"file": "verity_vllm/pipeline/vu_store.py", "kind": "T201", "symbol": "extract", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/weight_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "SIM300", "symbol": "_replay", "detail": "Yoda condition detected"},
-    {"file": "verity_vllm/pipeline/workload.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 6},
     {"file": "verity_vllm/pipeline/workload_file.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "E741", "symbol": "_scan_executed", "detail": "Ambiguous variable name: `l`"},
     {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "SIM300", "symbol": "_build.embed_norm", "detail": "Yoda condition detected"},
