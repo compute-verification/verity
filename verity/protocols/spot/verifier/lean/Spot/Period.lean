@@ -173,8 +173,8 @@ def holds (label : String) (families : Json) : Bool :=
   | .arr fs => fs.any fun f =>
     match f with
     | .arr xs =>
-      (match xs[0]? with
-      | some (.str l) => l == label
+      (match xs.toList with
+      | .str l :: _ => l == label
       | _ => false)
     | _ => false
   | _ => false
