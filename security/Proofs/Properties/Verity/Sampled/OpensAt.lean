@@ -18,9 +18,10 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Live.OpensReady`: what the session's files must give: every port a `sha512/row/v2` or `sha512/row-seg/v1` row,
   formats `Hash.RowLeaf` takes from the code's schemas (`Flock.Bridge.Spec.formatOf`); the files pass `verify --zk`'s
   ports and roots check (`Flock.PortRoots.checkOf`), which v2 runs on every session it accepts (`Accepted.ports`);
-  every port at least two leaves, so an accepted opening's path has a level and its salt is `saltLen` bytes
-  (`Flock.Bridge.saltOf_length`); the ports' roots distinct, so the port the deployed path check finds by its root is
-  the row's own, of the row's format; and every row shorter than `2^64` bits, `RowLeaf.accepts`'s `u64` length.
+  the ports' roots distinct, so the port the deployed path check finds by its root is the row's own, of the row's
+  format; and every row shorter than `2^64` bits, `RowLeaf.accepts`'s `u64` length. An accepted opening's salt is
+  `saltLen` bytes at every depth: the deployed commitment refuses data shorter than the salt
+  (`Flock.Bridge.saltOf_length`).
 * `Live.OpensReady.domain`: **every port's frame-v3 domain is 64 bytes**, the width of `Hash.Tree.Domain.id`, at files
   that pass the ports and roots check: the domain is the one the public file publishes (`Flock.Bridge.domOf`), and the
   check refuses a file whose published domain is not 64 bytes (`Flock.Bridge.idsSized_of_checksStmt`).
@@ -109,15 +110,13 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
 /-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: `sha512/row/v2` or
 `sha512/row-seg/v1` rows, files that pass `verify --zk`'s ports and roots check (`Flock.PortRoots.checkOf` at the
 circuit `Flock.ProvedScope.circuitOf` reads, which refuses a published frame-v3 domain that is not 64 bytes:
-`OpensReady.domain`), at least two leaves a port (an accepted path then has a level, which the salt precedes), distinct
-roots (the deployed path check opens a row at the first port of the row's root, which is then the row's own), and rows
-shorter than `2^64` bits. -/
+`OpensReady.domain`), distinct roots (the deployed path check opens a row at the first port of the row's root, which is
+then the row's own), and rows shorter than `2^64` bits. -/
 structure OpensReady : Prop where
   rows : A.D.unroll.ports.all (fun p => p.v2 || p.segs.isSome) = true
   ports : Flock.PortRoots.checkOf
     (Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.tables)
     (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.publicFile = .ok ()
-  leaves : ∀ q < A.D.unroll.ports.size, 2 ≤ A.Lm.cnt q
   roots : ∀ q q', q' < q → q < A.D.unroll.ports.size → A.roots.getD q' [] ≠ A.roots.getD q []
   width : ∀ i, (Flock.Bridge.placeOf A.Cc A.rows i).1 < 2 ^ 64
 
@@ -188,11 +187,8 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
       have hop' := hop
       simp only [Flock.Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq] at hop'
       obtain ⟨⟨-, hl⟩, -⟩ := hop'
-      have hleaves : reg.leaves = A.Lm.cnt r.port := by rw [← hreg]
-      have hidx : Flock.Bridge.portIdxOf A.Cc A.rows i = r.port := by simp [Flock.Bridge.portIdxOf, hr]
-      rw [Claims.Sampling.size_bytes, hleaves] at hl
-      exact Flock.Bridge.saltOf_length (by simpa [Flock.Bridge.pathOfL, hidx] using hl)
-        (Flock.Bridge.PortRoots.one_le_log2ceil (hA.leaves r.port hq))
+      rw [Claims.Sampling.size_bytes] at hl
+      exact Flock.Bridge.saltOf_length (d := Flock.log2ceil (A.Lm.cnt (Flock.Bridge.portIdxOf A.Cc A.rows i))) hl
     have hacc := Flock.Bridge.Spec.opensLeaf_accepts sha512_hashOf hdom hop
     rw [Claims.Sampling.bs_bytes, Flock.Bridge.Spec.sha512Msg_hm96Outer sha512_hashOf, hrow, rowMsg_digest hpr,
       ← hschema] at hacc

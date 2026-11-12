@@ -49,7 +49,8 @@ function of the session's files and the game's rows, none a free parameter:
   row's unit; `none` at a position no row holds.
 * `placeOf`: the position's row width and bit, from `rows`.
 * `saltOf`, `pathOf`, `bitsOf`: an opening's data is its row's salt (`saltLen` bytes), its frame-v3 path
-  (`64 · log2ceil nl` bytes) and the row's bits, one byte each.
+  (`64 · log2ceil nl` bytes) and the row's bits, one byte each. Data shorter than the salt has no path the path check
+  takes (`saltLen_le_of_pathOf`), so the commitment refuses it.
 * `rowDep`: an opening's row message, its row's bits (`SamplingDeploy.rowBits`) in its port's format (`rowMsg`):
   `sha512/row-seg/v1`'s outer message `Q(ℓ) ‖ d₀ ‖ …` at a segmented port, `sha512/row/v2`'s `P(ℓ) ‖ bytes` at a bit
   row, `sha512/row/v1`'s `rowPrefix (ℓ / 16) ‖ bytes` otherwise, as Flock's hm96 slot hashes that port's rows.
@@ -121,8 +122,18 @@ def saltLen : ℕ := 192
 /-- An opening's salt: its data's first `saltLen` bytes. -/
 def saltOf (o : Opening Bool) : Msg := o.data.take saltLen
 
-/-- An opening's frame-v3 path, `d` levels: the `64 · d` bytes after the salt. -/
-def pathOf (d : ℕ) (o : Opening Bool) : Msg := (o.data.drop saltLen).take (64 * d)
+/-- An opening's frame-v3 path, `d` levels: the `64 · d` bytes after the salt. Data shorter than the salt carries no
+path: it reads as one byte, which no path check takes (a path is 64 bytes a level), so the deployed commitment refuses
+an opening whose salt is short, as Flock's statement check holds the salt input to `saltLen` bytes. -/
+def pathOf (d : ℕ) (o : Opening Bool) : Msg :=
+  if saltLen ≤ o.data.length then (o.data.drop saltLen).take (64 * d) else [0]
+
+/-- **An opening whose path is whole levels carries a whole salt**: its data is at least `saltLen` bytes. -/
+theorem saltLen_le_of_pathOf {d k : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64 * k) :
+    saltLen ≤ o.data.length := by
+  by_contra hn
+  rw [pathOf, ite_eq_right hn, List.length_singleton] at h
+  omega
 
 /-- An opening's row bit `k`: the `k`th byte after the salt and the path is `1`. -/
 def bitsOf (d : ℕ) (data : Msg) (k : ℕ) : Bool := (data.drop (saltLen + 64 * d))[k]? == some 1
