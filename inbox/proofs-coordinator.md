@@ -108704,3 +108704,68 @@ It is `Round2.stmtOk_of_check` at `h`. Your `RegistersNone rec` gives my `Inputs
 - Section 4: `InputsNone`'s docstring now says the statements that take it are of a design whose interior registration registers no value, and say nothing at one that registers a value such as the replay block's `logits` (`4cf375876a`). [relayed: GATHER] That is the second try's design, not the first's.
 
 **Not established.** That anything elaborates. When a slot comes [guess: 23:50Z to 00:05Z, from the line's pace of about two checks a minute since 23:20Z].
+
+## ACCOUNTS, Thu 12 Nov 23:29Z: yes: `Spot/SiteDifftest.lean` builds at `a88978bf950f` (try `r20261112-231533-4bc0`, exit 0), and both difftests pass against the Lean there (16 of 16 suites, `r20261112-224804-2b10`); in line or running on vy-nebius-2: `r20261112-231553-5b1a` (records, ETA about 00:30Z) and `r20261112-231602-5563` (the two lists' suites, ETA about 23:45Z)
+
+**For the lead to post on the Site v2 issue:** "proofs: yes, `Spot/SiteDifftest.lean` builds at `a88978bf950f`, the head of `cursor/proofs-site-v2-1dc6`, which holds compute-research's `dda15f7225` and network's `2bccc17865`. Both difftests ran against the Lean at that head and passed, in `r20261112-224804-2b10` (16 suites, 16 passed, none cached): the Site's difftest in `verity-core-sampled-proofs` (318 passed, 2 skipped) and the registration difftest in `verity-core-composition` (19 passed). A run of compute-research's own at `dda15f7225` would show the same two at its head; the files the two executables import differ between the heads only in three docstrings."
+
+Every "[run]" is a command on my VM unless it names a run. Times are from `date -u`.
+
+**1. The difftest: yes.**
+
+- [run: `r20261112-231533-4bc0`, vy-nebius-2, took its place 23:27:46Z, done, exit 0] three tries at `a88978bf950f`, each "lean exit 0": `Spot/SiteDifftest.lean` (4 s), the interface's root `CoreProtocol.lean` (9 s), which now imports `SiteV2Guards.lean` and so runs its guards, and `NetworkCheck/Registered.lean` (3 s). None holds a theorem, so the axiom probe has nothing to say.
+- [run: `r20261112-224804-2b10`, vy-nebius-cpu-8, took its slot 23:14:27Z, ended 23:25:34Z, exit 0] `suites.py … --quick` on 16 suites: "16 suites: 16 passed (0 cached), 0 failed; 33.2 min of test time".
+- [derived] That the Site's difftest ran against the Lean, and was not skipped. Every test of `test_site_difftest.py` takes the fixture that builds and serves `site-difftest`, and the file's one skip is for the whole module, where `lake` is missing [read: the file, lines 31 and 361 to 442]. The module holds 44 tests by compute-research's count, and the suite skipped 2. So the module ran.
+- [derived] That the registration difftest's four tests are among the 19 of `verity-core-composition`. The suite collects 27 [relayed: compute-research's count]; 8 carry the `slow` mark, all in `test_composition_difftest.py` [read: its lines 501, 544, 587, 702, 741, 747, 765, 803]; 27 less 8 is 19, and none was skipped.
+
+| Suite | Result |
+|---|---|
+| `verity/hardware/site` | 183 passed |
+| `verity/hardware` | 187 passed |
+| `verity/protocols/certifier/verifier` | 1,477 passed, 1 skipped |
+| `verity/protocols/certifier/verifier/network` | 84 passed |
+| `verity-core-sampled-proofs` | 318 passed, 2 skipped |
+| `verity-core-composition` | 19 passed |
+| `verity/protocols/spot/verifier` | 892 passed |
+| `benchmarks/certifier_term` | 14 passed |
+| `benchmarks/compute` | 76 passed |
+| `verity-datacenter` | 49 passed |
+| `demos/lifecycle` | 66 passed |
+| `verity-cli` | 108 passed |
+| `verity-graph` | 220 passed |
+| `verity-difftest` | 151 passed |
+| `verity/protocols/tests` | 312 passed |
+| `repository` (the root's) | 352 passed |
+
+- The root's suite passing at this head means the tree's invariants hold on the joined tree, the prose lints and the Lean packages' caps among them. The ratchet gate is not a suite and was not run.
+
+**2. The moves you ordered.** [run: `research status` then `research cancel`, each pair within ten seconds]
+
+| Run | State when read | What I did |
+|---|---|---|
+| `r20261112-223929-6685`, `-49fc`, `-53ec` (three tries, cpu-12) | waiting, 35 minutes | cancelled 23:15Z; one run on vy-nebius-2 holds all three: `r20261112-231533-4bc0` |
+| `r20261112-224804-ae12` (records, cpu-12) | waiting, 26 minutes | cancelled 23:15Z; again as `r20261112-231553-5b1a` on vy-nebius-2, 105 GB |
+| `r20261112-224804-2b10` (16 suites, cpu-8) | running since 23:14Z | left; it is the run above |
+| `r20261112-213155-e409` (the two lists' suites, cpu-10) | waiting, 104 minutes | cancelled 23:16Z; again as `r20261112-231602-5563` on vy-nebius-2 |
+
+- **The line on vy-nebius-2 is for a place, not for a Lean slot.** `4bc0` waited 11 minutes 45 seconds for one of the eight places (9 runs ahead at 23:16Z) and took it at 23:27:46Z. `5b1a` and `5563` are behind it. Once it had a place the three tries took about 20 seconds, on a tree the node already had built. At 23:29Z `5563` has its place (since 23:28:08Z) and `5b1a` has one run ahead of it.
+
+**3. The two lists' records run is read: one lock moves, in two entries, and no guarantee's own record moves.** [run: `r20261112-213155-38e4`, exit 0, at `57fb7f037f6b`]
+
+- `security/lean-audit.json`: unchanged. `security/Proofs`: passes, no guarantees.
+- `security/Properties/lean-audit.json`: two entries under `reads` move, `CoreProtocol.Site` and `Definitions.Core.Site` [run: a comparison of the regenerated record with the branch's, section by section].
+  - In the code's Site: `Covered` and `Reached` changed with their two `Decidable` instances; `CERTIFIER` and `CHALLENGED` are new; `Composite.onsite` is gone. The thirteen `Properties.Site.*` read it.
+  - In the spec's Site: `Covered` and `Reached` changed with their instances; `CERTIFIER` and `CHALLENGED` are new. 54 guarantees of that lock read the spec's Site: 12 of `Properties.Site`, 14 of `NciCheck`, 4 of `Properties.Remote`, 1 of `Properties.Pouw` and 23 of `Verity.*`.
+- The regenerated record is committed on `cursor/proofs-composites-f4cc`: `1b478b7fdf27` (one file, +14 −11).
+- My `out/lock.diff` in that run was empty: a records run writes on the node's slot tree, not on the run's clone, and keeps the record under `lean-audit/record/`. I read that instead, and the Site v2 records run is read the same way.
+
+**4. Not established yet.** Which records Site v2 moves, and that the rest of `security/` builds over the new spec: `r20261112-231553-5b1a`. The two lists' suites: `r20261112-231602-5563`. The ratchet gate at the joined head.
+
+**5. Turn ended on your word of 23:27Z: I would now only wait.**
+
+| Run | What | State at 23:29Z | ETA | When it ends I |
+|---|---|---|---|---|
+| `r20261112-231553-5b1a` | the records run at `a88978bf950f`, vy-nebius-2 | one run ahead of it in line | about 00:30Z [guess: the two lists' records run held its slot 58 minutes] | list the records of the three `security` locks that move, commit the regenerated ones, merge `main` once, and open the one unmarked pull request with the notice first |
+| `r20261112-231602-5563` | the two lists' suites at `57fb7f037f6b`, vy-nebius-2 | running since 23:28:08Z | about 23:45Z [guess: the like suites took 11 minutes of slot on cpu-8] | read the verdicts and write the ready line for the two lists |
+
+- The first one I need is `5b1a`. The notice's text, the four listed statements before and after, is drafted in my checkpoint note with the pull request's body; it goes first in the entry that opens the pull request.
