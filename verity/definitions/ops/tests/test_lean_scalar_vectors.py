@@ -1,5 +1,5 @@
 """`verity.definitions.ops.scalar`'s primitives and `verity.definitions.ops.prims`' casts are held to their Lean definitions
-(`Security/Definitions/Core/Scalar.lean`, `Verity/Protocol/Prims.lean`) by vectors: `Verity/SecurityProofs/Scalar/
+(`security/Definitions/Core/Scalar.lean`, `Verity/Protocol/Prims.lean`) by vectors: `Verity/SecurityProofs/Scalar/
 Vectors.lean` and `Verity/SecurityProofs/Prims/Vectors.lean` state each one as a theorem the kernel checks against the
 Lean, and this test checks the same vectors against the Python: each primitive's evaluator, and `evaluate_batch` (its numpy
 kernel, where one is registered). A change to either side's semantics then fails a build."""
@@ -17,7 +17,7 @@ from verity.definitions.ops import prims as P
 from verity.definitions.ops import scalar as S
 from verity.definitions.silicon.cast import E2M1_UP
 
-LEAN = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Core"
+LEAN = Path(__file__).resolve().parents[4] / "security" / "Proofs" / "Core"
 FILES = (LEAN / "Scalar" / "Vectors.lean", LEAN / "Prims" / "Vectors.lean")
 #: each Lean function, the primitive it transcribes, and the fewest vectors its theorems hold
 PRIMITIVES = {

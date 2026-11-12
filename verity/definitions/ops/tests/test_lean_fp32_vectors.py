@@ -1,5 +1,5 @@
-"""The Lean FP32 arithmetic (`Security/Definitions/Core/Fp32.lean`) is held to `verity.definitions.ops.fp32` by vectors:
-`Security/Proofs/Core/Fp32/Vectors.lean` states each one as a theorem the kernel checks against the Lean, and this test
+"""The Lean FP32 arithmetic (`security/Definitions/Core/Fp32.lean`) is held to `verity.definitions.ops.fp32` by vectors:
+`security/Proofs/Core/Fp32/Vectors.lean` states each one as a theorem the kernel checks against the Lean, and this test
 checks the same vectors against the Python, and that they reach every case the Python distinguishes. A change to either
 side's semantics then fails a build.
 
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from verity.definitions.ops import fp32 as F
 
-LEAN = Path(__file__).resolve().parents[4] / "Security"
+LEAN = Path(__file__).resolve().parents[4] / "security"
 VECTORS = LEAN / "Proofs" / "Core" / "Fp32" / "Vectors.lean"
 THEOREM = re.compile(r"theorem \w+ : (\w+)((?: 0x[0-9a-f]+)+) = (0x[0-9a-f]+) :=")
 

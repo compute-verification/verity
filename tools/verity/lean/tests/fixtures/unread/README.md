@@ -1,7 +1,7 @@
 # `unread.py`'s fixture
 
-A tree of four Lake packages laid out as the repository's are: `Security` (`Definitions`), `Security/Proofs` and
-`Security/Properties` (each with `srcDir = ".."`), and one code package, `code`. `test_unread.py` builds it in a copy and
+A tree of four Lake packages laid out as the repository's are: `security` (`Definitions`), `security/Proofs` and
+`security/Properties` (each with `srcDir = ".."`), and one code package, `code`. `test_unread.py` builds it in a copy and
 checks what the closure keeps: the guarantee's proof and what it reads, the properties, the code, a notation, a
 declaration a tool names (`tools/reader.toml`), a module of checks a test names by path (`tools/checks.py`), `@[defeq]`
 theorems, a `Coe` instance (a property uses the coercion,

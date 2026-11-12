@@ -9,7 +9,7 @@ subprotocol's own proof discharges it. This page says where it is, what it reads
 
 | Name | Statement | Proof |
 |---|---|---|
-| `Verity.soundness_at_of_targets : Verity.SoundnessOf` | at every composite `k`, `k`'s subprotocols' targets give `Vocab.SoundnessAt k` | `Security/Proofs/Properties/Verity/Soundness.lean` |
+| `Verity.soundness_at_of_targets : Verity.SoundnessOf` | at every composite `k`, `k`'s subprotocols' targets give `Vocab.SoundnessAt k` | `security/Proofs/Properties/Verity/Soundness.lean` |
 | `Verity.soundness_of_subprotocols : Verity.Soundness` | at onsite, from its seven targets | the same file |
 | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` | at remote, from its three targets | the same file |
 
@@ -20,7 +20,7 @@ compiled verifier (`Core.Remote.protocol`, `verity/remote/v0`) accepts files tha
 one of the three claims fails is at most the three errors at that strategy summed. Onsite's is the same statement over
 its seven.
 
-The lock (`Security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
+The lock (`security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
 the targets alone, and with its two witnesses at the idle deployment (`Idle.lean`): `*_honest`, every target holds at
 `Idle.unbounded`, and `*_nontrivial`, the conclusion fails at `Idle.exact` for a verifier that accepts everything.
 
@@ -42,7 +42,7 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 
 In this order:
 
-1. **The game**, `Verity.Game` (`Security/Definitions/Core/Game.lean`): the prover `send`s, the verifier flips a live
+1. **The game**, `Verity.Game` (`security/Definitions/Core/Game.lean`): the prover `send`s, the verifier flips a live
    `coin`, the game `ret`urns; a `Strategy` picks every message from the history, and `Game.prob` is the exact
    probability over the coins.
 2. **The play** (`Game.lean`): the prover sends `θ`, `F` and `c` before any coin, then `Verity.play`, in which it drives
@@ -58,7 +58,7 @@ In this order:
 5. **`Target` and `SoundnessAt`**: `Vocab.Target k a` bounds `Pr[Verdict ∧ ¬ Holds]` by `a`'s error at every
    `θ F c σ`; `Vocab.SoundnessAt k` bounds `Pr[Accepts k ∧ Registered ∧ ∃ a, ¬ Holds]` by the sum. The seven named
    targets are `Target` at one subprotocol each.
-6. **The proof** (`Security/Proofs/Properties/Verity/Soundness.lean`): `accepts_same` and `accepts_components` (the
+6. **The proof** (`security/Proofs/Properties/Verity/Soundness.lean`): `accepts_same` and `accepts_components` (the
    composite's acceptance is a `same` composition and each subprotocol's on its own case, from `Properties.Composition`),
    then `prob_exists_finset_le`, the union bound. `sent_reachable` and `Vocab.accepts_reachable` say the event covers
    every input whose blobs begin with the committed files, so no input shape escapes it.
@@ -67,11 +67,11 @@ In this order:
 
 - **The five period subprotocols** (sampled proofs, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
-  `Security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
+  `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
 - **Sampled proofs** at the recursive configuration: `Verity.Recursive.spotRecursive`
-  (`Security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
+  (`security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
-  (`Security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
+  (`security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
   `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SpotSound`.
 - **The others** are hypotheses of the theorem. Each subprotocol's own guarantee, in its own form, is in
   [the guarantees to read first](../../README.md#the-guarantees-to-read-first).
@@ -80,24 +80,24 @@ In this order:
 
 The targets are the theorem's only hypotheses. Three kinds of assumption enter beside them, by their lock names:
 
-- **SHA-512 collision resistance**, `Claims.ExpectedCR` (`ecr/sha-512`, `Security/Definitions/Core/Interaction.lean`;
-  `Security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` is
+- **SHA-512 collision resistance**, `Claims.ExpectedCR` (`ecr/sha-512`, `security/Definitions/Core/Interaction.lean`;
+  `security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` is
   `Claims.ExpectedCR` there, which bounds the finder's collision probability at `ε_cr`, its budget of SHA-512 calls
   over `2^256` (`Vocab.crBound`, `Vocab.finder_calls`), and where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
   `ecr/sha-512` gives at their own budgets (`Vocab.finderCR`), and a second file with a registered digest enters the
   same way (`Vocab.fileFinder`, `Vocab.publicFinder`).
 - **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512`,
-  `Security/Definitions/Hash/Assumptions.lean`; `Security/Properties/lean-audit.json`). It is asked only of each
+  `security/Definitions/Hash/Assumptions.lean`; `security/Properties/lean-audit.json`). It is asked only of each
   subprotocol's fixed forger at the compiled LMS verifier (`Verity.lmsVerify`, `Vocab.Unforgeable`) and adds
   `ε_forge(t, Q)` to the error. A log a subprotocol's check reads that isn't the device's whole log is such a forgery,
   or a SHA-512 collision of the log's signed chain (`Vocab.Logged`).
 - **The auditor's live-coin challenger**, `Verity.Assumptions.ChallengerLogsCoins`, `Verity.Assumptions.FlipsAfterRecorded`
-  and `Verity.Assumptions.VerifierReadsLog` (`Security/Definitions/Core/Assumptions/Challenger.lean`;
-  `Security/lean-audit.json`): the challenger logs every coin it releases, flips each only after what it samples is
+  and `Verity.Assumptions.VerifierReadsLog` (`security/Definitions/Core/Assumptions/Challenger.lean`;
+  `security/lean-audit.json`): the challenger logs every coin it releases, flips each only after what it samples is
   recorded, and the verifier reads coins only from that log. The game's device, each release's coins flipped uniformly after
   the bytes they answer, is the challenger they describe. They are stated over the challenger's log
-  (`Security/Definitions/Core/Challenger.lean`), not over `Verity.Game`, and are not hypotheses of the theorem; what they
-  give is `Verity.Guarantees.SampleAfterRecorded` (`Security/Proofs/Core/Challenger.lean`). The challenger is an auditor
+  (`security/Definitions/Core/Challenger.lean`), not over `Verity.Game`, and are not hypotheses of the theorem; what they
+  give is `Verity.Guarantees.SampleAfterRecorded` (`security/Proofs/Core/Challenger.lean`). The challenger is an auditor
   device (`trusted-host`, `Verity.Assumptions.TrustedHost`).
 
 Each subprotocol's own proof of its target adds that subprotocol's named assumptions.

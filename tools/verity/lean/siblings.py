@@ -14,7 +14,7 @@ else a plain file. A package's modules are its `[[lean_lib]]`s' files (the libra
 newer than its source and than the sources of the package's modules it imports, directly or through others (an import
 from another package is taken as built). One that isn't is listed as unchecked.
 
-It is opt-in because of what it costs: on Security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
+It is opt-in because of what it costs: on security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
 (`--on`), and records runs still catch what it isn't asked for. Stdlib only: the CLI's local `verity lean try` and
 `lean_changed.py --try` both load it, and every try takes its package's Lean options from it (`options`)."""

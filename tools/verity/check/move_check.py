@@ -36,7 +36,7 @@ Every path git sees changed must be one of:
   `reads` byte for byte (a `reads` key, a module's name, may follow the module's move), may change the structural `roots`,
   `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
-  names, a moved path there too left where it is a word (a reason that calls a conclusion `Security`, when the directory
+  names, a moved path there too left where it is a word (a reason that calls a conclusion `security`, when the directory
   of that name moves); a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
   renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
   must end up in exactly one, otherwise unchanged (`runs_moved`);

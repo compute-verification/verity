@@ -8,7 +8,7 @@ step stands in Lean.
 
 ## Start here
 
-Four statements carry what an accepted run guarantees. Each entry gives its file (under `Security/`), Lean name and
+Four statements carry what an accepted run guarantees. Each entry gives its file (under `security/`), Lean name and
 one-line statement, and its premises by kind: **domain**, what the statement is about; **real**, a named cryptographic
 or trust assumption; **folds into**, a second form of another premise; and **open**, a premise about our own code or
 protocol that a proof has yet to discharge.
@@ -244,7 +244,7 @@ bound has three ingredients, each with its own premises: **information** (which 
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
 block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
 `Nci.Capability` (vocabulary), `Nci.Assumptions` (premises) and `Nci.Guarantees` (the repertoire), one module per role;
-`Security/Definitions/Nci/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
+`security/Definitions/Nci/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
 test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
 named as one.
 
@@ -579,8 +579,8 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 With the toolchain `lean-toolchain` pins:
 
 ~~~text
-lake build                                    # in Security/: the spec
-lake build                                    # in Security/Properties/, then Security/Proofs/ (fetches ArkLib)
+lake build                                    # in security/: the spec
+lake build                                    # in security/Properties/, then security/Proofs/ (fetches ArkLib)
 python3 tools/verity/lean/check.py Security   # from the repository root
 ~~~
 
