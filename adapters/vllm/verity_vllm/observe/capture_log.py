@@ -43,7 +43,7 @@ def request_params(header: dict) -> tuple[list[dict], dict[str, int], dict[str, 
     workload = header.get("workload")
     requests = workload.get("requests") if workload else None
     reqs = list(requests) if requests else []
-    if not reqs:
+    if not workload or not reqs:
         raise ValueError("RunHeader.workload has no requests")
     idx = {r["request_id"]: i for i, r in enumerate(reqs)}
     parent = {r["request_id"]: r["request_id"] for r in reqs}
