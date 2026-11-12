@@ -290,7 +290,8 @@ def measuredParams : StreamedWipe.Params := ⟨16777216, 2152, 1, 20000000, #[("
 /-- Its commitment. -/
 def measuredCommitment : StreamedWipe.Commitment := ⟨MEASURED_SERVER, MEASURED_SESSION, measuredParams⟩
 
-/-- The challenger's clock (`CLOCK_MONOTONIC`, ns) as the fill started. -/
+/-- The challenger's clock reading as the fill started, in ns. The wipe of record read `CLOCK_MONOTONIC`, and a
+session's header names the raw clock (`StreamedWipe.CLOCK`): the honest lemma takes the readings as numbers. -/
 def MEASURED_FILL_START_NS : Int := 124346189273550
 
 /-- As the fill ended, 2.95 s later. -/

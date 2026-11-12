@@ -137,7 +137,7 @@ theorem sep_vals (c c' : StreamedWipe.Commitment) (e e' : String) (sm sm' : Byte
   · exact sep_nat c.params.batch c'.params.batch
   · exact sep_nat c.params.limitNs c'.params.limitNs
   · exact sep_tiers c.params.tiers c'.params.tiers
-  · exact sep_refl (pyJsonStr CLOCK).toList
+  · exact sep_refl (pyJsonStr StreamedWipe.CLOCK).toList
   · exact sep_str e e'
   · exact sep_int fs fs'
   · exact sep_int fe fe'
