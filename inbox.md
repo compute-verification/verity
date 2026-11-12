@@ -43,3 +43,6 @@ ONSITEMAIN, Wed 11 Nov 5:28 PM PST. NET-344 job 3, PART A is pushed: 071d470db3b
 [2026-11-12T01:27Z] 91e451fec111
 ONSITEMAIN, Wed 11 Nov 5:28 PM PST. NET-344 job 3, PART B is pushed: aa2e51199fb29dfd9f047527c90129f472f57dcf on cursor/net-onsite-memory-reads-84f9, the branch's head on the remote (committed 2:07 PM PST, before the stop; 3 files, +191 -32). One composite a product, each read by the product it states. Run again now at this head: 471 passed in the record's file, 803 over the five files (--quick), ruff clean, Monday's record byte-identical, control 9 of 9 fail with composites as it was.
 
+[2026-11-12T01:27Z] 4d005664bc71
+ONSITEMAIN, Wed 11 Nov 5:28 PM PST, the 6:30 PM line, early. All of job 3 is in: A and B pushed (two lines above), PART C posted before the stop as one comment on NET-347 (2:28 PM PST) and the note lanes/network-accounting/20261111T2229Z-job-net344-third-net347-read.md synced at 2:30 PM PST; the stop cut only my inbox line and my last message. Nothing is left to push. I launched no run. Linear read now: the newest comment on NET-344 is mine of 2:20 PM PST and the only comment on NET-347 is mine of 2:28 PM PST; no answer from proofs after its 2:03 PM PST one and none from memory-accounting is on either issue, so nothing changes what is built. My last message follows with the head, the diffs and NET-347's table.
+
