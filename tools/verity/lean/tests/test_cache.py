@@ -1056,13 +1056,163 @@ def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
 
 
+def no_unshare(tmp_path: Path, monkeypatch) -> None:
+    """A node without unprivileged user namespaces: `unshare` fails, so nothing here builds in the sandbox."""
+    stub = tmp_path / "no-unshare"
+    stub.mkdir()
+    (stub / "unshare").write_text("#!/bin/sh\nexit 1\n")
+    (stub / "unshare").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stub}{os.pathsep}{os.environ['PATH']}")
+
+
+def linked(pkg: Path, *caches: Path) -> list[str]:
+    """The files under ``pkg``'s `.lake` that are one file with a file of ``caches``, by a hard link."""
+    theirs = {(s.st_dev, s.st_ino) for c in caches for f in c.rglob("*") if f.is_file() for s in [f.stat()]}
+    return sorted(f.relative_to(pkg).as_posix() for f in (pkg / ".lake").rglob("*")
+                  if f.is_file() and (f.stat().st_dev, f.stat().st_ino) in theirs)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+@pytest.mark.parametrize("sandbox, staged", [(True, True), (False, False), (False, True)],
+                         ids=["in the sandbox", "with no sandbox", "with no sandbox and a records build that stages"])
+def test_a_build_restores_no_file_by_a_link_and_outside_the_sandbox_restores_none(tmp_path, monkeypatch, capsys, sandbox,
+                                                                                  staged):
+    """`outdated` reads a file's time as the time it was built, which holds while a file Lake restores from a cache is a
+    copy. Lake restores by a hard link where it can, and the linked file keeps the cache file's time. In the sandbox the
+    package's `.lake` is a mount of its own, the link fails and Lake copies: a build there unpacks the published module,
+    the object compiled from the unpacked C stays under the hash of the C before it, and the repair drops it for being
+    older than the C a records build restores.
+
+    Outside the sandbox `build` gives Lake no cache to read, whatever the environment names: `--build` compiles the
+    module, no file of the tree's `.lake` is one of Lake's own cache's, and after each build the executable runs the
+    source the tree holds. A records build stages nothing there. Where one staged all the same, its restore by a link gave
+    the C the cache file's time, older than the object compiled from the unpacked C: the repair kept that object and the
+    executable ran the earlier source. With nothing unpacked, no build leaves such an object."""
+    LC, LA, LCH = (_load(f"no_cache_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    if sandbox and not LC.sandboxed():
+        pytest.skip("no sandbox here, so there is no build in the sandbox to test; the cases with no sandbox run")
+    if not sandbox:
+        no_unshare(tmp_path, monkeypatch)
+    assert LC.sandboxed() == LCH.sandboxed() == sandbox
+    store, own, slot = tmp_path / "lean-artifacts", tmp_path / "lakes-own-cache", tmp_path / "cache" / LCH.RECORDS / "local"
+    src, tree, publisher = toy(tmp_path / "checkout" / "toy"), slot / "toy", toy(tmp_path / "publisher" / "toy")
+    files = sorted(f"toy/{f.relative_to(src).as_posix()}" for f in src.rglob("*") if f.is_file())
+    (slots := tmp_path / "lean-slots").write_text("build 1\n")
+    for at, name, value in ((LC, "ARTIFACTS", store), (LCH, "ROOT", src.parent), (LCH, "records_tree", lambda: slot),
+                            (LCH, "closure", lambda p: [p]), (LCH, "link", lambda *a, **k: True),
+                            (LCH.LEAN_SLOT, "SLOTS", slots), (LCH.LEAN_SLOT, "hold", lambda *a, **k: None),
+                            (LCH.LA, "packages", lambda _: ["toy"]), (LCH.LA.COMMON, "tracked_files", lambda _: files),
+                            (LCH.LA.COMMON, "cache_dir", lambda: tmp_path / "cache")):
+        monkeypatch.setattr(at, name, value)
+    q, z, a = (WORD.replace("{tag}", t) for t in "QZA")
+    assert (publisher / "Toy" / "Word.lean").read_text() == a
+    publish(LC, publisher, tmp_path / "published", own)
+    # as on a node: Lake's own cache holds main's published build, and the environment leaves Lake to read it
+    monkeypatch.setenv("LAKE_CACHE_DIR", str(own))
+    monkeypatch.delenv("LAKE_ARTIFACT_CACHE", raising=False)
+    monkeypatch.delenv(LCH.LEAN_SLOT.HELD, raising=False)
+    n = iter(range(99))
+
+    def edit(word: str) -> None:
+        (src / "Toy" / "Word.lean").write_text(word)
+        LCH.sync(["toy"], files, slot)
+
+    def lake(pre: list[str]) -> tuple[int, str]:
+        r = subprocess.run(LC.in_sandbox(tree, [*pre, "lake", "build"]), cwd=tree, capture_output=True, text=True,
+                           env=LC.lake_env())
+        return r.returncode, r.stdout + r.stderr
+
+    def records() -> tuple[int, str]:
+        """`check.py`'s build, as a records run reaches it: in the sandbox staged from the node's artifact cache and put
+        there after; outside it nothing is staged and Lake's cache is off (`lake_env`)."""
+        if not staged:
+            return lake([])
+        cache = store / LA.MK.STAGE / f"test-{next(n)}"
+        LC.stage_build(LA.MK, tree, ["Toy", "Main"], cache)
+        rc, out = lake(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"])
+        shutil.rmtree(cache)
+        LA.LakeArtifacts(store).put({tree: {"sandbox": True}})
+        return rc, out
+
+    def build() -> str:
+        """`--build` of the two modules: the slot tree synced and repaired, then `lake build +Toy.Word +Main`."""
+        capsys.readouterr()
+        assert LCH.build_files(["toy/Toy/Word.lean", "toy/Main.lean"], tmp_path / "deps", log=lambda s: None) == 0
+        return capsys.readouterr().out
+
+    def repair() -> list[str]:
+        said: list[str] = []
+        LCH.repair(slot, ["toy"], {}, None, said.append)
+        return said
+
+    def says() -> str:
+        return subprocess.run([str(tree / ".lake" / "build" / "bin" / "toy")], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    edit(z)
+    assert records()[0] == 0 and says() == "version Z 1"
+    edit(q)
+    assert records()[0] == 0 and says() == "version Q 1"
+    edit(z)
+    assert "Built Toy.Word" in build(), "a `--build` run compiles what Lake's cache lacks"
+    edit(a)
+    rc, out = LCH.build("toy", slot, LAKE, sandbox=sandbox, echo=lambda s: None)
+    assert rc == 0 and ("Unpacked Toy.Word" in out) == sandbox and says() == "version A 1", out
+    assert linked(tree, own) == [], "a file restored by a link keeps the time of the cache's"
+    edit(z)
+    lib, ir = (tree / ".lake" / "build" / d / "Toy" for d in ("lib/lean", "ir"))
+    for f in (lib / "Word.trace", *lib.glob("Word.*.hash"), *ir.glob("Word.*.hash")):
+        f.unlink()                                                      # what the repair dropped before it dropped objects
+    rc, out = records()
+    assert rc == 0 and says() == ("version A 1" if sandbox else "version Z 1"), out
+    assert any("older than the C" in s and "Toy/Word.c.o.export" in s for s in repair()) == sandbox, \
+        "the object of the earlier source goes where one was taken as built"
+    rc, out = records()
+    assert rc == 0 and says() == "version Z 1", out
+
+    edit(a)
+    out = build()
+    assert ("Unpacked Toy.Word" in out) == sandbox and ("Built Toy.Word" in out) != sandbox, out
+    assert linked(tree, own) == []
+    repair()
+    rc, out = records()
+    assert rc == 0 and says() == "version A 1" and linked(tree, own) == [], out
+    assert staged or not store.exists(), "the node's artifact cache is for what a build compiled in the sandbox"
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_outside_the_sandbox_a_lakefile_that_turns_lake_s_cache_on_finds_an_empty_one(tmp_path, monkeypatch):
+    """Lake reads a package's lakefile before the environment: a package that sets `enableArtifactCache` reads and
+    writes the cache the environment names, whatever `LAKE_ARTIFACT_CACHE` says. So outside the sandbox `build` also
+    names a cache directory of its own, empty and removed after the command: Lake restores nothing an earlier build left,
+    no file of the tree stays linked to another, and the cache the environment named is as it was."""
+    LC, LCH = (_load(f"cache_on_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_changed"))
+    no_unshare(tmp_path, monkeypatch)
+    on = {**TOY, "lakefile.toml": TOY["lakefile.toml"].replace('name = "toy"\n', 'name = "toy"\nenableArtifactCache = true\n')}
+    own = tmp_path / "lakes-own-cache"
+    built, by_env = (toy(tmp_path / n / "toy", on) for n in ("built", "by-env"))
+    publish(LC, toy(tmp_path / "publisher" / "toy"), tmp_path / "published", own)
+    before = sorted(f.relative_to(own).as_posix() for f in own.rglob("*"))
+    monkeypatch.setenv("LAKE_CACHE_DIR", str(own))
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "true")
+    rc, out = LCH.build("toy", built.parent, LAKE, sandbox=LCH.sandboxed(), echo=lambda s: None)
+    assert rc == 0 and "Unpacked" not in out and "Built Toy.Word" in out, out
+    assert not [f for f in (built / ".lake").rglob("*") if f.is_file() and f.stat().st_nlink > 1]
+    assert sorted(f.relative_to(own).as_posix() for f in own.rglob("*")) == before
+    r = subprocess.run(["lake", "build"], cwd=by_env, capture_output=True, text=True,
+                       env={**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "false"})
+    assert r.returncode == 0 and "Unpacked Toy.Word" in r.stdout and linked(by_env, own), \
+        "the environment alone leaves this package its cache"
+
+
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the_build_compiled(tmp_path):
-    """A `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar` archives. Where
-    a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash` files, Lake unpacks
-    the archive and hashes the outputs afresh, and the trace the archive holds is the publisher's own: the build holds
-    nothing that tells the module from one it compiled. The index is for what this node compiled in the sandbox, so of
-    such a build only the modules Lake said it built go in."""
+    """In the sandbox a `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar`
+    archives. Where a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash`
+    files, Lake unpacks the archive and hashes the outputs afresh, and the trace the archive holds is the publisher's
+    own: the build holds nothing that tells the module from one it compiled. The index is for what this node compiled in
+    the sandbox, so of such a build only the modules Lake said it built go in."""
     LC, LA, LCH = (_load(f"unpacked_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     own = tmp_path / "lakes-own-cache"
     tree, publisher = (toy(tmp_path / n / "toy") for n in ("build-0", "publisher"))
