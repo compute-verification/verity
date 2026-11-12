@@ -79252,3 +79252,144 @@ Rows priced a table (every table pays the fixed seconds of a one-table session o
 ### What I wait for
 
 Nothing blocks me. Three things would change figures here: a measurement of the GPU prover and of the head type at more than one table a session (none exists; I bracketed both); the second read of the table statement (LAND2, by 11:15Z); and a count of shared classes from the wiring in place of my model, if you want it (section 1.5 of the 08:27Z entry).
+
+## ACCOUNTS, Thu 12 Nov 08:38Z: the design for MEM-279 is ready to post: one value beside each protocol and one function from a site and the answers to the rows; the file compiles and its 27 checks hold; a part of memory now names its tiers, so PoUB's one number fits; the Site's one decoder is in the same branch, 7 lines of Lean; yes to compute-research's place; the key of a host's figure is the leaf's id
+
+Two parts. **A** is written to be posted on MEM-279 as it stands. **B** is for you: your 08:11Z questions, the decoder, a flaw check on memory-accounting's case, and the runs.
+
+Branch `cursor/proofs-accounts-e4bb`, head `afe45dcfd5ab`, 7 files and 697 lines added over `d6075b75d289`, nothing removed. [run: `git diff --stat d6075b75d289 HEAD`, 08:36Z] Every line number below is `verity/protocols/interface/CoreProtocol/Account.lean` at that head unless a file is named.
+
+### A. For MEM-279: the shared type and the rows
+
+**What it is.** One new Lean file, `verity/protocols/interface/CoreProtocol/Account.lean`. It holds a type, `Core.Account`, which each protocol's owner fills in once for its protocol, and a function, `Account.rows`, which turns a site, its registration's head and the protocols' answers into the accounting rows. It changes no protocol and renames no key of any public output. [read: the branch's diff, 08:36Z] It compiles, and its 27 checks (`#guard`) hold. [run: `r20261112-083228-be2d`, exit 0]
+
+**The type: what a protocol's owner writes.** An account is a value beside the protocol, not a field of it: the protocol's id, the key under which an accepted answer names the registration's head, and one entry for each amount the protocol publishes. [read: `:238-241`] Each entry (`Account.Amount`, `:209-222`) says:
+
+| Field | What it says | Choices |
+|---|---|---|
+| `metric` | the amount's name among its protocol's | text |
+| `part` | the part of the registered hardware it is about | the devices' compute; the memory of some tiers; the read rate of some tiers' memory; a link |
+| `place` | the key under which an answer names the location or link it ran on | a key, or none for the whole site |
+| `key`, `unit` | where the amount is, and its unit | a key; bits, bytes, MiB or MACs |
+| `side` | which side of the capacity it bounds | verified, from below; or free, from above |
+| `time` | when it holds | a moment; a span, by the key of its count and the seconds of one step; or not stated |
+| `share` | the key of the share of the amount that the error leaves out | a key, or none |
+| `error`, `pool` | the key of its error, and how a period's error forms from its answers' | summed; or stated once by the period's one answer |
+| `capacity` | the key of a capacity the answer itself carries | a key, or none |
+| `uncertified` | what an answer holds when nothing is certified | a boolean key; the amount already at its safe end; or no accepted answer |
+| `unpriced` | the terms the error names and does not price | names |
+
+A key is "in the public output" or "in the profile", with its name. [read: `:59-62`]
+
+**The capacity is read from the registration, never copied from an answer.** Compute is the registered sheets' rate, beside the larger of it and the auditor's estimate. Memory is the leaves' bytes. A read rate is the sheet of the device each leaf is under. A link is its β. [read: `Part.capacity`, `:146-160`] Where the registration holds no figure the row prints no capacity. Today that is the read rate of any memory under a host, which is why memory-accounting's field is needed for PoUB's row. [read: `:155-159`, and the check at `:587`; relayed: memory-accounting, MEM-279, 07:48Z]
+
+**The rows: what an auditor reads.** `Account.rows` (`:452-458`) takes the site, the registration's head, a tick's length, the period's length in ticks, the accounts and the answers.
+
+- **An answer counts** only if it accepts, names its account's protocol, and names this registration's head under the account's key. [read: `:425-431`]
+- **A flow** (compute, a read rate, a link) gets one row for the period. Verified is the counted answers' amounts summed. Free is their amounts, plus the capacity of every tick no certified answer covers, and never more than the capacity. The error is the answers' errors summed, or the one answer's where the protocol pools a period itself. A free amount whose uncovered ticks have no registered capacity to be charged at prints no amount. [read: `:389-403`, and the checks at `:592-595`]
+- **Memory**, an amount at a moment, gets one row for each answer and one for the period: the least verified, or the most free, of its sessions. [read: `:404-420`]
+- **An error of 1 or more** prints "no bound at this period" with the error and no amount, as soundness ruled. [read: `:330-333, 369-375`; relayed: soundness, MEM-279, 07:20Z]
+- **What no counted answer covers** is a row of its own: "not audited: charged at capacity", verified 0, free the whole capacity. [read: `:435-446`]
+- **A row** is plain data. It prints as JSON under `metric`, `capacity`, `verified`, `free` and `error`. [read: `:463-470`]
+
+**Three things each lead can act on.**
+
+1. **The registration's head can be published in the public output or in the profile: I found no reason it must be the public output.** [derived, from the four reads that follow]
+   - An accepted answer carries both, and a refusal neither. [read: `CoreProtocol/Protocol.lean:42-47, 73-81` at `d6075b75d289`]
+   - A property is stated over both. [read: `Protocol.lean:68-71`]
+   - The composition carries both under each protocol's id. [read: `CoreComposition/Product.lean:96-100`]
+   - A record reads neither. [read: `CoreProtocol/Record.lean`, no match for either word]
+   - One cost points to the public output for a protocol that samples, and it is a cost, not a need. Such a protocol's profile is the shared type `Core.Integrity`, so a head there is a new field of a type whose module 47 lock records read, 2 of them deployed. A key of the public output is the protocol's own. [read: `report.json` of records run `r20261112-030020-70e6`, at tree `0b6bdb0352e1`, not `main`]
+2. **None of the seven protocols publishes the head today, so the rows certify nothing from them yet.** [read: each public output and profile; the places are in my 07:41Z entry, section 3] An account's `head` is none until its protocol publishes one. `rows` then holds its answers to no registration, and every row reads "not audited: charged at capacity". [read: `:425-431`, and the check at `:606`] This is the one thing every protocol must add before its row can carry a number. It is a new key and no rename.
+3. **What does not fit the form as it stands, for the leads to know before they write their values.** [read: the same places]
+   - The certifier's and PoUW's spans are counts, and the seconds of one step are not in the output. The value must carry them as a constant.
+   - PoUS and the wipe name no device. At a site of more than one device their row is about every leaf of the tiers they name.
+   - No flow publishes which ticks its span covers. Two answers over the same ticks both count as cover.
+   - The older bandwidth protocol (`verity/remote-bandwidth/v0`) publishes no span, so it covers no tick.
+
+**One shape for soundness to say.** Memory's row for the period reads the least verified of its sessions at the largest of their errors. The other reading sums the sessions' errors, which is the 07:20Z rule read at every session. Each session has its own row either way, so the comparison can form both. [derived; read: `:418-420`]
+
+**What changed since the first text, and what did not compile.** Nothing failed to compile as written: the first text compiled whole, with every check holding. [run: `r20261112-071838-1772`, exit 0, at `944c0750d4`] Four things changed after it, none from a compiler error:
+
+| Change | Why | Compiled |
+|---|---|---|
+| A part of memory names a list of tiers, not one tier | PoUB publishes one number for a node's reads from its devices' memory and its host's, and the wipe one for the same leaves' bytes [relayed: memory-accounting, MEM-279, 07:48Z]. Its capacity prints only when every leaf has a registered rate | [run: `r20261112-080942-769c`, exit 0] |
+| No word the Glossary retired | the tree's lint; the example's answer is now the example protocol's own check's | [run: `r20261112-075121-0a93`, exit 0] |
+| The header is the module's docstring | the Lean bar's rule | the same run |
+| A free amount with uncovered ticks and no registered capacity prints no amount | it read those ticks as free of charge, which understates a bound from above; found by reading, on a part no protocol has today | [run: `r20261112-083228-be2d`, exit 0] |
+
+### B. For you
+
+**1. Compute-research's function in `verity/hardware/site`: yes.** [derived, from these reads]
+
+- It can sit nowhere nearer the cards. The cards' unit may import no unit, so a function there could not build a `Loc` or an `Entry`. [read: `tests/test_boundaries.py:57, 153` at `1a3eadc9c5b4`]
+- It adds no edge. The site's unit may import only the wire, and `Sheet.of_file` and `Auditor.of_files` already take a card as a table and import nothing. [read: `tests/test_boundaries.py:84, 151`; `verity/hardware/site/__init__.py:40-50, 275, 455`]
+- Three things to ask of it:
+  - it takes the node's table and the cards' tables as mappings, as `of_file` does;
+  - no check and no view calls it: what it returns passes `check` like any entry;
+  - a host leaf's rate is rounded as a device's is, `math.ceil(8 * bandwidth * tick)` (`__init__.py:290`), so both are bits a tick and PoUB's sum is in one unit.
+
+**2. A rate read from the host card agrees with our condition, and the key is the memory leaf's registered id.** [derived]
+
+- **It agrees in the way a GPU's does.** The auditor's sheets are built from the card files (`Auditor.of_files`, `__init__.py:455-459`), and the entry's sheet from the same card, so the two are equal by construction and the check holds a developer who writes anything else. For a host the function fills the leaf's field from the host card's `memory.bandwidth`, and the auditor's figure for that leaf is read from the same line. [read; relayed: compute-research, MEM-279, 07:55Z]
+- **The key: `Loc.id` of the memory leaf**, as `Auditor.key` is already keyed by the id of one of the auditor's devices. [read: `CoreProtocol/Site.lean:298-301, 365-368`] The host card's SKU names the file the auditor read. It is in neither the entry nor the auditor's registration, so your "it will not be a SKU" holds.
+- **What that costs:** the auditor's registration holds one figure for each host leaf of the site, as it holds one key for each of its devices, and not one for each host model. The one function writes them all from one card. [derived]
+- **What it buys:** a host gains no field and names nothing; there is no second kind of sheet; and nothing the developer states picks the figure it is held to. With a SKU the developer picks, as it does for a GPU today. [derived; read: `Sheets` and `Figures`, `Site.lean:350-358`]
+- **The size goes under the same key.** Memory-accounting's page (08:12Z) asks that a host leaf's bytes be held to the auditor's figure too. One figure for a leaf then holds a rate and a size, and the new conjunct holds both. [relayed: memory-accounting, MEM-279, 08:12Z]
+- **One thing to say to compute-research:** the RTX PRO 6000 node's host card marks its `memory.bandwidth` a placeholder (8.192e11 B/s, `xeon-6776p-2s.toml:34`); the H200 node's host card marks its own a ceiling (6.144e11 B/s, `xeon-platinum-8468-2s.toml:34`). A capacity read from a placeholder is as good as the placeholder. [read: both lines at `1a3eadc9c5b4`]
+- The Lean text for the field, the conjunct and the JSON comes in the 12:30Z entry.
+
+**2a. The field's Lean text reads a number the registration carries, and that is the one I recommend** (your 08:34Z question). [derived]
+
+- Lean reads no Python. The field is a number in the site entry, under the entry's digest, so the registration's head names it. [read: `Registration.Entry.toJson`, `Site.lean:585-588`; the entry's digest, `:595-598`]
+- Compute-research's function is what writes that number into the entry, and the auditor's figure beside it, both from one line of the host card. Its node file states no rate. [relayed: compute-research, MEM-279, 07:55Z]
+- **The other way is no field at all:** a view reads the auditor's figure for the leaf, as compute's `bound` reading already reads the auditor's estimate (`:152`). It moves no entry's digest and no site tag. Its price: the head no longer names the figure, so two readers of one head could read two rates, and a protocol that takes the Site alone has no rate to sum. [derived]
+- **Nothing here waits for Daniel.** The field is built after lean's remote merge is on `main`. [relayed: top, MEM-279, 08:12Z; your 08:34Z section]
+
+**3. The decoder of the whole Site fits in the type's pull request, as its own commit (`5d9bf917788b`, with one sentence of the README in `ec4d5a77c6b3`).** [read: `git show --stat` of both]
+
+| File | What | Lines added |
+|---|---|---|
+| `CoreProtocol/Site.lean` | `Core.Site.ofJson`, which reads exactly what `Site.toJson` writes | 8 (7 of code) |
+| `CoreProtocol/Registration.lean` | two checks: a site decodes from what it encodes to, and from nothing with another key | 4 |
+| `verity/hardware/site/__init__.py` | `Site.of_json`, its Python | 7 |
+| `verity/hardware/site/tests/test_site.py` | the round trip, and one malformed case | 2 |
+
+- It changes no existing declaration. [read: the diff adds lines only]
+- It compiles with its checks. [run: `r20261112-082204-5afd`, exit 0]
+- **It moves no lock record, by how a record is made:** a record holds the hash of its statement's type and of the type unfolded over the definitions it reads, and no statement reads the new definition. [derived; read: one record of `security/Properties/lean-audit.json`, keys `type_hash` and `unfolded_hash`] The interface's records run at this head will say for its own lock. [run: `r20261112-082204-a895`, running]
+- **Its one cost:** `Site.lean`'s source changes, so the check rebuilds what imports it, which the type alone would not: `security/Properties/Core/Site.lean` and the SPOT verifier's site difftest import it directly. [run: `rg` for the import, 5 files] If you would rather the type land on the smaller check, say so and I revert it here; the decoder then needs a branch of its own, which is yours to name.
+- Lean's merge branch does not touch `Site.lean` or `Registration.lean`. [run: `git diff --stat d6075b75d289 ded7d80c415b -- verity/protocols/interface`, 9 files, neither among them]
+
+**4. Memory-accounting's case against my "no": I see no flaw in it.** [derived]
+
+- My objection was that a field on a leaf with no sheet is a number nothing holds. Their form holds it to the auditor's figure. With the key above the figure is the auditor's own for that leaf.
+- One correction of a detail in their text, which changes nothing they ask: a link's β is held positive (`Entry.Kinds`, `Site.lean:346`) and to no figure of the auditor's. The host leaf's rate would be the first figure of the site held to the auditor's by a location's id. [read]
+- What my rows do without the field is safe and useless to PoUB: they print no capacity for a part that holds a host's leaf, where leaving DRAM out would print one that is too small. [read: the check at `:587`]
+
+**5. The merges.** My head merges cleanly with lean's branch at `ded7d80c415b` (tree `f15306814398`) and with `main` at `1a3eadc9c5b4` (tree `60fc3a5fc56e`). [run: `git merge-tree --write-tree`, 08:36Z] Both sides add to `CoreProtocol.lean`'s imports and to the interface's README, in different lines. [read: the merge branch's diff of both files]
+
+**6. Runs.**
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-071838-1772` | try of `Account.lean` at `944c0750d4`, the 07:41Z text | exit 0; Lean exit 0 in 5 s |
+| `r20261112-075121-0a93` | try at `f5d7b1f2a6` | exit 0 in 448 s; Lean exit 0 in 4 s |
+| `r20261112-080942-769c` | try at `d3a1a2b2845d`, tiers as lists | exit 0 in 77 s; Lean exit 0 in 6 s |
+| `r20261112-082204-5afd` | try of `Registration.lean` at `5d9bf917788b`, the decoder | exit 0 in 222 s; Lean exit 0 in 4 s |
+| `r20261112-082626-5c84` | try of `Account.lean` at `5d9bf917788b` | exit 0 in 163 s; Lean exit 0 in 6 s |
+| `r20261112-083228-be2d` | try of `Account.lean` at `afe45dcfd5ab`, the head | exit 0 in 101 s; Lean exit 0 in 6 s; 12 siblings imported, none unchecked |
+| `r20261112-082204-a895` | the interface's records run at `5d9bf917788b`, one commit of `Account.lean` behind the head | running since 08:22Z; my guess is 09:50Z, from another package's 5,125 s. I launch the head's own once the head is the pull request's |
+| `r20261112-082942-554b` | the suites the change touches, quick tier, at `ec4d5a77c6b3` | waiting for a slot since 08:30Z |
+| `r20261112-080432-e018`, `r20261112-080943-7452` | records runs at earlier heads | cancelled by me when the head moved; the second ran 12 min |
+
+Every try's sibling check found no name declared twice. No file has a theorem, so the axiom probe had nothing to read. [run: each try's log] The ratchet gate passes on the head: no new retired word, lane text, silent handler or ruff finding in the 7 files. [run: `ratchet_gate.py origin/main HEAD`, 08:36Z]
+
+**7. What I could not establish.**
+
+- What the interface's lock gains: no records run has finished.
+- Whether the file compiles on lean's merge branch. Only the text merge is checked.
+- Whether the decoder moves a record of a lock outside the interface: derived from the record's form, not run.
+- The lock counts are from tree `0b6bdb0352e1`, not `main`.
+
+**8. Next.** The 12:30Z entry: the optional field and its check as Lean text, the auditor's figure by the leaf's id with its JSON, the tick's length and a finer unit for β for the same move to v2, and the LMS key's encoding. Your 08:34Z ask, the word move's sites taken and left with one reason each, comes in that entry too, ahead of your 17:00Z line. Then the pull request by 13:00Z, when the records run says what the lock gains.
