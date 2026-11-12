@@ -34,7 +34,7 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
   2Δ_grad ≤ k and update application Δ_t + Δ_grad ≤ k (Δ counts only when its decoder fits, d < c, and so does Δ_t;
   a part with no token blocks has only the compute kind). Where every part fits, the record's slowdown is c/(c − d) (`rho_fit`).
 - **Slowdown** (the counting lemma at B = A \\ R; stated, not yet proved in Lean): its token form with the largest
-  per-token affected count α_max where token blocks vary, ρ ≥ σ(1 − x0)·(s/s*)·(ᾱ/α_max), ᾱ the mean per-token
+  per-token affected count α_max where token blocks vary, slowdown ≥ σ(1 − x0)·(s/s*)·(ᾱ/α_max), ᾱ the mean per-token
   affected count (for identical token blocks the last factor is 1). The claim takes the assumption's upper bounds,
   never best-known values: s* ≤ max_x x(k − u(x))/a and x0 ≤ max{x : u_in(x) ≤ k} (A1). A target, not a bound: the
   one bound publishes it as a sensitivity (`token_form`).
@@ -56,7 +56,7 @@ sequence, doing a share x of each one's affected work and some of it at such a l
 starts at the sequence start and every token p it serves has a(p + 1) ≤ k − u(x). With L = ctx positions, h the share
 of a token's affected work at no such layer (`free_share`) and h' = min(h, 1 − x0), Slowdown's bound becomes
 
-    ρ ≥ σ·s·(ᾱ/α_max)·(1/L)·Σ_{p<L} [h'/max(S0, S1(p)) + (1 − x0 − h')/S1(p)],
+    the record's slowdown ≥ σ·s·(ᾱ/α_max)·(1/L)·Σ_{p<L} [h'/max(S0, S1(p)) + (1 − x0 − h')/S1(p)],
     S1(p) = max{x(k − u(x))/a : u(x) + a(p + 1) ≤ k},   S0 = max{x(k − u(x))/a : x ≤ h},
 
 which is the token form with s* the harmonic mean (1 − x0)/((1/L)·Σ_{p<L}[...]) (`s_star`; v2's A1 value is
@@ -72,9 +72,9 @@ choices favourable to the block:
 A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
 
 **The one bound** (`bound`, which `at` reads): the counting lemma over kinds K of block work, each a lower
-bound on its own, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
-kind rests on (`RESTS_ON`). Where Fit fails the record's slowdown is the entry point's, max(1, that max); where Fit holds it is
-c/(c − d), and every term is at most that. Its one kind:
+bound on its own, the record's slowdown ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it
+binds on and what each kind rests on (`RESTS_ON`). Where Fit fails the record's slowdown is the entry point's, max(1,
+that max); where Fit holds it is c/(c − d), and every term is at most that. Its one kind:
 - products: the theorem of record's count on M (`RESTS_ON` has its statement), a theorem for the run's circuit given
   (H) and (E). The term is `calculator.slowdown`'s, the benchmark's one entry point to a slowdown, before its floor at
   1: it reads the record's products (`Measured.products`, `work.products_of_trace` of the trace's rows) at the
@@ -385,8 +385,8 @@ def _beta_rows() -> str:
 RESTS_ON = {
     "products": "theorem of record for this circuit: every partition into blocks of at most c gates, each "
                 "reading at most k bits outside θ, does N ≤ m(k + α) + F·(k/2)·√(mO/(β_w·β_x)) of M's N MACs "
-                "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so ρ ≥ c/|C| times the least m that count "
-                "allows, floored at 1, O M's output wires; given these premises "
+                "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so the record's slowdown ≥ c/|C| times the least m "
+                "that count allows, floored at 1, O M's output wires; given these premises "
                 "on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words "
                 "with a cut of at most k bits from the unregistered inputs has a cut of at least each word's β, "
                 "the casts of one value counting as one word: a weight's (an operand no token indexes) its "
@@ -550,12 +550,12 @@ def he_rests_on(got: dict) -> str:
 
 def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
     """The counting lemma over the kinds of block work that are lower bounds on their own (module docstring) at (c, k):
-    each kind's term (None: no figure, its reason in `unmeasured`), ρ ≥ their max over `kinds`, the kind that max
-    binds on (`binding`; None where no kind has a figure) and what each kind rests on (`rests_on`); and beside them
-    the sensitivities (`SENSITIVITIES`), never in the max, reduction and update each the sum over the parts that
-    measure it (None where none does; `unmeasured` names it where a part doesn't). `inputs` holds what each term
-    reads beyond `m`'s fields. The products term is `calculator.slowdown`'s, before its floor, on `m`'s products at
-    the record's |C|, τ and update code; `entry` is that call's whole result, the slowdown and the bound of record
+    each kind's term (None: no figure, its reason in `unmeasured`), the record's slowdown ≥ their max over `kinds`,
+    the kind that max binds on (`binding`; None where no kind has a figure) and what each kind rests on (`rests_on`);
+    and beside them the sensitivities (`SENSITIVITIES`), never in the max, reduction and update each the sum over the
+    parts that measure it (None where none does; `unmeasured` names it where a part doesn't). `inputs` holds what each
+    term reads beyond `m`'s fields. The products term is `calculator.slowdown`'s, before its floor, on `m`'s products
+    at the record's |C|, τ and update code; `entry` is that call's whole result, the slowdown and the bound of record
     among it."""
     off = [kind for kind in kinds if kind in SENSITIVITIES]
     if off:

@@ -1,4 +1,4 @@
-"""The grade: a config's slowdown S = p·ρ, from its jobs' records and its honest config's.
+"""The grade: a config's slowdown S, p times the record's slowdown, from its jobs' records and its honest config's.
 
     python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \\
         [--also NAME=DIR ...] [--out OUT]
@@ -36,14 +36,15 @@ whose slowdown it read, in what S rests on (`rests_on`). It prints the block (`t
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same slowdown
   where τ's stub changes no step count: the block says which figures are blank and why (`blank`);
-- **S = p·ρ** against each H, a lower bound where the record's slowdown is one (`partial`), with what each factor rests on;
+- **S**, p times the record's slowdown, against each H: a lower bound where that is one (`partial`), with what each
+  factor rests on;
 - **the bound of record** at the same policy (the `bound` of `calculator.slowdown`'s result there): the least
   slowdown of any partition of the attack's traced circuit, by the theorem's count solved for the fewest blocks. The
   products term of the record's slowdown is this bound, so where products bind the record's slowdown is it and S is p times it (`BOUND_IS_SLOWDOWN`). The block prints
   it under S with its statement and what it rests on;
-- **per period** (`per_period`): the run's AND gates at S, C·ρ, and their share of one datacenter's and of the
-  world's compute over a window, a week, a month and a year (`calculator.fleets`, `calculator.periods`), with the
-  measured, proved and scaled parts named.
+- **per period** (`per_period`): the run's AND gates at S, C times the record's slowdown, and their share of one
+  datacenter's and of the world's compute over a window, a week, a month and a year (`calculator.fleets`,
+  `calculator.periods`), with the measured, proved and scaled parts named.
 """
 from __future__ import annotations
 
@@ -434,9 +435,9 @@ def slowdown_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> 
 
 
 def per_period(run_gates: float, slowdown: dict) -> dict:
-    """The run's gates at S (`run_gates`, C·ρ) in AND gates, at a served-precision GEMM's gates an AND, and their share
-    of each fleet's compute over each period (`calculator.fleets`, `calculator.periods`), with what is measured, what
-    is proved and what is scaled."""
+    """The run's gates at S (`run_gates`, C times the record's slowdown) in AND gates, at a served-precision GEMM's
+    gates an AND, and their share of each fleet's compute over each period (`calculator.fleets`,
+    `calculator.periods`), with what is measured, what is proved and what is scaled."""
     run_and = run_gates / gates.per_and(f"gemm/{policy.SERVED_PRECISION}")
     rows = [{"over": fl["over"], "fleet": fl["fleet"], "locations": fl["locations"], "period": name, "seconds": s,
              "fleet_and_gates": fl["and_per_s"] * s, "share": run_and / (fl["and_per_s"] * s)}
@@ -449,7 +450,7 @@ def per_period(run_gates: float, slowdown: dict) -> dict:
                    "b_y the traced step gives, given (H), (E) and the theorem's hypotheses on the circuit, which the "
                    "trace doesn't check; the solving is the calculator's arithmetic, and p and the shares are not "
                    "proved" if slowdown["binding_kind"] == "products" else
-                   f"nothing: ρ's {slowdown['binding_kind']} term is computed"),
+                   f"nothing: the {slowdown['binding_kind']} term of the record's slowdown is computed"),
         "scaled": f"every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC at the "
                   f"{calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the run's "
                   f"gates are AND gates at the {policy.SERVED_PRECISION} GEMM's ratio. The fleets' sizes and the "

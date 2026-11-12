@@ -249,9 +249,9 @@ def test_an_unknown_policy_is_refused_by_name_and_a_name_resolves_in_one_place()
 
 
 def test_the_records_slowdown_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
-    """The record's slowdown is `formalism.published` at the policy's (c, k) on the search job's first checkpoint reaching the gain, and
-    S = p·ρ against each H. At a registry policy whose k the trace's products aren't classified at, the record's slowdown is unmeasured
-    with the formalism's reason and there is no S; p stands."""
+    """The record's slowdown is `formalism.published` at the policy's (c, k) on the search job's first checkpoint
+    reaching the gain, and S is p times it against each H. At a registry policy whose k the trace's products aren't
+    classified at, the record's slowdown is unmeasured with the formalism's reason and there is no S; p stands."""
     search = traced([OVER, UNDER, UNDER])
     runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1), search], [job([OVER, UNDER])]
     s = graded(runs, ref)
@@ -628,8 +628,8 @@ def test_the_bound_call_fits_the_calculator_as_it_is():
 
 
 def test_the_periods_and_fleets_are_the_calculators():
-    """The run's AND gates at S are C·ρ at a bf16 GEMM's gates an AND, and each share is over a fleet of the
-    calculator's at its peak, for the census's window and core's periods."""
+    """The run's AND gates at S are C times the record's slowdown at a bf16 GEMM's gates an AND, and each share is
+    over a fleet of the calculator's at its peak, for the census's window and core's periods."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     per = s["per_period"]
     assert per["run_and_gates"] == pytest.approx(2 * STEP_GATES * s["rho"]["rho"] / gates.per_and("gemm/bf16"))

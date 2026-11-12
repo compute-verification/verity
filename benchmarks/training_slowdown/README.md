@@ -27,7 +27,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit at (c, k) (`at`), the one bound's products term, which is the entry point's, and its sensitivities, Slowdown's token form among them (`bound`), and a record's published slowdown with what it rests on (`published`) |
 | `as_math.py` | a record that holds a fused attention kernel as one row, rewritten as the counter writes the kernel: `python -m training_slowdown.as_math SRC DST [--partial none\|SUBSET:CALLS]`. Which gradients a backward call asked for is read from the record's trace; where the trace doesn't show it the rewrite is refused unless `--partial` says, and a `--partial` the trace contradicts is refused. One case the trace leaves open: k's gradient alone in c calls leaves the products of k's with q's, or with v's, in 2c, so there the rewrite is refused naming the readings and `--partial` picks one |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
-| `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
+| `grade.py` | the grade: a config's slowdown S, p times the record's slowdown, from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
 | `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, the gradients its attention's backward asked for where the record can't say, and the lines of the record's own program a route doesn't compute |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it, and the one module here that does: the benchmark's one slowdown (`slowdown`, below), a fixed policy's numbers, the fleets and periods a figure is presented over and the rows of β(k) |
@@ -329,7 +329,8 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
   of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` still grades: the record's slowdown reads
   the rows either way (the circuit's τ stands in for a stub, which moves the record's slowdown only where it changes how many steps a
   block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
-- **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
+- **S**, p times the record's slowdown, with what each factor rests on, and each seed beside it: whether it reaches
+  the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
   the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, the `bound` of
   `calculator.slowdown`'s result). The products term of the record's slowdown is this bound, so where products bind the record's slowdown is it and S is p times
