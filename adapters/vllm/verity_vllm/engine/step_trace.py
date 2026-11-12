@@ -76,7 +76,10 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
     scheduler config no longer holds it, as in vLLM 0.11 on), and what an engine at vLLM's defaults does not have: the
     KV cache's format where it is not ``auto`` (``kv_cache_dtype``, as the engine's arguments name it), and under
     speculative decoding its ``speculative`` settings (`SPECULATIVE`, those that are set): an engine built with them
-    as its ``kv_cache_dtype`` and ``speculative_config`` stores, drafts and accepts as this one does."""
+    as its ``kv_cache_dtype`` and ``speculative_config`` stores, drafts and accepts as this one does. Where the launch
+    left the context limit to vLLM (``max_model_len`` -1, the command line's ``auto``), ``max_model_len_auto`` says so:
+    vLLM then builds the model at the checkpoint's own limit and fits ``max_model_len`` to the KV pool afterwards, so
+    an engine launched at the fitted number is built at another length than this one."""
     sc = getattr(sched, "scheduler_config", None)
     cc = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
@@ -84,11 +87,13 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
            **pick(sc, ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill", "long_prefill_token_threshold",
                        "max_num_partial_prefills", "policy", "async_scheduling")),
            **pick(cc, ("block_size", "enable_prefix_caching", "num_gpu_blocks"))}
+    mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
     if "max_model_len" not in out:
-        mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
         n = getattr(sched, "max_model_len", None) or getattr(mc, "max_model_len", None)
         if n is not None:
             out["max_model_len"] = int(n)
+    if getattr(mc, "original_max_model_len", None) == -1:
+        out["max_model_len_auto"] = True
     if getattr(cc, "cache_dtype", "auto") != "auto":
         out["kv_cache_dtype"] = _plain(cc.cache_dtype)
     spec = getattr(getattr(sched, "vllm_config", None), "speculative_config", None)
