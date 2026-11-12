@@ -13,9 +13,11 @@ from verity_config import Admission, ConfigError, gpus, load, sha256
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
 SPEC_ROOT = Path(__file__).resolve().parents[3] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
-#: The specs' directory before the harness held them, from the source tree's root. A run recorded then names its spec by
-#: its path there, and so does a command written then: each is the spec of that name in `SPEC_ROOT` (`former_name`).
-FORMER_SPECS = "benchmarks/specs"
+#: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
+#: recorded then names its spec by that path, and so does a command written then: each is the spec of that name in
+#: `SPEC_ROOT` (`former_name`).
+FORMER_SPEC = "benchmarks/specs/{name}.toml"
+FORMER_SPECS = PurePosixPath(FORMER_SPEC).parent.as_posix()
 GPUS = gpus()
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.

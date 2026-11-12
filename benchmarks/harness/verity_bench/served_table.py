@@ -28,7 +28,7 @@ from typing import Any
 
 from verity_bench import jobs
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.presets import FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
+from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -121,9 +121,9 @@ def spec_path(spec: str) -> str:
 
 def spec_paths(spec: str) -> tuple[str, str]:
     """The two paths a run of `spec` may have recorded: where the spec is, and where it was while the specs had a
-    directory of their own (`presets.FORMER_SPECS`). A run of record keeps the path it ran under, so both are read."""
+    directory of their own (`presets.FORMER_SPEC`). A run of record keeps the path it ran under, so both are read."""
 
-    return spec_path(spec), f"{FORMER_SPECS}/{spec}.toml"
+    return spec_path(spec), FORMER_SPEC.format(name=spec)
 
 
 def spec_name(path: str) -> str:

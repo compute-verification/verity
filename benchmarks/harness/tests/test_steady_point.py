@@ -275,8 +275,9 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert sorted(covered) == ["benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
-                               "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"]
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
+                            "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"}
+    assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}

@@ -23,8 +23,9 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "**/lake-manifest.json", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
            "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
 # Kept in the one file that states it: the harness reads a run recorded before the move by its spec's former path, and a
-# command written then by the path it names, so the former directory's name stays there (`presets.FORMER_SPECS`).
-keep_in = {"benchmarks/harness/verity_bench/vllm/presets.py" = ["benchmarks/specs"]}
+# command written then by the path it names, so that path's form stays there (`presets.FORMER_SPEC`). The file's anchor
+# on the directory itself (`SPEC_ROOT`) is not that string, and moves.
+keep_in = {"benchmarks/harness/verity_bench/vllm/presets.py" = ["benchmarks/specs/{name}.toml"]}
 
 [modules]
 # the rename [paths] implies (`layout.py --modules`): a Python file under a directory is named by its path from the
