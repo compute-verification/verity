@@ -897,21 +897,26 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
     # directory's; a replay none of whose processes kept any shows nothing of the top-k having run there
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert engine["engine"]["topk"] == {"kept": True, "replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3}}
     assert ("  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
-            "60 rows of more than its keys rewritten\n") in txt
+            "60 rows of more than its keys rewritten, 3 of them with a tie across the k-th key\n") in txt
     topk_log(private / "replay-compiled/topk-log", 11, 5000, (40, 2, 1))
     topk_log(private / "replay-compiled/topk-log", 12, 3000, (10, 0, 0))
     txt, engine = said("--private", str(private))
-    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50}
+    assert engine["engine"]["topk"]["replay"] == {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2}
     assert ("  the canonical top-k in the replay: 2 processes kept counters: at least 8,000 calls of the indexer's top-k, "
-            "50 rows of more than its keys rewritten\n") in txt
+            "50 rows of more than its keys rewritten, 2 of them with a tie across the k-th key\n") in txt
     # the report keeps the counts in OUT, where a later reading of the job finds them once the node's directory is gone
     kept = json.loads((out / P.TOPK_KEPT).read_text())
-    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50}, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}
+    assert kept == {"replay": {"processes": 2, "calls": 8000, "rows_long": 50, "rows_tied": 2},
+                    "served": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3}}
     shutil.rmtree(private)
     assert said()[1]["engine"]["topk"] == {"kept": True, **kept}
+    # counters an earlier report kept before it kept the ties are printed without them
+    (out / P.TOPK_KEPT).write_text(json.dumps({"replay": None, "served": {"processes": 1, "calls": 9000, "rows_long": 60}}))
+    assert ("  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, "
+            "60 rows of more than its keys rewritten\n") in said()[0]
     # counters that can't be read end that part alone
     (out / P.TOPK_KEPT).write_text("not json")
     assert P.main(argv) == 0 and "  the replay's engine: the replay's engine can't be read from the job's files: JSONDecodeError" in (
@@ -947,6 +952,9 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
         return (out / "prod_repro.txt").read_text(), json.loads((out / "prod_repro.json").read_text())
 
     block = ("each pass, by the engine's counters read before and after it (in no verdict):\n"
+             "  every arm's are the server's own on /metrics, one reader: the draft tokens accepted are "
+             "vllm:spec_decode_num_accepted_tokens_total over vllm:spec_decode_num_draft_tokens_total, the tokens its drafts "
+             "proposed\n"
              "  prod chat@16 rep 1: 2,089 engine steps, 4,992 drafts, 693 of their 24,960 tokens accepted (2.78%); 30,000 output tokens in 100.0 s\n"
              "  prod-seeded chat@16 rep 1: 2,100 engine steps, 5,000 drafts, 650 of their 25,000 tokens accepted (2.60%); 30,000 output tokens "
              "in 100.0 s\n"
@@ -978,10 +986,10 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     # with the job's private directory, each directory's processes' counters, kept in OUT for a later reading
     topk_log(private / "prod-record/topk-log", 21, 9000, (60, 3, 1))
     counted = ("prod-record 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 rows of more than its "
-               "keys rewritten; ")
+               "keys rewritten, 3 of them with a tie across the k-th key; ")
     txt, r = said("--private", str(private))
     assert block + counted + off in txt
-    assert json.loads((out / P.TOPK_KEPT).read_text()) == {"dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60}}}
+    assert json.loads((out / P.TOPK_KEPT).read_text()) == {"dirs": {"prod-record": {"processes": 1, "calls": 9000, "rows_long": 60, "rows_tied": 3}}}
     assert r["ran"]["passes"]["topk"]["on"] == {"prod": False, "prod-record": True, "prod-seeded": False, "prod-trace": False}
     # a later reading has no private directory, and one whose private directory holds none for it has the kept ones
     shutil.rmtree(private)
@@ -1219,7 +1227,7 @@ STAND_IN = """#!/usr/bin/env bash
     PASS_PROMPTS STOP_AT SAMPLED PRIVATE LIFETIMES LEAVE_OUT; do echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/started"
 if [ -n "${STAND_IN_TOPK:-}" ]; then
   mkdir -p "$PRIVATE/replay-compiled/topk-log"
-  echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5}}}' \\
+  echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5, "rows_tied": 2}}}' \\
     > "$PRIVATE/replay-compiled/topk-log/dsa_topk.1.json"
 fi
 [ -z "${STAND_IN_TERM:-}" ] || kill -TERM "$PPID"
@@ -1396,10 +1404,10 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms(tmp
                                "requests at once, vLLM does not start this model")
     # the job's report reads the top-k's counters where its processes kept them, and keeps the counts in the run's
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
-            "of more than its keys rewritten\n"
+            "of more than its keys rewritten, 2 of them with a tie across the k-th key\n"
             "  the canonical top-k while serving: 1 process kept counters: at least 9,000 calls of the indexer's top-k, 60 "
-            "rows of more than its keys rewritten\n") in p.stdout
-    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5}
+            "rows of more than its keys rewritten, 0 of them with a tie across the k-th key\n") in p.stdout
+    assert json.loads((run_dir / "out" / P.TOPK_KEPT).read_text())["replay"] == {"processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2}
     assert "stock prod, stock again not served, ours prod-record" in p.stdout and "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "advice: not measured: the scheduler replay refuses the pass: " in p.stdout
     # read again without a GPU and without the node's directory, the earlier job says the same
@@ -1488,11 +1496,11 @@ def test_the_runner_replays_an_earlier_jobs_pass_and_serves_nothing(tmp_path: Pa
     p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private"), STAND_IN_TOPK="1")
     assert p.returncode == 0, p.stdout + p.stderr
     assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
-            "of more than its keys rewritten\n"
+            "of more than its keys rewritten, 2 of them with a tie across the k-th key\n"
             "  the canonical top-k while serving: 9 processes kept counters: at least 65,536 calls of the indexer's top-k, "
             "20,496,064 rows of more than its keys rewritten\n") in p.stdout
     assert json.loads((run_dir / "out/topk_counters.json").read_text()) == {
-        "replay": {"processes": 1, "calls": 7, "rows_long": 5}, "served": served}
+        "replay": {"processes": 1, "calls": 7, "rows_long": 5, "rows_tied": 2}, "served": served}
     # and where this job's replay kept none, the earlier job's replay's are not shown as its own
     p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private-2"))
     assert "  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n" in p.stdout

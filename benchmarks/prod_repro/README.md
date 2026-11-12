@@ -105,13 +105,16 @@ replay that differs, the first token that does and the first step.
   record says: the plugins and environment of ours it ran under and what set them (the replay), or that ours serves
   with no plugin beside its record.
   For the canonical DSA top-k, what its own counters say of the replay's processes and of serving's: the processes
-  that kept counters, the calls of the indexer's top-k and the rows of more than its keys that were rewritten. The
+  that kept counters, the calls of the indexer's top-k, the rows of more than its keys that were rewritten, and
+  those of them with a tie across the k-th key, where vLLM's own kernels may select another set from run to run. The
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
   `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
   exits), and a replay in which no process kept any shows nothing of the top-k having run there.
 - **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
   line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
-  own `meta.json`): its engine steps, its drafts and how many of their tokens the model accepted, and beside them
+  own `meta.json`; they are vLLM's own on the server's `/metrics`, so every arm's are read the same way, with a step
+  trace or without, and the first line names the two the accepted share is of): its engine steps, its drafts and how
+  many of the tokens they proposed the model accepted, and beside them
   its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
   arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
   was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
