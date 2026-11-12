@@ -20,7 +20,7 @@
 #      the lane's gate key)
 #      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
 #      max_child_rss_gb is the largest of every session's so far)
-#      SC_LEAN_ONE=1 (the Lean verifier, flock-verify, on one core: each of its processes pinned to the lowest core
+#      SC_LEAN_ONE=1 (the Lean verifier on one core: each of its processes is pinned to the lowest core
 #      the job has, with its command, the session archive it verifies, that core, its wall and CPU seconds and its
 #      peak RSS a line in $OUT/lean.jsonl)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
@@ -58,7 +58,7 @@ EOF
   BIN=$W/flock-circuit-rss
 fi
 if [ -n "${SC_LEAN_ONE:-}" ]; then
-  cat > "$W/flock-verify-one" <<EOF
+  cat > "$W/lean-verifier-one" <<EOF
 #!$PY
 import json, os, resource, subprocess, sys, time
 core, args = min(os.sched_getaffinity(0)), sys.argv[1:]
@@ -73,8 +73,8 @@ with open("$OUT/lean.jsonl", "a") as f:
                         "peak_gb": round(used.ru_maxrss / 2 ** 20, 2)}) + "\n")
 sys.exit(rc)
 EOF
-  chmod +x "$W/flock-verify-one"
-  LEAN=$W/flock-verify-one
+  chmod +x "$W/lean-verifier-one"
+  LEAN=$W/lean-verifier-one
 fi
 
 if [ -n "${SC_REHEARSE:-}" ]; then
