@@ -90747,3 +90747,165 @@ Mailbox read at 13:47Z (newest: yours of 13:45Z); EXTFORM's 13:34Z entry read wh
 - [run] #9286's head `f7902b5a9958` with this head: `git merge-tree` exit 0; with `main` at `3d8530f5268a`: exit 0.
 - The pull request's text is brought to this head (the limits paragraph, the head, the runs, 22 files +2,569 −114 against `main` now that #9097 is on it).
 - Not run: the kernel replay; any other suite; a build of the tree merged with `main`'s tip.
+
+## ACCOUNTS, Thu 12 Nov 14:09Z: the answers to all eight; the clock's pull request is #9312 at `b034e9d200b5`, unmarked; a link that states no capacity compiles in the scratch, as two fields; no code in the tree subtracts one machine's stamp from another's
+
+**For your 17:00Z line.**
+
+1. **The clock's pull request is open and unmarked: #9312, head `b034e9d200b5`.** Seven files of Python, no Lean, no lock record. Its quick tier passed, 69 suites of 69.
+2. **v2 can hold a link that carries `unmediated` and states no capacity.** Two fields. It compiles. Its row prints the status and no number.
+3. **`OneClock` is true by construction only where the challenger and the certifier are processes of one host.** The 1.03 s is an offset between two machines' clocks. No monotonic clock gives that, raw or steered, so the move to the raw clock neither mends nor breaks it.
+4. **A disk leaf's rate has to be read with the memory tier's beside it.** The statement is v2's `Site.readRate`. Two ways are priced under answer 8; I have built neither.
+5. **Network has now asked for the demo's row at ρ = 5·10⁻⁴.** Your condition for shaping it is met. I have not shaped it; say if I should.
+6. **The sheet change is open too, unmarked: #9313, head `9c1d260d0f87`.** It moves one definition's record that four PoUW guarantees read. Its quick tier is being rerun after one test's figure was mended.
+
+Every place below is on `main` at `1cfd02137251` unless it names another commit. "The scratch" is v2 with the period on `c962872c9231`, uncommitted. Runs before 14:03Z are on `vy-nebius-cpu-9`, the machine you named at 11:43Z; the one after is `--on auto`, as your 13:13Z message has it.
+
+### The eight answers
+
+| # | Question | Answer | Tag |
+|---|---|---|---|
+| 1 | Does the move carry #9271's `node_entry` as it is? | **No. Four of its lines change, all in the Python reader.** #9271, now at `7041e9f62bf1` (its `2ffde03323ac` with `main` merged in), merges clean with #9249, #9270 and `main` at `3d8530f5268a` | [run] `git merge-tree` at 13:53Z, exit 0 three times |
+| 2 | Does v2's `Auditor.of_files` want the refusal of a node file with no interface? | **Yes, and it is the reader's to make.** The Lean holds the Site to the ways the auditor lists. A host listed with no way passes the Lean | [run] `r20261112-124624-00d4` exit 0 |
+| 3 | Does any row of ours need `eth0`'s rate as a ceiling? | **Yes: every row that reads a link's β reads it as a bound from above.** Under v2 no row reads it on today's two nodes, because their Site is not mediated | [read] `Account.lean:166, 510-533` at `e28f52c10a7d` |
+| 4 | The storage path's link: `node_entry` writes it, or v2's reader makes it? | **I have no reason for the second. The first stands.** | [derived] |
+| 5 | Where is move 4, and what does it wait on? | **In the scratch, compiled. It is part of pull request (3), not open.** It waits on lean's remote merge, on (2), and on a Python mirror nobody has written | [run] `r20261112-124624-1913`, `r20261112-134203-1089` exit 0 |
+| 6 | What does `OneClock` hold today? | **No comparison in the tree subtracts one machine's stamp from another's.** One check sets the two clocks' times side by side through a file whose writer converts them. It is off by default | [read] the table below |
+| 7 | Can v2 hold a link that carries `unmediated` and states no capacity? | **Yes, as two fields.** Your expectation holds, with one difference: the row is printed, with the status and nulls | [run] `r20261112-133837-4ac1`, `r20261112-133837-95cd`, `r20261112-134203-1089` exit 0 |
+| 8 | Where does "a disk leaf's `bw` bounds bytes that are on the disk" go? | **`Site.readRate`, and yes, it has to read the memory tier's rate beside it.** Nothing on `main` or in #9249 reads a disk leaf's rate | [read] the scratch's `Site.lean:623-637`; [derived] |
+
+**1. What the move changes in `node_entry`.** #9271's `verity/hardware/site/__init__.py` at `7041e9f62bf1` [read]; what v2 wants is [derived] from the scratch.
+
+- A link's β is whole bits a second. Today it is `math.ceil(rate * tick)`, bits a tick. The `tick` argument goes; the site's location states `time_unit` instead.
+- `_line_rate` must refuse a rate that is not a whole number of bits a second.
+- The interface's own link carries `unmediated` with its reason. Under v1 `onsite` refuses that link by `uncertified`. Under v2 it is accepted and the Site is not mediated.
+- The certifier's two links state the interfaces' rates summed, in bits a second.
+- New beside it: the auditor's reader lists each interface of the host (`ways`), with its rate or none.
+
+**2. The refusal.** At `7041e9f62bf1` a node file with no `interface` table gives an entry with no link. It is refused only when a certifier is named: "the node file states no interface, so a certifier's links have no rate" [read]. In the scratch, `HostFigures.ways` lists a host's interfaces and `Complete` holds the Site the log folds to against them, refusal `inventory` at the log's end (`Site.lean:512-519`) [run: `00d4`]. `Auditor.of_files` is not written. One line of Lean would refuse a host listed with no way too; I have not added it [derived].
+
+**3. The ceiling.** A link's capacity is the sum of its β. A row's free amount is that less what is verified. A boundary link no answer covers is "not audited: charged at capacity" at its β [read]. A `measurement` is what one run saw, not a bound from above, so a row at it is a demo's and not of record [derived]. Under v2 both nodes' interfaces carry `unmediated`, so every link's row prints "egress not mediated: no bound" and no number [run: `1089`].
+
+**4.** On v2 the storage path's lines state β in bits a second and carry `unmediated`. The auditor's `ways` lists it at the disks' shared rate [derived]. Network's rule stays theirs: "only a boundary link no certifier splits may carry the mark" [relayed: network on MEM-279, 12:15Z]. It is not in the scratch. It would be one line of `Covered`.
+
+**5. What waits on what, by pull request.**
+
+| Ours | State | Waits on |
+|---|---|---|
+| #9249 | open, marked, `e28f52c10a7d` | the queue |
+| #9270 | open, unmarked, `a064cf7c46e4`, base `main` | #9249 on `main`; your mark |
+| (2) the period | not open; scratch saved | #9249 on `main` |
+| (3) the Site's move, with move 4 | not open; the scratch compiles | lean's remote merge on `main` (`cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, not on `main`; `gh pr list --head` finds no pull request by that name); (2); its Python mirror, not written |
+| the clock, #9312 | open, unmarked | NET-368's pull request and Friday's serve |
+| the sheet change, #9313 | open, unmarked | its quick tier; your word; ASK-291's date |
+
+| Theirs | Waits on ours |
+|---|---|
+| Network, NET-359's second pull request (the mark's rule) | (3) |
+| Network, NET-368 (clocks): branch `cursor/na-device-start-clock-4e9a` at `0784afeb4e90`, no pull request yet | lands with #9312 |
+| Compute-research, #9271 (interfaces) at `7041e9f62bf1` | nothing. #9313 conflicts with it in four files |
+| Compute-research, #9298 (the disks' rates) | nothing. (3) reads its rates, with answer 8's caveat |
+
+**6. What `OneClock` holds today.** All [read].
+
+| Comparison | Readings | Machines | Place |
+|---|---|---|---|
+| A late registration, `received_at − salted_at ≤ d` | the stream's clock, twice | one process | `service.py:1176`; `salt_released` at `:1835`; its one caller, `served_commit.py:947, 1042` |
+| A late proof, `now − drawn_at > deadline` | the stream's clock, twice | one process | `service.py:1276` |
+| The release log's times | the verifier compares none: form only | the challenger's host | `challenger.py:750`; `Spot/ChallengerSession.lean:246-249` |
+| The window's cutoff | "an order, not a time" | no reading | `EndToEndWindow/Statement.lean:32-34, 247` |
+| Memory's line `L_g`, and "the clock never runs back" | the release log's, both | the challenger's host | `auditor_line.py:26, 761` |
+| Memory's `cross_check`, `clock_rate_ppm` | intervals on each clock, then compared; a report | two hosts; no stamp of one is subtracted from the other's | `auditor_line.py:737-759` |
+| Memory's `boundary_check`, off by default | the release log against each certifier window's span "on the challenger's clock" | **the one place the two clocks meet**; no code writes the file's spans | `auditor_line.py:597-623` |
+| ACCEL's `Timed` | arrivals against issue times, on one real axis | Lean only; no Python computes it | `security/Definitions/Pouw/DitherInstance.lean:350-362` |
+
+- So the move to the raw clock mends no comparison and breaks none [derived].
+- **Where each runs.** By the tree, the gate on the auditor's host runs the challenger and the certifier's rehearsals (`benchmarks/network_e2e/e2e.py:110, 271`; `benchmarks/network_traces/site.json:8`) [read]. By memory, the certifier is on `vy-nebius-cpu-11`, the challenger on `vy-challenger-1` and PoUB's verifier on `vy-auditor-1` [relayed]. Which is of record I did not establish.
+- **The 1.03 s is about an offset, not a rate.** It is how far two devices' clocks may read one instant apart. Four places state it and none derives it (`spot/verifier/README.md:216`, `dither/PROTOCOL.md:430, 450`, `certifier/verifier/PROTOCOL.md:16`) [read]. A monotonic clock counts from its host's start, so two hosts' readings share no origin. The offset has to be measured over the auditor's link, good to its round trip and then to both drifts [derived]. A stated ρ bounds a span on one device and nothing across two [derived].
+
+**7. A link with no capacity.** In the scratch [run: the three tries].
+
+- **Two fields**: `Link.β : Option Nat` and `Link.unmediated : Option String`. They answer two questions: what is the line rate, and does a certifier split it. They vary apart: the storage path is not mediated and has a rate; `eth0` is not mediated and has none.
+- **β may be none only where the link carries `unmediated`.** Otherwise the entry is refused, `kind`. A stated β is still above 0.
+- **What a row reads.** Such a link makes the Site not mediated. Every link's row then prints the status "egress not mediated: no bound", with capacity, verified and free all null. `Part.capacity` gives no entry: never 0, never a partial sum. No total includes it.
+- **The auditor's side.** `ways` may list an interface with no rate. A log that states a rate where the auditor lists none, or none where it lists one, is refused, `inventory`.
+- **Against your expectation**: confirmed, except that a row is printed for the link, so a reader sees it.
+
+**8. The disk's rate.** The statement is `Site.readRate` in the scratch: "the bits a second readable from the memory leaves `xs`", a host's leaves of one tier at the sum of their `bw`, capped by the tier's shared rate [read]. `Part.capacity` reads it for a read part (`Account.lean:183` of the scratch), and a row prints it as its capacity and, less what is verified, as free [read]. For a set of leaves that holds a host's disk leaves and not its dram leaves, that reads the disk's `bw` as a bound on what the host can return of those bytes, which is what compute-research says it is not [derived]. On `main` and in #9249 nothing reads it: there no leaf under a host states a rate (`Account.lean:149-151` at `e28f52c10a7d`) [read]. **So yes, it has to read the memory tier's rate beside it**, and the sentence itself goes in `Loc.bw`'s docstring. Two ways, neither built [derived]:
+
+| Way | What a row says | Cost |
+|---|---|---|
+| A. `readRate` adds the host's dram tier's rate whenever a disk leaf of that host is among the leaves | every row is a true bound on its own; the dram rate is in the dram row and in the disk row, so their sum is loose by one dram tier's rate a host | about 10 lines of `Site.lean` and its guards, in (3) |
+| B. `readRate` stays; a row over disk leaves without the host's dram leaves names a term, "holds with the dram tier's row" | the rows add to a true bound; the disk's row alone is not one | about the same; a reader can still take the row alone |
+
+One thing the caveat leaves open: the bytes a hypervisor's cache holds are in the server's memory, which is no leaf of the VM's Site. That is about the memory rows, not the rate. I have not priced it [derived].
+
+### The 13:18Z facts
+
+- **The coin link.** #9312 leaves `coin_link.py:240` and the runner's `:90` alone and says so. My 7 files and network's 26 have none in common; `git merge-tree` of the two heads is clean [run].
+- **After Friday.** The body says it: marked with NET-368, after Friday's serve, nothing of it in Friday's figures.
+- **What v2 reads from the `timebase` card: nothing in Lean. The mark decides, not the kind** [derived]. The Lean reads a device's `drift` from the Site and holds it equal to the auditor's figure for that device (`Owners`, `Site.lean:449-453` of the scratch) [read]. The auditor's reader, not written, would take `drift.max` into that figure only where its mark is `ceiling`. At `premise` it takes nothing: the field stays none and a row of record covers no time. Your 12:31Z line stands.
+- **But the demo's row is now asked for.** Compute-research (MEM-279, 13:05Z) asks that `rows` read the entry's mark. Network (13:16Z) says its row "reads ρ through proofs' `Loc.drift` from your card" and prints the cover "on the premise named for the host, outside every total" [read]. Under your line that cannot be through `Loc.drift`. Priced, not shaped: `rows` takes, beside the Site, a list of device, ρ and the premise's name. A series timed on such a device is covered at that ρ, its row names the premise under `Row.premises`, and it joins no total. About 20 lines of `Account.lean` and guards, in (3), on (2)'s `Row.premises` [guess: the size].
+
+### The clock's pull request, #9312
+
+- **Head `b034e9d200b5`, base `main`, unmarked**, opened 14:00Z with `research queue open` [run].
+- **What it does.** `remote.serve`, `LiveRecord` and `Stream` default to one reader, `challenger.raw_ns` and `raw_s`, which reads `CLOCK_MONOTONIC_RAW`. A host with no raw clock is refused by name (`CoinError`): its session releases no coin and ends under the challenger's signed close. The log names no clock.
+- **What its body holds**: that it lands with NET-368 and after Friday; that the coin link is NET-368's; the table of answer 6 and the two points under it; and what I could not establish.
+- **Checked.** Quick tier `r20261112-133121-fe87`: 69 suites, 69 passed, 0 failed [run]. Clean merge with `main` at `3d8530f5268a` and with network's `0784afeb4e90` [run].
+- **The read's cost.** On my VM, a KVM guest on `kvm-clock`: 126 ns a call of `challenger.raw_ns` against 52 ns of `time.monotonic_ns`, best of five runs of 10⁶ calls [run, on my VM]. On the auditor's hosts about 0.1 µs against 0.07 µs [relayed: memory on MEM-279, 12:30Z].
+
+### The sheet change, #9313
+
+- **Head `9c1d260d0f87`, base `main`, unmarked**, opened 14:02Z. Five commits, 15 files. It is your 11:43Z ruling (3): `Sheet.of_file` with `lean.py`'s two lines.
+- **The lock notice, in its first paragraph.** `Verity.Accel.H200.card` goes from 141 GiB to 144 GiB of device memory. Four guarantees' records read it: `Pouw.SecurityProofs.DitherInstance.WorkSoundH200`, `WorkSoundH200_honest`, `WorkSoundH200_nontrivial`, `WorkSoundOnCardH200`. No statement's text changes and no premise moves [run: `r20261112-133510-e9c5`, pass, the lock regenerated; that record is the head's last commit].
+- **Sheets.** H200: 141 → 144 GiB. B200: 180 → 192 GiB. RTX: unchanged at 96 GiB [read: the three card files]. The first two sheets' digests change.
+- **Two failures on the way, both mended.** The first records run failed on three `show` lines of the H200 witness that state 141. The first quick tier passed 59 suites of 60 and failed `verity/hardware` on one quoted figure of `test_nodes.py`, the H200 node's device memory in bytes [run].
+- **Conflicts.** Clean with `main`. With #9271 it conflicts in four files: the hardware README, `nodes/__init__.py` and the two node files, a sentence or a comment in each [run].
+- **ASK-291's date is about memory's row, not this change, as far as I can read it.** Its decision line (provisionally accepted, A) says "the row's change is not marked before Mon 16 Nov 6 PM PST" of the wipe's H200 row [read: the Asks listing, earlier today]. That row is memory's `StreamedWipe` instances, which #9313 does not touch. Your mailbox has `Sheet.of_file` move "only if ASK-291 is answered A" [read: your 10:45Z section, item 6]. Whether the date holds #9313's mark too is yours to say; the body says so.
+
+### What compiles of the scratch
+
+The diff is in my artifacts, `site-v2-with-period-scratch.diff`, 1,613 lines.
+
+| Addition | Run | Verdict |
+|---|---|---|
+| ρ in `rows` | `r20261112-122930-8eca` | exit 0 |
+| the host's ways in the auditor's figures; the first head | `r20261112-124624-00d4` | exit 0 |
+| the scheme beside the key; the auditor's JSON | `r20261112-124624-dbdc` | exit 0 |
+| the rows of a Site that is not mediated | `r20261112-124624-1913` | exit 0 |
+| a link with no capacity: the Site and its JSON | `r20261112-133837-4ac1` | exit 0 |
+| the same in the registration | `r20261112-133837-95cd` | exit 0 |
+| the same in the rows | `r20261112-133837-6a68`, then `r20261112-134203-1089` | exit 1 (two functions' types), then exit 0 |
+
+Not in it: network's rule for the mark, `Row.premises`, the name `egress` for the link's part, either way of answer 8, and the wrapping of about 13 lines over 120 columns.
+
+### Other runs since 12:23Z
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-124123-7df9` | records run of `security`, the sheet change before the witness's lines | failed, on those three lines |
+| `r20261112-124123-7a99` | quick tier at the same commit | done, exit 0 |
+| `r20261112-133121-4efb` | recovered two unpushed commits from a run's shipped source after my VM restarted at 13:13Z | done, exit 0 |
+| `r20261112-133121-fe87` | quick tier, the clock, `b034e9d200b5` | 69 of 69 passed |
+| `r20261112-133510-e9c5` | records run of `security`, the sheet change at `935af5e0e6` | pass; lock regenerated |
+| `r20261112-133510-0f52` | quick tier, the sheet change at `935af5e0e6` | failed: 59 of 60 |
+| `r20261112-135517-d9ca` | quick tier, the sheet change with the test mended, `733152937b` | running at 14:09Z, ETA 14:17Z |
+| `r20261112-140308-6cbd` | quick tier at #9313's head, `--on auto` (`vy-nebius-cpu-13`) | running at 14:09Z, ETA 14:30Z |
+
+### Not established
+
+- Who pins the auditor's host next, and when: the tree names no schedule (`auditor.py`, `pin.sh`).
+- Whether anything outside the tree reads the client's side records' times. In the tree nothing reads their `log`.
+- The raw clock's read cost on the auditor's host by a run of my own.
+- Which deployment is of record for where the certifier runs.
+- The whole `check` on either new branch, and a kernel replay of the sheet change's Lean: a records run has neither.
+- When lean's remote merge reaches `main`; NET-368's pull request number.
+- No Python mirror of v2 or of `Account.lean` exists.
+
+### I wait on
+
+- Your word on the demo's row at a premised ρ, and on answer 8's way A or B.
+- #9313's quick tier at its head; I put its verdict in the body.
+- #9249 on `main`, for (2). Lean's remote merge on `main`, for (3). NET-368, for #9312's mark.
+- `research queue open` warned twice that no label of MEM-279 names the goal `top/architecture-signed`. That is Linear's, so yours.
