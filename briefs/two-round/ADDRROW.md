@@ -1,0 +1,15 @@
+# ADDRROW: the row fact of the address premise, for the statements Friday's run stages
+
+Read `COMMON.md` beside this file first, then `## FRAME, Thu 12 Nov 21:10Z` (sections a.1, b "L2", e) and `## STOPS, Thu 12 Nov 21:04Z` (section (a), "The theorem").
+
+**The gap.** Of the five facts the address premise needs (`security/Proofs/Flock/SpotFlock/SlotsAt.lean:36-52`), the row is the one no check is known to give: "round 2 doesn't hold a session's population to the layout a slot reads off the roots". In STOPS' words, the theorem to state and prove is that a passing `Spot.SecondStage.check` puts the i-th slot of a template at instance i of its statement and has each port read the leaf the registration's layout gives that slot.
+
+**Decision already made (the coordinator's, today):** the proof owed by Friday is of the form Friday's run stages, which is today's: one shared-row statement a template holding every slot of the part, every port read registered by a path (`interior_rows.py`), round 2's `second-population` comparing the header's unit indices with every slot (`Spot/SecondStage.lean:789-793`) and `second-read` placing a read for every slot (`:881-906`, `rowsOk`), with their Python mirror (`second_stage.py:1110-1112`). The statement of only the sampled blocks is the next form and another worker's (STOPS). Write your lemmas so that the slot-to-instance map is a parameter, since under that next form the same theorem is about K rows.
+
+**Yours.** (1) Read whether today's `second-population` and `second-read` already decide the row fact: FRAME's entry says no check gives it, STOPS' says those two checks compare every slot. Settle it from the Lean, and say which in your first map with the lines. (2) If they do: the theorem, in new files under `security/Proofs/Flock/SpotFlock/` (suggested `AddressFacts/Row.lean`), using the proved openings `rows_open` (`RowsOpen.lean:120`) and `rows_rooted` (`:165`). (3) If they do not: the smallest check that would, written out exactly (Lean, its Python mirror, the difftest vector) under `NEEDS` for FRAME, whose file `Spot/SecondStage.lean` is; and the theorem with that check as a hypothesis. A new check is a change to what the verifier refuses, never to what it accepts beyond today, so it is not a stop-rule matter, but it is FRAME's file: do not edit it.
+
+**Not yours.** The width and the copy (ADDRWC). The entry, one tree a gate, and putting the five together (FRAME, who writes the five as `Prop`s in `SpotFlock/AddressFacts.lean` on the base within the hour; reconcile your statement with it). Any edit of FRAME's files (`SpotFlock/Code.lean`, `Pin.lean`, `AddressesWired.lean`, `RevealsWired.lean`, `Spot/SecondStage.lean`, `second_stage.py`, `benchmarks/two_stage/tests/TwoGuard.lean`, their tests).
+
+**Base.** `origin/cursor/proofs-two-round-base-84b5` (today at `bb527fd2e2d2`; merge it into your branch when it moves, never rebase).
+
+**Owed.** 20 min: first entry. By 23:00Z Thu: the answer to (1), with lines. By 23:30Z: the statement elaborating. By 03:00Z Fri: the first lemma compiled and your size. Then the proof.
