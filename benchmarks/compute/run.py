@@ -64,9 +64,9 @@ withdrawn whole, or in a part that holds a file read here, is refused before any
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
 there the evidence store is read with the run's `--store-read` key.
 
-Under `research run` it also writes, through the harness kit's writer (`verity_bench.kit`), `$OUT/result.json` with the
-fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
-recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
+With `OUT` set it also writes the run's result through the harness kit's writer (`verity_bench.kit`): `result.json`, the
+run directory's under `research run` and `$OUT/result.json` outside one. It holds the fields every resource's benchmark
+reports (`amounts`), each stamped with this run and its commit and computed from the recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
 the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
 are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.hardware.cards`), capacity the registered devices'
