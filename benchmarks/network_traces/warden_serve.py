@@ -44,7 +44,8 @@ it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
 `--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
 so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
-loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
+loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it. Under
+`--lengths 2` the run is longer where it must be to admit its last group (`closing_windows`).
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
 
@@ -106,12 +107,16 @@ the run's session before its first window (`sign_load`), so one LMS key and one 
 and writes `load.json`, the client's kept registrations of the load. `check` reads it under the deployment's key and
 session (`check_load`) at the relay's roots.
 
-**The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1 [--content P,O,ROWS ...]`,
+**The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1|2 [--content P,O,ROWS ...]`,
 the schedule's lengths rows and its content rows' classes, which `rehearse` passes to its `serve`; without them a
 run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
 `rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has
-connection rows to a registration that verifies and whose head is the tables laid from the records.
+connection rows to a registration that verifies and whose head is the tables laid from the records. Under
+`--lengths 2` every execution phase of the run ends, its last at the run's last close: in its head, or in the network
+certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each to the one that is due.
+The network certifier then admits nothing in the run's last `WardenParams.span` buckets, so `rehearse` runs long
+enough for its last request to be admitted before them (`closing_windows`).
 """
 
 from __future__ import annotations
@@ -244,6 +249,13 @@ def group_windows(params: WardenParams, tokens: int) -> int:
     admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
     s + D + ⌊tokens/r⌋ (the network certifier's schedule), so a group's cells are all in its own windows."""
     return -(-(params.delay + tokens // params.slots + 3) // params.window)
+
+
+def closing_windows(params: WardenParams, at: float) -> int:
+    """The fewest execution phases of a run under the lengths rows' form 2 in which a request sent `at` seconds after
+    the origin is admitted when a lane is free: by the bucket after its arrival's (and one more for the client's
+    lag), which is `WardenParams.span` buckets before the run's end at the latest (`warden`'s "The lengths rows")."""
+    return -(-(math.floor(at * 1000 / params.bucket_ms) + params.span + 3) // params.window)
 
 
 def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
@@ -684,7 +696,8 @@ class PublisherProcess:
     def lengths(self, window: int, strides) -> None:
         """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
         (`connection_rows_run.hand`); the process lays its tables, commits them and signs their head
-        (`connection_rows_run.Keeper`)."""
+        (`connection_rows_run.Keeper`), or, for one that ends without releases (`strides` None), signs the word
+        that it has no head."""
         for item in crr.hand(window, strides):
             self.rows.put(item)
 
@@ -1186,6 +1199,8 @@ def rehearse(args) -> int:
                              traffic[0]["ids"]["max_tokens"])
             (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
             windows = grouped[-1]["windows"][1]
+        if params.closes:
+            windows = max(windows, closing_windows(params, traffic[-1]["at"]))
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
@@ -1285,7 +1300,10 @@ def parser() -> argparse.ArgumentParser:
     up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
     pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
-    r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
+    r.add_argument("--tail", type=float, default=60.0,
+                   help="seconds the run lasts past the last request's time; under --lengths 2 the network certifier "
+                        "admits nothing in the run's last span buckets, and the run lasts at least long enough to "
+                        "admit the last request before them (closing_windows)")
     r.add_argument("--ids", action="store_true",
                    help="network-certifier-form id requests (id_traffic), answered id-form (the fake's --id-payload): "
                         "the scan's traffic (scan_zk.py --warden-run)")
@@ -1294,7 +1312,8 @@ def parser() -> argparse.ArgumentParser:
                         "of the n, each with exactly --max-tokens (at most --egress-cells - 1)")
     r.add_argument("--window-per-group", action="store_true",
                    help="with --prompts: the requests in groups of the n prompts (at most --lanes), group g's half a "
-                        "bucket into window g·G, G = group_windows, the run exactly its groups' windows (groups.json)")
+                        "bucket into window g·G, G = group_windows, the run exactly its groups' windows (groups.json), "
+                        "or under --lengths 2 as many more as admit the last group (closing_windows)")
     f.add_argument("--id-payload", type=int, help="answer every request id-form (id_response) at P bytes an event")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)

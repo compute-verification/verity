@@ -590,14 +590,16 @@ def refusing_commit(*args, **kwargs):
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
+         id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
+         late: dict[int, float] | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`, its
     connection rows kept as the publisher process keeps them when the schedule has lengths rows (its key then a
     height taller, for their heads), `deployment.json`, and `client.json` with every cell's arrival 1 ms into the
     bucket it was sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side
-    of each connection, in connect order. Returns the network certifier."""
+    of each connection, in connect order. Request j connects before the run's first tick, or just before tick
+    `arrive[j]` (later requests no earlier), and tick t runs `late[t]` seconds late. Returns the network certifier."""
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
     if process:
@@ -633,18 +635,25 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
         running = asyncio.create_task(warden.run())
         clients, tasks = [], []
-        for request in requests:
-            reader = asyncio.StreamReader()
-            reader.feed_data(cells(request, params.cell_bytes))
-            reader.feed_eof()
-            clients.append(_Writer(warden))
-            tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
+
+        async def connect_due(t: int) -> None:
+            for j, request in enumerate(requests):
+                if (arrive or {}).get(j, 0) == t:
+                    reader = asyncio.StreamReader()
+                    reader.feed_data(cells(request, params.cell_bytes))
+                    reader.feed_eof()
+                    clients.append(_Writer(warden))
+                    tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
+            await warden.until(lambda w: w.ordinals + w.refused == len(clients))
+
+        await connect_due(0)
         PROCESS_CLOCK.append(clock)
         try:
             for t in range(windows * params.window):
+                if t:
+                    await connect_due(t)
                 await warden.until(settled)
-                clock.advance(t * tau)
+                clock.advance(t * tau + (late or {}).get(t, 0))
                 await warden.until(lambda w, t=t: w.ticks > t)
             await running
         finally:
