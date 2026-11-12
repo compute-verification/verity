@@ -2253,7 +2253,7 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:main")       # by its path: no ref of the clone's says origin has it
     origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
     origin.rename(gone)
     # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
@@ -2263,10 +2263,49 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
     assert sleeps.read_text().split()[0] == "5"
     sleeps.unlink()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "another")
+    git("push", "-q", str(origin), "HEAD:main")
     origin.rename(gone)
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
+
+
+def _counting_git(tmp_path):
+    """A `git` ahead of the real one on train.sh's PATH that appends each call's subcommand to the file it returns."""
+    import shutil
+
+    calls = tmp_path / "git-calls"
+    (tmp_path / "bin" / "git").write_text(
+        f'#!/bin/sh\nfor a; do case $a in -*|*/*) ;; *) echo "$a" >> {calls}; break;; esac; done\nexec {shutil.which("git")} "$@"\n')
+    (tmp_path / "bin" / "git").chmod(0o755)
+    return calls
+
+
+def test_train_sh_fetches_only_a_commit_no_ref_of_origin_holds(tmp_path):
+    """The queue launches each shard of a candidate it has just built and pushed from the same clone: a branch of origin
+    points at it, so the launch fetches nothing (a fetch per shard held the clone's lock for each); a commit origin holds but
+    no ref of the clone's says so is fetched, then launched; one origin lacks is refused."""
+    git, train, argv = _train_repo(tmp_path)
+    calls = _counting_git(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "candidate")
+    git("push", "-q", "origin", "HEAD:refs/heads/queue/c1")
+    for shard in ("1/2", "2/2"):
+        p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", shard)
+        assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert "fetch" not in calls.read_text().split(), calls.read_text()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "pushed by its path")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:refs/heads/queue/c2")
+    calls.unlink()
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and calls.read_text().split().count("fetch") == 1, (p.stderr, calls.read_text())
+    (tmp_path / "repo" / "a").write_text("d\n")
+    git("commit", "-q", "-am", "local")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
