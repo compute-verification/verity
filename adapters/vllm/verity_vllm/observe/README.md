@@ -7,8 +7,9 @@ a log back into a Program.
 ## Interface
 
 - **Provides:** the log's event vocabulary (`events`), its writer and reader (`log`), the capture (`capture`, over
-  `observer`, `storage`, `pinned` and `triton_adapter`), the log as the Match reads it (`capture_log`), the device
-  kernels of a profiler's trace (`kernel_trace`) and the runtime's module tree as a command (`runtime_tree`).
+  `capture_types`, `observer`, `storage`, `pinned` and `triton_adapter`), the log as the Match reads it
+  (`capture_log`), the device kernels of a profiler's trace (`kernel_trace`) and the runtime's module tree as a command
+  (`runtime_tree`).
 - **Loaded by:** the integration's `pipeline`, `check`, `program`, `properties` and `acquire` packages, `fold/`, and
   the benchmarks that read a log or a kernel trace.
 - **Loads:** the integration's `records`, `engine` and `config`, and `program` inside one function; torch and numpy in

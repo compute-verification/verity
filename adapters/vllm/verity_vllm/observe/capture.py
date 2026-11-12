@@ -41,7 +41,6 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable
@@ -49,6 +48,7 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
+from verity_vllm.observe.capture_types import ObserverConfig, _Step
 from verity_vllm.observe.events import (SCHEMA, Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                         StorageAlloc, ViewDesc)
 from verity_vllm.observe.log import LogWriter
@@ -60,38 +60,6 @@ from verity_vllm.engine.build import Engine
 from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
 from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
-
-
-@dataclass
-class ObserverConfig:
-    mode: str = "record"                 # "none" (baseline timing only) | "empty" (EmptyMode) | "record"
-    reenter: bool = True
-    triton: bool = True
-    module_hooks: bool = True
-    write_log: bool = True               # False: build every event, discard the buffer at step end (M0 rungs c-f)
-    snapshot_steps: frozenset = frozenset()
-    snapshot_dir: Path | None = None
-    snapshot_max_bytes: int = 32 << 20
-    snapshot_max_bytes_op: int | None = None   # limit at dispatcher-call events (None: snapshot_max_bytes); Triton launches keep the full limit
-    arena_bytes: int = 1 << 30
-
-
-@dataclass
-class _Step:
-    step: int
-    events: list[Event] = field(default_factory=list)
-    forward_s: float = 0.0
-    sample_s: float = 0.0
-    t_wall0: float = 0.0
-    wall_s: float = 0.0
-    facts: dict = field(default_factory=dict)
-    input_ids_view: ViewDesc | None = None
-    positions_view: ViewDesc | None = None
-    sampled_view: ViewDesc | None = None
-    logits_view: ViewDesc | None = None
-    sampled_shape: tuple[int, int] = (0, 0)
-    event: Any = None
-    n_snap: int = 0
 
 
 class Capture:
