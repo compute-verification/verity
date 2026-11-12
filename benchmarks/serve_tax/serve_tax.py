@@ -90,7 +90,9 @@ vLLM's client, which nothing reads them of, gets by default a fresh directory re
 With ``--client vllm-bench`` the loads are sent by vLLM's own benchmark client instead (`vllm bench serve`, `bench_argv`),
 one pass a load and rung: a load (`LOADS`) is one of the client's datasets, and a rung the concurrency the client holds
 (``--request-rate inf --max-concurrency RUNG``, the shape of vLLM's standing serving tests), every request greedy and
-decoding to its length (``--ignore-eos``). Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
+decoding to its length (``--ignore-eos``); under ``--sampled`` each is sampled instead, at the recipe's temperature
+and top-p (`SAMPLED`), naming its client as its ``user`` and under that user's seed, which the client sends
+(`user_seed`), so that every arm samples the same tokens. Each pass's DIR/<load>@<rung>/rep-<r>/result.json is the result the client
 saved, and `metrics` and `table` take its figures as the client computed them (`bench_metrics`). A load whose dataset
 is a file reads the node's one copy of it, pinned by revision and SHA-512 (`Dataset`): `passes --fetch` downloads it
 into the node's cache where it is missing, every run checks its SHA-512 and refuses a file that differs, and its
@@ -1243,12 +1245,24 @@ def parse_loads(text: str) -> dict[str, tuple[int, ...]]:
 #: block's id, which differs from one process to the next unless its seed is set
 CLIENT_ENV = {"PYTHONHASHSEED": "0"}
 
+#: a sampled pass's sampling (``run --sampled``), the recipe's own: what vLLM's client sends in place of temperature 0
+SAMPLED = {"temperature": 1.0, "top_p": 0.95}
+
+
+def user_seed(user: str) -> int:
+    """The seed a sampled pass's client sends in each of its requests, beside its name (the body's ``user``): the first
+    63 bits of SHA-512 over the name, which is the pass's tag and, on a sessions load, the user's. So every arm samples
+    a rep's requests under the same seeds, as stock would not without one (it samples each such request under a seed
+    of ``np.random``), and a replay samples them again. It is the client's seed: a served request need not send one."""
+    return int.from_bytes(hashlib.sha512(b"serve-tax/user-seed/v1/" + user.encode()).digest()[:8], "big") >> 1
+
 
 def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int, d: Path, tag: str,
-               dataset: str | None = None, prompts: int | None = None, seed: int = 0) -> list[str]:
+               dataset: str | None = None, prompts: int | None = None, seed: int = 0, sampled: bool = False) -> list[str]:
     """One pass of vLLM's client against the server on ``port``: ``load``'s prompts (the same ones under one seed, so
     every arm and rep serves the same requests) at concurrency ``rung``, greedy and each decoding to its length, with
-    goodput against the model's SLO and its result saved to ``d``. The client sends no completion of its own before
+    goodput against the model's SLO and its result saved to ``d``. A ``sampled`` pass's requests are sampled instead
+    (`SAMPLED`), each naming its client as its ``user`` (``tag``) and sending that user's seed (`user_seed`). The client sends no completion of its own before
     the pass (no ready check: `wait_ready` has waited), so every completion it sends is in its result, and request k's
     X-Request-Id is ``{tag}-{k}``, the form the release-order arm reads its release number from
     (`servetax_plugin.release_key`). It names the served model in every request and takes its tokenizer from the
@@ -1263,13 +1277,16 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     slo = dict(zip(("ttft", "tpot"), model.slo))
     held = [] if rung == ARRIVING else [*(["--no-self-timed"] if load.plan or load.sessions else []),
                                         "--request-rate", "inf", "--max-concurrency", str(rung)]
+    sampling = ["--temperature", "0"] if not sampled else [
+        "--temperature", str(SAMPLED["temperature"]), "--top-p", str(SAMPLED["top_p"]),
+        "--extra-body", json.dumps({"user": tag, "seed": user_seed(tag)})]
     return [sys.executable, "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai",
             "--base-url", f"http://127.0.0.1:{port}", "--endpoint", "/v1/completions",
             "--model", model.served, "--tokenizer", str(checkpoint),
             *(["--trust-remote-code"] if "--trust-remote-code" in model.args else []),
             *load.dataset, *(["--dataset-path", dataset] if dataset else []),
             "--num-prompts", str(prompts or load.prompts), "--seed", str(seed),
-            *held, "--ignore-eos", "--temperature", "0",
+            *held, "--ignore-eos", *sampling,
             "--goodput", *(f"{k}:{round(slo[k] * 1e3)}" for k in load.slo),
             "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
             "--request-id-prefix", f"{tag}-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
@@ -1311,7 +1328,7 @@ def merged(results: Sequence[dict]) -> dict:
 
 def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int, tag: str, d: Path,
                 dataset: str | None = None, seed: int = 0, lib: object | None = None, prompts: int | None = None,
-                run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+                sampled: bool = False, run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                 clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> dict:
     """One pass sent by vLLM's client (`bench_argv`): its output in d/bench.log, the result it saved in d/result.json,
     and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved). The
@@ -1331,7 +1348,7 @@ def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int
             raise RuntimeError(f"the client's result would be saved in {saved}, inside the run's directory, which leaves "
                                "the node with each request's generated text: TMPDIR, outside every run's directory")
         to = [saved / u.name if load.sessions else saved for u, *_ in jobs]
-        argvs = [bench_argv(model, checkpoint, port, load, c, to[k], name, f, prompts, seed)
+        argvs = [bench_argv(model, checkpoint, port, load, c, to[k], name, f, prompts, seed, sampled)
                  for k, (_, name, c, f) in enumerate(jobs)]
 
         def client(k: int) -> int:
@@ -1537,6 +1554,9 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         if not a.rates or not a.c4:
             raise SystemExit(f"--client {CORPUS} serves --rates NAME=REQ_PER_S,... of the --c4 shard's plan")
         passes, context, traces, lines, sent, sizes = {}, given, {}, {}, {}, {}
+        if a.sampled:
+            raise SystemExit(f"--sampled is a pass of vLLM's client (--client {BENCH}): the corpus client's sampling is "
+                             "its arm's")
         rates = parse_rates(a.rates)
         t = time.monotonic()
         plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
@@ -1576,11 +1596,13 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                          for n, f in (datasets if bench else {}).items() if LOADS[n].file},
             "planned": {n: {**planned(lines[n]), "sha256": file_digest(Path(f)),
                             **({"users": max(loads[n])} if LOADS[n].sessions else {}),
+                            **({"sampled": SAMPLED} if a.sampled else {}),
                             **({"table_sha256": file_digest(Path(datasets[n]))} if n in datasets and LOADS[n].plan else {})}
                         for n, f in traces.items()},
             "commit": source_commit(),
             "plan_sha256": file_digest(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
-            "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
+            "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampled": SAMPLED if a.sampled else None,
+            "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -1601,7 +1623,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                                   None if warm else a.requests, arm.sampling, busy)
             n, c = passes[name]
             return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
-                               pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, sizes.get(n)))
+                               pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, sizes.get(n)),
+                               a.sampled)
 
         if a.warm_s > 0:
             w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
@@ -2403,7 +2426,9 @@ def session_text(r: dict) -> str:
         f"serving cost on load {r['load']}: {r['arm']} over {r['reference']}: {_c(r)} of stock's serving compute, "
         f"{_reps(r['reps'])}, {r['users']} users; target {r['target']:g}%: {r['verdict']}",
         f"  the load: {r['what']}; {plan['requests']:,} requests of {plan['prompt_tokens']:,} prompt tokens, "
-        f"{plan['repeated_share']:.2f}% of them planned to repeat",
+        f"{plan['repeated_share']:.2f}% of them planned to repeat"
+        + (f"; each sampled at temperature {plan['sampled']['temperature']:g} and top-p {plan['sampled']['top_p']:g} "
+           "under a seed its client sends, one a user" if plan.get("sampled") else "; each greedy"),
         "  noise floor: " + (f"{n['arm']} over {r['reference']}: {_c(n)}, {_reps(n['reps'])}; the verdict's interval is "
                              "widened by its size" if n else
                              f"not measured: no second lifetime of {r['reference']}'s engine served the load"),
@@ -2907,6 +2932,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--pass-prompts", metavar="NAME=N|Kx,...",
                    help="vLLM's client: the prompts a pass of a load sends in place of the load's own: N at every rung, "
                         "or Kx, K for each request its rung holds in flight (parse_pass_prompts)")
+    r.add_argument("--sampled", action="store_true",
+                   help="vLLM's client: each request sampled at the recipe's temperature and top-p (SAMPLED) in place "
+                        "of greedy, naming its user and under that user's seed (user_seed)")
     r.add_argument("--reps", type=int, default=3)
     r.add_argument("--stop-at", metavar="TIME",
                    help="the time the arm stops by, with its zone (2030-01-01T00:00:00Z): it starts no pass that it "

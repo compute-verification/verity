@@ -281,7 +281,7 @@ different builds of vLLM served. Where `prod`'s server and its requests differ f
 | the recipe's line | `prod` | why |
 |---|---|---|
 | no seed, uvicorn's access log on | `--seed 0`, `--disable-uvicorn-access-log` | every arm's (`serve_tax.BASE_ARGS`): the same engine seed on both sides, and no line a request in the server's log |
-| requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says | `/v1/completions` with token ids, greedy, each request decoding to its recorded length | every arm then serves the same tokens whatever it generates; the parsers are loaded and parse nothing |
+| requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says, no seed | `/v1/completions` with token ids, each request decoding to its recorded length; greedy, or under `SAMPLED=1` sampled at temperature 1.0 and top-p 0.95, each request naming its `user` and sending that user's seed (`serve_tax.user_seed`) | every arm then serves the same tokens whatever it generates, and a replay samples them again; the seed is the client's, which a recipe's client does not send; the parsers are loaded and parse nothing |
 
 The loads `agentic` and `agentic-full` are a coding agent's recorded sessions: SemiAnalysis's AgentX traces
 (`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id for

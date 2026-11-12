@@ -2,6 +2,7 @@
 user, a pass sent by one client a user, and the cost on such a load, on synthetic records."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -211,6 +212,37 @@ def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_the_us
                       run=lambda argv, stdout, stderr, env: NS(returncode=1), clock=lambda: 0.0, now=lambda: 0.0)
 
 
+def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_seed(tmp_path: Path, monkeypatch):
+    load, user = S.LOADS[S.AGENTIC], "agentic@4-r1-u0"
+    greedy = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24)
+    argv = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24, sampled=True)
+    at = greedy.index("--temperature")
+    assert greedy[at:at + 2] == ["--temperature", "0"] and not {"--extra-body", "--top-p"} & set(greedy)
+    assert argv[at:at + 5] == ["--temperature", "1.0", "--top-p", "0.95", "--extra-body"]
+    assert json.loads(argv[at + 5]) == {"user": user, "seed": S.user_seed(user)}
+    # the rest of the pass is the greedy one's: its requests, their lengths, its ids
+    assert argv[:at] == greedy[:at] and argv[at + 6:] == greedy[at + 2:] and "--ignore-eos" in argv
+    # a seed is its user's own, 63 bits of SHA-512 over the user's name
+    seeds = [S.user_seed(f"agentic@4-r{r}-u{j}") for r in (1, 2) for j in range(4)]
+    assert len(set(seeds)) == 8 and all(0 <= x < 2 ** 63 for x in seeds)
+    assert seeds[0] == int.from_bytes(hashlib.sha512(b"serve-tax/user-seed/v1/" + user.encode()).digest()[:8], "big") >> 1
+    # each user's client names its own user
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
+    whole = S.write_trace(tmp_path / "agentic.trace.jsonl", S.session_lines(corpus(tmp_path), 2, 3, 400))
+    bodies = []
+
+    def run(argv, stdout, stderr, env):
+        bodies.append(json.loads(argv[argv.index("--extra-body") + 1]))
+        (Path(argv[argv.index("--result-dir") + 1]) / S.RESULT).write_text(json.dumps(result(3, 60.0, 100.0, 3.0)))
+        return NS(returncode=0)
+
+    S.drive_bench(8000, GLM, Path("/ck"), load, 2, "agentic@2-r1", tmp_path / "rep-1", dataset=whole, prompts=3,
+                  sampled=True, run=run, clock=lambda: 0.0, now=lambda: 0.0)
+    assert sorted(bodies, key=lambda b: b["user"]) == [{"user": u, "seed": S.user_seed(u)}
+                                                       for u in ("agentic@2-r1-u0", "agentic@2-r1-u1")]
+
+
 #: what a job's arms planned for load agentic: four users of 24 turns each
 PLAN = {"requests": 96, "prompt_tokens": 8000000, "repeated_tokens": 7600000, "span_s": 0.0, "sha256": "a" * 64, "users": 4}
 
@@ -293,6 +325,14 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
         S.session_cost([ref, served("prod-record", OURS) | {"vllm": "0.2"}], "prod-record", "prod")
     with pytest.raises(SystemExit, match="prod and prod-record served load agentic from different plans"):
         S.session_cost([ref, served("prod-record", OURS, plan=PLAN | {"sha256": "b" * 64})], "prod-record", "prod")
+    # nor of a sampled side over a greedy one: the plan each served names its sampling, and the cost's text says which
+    sampled = PLAN | {"sampled": S.SAMPLED}
+    with pytest.raises(SystemExit, match="prod and prod-record served load agentic from different plans"):
+        S.session_cost([ref, served("prod-record", OURS, plan=sampled)], "prod-record", "prod")
+    both = [served("prod", [2.0] * 6, plan=sampled), served("prod-record", OURS, plan=sampled)]
+    assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95 under a seed its client sends, one a user\n"
+            in S.session_text(S.session_cost(both, "prod-record", "prod")))
+    assert "planned to repeat; each greedy\n" in S.session_text(S.session_cost([ref, served("prod-record", OURS)], "prod-record", "prod"))
     with pytest.raises(SystemExit, match="prod served load agentic and prod-record did not"):
         S.session_cost([ref], "prod-record", "prod")
     with pytest.raises(SystemExit, match="no directory of arm prod "):
