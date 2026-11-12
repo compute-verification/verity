@@ -284,9 +284,11 @@ def check_point_environment(spec: ResolvedSpec | SteadySpec, environ: Mapping[st
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU in GPU_SLOTS (the nebius nodes g0-g7, the
-#: single-GPU DC VMs g0)
-DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-b200")
+#: the GPU nodes whose GPUs `--direct` may take: each has its GPU slots in GPU_SLOTS, one per GPU (the nebius nodes and
+#: the eight-card H200 node g0-g7, the single-GPU DC VMs g0). A slot gives a run its CPUs and no GPU: the run takes
+#: its GPUs from the node's gpu-lease
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-h200-3", "vy-dc-b200",
+                "vy-spot-glm53")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 
 

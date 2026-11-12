@@ -189,7 +189,8 @@ find it the same way, and its command takes one of the node's GPU slots (`/works
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
 GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
-share). A preempted direct point is a failed run, which the
+share): a node joins the tuple once it has that slots file, so a node without one is refused here, before any run, and
+not by the slot at a point's start. A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU

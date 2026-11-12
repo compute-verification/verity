@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from test_steady_point import tree
 
+from verity_bench import jobs
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_plan as P
@@ -80,10 +81,10 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     return root, path
 
 
-def launches(root: Path, path: str) -> tuple[list, list[list[str]]]:
+def launches(root: Path, path: str, node: str = "vy-dc-h200") -> tuple[list, list[list[str]]]:
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
     commands: list[list[str]] = []
-    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200",
+    assert P.dispatch(plan, root / path, root=root, direct=node,
                       execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
     return list(plan.points), commands
 
@@ -98,6 +99,34 @@ def test_each_point_of_the_head_blocks_spec_is_launched_with_the_stores_key_with
         assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
             "RUST_MIN_STACK=67108864", f"VERITY_BENCH_SETUP={SETUP}"]
         assert job[-8:] == ["bash", LAUNCHER, "--spec", path, "--point", item.point.id, "--identity", item.identity]
+
+
+@pytest.mark.parametrize("node", ["vy-spot-glm53", "vy-dc-h200-3"])
+def test_the_head_blocks_spec_runs_direct_on_the_h200_nodes_whose_slots_give_ten_cores_of_one_numa_node(tmp_path, node):
+    from research.pods.nebius.slot_only import through_slot
+
+    assert node in jobs.DIRECT_NODES
+    points, commands = launches(*real(tmp_path), node=node)
+    assert len(commands) == len(points) == 6
+    for command in commands:
+        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+        assert flags[:4] == ["research", "run", "--on", node] and "--queue" not in flags and "--gpus" not in flags
+        assert through_slot(workload) and workload[:2] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}"]
+        assert "gpu-lease" not in command, "the node side takes the card, on the NUMA node of the slot's cores"
+
+
+def test_a_node_outside_the_direct_nodes_is_refused_at_dispatch_and_no_point_starts_there(tmp_path):
+    """A node joins `jobs.DIRECT_NODES` with its slots file: one without is refused here, where the tuple and the file
+    to add are named, and not by the slot at the start of each point's run."""
+
+    root, path = real(tmp_path)
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
+    launched: list = []
+    for node in ("vy-dc-h200-without-slots", "vy-nebius-cpu-1"):
+        assert node not in jobs.DIRECT_NODES
+        with pytest.raises(ValueError, match=f"--direct {node}: not a GPU node with gpu slots.*{jobs.GPU_SLOTS} joins"):
+            P.dispatch(plan, root / path, root=root, direct=node, execute=lambda command, cwd: launched.append(command) or 0)
+    assert launched == []
 
 
 def test_another_pin_and_another_stored_statement_are_a_change_to_the_spec_alone(tmp_path):
