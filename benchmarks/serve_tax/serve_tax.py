@@ -237,9 +237,13 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
+#: the logits each served id was selected from in the boundary commitment (its ``logits``): their rows and salts kept on
+#: the node
+LOGITS = {"private": PRIVATE}
 #: the two-stage serve's boundary object: `ROWS`, the ids served committed as what its replay block returns
-#: (`boundary_rows.Layout.ids`), which round 2 holds the check's output to, and `TABLES`
-TWO_STAGE_ROWS = {**ROWS, "ids": True, "tables": TABLES}
+#: (`boundary_rows.Layout.ids`), which round 2 holds the check's output to, the logits they were selected from
+#: (`boundary_rows.Layout.logits`), the select's inputs, and `TABLES`
+TWO_STAGE_ROWS = {**ROWS, "ids": True, "logits": LOGITS, "tables": TABLES}
 ARMS = {
     "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
