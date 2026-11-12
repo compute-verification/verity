@@ -33,8 +33,8 @@ flight; and `flying` each member of the chain not ready at its head as built, wi
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
 the command's (`--lean`, `--pending-hours`), and `wide` and `pinned` the PRs `--wide-file` and `--pins-file` name, read each
-tick as the priority file is (`World.wide`, `World.pinned`), `wide` with those `--heavy-file` names while `--heavy-on` names
-machines (`World.heavy`); a tick that builds nothing while a pinned Lean PR waits logs
+tick as the priority file is (`World.wide`, `World.pinned`), `wide` with the PRs `--heavy-file` names while `--heavy-on` names
+machines (`World.heavy`; its `*` makes none wide); a tick that builds nothing while a pinned Lean PR waits logs
 why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
@@ -121,7 +121,8 @@ as its own one no line names that is the same build made before, as a tick cut o
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
 machines, on its tree), logged (`regenerate`), and its check waits.  Every check starts at one seam (`Loop._enqueue`: the
-enqueue, its line and the run beside it).  A candidate holding a heavy PR (`World.heavy`) runs its records run, and, where
+enqueue, its line and the run beside it).  A candidate holding a heavy PR (`World.heavy`), or every candidate and `main`'s
+own check while the heavy file holds `*`, runs its records run, and, where
 the check gates, the shard of its check that audits `vqueue_slim.HEAVY_PART`, on `--heavy-on`'s machines alone, its other
 shards on theirs (`Loop._heavy_on`); a records run's resend after a machine's fault stays on them, as a check started again
 does.
@@ -194,7 +195,7 @@ from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, cancel_r
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers,
-                    conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk, merged_tree,
+                    conflicting_files, flags_at, forces_cold, label_verifier, lean_change, listed, lowrisk, merged_tree,
                     moves_between, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
@@ -222,7 +223,7 @@ KEEP_RUNS = Path("/data/vqueue/live/keep-runs")
 WIDE = Path("/data/vqueue/live/wide")
 #: the PRs whose Lean change is heavy, its audit's replay more memory than a check slot holds, one number a line as the wide
 #: file holds them: wide too, and a candidate holding one runs its records run and the shard of its check that audits
-#: `vqueue_slim.HEAVY_PART` on `--heavy-on`'s machines alone (`Loop._heavy_on`)
+#: `vqueue_slim.HEAVY_PART` on `--heavy-on`'s machines alone (`Loop._heavy_on`); `*`, every candidate, none of them wide
 HEAVY = Path("/data/vqueue/live/heavy")
 #: the pinned PRs, one number a line (`#` comments and blank lines allowed): a pinned Lean PR opens a batch of pinned Lean PRs
 #: only, on `main` or on a top candidate holding no Lean change; no other Lean PR goes ahead of a PR with none (`vqueue._next`)
@@ -964,10 +965,13 @@ class World:
         missing or empty."""
         return frozenset(priority_list(self.pins_file, "--pins-file", comments=True)) if self.pins_file else frozenset()
 
-    def heavy(self) -> frozenset[int]:
-        """The PRs the heavy file names (`HEAVY`), parsed and refused as the wide file is: none while it is missing or empty,
-        or while no machines take their runs (``heavy_on`` "")."""
-        return frozenset(priority_list(self.heavy_file, "--heavy-file")) if self.heavy_file and self.heavy_on else frozenset()
+    def heavy(self) -> tuple[frozenset[int], bool]:
+        """(the PRs the heavy file names, `HEAVY`, parsed and refused as the wide file is; whether it names every candidate,
+        `queue.EVERY`): none while it is missing or empty, or while no machines take their runs (``heavy_on`` "")."""
+        if not (self.heavy_file and self.heavy_on):
+            return frozenset(), False
+        prs, every = listed(self.heavy_file, "--heavy-file", every=True)
+        return frozenset(prs), every
 
     def _another(self, n: int, by: str | None) -> bool:
         """Whether ``by`` is someone other than PR ``n``'s owner and its handle (`_owners`), compared as `unreviewed` does."""
@@ -1996,7 +2000,7 @@ class Loop:
         w = self.world
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
-        wide, pinned = w.wide() | w.heavy(), w.pinned()
+        wide, pinned = w.wide() | w.heavy()[0], w.pinned()
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
         ready, out = [], {}
         for x in w.ready(main):
@@ -2505,10 +2509,13 @@ class Loop:
                           **({"start_error": error} if error else {}))
 
     def _heavy_on(self, line: dict) -> str:
-        """The machines the heavy runs of the candidate of ``line`` take, `World.heavy_on`, when a member of it is a heavy PR
-        (`World.heavy`, read at each launch); "" else, and when no machines are named."""
-        on = getattr(self.world, "heavy_on", "")
-        return on if on and set(line.get("members") or ()) & self.world.heavy() else ""
+        """The machines the heavy runs of the candidate of ``line`` take, `World.heavy_on`, when a member of it is a heavy PR or
+        the heavy file names every candidate (`World.heavy`, read at each launch), `main`'s own check then too; "" else, and
+        when no machines are named."""
+        if not (on := getattr(self.world, "heavy_on", "")):
+            return ""
+        prs, every = self.world.heavy()
+        return on if every or set(line.get("members") or ()) & prs else ""
 
     def _audit_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
@@ -3180,9 +3187,11 @@ def main(argv: list[str]) -> int:
                     help=f"the PRs whose Lean change is heavy, one number a line, read each tick as --wide-file is: each is "
                          f"wide too, and a candidate holding one runs its records run, and the shard of its check that audits "
                          f"security/Proofs, on --heavy-on's machines alone, a resend after a machine's fault too; none while "
-                         f"the file is missing or empty, or --heavy-on is empty (default {HEAVY})")
-    ap.add_argument("--heavy-on", default="", help="the machines a heavy PR's candidate's heavy runs take, a comma list "
-                                                   "(--heavy-file); empty, the default, turns heavy PRs off")
+                         f"the file is missing or empty, or --heavy-on is empty; a line '*' makes every candidate's runs so, "
+                         f"main's own check's too, and no PR wide (default {HEAVY})")
+    ap.add_argument("--heavy-on", default="", help="the machines a heavy PR's candidate's heavy runs take, a comma list, each "
+                                                   "run the first free of them (--heavy-file); empty, the default, turns heavy "
+                                                   "PRs off")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")

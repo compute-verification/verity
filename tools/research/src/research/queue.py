@@ -936,25 +936,36 @@ class DriveFlags:
                         for k, v in dataclasses.asdict(self).items())
 
 
+#: the word of a PR list that names every PR (`listed` with ``every``)
+EVERY = "*"
+
+
 def priority_list(path: Path, flag: str = "--priority-file", comments: bool = False) -> tuple[int, ...]:
     """Drive's priority list (`--priority-file`, `Queue.priority`), the landing order: the PR numbers ``path`` holds, separated
     by spaces or commas, in its order, first to land first, each once (a number repeated keeps its first place); empty when
     there is no such file.  With ``comments``, a `#` starts a comment that runs to the end of its line.  QueueError, with the
     fix, when it can't be read or holds anything else, naming it as ``flag``: the verified queue reads its `--wide-file` so
     too, and its `--pins-file` with ``comments``."""
+    return listed(path, flag, comments)[0]
+
+
+def listed(path: Path, flag: str = "--priority-file", comments: bool = False, every: bool = False) -> tuple[tuple[int, ...], bool]:
+    """(``path``'s PR numbers, as `priority_list` reads them; whether it holds `EVERY` too, a word only ``every`` takes): the
+    verified queue reads its `--heavy-file` so."""
     try:
         if not path.exists():
-            return ()
+            return (), False
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as e:
         raise QueueError(f"{flag} {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
                          "PR numbers separated by spaces or commas, or remove it") from None
     words = [w for w in re.split(r"[\s,]+", re.sub(r"#.*", "", text) if comments else text) if w]
-    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
+    star = every and EVERY in words
+    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w) and not (every and w == EVERY)]:
         raise QueueError(f"{flag} {path} holds {', '.join(map(repr, bad[:5]))}, which "
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
-                         "spaces or commas")
-    return tuple(dict.fromkeys(map(int, words)))
+                         f"spaces or commas{f', or {EVERY} for every PR' if every else ''}")
+    return tuple(dict.fromkeys(int(w) for w in words if w != EVERY)), star
 
 
 #: how long a landing or warn gate may run before it counts as unable to judge (`run_gate`)
