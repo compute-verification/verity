@@ -69944,3 +69944,20 @@ Agent `bc-91afa190-e757-5374-b33f-2763b8d55e5e`. First entry. Every time below i
 - Still to read before 09:00Z: which of the eight files read neither `Held`'s shape nor the premises, and so would carry over as they are.
 
 **Next.** #8139's ready line when its three runs end, or their state at 06:30Z. Then #8363's final read. Nothing is pushed to #8406's, #8414's or #8363's branch.
+
+## 04:07Z KEPT: #9124's quick tier passed, so here is its ready line; my yes on #9090 carries to its new head `7e57f859cf`; #8949 and #9042 are on `main`, so I am merging `main` into the first branch now
+
+**1. #9124 is ready for your mark** ([#9124](https://github.com/compute-verification/verity/pull/9124), open, unmarked, mergeable).
+- **The line:** `research queue ready 9124 --mark --by proofs`, head `c307cc49b2f690fd5b413f104a7c1ad993e5d136`.
+- **Quick tier** `r20261112-033407-e586` at that head, `--changed be9a3d5669 --quick`: ended 04:03Z rc 0. 4 suites, 4 passed, none cached, 0 failed: `benchmarks/one_stage` 538 passed, `benchmarks/prove_path` 148, `repository` 308, `verity-graph` 208 [run]. The row is in the body.
+- **`main` has moved since** (`be9a3d5669` to `62bf29346f`, 60 commits). None touches the three files this changes (`a5.py`, `tests/test_a5_warden.py`, `tests/test_a5_case_v2.py`), and GitHub says mergeable [read: `git diff --stat` of the two heads]. I did not rerun the tier on the new base.
+- It still carries `Issue: none`; link one with `research queue link 9124 --issue KEY` if you want it.
+
+**2. #9090 moved to `7e57f859cf` at 04:02Z; the yes carries** [read: `git diff 7c5ed234e1 7e57f859cf`].
+- The one change is `PROTOCOL.md` section 10.4, +6 −1. No Rust, no Lean, no test.
+- It adds the two sentences I said were owed: the statement's name and the `Hello` flags are the process's for every session; a line the reader refuses ends the process under the session then being proved, which gets no verdict.
+- It also says a session whose circuit binds another partition or program is refused by its own Lean loop, naming `HmRow.checkPartition`. That is what the code does: a `verity/partition/v1` binding whose digest is not the given object's, an object over another program than the circuit's, a binding with no object given, and an object given to a circuit under the provisional unit cover are each refused (`Flock/HmRow.lean:1292-1310`) [read]. A circuit under the provisional unit cover with no object given binds nothing, which is PRF-567's, as you said.
+- And: "a session left without a verdict is failed and never proved again, since a second session for it has new coins". Nothing on the stream's path proves a line twice (my 03:08Z entry), and if a second process did, the audit's count refuses it (my 03:59Z entry's last section).
+- **One line you can post:** yes at `7e57f859cf`; the only change since `7c5ed234e1` is the text of section 10.4, and it says what we asked.
+
+**3. The first pull request's wait is over.** #8789, #8949 and #9042 are on `main` (`62bf29346f`, 03:54Z) [read: `gh pr view`]. As you ordered at 19:37Z: I merge `main` into `cursor/proofs-keptverify-604f`, try each Lean file the merge touches, then one records run and the tier at the merged head, then open it unmarked. Six files changed on both sides (`Flock.lean`, `Flock/ProgramRead.lean`, `FlockVerify.lean`, two READMEs, the prover's `pyproject.toml`). My next entry names the runs.
