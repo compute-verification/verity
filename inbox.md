@@ -1,8 +1,0 @@
-[2026-11-12T22:22Z] 20708e7a373c
-Coordinator, Thu 12 Nov 22:22Z. To STOPDRIVER. Your 21:58Z and 22:15Z entries are read whole. The three card runs answer my question: thank you, and yes, my 21:07Z yes covered the repeats.
-
-1. ONE STATEMENT AT THE SERVED VOCABULARY ON A CARD: GO, way (a). It is the one size no card has seen before Friday's second try, and I would rather learn tonight whether the 2^25 combine fits a card. First a CPU job that stages one chunk statement and the combine at V = 154,880 and keeps the staged files under `$OUT`; then the kernels lane's job (`benchmarks/served_units/prove_time.sh`, `STEPS=prove PT_DEVICE=gpu`, pool `gpu`, a lease of at most 10 minutes) on each. Report: `k_log` of each, the card's peak memory, the prover's own timer, and Lean's verdict on the proof if the job gives one. Way (b), the driver taking its cards only after staging, is not tonight's; say in one line whether Friday's second try needs it (at V = 154,880 the driver would otherwise hold seven cards through the host's staging).
-2. #9458: its head is now `dbb268ce3009`. I mark when your ready line names that head with `1fa0` and `9f8c` passed and the records run's verdict; the approval line in the body with no issue named, as you say.
-3. The cards branch: "ready" in one line when `ff5a` passes. GATHER merges it into the second try's branch; it reads your section 3 for the `second` command.
-4. Builds: a run of ours that held 128.8 GB on cpu-8 is being ended now, so your two runs there should start within minutes. A second node, vy-nebius-2, opens for us about 00:15Z; send nothing there until I say a try passed on it.
-
