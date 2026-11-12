@@ -19,7 +19,7 @@ uv run python benchmarks/pouw/contents.py   # what is here, from contents/
 ~~~
 
 `verity bench pouw NAME [ARGS]` runs `NAME/`'s runner with ARGS. `run.py` here is that front door: a directory's runner
-is its `run.sh`, else its `run.py`, and given no NAME it names the directories that have one. A runner that needs a GPU
+is its `run.py`, else its `run.sh`, and given no NAME it names the directories that have one. A runner that needs a GPU
 or a whole node is the command of a `research run`, as its header says.
 
 **What a caller may import.** The Python files directly here are the front door (`run.py`), the table (`contents.py`),
@@ -30,10 +30,12 @@ names its readers take, but two. `pearlc_census.py` states none: its readers are
 these files; inside it their readers are each other, three scripts of `pearl_c_vllm/` (`run_result`) and the tests.
 
 **What it never does.** The files directly here hold no kernel and build none. A calculator runs on a CPU and writes
-only the files its arguments name, but for three: `budget.py --sweep` and `--sampling-sweep` rewrite its two data files
-here, and `lean_headline.py` and `lean_headline_dc.py` write the Lean files they generate. `run_result.py` imports the
-standard library alone and writes a run's `result.json` only under a `research run`. `run.py` starts the runner it is
-asked for and nothing else.
+only the files its arguments name, but for these: `budget.py --sweep` and `--sampling-sweep` rewrite its two data files
+here; `lean_headline.py` and `lean_headline_dc.py` write the Lean files they generate; `pearlc_census.py` and
+`pearlc_k256_gate.py` write `--out`'s default into the working directory when it is not given, the gate under
+`--verdict` writes `verdict.json` into the directory it is given, and under a `research run` each also writes the run's
+`result.json`, through `run_result.py`. `run_result.py` imports the settings registry and the standard library, and
+writes nothing outside a `research run`. `run.py` starts the runner it is asked for and nothing else.
 
 Served claims (`pearl_c_vllm/`) are measured against graphed stock FP8: stock vLLM `quantization="fp8"` compiled with its
 CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).

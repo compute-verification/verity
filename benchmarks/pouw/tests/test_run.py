@@ -11,11 +11,11 @@ from conftest import load
 R = load("run.py")
 
 
-def test_a_directorys_runner_is_its_run_sh_else_its_run_py(tmp_path):
+def test_a_directorys_runner_is_its_run_py_else_its_run_sh(tmp_path):
     for file in ("job/run.sh", "script/run.py", "both/run.sh", "both/run.py", "neither/tool.py", "run.sh"):
         (tmp_path / file).parent.mkdir(exist_ok=True)
         (tmp_path / file).touch()
-    assert R.runners(tmp_path) == {"both": ["bash", str(tmp_path / "both/run.sh")],
+    assert R.runners(tmp_path) == {"both": [sys.executable, str(tmp_path / "both/run.py")],
                                    "job": ["bash", str(tmp_path / "job/run.sh")],
                                    "script": [sys.executable, str(tmp_path / "script/run.py")]}
 

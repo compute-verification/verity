@@ -32,7 +32,7 @@ says. These are the directories that have one:
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
-| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.sh` or else its `run.py`; given no NAME, the names |
+| `verity bench pouw NAME` | a PoUW benchmark by its directory's name: `pouw/NAME/`'s runner, its `run.py` or else its `run.sh`; given no NAME, the names |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
 | `verity bench proof_throughput` | the proof blocks a second Flock proves and the Lean verifier accepts, over the batch size |

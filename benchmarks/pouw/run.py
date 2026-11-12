@@ -1,6 +1,7 @@
 """The PoUW benchmarks' front door: ``benchmarks/pouw/run.py NAME [ARGS]`` runs ``benchmarks/pouw/NAME/``'s runner with
-ARGS, which is what ``verity bench pouw NAME [ARGS]`` does. A directory's runner is its ``run.sh``, else its ``run.py``.
-Given no NAME, or one that has no runner, it names the directories that have one.
+ARGS, which is what ``verity bench pouw NAME [ARGS]`` does. A directory's runner is its ``run.py``, else its ``run.sh``,
+the order ``verity bench`` takes them in. Given no NAME, or one that has no runner, it names the directories that have
+one.
 
 The runner takes this process's place, so its exit status, its output and a signal sent to the job are the runner's
 own. A runner that needs a GPU or a whole node is the command of a ``research run``, as its header says. Standard
@@ -17,7 +18,7 @@ __all__ = ["HERE", "runners"]
 
 HERE = Path(__file__).resolve().parent
 #: a runner's file name with the program that starts it; a directory's runner is the first of these it holds
-RUNNERS = (("run.sh", "bash"), ("run.py", sys.executable))
+RUNNERS = (("run.py", sys.executable), ("run.sh", "bash"))
 
 
 def runners(here: Path = HERE) -> dict[str, list[str]]:
