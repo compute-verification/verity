@@ -734,6 +734,76 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     assert "(3 imported" in capsys.readouterr().out
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+@pytest.mark.parametrize("how", ["cache", "ltar"])
+def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_say(tmp_path, monkeypatch, capsys, how):
+    """Built with Lake, then taken by Lake into a tree with no build: from its artifact cache (`cache`), or unpacked
+    from the archives of a published build (`ltar`), as a node's tree takes main's. Every trace there states one hash
+    and no source. Without Lake asked none of the modules is a sibling; with it each is, and the try passes on them.
+    Then `P.A`'s text changes, and its trace is made the newer of the two: `P.A` is unchecked, and so are `P.B` and the
+    root, which import it and of which Lake says nothing. Written again as it was, later than every build, all are
+    siblings again.
+
+    Only this test takes builds with Lake and has Lake say which it holds, so only it shows that `built_from` knows
+    the traces and `held` the lines Lake writes for them, and that a stub loads the builds a plan counts on that word."""
+    pkg, cache = tmp_path / "tree" / "p", tmp_path / "cache"
+    files = {"lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n',
+             "lean-toolchain": (HERE / "fixtures" / "control" / "lean-toolchain").read_text(),
+             "P.lean": "module\n\npublic import P.A\npublic import P.B\npublic import P.D\n",
+             "P/A.lean": "module\n\n@[expose] public section\n\ndef P.a : Nat := 1\n",
+             "P/B.lean": "module\n\npublic import P.A\n@[expose] public section\n\ntheorem P.b : P.a = 1 := rfl\n",
+             "P/D.lean": "module\n\n@[expose] public section\n\ndef P.d : Nat := 4\n\n#eval IO.println \"said while it compiled\"\n",
+             "P/C.lean": "module\n\n@[expose] public section\n\ndef P.c : Nat := 3\n"}
+    monkeypatch.delenv("LAKE_ARTIFACT_CACHE", raising=False)
+    monkeypatch.setenv("LAKE_CACHE_DIR", str(cache))
+
+    def lake(at: Path, *argv: str, **env: str) -> str:
+        r = subprocess.run(["lake", *argv], cwd=at, env={**os.environ, **env}, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True)
+        assert r.returncode in (0, 3) if "--no-build" in argv else r.returncode == 0, r.stdout
+        return r.stdout
+
+    write(pkg, files)
+    if how == "cache":
+        lake(pkg, "build", LAKE_ARTIFACT_CACHE="true")
+        shutil.rmtree(pkg / ".lake" / "build")
+    else:
+        publisher, out = write(tmp_path / "publisher" / "p", files), tmp_path / "published"
+        writable = {"LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
+        lake(publisher, "build", "-o", str(out / "outputs.jsonl"), **writable)
+        lake(publisher, "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage"), **writable)
+        lake(publisher, "cache", "unstage", str(out / "stage"))
+        shutil.copy(publisher / "lake-manifest.json", pkg)
+    took = lake(pkg, "build", "-v", "--no-ansi")
+    assert "Built" not in took and ("Reused P.A" if how == "cache" else "Unpacked P.A") in took, took
+    mods = ["P", "P.A", "P.B", "P.D"]
+    for m in mods:
+        trace = (pkg / S.LIB).joinpath(*m.split(".")).with_suffix(".trace")
+        assert S.built_from(trace, f"{m.split('.')[-1]}.lean") == (None, True), f"{m}: {trace.read_text()}"
+
+    def ask(args: list[str]) -> str:
+        return lake(pkg, *args)
+
+    assert S.plan(pkg, "P/C.lean") == S.Plan("P.C", True, [], mods), "no build Lake took counts without Lake's word"
+    assert S.plan(pkg, "P/C.lean", ask) == S.Plan("P.C", True, mods, [])
+    cli = _cli()
+    assert cli.main(["lean", "try", str(pkg / "P" / "C.lean"), "--siblings"]) == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "P/C.lean: Lake holds 4 of the 4 modules that could be siblings as their inputs are now (lake build" in out, out
+    assert "siblings: no built module of its package that doesn't import P.C declares a name it does (4 imported" in out, out
+
+    source, trace = pkg / "P" / "A.lean", pkg / S.LIB / "P" / "A.trace"
+    write(pkg, {"P/A.lean": files["P/A.lean"] + "\ndef P.more : Nat := 2\n"})
+    os.utime(source, (2_000_000_000, 2_000_000_000))
+    os.utime(trace, (2_000_000_100, 2_000_000_100))
+    assert S.plan(pkg, "P/C.lean", ask) == S.Plan("P.C", True, ["P.D"], ["P", "P.A", "P.B"]), \
+        "a build taken for another text, though its trace is the newer"
+    write(pkg, {"P/A.lean": files["P/A.lean"]})
+    os.utime(source, (2_100_000_000, 2_100_000_000))
+    assert S.plan(pkg, "P/C.lean", ask) == S.Plan("P.C", True, mods, []), "written again as it was, later than every build"
+
+
 DEFS = ("module\n\n@[expose] public section\n\nnamespace P\n\nstructure Trace where\n  log : List Nat\n  out : Nat\n\n"
         "def step : Nat → Trace → Trace\n  | 0, t => { t with out := 0 }\n  | n + 1, t => step n { t with log := n :: t.log }\n")
 USER = ("module\n\npublic import P.D\n\n@[expose] public section\n\nnamespace P\n\n"
