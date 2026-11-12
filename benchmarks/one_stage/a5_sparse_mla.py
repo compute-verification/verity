@@ -48,7 +48,6 @@ import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
-from verity_vllm.pipeline import chain_rows as CH  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
 
 RULE = "stratified-rate:1/64"
@@ -71,7 +70,7 @@ def committed(w: CS.Binding, got: list, out: Path, of: dict, module: str) -> CS.
     """Window ``w`` on its members' values ``got`` (`serving_rows.read_all`'s) committed into ``out`` as serving commits it, its
     salts fresh, each port a member holds in its writer's tree given as its writer's (`chain_rows.held_rows`): a stand-in of
     ``of``, committed by ``module``."""
-    c = CS.commit(w, CH.held_rows(w, [g for g, _e in got]))
+    c = CS.commit(w, TS.held_values(w, got))
     CS.write(c, out, {"of": of, "committer": {"module": module}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
              kind="stand-in", registrar=R)
     return w

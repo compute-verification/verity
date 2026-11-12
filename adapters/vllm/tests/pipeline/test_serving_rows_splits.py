@@ -224,6 +224,12 @@ def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
     return SRW.read_all(ms, [s.rows] * len(tmpls), s, None)
 
 
+def held_values(w: CS.Binding, got: list[tuple[dict, list]]) -> list[dict]:
+    """``w``'s members' values ``got`` (`read`'s) as serving commits them: each port a member holds in its writer's tree given
+    as its writer's (`chain_rows.held_rows`)."""
+    return CH.held_rows(w, [g for g, _e in got])
+
+
 @pytest.fixture(autouse=True)
 def _slices(monkeypatch):
     """`serving_rows._slices` back after each test, which `read` replaces."""
@@ -783,7 +789,7 @@ def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
     got = read(s, w.members, UNITS)
-    c = CS.commit(w, CH.held_rows(w, [g for g, _e in got]), salt_key=bytes(32))
+    c = CS.commit(w, held_values(w, got), salt_key=bytes(32))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     held = [(m, p) for m in w.members if not m.wired_trees for p, _o, _ws in m.wired]
@@ -875,7 +881,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
                              leaf_layer=CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(win.members)})).codes)
 
     assert "R3-ports" in codes(copies, other_keys(s, copies)[0])
-    assert "R3-ports" not in codes(w, CH.held_rows(w, [g for g, _e in read(s, w.members, UNITS)]))
+    assert "R3-ports" not in codes(w, held_values(w, read(s, w.members, UNITS)))
 
 
 def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
@@ -886,7 +892,7 @@ def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_ta
     only the member's other units."""
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
-    c = CS.commit(w, CH.held_rows(w, [g for g, _e in read(s, w.members, UNITS)]), salt_key=bytes(32))
+    c = CS.commit(w, held_values(w, read(s, w.members, UNITS)), salt_key=bytes(32))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     kp = CH.key_places(HALF)
     writer = {(kp[j].split, kp[j].block, kp[j].col): u for (_p, j), u in key_units(w.members, UNITS, UNITS_PLACES).items()}
