@@ -3787,7 +3787,7 @@
     {"file": "demos/lifecycle/pyproject.toml", "count": 2},
     {"file": "demos/lifecycle/remote.py", "count": 4},
     {"file": "demos/lifecycle/tests/test_lifecycle.py", "count": 12},
-    {"file": "demos/onsite_served/README.md", "count": 4},
+    {"file": "demos/onsite_served/README.md", "count": 10},
     {"file": "demos/onsite_served/config.toml", "count": 5},
     {"file": "demos/onsite_served/served_table.py", "count": 47},
     {"file": "demos/vllm/README.md", "count": 6},
