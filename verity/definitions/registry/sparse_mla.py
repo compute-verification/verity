@@ -343,6 +343,36 @@ def SparseMlaHeadScoresCols(B, S, q_nope, q_rope, *rest):
                        key_rows(S, rest[:n], rest[n]), *rest[n + 1:])
 
 
+def key_cols(S, kv, bf16=BF16) -> tuple:
+    """A block's NVIS key rows [kv_c | k_pe] as kv_c's DV / G column blocks of G columns, in order, then k_pe: `key_rows`'
+    inverse, views of the rows' leaves, no gate."""
+    KW, n = S.DR + S.DV, S.DV // S.G
+    rows = kv.reshape(Array(S.NVIS, Array(KW, bf16)))
+    cols = [Coll(Array(S.NVIS, Array(S.G, bf16)), concat([rows[k][c * S.G:(c + 1) * S.G].refs for k in range(S.NVIS)]))
+            for c in range(n)]
+    return (*cols, Coll(Array(S.NVIS, Array(S.DR, bf16)), concat([rows[k][S.DV:KW].refs for k in range(S.NVIS)])))
+
+
+def _head_scores_keys_type(S, bf16=BF16, f32=F32):
+    check_cols_statics(S)
+    params, ret = _head_scores_type(S, bf16, f32)
+    cols = tuple(Array(S.NVIS, Array(S.G, bf16)) for _ in range(S.DV // S.G)) + (Array(S.NVIS, Array(S.DR, bf16)),)
+    return params, Tuple(*ret.fields, *cols)
+
+
+@composite("SparseMlaHeadScoresKeys", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE", "G"], _head_scores_keys_type,
+           conformance=_CONF)
+def SparseMlaHeadScoresKeys(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None):
+    """`SparseMlaHeadScores_v1` that also returns the keys it read, in column blocks (`key_cols`): its own returns, then kv_c's
+    DV / G blocks of G columns and k_pe, each a return of its own.  One head's scores unit as the one writer of its key
+    block's columns, whose returns the other heads' `SparseMlaHeadScoresCols_v1{G}` and every head's values units of G
+    columns read."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    check_cols_statics(S)
+    r = head_scores(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), q_nope, q_rope, kv, m_prev, l_prev)
+    return tuple_of(*(r[i] for i in range(len(r))), *key_cols(S, kv))
+
+
 def _head_keys_type(S, bf16=BF16):
     return ((("kv", Array(S.NVIS, Array(S.W, bf16))),), Array(S.NVIS, Array(S.W, bf16)))
 
@@ -354,6 +384,19 @@ def SparseMlaHeadKeys(B, S, kv):
     columns, whose output row every unit of the row's heads that reads them is wired to (a scores unit's ``kv<c>`` and
     ``k_pe``, a values unit's ``kv``)."""
     return kv.reshape(Array(S.NVIS, Array(S.W, BF16)))
+
+
+@composite("SparseMlaHeadKeysWire", 1, ["NVIS", "W"], _head_keys_type,
+           conformance="reference-defined: each word widened (Bf16ToF32_v1) and its high half taken (U32Hi16_v1), the identity on a "
+                       "BF16 word; its output is its input")
+def SparseMlaHeadKeysWire(B, S, kv):
+    """`SparseMlaHeadKeys_v1` through wires: each of the column block's NVIS x W words widened to FP32 exactly
+    (`Bf16ToF32_v1`, the encoding << 16) and its high half taken (`U32Hi16_v1`), so the template's gates are its 2 NVIS W
+    primitive calls at 0 ANDs and its output is its input, word for word (`LinearOut_v1`'s wire)."""
+    from verity.definitions.ops.scalar import U32Hi16
+
+    wide = B.batch(P.Bf16ToF32, Coll(Array(S.NVIS * S.W, BF16), kv.refs), axes=(0,))
+    return B.batch(U32Hi16, wide, axes=(0,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
 
 
 def _head_query_type(S, bf16=BF16):
@@ -434,7 +477,8 @@ def SparseMla(B, S, q_nope, q_rope, kv):
 
 
 SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadScores, SparseMlaHeadValues,
-                         SparseMlaHeadScoresCols, SparseMlaHeadKeys, SparseMlaHeadQuery, SparseMlaHeadEnd, SparseMla]
+                         SparseMlaHeadScoresCols, SparseMlaHeadScoresKeys, SparseMlaHeadKeys, SparseMlaHeadKeysWire,
+                         SparseMlaHeadQuery, SparseMlaHeadEnd, SparseMla]
 #: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
 #: each unit to the Flock block in the Call's place)
 CUTS = {"SparseMla_v1": head_chain}

@@ -55,7 +55,11 @@ _BITS = dict(DR=16, DV=32, BN=16, DOT=BM.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)
 
 @pytest.mark.parametrize("target", [bind(BM.SparseMlaHeadScoresColsV2, NVIS=5, FIRST=True, G=16, **_BITS),
                                     bind(BM.SparseMlaHeadScoresColsV2, NVIS=16, FIRST=False, G=16, **_BITS),
-                                    bind(BM.SparseMlaHeadKeysV2, NVIS=16, W=16)], ids=lambda t: t.id)
+                                    bind(BM.SparseMlaHeadKeysV2, NVIS=16, W=16),
+                                    bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=16),
+                                    bind(BM.SparseMlaHeadScoresKeysV2, NVIS=5, FIRST=True, G=16, **_BITS),
+                                    bind(BM.SparseMlaHeadScoresKeysV2, NVIS=16, FIRST=False, G=16, **_BITS)],
+                         ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
     assert SW.boolean_version(word).id == target.id
@@ -71,6 +75,72 @@ def test_the_writer_is_a_copy() -> None:
     kv = _planted(np.random.default_rng(5), _bf16(np.random.default_rng(6), (8, 16, 32)), BF16_SPECIALS, 0.05)
     got = np.asarray(E.evaluate_batch(bind(M.SparseMlaHeadKeys, NVIS=16, W=32), kv)).reshape(kv.shape)
     assert np.array_equal(got, kv)
+
+
+def test_the_wire_writer_is_the_identity_with_gates_at_no_and_and_binds_its_output_to_its_input() -> None:
+    """Form (b3)'s writer: the identity on its words (word and Boolean), gates in the IR (the partition's `fn.gates`), none an
+    AND, and its flat unit (`class_statement.unit_lowering`, as `UnitStager` stages it) of one unit, whose lane a flipped output
+    bit leaves unsatisfied."""
+    from verity_flock import class_statement as CL
+    from verity_flock import ir_lower as IL
+
+    kv = _planted(np.random.default_rng(5), _bf16(np.random.default_rng(6), (8, 16, 32)), BF16_SPECIALS, 0.05)
+    word, boo = bind(M.SparseMlaHeadKeysWire, NVIS=16, W=32), bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=32)
+    assert np.array_equal(np.asarray(E.evaluate_batch(word, kv)).reshape(kv.shape), kv)
+    assert np.array_equal(np.asarray(BS.evaluate_words(boo, kv)).astype(kv.dtype).reshape(kv.shape), kv)
+    assert (word.gates, boo.gates) == (2 * 16 * 32, 16 * 32)
+    for d in (M.SparseMlaHeadKeysWire, BM.SparseMlaHeadKeysWireV2):
+        low, _ow = CL.unit_lowering(bind(d, NVIS=2, W=16), "w", [("kv", ["kv"])])
+        words = [[int(x)] for x in kv.reshape(-1)[:32]]
+        outs, ok = IL.evaluate_layout(low.layout, words, 1)
+        _o, flipped = IL.evaluate_layout(low.layout, words, 1, flip=(low.layout.out_port_cols[3], 0))
+        assert (low.units.n, low.layout.counts["ands"], ok, [o[0] for o in outs], flipped) == (1, 0, 1, [w[0] for w in words], 0)
+
+
+@pytest.mark.parametrize("st,NVIS,FIRST,G", [(SMALL, 16, False, 16), (SMALL, 5, True, 8), (TOY, 16, False, 32),
+                                             (TOY, 8, True, 32)])
+def test_the_gated_writer_is_the_scores_unit_and_the_keys_it_read(st, NVIS, FIRST, G) -> None:
+    DR, DV, n = st["DR"], st["DV"], 16
+    scores = bind(M.SparseMlaHeadScores, NVIS=NVIS, FIRST=FIRST, **st)
+    writer = bind(M.SparseMlaHeadScoresKeys, NVIS=NVIS, FIRST=FIRST, G=G, **st)
+    qn, qr, kv, *state = _inputs(n, NVIS, FIRST, DR, DV, 11 * NVIS + G + FIRST)
+    widths = [1, 4, NVIS] + [1] * (not FIRST)
+    cols = [w * NVIS for w in [G] * (DV // G) + [DR]]
+    want = np.asarray(E.evaluate_batch(scores, qn, qr, kv, *state[:2])).astype(np.uint64).reshape(n, -1)
+    got = np.asarray(E.evaluate_batch(writer, qn, qr, kv, *state[:2])).astype(np.uint64).reshape(n, -1)
+    lead = want.shape[1]
+    assert got.shape[1] == lead + sum(cols), f"{writer.id}: {got.shape[1]} words, not {lead} + {sum(cols)}"
+    assert np.array_equal(got[:, :lead], want), f"{writer.id}: its scores returns are not {scores.id}'s"
+    want_cols = np.concatenate([c.reshape(n, -1) for c in _cols(np.asarray(kv).reshape(n, NVIS, DR + DV), DV, G)], axis=1)
+    assert np.array_equal(got[:, lead:], want_cols.astype(np.uint64)), f"{writer.id}: its key returns are not its kv's columns"
+
+
+def test_the_gated_writer_binds_its_returned_keys_to_its_input() -> None:
+    """The flat unit (`class_statement.unit_lowering`) of the Boolean writer at small statics: honest inputs satisfy every row,
+    and a returned key bit flipped after witness generation (`ir_lower.evaluate_layout`'s ``flip``) leaves the lane unsatisfied:
+    the output row's copy row reads the input column."""
+    from verity_flock import class_statement as CL
+    from verity_flock import ir_lower as IL
+
+    target = bind(BM.SparseMlaHeadScoresKeysV2, NVIS=2, FIRST=True, G=16, **_BITS)
+    params = [nm for nm, _t in target.signature()[0]]
+    low, out_words = CL.unit_lowering(target, "writer", [(p, [p]) for p in params])
+    word = TR.word_of(target)
+    inputs = _operands(word, 1, 3)
+    words = np.concatenate([np.asarray(x).astype(np.uint64).reshape(-1) for x in inputs])
+    lay = low.layout
+    assert len(lay.in_bits) == words.size
+    outs, ok = IL.evaluate_layout(lay, [[int(w)] for w in words], 1)
+    leaves = np.asarray(E.evaluate_batch(word, *inputs)).astype(np.uint64).reshape(-1)
+    widths = word.signature()[1].leaf_widths()
+    want = [int(v) >> s & 0xFFFF for v, w in zip(leaves, widths, strict=True) for s in range(0, w, 16)]
+    assert ok == 1 and [int(o[0]) for o in outs] == want
+    lead = 2 + 8 + 2
+    key_word = lead
+    _o, ok_flip = IL.evaluate_layout(lay, [[int(w)] for w in words], 1, flip=(lay.out_port_cols[key_word], 0))
+    assert ok_flip == 0, "a flipped returned key bit satisfies every row: the return is not bound to the input"
+    _o, ok_score = IL.evaluate_layout(lay, [[int(w)] for w in words], 1, flip=(lay.out_port_cols[0], 0))
+    assert ok_score == 0
 
 
 def test_the_variant_and_the_writer_at_the_served_statics_as_flock_blocks() -> None:

@@ -226,6 +226,19 @@ SparseMlaHeadScoresColsV2 = EW.on_bits("SparseMlaHeadScoresCols", 2, ["DR", "DV"
                                        M.SparseMlaHeadScoresCols, lifted=_LIFTED)
 
 
+def _head_scores_keys_calls(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None):
+    """`SparseMlaHeadScoresKeys_v1`'s body on bits: `SparseMlaHeadScores_v2`'s Calls, then the keys it read in column blocks
+    (`sparse_mla.key_cols`), no gate."""
+    M.check_cols_statics(S)
+    r = _head_scores_calls(B, S, q_nope, q_rope, kv, m_prev, l_prev)
+    return tuple_of(*(r[i] for i in range(len(r))), *M.key_cols(S, kv, BF16))
+
+
+SparseMlaHeadScoresKeysV2 = EW.on_bits("SparseMlaHeadScoresKeys", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE", "G"],
+                                       lambda S: M._head_scores_keys_type(S, BF16, F32), _head_scores_keys_calls,
+                                       M.SparseMlaHeadScoresKeys, lifted=_LIFTED)
+
+
 def _head_keys(B, S, kv):
     """`SparseMlaHeadKeys_v1`'s body on bits: a copy, no gate."""
     return kv.reshape(Array(S.NVIS, Array(S.W, BF16)))
@@ -233,6 +246,20 @@ def _head_keys(B, S, kv):
 
 SparseMlaHeadKeysV2 = EW.on_bits("SparseMlaHeadKeys", 2, ["NVIS", "W"], lambda S: M._head_keys_type(S, BF16), _head_keys,
                                  M.SparseMlaHeadKeys)
+
+
+def _head_keys_wire(B, S, kv):
+    """`SparseMlaHeadKeysWire_v1`'s body on bits: each word through `Bf16ToF32_v2` and `U32Hi16_v2`, wires and constants, 0
+    ANDs."""
+    from verity.definitions.ops.boolean import cast as BC
+    from verity.definitions.ops.boolean import scalar as BSC
+
+    wide = B.batch(BC.Bf16ToF32, Coll(Array(S.NVIS * S.W, BF16), kv.refs), axes=(0,))
+    return B.batch(BSC.U32Hi16, wide, axes=(0,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
+
+
+SparseMlaHeadKeysWireV2 = EW.on_bits("SparseMlaHeadKeysWire", 2, ["NVIS", "W"], lambda S: M._head_keys_type(S, BF16),
+                                     _head_keys_wire, M.SparseMlaHeadKeysWire)
 
 
 def _head_values_calls(B, S, pb, kv, rescale=None, o_prev=None):
@@ -283,5 +310,6 @@ SparseMlaV2 = flat("SparseMla", 2, ["T", "NH", "DR", "DV", "BN", "DOT", "INV", "
                    M.SparseMla, lifted=_LIFTED)
 
 BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaDotStepB, SparseMlaDotStep,
-                      SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadScoresColsV2, SparseMlaHeadKeysV2,
+                      SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadScoresColsV2, SparseMlaHeadScoresKeysV2,
+                      SparseMlaHeadKeysV2, SparseMlaHeadKeysWireV2,
                       SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaV2]

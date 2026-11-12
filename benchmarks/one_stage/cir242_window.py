@@ -16,8 +16,10 @@ checks each unit's Definition on its rows (`UnitStager.reference_check`), commit
 and prints one JSON line a fact: what the Binding holds, the rows and bytes the commitment holds against the figures computed
 from the Definitions' signatures, the verifier's checks on the public bodies and the record, and each member's published
 domain ids (Flock's `PortRoots.dupId`). ``--attack`` runs a prover's tries at other key rows and prints each refusal.
+``--wire`` is form (b3): the keys writer `SparseMlaHeadKeysWire_v1`, each word through `Bf16ToF32_v1` and `U32Hi16_v1`, so
+its template has gates (at 0 ANDs) where the copy has none.
 
-``uv run python benchmarks/one_stage/cir242_window.py [--per column|block] [--attack] [--glm T]``."""
+``uv run python benchmarks/one_stage/cir242_window.py [--per column|block] [--wire] [--attack] [--glm T]``."""
 from __future__ import annotations
 
 import argparse
@@ -63,11 +65,15 @@ def scores(nvis: int | None, S: dict, boolean: bool = False) -> str:
                          else bind(M.SparseMlaHeadScoresCols, **at, **st, G=S["DR"], DOT=TS.FA3["DOT"]))
 
 
-def keys(nvis: int, S: dict, boolean: bool = False) -> str:
+def keys(nvis: int, S: dict, boolean: bool = False, wire: bool = False) -> str:
+    """The keys writer: the copy (`SparseMlaHeadKeys_v1`, no gate), or with ``wire`` form (b3)'s, each word through
+    `Bf16ToF32_v1` and `U32Hi16_v1` (`SparseMlaHeadKeysWire_v1`, gates at 0 ANDs)."""
+    if wire:
+        return descriptor_id(bind(BM.SparseMlaHeadKeysWireV2 if boolean else M.SparseMlaHeadKeysWire, NVIS=nvis, W=S["DR"]))
     return descriptor_id(bind(BM.SparseMlaHeadKeysV2 if boolean else M.SparseMlaHeadKeys, NVIS=nvis, W=S["DR"]))
 
 
-def layout(S: dict, per: str, queries: bool = False) -> tuple[dict[str, str], dict[str, int]]:
+def layout(S: dict, per: str, queries: bool = False, wire: bool = False) -> tuple[dict[str, str], dict[str, int]]:
     """The row's templates by role, and each one's chunk cap (`serving_rows.members`); with ``queries`` a head's query one
     writer too, the row's heads one member."""
     T, BN, DR, DV = (int(S[x]) for x in ("T", "BN", "DR", "DV"))
@@ -75,7 +81,7 @@ def layout(S: dict, per: str, queries: bool = False) -> tuple[dict[str, str], di
     if first == BN:
         raise SystemExit(f"T = {T} is whole blocks of {BN}: the first block's keys template is the later blocks', give T % BN != 0")
     tm = {"scores first": scores(first, S), "scores": scores(None, S), "values first": TS.values(first, S, G=DR),
-          "values": TS.values(None, S, G=DR), "keys first": keys(first, S), "keys": keys(BN, S),
+          "values": TS.values(None, S, G=DR), "keys first": keys(first, S, wire=wire), "keys": keys(BN, S, wire=wire),
           "end": descriptor_id(bind(M.SparseMlaHeadEnd, DV=DR, INV=TS.FA3["INV"]))}
     kf, kl, vc = (1, later, 1) if per == "column" else (nc + 1, later * (nc + 1), nc)
     caps = dict(zip(tm.values(), (1, 1, vc, vc, kf, kl, nc), strict=True))
@@ -291,16 +297,18 @@ def main() -> int:
                     "set it aside for that template alone (`probe_gateless`) and run the rest")
     ap.add_argument("--queries", action="store_true", help="each head's query one writer too (`SparseMlaHeadQuery_v1`), every "
                     "scores unit's q_nope and q_rope wired to it")
+    ap.add_argument("--wire", action="store_true", help="form (b3): the keys writer through wires "
+                    "(`SparseMlaHeadKeysWire_v1`, gates at 0 ANDs), not the gate-free copy")
     ap.add_argument("--lean", action="store_true", help="the verifier of record's registration check (Python and Lean, "
                     "`one_stage.verifier.check`, which builds the Lean verifier) on the record, the probe removed")
     a = ap.parse_args()
     t0 = time.perf_counter()
     S = {**GLM, "T": a.glm} if a.glm else TOY
-    tm, caps = layout(S, a.per, a.queries)
+    tm, caps = layout(S, a.per, a.queries, a.wire)
     role = {t: r for r, t in tm.items()}
     ts = list(tm.values())
     s = TS.Served(TS.row(S), n=1)
-    emit(fact="statics", S=S, per=a.per, templates=tm, caps={role[t]: c for t, c in caps.items()})
+    emit(fact="statics", S=S, per=a.per, wire=a.wire, templates=tm, caps={role[t]: c for t, c in caps.items()})
     try:
         w = window(s, ts, caps)
     except ValueError as e:
