@@ -3,6 +3,8 @@ module
 public import Proofs.Properties.Verity.Sampled.OpensAt
 public import Proofs.Properties.Verity.Sampled.Event
 public import Proofs.Flock.Bridge.Refused
+public import Proofs.Flock.Bridge.DrawnLaw
+public import Proofs.Properties.Verity.Sampled.Trees
 public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-!
@@ -23,9 +25,9 @@ construction.
   empty input ports (`pub`) and at its outputs (`pubO`), both of `n` proof blocks; the ports and roots check and the
   form check at some sample (`PortRoots.checkOf`, `KsScope.checkOf`, as `Accepted` states them); the registration's
   population `n` under the verifier's program and query (`Slots.popOk`); a descriptor `desc` that parses to the
-  verifier's program; the sampling design `lawAt` reads, `designAt`'s; and a reference sample at which `verify --zk`
-  sets a table up (`DrawSetupZHJP`). One clause is not a check v2 makes: the sampling design `lawAt` reads is a plain
-  subset (`ChecksAt.subset`, giving `Live.hsub`), the theorem's limit.
+  verifier's program; and a reference sample at which `verify --zk` sets a table up (`DrawSetupZHJP`). One clause is
+  not a check v2 makes: the sampling design `lawAt` reads is a plain subset (`ChecksAt.subset`), the theorem's limit;
+  `designAt` then reads the same one (`designAt_of_lawAt`), giving `Live.hsub`.
 * **The bound's parameters** (`SessionBound`): `k`, `Rw`, `M`, the claim's share `ε` and the costs `v`, `w`, `h`, with
   `rateM1 k < 1`.
 * **The tables' rate** (`RateM1`): every table of the hidden-output plan at public inputs `own` has rate at most
@@ -71,6 +73,24 @@ noncomputable def inputsAt (p : _root_.Spot.OneStageZk.Params) (cf pf : ByteArra
       partition := some p.own.partition
       program := some p.own.program }
 
+/-- **A subset sampling design `lawAt` reads is the one `designAt` reads** at a descriptor of the verifier's program:
+`drawnLaw` reads the same derived sampling design and law object, and passes a subset one as it is. -/
+theorem designAt_of_lawAt {desc : Claims.Msg} {v : _root_.Spot.Registration.Verifier} {n kd : ℕ}
+    (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program) (h : lawAt v n = .ok (.subset kd)) :
+    Flock.Bridge.designAt desc v.query v.law v.workTable n = .subset kd := by
+  unfold lawAt at h
+  obtain ⟨lawJ, hlo, h⟩ := Trees.bind_ok h
+  obtain ⟨derived, hder, h⟩ := Trees.bind_ok h
+  obtain ⟨fl, hfl, h⟩ := Trees.bind_ok h
+  have hg : derived.getD fl = .subset kd := Except.ok.inj h
+  unfold _root_.Spot.Draw.derive at hlo
+  obtain ⟨derived', hder', hlo⟩ := Trees.bind_ok hlo
+  rw [hder] at hder'
+  cases hder'
+  obtain rfl : Properties.Spot.SecurityProofs.lawObj v.law derived = lawJ := Except.ok.inj hlo
+  unfold Flock.Bridge.designAt Flock.Bridge.drawnLaw
+  rw [hp, Trees.ok_bind, hder, Trees.ok_bind, hfl, Trees.ok_bind, hg] <;> rfl
+
 /-- **What v2's check computes on the parameters `θ`, the circuit file `cf` and the public file `pf`**, at its
 parameters `p`, the circuit file's parse `D`, the public file loaded at the circuit's empty input ports (`pub`) and at
 its outputs (`pubO`), the population `n`, a descriptor `desc` of the verifier's program and a reference sample `S₀`
@@ -106,11 +126,8 @@ structure ChecksAt (θ : ByteArray) (cf pf : ByteArray) (p : _root_.Spot.OneStag
   pop : _root_.Spot.Slots.popOk p.base.verifier.program p.base.verifier.query n = true
   /-- the descriptor parses to the verifier's program -/
   program : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program
-  /-- the sampling design v2 samples under over the population is the registration's (`lawAt`, `designAt`) -/
-  law : lawAt p.base.verifier n =
-    .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n)
   /-- **not a check v2 makes**: the sampling design the registration's law gives over the population is a plain
-  subset, the one the theorem covers (`Live.hsub`) -/
+  subset, the one the theorem covers (`Live.hsub`); `designAt` then reads it too (`designAt_of_lawAt`) -/
   subset : ∃ kd, lawAt p.base.verifier n = .ok (.subset kd)
   /-- `verify --zk` sets a table up at the reference sample -/
   setup : Nonempty (DrawSetupZHJP (inputsJ (inputsAt p cf pf) 0) none
@@ -208,10 +225,15 @@ theorem dup : Flock.PortRoots.dupId W.D.unroll W.pub = false := by
 abbrev design : Flock.Draw.Law :=
   Flock.Bridge.designAt W.desc W.p.base.verifier.query W.p.base.verifier.law W.p.base.verifier.workTable W.n
 
-/-- The registration's sampling design is the subset one `lawAt` reads (`ChecksAt.law`, `ChecksAt.subset`). -/
+/-- The sampling design `lawAt` reads over the population is the registration's (`designAt_of_lawAt`). -/
+theorem law : lawAt W.p.base.verifier W.n = .ok W.design := by
+  obtain ⟨kd, hk⟩ := W.checks.subset
+  exact hk.trans (congrArg Except.ok (designAt_of_lawAt W.checks.program hk).symm)
+
+/-- The registration's sampling design is the subset one `lawAt` reads (`ChecksAt.subset`). -/
 theorem hsub : W.design = .subset (Flock.Bridge.lawK W.design) := by
   obtain ⟨kd, hk⟩ := W.checks.subset
-  have h : W.design = .subset kd := Except.ok.inj (W.checks.law.symm.trans hk)
+  have h : W.design = .subset kd := designAt_of_lawAt W.checks.program hk
   rw [h]
   rfl
 
@@ -285,7 +307,7 @@ theorem ChecksWitness.live_setsUp {θ : ByteArray} {F : Array ByteArray}
     (B : SessionBound) (hε : (V.certOf θ).ε = B.ε) (hrate : RateM1) : SetsUp V θ F (W.live B hrate) where
   params := by
     obtain ⟨key, label, hch⟩ := W.checks.challenger
-    exact ⟨W.p, W.checks.params, rfl, rfl, W.checks.law, W.checks.program, rfl,
+    exact ⟨W.p, W.checks.params, rfl, rfl, W.law, W.checks.program, rfl,
       key, label, _root_.Spot.Challenger.MAX_COINS, hch, hfam key label hch, rfl⟩
   tags := W.statement_tags
   count := rfl
