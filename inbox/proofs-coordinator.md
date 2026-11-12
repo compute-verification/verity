@@ -101922,3 +101922,303 @@ The spec's Site in v2's form is written and compiles: `security/Definitions/Core
 - A device's model read off the Site (`Verity.Site.device`) now rounds a sheet's memory rate, stated a second, over one unit of the Site's time, as the code does. No listed statement reads it [read: neither lock's `reads` names it, at `e0167418c1`].
 
 **One choice inside it, for the lead** (my 21:06Z entry): whether the spec's "valid log" itself gains completeness (as written above for `checks`), or stays entry by entry with completeness stated beside it. The second makes `Checks`' own text change as well; the first changes the spec's lemma that a valid log's prefix is valid. What Daniel reads in the table is the same either way.
+
+## WINDOWAT, Thu 12 Nov 21:16Z: the map: 2 theorems and 6 files of ours, stated from the verifier's own `membersRun`; both theorems wait on changes in three files of soundness's (the file check, one field of `WindowSessions`, the window's `read` and `extract`), and one question about an empty draw is open
+
+Clock: `date -u` read 21:16Z before posting. Mailbox read at `cursor/proofs-inbox` `f31b63da965d`: one message, yours of 20:50Z, acted on (section 1). Tags: [run] with the command or run id; [read] file and line on `cursor/proofs-windowat-5e4b` at `c4f8baa79c`; [derived]; [guess]. **Every Lean signature below is [derived]: written against the merged tree's names and read against their definitions, none elaborated yet.** The first compile is Friday's deliverable. `Z` abbreviates `_root_.Spot.OneStageZk`; paths without a directory are under `security/Proofs/Properties/Verity/`.
+
+### 1. The merge's state
+
+- [run] Branch `cursor/proofs-windowat-5e4b` at `c4f8baa79c` = soundness's `3e26cac7596a` + MEMBERS' lever `7d4e96a5fa07`. Fetched again at 21:15Z: soundness's branch, the lever, #9441's head (`ce41e7c92e8e`) and `main` (`5f0c008aa040`) have not moved since. No merge has changed a declaration this map names: the second merge changed no Lean file (entry of 21:00Z).
+- [run] Records run `r20261112-203452-ae67` (`vy-nebius-cpu-12`, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`): running at 21:15Z (it has held its Lean slot since 20:42Z), no verdict yet. Its peak memory was 46.3 GiB at 21:04Z against the `--mem-gb 32` I named; my next launches name 64.
+
+### 2. The shape
+
+[read] `remote_soundness_window` (`Sampled/Window/Instance.lean:605`) takes `hWa : I.WindowAt .remote` and `hWR : I.WindowReads .remote ev filesDec` at a `WindowInstance I` whose `SetsUp : ByteArray → Array ByteArray → Window → Prop` is a field no file fills (`:133`); `ev` and `filesDec` are parameters of the theorem, so I choose them.
+
+[derived] I define the predicate that field must be (`MembersSetUp`, file C), choose `ev` and `filesDec` (file E), and prove the two hypotheses at every instance whose `SetsUp` is that predicate:
+
+```lean
+theorem windowAt_members (I : WindowInstance d α) (k : Verity.Registration.Composite)
+    (hI : ∀ θ F W, MembersSetUp I.base θ F W → I.SetsUp θ F W)
+    (hread : ∀ θ F, I.base.read θ F = membersRead θ F)           -- needs (N3)
+    (hW : WindowRegistered I) (hfiles : MemberFilesAt I k)        -- hfiles is (N1)
+    (hF : FormAccepts) : I.WindowAt k
+
+theorem windowReads_members (I : WindowInstance d α) (k : Verity.Registration.Composite)
+    (hI : ∀ θ F W, I.SetsUp θ F W → MembersSetUp I.base θ F W) (hF : FormAccepts) :
+    I.WindowReads k sentEvidence statementFiles                   -- needs (N2)
+```
+
+What stays a hypothesis of the window theorem after them: `ClaimReads` (of which `read`, `consts`, `laid`, `share`, `units` and `checked` follow from `MembersSetUp`, file C and F; `opens` and `trace` do not, section 5), `RegisteredFiles`, the deployment's `WindowRegistered` (the analogue of the one statement's `SessionRegistered`, `Sampled/SessionAt.lean:47`, which is still a hypothesis of `remote_soundness_deployedReady`), and `FormAccepts` until S8.
+
+`FormAccepts` is the one place the lift enters:
+
+```lean
+structure MembersAccept (p : Z.Params) (c : _root_.Spot.OneStage.Commitment) (ξ : ByteArray) (e : Z.Evidence)
+    (bs : _root_.Core.Blobs) (ms : Array Z.Member) (sts : Array Z.StatementFiles) (r : Z.Run) : Prop where
+  members : p.members = some ms
+  statements : e.statements = some sts
+  sessions : e.sessions = sts.flatMap (·.sessions)
+  run : Z.membersRun p ms c e sts bs = .ok r
+  all : r.all = true
+  v1 : ∃ pub prof, _root_.Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof
+
+def FormAccepts : Prop :=
+  ∀ p c ξ e bs pub prof ms, Z.checkBlobsAt p c ξ e bs = .accept pub prof → p.members = some ms →
+    ∃ sts r, MembersAccept p c ξ e bs ms sts r
+```
+
+[read] Its fields are `checkBlobsAt`'s match (`OneStageZk.lean:1471-1473`), the lines of `checkMembersAt` (`:1439-1448`) and, for `sessions`, `membersEvidenceOf` (`:849-858`). [derived] Today `FormAccepts` holds for want of an accept (`checkBlobsAt_accept`, `:1478`: an accept has `p.members = none`), and I prove it so (`formAccepts_refused`), so every file compiles now; after the lift it is MEMBERS' accept-shape lemma, and my files take it with no other edit. Until the composite parses the form (`VStarRecursive/Sampled.lean:57-70`), no `θ` has `ParamsAt θ p` with `p.members = some ms`, so both theorems hold of no play: they say something on the day S8's lift and the either-form parse land, not before.
+
+### 3. The files, with each statement
+
+All new, under `Sampled/MemberForm/` (ours), in namespace `Verity.Sampled.MemberForm`. Sizes are [guess] until Friday.
+
+**A. `MemberForm/Accept.lean`** (about 150 lines, 5 statements). `MembersAccept`, `FormAccepts`, `formAccepts_refused` above, and:
+
+```lean
+theorem verdict_members {V : Vocab d α} {k} {x : Verity.Exchange} (hF : FormAccepts) (hv : V.Verdict k .sampled x)
+    {p : Z.Params} {ms} (hp : ParamsAt x.params p) (hm : p.members = some ms) :
+    ∃ a b e c ev ξ dr sts r, V2Case k x.sent a b e ∧
+      V2Accepts (_root_.Core.Blobs.ofArray x.sent.blobs) a b e p c ev ξ dr ∧
+      MembersAccept p c ξ ev (_root_.Core.Blobs.ofArray x.sent.blobs) ms sts r
+def StepAt.forget (a : Z.StepAt) : Verity.Sampled.StepAt :=
+  ⟨a.I, a.rd, a.scope, a.ksFiles, a.population, a.programSha, a.want⟩
+theorem forget_step (a : Z.StepAt) (bs r s) : (StepAt.forget a).step bs r s = a.step bs r s   -- rfl
+```
+From: the verdict. Exists: `case_drew` (`SampledDraw.lean:461`), `verdict_case` (`:555`), `paramsAt_case` (`SampledRead.lean:803`), `V2Accepts` (`SampledDraw.lean:429`), the two `StepAt`s (`OneStageZk.lean:1100`, `Sampled/Window/Accepts.lean:51`).
+
+**B. `MemberForm/Run.lean`** (about 450 lines, 12 statements): the verifier's run read as the sessions' verdicts, session `j` the `j`-th statement's.
+
+```lean
+theorem membersHeld_ok {ms : Array Z.Member} {sts : Array Z.StatementFiles} {held : Array Z.Member}
+    (h : Z.membersHeld ms sts = .ok held) :
+    held.size = sts.size ∧
+      (∀ j st m, sts[j]? = some st → held[j]? = some m → m ∈ ms ∧ st.member = some m.name ∧ ∃ s, st.sessions = #[s]) ∧
+      held.toList.Pairwise fun a b => a.name ≠ b.name ∧ a.first ≤ b.first
+theorem membersRun_structure {p ms c e sts bs r} (h : Z.membersRun p ms c e sts bs = .ok r) :
+    Z.orderHeld p c e = .ok () ∧ Z.laidHeld ms c.record = .ok () ∧ Z.popHeld p.base.verifier c.record = .ok () ∧
+      ∃ held ts lines, Z.membersHeld ms sts = .ok held ∧ Z.treesOf p.base e.base = .ok ts ∧ Z.linesOf e = .ok lines ∧
+        Z.membersTreesHeld ts lines (sts.zip held) bs = .ok ()
+theorem membersRun_session {p ms c e sts bs r} (h : Z.membersRun p ms c e sts bs = .ok r) (hall : r.all = true)
+    {j : ℕ} {st : Z.StatementFiles} (hj : sts[j]? = some st) :
+    ∃ held roots m a s keys record spec tabs rest proofs units,
+      Z.membersHeld ms sts = .ok held ∧ held[j]? = some m ∧ Z.rootsOf ms c.record = .ok roots ∧
+      m.statement (m.slice c.record roots) bs = .ok a ∧ st.sessions = #[s] ∧
+      SessionVerdict (StepAt.forget a) bs keys s record spec tabs rest proofs units
+theorem membersRun_units {p ms c e sts bs r} (h : Z.membersRun p ms c e sts bs = .ok r) (hall : r.all = true) :
+    -- the sessions' proved units, each its statement's member's public file's indices at its record's sample,
+    -- appended in statement order and sorted, are the evidence's `proved_units`
+```
+From: `run`, `all`. Exists: `membersRun_files` (`OneStageZk.lean:1417`), `membersRun_proved` (`:1428`), `membersFiles_ok` (`:1285`), `Member.files_ok` (`:1271`), `statementOf_ofOwn` (`:1227`), `Member.statement_parse` (`:1249`); `step_iff`, `steps_iff`, `verdicts_append`, `Verdicts.getElem`, `push_iff` (`Sampled/Window/Accepts.lean:200,279,337,364,119`); `step_proved`, `push_proved` (`Sampled/Held.lean:533,515`). [read] Soundness's `membersHeld_ok_iff`, `membersHeld_zip`, `membersHeld_inOrder` and `runMembers_iff` (`Sampled/Window/Members.lean:288,316,370,535`) are over their stand-in definitions, not the verifier's; they are the template, not lemmas I can apply. New: all four above.
+
+**C. `MemberForm/SetsUp.lean`** (about 450 lines, 12 statements): the window the verifier sets up, and `WindowAt`.
+
+```lean
+/-- The window's member `m` is the verifier's member `vm` on the files `F`. -/
+structure MemberOn (F : Array ByteArray) (vm : Z.Member) {nJ : ℕ} (m : Member nJ) : Prop where
+  tags : Flock.Tags.find? Z.STATEMENT = some m.I.tags
+  circuit : tableFile vm.own.circuit F = some m.I.circuitFile
+  publicFile : tableFile vm.own.pub F = some m.I.publicFile
+  tables : m.I.tables = pinnedTables m.I.circuitFile
+  count : m.I.count = 1
+  partition : m.I.partition = some vm.own.partition
+  program : m.I.program = some vm.own.program
+  work : m.I.work = none
+  stratified : m.I.stratified = none
+  closure : m.I.closure = none
+  own : m.own = none
+  units : m.n = vm.count ∧ ∀ u : Fin m.n, (m.emb u).val = vm.first + u.val
+
+/-- The window `W` is the parameters' members, in unit order, on the files `F`. -/
+structure WindowOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop where
+  params : ∃ p ms vms, ParamsAt θ p ∧ p.members = some ms ∧ vms.Perm ms.toList ∧
+    vms.Pairwise (fun a b => a.first < b.first) ∧ List.Forall₂ (MemberOn F) vms W.ms ∧
+    lawAt p.base.verifier W.nJ = .ok W.law ∧
+    ∃ key label, p.base.challenger = some (key, label) ∧ (label, _root_.Spot.Challenger.MAX_COINS) ∈ V.families θ
+  lb : W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * _root_.Spot.Challenger.COIN_BYTES
+  read : ∃ m₀ rest, W.ms = m₀ :: rest ∧ V.read θ F = ⟨m₀.fileRead, rest.map Member.fileRead⟩
+  share : (V.certOf θ).ε = W.ε
+  units : V.units θ F = W.nJ
+
+structure MembersSetUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop
+    extends WindowOn V θ F W where
+  laid : W.Laid
+  loads : ∀ m ∈ W.ms, ∃ pubO, Flock.HmOut.loadPublic (zkTags m.I) m.D.unroll m.I.publicFile = .ok pubO ∧ pubO.n = m.n
+  distinct : ∀ m ∈ W.ms, Flock.PortRoots.dupId m.D.unroll m.pub = false
+
+def Member.fileRead {nJ : ℕ} (m : Member nJ) : Verity.FileRead := ⟨zkTags m.I, m.I.circuitFile, m.I.tables, m.I.publicFile⟩
+noncomputable def membersRead (θ : ByteArray) (F : Array ByteArray) : Verity.WindowFiles
+    -- `readOf` (`Sampled.lean:795`) at each member's two digests, the members in unit order
+def WindowRegistered (I : WindowInstance d α) : Prop :=
+  ∀ θ W, I.window θ = some W → (∃ p, ParamsAt θ p) → WindowOn I.base θ (I.base.registered θ) W
+def MemberFilesAt (I : WindowInstance d α) (k : Verity.Registration.Composite) : Prop :=
+  ∀ θ F p ms, ParamsAt θ p → p.members = some ms →
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) →
+    ∀ m ∈ ms, tableFile m.own.circuit F = tableFile m.own.circuit (I.base.registered θ) ∧
+      tableFile m.own.pub F = tableFile m.own.pub (I.base.registered θ)
+
+theorem MembersSetUp.lb' (h : MembersSetUp V θ F W) : W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64
+theorem MembersSetUp.membersAt (h : MembersSetUp V θ F W) : MembersAt W W.table
+theorem windowOn_files (hc : ∀ member's two files, F and F' agree) (hr : V.read θ F' = V.read θ F)
+    (h : WindowOn V θ F W) : WindowOn V θ F' W
+theorem filesHeld_checked {vm : Z.Member} {slice bs} (h : vm.FilesHeld slice bs) {nJ} {m : Member nJ}
+    (hm : MemberOn F vm m) (hbs : the blobs `bs` hold `F` first) (ht : TablesSent ...) :
+    (∃ pubO, Flock.HmOut.loadPublic (zkTags m.I) m.D.unroll m.I.publicFile = .ok pubO ∧ pubO.n = m.n) ∧
+      Flock.PortRoots.dupId m.D.unroll m.pub = false
+theorem laid_of_accept (h : Z.laidHeld ms c.record = .ok ()) (hon : WindowOn V θ F W) ... : W.Laid
+```
+From: `run`'s files pass (`membersRun_files`: every member's files held, drawn or not), `laidHeld`, `popHeld`. Exists: `tableFile`, `pinnedTables`, `lawAt`, `ParamsAt` (`Sampled.lean:698,733,663,645`), `SetsUp` as the template (`:678-694`), `read_files`, `setsUp_files`, `sessionAt_of_registered` as the templates (`Sampled/SessionAt.lean:33,39,57`), `MembersAt` (`Sampled/Window/Steps.lean:205`), `Window.Laid` and its `emb` clause (`Sampled/Window/Instance.lean:95-114`), `v5Files_of_checksStmt` (`Flock/Bridge/V5/Accepted.lean:239`), `play_ends`, `filesOn_play` as the template for "the blobs sent are the committed files, then the evidence's" (`Sampled/Accepts.lean:433,480`), `MemberV5.Checked` (`Sampled/Window/Unbound.lean:129`). New: everything named above. `loads` and `distinct` are word for word the first two fields of MEMBERS' `Member.FilesChecked` (`Window/UnboundChecked.lean` at `f9f1d7b2f7f6`, not on the merged tree); when that file reaches the lever's branch I take its structure in place of the two fields.
+
+[derived] Why `WindowAt` needs the accept at all, where the one statement's `SessionAt` did not (`sessionAt_of_registered` never opens the play): `ClaimReads.reads` has no play (`Sampled/Window/Instance.lean:444`), so the file-check facts `Checked` asks must be clauses of `SetsUp`, and only an accepting play gives them of the files a play committed.
+
+**D. `MemberForm/Sessions.lean`** (about 900 lines, 15 statements; the largest, and the least certain): from the members' trees check to soundness's `SessionRead` at each session.
+
+```lean
+theorem members_trees_read {k} {x : Verity.Exchange} {a b e p c ev ξ dr ms sts r}
+    (hS : Verity.SameAccepts k x.sent) (hcase : V2Case k x.sent a b e)
+    (hacc : V2Accepts (_root_.Core.Blobs.ofArray x.sent.blobs) a b e p c ev ξ dr)
+    (hM : MembersAccept p c ξ ev (_root_.Core.Blobs.ofArray x.sent.blobs) ms sts r)
+    (hl : Binding.Logged Binding.readsV2 x) :
+    ∃ lines trees recs lr named, linesOf ev = .ok lines ∧ coinTreesOf lines = .ok trees ∧
+      readLog dr.label c.digest recs ξ lines = some lr ∧
+      List.Forall₂ (fun y z : Verity.Release => y.frame = z.frame ∧ y.answers = z.answers) lr x.log ∧
+      List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) x.log ∧
+      membersTreeReason trees lines named = none ∧ named.size = sts.size ∧
+      ∀ j st s, sts[j]? = some st → st.sessions = #[s] → ∃ record evidence tabsB,
+        sentRecordAt j x.sent = some record ∧ Z.sessionEvidence (_root_.Core.Blobs.ofArray x.sent.blobs) s = .ok evidence ∧
+        named[j]? = some (s.name, tabsB, (Flock.JsonParse.parse record).toOption.getD Lean.Json.null,
+          _root_.Spot.sha512Hex evidence)
+theorem accepted_frames (same hypotheses) :
+    (∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup) ∧ OpensLast x.log          -- what (N2) leaves of `members`
+theorem openedTrees_sessions (same hypotheses) : (openedTrees x.log).length = sts.size
+theorem sessionRead_members (same hypotheses) {j st s} (hj : sts[j]? = some st) (hs : st.sessions = #[s])
+    {record spec tabs rest proofs units a} (hv : SessionVerdict a bs keys s record spec tabs rest proofs units)
+    (hspec : spec.tables = #[tb]) {evidence} (he : Z.sessionEvidence bs s = .ok evidence) :
+    ∃ J sess τ, Flock.Record.decode spec record = .ok sess ∧
+      SessionRead x.log #[tb] j record J sess evidence.data.toList ∧ (openedTrees x.log)[j]? = some τ
+```
+From: `run`'s `membersTreesHeld` (the trees check passed on the sessions' records and evidence digests), `treesOf`, the sessions' names in order; each session's `Flock.Zk.verify`. Exists, ours: `members_read` (`Sampled/MemberForm/Order.lean:750`: each session's tree, its closing round after one link opening, answering its evidence's digest, nothing of the tree after it; the trees in session order), `membersTreeReason_none`, `memberTreeReason_none`, `sessions_trees`, `members_tree` (`:661,:643,:703,:718`), `Accepted.specs`, `Accepted.opensLast` (`:817,:812`). Exists, soundness's: `SessionOpens`, `SessionRead` (`Sampled/Window/Record.lean:283,317`), `SessionRead.of_dropped` (`Sampled/Window/Closing.lean:265`: from `SessionOpens` of the log without the closing round to `SessionRead`), `openedTrees` and its lemmas (`Sampled/Window/Sessions.lean:52-123`, `Window/Trees.lean:114,120`), `helloSpecs_congr` (`SampledRead.lean:725`), `openedOf_congr` (`Sampled/RecordRounds.lean:70`), `ofV2_frames` (`Sampled/LinkFirst.lean:100`). Exists, for one tree only: `verdict_read` (`Sampled/MovesReach.lean:672`), `recordRound_isSome` (`:619`), `keyAt_of_record` (`:659`), `logRead_isSome`, `logRead_eq` (`SampledRead.lean:1328,1261`).
+New, and the risk: (i) that v2's read of the log exists at a per-member accept (`readLog … = some lr`): `logRead_isSome` proves it through the one statement's `treesHeld`, so its sessions' half is redone over `membersTreesHeld`; (ii) the nine fields of `SessionOpens` at the `j`-th tree of a log of several: the one-statement lemmas speak of a log with one tree (`trees.size = 1`), and each is restated at "the tree `sessionTreeReason #[t.unclosed]` accepts" which `members_read` hands over. I have read the statements, not the proofs, of (ii); its size is the widest [guess] in this map.
+
+**E. `MemberForm/Reads.lean`** (about 600 lines, 14 statements): the sample, the places, the evidence, and `WindowReads`.
+
+```lean
+noncomputable def sentEvidence (u : ℕ) (x : Verity.Exchange) : Option Claims.Msg :=
+  (caseOf x.sent).toOption.bind fun y => y.2.2.sessions[u]?.bind fun s =>
+    (Z.sessionEvidence (_root_.Core.Blobs.ofArray x.sent.blobs) s).toOption.map (·.data.toList)
+noncomputable def statementFiles (w : Claims.Msg) : Array ByteArray
+    -- `Z.evidenceParts` of `w`, then the two rep files of the statement's one table by name, in `filesOf`'s order
+theorem statementFiles_evidence {bs s spec tabs rest proofs evidence} (hf : Z.filesOf bs s (.ok (spec, tabs, rest)) = .ok proofs)
+    (he : Z.sessionEvidence bs s = .ok evidence) (hspec : spec.tables = #[tb]) : statementFiles evidence.data.toList = proofs
+theorem fresh_members (...accept, `Logged`, `SampleNamed`) : ∀ pre r post, x.log = pre ++ r :: post → ∀ i s n,
+    r.frame = .opening i s n → ∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after)
+theorem member_recordDraw (...accept, coins agree, `MembersSetUp`) {i m} (hm : W.ms[i]? = some m)
+    (hd : (m.part (W.L.draw ω)).Nonempty) {j record} (hj : j = drawnBefore W.ms (W.L.draw ω) i)
+    (hr : sentRecordAt j x.sent = some record) :
+    FlockSoundness.Discharge.Exec.recordDraw record = some (printedPart (m.part (W.L.draw ω)))
+theorem statement_of_drawn (...) (hd : (m.part S).Nonempty) : ∃ st, sts[drawnBefore W.ms S i]? = some st ∧ st.member = some vm.name
+theorem statesMember (hon : MemberOn F vm m) (ha : vm.statement slice bs = .ok a) (ht : TablesSent x.sent) ... :
+    StatesMember (StepAt.forget a) m
+theorem windowReads_members   -- section 2
+```
+From: `v1` (v1's check holds the evidence's `proved_units` to the sample it drew from the coins) with `run`'s `provedHeld` and each member's population check (`Member.population`: its public file holds exactly its units, in order); `orderHeld` for `fresh`; `sessionEvidence` in `membersTreesHeld` for `ev`. Exists: `checkAt_proved` (`Sampled/Held.lean:829`), `provedUnits_eq` (`:599`), `verdictOf_drawn`, `step_drawn` (`:70,:89`), `obj_eq_subsetPrint`, `ofJson_subset_eq`, `recordDrawn_of_subset` (`:259,:274,:311`), `recordDraw_of_coins` as the template (`Sampled/RecordDraw.lean:886`), `Drew`, `drew_of`, `freshCoins` (`SampledDraw.lean:488,493,507`), `orderHeld_ok`, `sampleLinkFirst_readLog`, `sampleLinkFirst_congr` (`Sampled/LinkFirst.lean:85`, `SampledRead.lean:686,736`), `labelAt` (`Sampled/SampleNamed.lean:39`), `evidenceParts_evidenceBytes`, `evidenceBytes_inj` (`Sampled/MemberForm/Evidence.lean:173,195`), `StatesMember` (`Sampled/Window/Writes.lean:66`), `drawnBefore` (`Sampled/Window/Steps.lean:120`), `printedPart` (`Sampled/Deployed.lean:94`). New: all named above; the sorted union of the sessions' units split by member (members' units are disjoint ranges, `membersOf`, `laidHeld`) is the combinatorial part.
+
+**F. `MemberForm/Consts.lean`** (about 150 lines, 6 statements): the `consts` lemma, in `ReadsWith`'s own shape (`Sampled/Window/Unbound.lean:177-189`).
+
+```lean
+theorem constsOpen_read (V : Vocab d α) (θ c : ByteArray) (F : Array ByteArray) :
+    ConstsOpen (V.read θ F) (V.Opens θ F c)
+theorem ConstsOpen.left {r r' : Verity.FileRead} {rs : List Verity.FileRead}
+    {op : (g : Fin (Verity.FileRead.circuitWith r (r' :: rs)).N) →
+      BitVec ((Verity.FileRead.circuitWith r (r' :: rs)).w g) → Prop} (h : ConstsOpen ⟨r, r' :: rs⟩ op) :
+    ConstsOpen (.one r) fun i v => op (Fin.castAdd (Verity.FileRead.circuitWith r' rs).N i)
+      (v.cast (Fin.append_left r.circuit.w (Verity.FileRead.circuitWith r' rs).w i).symm)
+theorem ConstsOpen.right (same binders) (h : ConstsOpen ⟨r, r' :: rs⟩ op) :
+    ConstsOpen ⟨r', rs⟩ fun j v => op (Fin.natAdd r.circuit.N j)
+      (v.cast (Fin.append_right r.circuit.w (Verity.FileRead.circuitWith r' rs).w j).symm)
+def ConstsWith : (r : Verity.FileRead) → (rs : List Verity.FileRead) →
+    ((g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop) → Prop
+  | r, [], op => ConstsOpen (.one r) op
+  | r, r' :: rs, op => ConstsOpen (.one r) (the left openings) ∧ ConstsWith r' rs (the right openings)
+theorem constsWith_of : ∀ r rs op, ConstsOpen ⟨r, rs⟩ op → ConstsWith r rs op
+theorem MembersSetUp.read_at (h : MembersSetUp V θ F W) (i : Fin W.ms.length) :
+    (V.read θ F).members[i.val]? = some (W.ms.get i).fileRead
+```
+From: no fact of an accept; `constsWith`'s recursion (`Properties/Verity/WindowFiles.lean:148`), `Fin.addCases_left`, `Fin.addCases_right`. Exists: `ConstsOpen` (`Sampled/Target.lean:74`), `Vocab.opens_const` (`Soundness.lean:342`). New: all six. This is the file I compile first: it needs nothing from soundness or MEMBERS.
+
+**Total** [guess]: 6 files, about 2,700 lines, about 64 statements. The measured size is Friday's.
+
+### 4. What I need from soundness
+
+**(N1) The file check over every member's files.** [read] `Vocab.Registered` checks two digests (`security/Properties/Verity/Game.lean:743`); `fileSpecs`, `fileCR` and `covers` carry two finders and hand `WindowAt` two equalities (`Sampled/Window/Instance.lean:147,370,527`). [read] A play's blobs are the committed files, then the evidence's (`filesOn_play`, `Sampled/Accepts.lean:477-480`), and the verifier finds a member's file at the first blob with its digest (`Core.Blobs.get`, `verity/protocols/interface/CoreProtocol/Blobs.lean:39-44`). [derived] So whichever two digests the window's base holds, `Registered` passes at an `F` that holds those two files alone, and the verifier reads every other member's file wherever the blobs have it: once the form accepts, a play that hands them among the evidence's blobs is accepted on that `F`. `WindowAt` concludes `I.SetsUp θ F W` there from its two equalities, which is false under any `SetsUp` whose `read` clause reads the members' files in `F`, so `hWa` cannot be discharged as stated; and under a `SetsUp` that reads none of them in `F`, nothing holds the files the verifier read on the blobs to the registered ones. `MemberFilesAt` (file C) is the statement `covers` must give `WindowAt` in place of its two equalities. Two ways to give it; soundness's to choose, and the second is not mine to make:
+ - inside the proofs tree: a field of `WindowInstance` for the members' digests; `fileSpecs` one `namedFinder` (`Game.lean:543`, already generic in the digest) a member's file; `WindowAt`'s two file hypotheses replaced by `MemberFilesAt`'s per-member pair where `F` holds the file; and for a member's file `F` does not hold, a premise on the blobs sent as `TablesSent` is for the tables (`Sampled.lean:743`), whose failure the read finder outputs (`Sampled/Binding.lean:959,1013`);
+ - or the commit phase's check over every digest the parameters hold: see `STOP RULE`.
+
+**(N2) `WindowSessions.members`.** In `Sampled/Window/Steps.lean:238`, the field `members : MemberForm.Accepted x.log` cannot be proved of an accept (entry of 21:00Z, (b)). Proposed, word for word: replace the field by its two uses,
+
+```lean
+  specs : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup
+  order : OpensLast x.log
+```
+with `WindowSessions.specs := h.specs` (`:256`) and `WindowSessions.order := h.order` (`:264`), and the docstring's sentence on `members` reading "each tree the log opens names its streams once, and an opening of a tree opened before is of the last tree opened". [read] No other declaration reads `h.members` (`rg '\.members\b' Sampled/Window/`: lines 256 and 264 only). I prove both of the device's log in file D (`accepted_frames`).
+
+**(N3) The window instance's `read`, and its digests.** [read] `WindowInstance` has no field tying `base.read`, `base.programDigest` or `base.publicDigest` to the window (`Sampled/Window/Instance.lean:127-135`); the one statement's `Instance` has all three (`Sampled/Instance.lean:163-203`). `windowAt_members` needs `hread : ∀ θ F, I.base.read θ F = membersRead θ F`: either a field `read` of `WindowInstance` saying so (I supply `membersRead`), or my theorem keeps `hread` as a hypothesis and the deployed instance fills it.
+
+**(N4) `trace`: the window vocabulary's `extract`.** [read] The window's `vocab` keeps the base's `extract` (`Sampled/Window/Instance.lean:340-348`), where the one statement's replaces it (`extractOf`, `Sampled/Instance.lean:404-412`), and `ClaimReads.reads` reads `I.base.extract` (`:447`), so `ReadAt.trace` (`Sampled/Window/Unbound.lean:153`) holds of no window as it stands. What I need of it, as an equation: at `I.windows θ F = some W`,
+
+```lean
+extract θ F c σ = tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+  (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ))
+```
+with these three definitions (beside `traceLeft`, `traceRight`, `WindowFiles.lean:51,54`, and `Seat`, `Sampled/Window/Unbound.lean:170`):
+
+```lean
+def Circuit.traceBeside {C D : Verity.Circuit} (X : C.Trace) (Y : D.Trace) : (C.beside D).Trace :=
+  Fin.addCases (motive := fun g => BitVec ((C.beside D).w g))
+    (fun i => (X i).cast (Fin.append_left C.w D.w i).symm) (fun j => (Y j).cast (Fin.append_right C.w D.w j).symm)
+noncomputable def Seat.trace (s : Seat Reg nJ) (r : Verity.FileRead) : r.circuit.Trace :=
+  if h : r.circuit = Flock.Bridge.circuitOf s.m.D s.m.hU s.m.n then
+    cast (congrArg Verity.Circuit.Trace h.symm) (s.m.transcript s.Xv) else fun _ => 0
+noncomputable def tracesWith : (r : Verity.FileRead) → (rs : List Verity.FileRead) → List (Seat Reg nJ) →
+    (Verity.FileRead.circuitWith r rs).Trace
+  | r, [], ss => (ss.head?.map (·.trace r)).getD fun _ => 0
+  | r, r' :: rs, ss => Circuit.traceBeside ((ss.head?.map (·.trace r)).getD fun _ => 0) (tracesWith r' rs ss.tail)
+```
+Then `trace` closes by `traceLeft (traceBeside X Y) = X`, `traceRight (traceBeside X Y) = Y` and `cast_heq`, the `dif_pos` from `Checked.parsed`. It takes no cast along `SetsUp`'s `read` clause, so it does not wait on (N3). I can write the three definitions and the two round-trip lemmas in file F if soundness prefers; the vocabulary's field is theirs.
+
+### 5. What I need from MEMBERS, and what has no owner
+
+- S8's lift, the either-form parse in the composite (`VStarRecursive/Sampled.lean:57-70`), and the accept-shape lemma in the form `FormAccepts` (section 2), its `sessions` field from `membersEvidenceOf` (`OneStageZk.lean:849`). I need no change to `membersRun` or `checkMembersAt`.
+- `Window/UnboundChecked.lean` on the lever's branch, so file C takes `Member.FilesChecked` rather than a copy of its two fields.
+- **No owner in my brief:** `MemberV5.ReadAt.opens` at a window (`OpensUnder`, `Sampled/Window/Unbound.lean:138`; the one statement's is the hypothesis `Instance.OpensAt`, `Sampled/Instance.lean:458`). If it stays a hypothesis of the window theorem as `OpensAt` is of the one statement's, say so and nobody proves it.
+
+### STOP RULE
+
+Not done, and not mine to do: the second way under (N1) changes a definition in the definitions' reach of listed statements. Before (`security/Properties/Verity/Game.lean:743-744`):
+
+```lean
+def Registered (θ : ByteArray) (F : Array ByteArray) : Prop :=
+  (∃ f ∈ F, V.programDigest θ = some (sha512 f.data.toList)) ∧ ∃ f ∈ F, V.publicDigest θ = some (sha512 f.data.toList)
+```
+After (with a field `digests : ByteArray → List (Option Hash.Digest)` of `Vocab` in place of the two, or beside them):
+
+```lean
+def Registered (θ : ByteArray) (F : Array ByteArray) : Prop :=
+  ∀ h ∈ V.digests θ, ∃ f ∈ F, h = some (sha512 f.data.toList)
+```
+[read] `Verity.Vocab.SpotSound`, `Verity.Vocab.Target` and the other `Verity.Vocab.*` entries of `security/Properties/lean-audit.json` (lines 163-183, 808-844) read `Vocab`; a record of each would change. What it buys: the commit phase's check says of a window what it says of one statement, every file the parameters name is committed before the coins, and (N1) needs no premise on the blobs sent. The first way under (N1) changes no listed statement and adds one premise to the leg.
+
+### To post
+
+To soundness, in this order: (N2), three lines in `Sampled/Window/Steps.lean`; (N1), their choice of the two ways, and `MemberFilesAt` as what `covers` hands `WindowAt`; (N4), the equation and the three definitions; (N3), a `read` field or not. To MEMBERS: `FormAccepts` as the accept-shape lemma's statement, with its `sessions` field.
+
+### Not established
+
+- Nothing here is elaborated. File F is first, Friday.
+- Whether the merged tree builds: the run above.
+- **An empty draw.** [read] `WindowSessions.trees` asks that the log open at most as many trees as members the sample draws (`Sampled/Window/Steps.lean:239`), and a session's place is `drawnBefore` (`:246`). Both need every statement's member to be drawn. `heldStep` says "an undrawn member has no statement" in a refusal's text (`OneStageZk.lean:901`), but refuses only a statement without exactly one session; I have not found what refuses a statement whose one session's record draws no unit. [guess] `Flock.ProvedScope.sizesOk` (`m ≥ 25` under `--zk`, `ProvedScope.lean:331-340`) refuses its table. If nothing does, file E's `statement_of_drawn` has no converse, and that is a change to the run (`heldStep` or `runMembers`), which I would write up and stop on. I answer this before Friday's entry.
+- (ii) of file D: the size of restating the one-tree lemmas at the `j`-th tree.
+- That `Flock.Record.decode spec record = .ok sess` follows from `Flock.Zk.verify` accepting by an existing lemma: I assumed one and have not found its name.
+- `WindowOn`'s clauses for the law and the population (`lawAt … = .ok W.law`, and that `W.nJ` is the registration's population, the one statement's `PopTied`): the one statement's `recordDraw_of_coins` takes `PopTied` as a separate hypothesis (`Sampled/RecordDraw.lean:887`); whether the window's is a clause of `WindowOn` or follows from `popHeld` is not worked out.
