@@ -524,8 +524,8 @@ def refuse_held(held: list[str]):
     if held:
         raise SystemExit(f"the move would delete {len(held)} `__init__.py` file{'s' * (len(held) != 1)} left in packages it "
                          "empties, which hold more than comments and whitespace:\n" + "".join(f"  {p}\n" for p in held)
-                         + "give each a row in the map saying where it goes (a file only a branch has: a row in the branch's "
-                         f"rows file, NAME{ROWS_SUFFIX} beside the map), or delete it in a hand commit before the move")
+                         + "give each a row in the map saying where it goes (on a branch, a row in its rows file "
+                         f"NAME{ROWS_SUFFIX} beside the map), or delete it in a hand commit before the move")
 
 
 def refuse_unread(unread: dict[str, int]):
