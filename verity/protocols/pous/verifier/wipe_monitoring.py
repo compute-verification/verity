@@ -51,9 +51,9 @@ EXCEPT = ("each wipe's PRF advantage (its labels' and coins' PRF, a named assump
 REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its monotonic clock "
            "(CLOCK_MONOTONIC ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
            "(Unix ns), handed to the record's writer. So nothing signed says the record covers this wipe's session, and "
-           "comparing the two would compare two clocks. A wipe signed UNCOUNTED stays uncounted until the memory "
-           "challenger signs its session's real-time window: until then give no record (no --egress, egress=None), and "
-           "the table is the wipe's as it was signed")
+           "comparing the two would compare two clocks. A wipe signed UNCOUNTED stays uncounted until what the memory "
+           "challenger signs ties its session to the span the record counts: until then give no record (no --egress, "
+           "egress=None), and the table is the wipe's as it was signed")
 
 
 def short_sessions(t: int, p: Fraction, delta: Fraction) -> tuple[int, Fraction]:

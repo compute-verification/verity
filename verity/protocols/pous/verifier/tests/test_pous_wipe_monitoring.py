@@ -111,7 +111,8 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
     said = str(refusal.value)
     assert said == WM.REFUSED and said.startswith(f"the {WM.EGRESS} record is refused")
     assert "its monotonic clock (CLOCK_MONOTONIC ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
-    assert "until the memory challenger signs its session's real-time window" in said and "no --egress" in said
+    assert "until what the memory challenger signs ties its session to the span the record counts" in said
+    assert "no --egress" in said
     for accepted in (uncounted, counted):
         with pytest.raises(ValueError, match="nothing signed says the record covers this wipe's session"):
             WM.table(accepted, 1, egress=RECORD)
