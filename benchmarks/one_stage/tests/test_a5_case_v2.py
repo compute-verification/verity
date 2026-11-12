@@ -146,7 +146,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
     """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
     coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, and
     its sampled-proofs form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
-    write(tmp_path, {}, challenger={"coins": COINS, "label": "draw", "window_root": WINDOW_ROOT})
+    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT)
     got = json.loads((tmp_path / "case-v2.json").read_text())
     assert got["params"] == {**zk["params"], "challenger": {"key": COINS["key"], "label": "draw"}, "window_root": WINDOW_ROOT}
     evidence = {"coins": {k: v for k, v in COINS.items() if k != "key"}, "proofs": {}}
@@ -158,23 +158,43 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
     assert not (tmp_path / "case-v2-error.txt").exists()
 
 
-@pytest.mark.parametrize("challenger,why", [
-    ({"coins": None, "label": "draw", "window_root": WINDOW_ROOT}, "no evidence of them or no window root"),
-    ({"coins": COINS, "label": "draw", "window_root": None}, "no evidence of them or no window root")])
-def test_an_audit_with_no_evidence_of_its_challengers_coins_has_no_v2_case(tmp_path, zk, challenger, why):
-    """A session that gave no evidence, or an audit with no window root, leaves nothing v2 could read the sample's coins
-    from: no case is written without them, the error file says why, and the v1 case stays."""
-    write(tmp_path, {}, challenger=challenger)
+def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tmp_path, zk):
+    """v2 reads the challenger's session as the one its ledger opens on the window's root: with no root to name, no
+    case is written, the error file says why, and the v1 case stays."""
+    write(tmp_path, {}, coins=COINS, window_root=None)
     assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
-    assert why in (tmp_path / "case-v2-error.txt").read_text()
+    assert "no window root" in (tmp_path / "case-v2-error.txt").read_text()
     assert (tmp_path / "case.json").exists()
 
 
-@pytest.mark.parametrize("params,evidence", [({"challenger": {}}, {}), ({"window_root": None}, {}), ({}, {"coins": {}})])
+@pytest.mark.parametrize("trees", [False, True])
+def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on_the_windows_session(tmp_path, monkeypatch,
+                                                                                                     zk, trees):
+    """The one statement's case names the challenger its sample's coins are from wherever the audit has their evidence.
+    The per-member case reads its sessions' trees from that challenger's session too, so it names the challenger only
+    where they ran there."""
+    pm = {**zk, "params": {"proofs": {"members": []}}}
+    monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
+    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, member_trees=trees)
+    named = {"challenger": {"key": COINS["key"], "label": "draw"}, "window_root": WINDOW_ROOT}
+    assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
+    assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
+
+
+@pytest.mark.parametrize("params,evidence", [({"challenger": {}}, {}), ({}, {"coins": {}})])
 def test_a_case_that_names_a_challenger_already_is_not_named_again(stub_case, params, evidence):
     case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical(evidence).encode().hex(), "params": params}
     with pytest.raises(ValueError, match="already"):
-        a5.case_on_challenger(case, coins=COINS, label="draw", window_root=WINDOW_ROOT)
+        a5.case_coins(case, COINS, "draw", WINDOW_ROOT)
+
+
+def test_the_case_is_named_where_replay_names_another_module(monkeypatch, stub_case):
+    """A process may hold another directory's `replay` under that name (`a5.own_replay`): the case is named with the
+    `replay.py` beside a5 all the same."""
+    monkeypatch.setitem(sys.modules, "replay", types.ModuleType("replay"))
+    case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({}).encode().hex(), "params": {}}
+    got = a5.case_coins(case, COINS, "draw", WINDOW_ROOT)
+    assert got["params"]["window_root"] == WINDOW_ROOT and "coins" in json.loads(bytes.fromhex(got["evidence"]))
 
 
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
