@@ -271,7 +271,7 @@ def read_prices(path: Path | None, keep: Path | None = None) -> dict:
     if path is not None:
         return json.loads(path.read_text())
     import shutil
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
     verity = Path(sys.executable).with_name("verity")
     cmd = [str(verity) if verity.exists() else shutil.which("verity") or "verity", *PROVE]
     got = subprocess.run(cmd, cwd=ROOT, stdout=subprocess.PIPE, text=True)
@@ -279,7 +279,7 @@ def read_prices(path: Path | None, keep: Path | None = None) -> dict:
         raise SystemExit(f"`verity {' '.join(PROVE)}` exited {got.returncode}: it reads the evidence store, so run it "
                          "where the store is reachable (in a `research run`, with --store-read), or pass the table "
                          "it wrote with --prices TABLE.json")
-    doc = {"read": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")} | json.loads(got.stdout)
+    doc = {"read": datetime.now(UTC).strftime("%Y-%m-%dT%H:%MZ")} | json.loads(got.stdout)
     if keep is not None:
         keep.write_text(json.dumps(doc, indent=1) + "\n")
     return doc
