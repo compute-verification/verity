@@ -5,7 +5,6 @@
     {"file": "tests/acquire/test_gate.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_challenge_seeds.py", "kind": "I001", "symbol": "test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_compiler_form.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/check/test_flip_weight_negative.py", "kind": "E741", "symbol": "_canary_flipweight_line", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/check/test_sampled_replay.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/check/test_sampled_replay_fp8.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/check/test_stoch_draw_ledger_of_record.py", "kind": "ISC004", "symbol": "test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_to_its_cap_r5_not_exercised", "detail": "Unparenthesized implicit string concatenation in collection"},
