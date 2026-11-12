@@ -1671,8 +1671,6 @@ OPT_IN = {
             "tests/pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
             "tests/pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
             "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
-        "VERITY_VLLM_H1_LANES_E2E": (
-            "tests/protocols/test_pouw_h1_drawn.py::test_a_lanes_form_ks_sampled_proof_blocks_are_staged_as_their_lanes_and_combine_and_credit_accepts_them",),
         "VERITY_VLLM_HISTORY_E2E": (
             "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
 }
