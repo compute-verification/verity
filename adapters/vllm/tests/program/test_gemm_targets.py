@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import sys
 
 import pytest
 from verity.definitions.registry import b1
@@ -241,6 +242,18 @@ def test_a_tagged_build_is_held_to_its_commit_through_the_read_back(monkeypatch)
     fake.set("vllm._version:__commit_id__", "g000000000")
     fake["vllm"].__version__ = "0.28.1rc1.dev472+gd9105ea80"   # the pin: its version, as it is
     assert read_back_applied()["vllm_version"] == "0.28.1rc1.dev472+gd9105ea80"
+
+
+def test_a_vllm_without_its_tuned_gemm_module_is_read_back_as_no_family_with_the_error(monkeypatch):
+    """An answer the running vLLM can't give is read back as None, with the probe's error beside it."""
+    pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import read_back_applied
+    fake_vllm.install(monkeypatch)
+    assert "tuned_gemm_arch_family_error" not in read_back_applied()
+    monkeypatch.setitem(sys.modules, "vllm.model_executor.determinism.batch_invariant_configs", None)
+    got = read_back_applied()
+    assert got["tuned_gemm_arch_family"] is None
+    assert got["tuned_gemm_arch_family_error"].startswith("ModuleNotFoundError: ")
 
 
 # -- Bet A: the GEMM rule's pins follow the registry (needs torch) ----------------------------------------------------------
