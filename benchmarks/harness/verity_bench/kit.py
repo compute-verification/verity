@@ -7,6 +7,8 @@
 - `writer(out).measurement(name, value, unit, ...)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
+  `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
+  `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
@@ -62,6 +64,9 @@ OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejec
 #: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
 #: result with no validation)
 VALIDATION_STATUSES = ("passed", "failed")
+#: the result's two lists of files relative to its directory, which `research` keeps with the run: the detailed records and
+#: what else is worth keeping
+FILES = ("measurement_files", "artifacts")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -218,6 +223,12 @@ def _target_check(verdict: Any, target: Any) -> str | None:
     return verdict
 
 
+def _inside(rel: Any) -> bool:
+    """Whether `rel` is a path relative to a result's directory and inside it, as a string."""
+
+    return isinstance(rel, str) and bool(rel) and not Path(rel).is_absolute() and ".." not in Path(rel).parts
+
+
 @contextlib.contextmanager
 def _locked(directory: Path) -> Iterator[None]:
     """One appender at a time in `directory`: two processes of a job each keep their measurement."""
@@ -298,7 +309,7 @@ class Writer:
         if not isinstance(evidence, (list, tuple)):
             raise ValueError(f"a validation's evidence is a list of paths relative to {self.out}, not {evidence!r}")
         for rel in evidence:
-            if not isinstance(rel, str) or not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+            if not _inside(rel):
                 raise ValueError(f"a validation's evidence is a list of paths relative to {self.out} and inside it, each a "
                                  f"string, not {rel!r}")
         block = {"status": status, "checker": checker, "detail": detail, "evidence": list(evidence)}
@@ -308,6 +319,65 @@ class Writer:
                                  "fresh directory)")
             doc["validation"] = block
         return block
+
+    def fingerprint(self, **fields: Any) -> dict:
+        """Adds `fields` to the result's `workload_fingerprint`, what actually ran (a script, its arguments, a mode), and
+        returns the fingerprint. It always holds `source_sha`, the commit `research run` shipped (`RESEARCH_SOURCE_SHA`;
+        None outside one), which the writer reads, so it refuses a field of that name, a field the fingerprint already
+        holds and a value that isn't JSON. Like `measurement_file` and `artifact`, it writes all three of the keys."""
+
+        if "source_sha" in fields:
+            raise ValueError("a fingerprint's source_sha is the commit research run shipped, which the writer reads "
+                             "(RESEARCH_SOURCE_SHA), not a field to give")
+        for key, value in fields.items():
+            try:
+                json.dumps(value, allow_nan=False)
+            except (TypeError, ValueError):
+                raise ValueError(f"a fingerprint's {key} is a JSON value, not {value!r}") from None
+        with self._open() as (path, doc):
+            held = self._attach(path, doc)["workload_fingerprint"]
+            if again := sorted(held.keys() & fields.keys()):
+                raise ValueError(f"{path}'s fingerprint already holds {', '.join(again)}: a fingerprint holds each once")
+            held.update(fields)
+        return dict(held)
+
+    def measurement_file(self, rel: str) -> str:
+        """Names one file of the run's detailed records in the result's `measurement_files` and returns it: a path relative
+        to `out` and inside it, as `evidence` is, which `research` keeps with the run. A file is named once, here or as an
+        artifact."""
+
+        return self._name("measurement_files", rel)
+
+    def artifact(self, rel: str) -> str:
+        """Names one file or directory worth keeping in the result's `artifacts` and returns it, as `measurement_file`
+        does."""
+
+        return self._name("artifacts", rel)
+
+    def _name(self, key: str, rel: str) -> str:
+        if not _inside(rel):
+            raise ValueError(f"a result's {key} are paths relative to {self.out} and inside it, each a string, not {rel!r}")
+        rel = Path(rel).as_posix()
+        with self._open() as (path, doc):
+            named = self._attach(path, doc)
+            if any(Path(p).as_posix() == rel for k in FILES for p in named[k]):
+                raise ValueError(f"{path} already names {rel}: a file is named once, as a measurement file or an artifact")
+            named[key].append(rel)
+        return rel
+
+    @staticmethod
+    def _attach(path: Path, doc: dict) -> dict:
+        """`doc` with the three keys `research` reads besides its measurements and validation: `workload_fingerprint` with
+        its `source_sha`, and `FILES`' two lists, each added where it is missing."""
+
+        if not isinstance(doc.setdefault("workload_fingerprint", {}), dict):
+            raise ValueError(f"{path}'s workload_fingerprint isn't an object: the writer adds only to a {RESULT_SCHEMA} result")
+        doc["workload_fingerprint"].setdefault("source_sha", settings.RESEARCH_SOURCE_SHA)
+        for key in FILES:
+            held = doc.setdefault(key, [])
+            if not isinstance(held, list) or not all(isinstance(p, str) for p in held):
+                raise ValueError(f"{path}'s {key} aren't a list of paths: the writer adds only to a {RESULT_SCHEMA} result")
+        return doc
 
     @contextlib.contextmanager
     def _open(self) -> Iterator[tuple[Path, dict]]:
