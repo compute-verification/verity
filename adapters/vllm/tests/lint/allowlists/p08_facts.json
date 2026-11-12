@@ -15,7 +15,6 @@
     {"file": "verity_vllm/check/c2_rules.py", "kind": "model", "symbol": "c2_rules", "detail": "mixtral"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "layer-class", "symbol": "compare_boundary", "detail": "RMSNorm"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "model", "symbol": "<module>", "detail": "smollm"},
-    {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer-class", "symbol": "<module>", "detail": "ParallelLMHead"},
     {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
     {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
     {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"},

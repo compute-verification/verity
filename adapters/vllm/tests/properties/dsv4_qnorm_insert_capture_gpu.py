@@ -572,7 +572,7 @@ def launch_sumsq_probe() -> dict[str, Any]:
     torch.cuda.synchronize()
     got = _u16(out)[0, 0]
     fn = bind(R.Dsv4QNormRope, D=D, DR=DR, EPS=SUMSQ_PROBE_EPS)
-    fused = np.asarray(_flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
+    fused: np.ndarray = np.asarray(_flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
     fused_model = sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=True)
     unfused = sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=False)
     fused_bad = np.flatnonzero(got != fused)
@@ -677,7 +677,7 @@ def bind_check() -> dict[str, Any]:
         "insert row -> FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": row_seam,
         "indexer q, w -> DsaMqaLogit_v1{H=64,D=128}": logit_seam,
     }
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, check in targets.items():
         try:
             out[name] = check()

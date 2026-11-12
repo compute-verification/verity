@@ -19,10 +19,14 @@ import hashlib
 import os
 from dataclasses import replace
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"),
                                 reason="needs a GPU and the JIT-built native_collect extension (NATIVE_COLLECT_BUILD)")
@@ -85,7 +89,7 @@ def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
     """One decode step's tensors, odd-sized so window boundaries fall inside them; the hidden plane is sized by every request's KV
     blocks, so steps differ in length. The values are a function of the geometry."""
     ntok, seed = len(kv), sum(kv)
-    shapes = [("model.embed_tokens/in", torch.int32, (ntok,))]
+    shapes: list[tuple[str, torch.dtype, tuple[int, ...]]] = [("model.embed_tokens/in", torch.int32, (ntok,))]
     for layer in range(LAYERS):
         shapes += [(f"model.layers.{layer}.self_attn.qkv_proj", torch.bfloat16, (ntok, 3 * H)),
                    (f"fa2.m1/L{layer}/acc", torch.float32, (sum(-(-k // BN) for k in kv), 4)),
