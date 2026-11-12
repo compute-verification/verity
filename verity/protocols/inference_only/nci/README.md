@@ -15,8 +15,8 @@ Nothing in `verity` reads this directory. The theorems it cites are in `security
 
 The slowdown lower bound's numbers come from [`verity/protocols/inference_only/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
-`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
-`fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
+`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`
+and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
 where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
@@ -43,13 +43,26 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python verity/protocols/inference_only/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python verity/protocols/inference_only/nci/fit.py [--json]` |
-| `figures.py` | `tiers.py`'s talk figures, with the slowdown from rho's `multiple_bound`, to the evidence store |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python verity/protocols/inference_only/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
 `governance`, `integration-measures`, `efficiency-metrics`, `strategy-local`, `strategy-lowrank-sparse`,
 `strategy-gradient-free`, `strategy-reuse`, `capability-measures`, `rl-scaling`.
+
+## What loads it
+
+This directory has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). Three things outside it read
+it:
+
+- `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library,
+  `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `slowdown.py` by
+  path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
+- the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
+  statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
+- `fixtures/artifacts.json` registers `sources/` by this directory's path.
+
+Every command above prints, and none writes a file.
 
 ## Rules for adding to it
 

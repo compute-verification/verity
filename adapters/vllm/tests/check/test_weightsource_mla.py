@@ -5,11 +5,13 @@ import json
 import struct
 
 import numpy as np
-
+import pytest
 from verity.circuits.types import Array, RecordType
+from verity.definitions.registry.prims import BF16, F32
+
+from verity_vllm.check.checkpoint_words import mla_moe_sources
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
-from verity.definitions.registry.prims import BF16, F32
 
 H, V, NL, FD, NH, QL, L, DN, DR, DV, I, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
 
@@ -66,6 +68,20 @@ def _write(path, tensors) -> dict[str, np.ndarray]:
     h = json.dumps(header).encode()
     path.write_bytes(struct.pack("<Q", len(h)) + h + b"".join(blobs))
     return words
+
+
+def test_only_a_record_with_dense_layers_and_an_array_of_layers_has_mla_sources():
+    wt = _mla_weights_type()
+    sources = mla_moe_sources(wt)
+    assert sources is not None
+    first_dense, dense, moe = sources
+    assert first_dense == FD and "gate_up_w" in dense and len(moe["w13"]) == 2 * E
+    assert mla_moe_sources(RecordType(*((k, t) for k, t in wt.fields if k != "dense_layers"))) is None
+    assert mla_moe_sources(RecordType(*((k, t) for k, t in wt.fields if k != "layers"))) is None
+    assert mla_moe_sources(RecordType(*((k, BF16 if k == "layers" else t) for k, t in wt.fields))) is None
+    assert mla_moe_sources(Array(FD, BF16)) is None
+    with pytest.raises(ValueError, match="an array w13 in each of its layers"):
+        mla_moe_sources(RecordType(*((k, Array(2, BF16) if k == "layers" else t) for k, t in wt.fields)))
 
 
 def test_mla_moe_fields_read_their_own_layer(tmp_path):

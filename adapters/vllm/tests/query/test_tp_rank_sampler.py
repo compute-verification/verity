@@ -9,10 +9,10 @@ from __future__ import annotations
 import dataclasses
 
 from tests.query.test_literal_operands import RES, sampler_program
-from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import ProgramView
 from verity_vllm.query.required import request_manifest
+from verity_vllm.query.units import ValueRef
 
 IMPL = ("embed", "lm_head")
 

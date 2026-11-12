@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.codec import encode_program, program_digest
-from verity.definitions.circuits.constants import REGISTRATION, inputs
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
+from verity.definitions.circuits.constants import REGISTRATION, inputs
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import tables as T
 
@@ -31,7 +30,7 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
     word = lambda j: (j * 0x9E37) & 0xFFFF   # noqa: E731
     for idx in [0, (1 << 27) - 1, 0xF8000005, 0x0123_4567]:
         e = idx & ((1 << 27) - 1)
-        assert r27.evaluate_lazy(lambda j: idx if j == 0 else word(j - 1)) == word(2 * e) | word(2 * e + 1) << 16
+        assert r27.evaluate_lazy(lambda j, idx=idx: idx if j == 0 else word(j - 1)) == word(2 * e) | word(2 * e + 1) << 16
     with pytest.raises(ValueError, match="do not fill rows"):
         T.table_read(4, 1)
 
@@ -90,7 +89,10 @@ def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
     words = [(w & 0x7FFFFFFF) | s for w in words for s in (0, 1 << 31)]
     table, reads = T.tanh_rn_table(), []
     assert (table.name, table.leaves, table.declared_by) == ("tanh_rn", T.TANH_RN_TABLE.leaves, D.TanhF32Rn)
-    counted = RegisteredTable("tanh_rn", lambda j: reads.append(j) or table.word(j), table.leaves, D.TanhF32Rn)
+    def counting(j):
+        reads.append(j)
+        return table.word(j)
+    counted = RegisteredTable("tanh_rn", counting, table.leaves, D.TanhF32Rn)
     fn = bind(T.TanhF32RnV2)
     assert fn.id == "TanhF32Rn_v2"
     for w in words:
@@ -129,10 +131,10 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     parameter (its Boolean version, `boolean_tanh.GeluTanhMul_v4`, computes the activation), and the Program computes what the
     constants derivation computes."""
     import torch
+    from verity.definitions.numerics.serve3_reference import materialize
 
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-    from verity.definitions.numerics.serve3_reference import materialize
 
     class GeGLU(torch.nn.Module):
         def __init__(self, I: int) -> None:

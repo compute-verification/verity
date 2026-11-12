@@ -23,17 +23,22 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import b1, pouw_rows
+
 from verity_vllm.check.replay import pouw_circuit as RC
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, gemm_pins_for, observe_target_profile, vllm_ruleset
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    gemm_pins_for,
+    observe_target_profile,
+    vllm_ruleset,
+)
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity.definitions.registry import b1, pouw_rows
-from verity.definitions.numerics.serve3_reference import materialize
 
 BF = torch.bfloat16
 M, K, NQ, V = 3, 64, 64, 16
@@ -186,7 +191,8 @@ def test_the_fused_row_is_bias_add_after_the_row_bit_for_bit_and_the_replays_nat
         return (np.asarray(rng.standard_normal(n) * scale, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     for scale in (1e-3, 1.0, 50.0, 1e-39, 0.0):
         x, w = bf16(K, scale), bf16(NQ * K, 0.5)
-        for b in (bf16(NQ, 1.0), np.full(NQ, 0x8000, np.uint16), np.zeros(NQ, np.uint16)):
+        biases: tuple[np.ndarray, ...] = (bf16(NQ, 1.0), np.full(NQ, 0x8000, np.uint16), np.zeros(NQ, np.uint16))
+        for b in biases:
             got = list(evaluate(fused, [int(v) for v in x], [int(v) for v in w], [int(v) for v in b]))
             assert got == list(evaluate(add, list(evaluate(row, [int(v) for v in x], [int(v) for v in w])), [int(v) for v in b])), scale
             _a, s, _b, t, z = RC.int7_linear(x, w, NQ)

@@ -42,17 +42,25 @@ import re
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from dataclasses import dataclass
 
 from verity_vllm.check import derived_weights, fp8_moe_scales, fp8_ue8m0
 from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # noqa: F401  (sha256_file: the record's shard hash)
-from verity_vllm.check.component_programs import component_program_dirs, load_program_head
+from verity_vllm.check.component_programs import (
+    component_program_dirs,
+    load_program_head,
+)
+from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of
+from verity_vllm.check.tp_shards import shard_dim as _shard_dim
+from verity_vllm.check.tp_shards import shard_dim0 as _shard_dim0
 from verity_vllm.config import UsageError, option
-from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of, shard_dim as _shard_dim, shard_dim0 as _shard_dim0
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)
 SCHEMA_V1 = "verity/commit/weights-of-record/v1"    # v1 roots differ per deriving host for models with a rotary table; verdict unaffected
@@ -742,11 +750,9 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 # ---------------------------------------------------------------------------------------------------------------------------- CLI
 
 def _default_manifest() -> str | None:
+    """The tree's checkpoint pins (`config.CHECKPOINTS`); None on a tree that holds none."""
     from verity_vllm.config import CHECKPOINTS
-    for p in (CHECKPOINTS, Path.cwd() / "manifests" / "checkpoints.json"):
-        if p.exists():
-            return os.path.abspath(p)
-    return None
+    return str(CHECKPOINTS) if CHECKPOINTS.exists() else None
 
 
 def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
@@ -756,7 +762,8 @@ def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = 
     from verity_vllm.check.checkpoint_index import shard_pin
     try:
         return shard_pin(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision)
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        logger.warning("no shard pin of %s was taken, so each rank takes its own: %s: %s", checkpoint_dir, type(e).__name__, e)
         return None
 
 
