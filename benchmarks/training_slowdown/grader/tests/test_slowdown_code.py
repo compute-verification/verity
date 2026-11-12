@@ -119,12 +119,16 @@ def test_the_command_line(fresh, steps, tmp_path, capsys, unit_prices) -> None:
 @pytest.mark.parametrize("step", ["f32", "bf16", "bf16-cublas"])
 def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch, request) -> None:
     """The slowdown code's capture of the same tiny step (`capture_step`, its product rows with each GEMM at its operands'
-    dtype) beside what the grader reads of the step's circuit: the same products, N, O and token dims at every (phase, op,
-    dims), and the same operand widths but at the bf16 steps' attention products, which the circuit wires at the 32 bits
-    torch's math path computes them in and the trace takes at the 16 bits their operands were passed at. On sm_120, priced at
-    the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times
-    their routes' factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't
-    count)."""
+    dtype) beside what the grader reads of the step's circuit: the same products, N and token dims at every (phase, op,
+    dims), and the same O and operand widths at every one but the bf16 steps' attention products. Those are the one
+    exception, named and exact: the trace prices an attention call's products at the width the card's fused kernel computes
+    them at, the 16 bits of the call's query (its raw rows' `attention`), and the step's circuit computes them on torch's
+    math path, in the 32 bits that path casts the call's operands up to, until it wires that kernel. So on the rows whose
+    `attention` is narrower than the dtype they were traced in, and on no other, the circuit's operands are 32 bits wide
+    against the trace's 16 and its O is 32 bits a word against the trace's 16, twice the trace's; the float32 step has no
+    such row. On sm_120, priced at the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a
+    bf16 MAC that dot's over 16) times their routes' factor (`route_factor`: the zeros grid.z slices pad their residue
+    tiles with are dots the trace doesn't count)."""
     dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
     directory, _, commit = SLOWDOWN_CODE.rpartition("@")
     code = G.load_slowdown_code(Path(directory), commit)
@@ -141,8 +145,22 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     h = G.load_handover(s.path)
     out = G.read(h, code)
     a = G.against(out, code.products.rows(g), code)
-    assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
-    assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
+    bits = {"bfloat16": 16, "float32": 32}
+    narrower = {G._key(r["phase"], r["op"], r["dims"]) for r in code.products.raw_on_dial(g)["rows"]
+                if r["attention"] and bits[r["attention"]] < bits[r["dtypes"][0]]}
+    excepted = [r for r in a["rows"] if G._key(r["phase"], r["op"], r["dims"]) in narrower]
+    assert len(excepted) == len(narrower) and bool(narrower) == (dtype is not None)
+    for r in a["rows"]:
+        circuit, trace = r["circuit"], r["trace"]
+        assert all(circuit[x] == trace[x] for x in ("count", "N", "token_dims")), r
+        if r in excepted:
+            assert r["op"] == "bmm" and (circuit["widths"], trace["widths"]) == ([(32, 32)], [(16, 16)]), r
+            assert circuit["O"] == 2 * trace["O"] == 32 * (trace["O"] // 16) > 0, r
+        else:
+            assert (circuit["O"], circuit["widths"]) == (trace["O"], trace["widths"]), r
+    assert a["agree"] == {"count": True, "N": True, "O": dtype is None, "widths": dtype is None, "token_dims": True}
+    assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N"))
+    assert a["totals"]["circuit"]["O"] - a["totals"]["trace"]["O"] == sum(r["trace"]["O"] for r in excepted)
     if cc:
         factor = route_factor(k16_steps(h), out["products"])
         assert a["C"]["mm"]["trace"] > 0 and a["C"]["mm"]["ratio"] == pytest.approx(factor), a["C"]
