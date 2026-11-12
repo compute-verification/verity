@@ -80,3 +80,14 @@ test stays a failure: that one is the guard. Top deletes landed lines, and the m
 
 **D. Your other items:** 1 stays as you wrote it (I ask lean once its merge is on `main`). 2, 3, 5, 6, 7 and 8:
 taken as you made them.
+
+## Thu 12 Nov 3:57 PM PST: three days change again (lean answered at 3:51 PM)
+
+lean takes a cut on Friday 7 PM PST for the path-only maps, landing Saturday by noon, but a map that moves a Lake
+package goes with the chain cut Sunday 8 AM PST (landing Sunday afternoon). So, over the 3:53 PM note:
+- `verity/difftest/`: day `2026-11-15`, note `its Lake package moves with Sunday's chain`.
+- `verity/definitions/`: day `2026-11-15`, note
+  `two Lake packages move with Sunday's chain; its served part waits for the vLLM adapter's snapshot and may land 2026-11-16`.
+- `verity/protocols/compose/` (coming), `verity/protocols/remote/` and `verity/protocols/onsite/`: `proofs`,
+  `2026-11-15` (the composition package is a Lake package too).
+Everything else stands as the 3:53 PM note has it.
