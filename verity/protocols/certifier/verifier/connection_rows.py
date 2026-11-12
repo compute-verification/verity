@@ -103,7 +103,7 @@ from verity.protocols.certifier.verifier import content_rows as CT
 from verity.protocols.certifier.verifier.active import DATA, PAD
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
-from verity.protocols.certifier.verifier.grid import Record, row_count
+from verity.protocols.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.certifier.verifier.io_tie import parse_cell
 from verity.protocols.certifier.verifier.warden import END, FAIL, Released, WardenParams, read_cell
 from verity.protocols.certifier.verifier.warden_rows import OWNER, SALT_BYTES, WORD_BITS, bc
@@ -203,8 +203,8 @@ def releases(params: WardenParams, lengths: Sequence[bytes], fails: Sequence[byt
     return out
 
 
-def of_records(params: WardenParams, ingress: Sequence[Record],
-               egress: Sequence[Record]) -> dict[int, tuple[tuple[Released, ...], ...]]:
+def of_records(params: WardenParams, ingress: Sequence[BlockGrid],
+               egress: Sequence[BlockGrid]) -> dict[int, tuple[tuple[Released, ...], ...]]:
     """The releases a run's records hold, read in the clear (a rehearsal's reading, as `warden.audit` is, and
     nothing a verifier runs): each execution phase's by slot stride, as the network certifier hands them and `tables`
     takes them. A release is an `END` in the ingress record, in its bucket's slot stride; N is its place among the

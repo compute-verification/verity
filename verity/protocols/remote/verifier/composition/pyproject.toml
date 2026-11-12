@@ -39,7 +39,7 @@ parts = 3
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
 # them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.configuration.deploy.config`)
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verity/claims",
           "verity/hardware/record.py",
           "verity/difftest", "verity/protocols/spot/verifier/profile.py",
           "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",

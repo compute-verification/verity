@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["NciCheck"],
  "exempt": {
   "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone, or with --count NciCheck.Count.check on it (with --count --detail NciCheck.Count.checkDetail, the private record's); IO around the audited check, not a proof",
@@ -7,8 +8,8 @@
   "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck"
+  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck",
+  "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.BaselineDifftestMain": {
@@ -94,19 +95,19 @@
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
   "NciCheck.Baseline": {
-   "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "imports": ["Std", "Circuits.Program", "Flock.WindowRecord", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
-   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
-  },
-  "NciCheck.Count": {
-   "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
-   "except": [],
-   "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
+   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports), the window record's one digest and the policy check it runs first"
   },
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
    "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+  },
+  "NciCheck.Count": {
+   "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "except": [],
+   "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
   },
   "NciCheck.DefinitionDigest": {
    "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],

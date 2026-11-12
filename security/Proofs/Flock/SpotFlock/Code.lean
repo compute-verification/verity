@@ -286,7 +286,7 @@ def scopeOkFast (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
 the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
 `ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
 per slot and proof block, none per gate. -/
-def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : List ℕ) : Bool :=
+def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (k : List ℕ) : Bool :=
   g.ns.size == ms.length && (List.range ms.length).all (fun t => k.getD t 0 == g.ks.getD t 0) &&
     (List.range l.blocks.size).all fun ρ =>
       match l.blocks[ρ]? with

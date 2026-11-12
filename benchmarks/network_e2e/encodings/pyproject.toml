@@ -42,4 +42,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py",
-          "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py", "verity/definitions/commitments/__init__.py", "verity/definitions/circuits/boolean/__init__.py", "verity/definitions/circuits/boolean/memcheck.py", "verity/definitions/commitments/gates/__init__.py", "verity/definitions/commitments/gates/block_key.py"]
+          "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py", "verity/definitions/commitments/__init__.py", "verity/definitions/circuits/boolean/__init__.py", "verity/definitions/circuits/boolean/memcheck.py", "verity/definitions/commitments/gates/__init__.py", "verity/definitions/commitments/gates/block_key.py",
+          # the certifier's `head_check` counts a Definition's ANDs with the census (`census.BooleanWork`), and the
+          # advice code's codec imports it (`window_code`, the certifier's `window_charge`, `arith_encode`):
+          # test_arith_vectors, the first test to load v1.py, reads it
+          "verity/definitions/circuits/census.py"]

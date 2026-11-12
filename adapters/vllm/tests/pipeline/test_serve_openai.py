@@ -147,7 +147,8 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifi
 
 
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
-                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None)])
+                                                     ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None),
+                                                     ("bfloat16", ("linears",), None)])
 def test_every_precision_registers_the_verity_int8_method_before_the_engine(precision, parts, scope):
     got: list = []
     assert so.register_int8(precision, got.append) == scope
@@ -395,13 +396,15 @@ class Tokenizer:
 
 
 class Serving:
-    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it."""
+    """The server over the stand-ins, its engine loop on a thread of its own, as `main` runs it; ``runner`` the model runner
+    (a `Runner`, by default a fresh one)."""
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
                  served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
-                 arm: Any = None, pool: tuple[Any, int] | None = None, no_slice: str | None = None) -> None:
-        self.runner = Runner()
+                 arm: Any = None, runner: Runner | None = None, pool: tuple[Any, int] | None = None,
+                 no_slice: str | None = None) -> None:
+        self.runner = runner if runner is not None else Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, no_slice=no_slice, marks=marks,

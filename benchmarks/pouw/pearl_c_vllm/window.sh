@@ -33,24 +33,42 @@
 # passes --capture: the arm's vLLM graph sizes, the decode batch's alone by default.  BATCH passes --batch.
 # STATEMENT (with WHOLE_STEP=1) passes --statement: hm96_rows.cu's cubin (a path, or "build" to build it here with
 # /usr/local/cuda-13.0's nvcc), adding e2e.py's pearlc-zk mode, each decode forward's rows committed in the ZK statement's format too.
+# PEARLC_KERNEL=benchmarks/pouw/pearl_c_sm90 runs every mode on an H100 or H200 instead (identity: the card's name and cc 9.0),
+# under `gpu-lease 1`: the ship is pearl_c_sm90/build.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
+# VARIANTS=h100, SCHEME defaults to pearl-c-h100-v1-h3, and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
+# with no setup.sh: no ready.json and no FlashInfer build, since every request e2e.py serves samples greedily. MODEL (the
+# checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
+# (the research user's, where those nodes keep a run's data).
 set -euo pipefail
-WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
-MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
+KERNEL=${PEARLC_KERNEL:-benchmarks/pouw/pearl_c_sm120}; K=$(basename "$KERNEL")
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
 mkdir -p "$OUT"
 MODE=${MODE:-window}
-SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs}
-          ${WHOLE_STEP:+--whole-step} ${WHOLE_DEFER:+--whole-defer} ${CAPTURE:+--capture "$CAPTURE"} ${BATCH:+--batch "$BATCH"})
 fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
-[ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
-export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
-# the epoch's coins are the Lean verifier's (e2e.Coins, pouw.verifier.coins), which Lake builds and runs
-command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-. benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
-"$PY" -c 'import json, os, sys
+case $K in
+  pearl_c_sm90)
+    GPU_NAME="H100|H200"; GPU_CC=9.0; VARIANTS=h100; SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
+    WORK=${WORK:-/workspace/research/pearl-c-sm90}; PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+    MODEL=${MODEL:?on $K, MODEL names the checkpoint directory}
+    [ -x "$PY" ] || fail SETUP "no Python at $PY: VERITY_BENCH_VENV names the node's pinned-vLLM environment"
+    export PATH=$(dirname "$PY"):$PATH ;;
+  pearl_c_sm120)
+    GPU_NAME="RTX PRO 6000 Blackwell"; GPU_CC=12.0; VARIANTS=sm120; [ "$MODE" = perplexity ] && VARIANTS="sm120 sm120-unpromoted"
+    WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
+    MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
+    [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || fail SETUP "no $WORK/ready.json: run setup.sh first"
+    export PATH=$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f
+    . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
+    "$PY" -c 'import json, os, sys
 p = json.load(open(sys.argv[1]))["flashinfer"]["prebuilt"]["sampling"]
 sys.exit(not (p.startswith(os.environ["FLASHINFER_WORKSPACE_BASE"] + "/") and os.path.exists(p)))' "$WORK/ready.json" \
-  || fail SETUP "ready.json's FlashInfer sampling library is not in this build's cache $FLASHINFER_WORKSPACE_BASE: run setup.sh"
+      || fail SETUP "ready.json's FlashInfer sampling library is not in this build's cache $FLASHINFER_WORKSPACE_BASE: run setup.sh" ;;
+  *) fail SETUP "PEARLC_KERNEL $KERNEL: window.sh runs pearl_c_sm120 or pearl_c_sm90" ;;
+esac
+SWITCHES=(${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs}
+          ${WHOLE_STEP:+--whole-step} ${WHOLE_DEFER:+--whole-defer} ${CAPTURE:+--capture "$CAPTURE"} ${BATCH:+--batch "$BATCH"})
+# the epoch's coins are the Lean verifier's (e2e.Coins, pouw.verifier.coins), which Lake builds and runs
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 export HF_HOME=${HF_HOME:-/workspace/hf}
 export PYTHONPATH=$PWD:$PWD/verity/configuration/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
@@ -65,17 +83,17 @@ if [ "${STATEMENT:-}" = build ]; then
 fi
 [ -z "${STATEMENT:-}" ] || SWITCHES+=(--statement "$STATEMENT")
 touch "$OUT/.started"
-trap 'find "$FLASHINFER_WORKSPACE_BASE/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
+[ -z "${FLASHINFER_WORKSPACE_BASE:-}" ] ||
+  trap 'find "$FLASHINFER_WORKSPACE_BASE/.cache/flashinfer" -name "*.so" -newer "$OUT/.started" > "$OUT/jit-built.txt" 2>/dev/null || true' EXIT
 
 nvidia-smi --query-gpu=uuid,name,compute_cap,clocks.sm,clocks.mem,driver_version --format=csv,noheader -i "$UUID" > "$OUT/identity.csv"
-grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"
+grep -Eq "$GPU_NAME" "$OUT/identity.csv" && grep -q ", $GPU_CC," "$OUT/identity.csv" || fail IDENTITY "$(cat "$OUT/identity.csv")"
 
-mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-$OUT/inputs/pearl-c-sm120-ship.tar}" -C "$OUT/ship"
+mkdir -p "$OUT/ship" && tar -xf "${SHIP_TAR:-${RESEARCH_RUN_DIR:-$OUT}/inputs/${K//_/-}-ship.tar}" -C "$OUT/ship"
 SHIP=$(dirname "$(find "$OUT/ship" -name MANIFEST.sha256 | head -1)")
 (cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) || fail SHIP "MANIFEST.sha256 does not hold"
-cmp -s "$SHIP/run.py" benchmarks/pouw/pearl_c_sm120/run.py || fail SHIP "the ship's run.py is not the run tree's"
+cmp -s "$SHIP/run.py" "$KERNEL/run.py" || fail SHIP "the ship's run.py is not the run tree's"
 
-VARIANTS="sm120"; [ "$MODE" = perplexity ] && VARIANTS="sm120 sm120-unpromoted"
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=$VARIANTS "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl" \
   || fail GPU1_CHECK "run.py's device check failed (exit $?); see gpu1-check.jsonl"
 
@@ -85,22 +103,23 @@ keep_passes() {
     --expires "${KEEP_EXPIRES:-never}" --priority "${KEEP_PRIORITY:-keep}" --why "retained passes of run $RESEARCH_RUN_ID" \
     ${RESEARCH_AGENT_URL:+--by "$RESEARCH_AGENT_URL"} > "$OUT/keep.json" || fail KEEP "no retention record on $d"
 }
+KERNEL_ARGS=(--kernel "$KERNEL" --cubin "$SHIP/$K.cubin")
 if [ "$MODE" = smoke ]; then
   [ -z "${RETAIN:-}" ] || keep_passes
-  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
+  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" "${KERNEL_ARGS[@]}" ${TAG:+--tag "$TAG"} \
     --out "$OUT/smoke.json" --smoke ${RETAIN:+--retain "$WORK/passes/${RESEARCH_RUN_ID:?}"} "${SWITCHES[@]}"
 elif [ "$MODE" = perplexity ]; then
-  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
+  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" "${KERNEL_ARGS[@]}" \
     --out "$OUT/quality.json" --perplexity --chunk-min "${CHUNK_MIN:-7}"
 elif [ "$MODE" = profile ]; then
   nsys profile -o "$OUT/decode" -f true -t cuda,nvtx --capture-range=cudaProfilerApi --capture-range-end=stop \
-    "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 \
-    --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/profile.json" "${SWITCHES[@]}"
+    "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --model "$MODEL" "${KERNEL_ARGS[@]}" \
+    --out "$OUT/profile.json" "${SWITCHES[@]}"
   nsys stats -q -f csv -r cuda_gpu_kern_sum -o "$OUT/decode" "$OUT/decode.nsys-rep"
   "$PY" benchmarks/pouw/pearl_c_vllm/profile_decode.py --nsys-kernels "$(ls "$OUT"/decode*cuda_gpu_kern_sum*.csv | head -1)" \
     --out "$OUT/profile.json"
 else
   keep_passes
-  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" \
+  "$PY" benchmarks/pouw/pearl_c_vllm/e2e.py --model "$MODEL" "${KERNEL_ARGS[@]}" ${TAG:+--tag "$TAG"} \
     --out "$OUT/e2e.json" --retain "$WORK/passes/${RESEARCH_RUN_ID:?}" "${SWITCHES[@]}"
 fi

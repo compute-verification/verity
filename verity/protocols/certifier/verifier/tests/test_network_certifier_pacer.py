@@ -130,8 +130,9 @@ def test_each_link_holds_only_its_own_bytes_and_a_last_part_closes_its_link():
 
 def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
     """Each link is passed just before the bucket that first writes to it, as the warden passes a client's connection
-    when it admits it. Waiting for a link's socket, the pacer may take a message whose arrival its last `poll` also
-    reported, and it then waits for no other: every bucket is released and written, and each link carries its own."""
+    when it admits it: its socket reaches the pacer ahead of the bucket, which may be read first and released at once,
+    so the pacer takes what its channel holds at the release. Every bucket is released and written, and each link
+    carries its own."""
 
     async def run():
         pacer = await Pacer.start()
@@ -149,6 +150,34 @@ def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
     assert sorted((r.t, r.end is None) for r in got) == [(t, end) for t in range(8) for end in (False, True)]
     assert all(r.written for r in got)
     assert read == [bytes([key]) * 100 for key in range(8)]
+
+
+def test_a_link_that_never_reaches_the_pacer_faults_each_release_naming_it_and_holds_no_other():
+    """Bucket 0 names link 7, whose socket the pacer never got: the pacer doesn't wait for it, and reports bucket 0's
+    release unwritten (a fault) and its writes unwritten, while link 0 still gets its part and bucket 1 is released
+    and written. Link 7 is lost for good: its socket, passed late, is closed, and bucket 2, naming it again, faults
+    too; link 0 carries its three parts."""
+
+    async def run():
+        (link, peer), (late, late_peer) = _pair(), _pair()
+        pacer = await Pacer.start({0: link.fileno()})
+        link.close()
+        reports = pacer.reports()
+        pacer.hand(0, 0.0, [(0, b"a", False), (7, b"lost", False)])
+        pacer.hand(1, 0.001, [(0, b"b", False)])
+        got = [await anext(reports) for _ in range(4)]
+        pacer.add(7, late.fileno())
+        late.close()
+        pacer.hand(2, 0.002, [(7, b"x", False), (0, b"c", True)])
+        got += [await anext(reports) for _ in range(2)]
+        code = await pacer.close()
+        return code, got, _read(peer), _read(late_peer)
+
+    code, got, read, late_read = asyncio.run(run())
+    assert code == 0
+    assert [(r.t, r.written) for r in got if r.end is None] == [(0, False), (1, True), (2, False)]
+    assert [(r.t, r.written) for r in got if r.end is not None] == [(0, False), (1, True), (2, False)]
+    assert read == b"abc" and late_read == b""
 
 
 def test_a_link_past_the_backlog_is_closed_and_its_parts_are_unwritten():
