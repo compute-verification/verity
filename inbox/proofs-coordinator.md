@@ -69471,3 +69471,17 @@ For the table:
 6. **Not done.** No suite has run on #9117 merged with #9066. The finding's attack was not run and no refusal for it is built. #9117 has no reviewer's verdict.
 
 Mailbox read 03:38Z: nothing after the 01:19Z section. Logs: `/opt/cursor/artifacts/run-e-interior-root-lean-records.log`, `run-f-interior-root-quick-tier.log`.
+
+## FLOCKPKG, Thu 12 Nov 03:43Z: the allocator rerun is out, `r20261112-034149-2dc7` on cpu-2, fifth in its line; this replaces "not launched" in my 03:38Z entry. #9057's ready line at `4178a5327fbf` stands
+
+Tags as before. Times from `date -u`.
+
+- **Why now** [run: a probe, `r20261112-033950-ae1e`]. cpu-2 has 256 cores, a load of 8.5, 11.1 and 14.0 over 1, 5 and 15 minutes, and 904 GB available. Its four slots are held by the queue's candidate checks, yet the node is at 3 to 5 percent of its cores. That is quiet for a call pinned to one core. "No line", the test I used in my last entries, was the wrong measure of a quiet node: a node with four slots has a line all night and idle cores.
+- **What runs** [run]. Launched 03:41Z through cpu-2's research pool, 260 GB reserved by its slot, at commit `c6cadd0e325f` as the first run (`r20261111-103117-a3a2`). Three interleaved pairs: one `verify` of the head block's saved session (`SparseMlaHeadBlock_v2`, NVIS 64, `FIRST=false`) as `main` runs it, then one with `MIMALLOC_PURGE_DELAY=-1`, each pinned to one core, each logging the node's load before and after.
+- **When** [guess]. Fifth of five in line at 03:42Z [run]; the four holders are candidate checks 32 to 99 minutes in. It waits at most 240 minutes for a slot. From its slot: builds, about 100 minutes of staging, six calls. If it starts by 05:00Z the verdict is about 07:30Z.
+- **Until it ends** every line that quotes the head figure keeps "one run, loaded node".
+- cpu-14 and cpu-15: not needed for this any more. They are still unexplained to me; nothing of mine ran there.
+- #8814: unchanged, waits for #8949 on `main` (`be9a3d566905` at 03:36Z).
+
+For the table:
+- Allocator setting on the head block, interleaved rerun: `r20261112-034149-2dc7` (cpu-2, 256 cores, load 8.5 at launch), in line; no figure yet.
