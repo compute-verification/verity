@@ -344,7 +344,10 @@ class Ledger:
 
     def append(self, kind: str, session: str | None, body: dict, leaf: int | None = None) -> None:
         q = next(self.leaves) if leaf is None else leaf
-        sign = lambda m: lms.sign_at(self.private, q, m).encode()  # noqa: E731
+
+        def sign(message: bytes) -> bytes:
+            return lms.sign_at(self.private, q, message).encode()
+
         self.lines.append(LC.ledger_line(self.lines, kind, session, body, self.key.public[:16], sign))
         self.path.write_text("".join(line + "\n" for line in self.lines))
 
