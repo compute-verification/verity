@@ -1326,7 +1326,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         if bounded and self.retain in ("host", "sample"):
             if self.retain == "sample" and not learning and chunk_picks is None:
                 kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient]
-                keep = _HostWindows(kept, used, W, C) if kept else None
+                keep: _HostWindows | _HostRanges | None = _HostWindows(kept, used, W, C) if kept else None
             else:
                 ex_fams: dict[str, int] = {}
                 for elo, ehi, fam in excl:
