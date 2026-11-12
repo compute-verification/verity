@@ -35,6 +35,8 @@ from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
 
+__all__ = ["Options", "main", "write_live"]
+
 SCHEMA = "verity-vllm/meta-inventory/v1"
 
 #: attributes whose value says which kernel a module runs; recorded by type name (objects) or value (scalars)

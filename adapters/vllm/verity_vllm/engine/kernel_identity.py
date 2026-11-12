@@ -30,6 +30,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+__all__ = ["collect", "inductor_cache_dir", "triton_cache_dir"]
+
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
 _AOT_ID = re.compile(r"^# AOT ID: \[(.*?)\]", re.M)
 _KERNEL_HEADER = re.compile(r"^@triton_heuristics\.\w+\(|^@triton\.jit", re.M)
