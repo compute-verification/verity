@@ -6,7 +6,7 @@
 #   verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM|none] [--ours ARM] [--load burst]
 #     [--rate 1000] [--requests 800 | --span-s S] [--reps 3] [--replay PASS|none] [--max-model-len N] [--target 1]
 #   verity bench prod_repro --client vllm-bench --load NAME[=RUNG+RUNG...] [--reps 6] [--replay NAME@RUNG]
-#     [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--model ...] [--stock ...] ...
+#     [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--lifetimes L] [--leave-out N] [--model ...] [--stock ...] ...
 #   verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
 #     [--target 1]
 #   verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
@@ -28,6 +28,10 @@
 # --pass-prompts, --sampled and --stop-at are the benchmark's PASS_PROMPTS (the prompts a pass sends), SAMPLED (each
 # request sampled at the recipe's temperature and top-p) and STOP_AT (an arm starts no pass it can't finish by then;
 # the replay runs after the arms whatever the time, and the job's end is its lease's, MAX_MIN).
+# --lifetimes and --leave-out are the benchmark's LIFETIMES and LEAVE_OUT: the arms are served L times, each time a
+# server of its own, lifetime K of an arm in OUT/<arm>.K, and each lifetime's first N passes, its warm-up, are left
+# out of every figure. A sessions load's cost has its interval over the lifetimes and so its verdict only with two
+# at least; the replay re-runs the named pass of ours's first lifetime.
 # The replay runs under the arms' lease, after them. An arm of ours that serves on the canonical DSA top-k (prod-record)
 # is replayed on it, and keeps files on the node: PRIVATE names a directory for them outside every run's (the corpus
 # client needs it for such an arm), from which the report reads the top-k's counters and keeps them in
@@ -56,9 +60,10 @@ while [ $# -gt 0 ]; do
     --rate) RATE=$1 ;; --requests) REQUESTS=$1 ;; --span-s) SPAN_S=$1 ;; --reps) REPS=$1 ;;
     --max-model-len) MAX_MODEL_LEN=$1 ;; --target) TARGET=$1 ;; --client) CLIENT=$1 ;; --report) REPORT=$1 ;;
     --replay) REPLAYED=$1 ;; --pass-prompts) PASS_PROMPTS=$1 ;; --stop-at) STOP_AT=$1 ;; --replay-of) REPLAY_OF=$1 ;;
+    --lifetimes) LIFETIMES=$1 ;; --leave-out) LEAVE_OUT=$1 ;;
     *) echo "prod_repro: unknown flag $flag (--model, --stock, --again, --ours, --load, --rate, --requests, --span-s," \
-            "--reps, --replay PASS|none, --pass-prompts NAME=N, --sampled, --stop-at TIME, --max-model-len, --target," \
-            "--client corpus|vllm-bench, --report OUT, --replay-of OUT)"; exit 2 ;;
+            "--reps, --replay PASS|none, --pass-prompts NAME=N, --sampled, --stop-at TIME, --lifetimes L, --leave-out N," \
+            "--max-model-len, --target, --client corpus|vllm-bench, --report OUT, --replay-of OUT)"; exit 2 ;;
   esac
   shift
 done
@@ -91,11 +96,16 @@ if [ -n "$REPORT" ]; then
 fi
 D=${RESEARCH_RUN_DIR:?run this under research run (or read an earlier job: --report OUT --load NAME)}; OUT=$D/out
 MODEL_ID=${MODEL_ID:-moonlight}
-export MODEL_ID CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${PASS_PROMPTS:+PASS_PROMPTS} ${STOP_AT:+STOP_AT} ${SAMPLED:+SAMPLED}
+export MODEL_ID CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${PASS_PROMPTS:+PASS_PROMPTS} ${STOP_AT:+STOP_AT} ${SAMPLED:+SAMPLED} \
+  ${LIFETIMES:+LIFETIMES} ${LEAVE_OUT:+LEAVE_OUT}
+[[ "${LIFETIMES:-1}" =~ ^[1-9][0-9]*$ ]] || { echo "prod_repro: --lifetimes $LIFETIMES: how many times the arms are served, 1 or more"; exit 2; }
+[ -z "$REPLAY_OF" ] || [ "${LIFETIMES:-1}" = 1 ] || { echo "prod_repro: --replay-of serves nothing: --lifetimes is of a job that serves its arms"; exit 2; }
+# ours's directory the replay reads: its first lifetime's where the arms are served in lifetimes
+ours_dir=$OURS; [ "${LIFETIMES:-1}" = 1 ] || ours_dir=$OURS.1
 [ -z "${STOP_AT:-}" ] || date -d "$STOP_AT" +%s > /dev/null || { echo "prod_repro: --stop-at $STOP_AT is not a time"; exit 2; }
 # the pass of ours the replay re-runs: REPLAY, REPLAY_FROM and REPLAY_MODES are the benchmark's runner's
 replays() {
-  if [ "$REPLAYED" = none ]; then unset REPLAY REPLAY_FROM; else export REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES; fi
+  if [ "$REPLAYED" = none ]; then unset REPLAY REPLAY_FROM; else export REPLAY=$REPLAYED REPLAY_FROM=$OUT/$ours_dir REPLAY_MODES; fi
 }
 # SIGTERM (the job's time ending) reaches the runner and its arm too, which stop; this script goes on to the report
 termed=0; trap 'termed=1' TERM

@@ -28,11 +28,14 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   difference; a replayed step serving did not run, a missing step that emitted a token or holds a request that had
   not ended, and rows that differ all fail;
 - ``cost``: what serving with our changes (``--ours``) costs over stock (``--stock``) on the load, a share of stock's
-  serving time with its 95% interval over the passes taken as independent, beside stock served a second time
-  (``--again``), the noise floor: by vLLM's client the benchmark's paired ratio at the rung where stock is saturated
-  (`serve_tax.serving_cost`), by the corpus client its tax over reps (`serve_tax.tax`), which is a cost only where
-  stock did not keep up with the arrivals. It is under the target only where the upper end of an interval over
-  server-lifetime pairs is (`under`), which a job of one lifetime an arm does not have; else that is not shown;
+  serving time. On a sessions load it is the benchmark's own cost (`serve_tax.session_cost`): the mean over the
+  server lifetimes an arm (the job's ``<arm>.K`` directories, `arm_dirs`) of each one's cost, with its 95% interval
+  over the lifetimes, and it is under the target only where the benchmark says that interval's upper end is, which
+  a job of one lifetime an arm can't say; beside it, each lifetime's cost, the spread, the cost over the passes
+  taken as independent and the noise floor (stock served a second time, ``--again``, else stock's own lifetimes).
+  On another load it is the cost over the passes taken as independent, by vLLM's client the benchmark's paired
+  ratio at the rung where stock is saturated (`serve_tax.serving_cost`), by the corpus client its tax over reps
+  (`serve_tax.tax`), which is a cost only where stock did not keep up with the arrivals; that has no verdict;
 - ``advice``: the bits a request by class, with each class's events, of the certified serve whose trace directory
   ``--advice-trace`` names, by the tree's reader of it (`BY_CLASS`: its ``report``), under the registered stop ids
   (``--advice-stops``, EOS first; else the ``eos_token_id`` of the generation_config.json beside the trace's model).
@@ -110,10 +113,18 @@ TOPK_KEPT = "topk_counters.json"
 #: by model, as the benchmark names it: what is known of leaving the context limit to vLLM (``auto``: whether vLLM
 #: then starts, at which settings, why not, and the run that showed it)
 LIMITS = HERE / "limits.json"
-#: the cost's verdict against its target (`under`)
-UNDER, NOT_SHOWN = "under", "not shown"
-#: why a job of one server lifetime an arm has no verdict (`under`)
+#: the cost's verdict against its target, and the benchmark's words for each on a sessions load
+#: (`serve_tax.session_cost`: by the interval over server lifetimes, "meets" where its upper end is under the target,
+#: "misses" where its lower end is over it)
+UNDER, OVER, NOT_SHOWN = "under", "over", "not shown"
+VERDICTS = {"meets": UNDER, "misses": OVER, "cannot tell": NOT_SHOWN}
+#: why a job of one server lifetime an arm has no verdict
 ONE_LIFETIME = "each arm has one server lifetime, and the verdict reads the interval over lifetime pairs"
+#: why a cost with such an interval is not shown to be under its target
+NOT_UNDER = "the upper end of the interval over lifetime pairs is not under it"
+#: why a load that is not a sessions load has no verdict, however many lifetimes served it
+NOT_SESSIONS = ("the interval over lifetime pairs is the benchmark's for a sessions load (serve_tax.session_cost), and "
+                "this load is not one")
 #: why a cost on a sessions load is not shown whatever its interval: the benchmark's own cost has no verdict there
 #: (`serve_tax.session_cost`'s ``same_work``)
 UNEQUAL = ("the arms did not do the same work (one left a request unserved, or their prefix caches served different "
@@ -125,9 +136,20 @@ def default_arms(model_id: str | None = None, out: Path | None = None) -> tuple[
     refuses an arm at the published settings for a model with none), else `TODAY`. An earlier job's ``out`` is read as
     `PROD` where it holds that set's arm of ours."""
     if out is not None:
-        return PROD if (out / PROD[2]).is_dir() else TODAY
+        return PROD if arm_dirs(out, PROD[2])[0].is_dir() else TODAY
     model = S.MODELS.get(model_id)
     return PROD if all(a in S.ARMS for a in PROD) and model is not None and getattr(model, "published", ()) else TODAY
+
+
+def arm_dirs(out: Path, arm: str) -> list[Path]:
+    """An arm's directories in a job's out/: its own, or, where the benchmark served the job's arms in server
+    lifetimes (its LIFETIMES), each lifetime's (``<arm>.K``), in the lifetimes' order. The arm's own where it has
+    neither."""
+    if (out / arm).is_dir():
+        return [out / arm]
+    k = len(arm) + 1
+    found = {int(d.name[k:]): d for d in out.glob(f"{arm}.*") if d.name[k:].isdigit() and d.is_dir()}
+    return [found[n] for n in sorted(found)] or [out / arm]
 
 
 def limits(model_id: str | None) -> dict:
@@ -202,12 +224,12 @@ def replay_state(replay_dir: Path, expected: bool) -> dict:
 
 # ------------------------------------------------------------------------------------------- the replay's engine
 
-def topk_counters(d: Path) -> dict | None:
-    """The canonical top-k's counters over the processes that kept theirs in ``d`` (`dsa_topk.log_to`: a file a
+def topk_counters(dirs: list[Path]) -> dict | None:
+    """The canonical top-k's counters over the processes that kept theirs in ``dirs`` (`dsa_topk.log_to`: a file a
     process, written every few thousand calls and at its exit, so each figure is a lower bound): the processes, the
     calls of the indexer's top-k and the rows of more than its keys that were rewritten. None where no process kept
     any."""
-    recs = [json.loads(f.read_text()) for f in sorted(d.glob("dsa_topk.*.json"))] if d.is_dir() else []
+    recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
     return {"processes": len(recs), "calls": sum(sum(r["calls"].values()) for r in recs),
@@ -217,7 +239,8 @@ def topk_counters(d: Path) -> dict | None:
 def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
     """The canonical top-k's counters of the replay's processes and of serving's (`topk_counters`). The processes keep
     them on the node, outside the run's directory, under the job's private one (the benchmark's PRIVATE: an arm's
-    under its name, a replay's under its directory's). With ``private`` they are read there and kept in OUT
+    under its directory's name, each of its lifetimes' under its own, and a replay's under its directory's). With
+    ``private`` they are read there and kept in OUT
     (`TOPK_KEPT`); without, they are the ones an earlier report of the job kept. Serving's are also the kept ones where
     the private directory holds none for the arm: the arm's processes ended with it, in this job or in the earlier one
     whose arm this job replays (run.sh --replay-of, which carries that job's). ``kept`` says whether either holds."""
@@ -226,8 +249,8 @@ def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
     if private is None:
         return {"kept": True, **before} if before else {"kept": False, "replay": None, "served": None}
     log = S.ARMS[ours].env.get(TOPK_LOG) if ours in S.ARMS else None
-    kept = {name: topk_counters(Path(log.replace(S.PRIVATE, str(private / d)))) if log else None
-            for name, d in (("replay", replay), ("served", ours))}
+    kept = {name: topk_counters([Path(log.replace(S.PRIVATE, str(private / d))) for d in ds]) if log else None
+            for name, ds in (("replay", [replay]), ("served", [d.name for d in arm_dirs(out, ours)]))}
     kept["served"] = kept["served"] or before.get("served")
     f.write_text(json.dumps(kept, indent=1))
     return {"kept": True, **kept}
@@ -433,13 +456,13 @@ def past_topk(w: dict, checkpoint: str | None, differing: list[dict]) -> dict | 
     return {"keys": k, "requests": len(past), "differing": sum(d["request"] in past for d in differing)}
 
 
-def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: dict) -> dict:
+def tokens(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path, state: dict) -> dict:
     """The tokens line: the served window of ``ours``'s pass ``load`` rep ``rep`` against the tokens its replay kept.
-    Not measured without a replay, where the replay is of another window, or where the window can't be read back.
-    Each differing request has its first differing position, the ids served and replayed there and the step that
-    emitted it while serving, the earliest first."""
-    arm_dir = out / ours
-    meta = json.loads((arm_dir / "meta.json").read_text())
+    ``dirs`` are the arm's directories (`arm_dirs`): of an arm served in lifetimes, the window is the pass of the
+    lifetime the replay's record names. Not measured without a replay, where the replay is of another window, or
+    where the window can't be read back. Each differing request has its first differing position, the ids served and
+    replayed there and the step that emitted it while serving, the earliest first."""
+    meta = json.loads((dirs[0] / "meta.json").read_text())
     if not state["ended"]:
         if state["expected"]:
             return not_measured(f"the replay did not end (no replay.json in {replay_dir})" + (
@@ -449,7 +472,8 @@ def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: d
                                                if meta.get("client") == S.BENCH else f" (no replay.json in {replay_dir})"))
     rec, run = json.loads((replay_dir / "replay.json").read_text()), meta.get("run_id")
     of = (Path(rec["arm_dir"]).name, rec["load"], rec["rep"], rec.get("served_run_id"))
-    if of != (ours, load, rep, run):
+    arm_dir = next((d for d in dirs if d.name == of[0]), None)
+    if arm_dir is None or of[1:] != (load, rep, run):
         return not_measured(f"the replay in {replay_dir} is of another window (arm {of[0]}, load {of[1]}, rep {of[2]}, "
                             f"run {of[3]}), not of {ours}'s {load} rep {rep} of run {run}")
     try:
@@ -494,7 +518,8 @@ def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: d
             "sampling": [{"temperature": t, "top_p": p, "seeded": seeded, "requests": k}
                          for (t, p, seeded), k in sorted(sampling.items(), key=lambda x: -x[1])],
             "past_topk": past_topk(w, meta.get("checkpoint"), diff),
-            "window": {"arm": ours, "load": load, "rep": rep, "run": run, "chosen": WINDOW},
+            "window": {"arm": ours, "lifetime": json.loads((arm_dir / "meta.json").read_text()).get("lifetime"),
+                       "load": load, "rep": rep, "run": run, "chosen": WINDOW},
             "served_mode": rec["served_mode"], "replay_mode": rec["mode"], "replay_run": rec.get("run_id"),
             "served_window_s": rec["served_window_s"], "replay_wall_s": rec["replay_wall_s"],
             "engine_ready_s": rec["engine_ready_s"]}
@@ -502,38 +527,45 @@ def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: d
 
 # ----------------------------------------------------------------------------------------------------------- the cost
 
-def kept_up(arm_dir: Path, arm: dict, load: str) -> dict:
+def rep_dir(dirs: list[Path], r: dict, load: str) -> Path:
+    """The directory of an arm's rep of ``load``: of an arm served in lifetimes (`arm_dirs`), the pass's in its
+    lifetime's directory (`serve_tax.lifetimes` numbers such an arm's reps over its lifetimes)."""
+    d = dirs[0] if "lifetime" not in r else next(d for d in dirs if d.name.rpartition(".")[2] == str(r["lifetime"]))
+    return d / load / f"rep-{r.get('pass', r['rep'])}"
+
+
+def kept_up(dirs: list[Path], arm: dict, load: str) -> dict:
     """Whether an arm the corpus client sent ``load`` to kept up with its arrivals, as the benchmark says it of a load
     sent as it arrives (`serve_tax.KEPT_UP`): it served every request, and each rep ended within that share of the
     time its requests arrived over after the last one arrived. ``tail_s`` is the longest such end."""
     tails, all_served = [], True
     for r in arm["loads"][load]:
-        arrived = json.loads((arm_dir / load / f"rep-{r['rep']}" / "meta.json").read_text())["arrivals_span_s"]
+        arrived = json.loads((rep_dir(dirs, r, load) / "meta.json").read_text())["arrivals_span_s"]
         tails.append((r["span_s"] - arrived, arrived))
         all_served &= r["ok"] == r["sent"]
     return {"kept_up": all_served and all(t <= S.KEPT_UP * a for t, a in tails), "tail_s": max(t for t, _ in tails),
             "arrivals_span_s": max(a for _, a in tails)}
 
 
-def under(life: list[float] | None, target: float) -> str:
-    """Whether a cost is shown to be under ``target``, a fraction: `UNDER` only where the upper end of its 95%
-    interval over server-lifetime pairs (``life``) is; else `NOT_SHOWN`, as without one. The unit is a server
-    lifetime: the passes of one share its server's state, so an interval over them as if independent is too narrow
-    to say it, and the estimate alone shows nothing. The noise floor is not added: each lifetime pair already holds
-    two servers' draws."""
-    return UNDER if life and life[1] < target else NOT_SHOWN
+def _frac(x: float | None) -> float | None:
+    """A figure of the benchmark's own cost, which is percent, as a fraction."""
+    return None if x is None else x / 100
 
 
 def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | None, load: str, target: float) -> dict:
-    """The cost line: ``ours`` over ``stock`` on ``load``, a fraction of stock's serving time, with its interval
-    over the passes taken as independent, the noise floor beside (``again`` over ``stock``, measured the same way,
-    and whether its own interval leaves out 0: stock then differs from stock) and whether the cost is under
-    ``target`` percent (`under`). The benchmark's runner serves each arm in one lifetime, so a job holds one
-    lifetime pair and no interval over them, and its verdict is `NOT_SHOWN`. On a sessions load it is so too where
-    the benchmark's own cost says the arms did not do the same work
-    (`serve_tax.session_cost`). Not measured where an arm did not serve the load, where an arm left requests unserved
-    (the arms then served different tokens), where the benchmark's own cost refuses the arms, or where the corpus
-    client's arrivals did not saturate stock."""
+    """The cost line: ``ours`` over ``stock`` on ``load``, a fraction of stock's serving time, and whether it is under
+    ``target`` percent. On a sessions load every figure is the benchmark's own cost's (`serve_tax.session_cost`): the
+    cost is the mean over the server lifetimes an arm of each one's cost, its interval is over the lifetimes, and the
+    verdict is the benchmark's, which reads that interval alone (`VERDICTS`). So a job of one lifetime an arm, which
+    has no such interval, shows nothing, nor does one whose arms did not do the same work. Beside it and in no
+    verdict: the cost over the passes taken as independent with its interval (``passes``), each lifetime's cost and
+    the spread between lifetimes and between a lifetime's passes (``lifetimes``), and the noise floor, a lifetime
+    pair its unit too: stock again over stock where a twin of stock was served, else stock's own lifetimes, each
+    second one over the one before it. On another load the cost is the one over the passes taken as independent, the
+    noise floor is ``again`` over ``stock`` measured the same way, and there is no verdict. ``leaves_out_zero`` says
+    whether the floor's own interval leaves out 0: stock then differs from stock. Not measured where an arm did not
+    serve the load, where an arm left requests unserved (the arms then served different tokens), where the
+    benchmark's own cost refuses the arms, or where the corpus client's arrivals did not saturate stock."""
     missing = [a for a in (stock, ours) if a not in by or not reps_of(by[a], load)]
     if missing:
         return not_measured(f"{', '.join(missing)} did not serve load {load}")
@@ -542,24 +574,33 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     if any(unserved.values()):
         return not_measured("the arms did not serve the same tokens: " + ", ".join(
             f"{a} left {n} requests unserved" for a, n in unserved.items() if n))
+    lives = {"pairs": len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1])), "ci95": None}
+    verdict = NOT_SHOWN
     if load in S.bench_loads(ref):
         c = S.serving_cost(ref, mine, load)
         if c is None:
             return not_measured(f"{stock} and {ours} share no rung or no rep of load {load}")
-        noise = S.serving_cost(ref, twin, load, c["rung"]) if twin else None
+        floor = S.serving_cost(ref, twin, load, c["rung"]) if twin else None
         how = {"client": S.BENCH, "rung": c["rung"], "reps": c["reps"], "saturated": c["saturated"],
                "sessions": bool(getattr(S.LOADS.get(load), "sessions", False)),
                "by": "the paired ratio of output tokens a second over reps at one rung (serve_tax.serving_cost)"}
+        noise = floor and {"arm": again, "over": "passes", "value": floor["value"], "ci95": floor.get("ci95")}
+        value = c["value"]
         if how["sessions"]:
             try:
-                own = S.session_cost([ref, mine], ours, stock)
+                own = S.session_cost([ref, mine, *([twin] if twin else [])], ours, stock, target)
             except SystemExit as e:
                 return not_measured(f"the benchmark's own cost on a sessions load refuses these arms: {e}", how=how)
             if own is None or own["load"] != load:
                 return not_measured(f"the benchmark's own cost on a sessions load is of {own['load'] if own else 'none'}, "
                                     f"not of {load}: a job serves one sessions load", how=how)
-            same = own["same_work"]
-        c = {k: c[k] for k in ("value", "ci95") if k in c}
+            same, value, verdict, n = own["same_work"], _frac(own["value"]), VERDICTS[own["verdict"]], own["noise_floor"]
+            lives = {"pairs": own["lifetimes"], "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
+                     "each": own["by_lifetime"] and [{**x, "value": _frac(x["value"])} for x in own["by_lifetime"]],
+                     "spread_points": own["spread"], "left_out": own["left_out"]}
+            noise = n and {"arm": n["arm"], "over": "lifetimes", "value": _frac(n["value"]),
+                           "ci95": n["ci95"] and [x / 100 for x in n["ci95"]], "pairs": n["pairs"],
+                           "own": "lifetimes" in n}
     else:
         def tok(a: dict) -> dict:
             return S.summary([r.get("output_tok_per_s") for r in a["loads"][load]])
@@ -567,23 +608,23 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
         c = S.tax(tok(ref), tok(mine))
         if c is None:
             return not_measured(f"{stock} or {ours} served no token of load {load}")
-        noise = S.tax(tok(ref), tok(twin)) if twin and load in twin["loads"] else None
-        kept = kept_up(out / stock, ref, load)
+        floor = S.tax(tok(ref), tok(twin)) if twin and load in twin["loads"] else None
+        noise = floor and {"arm": again, "over": "passes", "value": floor["value"], "ci95": floor.get("ci95")}
+        value = c["value"]
+        kept = kept_up(arm_dirs(out, stock), ref, load)
         how = {"client": S.CORPUS, "rate": ref["loads"][load][0]["rate"], "reps": c["n"], **kept,
                "by": "stock's mean output tokens a second over ours, less one, over reps (serve_tax.tax)"}
         if kept["kept_up"]:
             return not_measured(f"{stock} kept up with the arrivals (its longest rep ended {kept['tail_s']:.1f} s after "
                                 f"the last of {kept['arrivals_span_s']:.1f} s of arrivals), so its tokens a second "
                                 "follow the arrivals and are not a cost: send faster", reading=c, how=how)
-    life = None  # the interval over lifetime pairs: a job holds one pair
-    ends = noise.get("ci95") if noise else None
-    return {"measured": c["value"] is not None, "value": c["value"], "ci95": c.get("ci95"), "how": how,
-            **({} if c["value"] is not None else {"why": "an arm served no token in some rep"}),
-            "lifetimes": {"pairs": 1, "ci95": life},
-            "noise_floor": {"arm": again, "value": noise["value"], "ci95": ends,
-                            "leaves_out_zero": bool(ends) and not ends[0] <= 0 <= ends[1]} if noise else None,
-            "target": target, "same_work": same,
-            "verdict": NOT_SHOWN if same is False else under(life, target / 100)}
+    if noise:
+        ends = noise["ci95"]
+        noise["leaves_out_zero"] = bool(ends) and not ends[0] <= 0 <= ends[1]
+    return {"measured": value is not None, "value": value, "passes": {"value": c["value"], "ci95": c.get("ci95")},
+            "how": how, **({} if value is not None else {"why": "an arm served no token in some rep"}),
+            "lifetimes": lives, "noise_floor": noise or None, "target": target, "same_work": same,
+            "verdict": NOT_SHOWN if same is False else verdict}
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -659,22 +700,31 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
            advice_trace: Path | None = None, advice_stops: str | None = None, private: Path | None = None) -> dict:
     replay_dir = replay_dir or out / "replay-compiled"
     names = [a for a in (stock, again, ours) if a]
-    states = {a: read(f"how far {a} got", lambda a=a: arm_state(out / a, load)) for a in names}
-    dirs = {a: out / a for a in names if (out / a / "meta.json").is_file()}
-    by, sets, unread = {}, {}, {}
-    for a, d in dirs.items():
-        m = read(f"{a}'s metrics", lambda d=d: S.arm_metrics(d))
-        if m.get("unread"):
-            unread[a] = m["why"]
+    held = {a: arm_dirs(out, a) for a in names}
+    states = {d.name: read(f"how far {d.name} got", lambda d=d: arm_state(d, load)) for a in names for d in held[a]}
+    dirs = {a: ds for a in names if (ds := [d for d in held[a] if (d / "meta.json").is_file()])}
+    per, by, sets, unread = {}, {}, {}, {}
+    for a, ds in dirs.items():
+        ms = [read(f"{d.name}'s metrics", lambda d=d: S.arm_metrics(d)) for d in ds]
+        if bad := next((m for m in ms if m.get("unread")), None):
+            unread[a] = bad["why"]
+        else:
+            per[a] = ms
+    # an arm's lifetimes are one arm's, and every arm's reps are numbered in one call (serve_tax.lifetimes), so that
+    # a cost pairs the same pass of the same lifetime
+    one = read("the arms' lifetimes", lambda: {m["arm"]: m for m in S.lifetimes([m for ms in per.values() for m in ms])})
+    for a in per:
+        if one.get("unread") or a not in one:
+            unread[a] = one["why"] if one.get("unread") else f"{a}'s record names another arm"
             continue
-        by[a] = m
+        by[a] = one[a]
         if a in (stock, ours):
-            s = read(f"{a}'s settings", lambda a=a, d=d, m=m: settings(d, m, load))
+            s = read(f"{a}'s settings", lambda a=a: settings(dirs[a][0], by[a], load))
             if s.get("unread"):
                 unread[a] = s["why"]
             else:
                 sets[a] = s
-    meta = read(f"{ours}'s record", lambda: json.loads((dirs[ours] / "meta.json").read_text())) if ours in dirs else {}
+    meta = read(f"{ours}'s record", lambda: json.loads((dirs[ours][0] / "meta.json").read_text())) if ours in dirs else {}
     line = read("the cost", lambda: cost(out, by, stock, ours, again, load, target)) if stock else not_measured(
         f"no stock arm was served: the job serves {ours} alone")
     if len(sets) == 2 and (differ := settings_differ(sets[stock], sets[ours])):
@@ -688,7 +738,7 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
     elif state.get("unread"):
         toks = not_measured(state["why"])
     else:
-        toks = read("the tokens", lambda: tokens(out, ours, replayed or load, rep, replay_dir, state))
+        toks = read("the tokens", lambda: tokens(dirs[ours], ours, replayed or load, rep, replay_dir, state))
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by)},
@@ -899,12 +949,42 @@ def _engine(e: dict) -> list[str]:
 
 
 def _verdict(c: dict) -> str:
-    """A cost's verdict in words: yes, or not shown and, where the interval is not the reason, what is."""
+    """A cost's verdict in words: yes, no, or not shown and why."""
     if c["verdict"] == UNDER:
         return "yes"
+    if c["verdict"] == OVER:
+        return "NO, the lower end of the interval over lifetime pairs is over it"
+    life = c["lifetimes"]
     why = (UNLIKE if c.get("settings_differ") else UNEQUAL if c.get("same_work") is False else
-           ONE_LIFETIME if not c["lifetimes"]["ci95"] else "")
-    return NOT_SHOWN + (f", {why}" if why else "")
+           ONE_LIFETIME if life["pairs"] < 2 else NOT_UNDER if life["ci95"] else NOT_SESSIONS)
+    return f"{NOT_SHOWN}, {why}"
+
+
+def _lifetimes(c: dict) -> list[str]:
+    """A sessions load's cost by lifetime: how the cost is taken, each lifetime's own and the spread."""
+    life, points = c["lifetimes"], c["lifetimes"]["spread_points"]
+
+    def spread(x: float | None) -> str:
+        return "not measured" if x is None else f"{x:.2f} points"
+
+    left = life.get("left_out")
+    return ["  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in "
+            "it (serve_tax.session_cost)"
+            + (f"; the first {left['passes']} of each lifetime's passes, its warm-up, served and left out" if left else ""),
+            *(["  by lifetime: " + ", ".join(f"{_pct(x['value'])} ({x['reps']} pass{'es' * (x['reps'] != 1)})"
+                                             for x in life["each"])] if life.get("each") else []),
+            f"  the cost's spread (standard deviations): {spread(points['between'])} between lifetimes, "
+            f"{spread(points['within'])} between a lifetime's passes"]
+
+
+def _noise(n: dict | None, stock: str) -> str:
+    if not n or n["value"] is None:
+        return "not measured (stock was not served a second time)"
+    if n["over"] == "passes":
+        return f"{n['arm']} over {stock} {_pct(n['value'])}{_interval(n)}, passes taken as independent"
+    who = f"{stock}'s own lifetimes, each second one over the one before it," if n["own"] else f"{n['arm']} over {stock}"
+    ends = f", 95% interval [{_pct(n['ci95'][0])}, {_pct(n['ci95'][1])}]" if n["ci95"] else " (no interval: one pair)"
+    return f"{who} {_pct(n['value'])}{ends}, over {n['pairs']} pair{'s' * (n['pairs'] != 1)} of server lifetimes"
 
 
 def text(r: dict) -> str:
@@ -957,25 +1037,30 @@ def text(r: dict) -> str:
                "attention reads the keys the DSA indexer's top-k selects"
                + (f"; {k['differing']:,} of the {t['requests_differing']:,} differing requests are among them"
                   if t["requests_differing"] else "")] if (k := t.get("past_topk")) else []),
-            f"  the window: {t['window']['chosen']}"]
+            f"  the window: {'of lifetime ' + str(lt) + ' of ' + ours + '; ' if (lt := t['window'].get('lifetime')) else ''}"
+            f"{t['window']['chosen']}"]
     if not c["measured"]:
         lines.append(f"cost: not measured: {c['why']}")
     else:
-        how, noise = c["how"], c["noise_floor"]
+        how, noise, life = c["how"], c["noise_floor"], c["lifetimes"]
         bench = how["client"] == S.BENCH
         at = (f"at {how['rung']} users" if how.get("sessions") else f"at concurrency {how['rung']}") if bench else ""
         at = (f"{at}, where stock's rungs {'show' if how['saturated'] else 'do NOT show'} it saturated"
               if bench else f"at {how['rate']:g} requests a second, which stock did not keep up with")
         reps = f"{how['reps']} paired rep{'' if how['reps'] == 1 else 's'}" if bench else f"{how['reps'][0]} and {how['reps'][1]} reps"
+        over = (f", 95% interval [{_pct(life['ci95'][0])}, {_pct(life['ci95'][1])}] over {life['pairs']} server lifetimes "
+                "an arm" if life["ci95"] else "")
+        own = how.get("sessions")
         lines += [
-            f"cost: {ours} over {stock} {_pct(c['value'])} of stock's serving time; under {c['target']:g}%: {_verdict(c)}",
-            f"  passes taken as independent{_interval(c)}: over {reps}, {at}: {how['by']}",
-            "  noise floor, beside and not added: " + (
-                f"{a['again']} over {stock} {_pct(noise['value'])}{_interval(noise)}, passes taken as independent"
-                if noise and noise["value"] is not None else "not measured (stock was not served a second time)")]
+            f"cost: {ours} over {stock} {_pct(c['value'])} of stock's serving time{over}; under {c['target']:g}%: {_verdict(c)}",
+            *(_lifetimes(c) if own else []),
+            f"  passes taken as independent{' ' + _pct(c['passes']['value']) if own else ''}{_interval(c['passes'])}: over "
+            f"{reps}, {at}: {how['by']}{'; in no verdict' if own else ''}",
+            "  noise floor, beside and not added: " + _noise(noise, stock)]
         if noise and noise.get("leaves_out_zero"):
             lines.append(f"  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of {stock} "
-                         "differ by more than their passes do")
+                         + ("differ by more than their passes do" if noise["over"] == "passes" else
+                            "did not serve at the same rate"))
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")
@@ -1026,8 +1111,8 @@ def main(argv: list[str] | None = None) -> int:
         print(" ".join(default_arms(a.model, a.out)))
         return 0
     if a.cmd == "served":
-        s = arm_state(a.out / a.arm, a.load)
-        return 0 if s["started"] and not s.get("error") and s.get("passes") else 1
+        ss = [arm_state(d, a.load) for d in arm_dirs(a.out, a.arm)]
+        return 0 if all(s["started"] and not s.get("error") and s.get("passes") for s in ss) else 1
     stock, again, ours = default_arms(out=a.out)
     r = report(a.out, (stock if a.stock is None else a.stock) or None, a.ours or ours,
                (again if a.again is None else a.again) or None, a.load, a.rep,

@@ -134,7 +134,7 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     # the cost is the benchmark's tax of the arms' output tokens a second over reps, with its interval and its floor
     ref, mine = (S.summary(x) for x in ([100.0, 101.0, 102.0], [99.0, 100.0, 101.0]))
     want = S.tax(ref, mine)
-    assert r["cost"]["value"] == pytest.approx(want["value"]) and r["cost"]["ci95"] == pytest.approx(want["ci95"])
+    assert r["cost"]["value"] == pytest.approx(want["value"]) and r["cost"]["passes"]["ci95"] == pytest.approx(want["ci95"])
     assert r["cost"]["how"]["client"] == "corpus" and r["cost"]["noise_floor"]["arm"] == "compiled-again"
     # one lifetime an arm: no interval over lifetime pairs, so no verdict; the interval printed is over the passes
     assert (f"cost: record over compiled {100 * want['value']:+.2f}% of stock's serving time; under 1%: not shown, each "
@@ -553,7 +553,8 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
     rc, txt, r = P.main(["report", str(out), "--load", "chat", *ARMS]), (out / "prod_repro.txt").read_text(), json.loads(
         (out / "prod_repro.json").read_text())
     want = S.serving_cost(S.arm_metrics(out / "compiled"), S.arm_metrics(out / "record"), "chat")
-    assert rc == 0 and r["cost"]["value"] == pytest.approx(0.004) == pytest.approx(want["value"]) and r["cost"]["ci95"] == want["ci95"]
+    assert rc == 0 and r["cost"]["value"] == pytest.approx(0.004) == pytest.approx(want["value"])
+    assert r["cost"]["passes"] == {"value": want["value"], "ci95": want["ci95"]}
     assert r["cost"]["how"] == {"client": "vllm-bench", "rung": 16, "reps": 6, "saturated": True, "sessions": False,
                                 "by": r["cost"]["how"]["by"]}
     # six passes that all sit under the target show nothing: they are one lifetime an arm, and the verdict reads the
@@ -570,9 +571,6 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
     assert (", passes taken as independent\n"
             "  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of compiled differ by "
             "more than their passes do\n") in txt
-    # under the target only where the upper end of an interval over lifetime pairs is; without one nothing is shown
-    assert P.under([0.001, 0.0099], 0.01) == "under"
-    assert P.under([0.001, 0.01], 0.01) == P.under(None, 0.01) == "not shown"
     assert "tokens: not measured: no replay ran: none was asked for (--replay PASS names the pass of vLLM's client" in txt
 
 
@@ -589,34 +587,119 @@ def sessions_arm(name: str, rates: list[float]) -> dict:
             "loads": {S.pass_name(S.AGENTIC, 4): reps}, "planned": {S.AGENTIC: plan}}
 
 
-def test_a_sessions_loads_cost_is_under_its_target_only_where_the_benchmark_says_the_arms_did_the_same_work(tmp_path: Path):
+def lifetimes_of(name: str, rates: list[list[float]]) -> list[dict]:
+    """An arm's metrics a server lifetime (`sessions_arm`), as the benchmark reads each lifetime's directory."""
+    return [sessions_arm(name, x) | {"lifetime": k, "reps": len(x), "left_out": 0} for k, x in enumerate(rates, 1)]
+
+
+def lifetimes_cost(tmp_path: Path, stock: list[list[float]], ours: list[list[float]]) -> tuple[dict, dict]:
+    """The cost line and the benchmark's own cost of two arms served in lifetimes, joined as the report joins them."""
+    arms = S.lifetimes(lifetimes_of("prod", stock) + lifetimes_of("prod-record", ours))
+    return (P.cost(tmp_path, {a["arm"]: a for a in arms}, "prod", "prod-record", None, S.AGENTIC, 1.0),
+            S.session_cost(arms, "prod-record", "prod"))
+
+
+def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_interval_over_lifetimes(tmp_path: Path):
     ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
     by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-record": sessions_arm("prod-record", ours)}
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
     own = S.session_cost(list(by.values()), "prod-record", "prod")
     assert c["measured"] and round(100 * c["value"], 2) == own["value"] == 0.5 and c["how"]["sessions"] and c["how"]["rung"] == 4
-    # the arms did the same work, and the job is one lifetime an arm: no verdict; with an interval over lifetime
-    # pairs whose upper end is under the target, yes
+    # one lifetime an arm: the benchmark can't tell and the line shows nothing, though the interval over its six passes
+    # taken as independent sits under the target
+    assert (own["verdict"], own["lifetimes"]) == ("cannot tell", 1) and c["passes"]["ci95"][1] < 0.01
     assert (c["same_work"], c["verdict"], P._verdict(c)) == (True, "not shown", "not shown, " + P.ONE_LIFETIME)
-    assert c["ci95"] and c["ci95"][1] < 0.01
-    assert P._verdict(c | {"lifetimes": {"pairs": 6, "ci95": [0.002, 0.008]}, "verdict": P.under([0.002, 0.008], 0.01)}) == "yes"
-    assert P._verdict(c | {"lifetimes": {"pairs": 6, "ci95": [0.002, 0.012]}}) == "not shown"
+    assert c["lifetimes"]["pairs"] == 1 and c["lifetimes"]["ci95"] is None and c["noise_floor"] is None
+    # three lifetimes an arm whose costs agree: the interval over them is the benchmark's, and its upper end is under
+    c, own = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
+    assert own["verdict"] == "meets" and (c["verdict"], P._verdict(c)) == ("under", "yes")
+    assert c["value"] == own["value"] / 100 and c["lifetimes"]["ci95"] == [x / 100 for x in own["ci95"]]
+    assert c["lifetimes"]["pairs"] == 3 and c["lifetimes"]["ci95"][1] < 0.01
+    assert [round(100 * x["value"], 2) for x in c["lifetimes"]["each"]] == [x["value"] for x in own["by_lifetime"]] == [0.5, 0.6, 0.45]
+    assert P._lifetimes(c) == [
+        "  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in it "
+        "(serve_tax.session_cost)",
+        "  by lifetime: +0.50% (2 passes), +0.60% (2 passes), +0.45% (2 passes)",
+        f"  the cost's spread (standard deviations): {own['spread']['between']:.2f} points between lifetimes, 0.00 points "
+        "between a lifetime's passes"]
+    # with no twin of stock the floor is stock's own lifetimes, the second over the first: one pair, so no interval
+    assert c["noise_floor"] == {"arm": "prod", "over": "lifetimes", "value": pytest.approx(-0.005), "ci95": None, "pairs": 1,
+                                "own": True, "leaves_out_zero": False}
+    assert P._noise(c["noise_floor"], "prod") == ("prod's own lifetimes, each second one over the one before it, -0.50% (no "
+                                                  "interval: one pair), over 1 pair of server lifetimes")
+    # lifetimes whose costs spread: the upper end is not under the target, and nothing is shown
+    c, own = lifetimes_cost(tmp_path, [[2.0, 2.0]] * 3, [[1.99, 1.99], [1.97, 1.97], [1.999, 1.999]])
+    assert own["verdict"] == "cannot tell" and c["lifetimes"]["ci95"][1] > 0.01
+    assert (c["verdict"], P._verdict(c)) == ("not shown", "not shown, " + P.NOT_UNDER)
+    # lifetimes that all cost more than the target: the lower end is over it, and the line says no
+    c, own = lifetimes_cost(tmp_path, [[2.0, 2.0]] * 3, [[1.96, 1.96], [1.959, 1.959], [1.961, 1.961]])
+    assert own["verdict"] == "misses" and c["verdict"] == "over"
+    assert P._verdict(c) == "NO, the lower end of the interval over lifetime pairs is over it"
     # one pass an arm has no interval over passes either
     one = {n: sessions_arm(n, x) for n, x in (("prod", [2.0]), ("prod-record", ours[:1]))}
     c = P.cost(tmp_path, one, "prod", "prod-record", None, S.AGENTIC, 1.0)
-    assert c["measured"] and c["ci95"] is None and (c["same_work"], c["verdict"]) == (True, "not shown")
+    assert c["measured"] and c["passes"]["ci95"] is None and (c["same_work"], c["verdict"]) == (True, "not shown")
     # a rep whose prefix cache served another share of the prompts: the benchmark's own cost has no verdict, nor this
     by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
-    assert own["verdict"] == "cannot tell" == S.session_cost(list(by.values()), "prod-record", "prod")["verdict"]
     assert c["measured"] and (c["same_work"], c["verdict"]) == (False, "not shown")
     assert P._verdict(c) == "not shown, the arms did not do the same work (one left a request unserved, or their prefix " \
                             "caches served different shares of the prompts in some rep)"
     assert P._verdict(c | {"settings_differ": ["the context limit"]}) == "not shown, the arms are not at the same settings"
+    # a twin of stock is the floor, a lifetime pair its unit too
+    by = {n: sessions_arm(n, x) for n, x in (("prod", [2.0] * 6), ("prod-again", [1.998] * 6), ("prod-record", ours))}
+    c = P.cost(tmp_path, by, "prod", "prod-record", "prod-again", S.AGENTIC, 1.0)
+    assert c["noise_floor"] == {"arm": "prod-again", "over": "lifetimes", "value": pytest.approx(0.001), "ci95": None,
+                                "pairs": 1, "own": False, "leaves_out_zero": False}
+    assert P._noise(c["noise_floor"], "prod") == ("prod-again over prod +0.10% (no interval: one pair), over 1 pair of "
+                                                  "server lifetimes")
     # arms the benchmark's own cost refuses are not measured, with its reason
     by["prod-record"] = sessions_arm("prod-record", ours) | {"vllm": "0.2"}
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
     assert not c["measured"] and "refuses these arms: cost: the arms were served by different builds of vLLM" in c["why"]
+
+
+def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_path: Path):
+    """The arms of a job the benchmark served in lifetimes are ``<arm>.K``: every lifetime is in what ran, an arm's
+    reps are all its lifetimes', and the tokens are those of the lifetime the replay's record names."""
+    out = tmp_path / "out"
+    for k, (stock, ours) in enumerate((([100.0, 101.0], [99.0, 100.0]), ([102.0, 103.0], [101.0, 102.0])), 1):
+        corpus_arm(out, f"compiled.{k}", stock, arm="compiled", lifetime=k, reps=2)
+        corpus_arm(out, f"record.{k}", ours, trace=True, arm="record", lifetime=k, reps=2)
+    replayed(out, "record.1")
+    rc, txt, r = run(out, "--again", "")
+    assert rc == 0, txt
+    assert ("what ran:\n"
+            "  compiled.1: up in 12.5 s; the load served 2 times, 4 requests, every one finished\n"
+            "  compiled.2: up in 12.5 s; the load served 2 times, 4 requests, every one finished\n"
+            "  record.1: up in 12.5 s; the load served 2 times, 4 requests, every one finished\n"
+            "  record.2: up in 12.5 s; the load served 2 times, 4 requests, every one finished\n"
+            "  the replay: ended") in txt
+    assert r["arms"]["served"] == ["compiled", "record"] and P.default_arms(out=out) == P.TODAY
+    assert "tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed" in txt
+    assert r["tokens"]["window"]["lifetime"] == 1 and "\n  the window: of lifetime 1 of record; every request of the load's rep" in txt
+    # the cost of a load that is not a sessions load is over the four passes an arm, and has no verdict
+    ref, mine = (S.summary(x) for x in ([100.0, 101.0, 102.0, 103.0], [99.0, 100.0, 101.0, 102.0]))
+    assert r["cost"]["value"] == pytest.approx(S.tax(ref, mine)["value"]) and r["cost"]["how"]["reps"] == [4, 4]
+    assert r["cost"]["lifetimes"] == {"pairs": 2, "ci95": None}
+    assert "; under 1%: not shown, the interval over lifetime pairs is the benchmark's for a sessions load" in txt
+    # a replay of the second lifetime's pass is compared with that lifetime's window
+    shutil.rmtree(out / "replay-compiled")
+    replayed(out, "record.2")
+    rc, txt, r = run(out, "--again", "")
+    assert rc == 0 and r["tokens"]["reproduces"] and r["tokens"]["window"]["lifetime"] == 2
+    # a replay of a directory that is none of ours's lifetimes is of another window
+    shutil.rmtree(out / "replay-compiled")
+    replayed(out, "record.2", arm_dir=str(out / "record.3"))
+    rc, txt, r = run(out, "--again", "")
+    assert "tokens: not measured: the replay in " in txt and "is of another window (arm record.3, load burst, rep 1" in txt
+    # a lifetime with no record is in what ran as not served, and `served` says the arm was not served whole
+    assert P.main(["served", str(out), "record", "--load", LOAD]) == 0
+    shutil.rmtree(out / "record.2")
+    (out / "record.2").mkdir()
+    rc, txt, r = run(out, "--again", "")
+    assert "  record.2: NOT SERVED: the job holds no record of it (no record.2/meta.json): it did not start\n" in txt
+    assert txt.endswith("; not served whole: record.2\n") and P.main(["served", str(out), "record", "--load", LOAD]) == 1
 
 
 def test_a_pass_vllms_client_sent_is_replayed_where_ours_kept_its_ids(tmp_path: Path):
@@ -865,7 +948,7 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
 #: one process's counters where a replay on the canonical top-k keeps them, or ends the job's time (SIGTERM)
 STAND_IN = """#!/usr/bin/env bash
 { echo "argv=$*"; for k in ARMS RATES REPS REQUESTS SPAN_S REPLAY REPLAY_FROM REPLAY_MODES MODEL_ID CLIENT MAX_MODEL_LEN \\
-    PASS_PROMPTS STOP_AT SAMPLED PRIVATE; do echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/started"
+    PASS_PROMPTS STOP_AT SAMPLED PRIVATE LIFETIMES LEAVE_OUT; do echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/started"
 if [ -n "${STAND_IN_TOPK:-}" ]; then
   mkdir -p "$PRIVATE/replay-compiled/topk-log"
   echo '{"pid": 1, "calls": {"persistent_topk": 7}, "launches": {"persistent_topk": 3}, "rows": {"cuda:0": {"rows_long": 5}}}' \\
@@ -893,7 +976,7 @@ def bash(script: Path, *argv: str, run_dir: Path | None = None, **env: str) -> s
     base = {k: v for k, v in os.environ.items() if k not in (
         "RESEARCH_RUN_DIR", "LOAD", "REPS", "REQUESTS", "MODEL_ID", "STOCK", "AGAIN", "OURS", "RATE", "SPAN_S", "TARGET",
         "MAX_MODEL_LEN", "REPLAY", "REPLAY_FROM", "REPLAY_MODES", "PASS_PROMPTS", "STOP_AT", "ADVICE_TRACE", "ADVICE_STOPS",
-        "SAMPLED", "PRIVATE", "ARMS")}
+        "SAMPLED", "PRIVATE", "ARMS", "LIFETIMES", "LEAVE_OUT")}
     if run_dir:
         (run_dir / "started").unlink(missing_ok=True)
     return subprocess.run(["bash", str(script), *argv], capture_output=True, text=True, check=False, env={
@@ -914,7 +997,7 @@ def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(
         "argv": "", "ARMS": "compiled compiled-again record", "RATES": "burst=1000", "REPS": "3", "REQUESTS": "800",
         "SPAN_S": "unset", "REPLAY": "burst", "REPLAY_FROM": str(run_dir / "out/record"), "REPLAY_MODES": "compiled",
         "MODEL_ID": "moonlight", "CLIENT": "corpus", "MAX_MODEL_LEN": "8192", "PASS_PROMPTS": "unset", "STOP_AT": "unset",
-        "SAMPLED": "unset", "PRIVATE": "unset"}
+        "SAMPLED": "unset", "PRIVATE": "unset", "LIFETIMES": "unset", "LEAVE_OUT": "unset"}
     assert "the replay's engine: vLLM's own (record serves with no other vLLM plugin of ours" in p.stdout
     assert "tokens: reproduced: 2 requests replayed" in p.stdout and p.stdout.endswith("prod_repro: 2 of 3 lines measured\n")
     assert (run_dir / "out/prod_repro.txt").read_text() in p.stdout
@@ -956,6 +1039,26 @@ def test_the_runner_hands_vllms_client_the_load_and_asks_for_no_replay(tmp_path:
     p = bash(script, *ARMS, "--client", "vllm-bench", "--load", "chat=16", "--model", "glm53", "--max-model-len", "131072",
              run_dir=run_dir)
     assert p.returncode == 0 and started(run_dir)["MAX_MODEL_LEN"] == "131072"
+
+
+def test_the_runner_serves_the_arms_in_lifetimes_and_replays_ours_first(tmp_path: Path):
+    script, run_dir = runner(tmp_path), tmp_path / "run"
+    (run_dir / "out").mkdir(parents=True)
+    argv = ("--client", "vllm-bench", "--model", "glm53", "--again", "none", "--load", "agentic=4", "--replay", "agentic@4")
+    p = bash(script, *argv, "--lifetimes", "3", "--leave-out", "1", run_dir=run_dir)
+    s = started(run_dir)
+    assert s["argv"] == "--model glm53 --arms prod prod-record --loads agentic=4 --reps 6", p.stdout + p.stderr
+    assert (s["LIFETIMES"], s["LEAVE_OUT"], s["REPLAY_FROM"]) == ("3", "1", str(run_dir / "out/prod-record.1"))
+    # nothing of it was served here, and the report says so of each arm; a replay was asked for, so the job fails
+    assert p.returncode == 1 and "  prod: NOT SERVED" in p.stdout and "  prod-record: NOT SERVED" in p.stdout
+    # one lifetime an arm is the arm's own directory
+    bash(script, *argv, run_dir=run_dir)
+    s = started(run_dir)
+    assert (s["LIFETIMES"], s["LEAVE_OUT"], s["REPLAY_FROM"]) == ("unset", "unset", str(run_dir / "out/prod-record"))
+    p = bash(script, *argv, "--lifetimes", "0", run_dir=run_dir)
+    assert p.returncode == 2 and "--lifetimes 0: how many times the arms are served, 1 or more" in p.stdout
+    p = bash(script, *argv, "--replay-of", str(tmp_path), "--lifetimes", "2", run_dir=run_dir)
+    assert p.returncode == 2 and "--replay-of serves nothing: --lifetimes is of a job that serves its arms" in p.stdout
 
 
 def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and_reads_the_advice_trace(tmp_path: Path):

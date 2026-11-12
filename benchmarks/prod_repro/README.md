@@ -17,7 +17,7 @@ the corpus client:
 verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM|none] [--ours ARM] [--load burst] [--rate 1000]
                         [--requests 800 | --span-s S] [--reps 3] [--replay PASS|none] [--max-model-len N] [--target 1]
 verity bench prod_repro --client vllm-bench --load NAME[=RUNG+RUNG...] [--reps 6] [--replay NAME@RUNG]
-                        [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] ...
+                        [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--lifetimes L] [--leave-out N] ...
 verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
 verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
@@ -42,6 +42,12 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
   sends), `SAMPLED` (each request sampled at the recipe's temperature and top-p, under its user's seed) and `STOP_AT`
   (an arm starts no pass it can't finish by then; the replay runs after the arms whatever the time, and the job's
   end is its lease's, `MAX_MIN`).
+- **Server lifetimes.** `--lifetimes L` is the benchmark's `LIFETIMES`: the arms are served L times, each time a
+  server of its own, in the arms' order and then that order turned round, and lifetime K of an arm is `out/<arm>.K`.
+  `--leave-out N` is its `LEAVE_OUT`: each lifetime's first N passes, its warm-up, are served and recorded and left
+  out of every figure. A sessions load's cost has an interval, and so a verdict, only over two lifetimes an arm or
+  more. The replay re-runs the named pass of ours's first lifetime, and the report says which lifetime its window
+  is of.
 - **The context limit** is `--max-model-len`'s, for every arm. Where the job names none it is the benchmark's for
   each arm: at the recipe's settings the recipe's for the cards (262,144 tokens for GLM-5.3). `limits.json` says what
   is known of leaving the limit to vLLM (`--max-model-len auto`), with the run that showed it, and the report's first
@@ -77,7 +83,8 @@ token that does and the first step.
   so of, that vLLM does not start with the limit left to it, at which settings, why, and the run that showed it.
 - **model**: the model as the benchmark names it and the checkpoint the engines loaded; they are two things where
   `CHECKPOINT` names another model's directory.
-- **what ran**: each arm from its own record (`meta.json`): the seconds its server took to come up, how many times it
+- **what ran**: each arm, or each lifetime of it, from its own record (`meta.json`): the seconds its server took to
+  come up, how many times it
   served the load and how many requests it left unfinished; `FAILED` with the record's error and the first exception
   its server's log names (the record's error is the last thing that failed, and the cause is above it), `STOPPED`
   before the pass `STOP_AT` left no time for, `NOT SERVED` for an arm with no record. Then the replay: whether it
@@ -112,19 +119,23 @@ token that does and the first step.
   emitted in the earliest step (its request, its position, the id served and the id replayed there, and that step),
   and the first step whose rows differ, with the rows only serving ran and the rows only the replay ran.
 - **cost**: stock's output tokens a second over ours, less one: the share of stock's serving time our changes add at
-  equal tokens. The verdict's unit is a server lifetime: the passes of one share its server's state, so `under 1%:
-  yes` is printed only where the upper end of the 95% interval over lifetime pairs is under the target, and
-  `not shown` otherwise. A job serves each arm in one lifetime, so it holds one pair and no such interval, and prints
-  `not shown`: the estimate alone shows nothing. Under it, the interval over the job's passes, labelled as taking them
-  as independent, with the reps it is over; and the noise floor, the same figure for stock served a second time,
-  beside and not added (each lifetime pair already holds two servers' draws), with a line where its own interval
-  leaves out 0: stock then differs from stock.
-  On a sessions load the verdict is also `not shown` where the benchmark's own cost says the arms did not do the same
-  work.
-  By the corpus client the figure is
-  `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up, the line is not
-  measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where stock serves most (for
-  a sessions load, at its users), which needs six reps for an interval.
+  equal tokens. The verdict's unit is a server lifetime: the passes of one share its server's state, so an interval
+  over them as if independent is too narrow, and the estimate alone shows nothing.
+  On a sessions load every figure is the benchmark's own cost's (`serve_tax.session_cost`). The cost is the mean of
+  the lifetimes' costs, a lifetime's the mean over its passes, with its 95% interval over the lifetimes an arm.
+  `under 1%: yes` is printed only where the benchmark says that interval's upper end is under the target; `NO` where
+  its lower end is over it; `not shown` otherwise, with the reason: one lifetime an arm (no such interval), an upper
+  end that is not under the target, arms that did not do the same work, or settings that differ. Under it: each
+  lifetime's cost and the spread between lifetimes and between a lifetime's passes; the cost over the passes taken
+  as independent, the paired ratio's median with its interval, in no verdict; and the noise floor, beside and not
+  added (each lifetime pair already holds two servers' draws): stock served a second time over stock where the job
+  served it, else stock's own lifetimes, each second one over the one before it, a lifetime pair its unit too, with
+  a line where its own interval leaves out 0: stock then differs from stock.
+  On another load the figure is the one over the passes taken as independent and has no verdict. By the corpus
+  client it is `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up,
+  the line is not measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where
+  stock serves most, which needs six reps for an interval; its noise floor is stock served a second time, measured
+  the same way.
 - **advice**: the bits a request of the certified serve whose trace directory `ADVICE_TRACE` names, then one line a
   class: its bits, its standing in the code and its events, `not exercised` where it has 0 bits and none of its events
   arose. The split is the tree's reader's (`prod_repro.BY_CLASS`: its `report`), whose whole row is kept in
