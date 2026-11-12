@@ -259,7 +259,7 @@ def view_array(raw: bytes, e: dict) -> np.ndarray:
     v = ViewDesc.from_json(e["view"])
     width = v.itemsize
     kind = {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}[width]
-    flat = np.frombuffer(raw, dtype=kind)
+    flat: np.ndarray = np.frombuffer(raw, dtype=kind)
     # spanned bytes start at the view's first element (min offset); strides are in elements
     base = v.offset * width - int(e["byte_offset"])
     assert base % width == 0
@@ -282,7 +282,7 @@ def f32_to_bf16_rne(f: np.ndarray) -> np.ndarray:
 
 def collective_entries(run: Path, inv_rank: dict) -> dict[tuple, dict]:
     """(step, op, ordinal) -> {'arg0': entry, 'out': entry} from this rank's snapshot index."""
-    by_event = defaultdict(dict)
+    by_event: defaultdict[Any, dict] = defaultdict(dict)
     rank = int(re.search(r"rank(\d+)", inv_rank["log"]).group(1))
     for e in load_index(run, rank):
         by_event[e["event"]][e["path"]] = e
@@ -360,7 +360,7 @@ def determinism_report(a: Path, b: Path) -> dict[str, Any]:
         ra, rb = inv_a["ranks"][r], inv_b["ranks"][r]
         ea, eb = collective_entries(a, ra), collective_entries(b, rb)
         keys = sorted(set(ea) & set(eb))
-        coll = Counter()
+        coll: Counter = Counter()
         mism = []
         for k in keys:
             for part in ("arg0", "out"):
