@@ -38,7 +38,7 @@ from . import (
     verify,
     weights_root,
 )
-from .vectors import digest_of, expand
+from .vectors import digest_of, expand, write_or_check
 
 VECTORS = Path(__file__).with_name("vectors_sha512.json")
 S = "sha512"
@@ -161,15 +161,10 @@ def load() -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    text = render()
-    if "--check" in args:
-        if not VECTORS.exists() or VECTORS.read_text(encoding="utf-8") != text:
-            print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
-            return 1
+    if write_or_check(render(), VECTORS, sys.argv[1:] if argv is None else argv):
         return 0
-    VECTORS.write_text(text, encoding="utf-8")
-    return 0
+    print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":

@@ -33,6 +33,28 @@ def test_vectors_file_is_what_the_reference_generates() -> None:
     assert V.main(["--check"]) == 0, "rerun `python -m verity_vllm.commitments.vllm_v1.vectors`"
 
 
+def test_write_or_check_writes_the_text_and_with_check_only_compares(tmp_path) -> None:
+    path = tmp_path / "vectors.json"
+    assert not V.write_or_check("a\n", path, ["--check"]) and not path.exists()
+    assert V.write_or_check("a\n", path, []) and path.read_text(encoding="utf-8") == "a\n"
+    assert V.write_or_check("a\n", path, ["--check"])
+    assert not V.write_or_check("b\n", path, ["--check"]) and path.read_text(encoding="utf-8") == "a\n"
+
+
+@pytest.mark.parametrize("generator", [V, V512], ids=["vllm-v1", "vllm-v1-sha512"])
+def test_a_generators_main_writes_its_file_and_with_check_says_a_stale_one(generator, tmp_path, monkeypatch, capsys) -> None:
+    path = tmp_path / "vectors.json"
+    monkeypatch.setattr(generator, "VECTORS", path)
+    assert generator.main(["--check"]) == 1 and not path.exists()
+    assert capsys.readouterr().err == f"{path} is stale; rerun without --check\n"
+    assert generator.main([]) == 0 and path.read_text(encoding="utf-8") == generator.render()
+    path.write_text(generator.render() + "\n", encoding="utf-8")
+    assert generator.main(["--check"]) == 1
+    assert capsys.readouterr().err == f"{path} is stale; rerun without --check\n"
+    path.write_text(generator.render(), encoding="utf-8")
+    assert generator.main(["--check"]) == 0 and capsys.readouterr().err == ""
+
+
 def test_scheme_implements_the_interface() -> None:
     scheme = ref.Scheme({})
     assert isinstance(scheme, CommitmentScheme)
