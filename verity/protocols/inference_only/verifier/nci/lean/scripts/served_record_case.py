@@ -6,7 +6,8 @@ each as a file. This reads those files as they are and writes the case (`NAME.ca
 results on it (`NAME.python.jsonl`), the two files `nci-record-difftest` compares.
 
     python served_record_case.py --program P --record C --log FIRST ... RUN --limits L --out DIR --name NAME
-        [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--no-pins] [--case-only]
+        [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--format P=JSON|P=-]
+        [--no-pins] [--case-only]
 
 - ``--program``: the Program's v1 descriptor. ``--record``: the circuit record, the bytes the run's record commits.
 - ``--log``: the registration log's records, the first first and the run's own last.
@@ -22,6 +23,8 @@ Two options make a case the run did not write, and the case's name should say so
   parameters the record reads that the first record registers.
 - ``--drop registered.KEY``: the record without that key of its ``registered``, and the run's own record pointed
   at the new text. The run committed no such text: a stand-in, to read what the form says past that key.
+- ``--format P=JSON``: the record with parameter P's row format (`registered.formats`) that JSON object, or with
+  none where it is ``-``, and the run's own record pointed at the new text, as ``--drop`` does.
 
 The reference visits every leaf of every row of every unit in two places, more than a served class's circuit lets it:
 the second half of `own_rows`, and `hands_on` and `lands_whole` under the assertions of `leaf_widths`. Here
@@ -159,7 +162,8 @@ def counted(inst: dict, tr: dict) -> None:
     for k in ("gates", "inputs", *ref.KINDS, "fresh"):
         said(f"   {k}, slot by slot: {e[k]}")
     x, T = e["x"], ref.front(inst, tr)[4]
-    theta = {p: ref.theta(T, x.params, p) for p in x.params}
+    rec = json.loads(inst["record"])
+    theta = {p: ref.theta(T, x.params, p, ref.width_of(rec, p)) for p in x.params}
     said(f"registered parameters: {len(theta)}, θ {sum(theta.values())}, not θ "
          f"{dict(collections.Counter(p.split('/')[0] for p, t in theta.items() if not t))}")
     said("pinned readers:", sorted(short(t) for t, d in e["pins"].items() if d is not None))
@@ -174,6 +178,7 @@ def main() -> int:
     ap.add_argument("--count", type=Path)
     ap.add_argument("--unregister")
     ap.add_argument("--drop", action="append", default=[])
+    ap.add_argument("--format", action="append", default=[])
     ap.add_argument("--no-pins", action="store_true")
     ap.add_argument("--case-only", action="store_true", help="write the case and not the reference's results")
     ap.add_argument("--out", type=Path, required=True)
@@ -199,6 +204,20 @@ def main() -> int:
         record = record_bytes(doc)
         log[-1] = {**log[-1], "window": {**log[-1]["window"], "circuit": hashlib.sha512(record.encode()).hexdigest()}}
         changed.append(f"the record without registered.{k}, the run's record pointed at it (a stand-in)")
+    for spec in a.format:
+        p, _, f = spec.partition("=")
+        if record_bytes(doc) != record:
+            sys.exit("--format: the record is not in the form a serve writes, so its text can't be made again")
+        formats = doc["registered"].setdefault("formats", {})
+        if f == "-":
+            if p not in formats:
+                sys.exit(f"--format {p}=-: the record has no format for {p}")
+            del formats[p]
+        else:
+            formats[p] = json.loads(f)
+        record = record_bytes(doc)
+        log[-1] = {**log[-1], "window": {**log[-1]["window"], "circuit": hashlib.sha512(record.encode()).hexdigest()}}
+        changed.append(f"the record with {p}'s format {f}, the run's record pointed at it (a stand-in)")
     if a.unregister:
         first = {e.get("value") for e in log[0]["registered"]}
         read = sorted((n, p) for p, n in doc["registered"]["params"].items() if p in first)
