@@ -45,7 +45,7 @@ _RANKS = [{"attention": "a", "tp_rank": 0}, {"attention": "a", "tp_rank": 1}]
 
 @pytest.mark.parametrize("llm", [
     NS(llm_engine=NS(vllm_config=_CONFIG), collective_rpc=lambda fn: _RANKS),
-    NS(vllm=NS(llm_engine=NS(vllm_config=_CONFIG)), collective_rpc=lambda fn: _RANKS),
+    NS(vllm=NS(llm_engine=NS(vllm_config=_CONFIG), collective_rpc=lambda fn: _RANKS)),
     NS(vllm_config=_CONFIG, collective_rpc=lambda fn: _RANKS),
 ], ids=["a vllm.LLM", "the wrapper around one", "its LLMEngine"])
 def test_the_profile_reads_the_config_of_whatever_the_handle_takes(monkeypatch, llm):
