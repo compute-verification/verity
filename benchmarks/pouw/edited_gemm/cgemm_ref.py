@@ -35,6 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
 from derive import NCT, tile_receipts
 from ref import key_mul
 
+__all__ = ["C_TAG", "DITHER_TAG", "NCT", "T", "block", "check", "cs", "patch_bits", "tile_receipts", "u_rows",
+           "z_rows"]
+
 HERE = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("checked_strip", HERE.parent / "theory" / "checked_strip.py")
 cs = importlib.util.module_from_spec(_spec)

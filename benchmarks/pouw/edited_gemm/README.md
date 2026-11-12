@@ -113,7 +113,10 @@ at every R, and a `static_assert` bounds R to 1..64.
 `egemm.cu` and `prof.cu` include `masked_gemm/lpgemm.cu`; `cgemm.cu` and `d2sgemm.cu` include `egemm.cu`; `cwgemm.cu`,
 `cpv.cu` and `apv.cu` include `cgemm.cu`; `fattn.cu` includes `apv.cu`. Four references (`egemm_ref.py`, `cgemm_ref.py`,
 `d2sgemm_ref.py`, `egemm80_ref.py`) import `floored_gemm/derive.py`'s `tile_receipts`, and the Dither-C and P V
-references recompute through `benchmarks/pouw/theory/checked_strip.py`. From outside the directory,
-`adapters/vllm/tests/engine/` loads `fattn_ref.py` by path as the int8 attention's oracle, and the ACCEL model's
-honest profiles under `benchmarks/pouw/machine_model/data/` are written from `eps_profile.py OUT --toml` and
-`egemm80.py summary`. The Python here touches no GPU but `flash_ref.py`; the job scripts do the rest.
+references recompute through `benchmarks/pouw/theory/checked_strip.py`. Inside the directory, `cwgemm_ref.py`,
+`cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, `apv_ref.py` imports `cpv_ref.py`'s `patch_cols`, and
+`vprod_profile.py` imports `eps_profile.py`; each module another file imports lists what it imports in `__all__`. From
+outside the directory, `benchmarks/pouw/theory/`'s fold checks import `egemm_depthr_check.py`'s `key_ok_r11` and
+`key_ok_r11_32`, `adapters/vllm/tests/engine/` loads `fattn_ref.py` by path as the int8 attention's oracle, and the
+ACCEL model's honest profiles under `benchmarks/pouw/machine_model/data/` are written from `eps_profile.py OUT --toml`
+and `egemm80.py summary`. The Python here touches no GPU but `flash_ref.py`; the job scripts do the rest.

@@ -38,6 +38,8 @@ import numpy as np
 from exact_kit import wrap
 from exact_kit.checks import Checks
 
+__all__ = ["key_ok_r11", "key_ok_r11_32"]
+
 
 def xorin_step_ref(y: np.ndarray, d0: np.ndarray, d1: np.ndarray, d2: np.ndarray, d3: np.ndarray, a0: np.uint32,
                    a1: np.uint32) -> np.ndarray:
