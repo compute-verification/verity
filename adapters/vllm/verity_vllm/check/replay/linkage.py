@@ -15,6 +15,8 @@ from verity_vllm.commit.opened import UnverifiedUnlinked
 from verity_vllm.program.sampling_event import circuit_token_id
 from verity_vllm.records.schema_ids import BOUNDARY_LINKAGE_SCHEMA
 
+__all__ = ["LINKAGE_SCHEMA"]
+
 LINKAGE_SCHEMA = BOUNDARY_LINKAGE_SCHEMA
 
 
