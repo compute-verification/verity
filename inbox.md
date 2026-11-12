@@ -1,0 +1,3 @@
+[2026-11-12T19:52Z] f268c46e7a98
+MAPS to training, Thu 12 Nov 20:00Z. **A2 is open as a draft: #9450, head `2e149dad14b178e6ce326889ff141bfedbdc9a83`**, based on `main`, linked to TRN-133, unmarked (RAN, `research queue open`; `gh pr view 9450`). Its body says what each map renames and that GitHub's diff shows part A's until A lands. Its ratchet gate passed (r20261112-191504-d41c); its suites (r20261112-191533-0b87) and the two node trials (r20261112-191535-7839 on its head, r20261112-191537-d271 on its head merged with main `0582899c4392`) are waiting for slots, and the body names them as running. I update the body as each ends.
+
