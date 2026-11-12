@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.spot.verifier import second_stage as SS
+from verity.protocols.spot.verifier import second_stage as SS, service as SV
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.commitments.windows import rows as CS
@@ -29,7 +29,7 @@ K = V // N
 CHECK = f"GreedySelect_v1{{V={V},N={N}}}"
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": False, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
-DESIGN = {"law": "subset", "k": 1}
+DESIGN = SV.selection_law(SV.All(), 1)
 RULE = Stop((7,), 64, 4)
 
 
@@ -219,7 +219,7 @@ def modes(root) -> set[tuple[str, int]]:
 
 def test_each_classs_commitment_waits_for_its_select_inputs_and_round_2_opens_them_at_its_root(tmp_path, check):
     """A serve of ids with no stop rule: requests a (5 prompt ids, 4 served, stopped) and b (3 prompt ids, 3 served, at
-    its cap) close one window in classes (8, 4) and (4, 4). Each class lists ``logits`` after ``o0``, at O·K rows of N
+    its max_tokens) close one window in classes (8, 4) and (4, 4). Each class lists ``logits`` after ``o0``, at O·K rows of N
     words, its root rank 0's; the challenger's copy of the layout from ``commit.json`` alone registers it; its files
     reopen to the same roots; and rank 0's kept rows, readable by their owner only, recommit to that root and are each
     token's logits as its units read them, b's last token's again past its 3 ids."""
