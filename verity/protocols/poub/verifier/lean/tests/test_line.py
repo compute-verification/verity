@@ -397,9 +397,9 @@ def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples)
 
 def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
     """Sampled four windows a coin (`groups_per_coin`), the record's line is `line`'s at the same groups and its three
-    draws, each four windows' receipts and draws summed (`line.draws_of`, the pooled bound's `audit.pooled_windows`),
-    the Lean's and line.py's alike; a sample that sampled other than min(s, U) is refused, word for word, and at one window
-    in flight the record has no line (`line.SHARED`)."""
+    samples, each four windows' receipts and samples summed (`line.draws_of`, the pooled bound's
+    `audit.pooled_windows`), the Lean's and line.py's alike; a sample that sampled other than min(s, U) is refused,
+    word for word, and at one window in flight the record has no line (`line.SHARED`)."""
     v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
     r = recorded(v, 37)
     r["record"]["groups_per_coin"] = 4

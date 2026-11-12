@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 GATE_RUNS = {"5/0": (2118, 130023424, 48), "5/2": (96, 130023424, 232), "6/0": (2118, 113770496, 48),
              "6/2": (96, 113770496, 232), "7/0": (2118, 130023424, 48), "7/2": (96, 130023424, 232)}
 """Each accepted session of gate runs 5–7 as `gate_run/k`: its record's windows, all alike (n of them, U receipts
-drawn s times each), at δ = 2^-40 (`tests/test_pooled.py`)."""
+sampled s times each), at δ = 2^-40 (`tests/test_pooled.py`)."""
 
 
 NOTHING = st.nothing()
