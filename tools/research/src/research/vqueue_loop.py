@@ -116,8 +116,8 @@ rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what th
 out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
 naming them where it merges onto `main`;
 nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), exports to the public export the
-fetched fixtures its members' merges register that its base doesn't (`--export-fixtures`, on the control pod; logged
-`fixtures`), leaving out, the rest built again, a member whose fixture's export failed (its owner told once a head and its
+fetched fixtures its members' merges register that its base doesn't (`--export-fixtures`, on the control pod, holding
+`--export-lock` as the pod's own export pass does; logged `fixtures`), leaving out, the rest built again, a member whose fixture's export failed (its owner told once a head and its
 fixtures; the next build exports again: `Loop._exported`), so no check starts that preflight-fixtures refuses, pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
@@ -217,6 +217,9 @@ EXPORT = ("sh", "-c", "set -a; . /root/.config/verity/r2.env; set +a; "
 EXPORT_S = 600
 #: how `research data export` starts each error's line on stdout (`store.cli.cmd_export`)
 EXPORT_ERROR = "ERROR  "
+#: the lock infra/control/fixtures_export.sh holds over its checkout and store, which `EXPORT` shares (its `flock -n` skips a
+#: pass while the loop holds it), and how long an export waits for it before it counts as failed
+EXPORT_LOCK, EXPORT_LOCK_S = "/root/fixtures-export.lock", 300
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
@@ -719,10 +722,13 @@ class World:
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
                  frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None,
-                 pins_file: Path | None = None, keep_file: Path | None = None, export: tuple[str, ...] = ()):
+                 pins_file: Path | None = None, keep_file: Path | None = None, export: tuple[str, ...] = (),
+                 export_lock: str = "", export_lock_s: int = EXPORT_LOCK_S):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         #: `research data export`'s argv before its flags (`export_fixtures`); none: a build exports nothing
         self.export = tuple(export)
+        #: the lock an export holds, on this host ('': none), and the seconds it waits for it
+        self.export_lock, self.export_lock_s = export_lock, export_lock_s
         #: `fixtures/artifacts.json`'s entries at each commit read (`_registry`)
         self._registries: dict[str, dict[str, str]] = {}
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
@@ -1550,7 +1556,26 @@ class World:
         `EXPORT_S`: {id: why} of each whose own export failed, {} once all were sent.  The export sends every id it can and
         prints an error naming each one no source holds, so when those are all its errors only they failed; a multi-id export
         failing otherwise (an upload, a crash) is done again an id at a time, and one that never ended or started fails each.
-        Only its error lines are read, never logged: the rest names the export's bucket and endpoint."""
+        Only its error lines are read, never logged: the rest names the export's bucket and endpoint.
+
+        It runs holding `export_lock`, waiting at most `export_lock_s` for it, else each id fails: the pod's own export pass
+        checks out the code this export runs and rewrites the store's ledger of landed keys while it holds that lock."""
+        if not self.export_lock:
+            return self._export(ids)
+        try:
+            f = open(self.export_lock, "a")
+        except OSError as e:
+            return dict.fromkeys(ids, f"the export's lock {self.export_lock} didn't open ({type(e).__name__})")
+        with f:
+            waited = 0
+            while not _flocked(f):
+                if waited >= self.export_lock_s:
+                    return dict.fromkeys(ids, f"another export held {self.export_lock} for {waited} s")
+                time.sleep(1)
+                waited += 1
+            return self._export(ids)
+
+    def _export(self, ids: list[str]) -> dict[str, str]:
         try:
             r = subprocess.run([*self.export, "--no-registry", *(f"--id={x}" for x in ids)], stdin=subprocess.DEVNULL,
                                capture_output=True, text=True, errors="replace", timeout=EXPORT_S)
@@ -1566,7 +1591,7 @@ class World:
         if errors and len(lost) == len(errors):
             return dict.fromkeys(lost, f"{why}; the store holds none of it")
         if len(ids) > 1:
-            return {x: w for one in ids for x, w in self.export_fixtures([one]).items()}
+            return {x: w for one in ids for x, w in self._export([one]).items()}
         return dict.fromkeys(ids, why)
 
     def main_now(self) -> str:
@@ -3215,6 +3240,15 @@ def _sharded(slim, shards: int | str) -> bool:
         return False
 
 
+def _flocked(f) -> bool:
+    """Whether ``f``'s lock is now held here, False while another holds it."""
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
 def _locked(path: Path):
     """Hold ``path``'s lock, or None when another tick holds it."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -3257,6 +3291,10 @@ def main(argv: list[str]) -> int:
                          "fixture a candidate registers that its base doesn't, before it is pushed; where the export's key "
                          "works, the control pod (on another host, ssh there, as with --graph2). '' exports nothing "
                          "(default the control pod's: fixtures_export.sh's code, store, key and bucket)")
+    ap.add_argument("--export-lock", default=EXPORT_LOCK, metavar="PATH",
+                    help=f"the lock each export holds, waiting at most {EXPORT_LOCK_S} s for it, on the host the loop runs on "
+                         f"(an export over ssh takes its own there): the one the pod's own export pass holds over the same "
+                         f"checkout and store. '' takes none (default {EXPORT_LOCK})")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
@@ -3359,7 +3397,7 @@ def main(argv: list[str]) -> int:
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
                       frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file, pins_file=a.pins_file,
-                      keep_file=a.keep_runs, export=tuple(shlex.split(a.export_fixtures)))
+                      keep_file=a.keep_runs, export=tuple(shlex.split(a.export_fixtures)), export_lock=a.export_lock)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards, records=None if a.no_records else vqueue_records)
