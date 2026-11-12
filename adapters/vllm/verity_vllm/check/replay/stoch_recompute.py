@@ -33,15 +33,17 @@ Implementation variant this checks against (recorded in the report): vLLM d9105e
 from __future__ import annotations
 
 import json
+import os
 import struct
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from dataclasses import dataclass
 
 from verity_vllm.config import option, workload_arg, workload_file
+from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
 
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
@@ -49,10 +51,21 @@ VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temp
            "+ argmax/gather; torch.multinomial not used")
 #: the prefix of a record entry naming an input file that is there but couldn't be read
 UNREADABLE = "unreadable: "
+#: the cgroup v2 file that states this process's CPU quota: `<quota> <period>`, or `max <period>` where it has none
+CGROUP_CPU_MAX = "/sys/fs/cgroup/cpu.max"
 
 
 def _f32_bits(x: float) -> int:
     return struct.unpack("<I", struct.pack("<f", float(x)))[0]
+
+
+def _stated(k: str, default: Any, request: dict, per_request: dict, sampling: dict) -> Any:
+    """`k` as the request's record states it, else its `per_request` entry, else the run's `sampling` (`default` where that has no such
+    key).  A record states a value that is not None."""
+    for d in (request, per_request):
+        if d.get(k) is not None:
+            return d[k]
+    return sampling.get(k, default)
 
 
 def _request_facts(header) -> dict[str, dict]:
@@ -62,9 +75,9 @@ def _request_facts(header) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for r in wl.get("requests", []) or []:
         p = per.get(r["request_id"], {})
-        pick = lambda k, d: r.get(k) if r.get(k) is not None else (p.get(k) if p.get(k) is not None else s.get(k, d))  # noqa: E731
-        out[r["request_id"]] = {"seed": None if r.get("seed") is None else int(r["seed"]), "temperature": float(pick("temperature", 0.0)),
-                                "top_p": float(pick("top_p", 1.0)), "top_k": int(pick("top_k", 0) or 0)}
+        out[r["request_id"]] = {"seed": None if r.get("seed") is None else int(r["seed"]),
+                                "temperature": float(_stated("temperature", 0.0, r, p, s)),
+                                "top_p": float(_stated("top_p", 1.0, r, p, s)), "top_k": int(_stated("top_k", 0, r, p, s) or 0)}
     for c in wl.get("children", []) or []:
         base = dict(out.get(c["parent"], {}))
         base["seed"] = None if c.get("seed") is None else int(c["seed"])
@@ -74,24 +87,28 @@ def _request_facts(header) -> dict[str, dict]:
 
 def _manifest_facts(path: str | Path) -> dict[str, dict]:
     """The DECLARED facts from the workload manifest itself (`workloads/<row>.json`: `variants[sampling.variant]` +
-    per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught."""
+    per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught.  A
+    request that pins a variant the manifest's `variants` does not hold is refused by name."""
     w = Workload.load(workload_file(path))
     p = w.variants.get(w.sampling_variant or "greedy") or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
     top = None if w.sampling is None else w.sampling.seed
     out = {}
-    for r in w.requests:
-        rp = w.variants.get(r.variant) if r.variant is not None else p
+    for i, r in enumerate(w.requests):
+        rp = p if r.variant is None else w.variants.get(r.variant)
+        if rp is None:
+            raise RecordError(w.where, f"requests[{i}].variant", f"is {r.variant!r}, which is no key of the workload's `variants`")
         s = r.seed if r.seed is not None else top
         out[r.request_id] = {"seed": s, "temperature": float(rp.get("temperature", 0.0)),
                              "top_p": float(rp.get("top_p", 1.0)), "top_k": int(rp.get("top_k", 0) or 0)}
     return out
 
 
-def _eval_job(job: tuple) -> tuple[int, "np.ndarray", float]:
+def _eval_job(job: tuple) -> tuple[int, np.ndarray, float]:
     """One sampled row through the Definition of record: GumbelTopPTokenSelect_v1{V,S} on (bf16 logits row, top_p, seed, pos, T) ->
     (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it."""
-    from verity_vllm.properties.admission import evaluate_spec
     from verity.definitions.registry import sampling_topp_difftest as D
+
+    from verity_vllm.properties.admission import evaluate_spec
     V, S, words = job
     t1 = time.time()
     out = evaluate_spec(D.spec({"V": int(V), "S": int(S)}), words)
@@ -101,7 +118,7 @@ def _eval_job(job: tuple) -> tuple[int, "np.ndarray", float]:
     return tok, np.array(out[1:1 + V], dtype=np.uint32), round(time.time() - t1, 3)
 
 
-def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
+def _eval_job_rows(job: tuple) -> tuple[int, np.ndarray, float]:
     """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
@@ -124,18 +141,17 @@ EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTo
 
 
 def _cpu_quota() -> int:
-    """The CPUs this process may use: the cgroup quota when one is set (cpu.max), else os.cpu_count()."""
-    import os
-    try:
-        q, per = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+    """The CPUs this process may use: the cgroup's quota where it states one (`CGROUP_CPU_MAX`), else os.cpu_count(): the file is
+    absent (no cgroup v2 CPU controller) or says `max`.  A file that is there and cannot be read, or is not `<quota> <period>`,
+    raises."""
+    if os.path.exists(CGROUP_CPU_MAX):
+        q, per = Path(CGROUP_CPU_MAX).read_text().split()
         if q != "max":
             return max(1, int(q) // int(per))
-    except (OSError, ValueError):
-        pass
     return os.cpu_count() or 1
 
 
-def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane") -> list[tuple[int, "np.ndarray", float]]:
+def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane") -> list[tuple[int, np.ndarray, float]]:
     """Evaluate every pending row; `n_jobs` worker processes (fork; default min(32, the cgroup's CPU quota)) when there is more than one
     row.  `evaluator`: 'lane' (the interpreter, the path of record) or 'rows' (the vectorised twins; one row is milliseconds, so no pool)."""
     fn = EVALUATORS[evaluator]
@@ -161,7 +177,7 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
     for p in sorted(glob.glob(str(Path(build_dir) / "build_request*" / "result.json"))):
         try:
             r = json.loads(Path(p).read_text())
-        except Exception as e:
+        except (OSError, ValueError) as e:
             unreadable.append(f"{p}: {e!r}"[:300])
             continue
         if not r.get("ok", True) or r.get("wrapper") != "request":
@@ -204,8 +220,8 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
     cands: list[tuple[str, object]] = []
     prof = getattr(header, "profile", None) if not isinstance(header, dict) else header.get("profile")
     prof = prof if isinstance(prof, dict) else {}
-    ek = prof.get("engine_kwargs") if isinstance(prof.get("engine_kwargs"), dict) else {}
-    cands.append(("RunHeader.profile.engine_kwargs.async_scheduling", ek.get("async_scheduling")))
+    ek = prof.get("engine_kwargs")
+    cands.append(("RunHeader.profile.engine_kwargs.async_scheduling", ek.get("async_scheduling") if isinstance(ek, dict) else None))
     ek_top = getattr(header, "engine_kwargs", None) if not isinstance(header, dict) else header.get("engine_kwargs")
     if isinstance(ek_top, dict):
         cands.append(("RunHeader.engine_kwargs.async_scheduling", ek_top.get("async_scheduling")))
@@ -234,7 +250,8 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than the cap, or an EOS before the cap
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
-    from verity_vllm.program.lifting import continuation as CT  # the Continuation_v1 recurrence: THE mechanism, not a twin of it
+    # the Continuation_v1 recurrence: THE mechanism, not a twin of it
+    from verity_vllm.program.lifting import continuation as CT
 
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
@@ -363,12 +380,15 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions"
         if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
             probs.extend(f"draw ledger {rid}: {p}" for p in cmp["problems"])
+        n_lag = 0                                                 # the lag slots the rule expects: none where no EOS is served before the cap
         if t_eos is None or t_eos >= T:
             ent["finish"] = "length" if t_eos is None else "eos-at-cap"
             ent["lag_slot"] = ("not scheduled: the request ran to its cap (nothing is scheduled past the length bound)" if t_eos is None else
                                f"not scheduled: the EOS is served at the cap slot {t_eos} (no slot after it)")
             out["requests_at_cap"] += 1
         else:
+            if lag is None:                                       # the rule leaves an EOS before the cap unjudged without the profile
+                raise TypeError(f"draw ledger {rid}: an EOS at slot {t_eos} before the cap {T} was judged without the scheduler profile")
             ent["finish"] = "eos"
             out["requests_with_eos_before_cap"] += 1
             out["lag_slot_exercised"] = True
@@ -386,7 +406,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             what = ("a draw past the length bound without an EOS" if t_eos is None else
                     ("a draw past the EOS's lag slot" if all(p > expected[-1] for p in extra) else "a draw at a position the rule does not execute"))
             probs.append(f"draw ledger {rid}: {len(extra)} drawn position(s) {extra[:4]} outside the executed set (slots 1..{exp_slots[-1]} of cap {T}"
-                         + (f", EOS at slot {t_eos}, {min(int(lag), T - t_eos)} lag slot(s)" if t_eos is not None and t_eos < T else "")
+                         + (f", EOS at slot {t_eos}, {n_lag} lag slot(s)" if t_eos is not None and t_eos < T else "")
                          + f"): {what} -- the RNG advanced without r_t")
         if missing:
             probs.append(f"draw ledger {rid}: {len(missing)} executed slot(s) did not draw (positions {missing[:4]} of the expected "

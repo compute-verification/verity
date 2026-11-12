@@ -11,7 +11,6 @@
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except AttributeError: pass"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "request_legs", "detail": "except OSError: pass"},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "silent-except", "symbol": "MatchOracle._view_bytes_range", "detail": "except (KeyError, TypeError, ValueError): return None"},
-    {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "silent-except", "symbol": "_cpu_quota", "detail": "except (OSError, ValueError): pass"},
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "silent-except", "symbol": "record_shard_pin", "detail": "except (OSError, ValueError): return None"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._end_step", "detail": "except OSError: pass"},
