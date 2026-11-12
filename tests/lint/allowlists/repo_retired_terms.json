@@ -4866,7 +4866,7 @@
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/FinishProver.lean", "count": 30},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Frame.lean", "count": 37},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Frames.lean", "count": 24},
-    {"file": "verity/protocols/flock/verifier/Flock/Firewall/Hello.lean", "count": 49},
+    {"file": "verity/protocols/flock/verifier/Flock/Firewall/Hello.lean", "count": 50},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Honest.lean", "count": 7},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Level0.lean", "count": 43},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Link.lean", "count": 19},
@@ -4875,7 +4875,7 @@
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Session.lean", "count": 42},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/SessionPlan.lean", "count": 4},
     {"file": "verity/protocols/flock/verifier/Flock/Firewall/Skeleton.lean", "count": 12},
-    {"file": "verity/protocols/flock/verifier/Flock/Firewall/Values.lean", "count": 16},
+    {"file": "verity/protocols/flock/verifier/Flock/Firewall/Values.lean", "count": 18},
     {"file": "verity/protocols/flock/verifier/Flock/HmRow.lean", "count": 214},
     {"file": "verity/protocols/flock/verifier/Flock/KsScope.lean", "count": 40},
     {"file": "verity/protocols/flock/verifier/Flock/Layout.lean", "count": 1},
@@ -4953,7 +4953,7 @@
     {"file": "verity/protocols/flock/verifier/Flock/With/VerifyE.lean", "count": 8},
     {"file": "verity/protocols/flock/verifier/Flock/With/Zk.lean", "count": 31},
     {"file": "verity/protocols/flock/verifier/Flock/With/ZkEq.lean", "count": 6},
-    {"file": "verity/protocols/flock/verifier/Flock/Witness.lean", "count": 27},
+    {"file": "verity/protocols/flock/verifier/Flock/Witness.lean", "count": 20},
     {"file": "verity/protocols/flock/verifier/Flock/Zk.lean", "count": 14},
     {"file": "verity/protocols/flock/verifier/Flock/ZkLigerito.lean", "count": 22},
     {"file": "verity/protocols/flock/verifier/Flock/ZkProof.lean", "count": 12},
@@ -5474,6 +5474,7 @@
     {"file": "security/Proofs/Flock/SpotFlock/WireMap.lean", "count": 3},
     {"file": "adapters/vllm/verity_vllm/pipeline/advice_code/by_class.py", "count": 13},
     {"file": "benchmarks/network_e2e/encodings/by_class.py", "count": 7},
-    {"file": "benchmarks/network_e2e/encodings/tests/test_by_class.py", "count": 18}
+    {"file": "benchmarks/network_e2e/encodings/tests/test_by_class.py", "count": 18},
+    {"file": "verity/protocols/flock/verifier/Flock/WitnessZk.lean", "count": 7}
   ]
 }

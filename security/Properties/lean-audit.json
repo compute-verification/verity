@@ -18406,7 +18406,13 @@
    }
   },
   "Flock.Witness": {
-   "digest": "680702dfd1e00609afa7808f365f56b9bf9b37dc3dee5cbe4a01bef1d1085f89",
+   "digest": "5ad6fa541d303b689859ec0b78b0bd8aff336a5c5e781e939416a6ac46ab34e3",
+   "definitions": {
+    "Flock.Witness.fullDraw": "a560ba82e182dbee6b2832615e99be2d1f57c09f5bde19721cd813fc2cc52b59"
+   }
+  },
+  "Flock.WitnessZk": {
+   "digest": "6a8ed38bded7330b7679e1751df28c005cb6c9af498ae2e9ddac3ab6fdb424f6",
    "definitions": {
     "Flock.Witness.Inputs": "178be9150b934b9af8a07491a225661dd3a0b878c85ee116e7de181897b3ffeb",
     "Flock.Witness.Inputs.circuitFile": "df0c373a125b8aa3a9cdcd5004cc47edcf9e4a8d966b60ae70f998eca139b789",
@@ -18416,7 +18422,6 @@
     "Flock.Witness.Inputs.publicFile": "11cb836f54e2019c61f6cf7616ca0899f6f79577300a2b7b4fd776bf23820037",
     "Flock.Witness.Inputs.tables": "e83f947817128998edf791db82e325b6e7675317dd95d3ab73ec4f5fd6c37a70",
     "Flock.Witness.Inputs.tags": "6fafc9a6767b896f11452c0485f46c9c1f011d445eeb5a8a18df1bb4e07e0a1a",
-    "Flock.Witness.fullDraw": "a560ba82e182dbee6b2832615e99be2d1f57c09f5bde19721cd813fc2cc52b59",
     "Flock.Witness.recordDraw": "3ceb0eacbbaa4cbd4c8ecc3fa1d4c48f7d35f71fbe1cb4b906dd20e99c493cae",
     "Flock.Witness.zkCoins": "761e46bcb1e3e9ae603b91a89a1eaac627f4b766d8d75187e0f443866e0890bb",
     "Flock.Witness.zkTags": "7e2e70fabb9af8c91ea95bf7268ef7f34f29f5e946f6fe792ecf87b6e9ca5a98"
