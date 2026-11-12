@@ -13,10 +13,9 @@ the read finder's SHA-512 collision plus the forger's forgery of the challenger'
 
 * **The case** (`caseOf`): the sampled component's parameters, registration and evidence in what the prover sent, each
   read by the two-stage form's decoders (`VStar.Recursive.SampledTwo.paramsOfJson`, `evidenceOf`).
-* **What the form accepts, the switch aside** (`Accepts`): the form's check's steps 1 to 5 (`prepare`) at the first
-  stage's bytes the evidence carries, the interior audit's verdict accepting and the run of record's symbol `accept`.
-  The form's last step refuses while `FORM` is off (`checkBlobsAt_refuses`), so a cut at the check itself would hold
-  because the check accepts nothing; this is the check with the switch on.
+* **What the form accepts** (`Accepts`): the form's check with its switch on (`checkBlobsAtWith true`) at the first
+  stage's bytes the evidence carries. The form's check refuses while `FORM` is off (`checkBlobsAt_refuses`), so a cut
+  at the check itself would hold because the check accepts nothing.
 * **The two sessions** (`records`): the play has two challenger sessions, the first stage's (the boundary
   registration's coins, `Evidence.coins`) and the interior's (the second stage's coins and the coin trees its sessions
   open, the interior audit's `coins`). Each is read under the parameters' challenger key (`keyOf`, the interior audit's,
@@ -78,13 +77,12 @@ def caseOf (s : Verity.Sent) : Flock.V (VStar.Recursive.SampledTwo.Params × Spo
   let e ← VStar.Recursive.SampledTwo.evidenceOf y.evidence
   pure (p, c, e)
 
-/-- **The form accepts, the switch aside**: the form's check's steps 1 to 5 (`prepare`) pass at the first stage's bytes
-the evidence carries, the interior audit's verdict accepts, and the run of record's symbol is `accept`; what
-`checkBlobs` accepts once `FORM` is on. -/
+/-- **The form accepts, with its switch on**: the form's check at the switch on (`checkBlobsAtWith true`) accepts the
+case at the first stage's bytes the evidence carries, as `Reading.AcceptsOn` reads a case. -/
 def Accepts (s : Verity.Sent) : Prop :=
-  ∃ p c e two run pub prof, caseOf s = .ok (p, c, e) ∧
-    VStar.Recursive.SampledTwo.prepare p c e.source e (_root_.Core.Blobs.ofArray s.blobs) = .ok (two, run) ∧
-    two = .accept pub prof ∧ Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true
+  ∃ p c e pub prof, caseOf s = .ok (p, c, e) ∧
+    VStar.Recursive.SampledTwo.checkBlobsAtWith true p c e.source e (_root_.Core.Blobs.ofArray s.blobs) =
+      .accept pub prof
 
 /-! ## The two sessions -/
 

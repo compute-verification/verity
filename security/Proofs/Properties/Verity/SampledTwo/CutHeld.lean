@@ -2,13 +2,14 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.CutPrints
 public import Proofs.Properties.Verity.Sampled.MemberForm
+public import Proofs.Properties.Verity.SampledTwo.Steps
 
 /-!
 # The two-stage form holds the interior's records to its session's trees
 
 `CutPrints.binds_of_prints` takes, of each accepted play, that the interior's records are held to the coin trees its
-session's lines hold (`InteriorHeld`). The form's check reads them so: `prepare` runs the interior audit's per-member
-sessions (`OneStageZk.membersRun`), which reads the challenger's trees from the interior's coin evidence (`treesOf`) and
+session's lines hold (`InteriorHeld`). The form's check reads them so: where it accepts, it ran the interior audit's
+per-member sessions (`accepted_steps`, `inputAt_ok`: `OneStageZk.membersRun`), which reads the challenger's trees from the interior's coin evidence (`treesOf`) and
 holds every statement's session's record to them (`membersTreesHeld`): `membersTreeReason` accepts each as
 `memberTreeReason` does (`MemberForm.membersTreeReason_none`), a logged tree whose last round closes the session and which,
 less that round, passes `sessionTreeReason` (`MemberForm.memberTreeReason_none`). The trees `treesOf` reads are those
@@ -196,16 +197,13 @@ it as `memberTreeReason` does, at a tree less its closing round; and the trees `
 reads from the session's lines. -/
 theorem interiorHeld_of_accepts {s : Verity.Sent} (ha : Accepts s) : InteriorHeld s := by
   intro p c e h1 recs hrecs lines hlines ts hts rec hrec
-  obtain ⟨p', c', e', two, run, pub, prof, h1', hprep, -, -⟩ := ha
+  obtain ⟨p', c', e', pub, prof, h1', hacc⟩ := ha
   rw [h1] at h1'
   have hpce := Except.ok.inj h1'
   simp only [Prod.mk.injEq] at hpce
   obtain ⟨rfl, rfl, rfl⟩ := hpce
-  unfold VStar.Recursive.SampledTwo.prepare at hprep
-  obtain ⟨_, -, hprep⟩ := Verity.Sampled.Trees.bind_ok hprep
-  obtain ⟨c₂, -, hprep⟩ := Verity.Sampled.Trees.bind_ok hprep
-  obtain ⟨_, -, hprep⟩ := Verity.Sampled.Trees.bind_ok hprep
-  obtain ⟨r, hrun, -⟩ := Verity.Sampled.Trees.bind_ok hprep
+  obtain ⟨-, c₂, ξ₂, r, i, _run, hin, -, -, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨-, -, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨held, ts₀, L, hheld, hts₀, hM⟩ := members_trees hrun
   obtain ⟨ls, hls, hl⟩ := linesOf_arr hlines
   obtain rfl : ts₀ = ts := Except.ok.inj ((Verity.Sampled.Binding.trees_of hts₀ hls hl).symm.trans hts)
