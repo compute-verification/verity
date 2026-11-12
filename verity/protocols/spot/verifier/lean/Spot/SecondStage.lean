@@ -402,17 +402,17 @@ row a list of sources, each `{kind: name}` of two strings, as `(value, rows)` ea
 null is none of them, and anything else is none. -/
 def suppliedOf? : Json → Option (Array (String × Array (Array (String × String))))
   | .null => some #[]
-  | j@(.obj _) => (entries j).mapM fun (v, rows) =>
+  | j@(.obj _) => (entries j).mapM fun ((v, rows) : String × Json) =>
     match rows with
-    | .arr rows => (rows.mapM fun r =>
+    | Json.arr rows => (rows.mapM fun (r : Json) =>
         match r with
-        | .arr ss => ss.mapM fun x =>
+        | Json.arr ss => ss.mapM fun (x : Json) =>
           (match x with
-          | .obj o => (match o.toArray with
-            | #[(k, .str n)] => some (k, n)
+          | Json.obj o => (match o.toArray with
+            | #[(k, Json.str n)] => some (k, n)
             | _ => none)
           | _ => none : Option (String × String))
-        | _ => none).map fun rows => (v, rows)
+        | _ => (none : Option (Array (String × String)))).map fun rows => (v, rows)
     | _ => none
   | _ => none
 
