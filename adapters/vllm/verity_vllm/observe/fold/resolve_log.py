@@ -56,6 +56,8 @@ from verity_vllm.observe.fold.resolver import (
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.log import read_log, split_steps
 
+__all__ = ["Options", "load_profile", "main", "resolve_log"]
+
 
 def load_profile(name: str) -> tuple[Profile, Any]:
     mod_name = name if "." in name else f"verity_vllm.observe.fold.profiles.{name}"
@@ -223,14 +225,15 @@ def dump_trees(se: StepEvents, res: list[Resolution] | None, max_depth: int, out
         print(f"[{i}] phase={root.phase} module={root.enter.module}{tag}", file=out)
         print(root.render(1, max_depth), file=out)
         if root.is_triton:
-            e = root.enter
-            args = {k: (repr(v) if not isinstance(v, (int, float, str, bool, type(None))) else v) for k, v in e.args.items()}
-            print(f"    args={args} num_warps={e.num_warps} num_stages={e.num_stages}", file=out)
+            launch = root.triton
+            args = {k: (repr(v) if not isinstance(v, (int, float, str, bool, type(None))) else v) for k, v in launch.args.items()}
+            print(f"    args={args} num_warps={launch.num_warps} num_stages={launch.num_stages}", file=out)
         else:
-            print(f"    schema={root.enter.schema}", file=out)
-            scalars = [a for a in root.enter.args if not hasattr(a, "alloc")]
-            if scalars or root.enter.kwargs:
-                print(f"    scalar args={scalars} kwargs={root.enter.kwargs}", file=out)
+            call = root.dispatch
+            print(f"    schema={call.schema}", file=out)
+            scalars = [a for a in call.args if not hasattr(a, "alloc")]
+            if scalars or call.kwargs:
+                print(f"    scalar args={scalars} kwargs={call.kwargs}", file=out)
 
 
 def build_report(header: RunHeader | None, results: list[StepResult], roots: dict[int, list[Root]], hist: dict[str, Counter],
@@ -264,14 +267,14 @@ def build_report(header: RunHeader | None, results: list[StepResult], roots: dic
     unknown_roots: list[str] = []
     classify = getattr(prof_mod, "root_class", None)
     for rs in roots.values():
-        for r in rs:
-            if r.role in ("weight", "buffer"):
-                cls = classify(r.name) if classify else ("weight" if profile.weight_field(r.name) else "unknown")
+        for root in rs:
+            if root.role in ("weight", "buffer"):
+                cls = classify(root.name) if classify else ("weight" if profile.weight_field(root.name) else "unknown")
                 root_classes[cls] += 1
                 if cls == "unknown":
-                    unknown_roots.append(r.name)
+                    unknown_roots.append(root.name)
             else:
-                root_classes[r.role] += 1
+                root_classes[root.role] += 1
     header_mismatch = []
     check = getattr(prof_mod, "check_header", None)
     if header is not None and check is not None:

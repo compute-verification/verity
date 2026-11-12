@@ -368,22 +368,22 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> RecordType:
     fields += linear("o_w", H, NH * DV)
     fields += [("ln2", Array(H, BF16))]
     if dense:
-        I = int(C["I_DENSE"])
-        fields += linear("gate_up_w", 2 * I, H)
-        fields += linear("down_w", H, I)
+        inter = int(C["I_DENSE"])
+        fields += linear("gate_up_w", 2 * inter, H)
+        fields += linear("down_w", H, inter)
         return RecordType(*fields)
-    E, I, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
+    E, inter, S = int(C["NUM_EXPERTS"]), int(C["I"]), int(C["SHARED_EXPERTS"])
     fields += [("gate_w", mat(E, H, BF16 if G else F32)), ("gate_bias", Array(E, F32))]
-    fields += linear("sh_gate_up_w", 2 * I * S, H)
-    fields += linear("sh_down_w", H, I * S)
+    fields += linear("sh_gate_up_w", 2 * inter * S, H)
+    fields += linear("sh_down_w", H, inter * S)
     if G:
-        g = fp8_moe_block(G, I, H)
-        fields += [("w13", Array(E, mat(2 * I, H, E4M3))),
-                   ("w13_ws", Array(E, mat(-(-(2 * I) // g), -(-H // g), F32))),
-                   ("w2", Array(E, mat(H, I, E4M3))),
-                   ("w2_ws", Array(E, mat(-(-H // g), -(-I // g), F32)))]
+        g = fp8_moe_block(G, inter, H)
+        fields += [("w13", Array(E, mat(2 * inter, H, E4M3))),
+                   ("w13_ws", Array(E, mat(-(-(2 * inter) // g), -(-H // g), F32))),
+                   ("w2", Array(E, mat(H, inter, E4M3))),
+                   ("w2_ws", Array(E, mat(-(-H // g), -(-inter // g), F32)))]
     else:
-        fields += [("w13", Array(E, mat(2 * I, H))), ("w2", Array(E, mat(H, I)))]
+        fields += [("w13", Array(E, mat(2 * inter, H))), ("w2", Array(E, mat(H, inter)))]
     return RecordType(*fields)
 
 
@@ -525,9 +525,9 @@ def _inv_freq(C: dict[str, Any]) -> np.ndarray:
     # 198 words of the captured table (positions t with t * inv_freq_k near a zero of cos / sin).
     exps = (np.arange(0, D, 2, dtype=np.float32) * (np.float32(1.0) / np.float32(D))).astype(np.float32)
     inv = (np.float32(1.0) / np.power(base, exps, dtype=np.float32)).astype(np.float32)
-    rs = C.get("rope_scaling") or {}
+    rs = C.get("rope_scaling")
     rtype = (rs.get("rope_type") or rs.get("type") or "").lower() if isinstance(rs, dict) else ""
-    if rtype == "llama3":
+    if isinstance(rs, dict) and rtype == "llama3":
         # vLLM Llama3RotaryEmbedding._compute_inv_freq (fp32): blend between inv_freq and inv_freq / factor by wavelength
         factor = np.float32(rs["factor"])
         low = np.float32(rs["low_freq_factor"])

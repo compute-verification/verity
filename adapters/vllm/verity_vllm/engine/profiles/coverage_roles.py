@@ -2,5 +2,8 @@
 (`pipeline.coverage_workloads` reads it when the manifest's lookup comes back empty)."""
 from __future__ import annotations
 
-#: role -> HF repo.  B1's manifest entry carries a compound role (``B1-B4,R*,...``), which the exact role lookup misses.
-ROLE_REPOS = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B"}
+from verity_vllm.engine.profiles.cases import CASES
+
+#: role -> HF repo, the case's own (`CASES`).  B1's manifest entry carries a compound role (``B1-B4,R*,...``), which the exact
+#: role lookup misses.
+ROLE_REPOS = {role: CASES[role]["repo"] for role in ("B0", "B1")}

@@ -53,7 +53,7 @@ class Capture:
                                 f"and {b.num_draft_tokens} draft tokens: a token select reads one bf16 row a token")
             rows = logits[keep].contiguous().view(torch.int16).cpu().numpy().view("<u2")
         out = self.inner(logits, input_batch, *a, **kw)
-        if keep:
+        if rows is not None:
             ids = out.sampled_token_ids[keep, 0].tolist()
             for k, i in enumerate(keep):
                 self.rows[b.req_ids[i]].append(rows[k].copy())
@@ -70,7 +70,6 @@ def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None =
     selects every id. ``pad``: the size class's tokens, the last row and id repeated to it first, as `Span.padded` pads
     `pieces`' cells by whole tokens."""
     import torch
-
     from verity.definitions.registry.b1 import NEG_INF_BF16
     from verity.definitions.registry.dead_free import CHUNK
     x = logits.view(torch.int16) if logits.dtype == torch.bfloat16 else logits
