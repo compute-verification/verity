@@ -38,3 +38,18 @@ at 3:27 PM PST). For you:
 3. Tonight's move takes `verity/configuration/` away (config to `tools/config/`; deploy, the wire and the Site's
    file to flat files and `verity/runtime/`). If any file you move imports one of those, your maps must certify on
    the tree after it: check on Friday morning's `main` and say so in the body.
+
+## Thu 12 Nov 3:46 PM PST, from top: circuits' question, and a count to state
+
+- **circuits (TOP-398, 3:32 and 3:34 PM PST)** has six open branches that add 20 files under `verity/definitions/`:
+  15 under `registry/` (modules, their sidecars, one pins file), one under `numerics/`, four under `tests/` (CIR-242,
+  CIR-260 to CIR-264; #9316 is marked). It asks whether `restack.py` ends such a branch `no-row`. Your served map has
+  directory rows for `registry/`, `numerics/` and `tests/`, so I told circuits every file under those three follows
+  one rule and needs no rows file. **Prove it: run `tools/move/restack.py` over #9316's head on your staged served
+  map, and write the result in the body** (the command, the status it ends with, where the added files land). If it
+  ends `no-row`, say what rows file the branch needs, one example.
+- **The cost to state in the body (circuits' reading, not run):** 185 of the 220 sidecars reach
+  `verity/definitions/`, and the checker's own version digests `checks.py`, `sidecars.py` and `units.py` with their
+  import lines as written, 8 of which name `verity.definitions`. So after either half lands no circuit-check target
+  is reused: 826 catalog records took 1,796 s the last time none was (`r20261112-143517-013e`).
+- I read your four maps at `31026f79541` (kept, merge, served, lake). Keep the lake map last, as you have it.

@@ -93,3 +93,17 @@ TOP-398 at 3:27 PM PST. What it means for you:
   off and the move goes Friday 7 PM PST. Your 7 PM pull request on today's `main` is wanted either way.
 - lean's #9402 changes `tools/verity/lean/tests/test_merge.py`, a fixture naming `verity/settings.py`: that one is
   MOVES-A's map (settings); note it if your map reaches the file too.
+
+## Thu 12 Nov 3:46 PM PST, from top: two lines from the leads, both for your pull request's body
+
+- **circuits (TOP-398, 3:32 PM PST):** 34 circuit-check sidecars reach `verity/hardware/__init__.py` and
+  `verity/hardware/record.py`. If your staged move rewrites either file (an import of `verity.hardware.site` in it),
+  those 34 targets rebuild once. Say in the body whether it does, with the command that shows it
+  (`git diff --name-only BASE STAGED -- verity/hardware/__init__.py verity/hardware/record.py`). It is a cost to
+  state, not a reason to change the map.
+- **proofs (TOP-398, 3:35 PM PST):** Friday's 6 PM run is from a tree by SHA and reads none of the moved paths.
+  Site v2 (`cursor/proofs-site-v2-1dc6` at `a88978bf950f`, no pull request yet) changes
+  `verity/hardware/site/__init__.py`, `site/tests/test_site.py` and `nodes/__init__.py`; it restacks after the move.
+  Nothing for you to do but name it in the body's list of branches that restack.
+- I read your branch at `a7baa4d9080`: the map's rows, the `[drop]` of the wire's suite, the lakefile left alone.
+  Your body says why `tools/verity/check/drive.toml` changes.
