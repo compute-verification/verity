@@ -832,17 +832,17 @@ blocks each have at most `Γ` gates and read at most `α` fresh input bits per g
 
 What it does not say:
 
-* **That the committed values follow the Program.** The circuit it speaks of is the Program's own layout. Sampled
-  proofs' claim is on the committed files' units, and nothing here holds the rows a unit commits to the Program's gates
-  or a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled units, and no
-  protocol calls it.
+* **That the committed values follow the Program.** The circuit it speaks of is the Program's own layout. SPOT's
+  claim is on the committed files' units, and nothing here holds the rows a unit commits to the Program's gates or a
+  wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled units, and no protocol
+  calls it.
 * **`Γ` in PoUW's unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the committed files' circuit
   (`computed`). No statement gives how many of those a Program gate is.
 * **That the Program is the registered compiler's output.** No compiled check runs the registered compiler or holds
   the record to the registration log's builder item, so the Program and the record are the ones the prover sent under
   the digests the composite ties, not the compiler's output on committed advice. This is a check the verifier lacks,
   not a premise of the claim.
-* **Who declared the day.** Where sampled proofs' parameters carry a day and the log's declarations
+* **Who declared the day.** Where SPOT's parameters carry a day and the log's declarations
   (`Properties.Spot.DeclaredDay`), the record's program is held to that day's declared one. The day and the
   declarations are read from the parameters as they were sent, with no device's signature on them: where they come from
   the prover's own log, the Program is held to what the prover declared, and the claim says nothing of who wrote it. -/
