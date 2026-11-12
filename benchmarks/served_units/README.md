@@ -54,7 +54,12 @@ Files:
   circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
-- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
+- `prove_rows.py OUT --record RUN`: a `window.py prove` run's timed statements as rows by block type, in the format
+  the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
+  largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
+  no time are listed with their reasons.
+- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
+  `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME` and `full/D` on a stub stager, `stage_window.py`'s member choice and public-body check, and
   `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in each) held to
   the tree.
