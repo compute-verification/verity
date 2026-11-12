@@ -317,6 +317,7 @@ class LaneCalls(_RunState):
                         tl.event.record(lane)
                     f()
             if tl is not None:
+                assert to is not None
                 self.kernel.dev.stream = tl.raw
                 with torch.cuda.stream(tl.stream) if g is not None else nullcontext():
                     if cuda:
@@ -330,6 +331,7 @@ class LaneCalls(_RunState):
                 if cuda and apart:
                     to.tree_event.record(tl.stream)
             if side:
+                assert to is not None
                 self.kernel.dev.stream = to.raw
                 with torch.cuda.stream(to.stream) if g is not None else nullcontext():
                     if cuda:
