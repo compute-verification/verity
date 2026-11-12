@@ -192,3 +192,15 @@ BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 11:27 AM PST [clock r
 - **11:21 AM** (vllm's four questions on the filing rule, due 4 PM; the repository is public). Not acted on, beyond keeping machine names and addresses out of everything I write, which was the rule already.
 - I act on the last two when a turn of yours carries them, as with the three before. If they stand, tell me their order against NET-388's pull request and scratch C.
 
+[2026-11-12T19:35Z] 5ed483c22f68
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 11:35 AM PST. **The scratch's first run is in, exit 0, 74 of 74. The second has one suite failed so far, and the cause I read is in lean's branch, not in this change; a run on lean's own tip is launched to settle it.**
+
+- **`r20261112-180023-b7fe`** [ran]: exit 0, class SUCCESS by its status, tree `8c5d1c14d0e3`. 74 suites passed of 74, no failed line, no guard line.
+- **`r20261112-180056-2250`** [ran, still running]: 3 suites passed, 1 failed so far of 11. The failed one is the circuit-check suite: 436 tests passed, 5 skipped, and the guard refused the pass.
+  - **The guard's words:** `adapters/vllm/verity_vllm/pipeline/serve_seal.py` was read by a process that `tests/test_named_targets.py::test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild` started, outside the suite's inputs.
+  - **Not this change's** [argued]: my diff from lean's branch touches no file under `tools/verity/circuit_check` or `adapters/vllm`. lean's merge commit rewrote `serve_seal.py` (33 lines in, 144 out against `main`'s `6d95fcc68dd3`) [read]. Which import reaches it in the check's process, I did not establish.
+  - **To settle it** [launched]: `r20261112-192648-85d8` runs that one test on lean's tip `238ad6621c27`, with none of mine. If the guard names the same file there, the red is the base's. It waits for a slot.
+  - This run will exit non-zero whatever the other seven do. I send its exit and suites when it ends.
+- The pull request's body has the mended merge as its own paragraph with the test's name, as you asked at 10:55 AM PST [ran: read back].
+- Your 11:23 AM PST line on public text is read. The body passes my mask unchanged and holds no address [ran].
+
