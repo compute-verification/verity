@@ -35,8 +35,9 @@ own and changes with it.
   `holds(m, since, until, epoch)`, `attacks(m, epoch, data)`, `all_attacks(data)` and `u_of`.
 - **`verity_machine_model.eps`**, a design's ε: `design(name, data)` and `designs(data)`, `honest(name, data)`,
   `forms(data)`, `machine(name, data)`, `table(data)`, `setup(d, pi, data)` and `eps(d, pi, q, data)`, with `Design`,
-  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`. `commands.eps` is the same computation as the command
-  prints it.
+  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`.
+- **`verity_machine_model.commands.eps`**, the same computation as the command prints it:
+  `record(d, pi, q, data, operands, credit)`, what `eps --json` prints for one design.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -44,7 +45,9 @@ own and changes with it.
 - **`verity_machine_model.sheet`**, a device's data sheet: `Sheet`, `sheet(data)`, `row(name)`, `omega(s)` and
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
-  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout"). One test
+  outside this directory, `benchmarks/pouw/tests/test_census_cover.py`, also reads every table of class counts the
+  data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
 file through `verity.hardware.cards`, imported only where a ceiling is read (`model.card`, the card table, the opcode
