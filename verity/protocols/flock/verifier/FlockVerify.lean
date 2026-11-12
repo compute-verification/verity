@@ -904,11 +904,8 @@ whose circuit links sets up only with the verifier's own program of it, `--rec-i
 as the session's does with `--program`.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
-sample; one verdict line per session, in order,
-naming with `--program` the digest of the verifier's own program (`ProvedScope.programFields`): as `program_sha512` only
-when the program is held to the circuit, its digest META's `program_sha512`; else as `program_handed_sha512`, with a
-`program_note` that says the program was handed and not held to the circuit, why, and that the registered-read refusals
-(`Registered.checkProgram`, `Registered.checkCover`) read the handed program only,
+sample; one verdict line per session, in order, naming with `--program` the verifier's own program's digest: as `program_sha512`
+only when it is META's `program_sha512`, else as `program_handed_sha512` with a `program_note` (`ProvedScope.programFields`),
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
 session up as (`session_tables`, `--session-tables J`, else 1),
@@ -934,11 +931,9 @@ session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner`
 over an inner session whose record (`--rec-inner-session`) holds no sample (`RecSetup.innerDrawn`), and a session at a
 holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
 a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
-verified without a `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies; the check is that a program was handed, and compares nothing), and in every mode, where
-META binds a `program_sha512` under `verity/partition/v1`, a session whose `--program` has another digest
-(`ProvedScope.programBound`, which compares nothing under the provisional unit cover: the session is not refused for
-it, and its verdict says the program was not held), then a record not in its canonical text (`RecordText.check`, S0), and last under
+verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
+cannot know what it verifies; it compares nothing), or with one that is not META's under `verity/partition/v1`
+(`ProvedScope.programBound`, in every mode), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
@@ -1149,11 +1144,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  -- the program's digest from that one parse, once a call: none without a program, `some none` for bytes that are no
-  -- JSON descriptor; from it what a verdict says of the program, and the refusal of one META does not bind
-  let handed := program.map fun b => ProvedScope.programDigestOf (read.jsonAt b)
-  let programFields := ProvedScope.programFields parsed handed
-  let programBound := ProvedScope.programBound parsed handed
+  let handed := program.map fun b => ProvedScope.programDigestOf (read.jsonAt b)  -- `some none`: bytes that are no descriptor
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
@@ -1216,7 +1207,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       RecSetup.denseOnly recInner
       RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
-      programBound
+      ProvedScope.programBound parsed handed
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
@@ -1227,7 +1218,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
     let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
-      programFields ++
+      ProvedScope.programFields parsed handed ++
       -- the public file's header and the registered reads it checked the session against, by their digests, the
       -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
       -- the session to
