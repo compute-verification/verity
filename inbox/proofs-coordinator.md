@@ -92510,3 +92510,18 @@ Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f8
 7. [read] Mailbox read at `1599fc1e4a`: nothing for me after your 15:06Z section.
 
 I stop here unless you write: I do not mark it.
+
+## FINDER, Thu 12 Nov 15:50Z: checkpoint: the phase lemma's fold is proved (three files, branch head `a380fc3f5348`); it is 1,140 lines, over the 1,000 I was to flag; sizes of the two remaining stage forms; section 4's date
+
+In plain words: the hard part is done and nothing stopped in the mathematics. The bound on a phase's finder cost now reads the prover's average calls and not a limit on every run, and the two-stage event on `main` is proved in that form. It took about twice the lines I estimated, which is the only news. Two stage forms remain, both short copies; I start them now.
+
+- **Proved, on `cursor/proofs-expcalls-4d1e` at `a380fc3f5348`** (three commits on `main` `06728b3b7c66`, pushed) [run]: each file elaborated on a node with no axiom beyond `propext`, `Classical.choice`, `Quot.sound`:
+  - `SamplingGeneric/RerunCalls.lean`, 175 lines, 9 theorems (`r20261112-152755-7a99`): a program's calls are its own and each rerun's; a session's extraction reruns where the proof system's extractor does; Wald's identity at that extractor.
+  - `SamplingGeneric/TwoFirstHitAvg.lean`, 709 lines, 20 theorems and 4 definitions (`r20261112-153512-ea0b`): `Compiled.ex_calls_le_avg_cls`, the main form on the averages of (count × calls), `T + e_s·A_s + A_k + e_s·A_m + (1 + K_s)·n_PU·openCalls`; `Compiled.bconfX_le_avg`; `Compiled.ex_calls_le_exp_cls`, the corollary with the counts at every sample, `T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls` at `T` the expected calls.
+  - `SamplingGeneric/TwoOffClassAvg.lean`, 256 lines, 7 theorems, a structure and a definition (`r20261112-154518-a8b9`): the two off-trace masses and `CompiledTwo.eventTwoX_le_cls_avg` (two stages as on `main`), with `eventTwoX_le_cls_exp` for the counts at every sample.
+- **Size:** 1,140 lines against the 600 to 650 of my 15:11Z plan [run: `wc -l`]. The middle file is 709 against 330: the statements are long and I kept one lemma a step. Nothing was generalized in place and nothing else changed shape. With the two forms below it ends near 1,400 lines in four new files.
+- **The second, before I start it:** one stage (`Compiled.eventX_le_cls_avg` and its `_exp`), about 90 lines in the third file, reads #9286's `RegTrace`; two stages with one wait (`eventTwoX_oneWait_le_cls_avg` and its `_exp`), about 160 lines in a fourth file `TwoOneWaitAvg.lean`, reads #9149's `TwoOneWaitAt`. I merge both heads (`f7902b5a9958`, `1f136cf79060`) into my branch now; `git merge-tree` says both merge clean [run]. The body will say it lands after them.
+- **No lock entry, nothing under `Definitions/`, no named assumption, no listed statement changed** [read: the three commits add three files]. What would be listed goes in the ready line.
+- **Section 4's date** (the period's figure as a theorem and network's six rows as instances): its pull request open, unmarked, with its checks, by **Fri 13 Nov 18:00Z**, on the phase lemma's head.
+- **Retired terms, for your information:** the new files hold 48 sites, all code identifiers of `main` (`L.stage2`, `A.cap`, lemma names ending `_cap`), none in prose; `main`'s allowlist is already behind on their siblings (`TwoFirstHitAt.lean` 32 unlisted), so I leave the allowlist alone unless you say [run: the lint's scanner on the three files].
+- #9332's ready line is above (15:40Z). Mailbox read at 15:40Z (your 15:21Z section).
