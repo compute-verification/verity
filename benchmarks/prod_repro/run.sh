@@ -16,7 +16,8 @@
 # settings (prod, prod-again, prod-record) for a model whose recipe the benchmark holds, else stock compiled vLLM,
 # stock again and the step record (prod_repro.py arms), each a server lifetime of its own; --again none serves stock
 # once, and the cost then has no noise floor. The context limit is --max-model-len's for every arm, by default the
-# one limits.json holds for the model (prod_repro.py limit), else the benchmark's. By
+# benchmark's for the arm (at the recipe's settings, the recipe's for the cards); limits.json holds what is known of
+# leaving it to vLLM, which the report's first line says. By
 # default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
 # prompts behind one of eight shared prefixes) arriving at RATE a second, faster than the engine serves, each rep from
 # an empty prefix cache; then the replay re-runs rep 1 of ours under its recorded schedule, in the mode it was served
@@ -24,7 +25,8 @@
 # gives the benchmark's paired cost; it replays nothing unless --replay names the pass of ours to re-run, as the
 # benchmark names it (NAME@RUNG), which needs an arm of ours that keeps each request's prompt ids and served ids.
 # --pass-prompts, --sampled and --stop-at are the benchmark's PASS_PROMPTS (the prompts a pass sends), SAMPLED (each
-# request sampled at the recipe's temperature and top-p) and STOP_AT (an arm starts no pass it can't finish by then).
+# request sampled at the recipe's temperature and top-p) and STOP_AT (an arm starts no pass it can't finish by then;
+# the replay runs after the arms whatever the time, and the job's end is its lease's, MAX_MIN).
 # The replay runs under the arms' lease, after them. An arm of ours that serves on the canonical DSA top-k (prod-record)
 # is replayed on it, and keeps files on the node: PRIVATE names a directory for them outside every run's (the corpus
 # client needs it for such an arm), from which the report reads the top-k's counters and keeps them in
@@ -82,8 +84,6 @@ if [ -n "$REPORT" ]; then
 fi
 D=${RESEARCH_RUN_DIR:?run this under research run (or read an earlier job: --report OUT --load NAME)}; OUT=$D/out
 MODEL_ID=${MODEL_ID:-moonlight}
-limit=$("$PY" "$here/prod_repro.py" limit --model "$MODEL_ID") || exit 2
-MAX_MODEL_LEN=${MAX_MODEL_LEN:-$limit}
 export MODEL_ID CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${PASS_PROMPTS:+PASS_PROMPTS} ${STOP_AT:+STOP_AT} ${SAMPLED:+SAMPLED}
 [ -z "${STOP_AT:-}" ] || date -d "$STOP_AT" +%s > /dev/null || { echo "prod_repro: --stop-at $STOP_AT is not a time"; exit 2; }
 # the pass of ours the replay re-runs: REPLAY, REPLAY_FROM and REPLAY_MODES are the benchmark's runner's

@@ -1,6 +1,5 @@
 {
  "glm53": {
-  "max_model_len": 262144,
   "auto": {
    "starts": false,
    "at": "its recipe's flags and vLLM's own limit of requests at once",

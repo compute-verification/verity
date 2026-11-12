@@ -37,11 +37,12 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
   (`NAME@RUNG`): that needs an arm of ours that keeps each request's ids (`prod-record`), which vLLM's client does
   not keep. `--pass-prompts`, `--sampled` and `--stop-at` are the benchmark's `PASS_PROMPTS` (the prompts a pass
   sends), `SAMPLED` (each request sampled at the recipe's temperature and top-p, under its user's seed) and `STOP_AT`
-  (an arm starts no pass it can't finish by then; no replay starts after it either).
-- **The context limit** is `--max-model-len`'s, for every arm. Where the job names none it is the one `limits.json`
-  holds for the model (262,144 tokens for GLM-5.3, its recipe's for these cards), else the benchmark's. The file also
-  says what is known of leaving the limit to vLLM (`--max-model-len auto`), with the run that showed it, and the
-  report's first line repeats it beside the limit the arms were started at.
+  (an arm starts no pass it can't finish by then; the replay runs after the arms whatever the time, and the job's
+  end is its lease's, `MAX_MIN`).
+- **The context limit** is `--max-model-len`'s, for every arm. Where the job names none it is the benchmark's for
+  each arm: at the recipe's settings the recipe's for the cards (262,144 tokens for GLM-5.3). `limits.json` says what
+  is known of leaving the limit to vLLM (`--max-model-len auto`), with the run that showed it, and the report's first
+  line repeats it beside the limit the arms were started at.
 - **The replay** runs after the arms, under their lease: `replay.py` rebuilds the engine from the step trace's header
   and re-runs the pass under its recorded schedule. An arm that served on the canonical DSA top-k (`prod-record`) is
   replayed on it: the replay loads the arm's other vLLM plugins under the arm's environment before it builds the
@@ -71,7 +72,8 @@ token that does and the first step.
   served the load and how many requests it left unfinished; `FAILED` with the record's error, `STOPPED` before the
   pass `STOP_AT` left no time for, `NOT SERVED` for an arm with no record. Then the replay: whether it ended, and where
   it did not, the last line of its log (`out/replay-<mode>.log`); and the replay's engine, as the replay's own
-  record says: the plugins and environment of ours it ran under, or that ours serves with no plugin beside its record.
+  record says: the plugins and environment of ours it ran under and what set them (the replay), or that ours serves
+  with no plugin beside its record.
   For the canonical DSA top-k, what its own counters say of the replay's processes and of serving's: the processes
   that kept counters, the calls of the indexer's top-k and the rows of more than its keys that were rewritten. The
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in

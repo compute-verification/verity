@@ -528,7 +528,7 @@ def topk_log(d: Path, pid: int, calls: int, rows: tuple[int, int, int]) -> None:
 
 
 #: what a replay of an arm that served on the canonical top-k says its engine ran under (`replay.served_under`)
-TOPK_UNDER = {"plugins": ["verity_dsa_topk = dsa_topk:register"], "env": {"VERITY_DSA_TOPK": "canonical"}}
+TOPK_UNDER = {"plugins": ["verity_dsa_topk = dsa_topk:register"], "by": "the replay", "env": {"VERITY_DSA_TOPK": "canonical"}}
 
 
 def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_counted(tmp_path: Path):
@@ -553,8 +553,8 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
     (d / "replay.json").write_text(json.dumps(rec | {"served_under": TOPK_UNDER}))
     txt, engine = said()
     assert engine == {"engine": {"arm": "prod-record", "under": TOPK_UNDER, "topk": {"kept": False, "replay": None, "served": None}}}
-    assert ("  the replay's engine: under what prod-record served with beside its record: the vLLM plugin verity_dsa_topk; "
-            "VERITY_DSA_TOPK=canonical\n"
+    assert ("  the replay's engine: under what prod-record served with beside its record (set by the replay): the vLLM "
+            "plugin verity_dsa_topk; VERITY_DSA_TOPK=canonical\n"
             "  the canonical top-k's counters were not kept (the job named no PRIVATE directory): nothing here shows how "
             "many rows it rewrote\n") in txt
     # with the job's private directory: serving's processes kept theirs under the arm's name, the replay's under its
@@ -582,12 +582,12 @@ def test_the_report_says_what_the_replays_engine_ran_under_and_what_the_top_k_co
         out / "prod_repro.txt").read_text()
 
 
-def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(tmp_path: Path):
     held = json.loads(P.LIMITS.read_text())
-    assert held["glm53"]["max_model_len"] == 262144 and held["glm53"]["auto"]["starts"] is False
+    assert held["glm53"]["auto"]["starts"] is False
     assert P.limits("glm53") == held["glm53"] and P.limits("moonlight") == P.limits(None) == {}
-    assert P.main(["limit", "--model", "glm53"]) == 0 and capsys.readouterr().out == "262144\n"
-    assert P.main(["limit", "--model", "moonlight"]) == 0 and capsys.readouterr().out == "\n"
+    # the limit a job that names none serves at is the benchmark's own for the arm: the file holds no second copy
+    assert "max_model_len" not in held["glm53"] and S.published_context("prod", "glm53", None) == 262144
     # a job on a model the file holds: its first line says the limit its arms were given and that auto does not start
     out = tmp_path / "out"
     bench_arm(out, "prod", {"chat@16": [300.0]}, argv=("--max-model-len", "262144"))
@@ -821,8 +821,8 @@ def test_the_runner_hands_vllms_client_the_load_and_asks_for_no_replay(tmp_path:
     s = started(run_dir)
     assert s["argv"] == "--model glm53 --arms compiled compiled-again record --loads chat=16 --reps 6"
     assert (s["REPLAY"], s["REPLAY_FROM"], s["CLIENT"], s["SAMPLED"]) == ("unset", "unset", "vllm-bench", "unset")
-    # the limit is the one the command holds for the model, for every arm, unless the job names one
-    assert s["MAX_MODEL_LEN"] == "262144"
+    # the limit is the benchmark's own for each arm unless the job names one, which is then every arm's
+    assert s["MAX_MODEL_LEN"] == "unset"
     assert "tokens: not measured: no replay ran" in p.stdout and "cost: record over compiled +0.00%" in p.stdout
     p = bash(script, *ARMS, "--client", "vllm-bench", "--load", "chat=16", "--model", "glm53", "--max-model-len", "131072",
              run_dir=run_dir)
@@ -845,7 +845,7 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and
     assert s["argv"] == "--model glm53 --arms prod prod-record --loads chat=16 --reps 1"
     assert (s["REPLAY"], s["REPLAY_FROM"], s["REPLAY_MODES"]) == ("chat@16", str(run_dir / "out/prod-record"), "compiled")
     assert (s["PASS_PROMPTS"], s["STOP_AT"], s["SAMPLED"]) == ("chat=8", "9999-01-01T00:00Z", "1")
-    assert (s["MAX_MODEL_LEN"], s["PRIVATE"]) == ("262144", str(private))
+    assert (s["MAX_MODEL_LEN"], s["PRIVATE"]) == ("unset", str(private))
     assert p.stdout.startswith("prod_repro: context limit 262,144 tokens, given outright to prod-record and prod; with the "
                                "limit left to it (--max-model-len auto), at its recipe's flags and vLLM's own limit of "
                                "requests at once, vLLM does not start this model")

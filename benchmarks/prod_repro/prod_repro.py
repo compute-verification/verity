@@ -803,7 +803,8 @@ def _engine(e: dict) -> list[str]:
 
     names = ", ".join(x.split("=")[0].strip() for x in under["plugins"])
     env = ", ".join(f"{k}={v}" for k, v in under["env"].items())
-    lines = [f"  the replay's engine: under what {e['arm']} served with beside its record: the vLLM plugin"
+    by = f" (set by {under['by']})" if under.get("by") else ""
+    lines = [f"  the replay's engine: under what {e['arm']} served with beside its record{by}: the vLLM plugin"
              f"{'' if len(under['plugins']) == 1 else 's'} {names}; {env}"]
     t = e["topk"]
     if t and not t["kept"]:
@@ -898,8 +899,6 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
     q.add_argument("--model", help="the model the job serves, as the benchmark names it")
     q.add_argument("--out", type=Path, help="an earlier job's out/, read again: the arms it is read as")
-    q = sub.add_parser("limit", help="the context limit a job serves a model at where it names none, or nothing")
-    q.add_argument("--model", required=True)
     p = sub.add_parser("report", help="the settings and the three lines of a finished job's out/")
     p.add_argument("out", type=Path)
     p.add_argument("--stock", help="the arms default to the three OUT is read as (default_arms)")
@@ -923,9 +922,6 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "arms":
         print(" ".join(default_arms(a.model, a.out)))
-        return 0
-    if a.cmd == "limit":
-        print(limits(a.model).get("max_model_len", ""))
         return 0
     stock, again, ours = default_arms(out=a.out)
     r = report(a.out, a.stock or stock, a.ours or ours, (again if a.again is None else a.again) or None, a.load, a.rep,
