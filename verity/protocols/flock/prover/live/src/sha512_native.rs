@@ -834,6 +834,15 @@ impl UnitHashPlan {
         crate::circuit::walk_pass_rows(|q| self.seeds(32, |col| input(q, col)))
     }
 
+    /// The seeds' z for the units whose input words are `flat` (`[units][2 * in_words]` u64, a unit's F128 words lo then
+    /// hi), as the device's walk takes them: `[passes][seeds][4]` u64, each pass [`Self::seeds_pass`] of its 256 units.
+    pub fn seeds_units(&self, in_words: usize, flat: &[u64]) -> Vec<u64> {
+        let (per, units) = (2 * in_words, flat.len() / (2 * in_words));
+        let bit = |x: usize, col: u32| if x < units { (flat[x * per + col as usize / 64] >> (col % 64)) as u32 & 1 } else { 0 };
+        (0..units.div_ceil(256)).flat_map(|pass| self.seeds_pass(|q, col| (0..32usize).fold(0u32, |v, l| v | bit(256 * pass + 32 * q + l, col) << l)))
+            .flatten().collect()
+    }
+
     /// The seeds' z in `lanes` slots (at most 32; bit l is slot l's), in the compressions' and [`UnitComp::seeds`]' order,
     /// from the unit's inputs alone: `input(col)` is input column `col` in the slots.
     pub fn seeds(&self, lanes: usize, input: impl Fn(u32) -> u32) -> Vec<u32> {

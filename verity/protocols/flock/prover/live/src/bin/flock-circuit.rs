@@ -5203,13 +5203,11 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                             ok = false;
                         }
                         Some(wr) => {
-                            let bit = |x: usize, col: u32| -> u32 {
-                                let (w, i) = (col as usize / 128, col as usize % 128);
-                                ins.get(x).map_or(0, |v| ((if i < 64 { v[w].lo } else { v[w].hi }) >> (i % 64)) as u32 & 1)
-                            };
-                            let pass_seeds = |pass: usize| plan.seeds_pass(|q, col| (0..32).fold(0u32, |v, l| v | bit(256 * pass + 32 * q + l, col) << l));
+                            // the seeds as a session's host computes them for the device, from the units' input words
+                            let flat: Vec<u64> = ins.iter().flat_map(|w| w.iter().flat_map(|x| [x.lo, x.hi])).collect();
                             let t = Instant::now();
-                            let given: Vec<Vec<[u64; 4]>> = (0..slots.div_ceil(256)).map(pass_seeds).collect();
+                            let given: Vec<Vec<[u64; 4]>> = plan.seeds_units(net.in_words, &flat).chunks(4 * seeds.len())
+                                .map(|pass| pass.chunks(4).map(|w| [w[0], w[1], w[2], w[3]]).collect()).collect();
                             let seeds_s = t.elapsed().as_secs_f64();
                             let t = Instant::now();
                             let ([z, a, b], held) = unit_walk_seeded(net, &cut, &wr, 4 * uw, &ins, &seeds, |pass| given[pass].clone());

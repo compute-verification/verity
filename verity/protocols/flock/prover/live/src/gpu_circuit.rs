@@ -442,11 +442,7 @@ impl UnitCut {
     fn given(&self, in_words: usize, flat: &[u64]) -> Vec<u64> {
         #[cfg(feature = "sha512")]
         {
-            let (per, units) = (2 * in_words, flat.len() / (2 * in_words));
-            let bit = |x: usize, col: u32| if x < units { (flat[x * per + col as usize / 64] >> (col % 64)) as u32 & 1 } else { 0 };
-            let passes: Vec<Vec<[u64; 4]>> = (0..units.div_ceil(256)).into_par_iter()
-                .map(|pass| self.plan.seeds_pass(|q, col| (0..32usize).fold(0u32, |v, l| v | bit(256 * pass + 32 * q + l, col) << l))).collect();
-            passes.into_iter().flatten().flatten().collect()
+            self.plan.seeds_units(in_words, flat)
         }
         #[cfg(not(feature = "sha512"))]
         {
