@@ -12,7 +12,7 @@ accepts at the switch `form` (`accepted_steps`):
 * the run of record's input is `inputAt`'s (`inputAt_ok`): the interior registration's commitment is its record's, its
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`);
-* `Spot.Run.run` returned a run of record whose symbol is `accept`;
+* `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`;
 * the interior audit's verdict at its coins, over the sessions' verdicts, is the accept, with the check's public
   outputs and profile.
 
@@ -80,26 +80,27 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
 theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i = .ok run ∧
+    form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
       OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out } = .accept pub prof := by
   unfold checkBlobsAtWith at h
-  cases hp : prepare p c ξ e bs with
+  cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
     obtain ⟨two, run⟩ := v
     simp only [hp] at h
     obtain ⟨hf, hj, htwo⟩ := finishWith_accept h
+    subst hf
     unfold prepare at hp
     cases hi : inputAt p c ξ e bs with
     | error _ => simp [hi, bind, Except.bind] at hp
     | ok w =>
       obtain ⟨c₂, ξ₂, r, i⟩ := w
-      cases hr : Spot.Run.run i with
+      cases hr : Spot.Run.run i true with
       | error _ => simp [hi, hr, bind, Except.bind] at hp
       | ok run' =>
         simp only [hi, hr, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
         obtain ⟨rfl, rfl⟩ := hp
-        exact ⟨hf, c₂, ξ₂, r, i, run', hi, hr, hj, htwo⟩
+        exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hj, htwo⟩
 
 end VStar.Recursive.SampledTwo
