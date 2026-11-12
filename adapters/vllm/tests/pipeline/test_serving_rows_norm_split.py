@@ -95,7 +95,7 @@ def served(monkeypatch):
         for i, op in enumerate(ops, start=7):
             rng = np.random.default_rng(i)
             vals = [bf16s(rng, n, 0.1 if nm == "w" else 1.0) for nm, n in groups]
-            outs = ev(fn, [v[None] for v in vals]).astype(np.uint16).reshape(len(members), N)
+            outs: np.ndarray = ev(fn, [v[None] for v in vals]).astype(np.uint16).reshape(len(members), N)
             if bad and i == 7:
                 outs[0, 5] ^= 1
             op = op or layer.format(L=i - 1)

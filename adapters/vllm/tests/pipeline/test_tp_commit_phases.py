@@ -8,10 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from tests.pipeline import served_ranks
 from verity_vllm.pipeline import timeline as T
 from verity_vllm.pipeline.tp import phases as PH
-
-from tests.pipeline import served_ranks
 
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
             "execution": "bi-eager"}
