@@ -71948,3 +71948,86 @@ Tags: [run] a run I launched, whose `members.json` and log I read today after 05
   - what the equation rests on: `verity/protocols/flock/verifier/Flock/ProgramRead.lean:157-188` (`Readers`, `readers_of`, `orOf`, `readers_orOf`: the kept readings are given only on the kept bytes, compared in full, and are the readings anew on every program);
   - the caller's side: `verity/protocols/flock/agreement/README.md:125-139`.
   - What no theorem holds: the loop itself is IO, held by `verity/protocols/flock/prover/tests/test_lean_verify_members.py` (five tests, the no-connection one among them), not by an equation.
+
+## A4ROWS, Thu 12 Nov 05:38Z: checkpoint, not the list yet: so far A4 is taken by name only in `KeyedDraw.lean` (PoUW's window sample), the one soundness use in proofs' own code is Flock's seed coins (no theorem takes it, the Lean verifier refuses the session), and three zero-knowledge uses are priced with no named hypothesis; five flags below
+
+Read at `origin/main` `62bf29346f76`; `origin/main` is now `d6075b75d289`, and `git diff --name-only 62bf29346f76
+d6075b75d289` touches none of the files cited here [read]. Mailbox `inbox/a4rows.md`: does not exist, 05:37Z [read].
+Ownership by `research msg handles --json`'s `owns`, longest prefix [read]. No build launched, no file of the repository
+changed.
+
+### Flags so far (each still to be re-read for the 12:00Z list)
+
+1. **The lock names A4 for two deployed guarantees that do not take it.** `security/lean-audit.json:3378-3389`
+   (`trust.extra`) lists `FlockSoundness.Assumptions.KeyedStreamsUniform` for `Flock.SecurityProofs.SessionLoopZKDeployed`
+   and `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed`, reason "the deployed salts' keyed SHA-512 streams pass a
+   test as uniform bytes do, up to its advantage (prf/sha-512)" [read]. Neither guarantee's record lists it as a
+   premise, and no record of the lock's 1,121 does: the closure `tools/verity/lean/check.py:3217-3230`
+   (`premise_closure`) computes for the first is `SwCausalOn, FillRoundEq, LiveRoundEq, Loop.Src, LoopInnerRound0`, for
+   the second `SwCausalOn, ReleaseReadsNoStop, LoopSessions.Honest, LoopSessions.Sized` [derived: the lock's
+   records, read by a script of mine that repeats that function; `check.py` itself was not run]. So `trust.extra` permits a premise neither statement has, and η appears
+   in neither bound [derived]. Both statements model the salts as uniform bytes
+   (`security/Proofs/Flock/Recursive/LoopAnyDeployed.lean:36-71`: the randomness is `Fin (fwHoles s + r) → Fin 192 →
+   Fin 256`) [read].
+2. **The ZK server's value salts are a keyed SHA-512 stream priced by a term with no hypothesis, under a second
+   name.** `verity/protocols/flock/verifier/Flock/Firewall/Salts.lean:95-97` (`saltOf`): `SHA-512(k ‖ L ‖ s ‖ be32 j ‖
+   be64 i ‖ ctr)`, ctr 0..2, `k` 64 bytes (`KEY_BYTES`, line 75; `loadKey` 390-401 draws it with `IO.getRandomBytes`)
+   [read]. In Lean it is `Verity.ValueSalts.Service.prfAdvantage` and `streamPrfAdvantage`
+   (`security/Definitions/Core/ValueSalts.lean:134-136, 189-191`: genuine minus ideal, "the gap SHA-512 keyed by the
+   server's key, as a PRF, bounds"), a term of `Verity.Guarantees.RegisteredLeakage` and `RegisteredStreamLeakage`
+   (`security/Definitions/Core/Guarantees/ValueSalts.lean:44-49, 60-67`) and of `Flock.Guarantees.SampledAuditAnyDeployed`
+   (`security/Proofs/Flock/SessionLoop/SampledAudit.lean:50-90`, the bound `Loop.AuditAnyAt`) [read]. No statement bounds the term and none takes
+   `KeyedStreamsUniform`; and A4 as stated (`security/Proofs/Flock/Soundness/Assumptions.lean:69-74`, over
+   `Randomness.stream (Randomness.derive …)`) is not about this format [read].
+3. **The hm96 rows' salts of a serving committer are a ChaCha20 stream, which `prf/sha-512` cannot cover.**
+   `verity/commitments/hm96/batch.py:66-82` (`salts`): three ChaCha20 blocks a row under a 32-byte key
+   (`verity/commitments/crypto/chacha20.py`) [read]. `verity/commitments/hm96/PROTOCOL.md:124-127` says the bound
+   treats a stream seeded from the OS "as uniform ... neither is a different assumption" [read]. `rg -i chacha
+   verity/claims/__init__.py`: no claim [read]. The callers are other owners' (`verity/commitments/windows/rows.py`
+   @vllm, `verity/protocols/pouw/verifier/audit.py` @compute-accounting), and one is ours: the auditor's registered
+   model's salt key, `verity/composite/device/live_challenger/auditor.py:892` (`secrets.token_bytes(32)`) [read].
+4. **LMS key generation folds the PRF claim into the signature claim.** `verity/commitments/crypto/lms.py:258-259`
+   (`_x`: `H(I ‖ u32 q ‖ u16 i ‖ 0xff ‖ SEED)`), 288 (`I = SHA-512("verity/lms/v0/I" ‖ SEED)[:16]`), 324 (`C`), seed
+   64 bytes (`os.urandom(params.N)`, lines 622, 638; `live_challenger/serve.py:87`) [read].
+   `verity/claims/__init__.py:88-91` says `euf-cma/lms-sha512-n64` rests, for seed-derived keys, on "SHA-512 as a PRF
+   keyed by the seed" [read]; `Hash.Assumptions.LmsUnforgeable` (`security/Definitions/Hash/Assumptions.lean:58`) takes
+   the key as given and says nothing of how it was made [read].
+5. **Stale text.** Seed coins are said to be SHA-256 in `ASSUMPTIONS.md:440-441`, `DESIGN.md:370`,
+   `flock-circuit.rs:129` and `gemm_hill.py:87`; the code is SHA-512 (`live/src/coin_seed.rs`, `ASSUMPTIONS.md:259-261`
+   agrees with the code) [read]. `Flock.Firewall.Salts.interiorKey` (`SHA-512(k ‖ L' ‖ s)`) is named in
+   `security/Proofs/Flock/ZkAny/SampledChosenTwo.lean:33` and `SessionLoop/SampledChosenTwo.lean:14`,
+   `SampledAuditTwo.lean:29`; no such definition exists, and an interior session's key and salts are OS bytes
+   (`Flock/Firewall/Values.lean:73-76`) [read].
+
+Key shorter than 32 bytes: none among secret keys so far (Flock's seed 32, the ZK server's key 64, LMS's seed 64, the
+salt keys 32). `randomness.derive` takes any nonempty source (`verity/commitments/randomness/__init__.py:154-156`), and
+two callers hand it public constants for synthetic benchmark inputs, one of 26 bytes (`verity_flock/synthetic.py:27`) and
+one of 32 (`partition_units.py:44`): no secret, nothing rests on them [read]. `FC_SALTS_KEYED`, which the brief names, is in no
+file of `origin/main` (`rg -i salts_keyed`: no hit outside `benchmarks/network_traces`); what exists is
+`FC_FIREWALL_SALT_KEY`, the path of the ZK server's key file (`flock-circuit.rs:1618`) [read].
+
+### Uses found so far
+
+| use | file and line | kind | today |
+|---|---|---|---|
+| Flock's seed coins (the binary's default plain session): 32 OS bytes → `derive` → `stream`, 16 bytes a coin | `live/src/coin_seed.rs:41-90`; `lib.rs:1610-1629, 1778-1790`; `flock-circuit.rs:145-155, 787` [read] | (i) | nothing: no theorem takes it; `ProvedScope.SEED_COINS` (`Flock/ProvedScope.lean:606-610`) refuses the session [read] |
+| PoUW's window sample (`Key.subset`) | `security/Proofs/Flock/Soundness/KeyedDraw.lean:640-1103`, six `keyedWindow*` theorems | (i) | A4 by name, `hA4`; in no lock's guarantees; compute-accounting's row [read] |
+| the ZK server's value salts | flag 2 | (ii) | `prfAdvantage`, no hypothesis |
+| the ZK server's tags (`tagOf`, `recordTagOf`, `keyTagOf`: SHA-512 with the key first) | `Flock/Firewall/Salts.lean:109-110, 280-281, 288` [read] | a keyed tag, not a stream | `forgeAdvantage`, a term, no hypothesis [read] |
+| hm96 row salts, ChaCha20 under a salt key | flag 3 | (ii) | nothing |
+| a staged benchmark's row salts: SHAKE-256 of a key | `verity_flock/circuit.py:1067-1078` [read] | (ii), benchmarks only | nothing |
+| LMS one-time keys from the seed | flag 4 | signatures | folded into `euf-cma/lms-sha512-n64` |
+| the certifiers' sealed link: keystream `H(K_enc ‖ N ‖ ctr)`, keys by HMAC from a 64-byte secret | `verity/commitments/crypto/aead.py:1-24` [read] | confidentiality of a link | `prf/sha-512` by name in the docstring; no Lean statement found yet |
+| Flock's tree coins and the challenger's coin trees | `live/src/coin_tree.rs:1-19, 270-296` [read] | (iv) | live bytes |
+| SPOT's sample draws | `verity/protocols/spot/device/coins.py:1-22, 74-95, 111-113`; `Spot/ChallengerCoins.lean:54-84` [read] | (iv) | coin bytes read directly, extended and never stretched |
+| the Flock prover's masks, pads and leaf salts | `live/src/zk_hooks.rs:1-25, 74-84` [read] | (iv) in a proving build | OS bytes; ChaCha20 only under an injected test seed |
+| the Lean ZK server's draws (`Frame`, `Level0`, `Hello`, `Session`) | `IO.getRandomBytes` at every site `rg` finds under `verity/protocols/flock/verifier/` [read] | (iv) | OS bytes |
+
+Not ours, one line each [read: the registry]: the remote bandwidth audit's pass seeds (`verity/protocols/poub/verifier/`,
+@memory-accounting); the window's seed salt is one live coin read whole (`Spot/ChallengerDraw.lean:57-61`), and what
+derives a request's seed from it is `adapters/vllm/verity_vllm/program/frontend/seed_rule.py` (@circuits).
+
+Still to read: SPOT's Python service and verifier, `verity/commitments/coin_tree.py`, `rec_live.py` and
+`rec_session.py`, hm96's pinned key from its label, `Discharge/ZkView/OsSalts.lean` and `Loop.Src`, the recursion
+verifier's firewall, `verity/commitments/attest`, `identity` and `windows`' readers in our files, the 210 files a sweep
+for OS randomness and derivations matched. Next entry by 06:38Z.
