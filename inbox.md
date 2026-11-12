@@ -22,3 +22,25 @@ ONE THING THAT HAPPENED: my VM was replaced at about 07:46Z (uptime 1 min at 07:
 
 Notes: 20261112T0613Z (the builder), 20261112T0642Z, and the final one synced now. I am done unless you send more.
 
+[2026-11-12T07:55Z] 32b1e6c73e84
+FORM to training, TRN-103, on your order of 07:46Z. THE RATCHET GATE FAILS AT 9cf54a37d7f4 ON THIS PR'S OWN LINES, AND #8676'S BRANCH WAS PUSHED TO THAT HEAD BEFORE I COULD TELL YOU. Nothing is changed for it; the head is as fixed.
+
+WHY THE ORDER BROKE: two turns of mine ran at once after the VM was replaced at 07:46Z. My timer's turn followed the earlier plan (push, body, report) and sent you "DONE" at 07:51Z; it never saw your order. It pushed at 07:48Z. This turn ran the gate at 07:49Z and found the branch already at 9cf54a37d7f4 (RAN: `git ls-remote`). A fast-forward, no force; it can't be taken back without one. That "DONE" has no gate in it: read this beside it.
+
+THE GATE (RAN on the VM, `python3 adapters/vllm/tools/ratchet_gate.py origin/main 9cf54a37d7f4cb7a0208c38875727a043bcd2a4d`, main bcaf58a45d53, exit 1). Its lines:
+"ratchet gate bcaf58a45d53..9cf54a37d7f4: 1 change(s), 1 failed"
+"be9a3d566905..9cf54a37d7f4 (9cf54a37d7f4): failed: grows tests/lint/allowlists/repo_retired_terms.json 109696 -> 110225 in total: no change adds a ratchet exception or raises a recorded count, past what the same kind's other counts lose"
+It names 65 keys of that list, the first twelve by name and "... and 53 more". All 65 are this PR's own entries (RAN: the list at main be9a3d566905, at #8686's head and at this head; #8686's head leaves the list as main has it):
+- 63 files this PR adds, each 0 to its count, +512 in all. The largest: `security/Properties/Nci/Record.lean` 0 -> 37; `RecordBlockFresh.lean` and `RecordLaidOut.lean` 0 -> 24; `RecordAligned.lean` 0 -> 23; `RecordLeafWide.lean` and `RecordServed.lean` 0 -> 20; the proofs' `Record.lean` and `NciCheck/Record.lean` 0 -> 16.
+- Two files main has: `NciCheck.lean` 35 -> 45 and the check's `lakefile.toml` 33 -> 36.
+- A 66th key rises, `period_case.py` 125 -> 129, and the gate does not name it (INFERRED: its rule lets a key rise to what main's tree holds, 165 there).
+What the sites are (RAN: the lint's own `sites` on the 65 files, 592 sites): `NciCheck` 375, `Nci` 191, the package's executables' names (`nci-check`, `nci-desc` and three more) 19, `cap` 5, `isolation units` 2. The five `cap` are in `LeafWidthsPart.lean`, the name of `Widths.residues`'s last parameter; the body's sentence "No other retired word is added" misses them, and I correct it.
+The mend adds none of it: 7bc9188630..9cf54a37d7f4 does not touch the list (RAN: `git diff`). The body has said since c1ac6b770a that the list gains an entry for each new file and that the ratchet gate reports the growth.
+Whether it holds a landing (READ: main's `tools/verity/check/policy.toml` and `drive.toml`): `off_gate` lists ratchet-gate and `warn_steps` lists it, so it warns at the ready mark and is rung to the lane after landing. NOT CHECKED: what the queue did with it for another PR.
+
+THE REST OF YOUR ORDER SO FAR:
+1. b264, every line READ (the run fetched whole): 57 named, 57 with a verdict line; 52 "passed", 5 "cached", none failed, none skipped, none without a line. Last line "57 suites: 57 passed (5 cached), 0 failed; 207.0 min of test time". The five cached did not run in this run: verity-datacenter, benchmarks/hash/dither, benchmarks/torch_gpu/j10r_sm90, verity/definitions/private_circuits, verity/protocols/tests, each "passed at 7581e0708a ... (traced: every file its run read is as it was)". I took a cached pass as a pass, not as "did not run"; if you read it the other way, say so and I run the five with `--fresh` (one run, one slot).
+2. Today's main: `git merge-tree --write-tree origin/main 9cf54a37d7f4...` exits 0, tree 9065861abac1, no conflict. main not merged in.
+4. The branch is at 9cf54a37d7f4 (the other turn's push).
+5 and 6 follow: the body gets the gate and the merge check, then my report.
+
