@@ -101,6 +101,12 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def _collector_counters(rc: Any) -> dict[str, Any]:
+    """The counters a run's native collector stated; none when its committer has no collector, or states none."""
+    stated = rc.extra.get("native_collect")
+    return stated if stated else {}
+
+
 def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
     hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
@@ -112,7 +118,7 @@ def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
                        "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
             "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
-            "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
+            "collector": {k: v for k, v in _collector_counters(rc).items() if k != "fa2_wrap"}, "sources": sources}
 
 
 class _LLMShim:
@@ -847,17 +853,19 @@ class TP2CaptureWorkerExtension:
                 sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
             if slot:
                 sampled_replay["host_slot"] = slot
+        errors = rc.extra.get("errors")
+        errors = errors if errors else []
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],
                           "leaves": sum(s.n_leaves for s in rc.steps), "bytes_bound": sum(s.n_bytes for s in rc.steps), "tensors": sum(s.n_tensors for s in rc.steps),
                           "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "spans_total_s": rc.spans["total_s"],
                           "expected_tensors": rc.extra.get("expected_tensors"), "committed_tensors": rc.extra.get("committed_tensors"),
-                          "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
+                          "errors_n": rc.extra.get("errors_n", len(errors)), "errors": errors[:10],
                           "collector_failure": rc.extra.get("collector_failure"), "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
-                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                          "plans_cached": _collector_counters(rc).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
                           "timing": _commit_timing(com, rc)})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
@@ -866,7 +874,8 @@ class TP2CaptureWorkerExtension:
         identity of that request goes UNBOUND and coverage FAILS for it (fail-closed; this was the r15-tp06 B8 first-attempt FAIL:
         96330/96493 unbound per rank with the raw `<uuid>-<hex>` ids in the map)."""
         st = self._tp2_commit
-        order = dict(st.get("request_ids") or {}) or {str(r): f"r{i}" for i, r in enumerate(st.get("request_order") or [])}
+        ids, listed = st.get("request_ids"), st.get("request_order")
+        order = dict(ids) if ids else {str(r): f"r{i}" for i, r in enumerate(listed if listed else [])}
         rid = str(rid)
         if rid in order:
             lg = order[rid]
