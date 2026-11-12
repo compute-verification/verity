@@ -944,7 +944,8 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
-    (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
+    (the piece's ``placement``, as its own module words it: the wipe's holds only under the key its challenger's host
+    is pinned to, and reads a rehearsal's otherwise); and each δ of the block record's at which its leg's quantity is not
     established."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None

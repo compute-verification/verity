@@ -172,7 +172,10 @@ and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_
 past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. Its `trusted_sha512` pins the one memory-challenger key the verifier trusts, by the SHA-512 of its
 public key: a session signed under another key is rejected, and a challenger on its own host with no key pinned is
-refused before its session. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
+refused before its session. That pin decides only what is accepted. The record's `trusted-host` holds only when the
+session's key is the one `wipe_party.AUDITOR_KEYS` pins for the challenger's host, and otherwise reads "rehearsal: key
+not the auditor's pinned key, no bound", whatever the host names say; the placement's `kind` (`own-host`, `simulated`,
+`prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
 declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger

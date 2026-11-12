@@ -9,7 +9,7 @@
 #     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
 #
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
-#                        run but the size and the placement (trusted-host unmet)
+#                        run but the size and the placement (a rehearsal, no bound)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
 #   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is 64 MiB);
 #                        the whole device is declared, so what the fill doesn't reach counts in
@@ -21,12 +21,14 @@
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
 #                        there, e.g. 'python -m verity.protocols.pous.verifier.wipe_party --device D --listen 0.0.0.0:P
-#                        --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
+#                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
-#                        challenger here signs under a key this run makes, trusted without it
+#                        challenger here signs under a key this run makes, trusted without it. trusted-host holds only
+#                        under the key wipe_party.AUDITOR_KEYS pins for the challenger's host; under any other the
+#                        record reads "rehearsal: key not the auditor's pinned key, no bound"
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
-#                        `simulated`, the premise assumed; its key in this run's scratch all the same)
+#                        `simulated`, a label; its key in this run's scratch, so a rehearsal all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject

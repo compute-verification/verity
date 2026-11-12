@@ -37,9 +37,10 @@ SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, 
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
 count (unless `wipe.egress_bits` names one) and an accepted leg's bound is vacuous: its verdict is real and its
-quantity isn't. The leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an
-uncounted egress, the
-node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
+quantity isn't. The leg's record says `trusted-host` holds only for a session signed under the challenger host's key
+that `wipe_party.AUDITOR_KEYS` pins, never from the hosts' names: a session accepted under a key the run pinned itself
+is a rehearsal with no bound. It names what the bound doesn't cover (`uncertified`): the key custody of any other
+session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
 leave outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
 `main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
@@ -542,12 +543,12 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
 
 def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
-    check took (`egress_of` of the evidence's; `None` leaves the egress out): the memory challenger off its own host
-    (its key on the developer's node), an uncounted egress (`EGRESS_MAX_UNITS`), each undeclared
-    tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
+    check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
+    signed under the challenger host's pinned key (`wipe_party.holds`), an uncounted egress (`EGRESS_MAX_UNITS`), each
+    undeclared tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
     the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
     certifier counts."""
-    out = [] if where["kind"] == "own-host" else [f"key custody: {where[wipe_party.PREMISE]}"]
+    out = [] if wipe_party.holds(where) else [f"key custody: {where[wipe_party.PREMISE]}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
                    "is vacuous")
@@ -573,7 +574,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     With `wipe-protocol` among the period's tools, the Lean answers (the
     verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
     which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
-    Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
+    Which host ran each party, whether `trusted-host`'s premise holds (the session's key against the pin
+    `wipe_party.AUDITOR_KEYS` holds for the challenger's host), the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
     (`placement`, `wipe_party.placement`); `wipe.json` adds the prover's own timings (`prover`: its store, gate, fill
@@ -625,7 +627,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
         conn = wipe.report["connection"]
         links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
-    where = wipe_party.placement(node, party.host, store=kept, simulated=c["placement"] == "simulated", links=links,
+    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], store=kept,
+                                 simulated=c["placement"] == "simulated", links=links,
                                  undeclared=undeclared(tier, memory_bits(params) // 8, kept))
     window = {"challenger": wipe.report.get("window"),
               "prover": {"t0": wipe_party.utc(p0), "t1": wipe_party.utc(p1),

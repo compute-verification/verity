@@ -46,6 +46,12 @@ from . import wipe_stream
 
 MODULE = "verity.protocols.pous.verifier.wipe_party"
 PREMISE = "trusted-host"
+AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+                                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+"""Each auditor host's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
+`placement` says `trusted-host` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
+which session the verifier accepts, never this."""
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -194,26 +200,34 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 
 
-def placement(node: str, host: str, *, verifier: str | None = None, store: Mapping[str, Any] | None = None,
-              simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
+def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
+              store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control, which is never the developer's node. `kind` names the placement: `own-host`,
-    `simulated` (the challenger a process of its own on the developer's node, standing in for its own host, the premise
-    assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
+    machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
+    session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
+    `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
+    `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
     `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
     declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
-    held = host != node
-    if simulated and held:
+    if simulated and host != node:
         raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
-    kind = "own-host" if held else "simulated" if simulated else "prover-node"
+    kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
+    names = {"own-host": f"the memory challenger ran on {host}, not the developer's {node}",
+             "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
+                          "in for a host the developer doesn't control",
+             "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
+    premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
+               if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
     out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: {"own-host": f"holds: the memory challenger ran on {host}, not the developer's {node}",
-                     "simulated": f"simulated: the memory challenger ran as a process of its own on the developer's node "
-                                  f"{node}, its key in its own scratch, standing in for a host the developer doesn't control",
-                     "prover-node": f"unmet: the memory challenger ran on the developer's node {node}"}[kind],
-           "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
+           PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
     return out if store is None else out | {"prover_store": dict(store)}
+
+
+def holds(where: Mapping[str, Any]) -> bool:
+    """Whether a placement's `trusted-host` holds: the session signed under the challenger host's pinned key."""
+    return where[PREMISE].startswith("holds: ")
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:

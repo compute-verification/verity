@@ -8,13 +8,16 @@ is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against th
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
 (the links leaving the node, the undeclared tiers, an uncounted egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
-session signed under another is rejected, and a challenger on its own host with no key pinned is refused."""
+session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
+says `trusted-host` holds only for a session signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's
+host: a run's own pin, or a rehearsal's host name, gives a rehearsal with no bound."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import socket
 import sys
 import threading
@@ -206,12 +209,48 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert wired == Side("auditor-host", ("gate", "wipe"), ("127.0.0.1", 7962))
     native = WP.side_of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
-    assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ") and WP.placement("n0", "n0")["kind"] == "prover-node"
-    assert WP.placement("n0", "a")["kind"] == "own-host"
-    simulated = WP.placement("n0", "n0", simulated=True)
-    assert simulated["kind"] == "simulated" and simulated[WP.PREMISE].startswith("simulated: ")
+    assert WP.placement("n0", "n0", OTHER)["kind"] == "prover-node" and WP.placement("n0", "a", OTHER)["kind"] == "own-host"
+    simulated = WP.placement("n0", "n0", OTHER, simulated=True)
+    assert simulated["kind"] == "simulated" and simulated[WP.PREMISE] == (
+        f"{REHEARSAL}; the memory challenger ran as a process of its own on the developer's node n0, standing in for a "
+        "host the developer doesn't control")
     with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the developer's node"):
-        WP.placement("n0", "a", simulated=True)
+        WP.placement("n0", "a", OTHER, simulated=True)
+
+
+AUDITOR = "vy-auditor-2"
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+OTHER = hashlib.sha512(b"a key that is no auditor's").hexdigest()
+
+
+def test_the_auditor_keys_are_sha512s_in_lowercase_hex() -> None:
+    assert WP.AUDITOR_KEYS and all(re.fullmatch("[0-9a-f]{128}", k) for k in WP.AUDITOR_KEYS.values())
+    assert WP.REHEARSAL == REHEARSAL
+
+
+def test_a_rehearsal_on_the_prover_node_names_another_host_and_has_no_bound() -> None:
+    """Every party on the prover's node, the challenger's host named `on-node-rehearsal` and its key the run's own: the
+    names say `own-host`, and the premise is a rehearsal's all the same, with the key custody left out of the bound."""
+    where = WP.placement("node-a", "on-node-rehearsal", OTHER)
+    assert where["kind"] == "own-host" and not WP.holds(where)
+    assert where[WP.PREMISE] == f"{REHEARSAL}; the memory challenger ran on on-node-rehearsal, not the developer's node-a"
+    assert W.uncertified(where, None) == [f"key custody: {where[WP.PREMISE]}"]
+    assert not WP.holds(WP.placement("node-a", "on-node-rehearsal", None))
+
+
+def test_the_auditor_host_under_its_pinned_key_holds() -> None:
+    where = WP.placement("vy-dc-h200", AUDITOR, WP.AUDITOR_KEYS[AUDITOR])
+    assert where["kind"] == "own-host" and WP.holds(where) and W.uncertified(where, None) == []
+    assert where[WP.PREMISE] == ("holds: the session is signed under vy-auditor-2's pinned key; the memory challenger ran "
+                                 "on vy-auditor-2, not the developer's vy-dc-h200")
+
+
+def test_the_auditor_hosts_name_under_another_key_is_a_rehearsal() -> None:
+    """The name `vy-auditor-2` is a label: under any key but its pinned one, the premise is a rehearsal's."""
+    for key in (OTHER, WP.AUDITOR_KEYS[AUDITOR].upper(), None):
+        where = WP.placement("vy-dc-h200", AUDITOR, key)
+        assert where["kind"] == "own-host" and not WP.holds(where) and where[WP.PREMISE].startswith(f"{REHEARSAL}; ")
+    assert not WP.holds(WP.placement("n0", "on-node-rehearsal", WP.AUDITOR_KEYS[AUDITOR]))
 
 
 CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
@@ -232,16 +271,19 @@ def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
 
 def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
-    (`wipe_side.py`), its case and record written, the premise recorded as held. No network certifier counted the
+    (`wipe_side.py`, its key here the one `AUDITOR_KEYS` pins for its host), its case and record written, the premise
+    recorded as held. No network certifier counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
+    monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
     period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
-    assert answer["profile"]["placement"]["trusted-host"] == "holds: the memory challenger ran on auditor, not the developer's n0"
+    assert answer["profile"]["placement"]["trusted-host"] == ("holds: the session is signed under auditor's pinned key; "
+                                                              "the memory challenger ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
@@ -358,6 +400,21 @@ def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, mo
     assert not started and not (tmp_path / "out").exists()
 
 
+def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path, monkeypatch) -> None:
+    """The run pins its own challenger's key (`wipe.trusted_sha512`, as `--trusted-sha512` and `WIPE_KEY_SHA512` do), so
+    the verifier accepts its session; the challenger's host is not one `AUDITOR_KEYS` pins that key for, so the record
+    says rehearsal, no bound, and leaves the key custody out of the bound."""
+    period = _side(tmp_path, monkeypatch, {})
+    answer = W.leg(period, "n0", tmp_path / "out")
+    assert answer["verdict"] == "accept", answer
+    record = json.loads((tmp_path / "out" / "wipe.json").read_text())
+    assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
+    where = record["placement"]
+    assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)
+    assert where[WP.PREMISE] == f"{REHEARSAL}; the memory challenger ran on auditor, not the developer's n0"
+    assert record["uncertified"][0] == f"key custody: {where[WP.PREMISE]}"
+
+
 @pytest.mark.parametrize("pin", ["ab" * 63, "AB" * 64, "ab" * 64 + "\n", 7])
 def test_a_pin_is_a_sha512_in_lowercase_hex(pin) -> None:
     with pytest.raises(ValueError, match="wipe.trusted_sha512 is null or the SHA-512"):
@@ -376,7 +433,7 @@ def test_what_the_bound_does_not_cover() -> None:
     host = W.undeclared("host-dram", 100)
     assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
     counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier")
-    where = WP.placement("n0", "n0", simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
+    where = WP.placement("n0", "n0", OTHER, simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)
     assert gaps[0] == f"key custody: {where[WP.PREMISE]}" and len(gaps) == 3
@@ -405,7 +462,7 @@ def test_what_a_joint_store_and_its_disks_leave_out() -> None:
         "of it is outside the boundary, which Covered assumes away"]
     assert W.disk_gaps(disk | {"spare_bytes": 7, "direct": False}) == [gaps[1], (
         "disk: buffered I/O, not O_DIRECT: the page cache can answer a read the disk doesn't keep")]
-    where = WP.placement("n0", "auditor", store=joint, links=[])
+    where = WP.placement("n0", "auditor", OTHER, store=joint, links=[])
     assert W.uncertified(where, None)[-2:] == gaps and W.disk_gaps(None) == []
 
 
@@ -430,7 +487,7 @@ def test_an_unmounted_block_device_no_target_is_on_is_undeclared_whole(tmp_path,
     got = [u for u in W.undeclared("disk+host-dram", 0, joint) if u["tier"] == "disk"]
     assert got == [{"tier": "disk", "bytes": 1 << 30, "what": "the host's block device nvme0n1, outside the declared disks"},
                    {"tier": "disk", "bytes": 1 << 20, "what": "the host's block device vdb, outside the declared disks"}]
-    where = WP.placement("n0", "auditor", store=joint, links=[], undeclared=got)
+    where = WP.placement("n0", "auditor", OTHER, store=joint, links=[], undeclared=got)
     assert ("tier disk: the host's block device vdb, outside the declared disks (1048576 bytes) is undeclared: the fill "
             "doesn't cover it and M doesn't count it") in W.uncertified(where, None)
 

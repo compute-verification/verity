@@ -505,6 +505,12 @@ The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdi
 the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which refuses a record `to_json` can't have
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
+
+**Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-host` for the memory challenger, as `holds`
+only when the session was signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's host. Under any other
+key, a key the run pinned for itself included, it reads `rehearsal: key not the auditor's pinned key, no bound`, and
+the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
+`prover-node`), a label and never the reason. Which keys the verifier accepts is the run's pin, and a separate matter.
 `verity/protocols/pous/device/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a start mark changed, a
 field past its width), JSON the Lean must refuse, and named negative controls.

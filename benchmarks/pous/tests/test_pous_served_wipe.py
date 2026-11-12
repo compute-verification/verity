@@ -38,8 +38,7 @@ DECIDED = {"program": "python", "host": socket.gethostname()}
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pous" / "verifier" / "tests"
                             / "wipe_side.py"))["key_sha512"]()
 #: the SHA-512 of the public key of vy-auditor-2's wipe party: the pin of a run that sets none of its own
-AUDITOR_PIN = ("c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
-               "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252")
+AUDITOR_PIN = WP.AUDITOR_KEYS["vy-auditor-2"]
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
 ROOT = Path(__file__).resolve().parents[3]
 #: the Lean judge's package, `wipe-protocol`'s
@@ -134,7 +133,8 @@ def _decided(case: dict) -> dict:
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:
     """In the serve's lease, before its engine loads: the card checked idle, the wipe of it, and DIR/answer.json the
     accepted core answer of verity/wipe/v0 that the case decides, the challenger the one WIPE_COMMAND starts on
-    vy-auditor-2 (trusted-host's premise held), the window's serve dir and the card in served.json, and the
+    vy-auditor-2 (its stand-in's key pinned by the run, not the tree's, so trusted-host's premise reads a rehearsal's
+    whatever the host is named), the window's serve dir and the card in served.json, and the
     piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
     composite's piece beside it (served_case.py's `CASE` line before the headline), and DIR keeps none of it."""
     d = tmp_path / "pieces" / "wipe"
@@ -148,7 +148,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-host"] == "holds: the memory challenger ran on vy-auditor-2, not the developer's vy-dc-h200"
+    assert placement["trusted-host"] == (f"{WP.REHEARSAL}; the memory challenger ran on vy-auditor-2, not the developer's "
+                                         "vy-dc-h200")
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
     case = json.loads((private / "wipe.case.json").read_text())
@@ -288,6 +289,13 @@ def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(nod
     assert case["params"]["trusted"] == [] and _decided(case) == answer
     summary = json.loads((d / "summary.json").read_text())
     assert (summary["verdict"], summary["key_pinned"], summary["key_sha512"]) == ("reject", False, PINNED)
+
+
+def test_the_wrappers_default_pin_is_the_trees_auditor_key() -> None:
+    """served_wipe.sh's default WIPE_KEY_SHA512 is the key `wipe_party.AUDITOR_KEYS` pins for vy-auditor-2, the one
+    under which the record says trusted-host holds."""
+    line, = [x for x in WRAPPER.read_text().splitlines() if x.startswith("TRUSTED_SHA512=")]
+    assert line.removeprefix("TRUSTED_SHA512=") == AUDITOR_PIN
 
 
 @pytest.mark.parametrize("pin, why", [

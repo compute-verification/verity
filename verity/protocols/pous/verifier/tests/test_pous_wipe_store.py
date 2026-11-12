@@ -338,7 +338,7 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
     record = json.loads((out / "wipe.json").read_text())
     n = W.foreign_labels("fM", W.params_for())
     assert record["answer"]["verdict"] == "reject" and record["prover"]["foreign"]["labels"] == n
-    assert record["placement"]["kind"] == "simulated" and record["placement"][WP.PREMISE].startswith("simulated: ")
+    assert record["placement"]["kind"] == "simulated" and record["placement"][WP.PREMISE].startswith(f"{WP.REHEARSAL}; ")
     assert W.summary(record)["foreign_labels"] == n == record["wipe"]["foreign_labels"]
 
 

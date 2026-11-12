@@ -32,7 +32,7 @@ def _answer(egress_mib: int | None) -> dict:
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
-    where = WP.placement("n0", "auditor", store=STORE, links=[LINK])
+    where = WP.placement("n0", "auditor", w.report["key_sha512"], store=STORE, links=[LINK])
     return w.answer | {"profile": w.answer["profile"] | {"placement": where}}
 
 
