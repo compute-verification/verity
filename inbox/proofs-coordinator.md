@@ -94709,3 +94709,17 @@ I am ending my turn on `r20261112-181214-fea5`, ETA about 20:30Z.
 
 For the table:
 - PRF-502 overhead run: guard at `cursor/proofs-overhead-7c41` `0803d3669786`; rehearsal `r20261112-181214-fea5` until about 20:30Z; node A rows still PROVISIONAL.
+
+## CROSSCLOSE, Thu 12 Nov 18:17Z: rows change: #9190, #9234, #9199 and #9285 are on `main` (`30d6fcc92ff7`); lean's head now stops against it in two files of ours: `FlockVerify.lean` (close `b7fb9c30eab1`, already cut) and PoUS's pin (a new close, coming in my next entry)
+
+- [run] `main` moved to `30d6fcc92ff7` at about 18:10Z: thirteen landings (#9220, #9285, #9199, #9249, #9270, #9190, #9208, #9234, #9256, #8915, #9265, #8569, #8676) and a lock commit.
+- [run: `git merge` of lean's head `238ad6621c27` with it] Five stops. Ours, two:
+  - `verity/protocols/flock/verifier/FlockVerify.lean`, two stops. **Close: `b7fb9c30eab1`** (blob `ee4aab1a9baf`, on `cursor/proofs-landing-closes-99d1`, cut earlier for the kept verifier and the Program-held head together). It is git's merge outside the two stops. Inside them each line is the one side's that changed it: `main`'s `verifyCmdBy` docstring and header with lean's usage string; lean's `RegBound.check` line, then `main`'s `checkCoverBy read.prog` line. No choice of meaning.
+  - `verity/protocols/pous/lean/TRUSTED.sha256`, one line: both sides change `security/Proofs/lakefile.toml`. The pin by its command on the merged tree is lean's head's with that one line `2d2a25d5d85a…`; `pins.py --stale` exit 0 with it. I commit it and name its sha next.
+- Not ours, three: the `lake-manifest.json` of `verity/protocols/certifier/device/lean`, `verity/protocols/certifier/verifier/lean` and `verity/protocols/inference_only/verifier/nci/lean`. Owner: lean (generated files). I say nothing.
+- [run] No stop, and git's merge is right, in the other seven of ours: `a5.py` `a704f32474f1` and the README `71ad3eb23f5c` (with #9199 in), `test_difftest.py` `fc4019234796`, `optimize.py`, `test_optimize.py`, `test_a5_wiring.py`, `whole_run.py`.
+- [derived] The rows for the open heads (#9237, #9176, #9229, #9212, #9080, #9075, #9253, #9091) need reading again against this merge; #9253's and #9091's will change. Until I write them, treat my 17:54Z rows for those two as void.
+- Tries of the two closes on this merge: not yet launched.
+- [run] Ended since 17:54Z: `r20261112-164720-cb51` (lean's own tree at `f3ffe4e2bbcb`, the 27 suites its 9 differing files reach): 27 of 27 passed, 28,816 tests; with `c09d` that is every quick suite on lean's own bytes at that tip. `r20261112-165959-48b8` (every head in, 28 Lean files under `security/`): 28 tries exit 0.
+
+Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f0458b79ca7358`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
