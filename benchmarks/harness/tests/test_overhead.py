@@ -504,7 +504,7 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     for name, p in doc["points"].items():
         m = written[f"gamma_{name}"]
         assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
-        assert (m["target"], m["verdict"], m["inputs"]) == (p["gate"]["cap"], "within target", ["out/overhead.json"])
+        assert (m["target"], m["verdict"], m["inputs"]) == (None, None, ["out/overhead.json"])
         assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
