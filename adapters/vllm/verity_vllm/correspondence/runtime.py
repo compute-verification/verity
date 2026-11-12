@@ -282,9 +282,6 @@ class RuntimeCorrespondence:
     def __len__(self) -> int:
         return len(self._calls)
 
-    def __iter__(self) -> Iterator[CallCorrespondence]:
-        return iter(self._calls[k] for k in sorted(self._calls))
-
     def record(self, call_id: int) -> CallCorrespondence:
         return self._calls[int(call_id)]
 
@@ -374,15 +371,12 @@ class _Stream:
     """A JSON text read in chunks with a cursor: `raw_decode` at the cursor, refilling until the value is complete."""
 
     def __init__(self, fh) -> None:
-        self.f, self.buf, self.pos, self.eof = fh, "", 0, False
+        self.f, self.buf, self.pos = fh, "", 0
         self.dec = json.JSONDecoder()
 
     def _more(self) -> bool:
-        if self.eof:
-            return False
         chunk = self.f.read(_CHUNK)
         if not chunk:
-            self.eof = True
             return False
         if self.pos > _CHUNK:
             self.buf, self.pos = self.buf[self.pos:] + chunk, 0
