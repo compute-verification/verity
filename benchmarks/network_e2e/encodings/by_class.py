@@ -3,7 +3,7 @@ beside its bits, and whether the string decodes back to the trace.
 
 The split is `verity_vllm.pipeline.advice_code.by_class` (`bits_by_class`: a window's parts sum to
 `codec.bits_by_window`'s charge for it; `closed`: the fields the registration holds at 0, each with its rule and the
-rule's line). This module reads a trace as `v1.py` does, encodes it under the uniform book of the table's caps
+rule's line). This module reads a trace as `v1.py` does, encodes it under the uniform book of the table's bounds
 (`v1.TABLE_CAPS`; under the certified tick `v1.TICK_TABLE_CAPS`, which are the code's own and code nothing), and
 reports per window the charge, its parts by class (`by_class.CLASSES`), the two classes with no field
 (`by_class.NO_FIELD`), and the events (`EVENTS`) that say whether each class's case arose in the window at all: a
@@ -85,7 +85,7 @@ FULL = ("max_num_seqs", "tokens")
 
 def registration(trace: Any, stop_ids: Sequence[int], T: int) -> Registered:
     """The trace's registration: under the certified tick, its tick and the code's own book (`codec.TICK_CAPS`'s, the
-    table's); otherwise the uniform book of the table's caps."""
+    table's); otherwise the uniform book of the table's bounds."""
     if trace.releases is not None:
         return Registered(trace.engine, tuple(stop_ids), T=T, tick=trace.releases.tick)
     return Registered(trace.engine, tuple(stop_ids), T=T, book=CV.Book.uniform(V.TABLE_CAPS))
