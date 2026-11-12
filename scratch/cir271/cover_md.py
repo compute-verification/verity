@@ -66,7 +66,19 @@ if "blocks" in c:
         for s, (t, n) in states.items():
             out.append(f"| {col} | {s} | {t} | {n:,} |")
     fc = c["first_cut"]
-    out += ["", "First cut (the coordinator's join by exact name): " + "; ".join(f"{s} {t} types, {n:,} blocks" for s, (t, n) in fc.items()) + ".",
+    out += ["", "First cut (the coordinator's join by exact name): " + "; ".join(f"{s} {t} types, {n:,} blocks" for s, (t, n) in fc["totals"].items()) + ".",
+            "", "Where this table differs from it:", "", "| block | blocks | first cut | here | form | run |", "|---|---:|---|---|---|---|"]
+    for x in fc["differs"]:
+        out.append(f"| {code(x['block'])} | {x['blocks']:,} | {x['first_cut']} | {x['here']} | {x['form'] or ''} | {x['run'] or ''} |")
+    pc = c["proofs_count"]
+    out += ["", f"Proofs' count (NET-390): the card at `{pc['card_at']}` has {pc['types']} Definitions, {pc['blocks']:,} blocks; "
+            f"only on main's card: {code([k for k, _ in pc['only_main']])} ({sum(n for _, n in pc['only_main']):,} blocks); only there: "
+            f"{len(pc['only_there'])} ({sum(n for _, n in pc['only_there']):,} blocks); changed: {len(pc['changed'])}.",
+            "", "## Runs read", "", "| run | issue | Lean | what | at the list's binding |", "|---|---|---|---|---|"]
+    for r in c["runs"]["read"]:
+        out.append(f"| {r['run']} | {r['issue']} | {r['lean'] or 'none'} | {r['what'].replace('|', '/')} | {r['at_list_binding']} |")
+    out += ["", "Named in the issues' comments and not read: " + "; ".join(f"{i} {len(v)}" for i, v in c["runs"]["named_not_read"].items())
+            + " (every id in `cover.json` `runs.named_not_read`).",
             "", "## Unaccepted block types over 3,000,000 blocks", "", "| block | blocks | lacks |", "|---|---:|---|"]
     for x in c["lacks_over_3m"]:
         out.append(f"| {code(x['block'])} | {x['blocks']:,} | {'; '.join(x['lacks'])} |")

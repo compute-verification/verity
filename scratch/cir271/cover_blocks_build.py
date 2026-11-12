@@ -149,6 +149,16 @@ totals = {
 }
 assert totals["card"][1] == sum(v[1] for v in totals["accepted"].values())
 
+FIRST_OWN = [k for k in card if k.startswith(("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,", "MoeExpertFp8BlockGemm_v3{K=6144,N=1,"))
+             and ("SWAP=true" in k or k.startswith("MoeExpertFp8BlockGemm_v3"))] + ["MoeSum_v1{TOPK=8,H=96}", "RoPEHeadGptJ_v2{D=64}", "SiluMul_v2{I=256}"]
+FIRST_BOOL = [k for k in card if k.startswith("MoeRouterSigmoidBias_v1{E=256,TOPK=8,")]
+bsum = lambda ks: [len(ks), sum(card[k]["prefill"] + card[k]["decode"] for k in ks)]  # noqa: E731
+assert bsum(FIRST_OWN) == list(FIRST_CUT["own-definition"]) and bsum(FIRST_BOOL) == list(FIRST_CUT["boolean-version"]), (bsum(FIRST_OWN), bsum(FIRST_BOOL))
+first_state = {k: "own-definition" for k in FIRST_OWN} | {k: "boolean-version" for k in FIRST_BOOL}
+vs_first = [{"block": r["block"], "blocks": r["blocks"], "first_cut": first_state.get(r["block"], "none"), "here": r["accepted"],
+             "form": r["form"], "run": (r["accepted_run"] or {}).get("run")}
+            for r in sorted(on, key=lambda r: -r["blocks"]) if first_state.get(r["block"], "none") != r["accepted"]]
+
 lacks = []
 for r in sorted(on, key=lambda r: -r["blocks"]):
     if r["accepted"] != "none" or r["blocks"] <= 3_000_000:
@@ -195,7 +205,16 @@ for t in uncut:
 cover["schema"] = "circuits/request-cover/v2"
 cover["block_run"] = Path(sys.argv[1]).resolve().parent.parent.name
 cover["block_totals"] = totals
-cover["first_cut"] = FIRST_CUT
+cover["first_cut"] = {"totals": FIRST_CUT, "own_definition": FIRST_OWN, "boolean_version": FIRST_BOOL, "differs": vs_first}
+cover["runs"] = J(HERE / "cover_runs.json")
+proofs_card = json.loads(subprocess.check_output(["git", "-C", str(ROOT), "show", f"{cover['sources']['friday_at']}:benchmarks/sampling_plan/glm53_blocks.json"]))["definitions"]
+cover["proofs_count"] = {
+    "card_at": cover["sources"]["friday_at"], "types": len(proofs_card),
+    "blocks": sum(v["prefill"] + v["decode"] for v in proofs_card.values()),
+    "only_main": [[k, card[k]["prefill"] + card[k]["decode"]] for k in card if k not in proofs_card],
+    "only_there": [[k, proofs_card[k]["prefill"] + proofs_card[k]["decode"]] for k in proofs_card if k not in card],
+    "changed": [k for k in card if k in proofs_card and (card[k]["prefill"], card[k]["decode"]) != (proofs_card[k]["prefill"], proofs_card[k]["decode"])],
+}
 cover["lacks_over_3m"] = lacks
 cover["card_places"] = {"templates": five, "card_log": log.strip().split("\n")}
 cover["blocks"] = brows
