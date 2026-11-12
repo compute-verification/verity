@@ -247,6 +247,8 @@ def test_a_readers_verdict_counts_only_under_a_delegation_of_its_name_by_the_hol
             [_auth(lab, _mint(WORKER), d)],
         "the label's time is outside its delegation":
             [_auth(lab, _mint(READER), _delegation(lane="review-36", agent=READER, until="2026-11-02T02:59:59Z"))],
+        f"its delegation is to the agent that minted it, {HOLDER!r}, and an agent's delegation to itself never counts":
+            [_auth(lab, _mint(HOLDER), _delegation(lane="review-36", agent=HOLDER))],    # the staffer as its own reader
     }
     for why, beside in cases.items():
         assert v.why(lab, beside) is not None and why in v.why(lab, beside), why
@@ -264,7 +266,9 @@ def test_the_staffer_registers_a_readers_agent_which_then_signs_its_verdicts_as_
     for holders, staffs, minter in ((HOLDERS, STAFFS, OTHER), (HOLDERS, None, HOLDER), (HOLDERS, {"proofs": ("review-*",)}, HOLDER)):
         with pytest.raises(QueueError, match="doesn't hold review-36 in main's registry .*nor a handle whose `staffs` there names it"):
             Q.delegate(store, READER, "review-36", 1, holders, mint=_mint(minter, iat=T - 3600), now=lambda: T - 3600, staffs=staffs)
-    assert store.labels(L.delegation_target(READER)) == []
+    with pytest.raises(QueueError, match=f"delegate: {HOLDER} is this agent, and an agent's delegation to itself never counts"):
+        Q.delegate(store, HOLDER, "review-36", 1, HOLDERS, mint=_mint(HOLDER, iat=T - 3600), now=lambda: T - 3600, staffs=STAFFS)
+    assert store.labels(L.delegation_target(READER)) == store.labels(L.delegation_target(HOLDER)) == []
     signer = L.Signer(store, _mint(READER), required=True, holders=HOLDERS, now=lambda: TS)
     with pytest.raises(L.AuthError, match=f"`research queue delegate {READER} --by review-36`"):
         signer.add_label(TARGET, vocab.REVIEWED, "land", "review-36")

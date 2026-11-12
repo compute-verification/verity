@@ -9,7 +9,8 @@ time and ref), minted within `SKEW_S` of the label's time by the agent that hold
 an agent that name is delegated to.  A delegation (`delegation`) is a token over a statement naming the name, the agent and an
 end at most `DELEGATION_MAX_DAYS` after it was minted, minted by the holder of that handle, or, for a name that is no handle's
 (a PR reader's), by the holder of the handle whose `staffs` in the registry it matches (`speaks_for`): that is how a reader
-is registered, and its name counts under no token but a registered agent's.  `research queue delegate AGENT --by NAME`
+is registered, and its name counts under no token but a registered agent's; a delegation to the agent that minted it never
+counts, so a staffer is never its own reader.  `research queue delegate AGENT --by NAME`
 writes it on `delegation_target(AGENT)`, and `Signer` copies it into each companion that agent writes under that name, so a
 companion is checked from its own target alone.  Labels that withhold a landing (`ready = false`, `reviewed = hold`) count
 unsigned: they can only keep a PR out.
@@ -227,6 +228,9 @@ class Verifier:
         if not isinstance(by := cl.get("cloud_agent_id"), str) or not speaks_for(self.holders.get(by), lane, self.staffs):
             raise AuthError(f"its delegation was minted by {by!r}, which doesn't hold {lane} in main's registry, nor a handle "
                             "that staffs it")
+        if by == st["agent"]:
+            raise AuthError(f"its delegation is to the agent that minted it, {by!r}, and an agent's delegation to itself never "
+                            "counts")
         until = epoch(st["until"])
         if until - cl["iat"] > DELEGATION_MAX_DAYS * 86400 + SKEW_S:
             raise AuthError(f"its delegation runs past {DELEGATION_MAX_DAYS} days")

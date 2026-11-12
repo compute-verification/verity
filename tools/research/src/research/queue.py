@@ -6561,7 +6561,7 @@ def delegate(store, agent: str, lane: str, days: int, holders: dict[str, str] | 
     the agent's delegation target, pushed to the store's remote, which `labelauth.Signer` copies into each companion it writes.
     LANE is also a name the caller's handle staffs (``staffs``, the registry's `staffs_at`), as `review-36`: that registers the
     agent as that reader.  Refused, nothing written, when this agent neither holds LANE in ``holders`` (the registry) nor
-    holds a handle that staffs it: its delegation would never count."""
+    holds a handle that staffs it, or when AGENT is this agent: its delegation would never count."""
     from . import labelauth
     from .store.cli import _label_write_through
 
@@ -6580,6 +6580,9 @@ def delegate(store, agent: str, lane: str, days: int, holders: dict[str, str] | 
         raise QueueError(f"delegate: this agent ({me}) doesn't hold {lane} in main's registry ({REGISTRY}), nor a handle whose "
                          f"`staffs` there names it, so its delegation would never count: {lane}'s holder runs it, or the "
                          "holder of the handle that staffs it")
+    if agent == me:
+        raise QueueError(f"delegate: {agent} is this agent, and an agent's delegation to itself never counts: delegate {lane} "
+                         "to the reader's or the worker's own agent")
     target = labelauth.delegation_target(agent)
     store.add_label(target, vocab.LABEL_DELEGATION, value, mine)
     said, lost = _label_write_through(store, target)
