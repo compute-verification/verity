@@ -347,7 +347,7 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     N, law = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
     lanes, sched = sz.lane_kinds(cls), SimpleNamespace(lanes=cls.NR)
-    assert list(lanes) == PC.prog_params(cls.NR)
+    assert lanes == PC.prog_params(cls.NR)
     roots = [{"port": PC.prog_name(j), "root": "aa" * 64, "leaves": nb, "domain": f"b{j}" * 64} for j in range(cls.NR)]
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
     reg = R.record(root, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64)
@@ -743,7 +743,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     want = {r["port"]: {"leaves": r["leaves"], "domain": r["domain"]} for r in roots}
     rests = R.check(reg, program, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64,
                     tied=sz.lane_kinds(cls)).rests_on_period_check
-    assert rests == sz.lane_kinds(cls) == tuple(PC.prog_params(p["schedule"]["lanes"])) and cls.EVERY > 1
+    assert rests == sz.lane_kinds(cls) == PC.prog_params(p["schedule"]["lanes"]) and cls.EVERY > 1
     unheld = (f"window 0: {PC.TIE_UNHELD}: its public outputs' {PC.TIED_KEY} names \"state\", none of the scan's lanes' "
               f"{', '.join(rests)}")
     for names, why in ((rests, None), (rests[:1], None), (rests[::-1], None), ((*rests, "state"), unheld)):
