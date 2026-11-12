@@ -133,12 +133,13 @@ composition suite's difftest (`../remote/verifier/composition/tests/test_registr
 
 `Core.Account` is a value beside a `Core.Protocol`, not a field of it. For each amount the protocol publishes
 (`Account.Amount`) it states the part of the registered hardware the amount is about (`Account.Part`: the devices'
-compute, a tier's memory, a tier's read rate, a link) and the form it is published in: its key, in the public output or
-the profile (`Account.Key`), its unit, the side of the capacity it bounds (the verified amount from below, the free
-amount from above), a moment or the key of its span, the key of its error and of the share the error leaves out, how a
-period's error forms from its answers' (`Account.Pool`), the key of the capacity an answer carries, what an answer holds
-when nothing is certified, and the terms the error names and does not price. `Account.head` is the key under which an
-accepted answer names the registration's head; a protocol that names none is held to no registration.
+compute, the memory of some tiers, the read rate of some tiers' memory, a link) and the form it is published in: its
+key, in the public output or the profile (`Account.Key`), its unit, the side of the capacity it bounds (the verified
+amount from below, the free amount from above), a moment or the key of its span, the key of its error and of the share
+the error leaves out, how a period's error forms from its answers' (`Account.Pool`), the key of the capacity an answer
+carries, what an answer holds when nothing is certified, and the terms the error names and does not price.
+`Account.head` is the key under which an accepted answer names the registration's head; a protocol that names none is
+held to no registration.
 
 `Account.rows` reads a Site, the head of its registration, the answers and their accounts into the accounting rows
 (`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). A row's capacity is a function of

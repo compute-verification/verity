@@ -17,9 +17,9 @@ meta import CoreProtocol.Site
 A protocol's check (`Core.Protocol`) publishes its amounts under its own keys and in its own units. An `Account` is a
 value beside a protocol, never a field of it: for each amount the protocol publishes (`Account.Amount`) it states
 
-* the part of the registered hardware the amount is about (`Part`: the devices' compute, a tier's memory, a tier's read
-  rate, a link), whose capacity is a function of the Site (`Part.capacity`), so a row's capacity is read from the
-  registration and never copied from an answer;
+* the part of the registered hardware the amount is about (`Part`: the devices' compute, the memory of some tiers, the
+  read rate of some tiers' memory, a link), whose capacity is a function of the Site (`Part.capacity`), so a row's
+  capacity is read from the registration and never copied from an answer;
 * the form the amount is published in: its key, its unit, which side of the capacity it bounds (`Side`: the verified
   amount from below, or the free amount from above), a moment or the key of its span (`Time`), the key of its error,
   the key of the share of the amount the error leaves out where the protocol reports one (ε at δ), how a period's error
@@ -67,12 +67,12 @@ def Key.read (k : Key) (a : Answer) : Option Json :=
   | .published key => a.published.bind fun j => (j.getObjVal? key).toOption
   | .profile key => a.profile.bind fun j => (j.getObjVal? key).toOption
 
-/-- A part of the registered hardware an amount is about: the devices' compute, in tensor-core MACs; a tier's memory, in
-bits held; a tier's read rate, in bits read from its memory; a link, in bits sent over it. -/
+/-- A part of the registered hardware an amount is about: the devices' compute, in tensor-core MACs; the memory of some
+tiers, in bits held; the read rate of some tiers' memory, in bits read from it; a link, in bits sent over it. -/
 inductive Part where
   | compute
-  | memory (tier : Tier)
-  | read (tier : Tier)
+  | memory (tiers : List Tier)
+  | read (tiers : List Tier)
   | link
   deriving DecidableEq, Repr
 
@@ -90,20 +90,39 @@ def unit : Part → String
 
 def name : Part → String
   | .compute => "compute"
-  | .memory t => s!"memory/{t.name}"
-  | .read t => s!"read/{t.name}"
+  | .memory ts => "memory/" ++ "+".intercalate (ts.map fun t => t.name)
+  | .read ts => "read/" ++ "+".intercalate (ts.map fun t => t.name)
   | .link => "link"
 
-/-- Every part a site can hold. -/
+/-- Every part a site can hold, tier by tier. -/
 def all : List Part :=
-  [.compute, .memory .hbm, .memory .dram, .memory .disk, .read .hbm, .read .dram, .read .disk, .link]
+  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .link]
 
-/-- The ids of a site's leaves of a part: its devices, a tier's memory leaves, or its boundary links. -/
+/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link. -/
+def same : Part → Part → Bool
+  | .compute, .compute => true
+  | .memory _, .memory _ => true
+  | .read _, .read _ => true
+  | .link, .link => true
+  | _, _ => false
+
+/-- The tiers a part names, where it names tiers. -/
+def tiers : Part → Option (List Tier)
+  | .memory ts => some ts
+  | .read ts => some ts
+  | _ => none
+
+/-- A part names at least one tier where it names tiers. -/
+def Formed (p : Part) : Prop := p.tiers ≠ some []
+
+instance instDecidableFormed (p : Part) : Decidable p.Formed := by unfold Formed; infer_instance
+
+/-- The ids of a site's leaves of a part: its devices, its tiers' memory leaves, or its boundary links. -/
 def leaves (p : Part) (S : Site) : List String :=
   match p with
   | .compute => S.units
-  | .memory t => (S.locs.filter fun x => x.kind = .memory ∧ x.tier = some t).map (·.id)
-  | .read t => (S.locs.filter fun x => x.kind = .memory ∧ x.tier = some t).map (·.id)
+  | .memory ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
+  | .read ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
   | .link => (S.boundary none).map (·.id)
 
 /-- The part's leaves at `place`: all of them when an answer names no place, a link by its id, and otherwise the leaves
@@ -121,9 +140,9 @@ def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Aud
 
 /-- **The registered capacity** of the leaves `xs` of a part, at each reading of the registration it can be read at: a
 rate a tick for a flow, an amount for memory. Compute has two readings: `stated`, the registered sheets' own figures,
-and `bound`, the larger of those and the auditor's estimate, which is the device model's rate. A tier's read rate is
-its devices' sheets' `bw`; no sheet states one for memory under a host, so the list is empty there: the registration
-holds none. -/
+and `bound`, the larger of those and the auditor's estimate, which is the device model's rate. A read rate is the
+`bw` of the sheets of the devices its leaves are under; no sheet states one for a leaf under a host, so the list is
+empty where a leaf has none: the registration holds no rate for the part. -/
 def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (xs : List String) : List (String × Nat) :=
   match p with
@@ -133,11 +152,11 @@ def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registr
     let bound : Option (List Nat) := xs.mapM fun d => tensorRate S digest A tick d
     (stated.map fun ns => ("stated", ns.sum)).toList ++ (bound.map fun ns => ("bound", ns.sum)).toList
   | .memory _ => [("registered", 8 * (xs.filterMap fun x => (S.loc? x).map fun y => y.bytes).sum)]
-  | .read .hbm =>
-    let devices : List String := (xs.filterMap fun x => (S.loc? x).bind fun y => y.parent).eraseDups
-    let rates : Option (List Nat) := devices.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
+  | .read _ =>
+    let parents : Option (List String) := xs.mapM fun x => (S.loc? x).bind fun y => y.parent
+    let rates : Option (List Nat) := parents.bind fun ds =>
+      ds.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
     (rates.map fun ns => ("registered", ns.sum)).toList
-  | .read _ => if xs.isEmpty then [("registered", 0)] else []
   | .link => [("registered", (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum)]
 
 end Part
@@ -203,10 +222,11 @@ structure Amount where
   unpriced : List String := []
   deriving DecidableEq, Repr
 
-/-- A form `rows` reads: a moment exactly for memory, a share only beside a verified amount, and a unit that is not
-empty. -/
+/-- A form `rows` reads: a part that names a tier where it names tiers, a moment exactly for memory, a share only beside
+a verified amount, and a unit that is not empty. -/
 def Amount.Formed (m : Amount) : Prop :=
-  (m.time = .moment ↔ m.part.flow = false) ∧ (m.share.isSome = true → m.side = .verified) ∧ 0 < m.unit.base
+  m.part.Formed ∧ (m.time = .moment ↔ m.part.flow = false) ∧ (m.share.isSome = true → m.side = .verified) ∧
+    0 < m.unit.base
 
 instance Amount.instDecidableFormed (m : Amount) : Decidable m.Formed := by unfold Amount.Formed; infer_instance
 
@@ -411,7 +431,7 @@ over the period. Their capacity is none where the registration holds none. -/
 def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure) (ticks : Nat)
     (cs : List (Amount × Reading)) : List Row :=
   Part.all.flatMap fun p =>
-    let covered : List String := (cs.filter fun x => x.1.part = p).flatMap fun x => p.leavesAt S x.2.place
+    let covered : List String := (cs.filter fun x => x.1.part.same p).flatMap fun x => x.1.part.leavesAt S x.2.place
     let rest : List String := (p.leaves S).filter fun x => !covered.contains x
     let totals : List (String × Option Nat) :=
       match p.capacity S digest A tick rest with
@@ -485,13 +505,13 @@ from above, with its own capacity and a flag; a link's bits, over a span, from a
 from below, with a share, pooled once. -/
 private def held : Account :=
   { protocol := "toy/held", head := some (.profile "registration")
-    amounts := [{ metric := "held", part := .memory .hbm, place := some (.profile "device"),
+    amounts := [{ metric := "held", part := .memory [.hbm], place := some (.profile "device"),
                   key := .published "s_bits", unit := bits, side := .verified, time := .moment,
                   error := .published "eps", uncertified := .flagged (.published "certified") }] }
 
 private def wiped : Account :=
   { protocol := "toy/wiped", head := some (.profile "registration")
-    amounts := [{ metric := "after a wipe", part := .memory .hbm, key := .published "foreign_bits", unit := bits,
+    amounts := [{ metric := "after a wipe", part := .memory [.hbm], key := .published "foreign_bits", unit := bits,
                   side := .free, time := .moment, error := .published "eps",
                   capacity := some (.published "memory_bits"), uncertified := .flagged (.published "certified"),
                   unpriced := ["the keyed stream's PRF advantage"] }] }
@@ -536,8 +556,22 @@ private def table (accounts : List Account) (answers : List Answer) (A : Site.Re
 private def cells (rs : List Row) : List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
   rs.map fun r => (r.metric, r.place, r.reading, r.capacity, r.verified, r.free, r.error.toString)
 
+/-- The example's site with a DRAM leaf under its host. -/
+private def hosted : Site :=
+  ⟨[sheet], locs ++ [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31 }],
+    links⟩
+
+private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacity S digest auditor tick (p.leaves S)
+
 #guard account.Formed ∧ held.Formed ∧ wiped.Formed ∧ sent.Formed ∧ worked.Formed
 #guard account.amounts.all fun m => ¬ ({ m with time := .moment } : Amount).Formed
+#guard account.amounts.all fun m => ¬ ({ m with part := .read [] } : Amount).Formed
+-- a part over two tiers: their leaves' bytes summed; a leaf under a host has no registered read rate, so neither has a
+-- part that holds one
+#guard registered (.memory [.hbm, .dram]) hosted == [("registered", 8 * (2 ^ 30 + 2 ^ 31))]
+#guard registered (.read [.hbm]) hosted == [("registered", 3200)]
+#guard registered (.read [.hbm, .dram]) hosted == [] ∧ registered (.read [.dram]) hosted == []
+#guard registered (.read [.disk]) hosted == [("registered", 0)]
 -- the example protocol's own answer reads by its account: two units at its profile's error
 #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
   [some (2, "1/1000000")]
