@@ -192,6 +192,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 from __future__ import annotations
 
 import argparse
+import ctypes
 import functools
 import gc
 import hashlib
@@ -201,6 +202,7 @@ import multiprocessing
 import multiprocessing.connection
 import os
 import shutil
+import signal
 import sys
 import threading
 import time
@@ -1551,12 +1553,24 @@ def _checks_since(before: dict[str, dict] | None) -> dict[str, dict] | None:
             for kind in ("asked", "reused")}
 
 
-def _work(fn: Callable[[], dict[str, dict]], send: Any) -> None:
-    """A worker's whole life, in a process forked from the audit: a Lean verifier process of its own (the audit's is
-    never written to: the worker's handle to the verifier's server is a new one before any check), the task, and its
-    entries or its error sent to the audit with its seconds, its memory and, under the memo, the checks it asked and
-    reused (it reuses what the audit kept before the fork, and what it keeps ends with it: the audit's own
-    ``verifier_checks`` count none of a worker's)."""
+def die_with(parent: int) -> None:
+    """This process is killed when ``parent``, the process that forked it, ends, however it ends: the kernel's signal
+    at the parent's death (Linux's ``PR_SET_PDEATHSIG``), and at once where the parent ended before it was set."""
+    if ctypes.CDLL(None, use_errno=True).prctl(1, signal.SIGKILL, 0, 0, 0) != 0:  # 1: PR_SET_PDEATHSIG
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG)")
+    if os.getppid() != parent:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def _work(fn: Callable[[], dict[str, dict]], send: Any, audit: int) -> None:
+    """A worker's whole life, in a process forked from the audit (the process ``audit``), which it never outlives
+    (`die_with`: an audit killed outright takes its workers with it, and each worker's Lean verifier process then
+    stops at the end of its input): a Lean verifier process of its own (the audit's is never written to: the worker's
+    handle to the verifier's server is a new one before any check), the task, and its entries or its error sent to
+    the audit with its seconds, its memory and, under the memo, the checks it asked and reused (it reuses what the
+    audit kept before the fork, and what it keeps ends with it: the audit's own ``verifier_checks`` count none of a
+    worker's)."""
+    die_with(audit)
     t0, checks = time.time(), AM.counts()
     V._server = V._Server()
     try:
@@ -1582,7 +1596,7 @@ class NegativeWorkers:
     running the next starts whatever its estimate, so one over the budget runs alone. A task's `entries` are its own,
     and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
     falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
-    killed. `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
+    killed. No worker outlives the audit: one killed outright takes its workers with it (`die_with`). `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
     process's as the workers started (``memory``), which a worker's ``private`` is to be read against."""
 
     def __init__(self, workers: int, budget: float, available: Callable[[], float],
@@ -1619,7 +1633,7 @@ class NegativeWorkers:
                         own + (len(running) + 1) * need <= self.budget and self.available() >= need)):
                     task = self.waiting.pop(0)
                     recv, send = ctx.Pipe(duplex=False)
-                    worker = ctx.Process(target=_work, args=(task.fn, send), daemon=True)
+                    worker = ctx.Process(target=_work, args=(task.fn, send, os.getpid()), daemon=True)
                     worker.start()
                     send.close()
                     running[recv] = (task, worker)

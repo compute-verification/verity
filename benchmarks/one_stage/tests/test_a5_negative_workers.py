@@ -7,6 +7,7 @@
   workers', and the node's free memory; with none running the next starts whatever its estimate;
 * nothing is retried and nothing falls back to the audit's process: a worker that raises or dies ends the run with its
   error, the task run once, the other workers killed;
+* no worker outlives the audit: one killed outright takes its workers with it;
 * a worker's Lean verifier process is its own: it never writes to the audit's, which answers after the workers end, and
   a worker reuses the checks the audit's memo kept before it was forked;
 * the negatives' file is byte for byte the same with one worker and with several, on the toy window's coin negatives,
@@ -157,6 +158,42 @@ def test_a_worker_that_raises_or_dies_ends_the_run_and_nothing_is_retried_or_run
     assert tasks[1].got is None and tasks[2].got is None
     with pytest.raises(a5.NegativeFailed, match="did not run"):
         w.entries(tasks)
+
+
+def _outlive(started: int, release: int, alive: int) -> dict:
+    """A task that says it started, waits for a byte on ``release`` and then says it is alive."""
+    os.write(started, b"x")
+    os.read(release, 1)
+    os.write(alive, b"x")
+    return {}
+
+
+def _audit_of_two(started: int, release: int, alive: int) -> None:
+    """A process that is the audit: two negatives at once, each in its worker, neither able to end."""
+    w = workers(2)
+    for name in ("a", "b"):
+        w.submit(name, lambda: _outlive(started, release, alive))
+    w.run()
+
+
+def test_an_audit_killed_outright_takes_its_workers_with_it():
+    """The audit is killed outright (SIGKILL: no handler, no cleanup of its own) while two workers run, each waiting
+    on a pipe. The kernel kills each worker as the audit ends (`a5.die_with`), before the audit's exit is collected
+    here; so a byte then sent to each worker's wait wakes none, none says it is alive, and the pipe they would say it
+    on reaches its end once every worker has ended. A worker that outlived the audit would read its byte and say so."""
+    (started, started_w), (release, release_w), (alive, alive_w) = os.pipe(), os.pipe(), os.pipe()
+    audit = multiprocessing.get_context("fork").Process(target=_audit_of_two, args=(started_w, release, alive_w))
+    audit.start()
+    os.close(started_w)
+    os.close(alive_w)
+    assert os.read(started, 1) + os.read(started, 1) == b"xx"
+    audit.kill()
+    audit.join()
+    assert audit.exitcode == -signal.SIGKILL
+    os.write(release_w, b"xx")
+    assert os.read(alive, 2) == b""
+    for fd in (started, release, release_w, alive):
+        os.close(fd)
 
 
 def _lean_pid() -> int:
