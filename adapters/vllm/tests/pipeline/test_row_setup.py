@@ -32,6 +32,33 @@ def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_pat
     assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
 
 
+@pytest.mark.parametrize("doc, label", [
+    ({"execution": "eager", "sweep": {"execution": "compiled"}}, "eager"),      # the file's own label first
+    ({"execution": "", "sweep": {"execution": "compiled"}}, "compiled"),        # then its sweep block's
+    ({"sweep": {"execution": "compiled"}}, "compiled"),
+    ({"sweep": {}}, "bi-eager"),                                                # then the id's last token
+    ({"sweep": ["execution"]}, "bi-eager"),                                     # a sweep that is no block names none
+    ({"sweep": None}, "bi-eager"),
+    ({}, "bi-eager"),
+    (["execution"], None),                                                      # a file that is no document has no label
+])
+def test_a_rows_execution_is_its_files_label_then_its_sweep_blocks_then_its_ids_last_token(tmp_path, doc, label):
+    r = _row(tmp_path)
+    r.wl = str(tmp_path / "workload.json")
+    Path(r.wl).write_text(json.dumps(doc))
+    assert r.execution() == label
+    os.remove(r.wl)
+    assert r.execution() is None
+
+
+def test_a_row_whose_shape_is_not_read_yet_names_no_target_to_its_derives(tmp_path):
+    """Before `shape` reads the row's declared target, a derive is built for the device: no ``--target`` and the plain limit."""
+    r = _row(tmp_path)
+    r.MML = 288
+    cmd = r.request_cmd(8, 1, "out")
+    assert cmd[-2:] == ["--out", "out"] and "--target" not in cmd and r.derive_timeout(256, 31) == 900
+
+
 def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path):
     """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
     refuses a bad address, a session of more than one mode or a Commit with no instrumented run to audit before anything
