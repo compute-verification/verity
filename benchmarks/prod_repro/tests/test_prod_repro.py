@@ -341,7 +341,7 @@ def test_speculative_decoding_and_the_models_own_limit_are_read_from_the_launch_
     assert r["cost"]["settings_differ"] == ["the KV cache's type"]
     assert P.flags(["--speculative-config={}", "--seed", "0"], ("--speculative",)) == "--speculative-config={}"
     assert r["settings"]["record"]["context_limit"] == {
-        "tokens": 131072, "given": "131072", "engine": False,
+        "tokens": 131072, "given": "131072", "by": None,
         "model": {"tokens": 131072, "key": "max_position_embeddings"}, "models_own": True}
     assert ("  context limit: 131,072 tokens (--max-model-len 131072), the model's own 131,072 (config.json "
             "max_position_embeddings); compiled: 131,072 tokens (") in txt
@@ -362,16 +362,30 @@ def test_a_limit_left_to_vllm_is_the_engines_own_and_the_engine_says_what_the_la
         "max_model_len": 202752, "kv_cache_dtype": "fp8", "speculative": {"method": "mtp", "num_speculative_tokens": 5}})
     rc, txt, r = run(out)
     # `auto` is resolved by the engine alone: ours kept its engine's configuration, stock kept none
-    assert rc == 0 and r["settings"]["record"]["context_limit"] | {"tokens": 202752, "given": "auto", "engine": True} == \
-        r["settings"]["record"]["context_limit"]
+    assert rc == 0 and r["settings"]["record"]["context_limit"] | {
+        "tokens": 202752, "given": "auto", "by": "the engine took it"} == r["settings"]["record"]["context_limit"]
     assert r["settings"]["compiled"]["context_limit"]["tokens"] is None
     assert ("  context limit: 202,752 tokens (the engine took it; --max-model-len auto), the model's own 131,072 "
             "(config.json max_position_embeddings); compiled: not resolved (--max-model-len auto; the arm kept no step "
-            "trace to say what its engine took)\n") in txt
+            "trace and its server's log does not say what its engine took)\n") in txt
     # two launch lines that both leave it to vLLM are at the same limit; the other settings are the engine's word
     assert "the context limit" not in r["cost"]["settings_differ"]
-    assert "  KV cache: fp8 (the engine's configuration); DIFFERS; compiled: the engine's default (" in txt
+    assert "  KV cache: fp8 (the engine's configuration: fp8); DIFFERS; compiled: the engine's default (" in txt
     assert "  speculative decoding: on (the engine's configuration: method mtp, num_speculative_tokens 5); DIFFERS; " in txt
+    # stock keeps no step trace: its limit is the one vLLM's own log says it fitted, and one that differs is said
+    log = out / "compiled/server/server.log"
+    log.write_text("INFO 11-12 kv_cache_utils.py:1 Auto-fit max_model_len: reduced from 1048576 to 202752 to fit in "
+                   "available GPU memory (61.2 GiB available for KV cache)\n")
+    _, txt, r = run(out)
+    assert r["settings"]["compiled"]["context_limit"]["tokens"] == 202752
+    assert ("; compiled: 202,752 tokens (its server's log: Auto-fit max_model_len: reduced from 1048576 to 202752; "
+            "--max-model-len auto), the model's own 131,072 (") in txt and "the context limit" not in r["cost"]["settings_differ"]
+    log.write_text("x\nINFO Auto-fit max_model_len: full model context length 65536 fits in available GPU memory\n")
+    _, txt, r = run(out)
+    assert "; DIFFERS; compiled: 65,536 tokens (its server's log: Auto-fit max_model_len: full model context length 65536 fits; " in txt
+    assert "BELOW the model's own 131,072" in txt and "the context limit" in r["cost"]["settings_differ"]
+    log.unlink()
+    _, txt, r = run(out)
     mine = r["settings"]["record"]
     other = {**mine, "context_limit": {**mine["context_limit"], "tokens": None, "given": "65536"}}
     assert P.settings_differ(mine, other) == ["the context limit"]
@@ -380,6 +394,20 @@ def test_a_limit_left_to_vllm_is_the_engines_own_and_the_engine_says_what_the_la
     reps = {"loads": {LOAD: [{"prompt_cached_share": 0.4, "draft_accepted_share": 0.5, "tokens_per_draft": 3.5}]}}
     spec = P.settings(out / "record", reps, LOAD)["speculative_decoding"]
     assert spec["by"].endswith("; 50.0% of its draft tokens accepted, 3.50 tokens a draft") and spec["tokens_per_draft"] == 3.5
+    # a setting the launch line turns on and the step trace's header does not hold: the replay's engine would lack it
+    shutil.rmtree(out / "record")
+    line = ("--speculative-config.method", "mtp", "--kv-cache-dtype", "fp8")
+    corpus_arm(out, "record", [100.0, 101.0], argv=line, trace=True)
+    _, txt, r = run(out)
+    assert ("  speculative decoding: on (--speculative-config.method mtp; the step trace's header holds none, and the "
+            "replay's engine is built from the header); DIFFERS; compiled: off (") in txt
+    assert "  KV cache: fp8 (--kv-cache-dtype; the step trace's header holds none, and the replay's engine is built from the header); " in txt
+    shutil.rmtree(out / "record")
+    corpus_arm(out, "record", [100.0, 101.0], argv=line, trace=True,
+               header={"kv_cache_dtype": "fp8_ds_mla", "speculative": {"method": "mtp"}})
+    _, txt, r = run(out)
+    assert "  speculative decoding: on (--speculative-config.method mtp; the engine's configuration: method mtp); DIFFERS; " in txt
+    assert "  KV cache: fp8 (--kv-cache-dtype; the engine's configuration: fp8_ds_mla); DIFFERS; " in txt
 
 
 def test_tokens_a_second_are_no_cost_where_stock_kept_up_or_an_arm_left_requests_unserved(tmp_path: Path):

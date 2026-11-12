@@ -40,6 +40,7 @@ import argparse
 import gzip
 import importlib.util
 import json
+import re
 import sys
 from collections import Counter
 from collections.abc import Callable
@@ -74,6 +75,12 @@ ON, OFF, UNCONFIRMED = "on", "off", "not confirmed"
 UNLIKE = "the arms are not at the same settings"
 #: the rows of a differing step and the characters of a log's line the report prints
 ROWS_MAX, LINE_MAX = 3, 400
+#: vLLM's own line for a context limit left to it (``--max-model-len auto``): the limit it fitted to the cards' memory,
+#: or the model's own where that fits; and the lines of a server's log read for it
+AUTO_FIT = re.compile(r"Auto-fit max_model_len: (?:reduced from (\d+) to (\d+)|full model context length (\d+) fits)")
+LOG_LINES = 20000
+#: what the report says of a setting the launch line turns on and the step trace's header does not hold
+NOT_IN_HEADER = "the step trace's header holds none, and the replay's engine is built from the header"
 
 
 def default_arms() -> tuple[str, str, str]:
@@ -164,6 +171,20 @@ def trace_header(arm_dir: Path) -> dict:
     return first.get("config") or {} if first.get("kind") == "header" else {}
 
 
+def fitted_limit(arm_dir: Path) -> dict | None:
+    """The context limit vLLM fitted for an arm whose launch line left it to vLLM, from the server's own log (`AUTO_FIT`,
+    in its first `LOG_LINES` lines): the tokens and the log's words. None where the log has no such line."""
+    log = arm_dir / "server" / "server.log"
+    if not log.is_file():
+        return None
+    with open(log, encoding="utf-8", errors="replace") as f:
+        for _, line in zip(range(LOG_LINES), f):
+            m = AUTO_FIT.search(line)
+            if m:
+                return {"tokens": int(m.group(2) or m.group(3)), "said": m.group(0)}
+    return None
+
+
 def model_limit(checkpoint: Path) -> dict | None:
     """The model's own context limit: the smallest of `CONTEXT_KEYS` in the checkpoint's config.json, with its key.
     None where this machine has no such file or it names none."""
@@ -186,9 +207,11 @@ def _mean(reps: list[dict], key: str) -> float | None:
 
 
 def settings(arm_dir: Path, arm: dict, load: str) -> dict:
-    """What one arm's serve ran with: each setting's state and what says so. The context limit is the engine's own
-    where the arm kept a step trace, else the launch line's where that is a number: a line that leaves it to vLLM
-    (``auto``) is resolved by the engine alone."""
+    """What one arm's serve ran with: each setting's state and what says so. Speculative decoding and the KV cache's
+    type are the launch line's, with the engine's own configuration beside where the arm kept a step trace, and a
+    note where the line turns one on that the trace's header does not hold (`NOT_IN_HEADER`). The context limit is
+    the engine's own where the arm kept a step trace; else, for a line that leaves it to vLLM (``auto``), the one
+    vLLM's log says it fitted (`fitted_limit`); else the launch line's number."""
     meta = json.loads((arm_dir / "meta.json").read_text())
     argv, header, reps = meta["server_argv"], trace_header(arm_dir), reps_of(arm, load)
     share = _mean(reps, "prompt_cached_share")
@@ -201,23 +224,36 @@ def settings(arm_dir: Path, arm: dict, load: str) -> dict:
         cache = (ON, served[2:])
     else:
         cache = (UNCONFIRMED, "the launch line does not turn it off, and the arm kept no step trace and counted no hit")
+    def said(line: str, engine: str, none: str, on: bool = True) -> str:
+        """What says a setting: the launch line's flags, the engine's configuration, and where the line turns it on
+        (``on``) a header that lacks it."""
+        both = "; ".join(x for x in (line, f"the engine's configuration: {engine}" if engine else "") if x)
+        return (both + (f"; {NOT_IN_HEADER}" if line and on and header and not engine else "")) or none
+
     spec, kv = flags(argv, ("--speculative", "--num-speculative")), flag(argv, "--kv-cache-dtype")
-    kv_by = "--kv-cache-dtype" if kv else "no --kv-cache-dtype in the launch line"
-    if not spec and header.get("speculative"):
-        spec = "the engine's configuration: " + ", ".join(f"{k} {v}" for k, v in sorted(header["speculative"].items()))
-    if not kv and header.get("kv_cache_dtype"):
-        kv, kv_by = header["kv_cache_dtype"], "the engine's configuration"
+    spec_engine, kv_engine = header.get("speculative"), header.get("kv_cache_dtype")
+    if isinstance(spec_engine, dict):
+        spec_engine = ", ".join(f"{k} {v}" for k, v in sorted(spec_engine.items()))
     accepted, each = _mean(reps, "draft_accepted_share"), _mean(reps, "tokens_per_draft")
     drafts = "" if each is None else f"; {100 * (accepted or 0.0):.1f}% of its draft tokens accepted, {each:.2f} tokens a draft"
     given, engine = flag(argv, "--max-model-len"), header.get("max_model_len")
-    limit = int(engine) if engine is not None else int(given) if given is not None and given.isdigit() else None
+    fitted = fitted_limit(arm_dir) if engine is None and given == "auto" else None
+    if engine is not None:
+        limit, by = int(engine), "the engine took it"
+    elif fitted:
+        limit, by = fitted["tokens"], f"its server's log: {fitted['said']}"
+    else:
+        limit, by = (int(given), None) if given is not None and given.isdigit() else (None, None)
     own = model_limit(Path(meta["checkpoint"])) if meta.get("checkpoint") else None
     return {"prefix_caching": {"state": cache[0], "by": cache[1], "cached_share": share},
-            "speculative_decoding": {"state": ON if spec else OFF,
-                                     "by": (spec + drafts) if spec else "no --speculative-config in the launch line",
+            "speculative_decoding": {"state": ON if spec or spec_engine else OFF,
+                                     "by": said(spec, str(spec_engine or ""), "no --speculative-config in the launch line")
+                                     + (drafts if spec or spec_engine else ""),
                                      "draft_accepted_share": accepted, "tokens_per_draft": each},
-            "kv_cache": {"state": kv or "the engine's default", "by": kv_by},
-            "context_limit": {"tokens": limit, "given": given, "engine": engine is not None, "model": own,
+            "kv_cache": {"state": kv or kv_engine or "the engine's default",
+                         "by": said("--kv-cache-dtype" if kv else "", str(kv_engine or ""),
+                                    "no --kv-cache-dtype in the launch line", on=kv != "auto")},
+            "context_limit": {"tokens": limit, "given": given, "by": by, "model": own,
                               "models_own": None if limit is None or own is None else limit >= own["tokens"]},
             "compiled": {"state": OFF if "--enforce-eager" in argv else ON,
                          "by": "--enforce-eager" if "--enforce-eager" in argv else "no --enforce-eager in the launch line"}}
@@ -557,9 +593,9 @@ def _limit(r: dict) -> str:
     def one(c: dict) -> str:
         line = f"--max-model-len {c['given']}" if c["given"] is not None else "no --max-model-len in the launch line"
         if c["tokens"] is None:
-            return f"not resolved ({line}; the arm kept no step trace to say what its engine took)"
+            return f"not resolved ({line}; the arm kept no step trace and its server's log does not say what its engine took)"
         own = c["model"]
-        return f"{c['tokens']:,} tokens ({'the engine took it; ' if c['engine'] else ''}{line}), " + (
+        return f"{c['tokens']:,} tokens ({c['by'] + '; ' if c['by'] else ''}{line}), " + (
             "the model's own limit not read (no config.json at the checkpoint on this machine)" if own is None else
             f"{'the' if c['models_own'] else 'BELOW the'} model's own {own['tokens']:,} (config.json {own['key']})")
 

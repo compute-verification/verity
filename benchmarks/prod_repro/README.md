@@ -57,9 +57,11 @@ does and the first step.
   share of draft tokens accepted where the benchmark counts them, the context limit beside the model's own (the
   checkpoint's `config.json`), the KV cache's type, compiled or eager, and whether the settings' circuit was compiled
   ahead of serving. A setting the serve did not turn on is `off`; `DIFFERS` marks one that stock and ours do not
-  share, and the cost line then gives its figure without a verdict. A context limit the launch line leaves to vLLM
-  (`--max-model-len auto`) is the one the engine took, which only an arm that kept a step trace records: stock's is
-  then `not resolved`, and two arms that both leave it to vLLM count as sharing it.
+  share, and the cost line then gives its figure without a verdict. Speculative decoding or a KV cache type that the
+  launch line turns on and the step trace's header does not hold is said: the replay builds its engine from the
+  header. A context limit the launch line leaves to vLLM (`--max-model-len auto`) is the one the engine took: the
+  header's where the arm kept a step trace, else the one vLLM's own log line says it fitted (stock keeps no trace);
+  `not resolved` where neither says, and two arms that both leave it to vLLM then count as sharing it.
 - **tokens**: the requests of the replayed window, their served tokens, the tokens the replay kept for them and how
   many differ; the engine steps and how many have other rows than the served schedule; how many of the window's
   requests began from a prefix-cache hit and the longest hit; the mode served and replayed; how the window's
