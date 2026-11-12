@@ -1008,7 +1008,10 @@ Two gaps stood between these statements and the deployed verifier:
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
   `trusted-host` (`verity.claims`): "the auditor's device runs its stated code, timing
   included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
-  host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
+  host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
+  says `trusted-host` holds only for a session signed under the key the tree pins for the challenger's host
+  (`challenger_session.AUDITOR_KEYS`, read by `challenger_session.placement`), never from the host names, which are the
+  run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is

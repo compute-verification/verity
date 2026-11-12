@@ -179,6 +179,10 @@ for the card; PoUS's must agree with the Python, and a verifier that doesn't bui
 Before the card it also loads `libp2v1.so` once in the sessions' Python: a library that doesn't load ends the piece
 there, and so does a node that refuses `setarch -R`, where the library doesn't build and `P2_LIB` names one built
 elsewhere.
+PoUS's verdict trusts the one challenger key `--trusted-sha512` pins, by default the one the tree pins for vy-auditor-2
+(`challenger_session.AUDITOR_KEYS`). Its record says `trusted-host` holds only for a session signed under that tree's
+key for the host it names; a run that pins its own key has its session accepted, and its record says so (`pous.json`'s
+`key_pin`, `run`) and is a rehearsal's, with no bound.
 The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is
 answered again from what the sessions kept (`--answers`), with no new session. Each of the three pieces' summaries (`pous.json`, `bandwidth.json`, the wipe's
 `summary.json`) names the program that decided and the host it ran on under `decided_by`; `pous.json` has the bytes of

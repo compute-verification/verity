@@ -36,8 +36,8 @@ of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its o
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
-when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
-still sampled on the node.
+when the challenger host isn't the node and the session was signed under the key `challenger_session.AUDITOR_KEYS`
+pins for it; the leg says which (`challenger_session.placement`). The setup's salt is still sampled on the node.
 """
 
 from __future__ import annotations
@@ -230,12 +230,14 @@ def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
 @dataclass(frozen=True)
 class Run:
     """A subprotocol's run over one monitoring period, PoUS's or the bandwidth audit's: its answer in the core
-    interface's canonical form, the core case its Lean replays to that answer, and, for a run on a setup (PoUS's), the
-    setup protocol's case that published its commitment."""
+    interface's canonical form, the core case its Lean replays to that answer, for a run on a setup (PoUS's), the
+    setup protocol's case that published its commitment, and for PoUS's, the SHA-512 of the key its memory challenger
+    signed the session under (`challenger_session.placement`'s ``key_sha512``)."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
     setup_case: dict[str, Any] | None = None
+    key_sha512: str | None = None
 
     @property
     def verdict(self) -> str:
@@ -351,7 +353,8 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
     trusted = (key,) if trusted is None else tuple(trusted)
     return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
                       setup_inputs=setup_inputs(held.setup_case)),
-               case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
+               case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case,
+               hashlib.sha512(session.signed.public_key).hexdigest())
 
 
 def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
@@ -558,13 +561,12 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
     answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
-    whether `trusted-host`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an accepted
-    answer's profile (`placement`)."""
+    whether `trusted-host`'s premise holds (`challenger_session.placement`, of the key the session was signed under),
+    go in `pous.json` and in an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
     party = challenger_session.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
-    where = challenger_session.placement(node, party.host)
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()
     if small or not (kept / "store.json").exists():
@@ -580,6 +582,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     t = time.monotonic()
     period = audit(node, held, secrets.token_bytes(64), party=party)
     seconds = round(time.monotonic() - t, 2)
+    where = challenger_session.placement(node, party.host, period.key_sha512)
     answer, lean = period.answer, {}
     if "pous-run-protocol" in tools:
         lean["run"] = serve(tools["pous-run-protocol"], [period.case])[0]

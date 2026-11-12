@@ -215,14 +215,14 @@ class Auditor:
         return report | {"session_id": sid.hex()}
 
 
-def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw):
+def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host: str = AUDITOR, **kw):
     auditor = auditor or Auditor(tmp_path)
     monkeypatch.setattr(CS, "salt", auditor.salt)
     monkeypatch.setattr(CS, "session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
-                    party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
+                    party=Side(host, ("ssh", host, "challenger_party"), ("192.0.2.36", 47610)),
                     private=s.private, pins=[s.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
     return answer, auditor.calls
 
@@ -288,7 +288,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
         "blocks": 48, "checkpoint_bytes": 7776, "share": str(Fraction(w_bytes, 7776)), "held": None}
     assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96, "the per-row scales": 1024}
     assert "KV cache" in prof["outside"]["serving"] and prof["window"] == 3
-    assert prof["placement"][CS.PREMISE].startswith(f"holds: the memory challenger ran on {AUDITOR}")
+    assert prof["placement"][CS.PREMISE].startswith("rehearsal: key not the auditor's pinned key, no bound; ")
     assert set(period.profile(period.point_for(1))) <= set(prof)                      # the run protocol's own profile
     party, request = calls[0]
     assert party.host == AUDITOR and request["node"] == NODE and request["blocks"] == 48
@@ -296,12 +296,30 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
+    assert doc["key_pinned"] and doc["key_pin"] == "run"
+    assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
     assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
     run = json.loads((served.private / "run.json").read_text())
     assert doc["key_sha512"] == hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
     assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
     assert run["warmups"] == CS.WARMUPS and run["host"] == AUDITOR
+
+
+@pytest.mark.parametrize("host", ["on-node-rehearsal", "vy-auditor-2"])
+def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(served, tmp_path, monkeypatch, host):
+    """A run that passes its own challenger key's SHA-512 as the pin has its session accepted under it (`key_pinned`),
+    and its record says the pin was the run's (`key_pin`) and that `trusted-host` is a rehearsal's, with no bound:
+    the tree pins another key for vy-auditor-2 and none for any other name, so naming the auditor's host changes
+    nothing."""
+    answer, _ = _run(served, tmp_path, monkeypatch, host=host)
+    assert answer["verdict"] == "accept", answer["reason"]
+    where = answer["profile"]["placement"]
+    assert where["kind"] == "own-host" and where[CS.PREMISE] == (
+        "rehearsal: key not the auditor's pinned key, no bound; "
+        f"the names say the memory challenger ran on {host}, not the prover's {NODE}")
+    doc = json.loads((served.out / "pous.json").read_text())
+    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] != CS.AUDITOR_KEYS["vy-auditor-2"]
+    assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}")
 
 
 def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(served_bf16, tmp_path, monkeypatch):

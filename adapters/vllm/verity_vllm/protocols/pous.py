@@ -440,7 +440,8 @@ class PousOption(Option):
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
-        returns the answer, its profile carrying where each party ran (`challenger_session.placement`).  ``schemes`` and
+        returns the answer, its profile carrying where each party ran and whether `trusted-host` holds, which only the
+        key the session was signed under decides (`challenger_session.placement`).  ``schemes`` and
         ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
         from verity.protocols.pous.device import challenger_session as CS
         from verity.protocols.pous.device import memory_challenger as mc
@@ -449,12 +450,12 @@ class PousOption(Option):
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
         party = CS.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
-        where = CS.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()
         got = self.audit(node, secrets.token_bytes(64), party=party, schemes=mc.SCHEMES if schemes is None else schemes,
                          protocol=period.PROTOCOL if protocol is None else protocol)
         seconds = round(time.monotonic() - t, 2)
+        where = CS.placement(node, party.host, got.key_sha512)
         self.periods += 1
         answer, lean = got.answer, {}
         if "pous-run-protocol" in tools:

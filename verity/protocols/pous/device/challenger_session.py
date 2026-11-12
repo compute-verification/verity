@@ -27,7 +27,8 @@ its own host under `SETUPS`, from which the remote bandwidth audit's verifier on
 `side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
 `salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is the leg's: it starts the
 side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
-party and whether `trusted-host`'s premise holds.
+party and whether `trusted-host`'s premise holds, which it does only for a session signed under the key `AUDITOR_KEYS`
+pins for the host named.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ import sys
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, BinaryIO
 
 from verity.configuration.deploy import stream
@@ -58,6 +60,12 @@ END = 2 ** 64 - 1
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.protocols.pous.device.challenger_party"
 PREMISE = "trusted-host"
+#: each auditor host's PoUS party by the SHA-512 of its public key (its gate's `party_key pous`), 128 lowercase hex
+#: digits: the one key under which `placement` says `trusted-host` holds for that host
+AUDITOR_KEYS: Mapping[str, str] = MappingProxyType({
+    "vy-auditor-2": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                    "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb",
+})
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
@@ -209,13 +217,23 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
     return Side.of(period, node, "pous", command(device))
 
 
-def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control, which is never the developer's node."""
-    held = host != node
-    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-            PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
-                      f"unmet: the memory challenger ran on the prover's node {node}")}
+def placement(node: str, host: str, key_sha512: str, *, verifier: str | None = None) -> dict[str, Any]:
+    """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
+    ``prover-node``), and whether `trusted-host`'s premise holds: that the memory challenger ran on a machine the
+    developer doesn't control. The names are the run's own, so they bound nothing: the premise holds only when
+    `key_sha512`, the SHA-512 of the key the session was signed under, is the one `AUDITOR_KEYS` pins for `host`, and
+    `host` isn't the node; otherwise the record is a rehearsal's, whatever key the run pinned itself."""
+    kind = "own-host" if host != node else "prover-node"
+    said = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
+            f"the memory challenger ran on the prover's node {node}")
+    if AUDITOR_KEYS.get(host) != key_sha512:
+        premise = f"rehearsal: key not the auditor's pinned key, no bound; the names say {said}"
+    elif kind == "own-host":
+        premise = f"holds: {said}, under the key pinned for {host}"
+    else:
+        premise = f"rehearsal: the prover's node has the auditor host's name, no bound; the names say {said}"
+    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
+            PREMISE: premise}
 
 
 def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]:

@@ -39,7 +39,9 @@ same sessions, which no second session replaces. With neither, one process does 
    own inputs) under the session id the verdict derives itself from the window's binding and what setup published,
    never the report's (a report of a session under any other id is a reject), and its answer on that case's bytes
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
-   check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
+   check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused;
+   ``pous.json``'s ``key_pinned`` says whether it was signed under that pin, and ``key_pin`` whether the pin is the
+   tree's for the challenger's host, ``tree``, or the run's own, ``run``), and what
    an accepted run certifies (`period.certify`): ``⌊ρ·|C|⌋`` bits at ``1% + 2^-128``, at `ROUNDS` challenges as at
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check's cost is the tie, which reads all of
    ``C*``, not the rounds. With ``--case-exe``
@@ -53,7 +55,9 @@ same sessions, which no second session replaces. With neither, one process does 
    the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
    ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
-   placement and the weights' public properties: their model, count and size.
+   placement and the weights' public properties: their model, count and size. The placement's `trusted-host` holds
+   only for a session signed under the key `challenger_session.AUDITOR_KEYS` pins for the challenger's host: a run's
+   own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound.
 
 6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, before either is answered and
    before ``C*`` is released, the same process runs PoUB-P2's session over the store it holds on the card, so both
@@ -137,9 +141,8 @@ CHALLENGER_ADDRESS = "10.96.0.36:47610"
 CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
                       "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "research@10.96.0.36",
                       "challenger_party")
-#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`)
-TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
-                  "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
+#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`), the tree's pin for it
+TRUSTED_SHA512 = CS.AUDITOR_KEYS[CHALLENGER_HOST]
 #: the bandwidth party on the auditor's host: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
 BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 "
             "research@10.96.0.36 bw_party")
@@ -589,14 +592,15 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
             "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)",
                            "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
                            "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
-            "placement": CS.placement(node, host) | {
+            "placement": CS.placement(node, host, key_sha) | {
                 "salt": f"drawn by the memory challenger on {host} from its OS after the commitment, "
                         "logged under the window's binding, with the session's id derived from both"},
             "weights": summary["weights"] | {"held": "loaded from the served snapshot on the card the window served "
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}
     _done(out, summary, answer, answer_s=answer_s, case_bytes=case_bytes, key_sha512=key_sha,
-          key_pinned=bool(trusted), private=str(private), public=inner["public"], bandwidth=bandwidth,
+          key_pinned=bool(trusted), key_pin="tree" if trusted_sha512 == CS.AUDITOR_KEYS.get(host) else "run",
+          private=str(private), public=inner["public"], bandwidth=bandwidth,
           decided_by=decided, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again
     unanswered = not agreed or (bw is not None and bw["verdict"] == "undecided" and (bw_private / HB.HELD).is_file())
@@ -637,7 +641,7 @@ def line(answer: Mapping[str, Any]) -> str:
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
                 f"{w.get('bytes')} B of the checkpoint's {w.get('checkpoint_bytes')} in {w.get('used_blocks')} of "
                 f"{w.get('blocks')} blocks; certifies {pub}; "
-                f"{(answer['profile'].get('placement') or {}).get(CS.PREMISE)}")
+                f"{CS.PREMISE} {(answer['profile'].get('placement') or {}).get(CS.PREMISE)}")
     return f"POUS: {answer['verdict']}: {answer['reason']}"
 
 

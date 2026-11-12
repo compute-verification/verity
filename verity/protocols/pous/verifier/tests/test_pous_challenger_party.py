@@ -13,6 +13,7 @@ import gc
 import hashlib
 import json
 import os
+import re
 import socket
 import threading
 
@@ -353,10 +354,46 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     wired = CS.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {
         "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", tmp_path)
     assert wired == Side("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
-    assert CS.placement("n0", "n0")[CS.PREMISE].startswith("unmet: ")
-    assert CS.placement("n0", "auditor-host") == {
-        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
-        CS.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
+
+
+PINNED, OTHER = CS.AUDITOR_KEYS["vy-auditor-2"], hashlib.sha512(b"a key that is not the auditor's").hexdigest()
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound; the names say "
+
+
+def test_a_rehearsals_challenger_under_a_key_that_is_not_the_pin_bounds_nothing() -> None:
+    """The rehearsal's names, a challenger host that is not the node, say the challenger ran off the node; under a key
+    the tree pins for no host, the record is a rehearsal's."""
+    assert CS.placement("vy-dc-h200-3", "on-node-rehearsal", OTHER) == {
+        "parties": {"memory_challenger": "on-node-rehearsal", "prover": "vy-dc-h200-3", "verifier": "vy-dc-h200-3"},
+        "kind": "own-host",
+        CS.PREMISE: REHEARSAL + "the memory challenger ran on on-node-rehearsal, not the prover's vy-dc-h200-3"}
+    assert CS.placement("n0", "n0", OTHER) == {
+        "parties": {"memory_challenger": "n0", "prover": "n0", "verifier": "n0"}, "kind": "prover-node",
+        CS.PREMISE: REHEARSAL + "the memory challenger ran on the prover's node n0"}
+
+
+def test_the_auditors_host_under_its_pinned_key_holds() -> None:
+    """vy-auditor-2 under the key the tree pins for it: `trusted-host` holds. The pins are the module's alone."""
+    where = CS.placement("vy-dc-h200-3", "vy-auditor-2", PINNED, verifier="vy-auditor-2")
+    assert where == {
+        "parties": {"memory_challenger": "vy-auditor-2", "prover": "vy-dc-h200-3", "verifier": "vy-auditor-2"},
+        "kind": "own-host",
+        CS.PREMISE: "holds: the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200-3, "
+                    "under the key pinned for vy-auditor-2"}
+    assert re.fullmatch("[0-9a-f]{128}", PINNED)
+    with pytest.raises(TypeError):
+        CS.AUDITOR_KEYS["on-node-rehearsal"] = OTHER
+
+
+def test_the_auditors_host_name_under_another_key_is_a_rehearsal() -> None:
+    """The name vy-auditor-2 is the run's to give: under any key but its pinned one the record is a rehearsal's, and
+    so it is when the prover's node takes that name too, even under the pinned key."""
+    assert CS.placement("vy-dc-h200-3", "vy-auditor-2", OTHER)[CS.PREMISE] == (
+        REHEARSAL + "the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200-3")
+    same = CS.placement("vy-auditor-2", "vy-auditor-2", PINNED)
+    assert same["kind"] == "prover-node" and same[CS.PREMISE] == (
+        "rehearsal: the prover's node has the auditor host's name, no bound; "
+        "the names say the memory challenger ran on the prover's node vy-auditor-2")
 
 
 def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:
