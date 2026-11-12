@@ -207,6 +207,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was given, and
     `session.json` holds only its digest, store and verdict."""
     reg = B.toy(tmp_path / "toy")
+    (tmp_path / "challenger").mkdir()
     mc.SessionLog.create(tmp_path / "challenger" / "sessions")
 
     def party(session: bytes) -> str:
