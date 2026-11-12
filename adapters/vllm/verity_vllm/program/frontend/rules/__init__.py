@@ -4,6 +4,10 @@ op / in-place / state rules, and the registered program families (`family.py`) w
 isomorphism.  Each rule application emits one Call of a registered Definition; the (rule, node, module path) record is the runtime
 correspondence's Build-side half.
 
+The default's rules are the members of two lists: `TORCH_RULES`, whose rules target ATen ops only, and `VLLM_RULES`, whose
+rules each target an op of vLLM's (`vllm_iface`).  The default keeps its own sequence (views, reference, profile, padding), in
+which each of the two lists keeps its order.
+
 The rule modules import `..derive` (for `Ctx`, `refuse`, ...), and `derive` imports `rules.base`; the concrete
 rule sets are therefore resolved lazily (PEP 562) to keep the package import acyclic.
 
@@ -41,7 +45,7 @@ from verity_vllm.program.frontend.rules.vocab import (
     vocabulary_for,
 )
 
-_LAZY = ("DEFAULT_RULES", "VIEW_RULES", "REFERENCE_RULES", "PROFILE_RULES", "PADDING_RULES", "DEFAULT_FAMILIES")
+_LAZY = ("DEFAULT_RULES", "TORCH_RULES", "VLLM_RULES", "VIEW_RULES", "REFERENCE_RULES", "PROFILE_RULES", "PADDING_RULES", "DEFAULT_FAMILIES")
 _cache: dict[str, object] = {}
 
 
@@ -49,12 +53,22 @@ def _load() -> None:
     if _cache:
         return
     from verity_vllm.program.frontend.rules.family import DEFAULT_FAMILIES
-    from verity_vllm.program.frontend.rules.padding import PADDING_RULES
-    from verity_vllm.program.frontend.rules.profile import PROFILE_RULES
+    from verity_vllm.program.frontend.rules.padding import (
+        PADDING_RULES,
+        PADDING_TORCH_RULES,
+        PADDING_VLLM_RULES,
+    )
+    from verity_vllm.program.frontend.rules.profile import (
+        PROFILE_RULES,
+        PROFILE_TORCH_RULES,
+        PROFILE_VLLM_RULES,
+    )
     from verity_vllm.program.frontend.rules.reference import REFERENCE_RULES
     from verity_vllm.program.frontend.rules.views import VIEW_RULES
     _cache.update(VIEW_RULES=VIEW_RULES, REFERENCE_RULES=REFERENCE_RULES, PROFILE_RULES=PROFILE_RULES, PADDING_RULES=PADDING_RULES,
                   DEFAULT_FAMILIES=DEFAULT_FAMILIES,
+                  TORCH_RULES=list(VIEW_RULES) + list(REFERENCE_RULES) + PROFILE_TORCH_RULES + PADDING_TORCH_RULES,
+                  VLLM_RULES=PROFILE_VLLM_RULES + PADDING_VLLM_RULES,
                   DEFAULT_RULES=RuleSet("default", list(VIEW_RULES) + list(REFERENCE_RULES) + list(PROFILE_RULES) + list(PADDING_RULES),
                                         list(DEFAULT_FAMILIES)))
 
@@ -68,4 +82,4 @@ def __getattr__(name: str):
 
 __all__ = ["DEFAULT_RULES", "RuleSet", "Rule", "RuleInfo", "OpRule", "ViewRule", "InPlaceRule", "StateRule", "ModuleRule", "FamilyRule", "ANY",
            "Vocabulary", "vocabulary_for", "PROFILE_B1_EAGER", "REFERENCE_CPU_F32", "VIEW_RULES", "REFERENCE_RULES", "PROFILE_RULES",
-           "DEFAULT_FAMILIES"]
+           "DEFAULT_FAMILIES", "TORCH_RULES", "VLLM_RULES"]
