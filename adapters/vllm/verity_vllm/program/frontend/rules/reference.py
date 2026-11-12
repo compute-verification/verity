@@ -10,14 +10,20 @@ import math
 
 import numpy as np
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    norm_kind,
+    rows_of,
+    shape,
+)
 from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 
 aten = torch.ops.aten
 

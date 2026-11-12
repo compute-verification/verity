@@ -9,12 +9,12 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
-
-from tests.program.test_train_step import _bits, _outputs, _program, _same_bits
 from verity.circuits.defs import bind
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import torch_embedding_f32 as TEF
+
+from tests.program.test_train_step import _bits, _outputs, _program, _same_bits
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules

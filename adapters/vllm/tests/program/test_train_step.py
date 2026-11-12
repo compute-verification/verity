@@ -20,23 +20,23 @@ import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._python_dispatch import TorchDispatchMode
-
-from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.boundary import gate_width
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import scalar as SC
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse
 from verity.circuits.refs import runs as ref_runs
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.ops import scalar as SC
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
+
+from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.errors import FrontendError
@@ -45,7 +45,13 @@ from verity_vllm.program.frontend.program_identity import check_identity
 from verity_vllm.program.frontend.report import DeriveReport
 from verity_vllm.program.frontend.rules.training import training_rules
 from verity_vllm.program.frontend.rules.training_survey import survey, with_holes
-from verity_vllm.program.frontend.train_step import AdamW, export_step, in_bits_beyond_theta, step_program, step_report
+from verity_vllm.program.frontend.train_step import (
+    AdamW,
+    export_step,
+    in_bits_beyond_theta,
+    step_program,
+    step_report,
+)
 
 aten = torch.ops.aten
 

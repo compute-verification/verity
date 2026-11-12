@@ -16,16 +16,23 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-
-from verity.definitions.ops.prims import const
 from verity.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
+from verity.definitions.ops.prims import const
+
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.patterns import _constant_tensor
-from verity_vllm.program.frontend.strided_views import (_EXPLICIT_LIMIT, _constant_run, _expand, _permute, _row_major, _strided_refs,
-                                                        _tensor_type)
+from verity_vllm.program.frontend.strided_views import (
+    _EXPLICIT_LIMIT,
+    _constant_run,
+    _expand,
+    _permute,
+    _row_major,
+    _strided_refs,
+    _tensor_type,
+)
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
 aten = torch.ops.aten

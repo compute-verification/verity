@@ -17,18 +17,25 @@ import math
 
 import numpy as np
 import torch
-
-from verity.definitions.ops import scalar as SC
 from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
+from verity.definitions.ops import scalar as SC
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import torch_words as W
+
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule
-from verity_vllm.program.frontend.rules.training_views import (_PARTS, StaticFloat, _const, _static_words, _view_expand,
-                                                               _view_permute, _words)
+from verity_vllm.program.frontend.rules.training_views import (
+    _PARTS,
+    StaticFloat,
+    _const,
+    _static_words,
+    _view_expand,
+    _view_permute,
+    _words,
+)
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 

@@ -18,14 +18,14 @@ import math
 
 import numpy as np
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
-from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
@@ -61,7 +61,11 @@ def _ensure_static(ctx, node) -> bool:
         return not isinstance(ctx.env[node], Coll)
     if node.op != "call_function":
         return False
-    from verity_vllm.program.frontend.rules.views import _STATIC_ARITH, _STATIC_MAKERS, StaticIndexRule
+    from verity_vllm.program.frontend.rules.views import (
+        _STATIC_ARITH,
+        _STATIC_MAKERS,
+        StaticIndexRule,
+    )
     if node.target not in _STATIC_MAKERS and node.target not in _STATIC_ARITH and node.target not in StaticIndexRule().targets():
         return False
     for a in node.args:

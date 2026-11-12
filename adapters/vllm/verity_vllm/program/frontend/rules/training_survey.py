@@ -14,14 +14,13 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import torch
-
 from verity.circuits.program import Program
+
 from verity_vllm.program.frontend.derive import _no_rule
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, Refuse, Unsupported
 from verity_vllm.program.frontend.rules.base import ANY, Rule, RuleInfo, RuleSet
 from verity_vllm.program.frontend.value_types import type_of_tensor
-
 
 
 class Hole(Rule):
