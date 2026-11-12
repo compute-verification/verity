@@ -45,7 +45,7 @@ def foldPoint (m kLog : Nat) (coins : Array (Array F128)) : Array F128 × Array 
     (Array.range (min (kLog - 6) (m - 6))).map fun j => (coins.getD (k + 1 + j) #[]).getD 0 0)
 
 /-- Table `i`'s walks at its two reps' points, the points read from the record's coins (`foldPoint`); none where the
-record does not give both reps' coins. Nothing rests on a point being the one `replay` reaches: `replay` draws every coin
+record does not give both reps' coins. Nothing rests on a point being the one `replay` reaches: `replay` takes every coin
 from its own checked round, and asks the fold at the point it reaches (`Stmt.foldedGiven`). -/
 def walksOf (spec : SessionSpec) (st : Stmt) (i : Nat) (record : String) : Stmt.Walks :=
   match JsonParse.parse record with
