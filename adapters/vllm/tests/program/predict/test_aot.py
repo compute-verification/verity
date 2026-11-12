@@ -97,6 +97,16 @@ def test_emit_cannot_say_the_descriptor_it_predicted_under_annotations_that_hold
     assert not (tmp_path / "out").exists()
 
 
+@pytest.mark.parametrize("shape", [{}, {"LP": 4}, {"T": 2}])
+def test_emit_of_a_request_asked_for_without_its_shape_is_ints_typeerror(tmp_path, shape):
+    """`predict emit --wrapper request` without `--LP` or `--T` asks for a request's Program of no shape, which is `int`'s
+    TypeError on None before anything is written."""
+    trace = _trace(tmp_path / "trace")
+    with pytest.raises(TypeError, match=r"^int\(\) argument must be a string, a bytes-like object or a real number, not 'NoneType'$"):
+        A.emit(_phi(TINY), "request", str(trace), str(tmp_path / "out"), **shape)
+    assert not (tmp_path / "out").exists()
+
+
 def test_emit_refuses_a_trace_whose_result_names_no_program(tmp_path):
     """A traced derive dir whose `result.json` has no `program` block names no digest, so it is a trace of another Program."""
     trace = _trace(tmp_path / "trace")
