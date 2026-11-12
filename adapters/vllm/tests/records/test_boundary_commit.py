@@ -1,5 +1,6 @@
 """`records.boundary_commit`: the ``commit.json`` `pipeline.boundary_rows` writes loads as the typed record and dumps back to
-the same JSON; another format, a missing, unknown or mistyped field is refused by name."""
+the same JSON, with ``verdicts`` only where its writer wrote it; another format, a missing, unknown or mistyped field is
+refused by name."""
 from __future__ import annotations
 
 import dataclasses
@@ -25,6 +26,9 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     assert set(KINDS) | set(OPTIONAL) == {f.name for f in dataclasses.fields(BoundaryCommit)}
     tables = _doc() | {"tables": {"layers": [0, 3], "capacity": 16}}
     assert BoundaryCommit.of(tables, "w").dump() == tables and rec.tables is None
+    verdicts = _doc() | {"verdicts": True}
+    assert BoundaryCommit.of(verdicts, "w").dump() == verdicts and rec.verdicts is None and "verdicts" not in rec.dump()
+    assert BoundaryCommit.of(tables | verdicts, "w").dump() == tables | verdicts
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))
@@ -46,3 +50,5 @@ def test_another_format_an_unknown_field_and_a_wrong_kind_are_refused_by_name():
     assert e.value.field == "salts"
     with pytest.raises(RecordError, match="'spans' is a str, not a int"):
         BoundaryCommit.of(_doc() | {"spans": "3"}, "w")
+    with pytest.raises(RecordError, match="'verdicts' is a int, not a bool"):
+        BoundaryCommit.of(_doc() | {"verdicts": 1}, "w")

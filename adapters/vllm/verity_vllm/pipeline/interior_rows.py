@@ -24,8 +24,9 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   port a table of its own Q·n_t rows and unit off_t + k reading row k, so each row a session proves is a registered read
   of the interior record. A port the replay block wires to another template's output (its wires, as round 2 derives
   them: `second_stage.replay_wires`) commits no tree of its own: its rows are its writer's Q·n_w output rows, whole, unit
-  u of span s reading its writer's unit off_w + s·n_w + j, j the row the design places it at (`second_stage.replay_rows`;
-  the writer's first in the span where it names none). It is registered after ``previous``, the boundary registration's digest,
+  u of span s reading its writer's unit off_w + s·n_w + j, j the row the design places it at (`second_stage.replay_rows`,
+  by `interior_links.wired`: the writer's one unit where it has one a block and the design names none). It is registered
+  after ``previous``, the boundary registration's digest,
   under the window ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and the
   replay sample, so every port's domain binds which replay block each cell of units is; the challenger derives the same
   ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
@@ -52,7 +53,6 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
-from verity.protocols.spot.verifier.second_stage import row_at
 from verity.circuits.defs import bind
 from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
@@ -332,11 +332,10 @@ def interior_run(boundary: str, sample: Sequence[int]) -> str:
 def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q: int,
           wires: Sequence[Any], rows: Sequence[Any] = ()) -> list[dict[str, Any]]:
     """Each member's wired ports, ``{port: (out, writer member, writers)}`` (`rows.Member.wired`): at wire w's port, unit u
-    of span s = u // n_t reads unit off_w + s·n_w + j, the writer unit of its span the design's rows place it at (``rows``,
-    `second_stage.replay_rows`: j is unit u mod n_t's row of the wire's port; the writer's first, j = 0, where they name
-    none for it), as round 2 reads a wired port (`SecondStage.wiredRow`)."""
+    of span s = u // n_t reads unit off_w + s·n_w + x, the one of its writer's n_w in that span that round 2 reads there
+    (`SecondStage.wiredRow`): x the row the replay block's ``rows`` give its unit u mod n_t (`interior_links.wired`), 0
+    where the writer has one unit a block."""
     at = {m.template: k for k, m in enumerate(ms)}
-    placed = {(x.template, x.port): x for x in rows}
     out: list[dict[str, Any]] = [{} for _ in ms]
     for w in wires:
         r, k = at.get(w.template), at.get(w.writer)
@@ -348,12 +347,8 @@ def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q:
                              f"{[p for p, _w in ms[r].rows]} is: an interior member's rows are its parameters (`named`)")
         if port in out[r]:
             raise ValueError(f"{w.template}: its {port!r} row is wired twice")
-        x = placed.get((w.template, port))
-        js = [0] * cells[r] if x is None else [row_at(x.runs, i) for i in range(cells[r])]
-        if any(j is None or not j < cells[k] for j in js):
-            raise ValueError(f"{w.template}: the design's rows place its {port!r} units at {js}, not each at one of its "
-                             f"span's {cells[k]} {w.writer} units")
-        out[r][port] = (w.wport, k, tuple(offs[k] + (u // cells[r]) * cells[k] + js[u % cells[r]]
+        x = IL.wired(rows, w.template, port, cells[r], cells[k])
+        out[r][port] = (w.wport, k, tuple(offs[k] + (u // cells[r]) * cells[k] + x[u % cells[r]]
                                           for u in range(q * cells[r])))
     return out
 
@@ -366,9 +361,10 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     under `interior_run`: what the prover commits and the challenger derives the ports of. ``members``: one, or one a
     template in the check's order; ``n_rho``: its n_t each (the stream's ``cells``), or one template's n_rho. ``wires``:
     the replay block's (`second_stage.replay_wires`). A wired port commits no tree of its own (`rows.Member.wired_trees`):
-    its table is its writer's Q·n_w output rows, whole, and unit u of span s reads its writer's unit off_w + s·n_w + j, j
-    the row ``rows`` (the replay block's, `second_stage.replay_rows`) place it at, 0 where they name none (`_held`).
-    ``values``: the values its program takes ahead of the templates' parameters (a window stream's, `link_values`)."""
+    its table is its writer's Q·n_w output rows, whole, and unit u of span s reads the one of its writer's n_w units in
+    that span that round 2 reads there, which ``rows`` say (the replay block's, `second_stage.replay_rows`; needed where
+    a writer has more than one unit a block). ``values``: the values its program takes ahead of the templates'
+    parameters (a window stream's, `link_values`)."""
     ms, cells = IL.cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
@@ -386,8 +382,8 @@ def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequen
                    wires: Sequence[Any] = (), values: Sequence[tuple[str, int, Any]] = (),
                    rows: Sequence[Any] = ()) -> dict[str, dict[str, Any]]:
     """The challenger's copy of the interior registration's ports: `interior_window`'s, from the templates' layouts, the
-    size class, the boundary registration's digest, its own replay sample, the wires and rows it derives from the
-    replay block and its stream's values."""
+    size class, the boundary registration's digest, its own replay sample, the wires and rows it derives from the replay
+    block and its stream's values."""
     return CS.expected_ports(interior_window(members, n_rho, boundary, sample, wires, values, rows))
 
 
@@ -454,8 +450,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              replay: str | None = None, previous: str | None = None, kind: str = "served",
              salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
-             positions: int | None = None, links: Sequence[Link] = (), window_root: str | None = None,
-             rows: Sequence[Any] = ()) -> Interior:
+             positions: int | None = None, links: Sequence[Link] = (), rows: Sequence[Any] = (),
+             window_root: str | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -465,8 +461,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     but at a port ``links`` name, whose rows keep their value's salts; ``salt_key``: tests only, the salts derived from it
     (`ml.windows.rows.commit`). ``device``: the commitment made on the
     rows' device (`committed`), registered in place of committing the spans' rows, which it never reads. ``wires`` and
-    ``rows``: the replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers' output rows, which
-    are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
+    ``rows``: the replay block's, as `interior_window` takes them; a wired port's replayed rows must be its writers'
+    output rows, each unit's the writer unit's round 2 reads there, which are what the interior commits. ``tables``: ``tables[i]`` sampled span i's, one a span exactly when a template reads a
     table: the table round 1 served (`kept_table`, from `boundary_tables.load`), as round 1's record ``served`` registers it under its
     name, holding its class's ``positions`` strings (C, `boundary_tables.class_rows`). The interior commits none of them:
     every read must open its span's (`table_reads`), and the tables' strings are published (`Interior.published`).
@@ -545,9 +541,11 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                 if not np.array_equal(d["rows"][p], data[j]["outs"][o][list(window.held_leaves(m, p))]):
                     raise ValueError(f"{m.template}: its replayed {p!r} rows are not the {o!r} rows of the "
                                      f"{window.members[j].template} units that write them, which the interior commits")
-                d["rows"][p] = CS.WIRED
         for k, (V, _H) in readers:
             IL.opened(window.members[k], data[k], cells[k], tcs, V)
+        for m, d in zip(window.members, data, strict=True):  # after the reads: a read's key may be a wired row
+            for p, _o, _ws in m.wired:
+                d["rows"][p] = CS.WIRED
         took = [np.asarray(data[k]["rows"][x.port], dtype=np.uint16) for x, k, _at in placed]
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):

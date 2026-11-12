@@ -474,8 +474,9 @@ def test_a_token_select_by_units_interior_reads_each_wired_row_at_the_unit_the_d
     wires and rows round 2 derives from that block: the combine's five input ports commit no tree, each a table of the
     units' Q·12 output rows, and token i of span s reads its ``x0`` at unit 12 s + 2 i's third output, its ``best<j>``
     and ``idx<j>`` at unit 12 s + 2 i + j's first and second, which are the rows `pieces` replayed. It derives the
-    challenger's ports. With the wires alone every unit of a wired port reads its span's first writer, which these rows
-    are not, and rows that place a unit past its span's writers are refused, both before any commitment."""
+    challenger's ports. With the wires alone it is refused, since the units' writer has twelve units a block and a wire
+    doesn't say which each reads (`interior_links.wired`), and so are rows that place a unit past its span's writers,
+    both before any commitment."""
     V, K, N = 256, 2, 6
     check = bind(DF.TokenSelectUnitsV1, V=V, K=K)
     replay = BR.inlined(check, N)
@@ -492,10 +493,10 @@ def test_a_token_select_by_units_interior_reads_each_wired_row_at_the_unit_the_d
         assert at[p] == (o, tuple(N * K * s + K * i + j for s in range(Q) for i in range(N)))
         assert w.held(mc, p) == mu.port(o) and mc.port(p) not in it.ports and dict(mc.tables)[p] == Q * N * K
     assert it.ports == IR.interior_ports(members, cells, "aa" * 64, [0, 2], wires, rows=rows)
-    with pytest.raises(ValueError, match="rows are not the 'o[0-2]' rows of the"):
+    with pytest.raises(ValueError, match="reads a writer of 12 units a block, and nothing says which each of its units"):
         IR.interior(per, cells, "aa" * 64, [0, 2], row=ROW, salt_key=SALT, wires=wires)
     past = [replace(r, runs=(SS.Run(0, N, 0, 3),)) if r.port == "best1" else r for r in rows]
-    with pytest.raises(ValueError, match="the design's rows place its 'best1' units at"):
+    with pytest.raises(ValueError, match="its wired 'best1' rows place other than its 6 units a block on its writer's 12"):
         IR.interior(per, cells, "aa" * 64, [0, 2], row=ROW, salt_key=SALT, wires=wires, rows=past)
 
 
