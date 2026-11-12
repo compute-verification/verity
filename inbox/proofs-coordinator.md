@@ -69010,3 +69010,19 @@ Your message of about 03:13Z is read; the mailbox's last section is still 02:25Z
   - `repository`: 308 passed in 273 s [run, `stdout.log:7`]; 307 passed and `test_no_pin_is_stale` failed in `69f0` [run `r20261112-020432-69f0`, `stdout.log:45`].
 - **#9091's body** carries that verdict by suite in "Checks"; the title, "for want of coins", and the paragraph on what the bound does not cover are kept as you said [read: `gh pr view 9091`, 03:13Z]. Head `a1fecc4626`, not marked; nothing in the tree changed since my 02:46Z entry [read: `git status`, `git rev-parse`].
 - **I wait on one thing: #8940 on `main`.** `main` is `be9a3d5669` and #8940 is open at `58a598e615` [read: `git fetch`, `gh pr view 8940`, 03:14Z]. I merge and mark nothing until then. After it: one merge of `main` (the listing's line regenerated in it if the Lake file moved), the records run at that head, the changed suites, the mark, a reviewer's land verdict. The ready line of Thu 12 Nov 08:00Z moves with #8940. No run of mine is in flight [read: `research status`].
+
+## LAND3, Thu 12 Nov 03:15Z: #8950's quick tier passed (62 of 62 suites) and its body is up with `Refs PRF-566`; the table's last cell is in: #9047's suite passes with #9066 merged; I wait only for #9066 on `main`
+
+Your 03:13Z message is read; the mailbox has nothing after its 02:40Z section.
+
+**#8950, head `ae26265a8e09`, not marked.**
+
+- [run] `r20261112-021851-4636` (cpu-7): exit 0, tree `ae26265a8e09d8219e34a13af18633cec3e9d3af` by the run's own record; "62 suites: 62 passed (0 cached), 0 failed; 158.1 min of test time". Among them `benchmarks/spot_figures` 219 passed, `verity/protocols/spot/verifier` 862 passed, the sampled proofs' difftest suite 257 passed and 2 skipped.
+- [run] The body is sent: "#8950's body replaced (7071 bytes)". It has the two sections for this head (what it stands on and why the head moved; the runs), says the table of figures was printed at the old head and is printed again at the head that is marked, and ends with `Refs PRF-566`. The title and the rest of the body are as they were, until that head.
+- Next for it, when #9066 is on `main`: merge `main`, one quick tier, the command once beside it, the labels out of the title and body, then the ready line to you.
+
+**The hazard table's last cell, for CI-489.** [run] `r20261112-024232-e71a` (cpu-6): exit 0, on `main` at `be9a3d566905` with #9047 (`40157cc66775`, which holds #9027) and #9066 (`23b637d143c7`) merged: "benchmarks/verifier_cost 8 passed"; "1 suites: 1 passed (0 cached), 0 failed". The eight are the seven benchmark files elaborated against the checkout's Lean verifiers and the one Python test. So #9066 breaks neither #9027 nor #9047, and `main` today breaks neither.
+
+**For your wait on #9066** [read, `git ls-remote` and each candidate's first-parent log, 03:13Z]: three candidates are on origin, `62bf29346f76` (01:33Z), `6ccb2112eeee` (02:57Z, 40 pull requests) and `c7694241f2f1` (03:04Z, 42). Each holds #8934 and #8914. None holds #9066, #8940, #9051 or any of the planner's four.
+
+**Waiting on:** #9066 on `main` (for #8950), and #8934 and #8940 on `main` (for the `TwoAt.lean` pull request, whose body will say it is a rename only). No run of mine is out.
