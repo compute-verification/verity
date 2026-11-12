@@ -100597,3 +100597,53 @@ Clock: `date -u` read 20:42Z before writing. Tags: [run] a command of this hour 
 - `r20261112-190229-73f1` (my first tree, the old select inlined at 154,880, 2 outputs, unlinked): ended as expected, `SMALL` every expectation true, `second rc=1`, that is everything holding but round 2's wires [run, 20:40Z]. Not a run of record.
 - `r20261112-203322-971f` (the honest rehearsal on the controls' tree) is in `second`; the three controls had not started at 20:40Z. `86b4` is still in `second`; `9ef9` has not started.
 - My mailbox on `cursor/proofs-inbox` was unchanged at 20:40Z, so I am still on your 20:02Z order (the controls, then the switch).
+
+## ACCOUNTS, Thu 12 Nov 20:46Z: interim, before job 2's writing: the two lists compile at `57fb7f037f6b`; to post, what the network certifier's file prints; STOP RULE on the agreement's mend (not written); I edited network-accounting's file before your order and reverted it
+
+Your 20:32Z message is read and I am on it. Job 2's three commits are next; this entry carries what is already established so you need not wait for them.
+
+**1. STOP RULE: the agreement's file (`security/Properties/Core/Site.lean`). Not written.**
+
+Mending its six errors is not mechanical: it cannot be made true without changing definitions of the spec's Site that all thirteen listed statements read. No listed statement's text changes; what they read does.
+
+| The code's v2 has | The spec on `main` has | What the mend would need |
+|---|---|---|
+| the refusal `inventory` [read `CoreProtocol/Site.lean` line 380 at `0c9e4b54ed00`] | no such refusal [read `security/Definitions/Core/Site.lean` lines 381–394, same commit] | `Properties.Site.refusal` is a total function from the code's refusals to the spec's; `inventory` has no image. Before: ten cases. After: the spec's `Verity.Registration.Refusal` gains `inventory`, and `Verity.Registration.Valid` gains the completeness the code's `check` holds a log to at its end |
+| a link's `β : Option Nat`, with `unmediated` [read `Site.lean` v2] | `β : ℕ` [read spec line 164] | `Properties.Site.link` and `ofLink`: the spec's `Link` takes the optional rate and the reason |
+| a location's 14 fields (`scheme`, `bw`, `chip`, `shared`, `drift`, `timeUnit` added) | 8 fields [read spec lines 149–158] | `Properties.Site.loc` and `ofLoc`: the spec's `Loc` takes them, or the six are dropped on the way to the spec and then the code refuses entries the spec accepts |
+| the auditor's `scheme`, `memory`, `hosts`, `drift` | `sheet`, `tolerance`, `key` [read spec lines 366–369] | `Properties.Site.auditor`, `witnessAuditor` |
+| the checks `Rates`, `Timed`, `Chips` under `figures`, and the scheme and drift in `Owners` | none of them | the spec's `Entry.Valid` gains the same clauses |
+
+- [derived] Why it cannot be a compile-only mend: `Properties.Site.Refuses` says the code's refusal of an entry is the spec's of the entry it denotes. In v2 a host that states no on-chip bytes is refused `figures` by the code (`Chips`), and the spec, which has no such clause, accepts it. So `refuses`, `entryValid`, `checks` and `refusedAt` are false of v2's code against `main`'s spec, and `security/Proofs/Properties/Core/Site.lean` (109 theorems) cannot be mended until the spec's Site says what v2's code checks.
+- [derived] The two witnesses' instances (`witnessAuditor`, `hostEntry`) must change too, so that v2's check accepts the honest log: a site that states the unit of time, a host with the auditor's figure for its on-chip bytes, a link at `some 1`. The witnesses' statements keep their text and read the changed instances.
+- [derived] This is the spec half of what you ruled is pull request (3). The choice for you: (A) v2's code lands only with the spec's Site and the agreement in the same change, as (3) was scoped; the notice's sentence "in the code's Site and later in the spec's" then does not hold, since the agreement cannot be true in between; or (B) another order you name. I write the spec's Site in v2's form and the agreement on your word, on this branch; I have not started it.
+- The Site's difftest mend (`140b7627fb`): changes no listed statement [read: `verity/protocols/spot/verifier/lean/lean-audit.json` lists no guarantee over `Spot.SiteDifftest`; line 9 names only its entry point]. It changes the difftest's input: `site_views` takes `{"auditor", "log"}` and no `"tick"`. compute-research's Python test must drop the key. Its try is running: `verity lean try` on `vy-nebius-cpu-12`, launched 20:44Z, verdict in my next entry.
+
+**2. To post (network-accounting's file).** `verity/protocols/certifier/verifier/lean/NetworkCheck/Registered.lean` does not compile against v2's `Link`, whose `β` is `Option Nat`. Run `r20261112-194215-7cf9` at `7dbf3bbaffac`, `lean exit 1 in 5 s` [run]:
+
+```
+NetworkCheck/Registered.lean:106:70: error: Type mismatch
+NetworkCheck/Registered.lean:134:51, 135:51, 136:51, 146:54, 147:54, 148:54, 149:54, 173:85, 178:84, 183:103:
+  error(lean.synthInstanceFailed): failed to synthesize instance of type class   (a numeric literal where `β : Option Nat`)
+NetworkCheck/Registered.lean:159 … 198 (every #guard): error: cannot evaluate code because '…exampleLinks' uses 'sorry' and/or contains errors
+```
+
+- An offer for them, not on the branch: a patch that takes the optional rate (the reading refuses a link that states no capacity with `link {link}: it states no capacity; a network certifier's link states its line rate`; the ten literals become `β := some N`; one new guard). It is the diff of commit `1005112abb` on `cursor/proofs-site-v2-1dc6`. Not established: that it compiles. Its try `r20261112-202330-bdf8` waited 21 minutes for a slot on the research pool and I cancelled it.
+- **Disclosure.** I committed that patch to the v2 branch (`1005112abb`, pushed 20:23Z) before your "Do not edit it" reached me. I reverted it with a new commit, no force (`0c9e4b54ed00`, pushed 20:36Z). The file is `main`'s again on the branch and does not compile there.
+
+**3. Job 3, the two lists: `cursor/proofs-composites-f4cc` at `57fb7f037f6b`.**
+
+| What | Run | Verdict |
+|---|---|---|
+| `verity/protocols/onsite/verifier/CoreComposites.lean` at `57fb7f037f6b` | `r20261112-203742-6dc6` | exit 0 in 91 s; it holds guards only [run] |
+| `security/Proofs/Properties/Verity/Soundness/Composite.lean` at `57fb7f037f6b`, without the two `rfl` lines | `r20261112-203742-665d` | exit 0 in 152 s; none of its 24 theorems beyond the three axioms [run] |
+| `CoreProtocol/Registration.lean` at `a74647c9a2f7` | `r20261112-195827-62d2` | exit 0 in 7 s [run] |
+| the agreement `security/Proofs/Properties/Core/Site.lean` at `a74647c9a2f7` | `r20261112-195827-49c7` | exit 0 in 75 s; none of its 109 theorems beyond the three axioms [run] |
+| six suites at `a74647c9a2f7` | `r20261112-195908-6ff4` | `verity-core-composition` 19 passed, `verity-cli` 108, `verity/protocols/spot/verifier` 892, `verity/configuration/deploy` 37, `verity/hardware/site` 104, `verity/hardware` 138 [run]. The seventh, `verity-core-sampled-proofs`, has no verdict: my cancel killed it at 883 s. I read the run as waiting; it was working |
+| the seven suites and the two new slow tests, again | `r20261112-203741-4eba` on `vy-nebius-cpu-8` | running since 20:37Z |
+| the records run on `security` | `r20261112-190320-3867` | timed out at 3600 s, exit 143: security's audit had passed (`AUDIT: PASS`, 1124 guarantees, 3005 s) and the locks' diff was never written [run] |
+| the records run, again, at 9000 s | `r20261112-203741-8406` on `vy-nebius-cpu-10` | running since 20:37Z; security alone took 3005 s last time, so not before 21:30Z [derived] |
+
+Not established for the two lists: `verity-core-sampled-proofs`; the two new slow composition tests; which lock records move.
+
+**4. A time I did not read.** My correction headed "20:02Z" was pushed at 20:00:35Z by `date -u`.
