@@ -79,7 +79,7 @@ from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_reco
 from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
-from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
+from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
 
 # automatic stage telemetry of THIS process: the engine's build, warm-up, arms, validation
@@ -2084,9 +2084,9 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
     d_dec = [inst[p]["step_wall_decode_mean_s"] / ctrl[p]["step_wall_decode_mean_s"] - 1 for p in pairs if ctrl[p]["step_wall_decode_mean_s"]]
     d_pre = [inst[p]["step_wall_prefill_s"] / ctrl[p]["step_wall_prefill_s"] - 1 for p in pairs]
     abs_wall_ms = [(inst[p]["wall_s"] - ctrl[p]["wall_s"]) * 1e3 for p in pairs]
-    ci = bootstrap_ci(d_wall)
-    ci_dec = bootstrap_ci(d_dec)
-    ci_pre = bootstrap_ci(d_pre)
+    ci = _bootstrap_ci(d_wall, seed=0)
+    ci_dec = _bootstrap_ci(d_dec, seed=0)
+    ci_pre = _bootstrap_ci(d_pre, seed=0)
     sp_keys = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
     spans = {k: statistics.fmean(inst[p]["commit"]["spans_total_s"][k] for p in pairs) for k in sp_keys} if pairs else {}
     rr = [inst[p]["commit"]["root_ready_delay_s"] for p in pairs]
