@@ -71,7 +71,7 @@ from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = ROOT / "verity/protocols/flock/verifier"
 EXE = "flock-verify"
-#: what a `flock-verify verify` runs under where its caller's environment sets no value of its own. The Lean runtime's
+#: what the Lean verifier's `verify` runs under where its caller's environment sets no value of its own. The Lean runtime's
 #: allocator (mimalloc) returns freed pages to the kernel after a delay and faults them in again when it reuses them; -1
 #: keeps them, trading peak memory for the faults. No byte the verifier reads or prints depends on it.
 VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
@@ -129,8 +129,8 @@ class Finding:
 
 
 def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
-    """The environment of a `flock-verify verify` child: ``environ`` (this process's when None) over `VERIFIER_ENV`, so a
-    variable the caller sets keeps the caller's value."""
+    """The environment `verify` starts the Lean verifier in: ``environ`` (this process's when None) over `VERIFIER_ENV`, so
+    a variable the caller sets keeps the caller's value. `verifier_env.sh` is the same for a shell job."""
     return {**VERIFIER_ENV, **(os.environ if environ is None else environ)}
 
 

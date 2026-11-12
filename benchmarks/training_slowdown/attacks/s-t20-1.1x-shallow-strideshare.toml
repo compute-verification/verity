@@ -16,3 +16,4 @@ warmup = 50
 decay = 0.4
 micro_batches = 2
 store = "q8"
+fused = true

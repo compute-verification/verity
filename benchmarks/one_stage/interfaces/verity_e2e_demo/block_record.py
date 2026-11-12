@@ -10,13 +10,17 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
 * ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the leg's certificate
-  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
-  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
+  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S0, Q_cert, K, the wipe's foreign_bits at its reads ``k``
+  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it; S0 is PoUS's state bound
+  ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
-  proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
-  block's is carried but not composed.
+  proofs' Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
+  the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
+  at least δ, which a uniform sample of as many units understates. A leg whose ``server`` is not the block's is
+  carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check`` or ``remote check``)'s
   answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
   (`Core.Verdict`: accept, reject or undecided), undecided when there is none; nothing here combines the legs' verdicts
@@ -44,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.reporting import DELTAS, PERIODS
-from verity.protocols.spot.verifier.profile import Stratified
+from verity.protocols.spot.verifier.profile import Stratified, Stratum
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
@@ -65,16 +69,35 @@ def frac(x: Any) -> Fraction:
     return Fraction(str(x))
 
 
-def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
-    """The most incorrect proof blocks of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
-    count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
-    ``δ``."""
-    return Stratified.uniform(n, kd).count_bound(delta)
+def integrity_bound(n: int, kd: int, delta: Fraction, strata: Sequence[Mapping[str, Any]] | None = None) -> int:
+    """The most incorrect proof blocks of ``n`` an accepted sample of ``kd`` leaves except with ``δ``: the integrity
+    profile's count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term is at least ``δ``. With no
+    ``strata`` the sample is uniform over the ``n`` and the term is ``C(n − K, kd)/C(n, kd)``. With ``strata``
+    (``[{name, size, k}]``, which must hold the ``n`` units and sample ``kd`` of them) each stratum is sampled on its
+    own, and the term is the likeliest escape of ``K`` incorrect proof blocks over their placements,
+    ``∏ C(n_s − m_s, k_s)/C(n_s, k_s)``: a stratum sampled whole hides none, and one sampled thinly hides more than the
+    uniform sample of ``kd`` would."""
+    if strata is None:
+        return Stratified.uniform(n, kd).count_bound(delta)
+    design = Stratified(tuple(Stratum(str(s["name"]), int(s["size"]), int(s["k"])) for s in strata))
+    if (design.population, design.k) != (n, kd):
+        raise ValueError(f"the strata hold {design.population} units and sample {design.k} of them, not the {kd} of {n} "
+                         f"beside them")
+    return design.count_bound(delta)
 
 
-def _draw(answer: Mapping[str, Any]) -> tuple[int, int]:
+def _sample(answer: Mapping[str, Any]) -> dict[str, Any]:
+    """The sample of an integrity answer's checked level, as its quantity carries it: the level's size, the units
+    sampled, and the ``strata`` of a stratified sampling design (`Stratified.to_json`); another design has none, and
+    its sample is read as uniform."""
     level = answer["profile"]["levels"][-1]
-    return int(level["size"]), int(answer["profile"]["drawn"][level["name"]])
+    n, kd = int(level["size"]), int(answer["profile"]["drawn"][level["name"]])
+    design = level.get("draw")
+    if not isinstance(design, Mapping) or design.get("law") != "stratified":
+        return {"of": n, "drawn": kd}
+    strata = [{"name": str(s["name"]), "size": int(s["size"]), "k": int(s["k"])} for s in design["strata"]]
+    integrity_bound(n, kd, DELTAS[0], strata)
+    return {"of": n, "drawn": kd, "strata": strata}
 
 
 def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fraction, str]:
@@ -82,15 +105,14 @@ def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fractio
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
     if leg == "integrity":
-        n, kd = _draw(a)
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", "of": n, "drawn": kd},
+        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
                 frac(row["delta"]), "delta")
     if leg == "pouw":
         w = q["work"]
         return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
                 frac(row["delta"]), "delta")
     if leg == "pous":
-        return ({"symbol": "S_cert", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
+        return ({"symbol": "S0", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
                 frac(q["eps"]), "quantity.eps")
     if leg == "bandwidth":
         return ({"symbol": "Q_cert", "value": int(q["q_bytes"]), "unit": "bytes"}, frac(q["eps"]), "quantity.eps")
@@ -109,7 +131,7 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
     out: dict[str, Any] = {}
     for d in DELTAS:
         if leg == "integrity":
-            b = integrity_bound(quantity["of"], quantity["drawn"], d)
+            b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:
             out[str(d)] = {"holds": True, "value": quantity["value"], "epsilon": None, "by": "run"}

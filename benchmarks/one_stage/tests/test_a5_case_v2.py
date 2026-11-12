@@ -6,7 +6,6 @@ members has its case in v2's per-member form beside those, in a file of its own.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import sys
 import types
@@ -19,18 +18,11 @@ sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
-REPLAY = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = REPLAY
-_spec.loader.exec_module(REPLAY)
-
 
 @pytest.fixture
-def RP(monkeypatch):
-    """This suite's `replay`, which a5 imports by that name, under that name for one test only: `network_traces` has a
-    `replay` of its own, which `active_replay` (imported by this suite's warden tests) reads by the same name."""
-    monkeypatch.setitem(sys.modules, "replay", REPLAY)
-    return REPLAY
+def RP():
+    """The `replay` a5 reads: the file beside it, loaded by its path (`a5.own_replay`)."""
+    return a5.own_replay()
 
 
 def sha(p: Path) -> str:
