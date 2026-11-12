@@ -684,6 +684,32 @@ def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     assert sw.tolist() == [np.float32(9.0) / np.float32(110), np.float32(4.0) / np.float32(110)] and qw.max() == 110
 
 
+def test_a_layers_tokens_come_from_the_seed_or_the_models_tokenizer_and_a_tokenizer_that_fails_raises(tmp_path, monkeypatch):
+    """`layer.tokens_of` gives the seed's ids where a seed is given and a fresh seed's where the model has no tokenizer;
+    where it has one, the prompt's ids are the tokenizer's, and a tokenizer that doesn't load raises instead of
+    falling back to a fresh seed."""
+    L = _module("h1_prove_layer", "layer.py")
+    seeded = L.tokens_of(tmp_path, 6, b"\x01" * 16)
+    assert seeded == L._seeded(6, b"\x01" * 16) != L._seeded(6, b"\x02" * 16) and seeded[0] == 128000
+    fresh = L.tokens_of(tmp_path, 6, None)
+    assert len(fresh) == 6 and fresh[0] == 128000 and all(0 <= t < 128000 for t in fresh[1:])
+
+    class Tokenizer:
+        @staticmethod
+        def from_file(path):
+            if Path(path).read_text() != "{}":
+                raise ValueError(f"{path} is no tokenizer")
+            return SimpleNamespace(encode=lambda text, add_special_tokens: SimpleNamespace(ids=list(range(len(text)))))
+
+    monkeypatch.setitem(sys.modules, "tokenizers", SimpleNamespace(Tokenizer=Tokenizer, __spec__=object()))
+    assert L.tokens_of(tmp_path, 6, None)[1:] != [0, 1, 2, 3, 4]
+    (tmp_path / "tokenizer.json").write_text("{}")
+    assert L.tokens_of(tmp_path, 6, None) == [128000, 0, 1, 2, 3, 4]
+    (tmp_path / "tokenizer.json").write_text("truncated")
+    with pytest.raises(ValueError, match="is no tokenizer"):
+        L.tokens_of(tmp_path, 6, None)
+
+
 def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_path, monkeypatch):
     """v3 serves z = A Bᵀ exactly where A rows hold 127, and `window.py tamper --xa-flip` flips one entry's X wrap bit xa
     in a unit's record: the record moves, its receipt doesn't. Which entries set xa follows the dither bits, which come
