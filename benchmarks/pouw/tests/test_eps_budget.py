@@ -234,7 +234,7 @@ def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
 
 
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
-    monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
+    monkeypatch.setattr("verity_machine_model.skip.PV_SCALE_OPS", 0.0)
     monkeypatch.setattr(E, "pv_ts", E.pv_ts.__wrapped__)
     for m, c, low, ratio in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
         e, r = E.pv_ts(m, c, 0, sink=False)
