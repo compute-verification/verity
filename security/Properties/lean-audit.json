@@ -8179,13 +8179,112 @@
    "type_hash": "04953e8d83f5c1c9547e81d0e660650c82389ed2312f1d80ca8e97514a4cb2a3"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_bites": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_bites :",
+    "  Exists fun node =>",
+    "    Exists fun r =>",
+    "      Exists fun sm =>",
+    "        Exists fun T =>",
+    "          Exists fun pub =>",
+    "            And (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm) T Unit.unit node r pub)",
+    "              (Not",
+    "                (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm)",
+    "                  { blocks := T.blocks, passes := T.passes, accepts := T.accepts, tick := T.tick, plan := T.plan,",
+    "                    correct := fun x x_1 => Finset.instEmptyCollection.emptyCollection, mem := T.mem, chip := T.chip,",
+    "                    rebuilt := T.rebuilt, disk := T.disk, link := T.link }",
+    "                  Unit.unit node r pub))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8adaaa52c3f7066d093fbd85cb406e9922ffabddeb774e5bfeef65e6d3a986ad"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
+    "  (X Cm : Type) [Fintype X]",
+    "  (prf : Fin node.samples → Pous.Bits κ → Accounting.Remote.Draw.Blocks Properties.RemoteAudit.Line.receiptMax)",
+    "  (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Properties.RemoteAudit.Line.Record)",
+    "  (com : Accounting.Remote.Draw.DrawCoins node.samples κ X → Cm) (R : Accounting.Remote.Draw.Receipts node.samples κ X)",
+    "  (passes : Nat) (tick : Accounting.Remote.Draw.DrawCoins node.samples κ X → Nat → Nat)",
+    "  (hS : Properties.RemoteAudit.Subprotocol.HonestSchedule node passes tick recs com) :",
+    "  And",
+    "    (∀ (c : Cm),",
+    "      Accounting.Remote.Draw.Assumptions.Live",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).view",
+    "          c))",
+    "    (And",
+    "      (Accounting.Remote.Draw.Assumptions.Refused",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "          com)",
+    "        prf (fun x x_1 x_2 => 0)",
+    "        (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "          (Properties.RemoteAudit.Line.played recs com))",
+    "        R)",
+    "      (And",
+    "        (Accounting.Remote.Draw.Assumptions.Counted",
+    "          ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "            com)",
+    "          (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "            (Properties.RemoteAudit.Line.played recs com)))",
+    "        (And",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              (Pous.StreamedWipe.prfAdvantage (prf t)",
+    "                (((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                          Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "                      (Accounting.Remote.Draw.Committed.junk com t)).distinguisher",
+    "                  prf RemoteAudit.Protocol.DELTA.cast t))",
+    "              0)",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                    Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).hide",
+    "                com prf RemoteAudit.Protocol.DELTA.cast t)",
+    "              0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Properties.RemoteAudit.Subprotocol.HonestSchedule"],
+    "reads": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ]
+   },
+   "type_hash": "ac98fed8a6775807f8c4772fbbceed2c2e683c9183d7efdc7ac14230163b086e"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_nontrivial :",
+    "  Not",
+    "    (Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy (fun x x_1 x_2 x_3 x_4 x_5 => True) (fun x x_1 => True)",
+    "      fun x x_1 => Option.none)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ],
+    "reads": []
+   },
+   "type_hash": "60aa3babbf4897496fcfe47730d7b47d0c2e7356d19b1b2ca2b849c2fe4ab685"
   },
   "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites": {
    "owner": "@memory-accounting",
@@ -23334,7 +23433,7 @@
    }
   },
   "Properties.Accounting.Remote.Line.Record": {
-   "digest": "baf0d256dd8b87366ea40abf7883764dea19a0464cbf77dcf5caa117e8c2e939",
+   "digest": "b3d9be5a6137dc7ee6a5209b3d0299d1f5ff620663d0f128a2d96198b26ca5ae",
    "definitions": {
     "Properties.RemoteAudit.Line.Node": "42711f27299bb2712c065ce499996be68bd26c2633bfabda7bdab0a113062b7d",
     "Properties.RemoteAudit.Line.Node.blockBytes": "01096187cab77105f77d1a06703965cd55de643c51b4e42a5d232ab07571c01e",
@@ -23374,6 +23473,7 @@
     "Properties.RemoteAudit.Line.recordPace": "1316e56cadcaa8849c67b093609407a0feaf4bc4a574736c2a27d058028c4cf4",
     "Properties.RemoteAudit.Line.recordSample": "5eeab044c58defbae7107ab29ccea7bfc4cdf970bfb74d9fe59e5ec6e62b7b24",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
+    "Properties.RemoteAudit.Line.sampleReceipts": "6029613ef43c2b62eb2c619ad1e5725d763d2c507a1d8f3c594912ac760e7f04",
     "Properties.RemoteAudit.Line.spanStart": "5abeb3e47b0228283062b5aa31507abf65ad01d964a30e39c7d247a3f8401e39",
     "Properties.RemoteAudit.Line.spanStop": "08dfa9d81578347c8ff30e3a1b7ca3c1e38c13f6b39385197a7fa52b0e208a9b",
     "Properties.RemoteAudit.Line.stretchPace": "769e5729fa2b2f7bc4a15a7c50795065e231a8c88508686a0ce1714239d4d488"
@@ -23452,7 +23552,7 @@
    }
   },
   "Properties.Accounting.Remote.Subprotocol": {
-   "digest": "baefef31499c9baa404495b95880ef9bfe9df09e940942bd1b09b05f181b524a",
+   "digest": "72bc65dc6f83af0b65bdf0bbac64a563a2ca7cdfb5d1ec0f99ceff1624afd04f",
    "definitions": {
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "5fc90912a6b189249808541a053d8d89b883764124ce64eb0781e90572d0520b",
     "Properties.RemoteAudit.Subprotocol.HonestSchedule": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
@@ -23460,6 +23560,8 @@
     "Properties.RemoteAudit.Subprotocol.LineHeldBy": "7937a4a637647400d1cd889e9c69f65d7362f56c0893981bae517be5b231d46b",
     "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80",
     "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "9e7658d9ad6bfd062b2b5601fff6cfdddcdd435cb1692f222debe9d51296f602",
+    "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": "d513d4ef22f5f242d104376a46170a79eda198177442d95ea3333448079326b1",
+    "Properties.RemoteAudit.Subprotocol.QBytesBy": "f199917ff3d94900a1a721731ca4c8ca57a84563356b5262bae9370ce6afea5a",
     "Properties.RemoteAudit.Subprotocol.ReadBy": "b6bb8c08db864db7b362e5bc4eae9246e510634f345595a098d15c38867ccaf4",
     "Properties.RemoteAudit.Subprotocol.groupsBy": "158c1d4767d23fcbb4b0f277fb71816a87a4dfad310df14d4f5bd010ac8e44d8",
     "Properties.RemoteAudit.Subprotocol.honestEvidence": "400483a989e2fe6103a34e5657efa843e9385ed5ea8ef044244eed91e7ba586d",
@@ -23469,6 +23571,7 @@
     "Properties.RemoteAudit.Subprotocol.noOutside": "d36249429e424b260ddd542d3cd729c0ec12049fc45804e18e8055e9654f18f1",
     "Properties.RemoteAudit.Subprotocol.paceBy": "ffe59f9943bbe1369fabf94a6d962e2aa26ef93b3feb6c8c311b7929826de8fe",
     "Properties.RemoteAudit.Subprotocol.quietIngress": "8b16be2ac77baf6987ae14f5345941589075996ae63e5f6a144c9b06d772fb49",
+    "Properties.RemoteAudit.Subprotocol.receiptsBy": "4f33f9a3ac1500eddb978ba583f0a33bd9cfcd3db7fc0f2007c2fc83879a94c1",
     "Properties.RemoteAudit.Subprotocol.traceBy": "a0c77c62142ab0734b25f19c39b1eb487c5e873c3eb94d7e8eed1807bf65dc62"
    }
   },
