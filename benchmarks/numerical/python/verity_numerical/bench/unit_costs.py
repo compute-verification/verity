@@ -591,7 +591,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             jobs += [_key(template, params, {"T": T}) for T in attention_t if T <= int(params["BN"])]
         elif template not in EXCLUDED:
             jobs.append(_key(template, params))
-    log(f"stage 1: {len(set(jobs))} small builds")
+    log(f"first pass: {len(set(jobs))} small builds")
     built = run_builds(jobs, n_jobs)
 
     out: dict[tuple, dict[str, Any]] = {}
@@ -692,7 +692,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             else:
                 r.update(method="exact", counts=_plain(c), tables=c["tables"], definition=c["definition"])
 
-    log(f"stage 2: {len(exact_jobs)} builds at the census parameters and {len(block_jobs)} attention heads past the first key "
+    log(f"second pass: {len(exact_jobs)} builds at the census parameters and {len(block_jobs)} attention heads past the first key "
         f"block (nonzeros <= {exact_nnz:.2e})")
     big = run_builds([*exact_jobs.values(), *(job for *_, job in block_jobs)], n_jobs)
     checks: dict[tuple, dict[int, tuple[int, dict[str, Any]]]] = {}
@@ -705,7 +705,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             continue
         r["block_checks"] = {T: {"built": _plain(c)} for T, c in by_j.values()}
         block_law(r)
-    log("stage 2: done")
+    log("second pass: done")
     for key, job in exact_jobs.items():
         r, c = out[key], big[job]
         if "error" in c:
@@ -881,7 +881,7 @@ SOURCE_MARK = {"registered": "R", "generic": "G", "tree": "T"}
 
 
 def render(inv: Mapping[str, Any]) -> str:
-    lines = [f"# F6 unit costs: K = {inv['K']} draws (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
+    lines = [f"# F6 unit costs: K = {inv['K']} sampled proof blocks (ε = {inv['epsilon']}, δ = {inv['delta']}), uniform over all units", "",
              "Method: E exact build at the census parameters, A exact affine extrapolation (checked on 4 builds; attention: "
              "affine in T within a key block and in the block count, checked past the first block), S token-select's scan "
              "law (read off every V in 2..139, checked by an exact build at V = 1030), M attention model (affine in T within "

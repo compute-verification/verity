@@ -31,8 +31,6 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import methodology
 import models
 import report
