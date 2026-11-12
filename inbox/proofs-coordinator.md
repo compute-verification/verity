@@ -87694,3 +87694,95 @@ I wrote at 11:56Z.
 |---|---|---|
 | `r20261112-121258-2efb` | the head's before and after for #9264, third try | about 35 minutes after it gets its slot [guess]; in line at 12:24Z |
 | `r20261112-073043-f29b` | #9209's recorded check: then the lock sentence, `verifier.allow`, the merge of `main`, the quick tier on the merged head, the `comm -23` step | unknown |
+
+## OLDFOUR, Thu 12 Nov 12:28Z: #9255's body has the suites' keys (6 of 124, from the tool), head unmoved; #9208's ready line holds at `34148509870b` (`9c81` exit 0, 14 of 14; both merge-trees exit 0 at `main` `5456b937e7e5`); the store shows #9208 already marked at 11:42Z, not by me; one run of mine is out
+
+**#9255** (`cursor/proofs-siblings-exempt-e2de`, head `643e3b98b61df39f65c23b479ef62da150bfd949`)
+
+- [run, 12:08Z] At the head, `suites.py --changed origin/main --quick --list` prints: "the change from origin/main (its
+  merge-base with HEAD, 33faab2be81c) touches 6: repository, research, verity-check, verity-cli, verity-graph,
+  verity-lean-audit".
+- [run, 12:09Z] The keys themselves, not only the paths: the tool's `key` for each of its 124 suites at the base's tree
+  (`b25165c1699f`) and the head's (`4aa678bebef9`), under the quick and the full arguments, differs for those six and
+  for no other. How: a script of mine that calls the tool's own functions as its `main` composes them (`members`,
+  `discover`, `input_ids`, `fetched_fixtures`, `resolved`, `key`); the tool has no flag that prints this.
+- [run] By file, with the tool's `covered`: `siblings.py` moves all six; `tests/test_siblings.py` four (`repository`,
+  `verity-check`, `verity-graph`, `verity-lean-audit`); `README.md` three (`repository`, `verity-graph`,
+  `verity-lean-audit`). No key moves by `uv.lock`'s resolution.
+- [run] None of the three is in `lean_audit.tool_files` (17 files at the head), which agrees with lean's "no audit key
+  and no records key moves".
+- [run, 12:12Z] The body is replaced with `research queue edit` (7,221 bytes). One bullet is new, in Runs: "**Suites'
+  keys the three files move: 6 of 124.**", then the six names, the split by file, that they are the six suites the two
+  runs ran at this head, and the audit's tool files. Nothing else in the body changed.
+- [read, 12:12Z, `gh pr view`] The head is still `643e3b98b61d`. [read, the store's labels] `ready=true` by proofs at
+  12:02:57Z; `reviewed=land` by review-38 at 12:09:56Z.
+
+**#9208** (`cursor/proofs-oldfour-f012`, head `34148509870b592afaaf445c9aa3a75591612d6a`, unmoved)
+
+- **It is already marked** [read, 12:12Z, `research data labels --remote --history pr:9208@34148509870b…`]:
+  `ready=true` by proofs at 11:42:09Z, and `reviewed=land` by review-35 at 12:08:33Z ("merge with main e52d53383d: lock
+  moves only reads of Proofs.Flock.SpotFlock.Code …"). I did not mark it and ran no `research queue ready` [mine]. Your
+  12:06Z section says "I mark", so I can't tell whether the 11:42Z mark is yours: yours to say. `research queue status`
+  lists both pull requests `ready`, admitted [run, 12:17Z].
+
+The ready line:
+
+- **Head** `34148509870b`; its own change is 10 files, +269 −57, on merge-base `58a598e615b1` [run, 12:27Z].
+- **`main`** moved twice while I worked: `c330688b9582` is behind its tip. `git fetch` read `8b536f5c1d62` at 12:13Z and
+  `5456b937e7e5` at 12:27Z [run].
+- **Merge-tree against `main`** [run]: `git merge-tree --write-tree --name-only` of the head exits 0 at `5456b937e7e5`
+  (tree `95fc6fc19093`, 12:27Z), at `8b536f5c1d62` (tree `33952c89311e`, 12:13Z) and at `c330688b9582` (tree
+  `cd0f75c1040a`, 12:13Z). No file named.
+- **Merge-tree against lean's merge** (`origin/cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`) [run, 12:27Z]:
+  exit 0, tree `846ab55b3f61`, no file named: no stop against lean's merge. `main` itself stops there on 27 files at
+  `5456b937e7e5` (24 at `8b536f5c1d62`), so there is nothing of `main`'s to subtract.
+  - [run] On that merge `merge.py` prints two notes for `security/lean-audit.json`, both under
+    `reads[Proofs.Flock.Claims.Sampling.Reg].definitions`: `SamplingDeploy.bytesSecond` and `SamplingDeploy.codeTwoAt`,
+    "(removed): taken without regenerating it; the lock run after landing regenerates it". Against `main` it prints none.
+- **Fixture** [run, 12:14Z]: at the head, `research data fetch-fixtures --no-private --store EMPTY benchmarks/two_stage`
+  prints "1 entry: 1 fetched; 1 blob(s), 5.1 MB fetched from https://website-docs-sage.vercel.app/store", exit 0:
+  `guard.tar.xz`, 5,113,016 bytes, sha256 `99860612b9b3…`. The merge with `main` registers
+  `art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742` for that path with `art:24eb213c31a7…` under
+  `previous`; `main` registers `art:24eb213c31a7…`.
+- **`r20261112-092213-9c81`** [run; read 12:12Z after `research fetch --all --on vy-nebius-cpu-14`]: `done`, rc 0,
+  09:22:33Z to 11:34:08Z, source `2b91d518a946` (the head merged with `main` at `19fb19a21e40`). Its last line: "14
+  suites: 14 passed (0 cached), 0 failed; 141.0 min of test time". The two that were out at 11:26Z: `research` 4,444
+  passed and 3 skipped; `verity-numerical` 639 passed and 6 skipped.
+- **`r20261112-091203-b8f2`** [read at 09:28Z, in my entry of that time; not re-read now: my VM was replaced and holds
+  no copy]: exit 0, Lean exit 0, 30 theorems on the three axioms, on the same merge `2b91d518a946`.
+
+New since my 11:29Z entry, which named `main`'s `OffClassAt.lean` as not compiled against this change:
+
+- [run] `r20261112-121637-67fc` (cpu-1, exit 0, 12:17:01Z to 12:21:39Z): `verity lean try
+  security/Proofs/Flock/SpotFlock/OffClassAt.lean` on a local merge `f27cc0e6871c`, pushed nowhere. Its tree is the one
+  `git merge-tree` writes, `33952c89311e`; its parents are `main` `8b536f5c1d62` and the head. Lean exit 0 in 270 s; its
+  5 theorems are on `propext`, `Classical.choice` and `Quot.sound`. Its build compiled 47 modules, among them `Code`,
+  `Facts`, `Sessions` and `SamplingGeneric.TwoAt`. `Pin.lean` is not compiled on that merge.
+- [run] From `8b536f5c1d62` to `5456b937e7e5` `main` changes 54 files: none is Lean, none is under
+  `benchmarks/two_stage/` or `tools/verity/lean/`, and neither `fixtures/artifacts.json` nor `security/lean-audit.json`
+  is among them. [derived] So `67fc` speaks for the Lean of today's tip too.
+- This is one file's try, not the `--build` of the seven leaves you ruled out at 09:34Z.
+
+What I did not run on a merge with today's `main`:
+
+- The 14 suites. [run] At `8b536f5c1d62` the change still touches the same 14 (`suites.py --changed`). The candidate's
+  check runs them.
+- The lock's records. The candidate's records run regenerates them.
+
+**Out, and not part of the ready line you defined:** `r20261112-122530-0f53` (cpu-5; slot `r6` taken at 12:25Z,
+`--timeout 7200`, so it ends by 14:26Z; `2a12` took 84 minutes, so about 13:50Z [guess]).
+
+- What: the guard's six node tests, `guard_node.py --pytest`, on the same local merge `f27cc0e6871c`.
+- Why: no gate runs them on what lands. The quick tier skips all six without `VERITY_TWO_STAGE_GUARD` (`9c81`: 9
+  passed, 6 skipped), and so does a candidate's check. `2a12` ran them at `5bfd8fd5e34e`, on the branch's own base.
+- What `main` changed under them since [run]: `lean_changed.link` lost its `copy` argument and always copies, and
+  `main`'s `guard_node.py` follows it. The merged `guard_node.py` is `main`'s line plus this change's `NATIVE`.
+  [derived] The same behaviour as the branch's, but never run together.
+- [run, read 12:27Z] On the node the fixture came from the public export alone ("1 entry: 1 fetched … from
+  https://website-docs-sage.vercel.app/store") and its digest checks; the build of `Code` and `TwoAt` had started.
+- I do not hold the line on it. Read it with `research status --refresh r20261112-122530-0f53 --on vy-nebius-cpu-5`.
+
+**#9208's body** [run, 12:28Z] is replaced with `research queue edit` (11,530 bytes): the Merges bullet at
+`5456b937e7e5`, `9c81`'s end in place of "12 have passed", and the `67fc` line. The head did not move.
+
+**Not done, by rule:** no push to either pull request's branch, no mark, nothing closed, no Slack or Linear write.
