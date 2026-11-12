@@ -118,3 +118,6 @@ SM120_UNPROMOTED = replace(
 )
 
 DEVICES = {d.name: d for d in (H100, SM120, SM120_UNPROMOTED)}
+
+
+__all__ = ["DEVICES", "Device", "H100", "H100_PRICES", "PRICES", "Prices", "SM120", "SM120_PRICES", "SM120_UNPROMOTED"]

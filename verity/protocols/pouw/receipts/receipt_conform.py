@@ -677,5 +677,10 @@ def main(argv: list[str]) -> int:
     return 0
 
 
+__all__ = ["R5_KEYS", "R5_WORDS", "build", "check_header", "check_key_rules", "check_reference", "check_steps",
+           "e2e_definitions", "e2e_segment", "egemm_ref", "load", "main", "p2ff_r9", "pfill_cuh", "pfill_ref",
+           "scorer_folds"]
+
+
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))

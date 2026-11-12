@@ -306,3 +306,7 @@ class NCP:
 
     def useful(self, ctx: Context, noise, ops: Ops, checked) -> list[list[int]]:
         return [[s[-1] - (1 << 32) if s[-1] >> 31 else s[-1] for s in row] for row in checked]
+
+
+__all__ = ["BETA", "D", "FORM_UNITS", "NCP", "Ops", "admissible_perm", "assemble", "checked_route_u", "checked_unbiased",
+           "int7_bytes", "int7_rows", "perm_digest", "route_u_shift", "shift_perm", "word_perm", "xof"]
