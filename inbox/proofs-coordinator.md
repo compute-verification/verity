@@ -92163,3 +92163,30 @@ Next entry by 16:25Z.
 - **The build** [run]: `r20261112-152632-9555` at `1aa359a7f5`, `lean_changed.py --build` over the 9 changed Lean files and 17 that import them: five packages exit 0, `"failed": {}, "skipped": {}`. `Proofs.Flock.ZkAny.Relay`, `Proofs.Flock.Claims.ZK.FrameZK`, `Properties.Firewall`, `PouwCheck.Credit` and the stop count's four files are each "Built" at the head. This stands in for the try at the head my 15:20Z entry promised: the proofs compile there; the axiom probe was not rerun, and no file under `security/` is changed [read].
 - **One thing the try could not say** [read]: the stop count's run (`StopCount.lean`, `Step`, lines 76-99) has no step for rule 5, on `main` as on A: its `.seat` is `admit (slot …)`, and `main`'s `seat` already ran `admitReads` after it. So the events rule 5 writes (`admitted`, `skipped`, its stop's `refused`, and now `known`) come from no step of the model. A moves rule 5's refusal from before anything left to after `Register` left: in the model's terms a seat, one relay, a cut, which is one of `RecStops`' stops [derived], but no theorem says it of the code, because the op is not a step. The six statements stand as they are; I change nothing for it. Say if it is an issue to file.
 - **Running now**: the suites `r20261112-153318-f059` (the release side's suite whole, then `--changed 1d71606cc12d --quick`) and Flock's Rust check and tests `r20261112-153352-5b35`, both launched 15:33Z [run]. Not run by anything: `flock-circuit selftest`'s `zk_value_salts`, whose `own` case I changed (it runs on a pod), and the Rust challenger with `--known-trees` against the loop (the Python tests' auditor stands in for it) [read].
+
+## REFUSE, Thu 12 Nov 15:37Z: `r20261112-142735-c6d3` ended rc 0, outcome `pass` on all three packages, nothing regenerated; #9043's three modules compiled with #9091's Lean; on #9091's side the mark waits on nothing
+
+- [read] (the run's `status.json`, `result.json`, last line; fetched 15:33Z) Done, rc 0, class SUCCESS, ended 15:32:19Z.
+  `outcome: pass` for `security/Proofs`, `security` and `security/Properties`; kind `lean-fast/v1` (no kernel replay,
+  no tests: not a Lean verdict), commit `d6fde415d986` = `main` at `8252fe8dff65` merged with the head `675dea740d6a`.
+- [read] (the three `audit.json` under `lean-audit/`) Each: `passed` true, `failed` empty, `regenerated` empty; no lock
+  kept under `lean-audit/record/`. So nothing regenerated at all: the candidate's lock already holds the one root
+  (`roots` 161 to 162) the notice names.
+- [read] (`lean-audit/audit-Proofs/build.log`) "Build completed successfully (14371 jobs)", no failed module. Built in
+  this run: `Proofs.Flock.SpotFlock.AddressesAt`, `WireMap`, `WiredAt` (#9043's three), and this change's
+  `Select.Second`, `SecondUnits`, `SecondFirst`, `SecondLaw`, `Properties.Spot.SecondSample`, `SecondFormed`,
+  `SecondRefused`. Warnings on `AddressesAt.lean` (164, 198, 286: deprecated names) and `WireMap.lean` (333: a tactic
+  never executed) are `main`'s files'; none on this change's modules. 3,894 modules in the package's audit.
+- [read] (the run's log) Times: check slot 14:32:07Z, Lean `build` slot after 1,402 s in line, then `security/Proofs`
+  1,158 s, `security` 604 s, `security/Properties` 435 s.
+- [run] 15:35Z: `main` is `99f1b414a647`, 108 files past the run's tree. Lean-side among them: #9261's
+  `security/Definitions/Core/Accel/Sm120.lean` (the card's `.reg` size) and `security/lean-audit.json`. [derived: the
+  import closures on the candidate at `main`'s tip, by a script over `security/`] `Definitions.Core.Accel.Sm120` is
+  in the closure of none of this change's 9 Lean modules, of none of #9043's three, and of none of the 65 modules
+  that import this change's. `main` also changed `benchmarks/harness/pyproject.toml` (#9277), which this change
+  edits too: the head still merges, `git merge-tree` exit 0, no file, drivers registered (tree `abddc0ecfa60`).
+- [read] (`gh`, 15:35Z) #9091's head is `675dea740d6a5d1789ea5a3894d6218333791726`, OPEN.
+- **Not established:** no run built the candidate at `main`'s tip after `8252fe8dff65`; the Lean check with the kernel
+  replay is the queue's; no suite ran on `main` after `8b536f5c1d62` merged with the head.
+- Next from me: the body's Lean item and its "Not run" restated with this run (no push, the head does not move); then
+  the NET-369 entry. Nothing marked, nothing posted.
