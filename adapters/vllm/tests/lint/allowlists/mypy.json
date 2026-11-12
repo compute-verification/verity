@@ -1423,7 +1423,6 @@
     {"file": "verity_vllm/protocols/pous.py", "kind": "union-attr", "symbol": "_package", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/pouw/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/registered_device.py", "kind": "union-attr", "symbol": "device_hash", "detail": "", "count": 2},
-    {"file": "verity_vllm/protocols/pouw/h1/tables_device.py", "kind": "assignment", "symbol": "device_lib", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "index", "symbol": "PassEnds.end", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "union-attr", "symbol": "PassEnds.end", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/graphs.py", "kind": "arg-type", "symbol": "GraphCalls._into", "detail": ""},
