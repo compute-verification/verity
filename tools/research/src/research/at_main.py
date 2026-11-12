@@ -17,10 +17,12 @@ The cache holds one entry per repository (a hash of its git common dir: worktree
 has its own), and each command that sets one up removes the entries no longer needed (`prune`): never its own, never one
 whose `lock` another command holds (it is being made or moved), never one a live process runs from (`inuse`, which every
 command started from the tree holds shared, carried through its exec, and which the kernel lets go when the last such
-process exits), never the `KEEP` most recently picked, and only once `IDLE_S` has passed since it was last picked (the
-`lock` file's mtime, dated under the lock by every pick). Picking and judging both happen under the entry's `lock`, so a
-pruner either sees a pick (and keeps the entry) or removes it first (and the command makes it again). A removal that fails
-is one line on stderr, and the command runs on.
+process exits), never one a live process of this user names (a copy of this module from before `inuse` holds nothing:
+`named` reads `/proc` for an entry about to be removed), never the `KEEP` most recently picked, and only once `IDLE_S` has
+passed since it was last picked (the `lock` file's mtime, dated under the lock by every pick). Picking and judging both
+happen under the entry's `lock`, so a pruner either sees a pick (and keeps the entry) or removes it first (and the command
+makes it again). An entry that holds nothing, which a pruner that died before its `rmdir` leaves, is dated by its
+directory and removed by `rmdir` alone. A removal that fails is one line on stderr, and the command runs on.
 
 `cli.main` asks this module first, which covers a checkout that has it. A checkout from before it can't ask, so on an
 agent VM `/usr/local/bin/research` (`tools/agent-guard/research.sh`, installed at boot) runs origin/main's copy of this
@@ -60,6 +62,9 @@ HOME = re.compile(r"[0-9a-f]{12}")
 run, clock, wall, sleep = subprocess.run, time.monotonic, time.time, time.sleep
 #: the `inuse` holds this process took, open and inheritable, so the process it starts carries them
 held: list[IO] = []
+#: where each live process's working directory, executable, command line and environment are read (`named`): Linux's,
+#: which a test stands in for
+PROC = Path("/proc")
 
 
 def late(at: str) -> TimeoutError:
@@ -193,11 +198,78 @@ def use(home: Path) -> None:
 
 def picked(home: Path) -> float:
     """When `home`'s tree was last picked (`use`): its lock file's mtime. An entry with no lock file is being made or
-    removed, so it counts as picked now."""
+    removed, so it counts as picked now, unless it holds nothing (what a pruner that died before its `rmdir` leaves, or
+    a command's `mkdir` just before its lock file), dated by its directory's last change."""
     try:
         return (home / "lock").stat().st_mtime
     except FileNotFoundError:
+        return emptied_at(home)
+
+
+def emptied_at(home: Path) -> float:
+    """When the entry `home`, with no lock file, last changed if it holds nothing; now if it holds something or is gone."""
+    try:
+        return home.stat().st_mtime if empty(home) else wall()
+    except FileNotFoundError:
         return wall()
+
+
+def empty(home: Path) -> bool:
+    """Whether the directory `home` is there and holds nothing."""
+    try:
+        with os.scandir(home) as entries:
+            return next(entries, None) is None
+    except FileNotFoundError:
+        return False
+
+
+def rmdir(home: Path) -> bool:
+    """Remove the directory `home` if it is empty; whether it did. Gone already, or holding a lock file a command made for
+    it meanwhile, it stays as it is."""
+    try:
+        home.rmdir()
+    except OSError as e:
+        if e.errno not in (errno.ENOENT, errno.ENOTEMPTY):
+            raise
+        return False
+    return True
+
+
+def under(word: str, roots: set[str]) -> bool:
+    """Whether a word of a command line or an environment, split at `=` and `:`, holds a path in one of `roots`."""
+    return any(part == r or part.startswith(r + "/") for part in re.split("[=:]", word) for r in roots)
+
+
+def says(proc: Path, name: str, roots: set[str]) -> bool:
+    """Whether the process at `proc` names a path in `roots` by `name`: its `cwd` or `exe` link, or a word of its
+    `cmdline` or `environ`. What can't be read (the process gone, or not readable by this user) names nothing."""
+    try:
+        if name in ("cwd", "exe"):
+            return under(os.readlink(proc / name), roots)
+        data = (proc / name).read_bytes()
+        return any(os.fsencode(r) in data for r in roots) and any(under(w, roots) for w in os.fsdecode(data).split("\0"))
+    except OSError:
+        return False
+
+
+def mine(proc: Path, uid: int) -> bool:
+    try:
+        return proc.stat().st_uid == uid
+    except OSError:
+        return False
+
+
+def named(tree: Path) -> bool:
+    """Whether a live process of this user names `tree` (`says`): what keeps a tree a command started by a copy of this
+    module from before `inuse` still runs from, which leaves no other mark. One listing of `PROC`, one stat a process,
+    and two links and two reads a process of this user's, up to the first that names it. Where `PROC` isn't there to
+    list, every tree counts as named."""
+    if not PROC.is_dir():
+        return True
+    roots, uid = {str(tree), os.path.realpath(tree)}, os.getuid()
+    with os.scandir(PROC) as procs:
+        return any(p.name.isdigit() and mine(Path(p.path), uid)
+                   and any(says(Path(p.path), n, roots) for n in ("cwd", "exe", "cmdline", "environ")) for p in procs)
 
 
 def due(cache: Path, keep: Path | None) -> list[Path]:
@@ -214,7 +286,11 @@ def due(cache: Path, keep: Path | None) -> list[Path]:
 
 def remove(home: Path, end: float) -> bool:
     """Remove the entry `home` by ``end`` unless, judged under its lock, it is being made or moved, was picked since it was
-    listed, or a live process holds it in use; whether it was removed. OSError when `rm` fails."""
+    listed, a live process holds it in use, or a live process names its tree (`named`, read only here, for an entry
+    otherwise removed); whether it was removed. OSError when `rm` fails. An entry that holds nothing has no lock to take,
+    and is removed by `rmdir` alone."""
+    if empty(home):
+        return rmdir(home)
     if (f := lock(home)) is None:
         return False
     with f:
@@ -225,15 +301,13 @@ def remove(home: Path, end: float) -> bool:
                 fcntl.flock(u, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 return False
+            if named(home / "tree"):
+                return False
             (home / "at").unlink(missing_ok=True)
             call(f"`rm -rf {home / 'tree'}`", ["rm", "-rf", "--", str(home / "tree")], end, check=True)
             (home / "inuse").unlink(missing_ok=True)
             (home / "lock").unlink(missing_ok=True)
-        try:
-            home.rmdir()
-        except OSError as e:
-            if e.errno not in (errno.ENOENT, errno.ENOTEMPTY):   # gone, or a command came for it and is making it again
-                raise
+        rmdir(home)
     return True
 
 

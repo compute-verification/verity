@@ -31,13 +31,16 @@ NOW = 2_000_000_000.0
 
 
 @pytest.fixture(autouse=True)
-def no_bound_on_git(monkeypatch):
+def no_bound_on_git(monkeypatch, tmp_path):
     """No test here depends on how long git takes: the set-up's bound is reached only when a test's own runner or clock
-    says so. Each test's in-use holds are its own, let go when it ends."""
+    says so. Each test's in-use holds are its own, let go when it ends, and the only live processes a test's pruner sees
+    are the ones it lists (`process`)."""
     monkeypatch.setattr(at_main, "run", to_its_end)
     monkeypatch.setattr(at_main, "clock", lambda: 0.0)
     monkeypatch.setattr(at_main, "wall", lambda: NOW)
     monkeypatch.setattr(at_main, "held", [])
+    (tmp_path / "proc").mkdir()
+    monkeypatch.setattr(at_main, "PROC", tmp_path / "proc")
     monkeypatch.delenv(at_main.OPT_OUT, raising=False)
     yield
     exited()
@@ -496,6 +499,133 @@ def test_a_command_waiting_for_the_lock_of_an_entry_a_pruner_removes_makes_it_ag
     assert ran[0] == str(wt / "tools/research/src") and "behind origin/main" in err and err.count("\n") == 1
     assert whole(home) and not (wt / "kept").exists() and (wt / "tools/research/src/research/cli.py").read_text() == "new\n"
     assert (home / "at").read_text().split() == [main]
+
+
+def process(pid: int, cwd: str = "/", exe: str = "/usr/bin/python3", cmdline=("python3",), environ=()) -> Path:
+    """A live process of this user as `PROC` shows one: its two links, and its command line and environment."""
+    p = at_main.PROC / str(pid)
+    p.mkdir()
+    os.symlink(cwd, p / "cwd")
+    os.symlink(exe, p / "exe")
+    (p / "cmdline").write_bytes(b"".join(os.fsencode(w) + b"\0" for w in cmdline))
+    (p / "environ").write_bytes(b"".join(os.fsencode(w) + b"\0" for w in environ))
+    return p
+
+
+NAMES = {
+    "its working directory": lambda t: {"cwd": f"{t}/tools/research"},
+    "its executable": lambda t: {"exe": f"{t}/bin/python3"},
+    "a word of its command line": lambda t: {"cmdline": ["python3", "-m", "pytest", f"--rootdir={t}/tools/research"]},
+    "a path in its environment": lambda t: {"environ": ["HOME=/home/u", f"PYTHONPATH={t}/tools/research/src:/elsewhere"]},
+}
+
+
+@pytest.mark.parametrize("how", list(NAMES))
+def test_an_entry_a_live_process_names_stays_however_long_unpicked_and_goes_once_it_exits(tmp_path, capsys, how):
+    """A command started by a copy of this module from before `inuse` holds nothing, and runs for as long as it runs: a
+    queue loop or a watch outlives `IDLE_S`, and fails on its next lazy import once its tree is gone. Such a copy's `start`
+    names the tree in PYTHONPATH, the environment's case."""
+    cache = tmp_path / "cache"
+    newer = [entry(cache, i, 1) for i in range(at_main.KEEP)]
+    old = entry(cache, 100, 10 * IDLE)
+    running = process(4242, **NAMES[how](old / "tree"))
+    at_main.prune(cache, None, 1.0)
+    assert whole(old) and (old / "tree/tools/f").is_file()
+    shutil.rmtree(running)
+    at_main.prune(cache, None, 1.0)
+    assert entries(cache) == newer and capsys.readouterr().err == ""
+
+
+def test_a_tree_a_process_names_by_the_caches_real_path_stays(tmp_path):
+    """A process's working directory and executable read back resolved, so a cache reached through a link is matched by
+    its real path too."""
+    (tmp_path / "real").mkdir()
+    (tmp_path / "cache").symlink_to(tmp_path / "real")
+    cache = tmp_path / "cache"
+    newer = [entry(cache, i, 1) for i in range(at_main.KEEP)]
+    old = entry(cache, 100, 10 * IDLE)
+    process(4242, cwd=os.path.realpath(old / "tree/tools"))
+    at_main.prune(cache, None, 1.0)
+    assert whole(old) and entries(cache) == sorted([*newer, old])
+
+
+def test_an_entry_no_process_names_goes_and_a_process_that_cant_be_read_names_nothing(tmp_path, capsys):
+    cache = tmp_path / "cache"
+    newer = [entry(cache, i, 1) for i in range(at_main.KEEP)]
+    old = entry(cache, 100, 10 * IDLE)
+    tree = old / "tree"
+    process(1, cwd=f"{tree}-other", exe=f"{old}/python3", cmdline=["python3", f"{tree}house/x"],
+            environ=[f"PYTHONPATH={old}:/elsewhere", f"OLD={tree}s"])
+    unreadable = at_main.PROC / "2"
+    for name in ("cwd", "exe", "cmdline", "environ"):
+        (unreadable / name).mkdir(parents=True)                         # each read fails, as another user's would
+    (at_main.PROC / "3").mkdir()                                        # a process that exited while it was listed
+    at_main.prune(cache, None, 1.0)
+    assert entries(cache) == newer and capsys.readouterr().err == ""
+
+
+def emptied(cache: Path, n: int, idle_s: float) -> Path:
+    """An entry that holds nothing, its directory last changed ``idle_s`` before NOW: what a pruner that died between
+    removing the lock file and the directory leaves."""
+    home = cache / f"{n:012x}"
+    home.mkdir(parents=True)
+    os.utime(home, (NOW - idle_s, NOW - idle_s))
+    return home
+
+
+def test_an_empty_entry_is_removed_once_idle_s_has_passed_since_it_changed_and_holds_no_place(tmp_path, capsys):
+    """An entry with no lock file counted as picked now, so one a pruner left empty stayed for good, in a `KEEP` place."""
+    cache = tmp_path / "cache"
+    newer = [entry(cache, i, 1) for i in range(at_main.KEEP)]
+    left = emptied(cache, 100, 2 * IDLE)
+    making = emptied(cache, 101, 1)                                     # a command's `mkdir`, just before its lock file
+    assert at_main.due(cache, None) == [left]
+    at_main.prune(cache, None, 1.0)
+    assert entries(cache) == sorted([*newer, making]) and capsys.readouterr().err == ""
+
+
+def test_a_command_that_comes_for_an_empty_entry_as_it_is_removed_makes_it_again(tmp_path, monkeypatch, capsys):
+    """The empty entry has no lock to judge it under: a command's `mkdir` may come just before the `rmdir`, whose
+    command then finds no directory to open its lock file in and makes it again."""
+    repo, cache = checkout(tmp_path), tmp_path / "cache"
+    main = git(repo, "rev-parse", "origin/main")
+    home = at_main.tree(repo, main, cache).parent
+    exited()
+    shutil.rmtree(home)
+    emptied(cache, int(home.name, 16), 2 * IDLE)
+    newer = [entry(cache, i, 1) for i in range(at_main.KEEP)]
+    real, seen = Path.mkdir, []
+
+    def another_pruner_after_it(self, *a, **kw):
+        real(self, *a, **kw)
+        if self == home and not seen:
+            at_main.prune(cache, None, 1.0)
+            seen.append(home.exists())
+
+    monkeypatch.setattr(Path, "mkdir", another_pruner_after_it)
+    ran, err = run_shim(repo, cache, capsys)
+    assert seen == [False], "the other pruner removed it between this command's mkdir and its open"
+    assert ran[0] == str(home / "tree/tools/research/src") and err.count("\n") == 1
+    assert whole(home) and entries(cache) == sorted([*newer, home])
+
+
+def test_an_empty_entry_a_command_has_opened_its_lock_in_stays(tmp_path, monkeypatch):
+    cache = tmp_path / "cache"
+    for i in range(at_main.KEEP):
+        entry(cache, i, 1)
+    left = emptied(cache, 100, 2 * IDLE)
+    assert at_main.due(cache, None) == [left]
+    real, command = at_main.empty, []
+
+    def a_command_opens_its_lock_meanwhile(home):
+        found = real(home)
+        command.append(at_main.lock(home, 60.0))
+        return found
+
+    monkeypatch.setattr(at_main, "empty", a_command_opens_its_lock_meanwhile)
+    assert at_main.remove(left, 1.0) is False
+    assert at_main.same(command[0], left / "lock"), "the command holds the lock at its path"
+    command[0].close()
 
 
 def test_a_research_a_test_starts_never_loads_at_main():
