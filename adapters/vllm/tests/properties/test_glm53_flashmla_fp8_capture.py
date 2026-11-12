@@ -281,6 +281,8 @@ def test_the_probes_count_the_rows_the_two_reads_stage_differently(made) -> None
                          "row_words_differ": r["hand"]["row_words_differ"]} and r["hand"]["row_words_differ"] > 0
     assert r["rows"] == 4 and r["words"] == 4 * X.DN and r["rows_differ"] >= 2 and r["special_rows"] == 0
     assert r["by_writer"]["planted"]["rows"] == 3 and r["by_writer"]["vllm"]["rows"] == 1
+    assert r["words_differ"] == sum(w["words_differ"] for w in r["by_writer"].values()) >= r["one_ulp"] > 0
+    assert r["by_writer"]["planted"]["most_in_a_row"] >= r["hand"]["row_words_differ"] >= r["by_writer"]["planted"]["least_in_a_row"]
     assert (r["rope_differ"], r["sparse_model_differ"], r["dense_model_differ"]) == (0, 0, 0)
     assert r["cases"]["probe"] == {"tokens": 4, "pad_heads_disagree": 0} and r["examples"][0]["sparse"] != r["examples"][0]["readback"]
 

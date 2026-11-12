@@ -765,15 +765,17 @@ def compare_probes(outdir: Path, cases: list[str]) -> dict[str, Any]:
     """The two reads of one row: a probe token's output on a pad head against the read-back's words of that row.  A pad head's
     query is zero, so its score of the one valid row is 0, the row's weight is exactly 1 and its output is the row as the
     sparse kernel staged it (-0 as +0); a real head's weight is 2^r for the residual r its score's product with the scale
-    leaves under the FMA, and is not compared here.  Rows whose staged words hold a NaN or an infinity are counted apart."""
+    leaves under the FMA, and is not compared here.  The probe cannot tell -0 from +0, so a word the read-back has as -0 and
+    the probe as +0 is counted apart (`zero_sign_words`) and is no difference.  Rows whose key holds a NaN or an infinity (in
+    a staged word, or in a RoPE word, which makes the score NaN) are counted apart: the probe does not show them staged."""
     lay = {k: np.load(outdir / f"layout_{k}.npy") for k in ("lens", "table", "numpy")}
     cache = np.load(outdir / "cache.npy", mmap_mode="r")
     rb, blocks = np.load(outdir / "readback" / "rows.npy"), np.load(outdir / "readback" / "blocks.npy").tolist()
     plant = len(lay["lens"]) - 1
     planted = set(slots(lay, plant, np.arange(PLANT_ROWS)).tolist())
-    rec: dict[str, Any] = {"cases": {}, "rows": 0, "rows_differ": 0, "words": 0, "words_differ": 0, "special_rows": 0,
-                           "special_words_differ": 0, "rope_words": 0, "rope_differ": 0, "sparse_model_differ": 0,
-                           "dense_model_differ": 0, "by_writer": {}, "examples": []}
+    rec: dict[str, Any] = {"cases": {}, "rows": 0, "rows_differ": 0, "words": 0, "words_differ": 0, "one_ulp": 0,
+                           "zero_sign_words": 0, "special_rows": 0, "special_words_differ": 0, "rope_words": 0, "rope_differ": 0,
+                           "sparse_model_differ": 0, "dense_model_differ": 0, "by_writer": {}, "examples": []}
     for case in cases:
         a = _case(outdir, case)
         c = {"tokens": int(a["out"].shape[0]), "pad_heads_disagree": 0}
@@ -786,12 +788,14 @@ def compare_probes(outdir: Path, cases: list[str]) -> dict[str, Any]:
             nope, scale, rope = rows_at(cache, [slot])
             staged = V.kv_rows(nope, scale, rope, [True], QT)[0, :DN]
             dense = dense_rows(nope, scale)[0]
-            special = bool(np.any((staged & 0x7F80) == 0x7F80))
+            special = bool(np.any((staged & 0x7F80) == 0x7F80) or np.any((rope[0] & 0x7F80) == 0x7F80))
             c["pad_heads_disagree"] += int(np.any(pads != got))
-            diff = got != back[:DN]
+            zero_sign = (got == 0) & (back[:DN] == 0x8000)
+            diff = (got != back[:DN]) & ~zero_sign
             r = int(a["req"][t])
             writer = "planted" if slot in planted else "numpy" if lay["numpy"][r] else "vllm"
-            w = rec["by_writer"].setdefault(writer, {"rows": 0, "rows_differ": 0, "words": 0, "words_differ": 0})
+            w = rec["by_writer"].setdefault(writer, {"rows": 0, "rows_differ": 0, "words": 0, "words_differ": 0, "one_ulp": 0,
+                                                     "zero_sign_words": 0, "least_in_a_row": None, "most_in_a_row": 0})
             rec["rope_words"] += DR
             rec["rope_differ"] += int((back[DN:] != rope[0]).sum())
             rec["sparse_model_differ"] += int((got != np.where(staged == 0x8000, 0, staged)).sum()) if not special else 0
@@ -800,16 +804,22 @@ def compare_probes(outdir: Path, cases: list[str]) -> dict[str, Any]:
                 rec["special_rows"] += 1
                 rec["special_words_differ"] += int(diff.sum())
                 continue
+            n = int(diff.sum())
+            one = int((np.abs(got.astype(np.int32) - back[:DN].astype(np.int32))[diff] == 1).sum())
             for d in (rec, w):
                 d["rows"] += 1
-                d["rows_differ"] += int(diff.any())
+                d["rows_differ"] += int(n > 0)
                 d["words"] += DN
-                d["words_differ"] += int(diff.sum())
-            if diff.any() and len(rec["examples"]) < 6:
+                d["words_differ"] += n
+                d["one_ulp"] += one
+                d["zero_sign_words"] += int(zero_sign.sum())
+            w["least_in_a_row"] = n if w["least_in_a_row"] is None else min(w["least_in_a_row"], n)
+            w["most_in_a_row"] = max(w["most_in_a_row"], n)
+            if n and len(rec["examples"]) < 6:
                 i = int(np.flatnonzero(diff)[0])
                 rec["examples"].append({"case": case, "token": t, "writer": writer, "element": i, "byte": int(nope[0, i]),
                                         "scale": int(scale[0, i // QT]), "sparse": int(got[i]), "readback": int(back[i])})
-            if case == "probe" and writer == "planted" and int(nope[0, 0]) == HAND_BYTE and int(scale[0, 0]) == HAND_SCALE:
+            if writer == "planted" and int(nope[0, 0]) == HAND_BYTE and int(scale[0, 0]) == HAND_SCALE:
                 rec["hand"] = {"byte": HAND_BYTE, "scale": HAND_SCALE, "sparse": int(got[0]), "readback": int(back[0]),
                                "row_words_differ": int(diff.sum())}
         rec["cases"][case] = c
@@ -884,7 +894,8 @@ def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
     r = doc["reads"]
     if r:
         print(f"[glm53-flashmla-fp8] two reads of one row: rows={r['rows']} differ={r['rows_differ']} words={r['words']} "
-              f"differ={r['words_differ']} by_writer={json.dumps(r['by_writer'])} special_rows={r['special_rows']} "
+              f"differ={r['words_differ']} (by one bf16 ulp {r['one_ulp']}; -0 read as +0, no difference, {r['zero_sign_words']}) "
+              f"by_writer={json.dumps(r['by_writer'])} special_rows={r['special_rows']} "
               f"hand={json.dumps(r.get('hand'))} rope {r['rope_words']}/{r['rope_differ']} sparse_model_differ="
               f"{r['sparse_model_differ']} dense_model_differ={r['dense_model_differ']} examples={json.dumps(r['examples'][:3])}",
               flush=True)
