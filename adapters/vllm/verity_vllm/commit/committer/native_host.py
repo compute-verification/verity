@@ -742,6 +742,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     name = "native_host"
     #: whether `_end_step` ends each source's step (`on_step_end`); a source that commits there refuses a committer without it
     ends_source_steps = False
+    #: what the engine step sets before each forward: the step's (tokens, requests), and the fewest bytes its arena block must hold
+    _plan_shape: tuple[int, int]
+    _step_min_bytes: int
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run",
                  hash_threads: int = 2, retain_values: bool = True, acquire_classes: set[str] | None = None, staging: str = "arena",

@@ -46,7 +46,6 @@
     {"file": "verity_vllm/commit/challenge.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/vllm-commit/opening-identities/v1"},
     {"file": "verity_vllm/commit/challenge.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/vllm-commit/opening-positions/v1"},
     {"file": "verity_vllm/commit/challenge.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/config.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/engine/build.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/engine/chunks.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},

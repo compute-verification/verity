@@ -158,6 +158,10 @@ class NativeCollectCommitter(NativeHostCommitter):
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
     ends_source_steps = True
+    #: what the engine step's part sets before each forward (`_StepPart.before_forward`): how the step's plan key was derived, and
+    #: the step's scheduler output, whose tokens per request the rows read at sample
+    _plan_key_mode: str
+    _cur_sched: Any
     #: set by the first sampling step that binds a seed (`install`'s `sample`)
     seed_bound_steps: int
 
@@ -624,7 +628,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         part of its plan key.  Kept per step while the sources are the same: H1's int8 source names every linear at every step."""
         srcs = tuple(src for src in self.sources if hasattr(src, "targets_at"))
         if getattr(self, "_targets_of", None) != srcs:
-            self._targets_of, self._targets_memo = srcs, {}
+            self._targets_of = srcs
+            self._targets_memo: dict[int, bytes] = {}
         sig = self._targets_memo.get(int(step))
         if sig is None:
             names = sorted(kv for src in srcs for kv in src.targets_at(step).items())
@@ -793,7 +798,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.win_log2_chunks = (W // C).bit_length() - 1
         largest = 0
         if rec:
-            layers = int((rec.get("model") or {}).get("layers") or 1)
+            model = rec.get("model")
+            layers = int((model.get("layers") if model else None) or 1)
             largest = int(rec.get("prefill_hidden_bytes") or 0) // max(1, layers)
             largest = max(largest, int(rec.get("decode_step_bytes") or 0))
         K = max(self.win_slots_req, 3)
