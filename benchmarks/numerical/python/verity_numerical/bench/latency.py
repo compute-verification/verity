@@ -30,7 +30,7 @@ shallower protocol has the lower end-to-end latency despite a slower prover.
 
 :data:`CATALOG` holds the designs the report runs (numbers from the recorded runs and reports named in each entry;
 every one labelled with its proof class, hardware, and what is modelled rather than measured); :func:`from_envelope`
-builds a design from a ``result.json`` that carries ``rounds.sequential_depth`` (the measured runs of this lane).
+builds a design from a ``result.json`` that carries ``rounds.sequential_depth``.
 ``python -m verity_numerical.bench.latency [--envelope NAME=result.json ...] [--out reports/latency]`` writes the
 report (``latency.md`` + ``latency.json``).
 """
@@ -49,14 +49,21 @@ from typing import Any
 from verity_numerical.bench import census
 
 __all__ = [
+    "A_CHECKER_LAYERS_B4096",
+    "A_COMMITTED_B4096",
+    "A_R16_LEVELS_B4096",
     "BANDWIDTHS_GBPS",
     "CATALOG",
     "RTTS_MS",
     "Design",
+    "a_depth_options",
     "bandwidth_for_compute_bound",
+    "checker_chain",
     "crossover_rtt",
     "e2e",
     "from_envelope",
+    "lookup_chain",
+    "measured_row",
     "memory_binding_rtt",
     "n_saturate",
     "pipeline",
@@ -236,8 +243,8 @@ GPU_H100 = "H100 80 GB"
 GPU_H100_MEM = 80 * GB
 
 #: The designs of the report at K = 1536.  ``prove_s`` is the zero-latency prover compute per batch (``t.total``).
-#: CPU rows are the recorded runs of archive/gkr/README.md and archive/direct/README.md (the ``--rtt-ms`` runs of
-#: this lane replace them when their envelopes are given); GPU rows are the re-priced kernel measurements of the
+#: CPU rows are the recorded runs each entry's ``source`` names (a result given with ``--envelope`` replaces
+#: one's numbers); GPU rows are the re-priced kernel measurements of the
 #: named reports (prover time measured or re-priced per bucket; memory per batch from the reports' device-memory
 #: numbers; the verifier's time is the CPU verifier's, an assumption for a GPU pair).
 CATALOG: dict[str, Design] = {
@@ -300,7 +307,7 @@ CATALOG: dict[str, Design] = {
 
 # --- A-GKR: depth-reduction options (costed, not implemented) --------------------------------------------------
 #
-# A's critical path (measured by the transcript's trip counter, archive/gkr/src/main.rs) is
+# A's critical path (measured by the trip counter of the archived prover's transcript) is
 #     depth = 1 (message 2a) + max(lookup chain, checker chain) + 2 (Ligero r, Q)
 #     lookup chain(n)  = 1 + sum_{k=0}^{n-1} (ceil(k / c) + 1)     the range table's fractional-GKR tree: level k is a k-round
 #                                                                  sumcheck followed by one (mu, lambda) message
@@ -334,19 +341,19 @@ def a_depth_options(n_r16: int, layers: Sequence[tuple[int, int]], committed: fl
     """The costed depth-reduction options for A at one (n_R16, checker layout): depth, prover-work factor, committed
     elements delta, e2e at 10 / 50 ms on the CPU and GPU rows, and the RTT above which each beats the baseline on
     the GPU (``prove x (w - 1) / (depth_base - depth_opt)``).  Work factors: c variables per message multiply the
-    sumcheck buckets by (d+1)^c / ((d+1) c) (PROTOCOL.md 5.4; the GPU's sumcheck share is ``sumcheck_share_gpu``,
-    fused_sumcheck_4090.md: 55-69%); committing more elements scales the commit/open buckets (``commit_share_gpu``)."""
+    sumcheck buckets by (d+1)^c / ((d+1) c) (the GPU's sumcheck share is ``sumcheck_share_gpu``); committing more
+    elements scales the commit/open buckets (``commit_share_gpu``)."""
 
     t = 65_536  # the 16-bit range table's size
     base_l, base_c = lookup_chain(n_r16), checker_chain(layers)
     base = 1 + max(base_l, base_c) + 2
 
-    def row(option: str, l: int, ch: int, work_sum: float, extra_committed: float, note: str, work_other: float = 1.0) -> dict[str, Any]:
-        depth = 1 + max(l, ch) + 2
+    def row(option: str, lookup: int, ch: int, work_sum: float, extra_committed: float, note: str, work_other: float = 1.0) -> dict[str, Any]:
+        depth = 1 + max(lookup, ch) + 2
         commit_frac = extra_committed / committed
         w_gpu = 1 + sumcheck_share_gpu * (work_sum - 1) + commit_share_gpu * commit_frac + (work_other - 1)
         w_cpu = 1 + 0.86 * (work_sum - 1) + 0.13 * commit_frac + (work_other - 1)  # CPU: lookup+arith 86%, commit+open 13% of 261 s
-        out = {"option": option, "depth": depth, "lookup_chain": l, "checker_chain": ch, "prover_work_x": round(w_gpu, 3), "prover_work_x_cpu": round(w_cpu, 3),
+        out = {"option": option, "depth": depth, "lookup_chain": lookup, "checker_chain": ch, "prover_work_x": round(w_gpu, 3), "prover_work_x_cpu": round(w_cpu, 3),
                "committed_pct": 100 * commit_frac, "note": note}
         for tag, d, w in (("cpu", cpu, w_cpu), ("gpu", gpu, w_gpu)):
             dd = replace(d, prove_s=d.prove_s * w, depth=depth)
