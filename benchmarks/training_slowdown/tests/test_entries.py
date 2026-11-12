@@ -19,12 +19,12 @@ import torch.nn.functional as F
 from synthetic import SHAPE as TINY
 from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
-from training_slowdown import config, library
+from training_slowdown import config, library, starts
 from training_slowdown.model import LM
 from training_slowdown.routes import subset
 from training_slowdown.routes._optimizers import Muon, newton_schulz
 
-#: six blocks, as the entries' patterns name them, 16 wide
+#: 16 wide; an entry's own test runs it at its start's depth (`at_its_depth`), so each block its patterns name is there
 SHAPE = TINY | {"n_layer": 6}
 STEPS, BATCH, CTX = 3, 4, 8
 #: the steps of an entry whose average has a horizon: enough that a tenth of them is over a step, where the average
@@ -44,6 +44,12 @@ def entry(name: str):
     raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
     route = config.route(raw["route"])
     return route, config.dials(route, raw.get("dials", {}), name)
+
+
+def at_its_depth(name: str, monkeypatch) -> None:
+    """`SHAPE` with the blocks of the entry's start."""
+    raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
+    monkeypatch.setitem(SHAPE, "n_layer", starts.start(raw["start"]).shape["n_layer"])
 
 
 def steps_of(dials: dict) -> int:
@@ -323,7 +329,8 @@ def test_every_entry_of_the_library_has_a_reference():
 
 
 @pytest.mark.parametrize("name", sorted(REFERENCES))
-def test_an_entrys_steps_end_at_its_references_weights(name):
+def test_an_entrys_steps_end_at_its_references_weights(name, monkeypatch):
+    at_its_depth(name, monkeypatch)
     route, dials = entry(name)
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)
