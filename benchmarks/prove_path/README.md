@@ -253,11 +253,11 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   Its negatives after the audit record run one after another, or `--negative-workers` at a time, each in a worker process
   forked from the audit with its own Lean verifier process, started only while its memory estimate, read then, fits
   (`a5.NegativeWorkers`); the negatives' file is the same either way, and nothing is retried.
-  An `--out` an attempt reached its draw under takes no second audit, whatever that attempt wrote after: a5's receipt,
-  written before it draws, or its audit record says so (`served_integrity.ATTEMPT`), nothing resamples, and a second
+  An `--out` an attempt reached its sample under takes no second audit, whatever that attempt wrote after: a5's receipt,
+  written before it samples, or its audit record says so (`served_integrity.ATTEMPT`), nothing resamples, and a second
   attempt on a registration is a new serve directory. No answer accepts beside an audit that exited nonzero:
-  `served_integrity.answer` accepts only where the audit's summary says it passed, and an attempt that reached its draw
-  and died is a reject.
+  `served_integrity.answer` accepts only where the audit's summary says it passed, and an attempt that reached its
+  sample and died is a reject.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to
