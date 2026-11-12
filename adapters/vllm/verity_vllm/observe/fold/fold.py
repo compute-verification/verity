@@ -1017,7 +1017,7 @@ class _Fold:
 
     # Transparent move ----------------------------------------------------------------------------
 
-    def _move_reads(self, t: Transparent) -> list[Refs]:
+    def _move_reads(self, t: Transparent) -> tuple[Operand, list[Refs]]:
         if t.src is None or t.dst is None:
             raise FoldError(f"move without src/dst ({t.hint})")
         for op in (t.src, t.dst):
@@ -1026,11 +1026,12 @@ class _Fold:
                 raise FoldError(f"move: {type(op).__name__} covers {n} rows, the move has {t.rows}")
         if whole_view(t.src).bits != whole_view(t.dst).bits:
             raise FoldError(f"move between widths {t.src.view.dtype} -> {t.dst.view.dtype} ({t.hint})")
-        return [self._read_operand(t.src, i) for i in range(t.rows)]
+        return t.dst, [self._read_operand(t.src, i) for i in range(t.rows)]
 
-    def _move_writes(self, t: Transparent, refs: list[Refs]) -> None:
+    def _move_writes(self, t: Transparent, read: tuple[Operand, list[Refs]]) -> None:
+        dst, refs = read
         for i, r in enumerate(refs):
-            self._write_operand(t.dst, i, r, None, f"move row {i} ({t.hint})")
+            self._write_operand(dst, i, r, None, f"move row {i} ({t.hint})")
 
     # memory access ----------------------------------------------------------------------------------
 

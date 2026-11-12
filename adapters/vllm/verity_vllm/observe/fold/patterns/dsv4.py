@@ -111,7 +111,8 @@ class Mhc:
             st["x"] = outs[0] if len(outs) == 1 else None
             return None
         mod = _module(node)
-        if op_name(node.op) not in ("empty", "empty_like") or not (mod == "model" or LAYER.fullmatch(mod)):
+        layer = LAYER.fullmatch(mod)
+        if op_name(node.op) not in ("empty", "empty_like") or not (mod == "model" or layer):
             return None
         outs = node.output_views()
         pend = st["pending"]
@@ -136,9 +137,9 @@ class Mhc:
         S = {"HC": HC, "H": H, "TN": g["TN"], "REPEAT": int(C["HC_REPEAT"]), "EPS": float(C["EPS"]), "HC_EPS": float(C["HC_EPS"])}
         rows = tuple(ctx.start.rows)
         sms = int(target_of(ctx)[0].num_sms)
-        if mod == "model":
+        if layer is None:
             return self._final(node, ctx, st, views, x, S, g, rows)
-        L = int(LAYER.fullmatch(mod).group(1))
+        L = int(layer.group(1))
         k = st["calls"][mod] = st["calls"].get(mod, 0) + 1
         if k > 2:
             return unsupported(node, "a third mHC call in one layer", module=mod)
