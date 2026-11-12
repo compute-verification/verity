@@ -478,6 +478,7 @@
     {"file": "tests/pipeline/test_serving_rows_experts.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_rows_flashinfer_parts.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_rows_splits.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/pipeline/test_serving_rows_stages.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_rows_weights.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_view.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_source_identity.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
