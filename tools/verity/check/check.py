@@ -12,7 +12,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             after-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
-                                                            shard's with those no shard holds (ratchet-gate) (drive's
+                                                            shard's with those no shard holds (ratchet-gate, where its
+                                                            plan doesn't name it) (drive's
                                                             `after_landing_shards`: one run per shard, at once, once the
                                                             records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
@@ -108,7 +109,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
 declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
 targets by the hash of each one's id, `lean-suites` by suite, one that declares `[tool.verity.tests] parts = P` into its P
-parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it), so one
+parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it, and
+`pytest` by suite as lean-suites in a plan that names one of its suites, `pytest:SUITE`, else whole), so one
 commit's check runs on N pods at once and takes about as long as its longest shard. Its result is a `check-shard/v1`
 (`SHARD_KIND`) that names the shard, the commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
 each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
@@ -201,8 +203,8 @@ doesn't name:
                     the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
                     run sends one below the tip: the tip of the last run whose ratchet-gate gave a verdict, else the last
                     verified `main`); one that names no commit here skips it.  Off the
-                    gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
-                    job, runs it
+                    gate: a recorded check skips it, and the after-landing run, `--deferred` with every job, runs it
+                    (sharded, in the shard its plan names, else in the last)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -2093,10 +2095,11 @@ def deferred_parts(steps: str) -> list[str]:
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
-    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
-    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    of the plan holds, ratchet-gate's where the plan doesn't name it, so the N shards together run every part drive's
+    after-landing run passes), "all": every part a recorded unsharded check covers (`gated_parts`; pytest's by suite in a plan
+    that names one, `_parts_of`)}, on this tree's Lake packages, each spec's audit on its provers' shard (`declaration.resolve`,
+    `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K
+    of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -2104,7 +2107,7 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
-    parts_of = _parts_of()
+    parts_of = _parts_of(plans[n])
     shards = DECLARATION.resolve(plans[n], JOBS, parts_of, audit_provers(parts_of["lean-audit"]))
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
@@ -2380,15 +2383,21 @@ def suite_parts() -> dict[str, int]:
         raise DECLARATION.DeclarationError(str(e)) from None
 
 
-def _parts_of() -> dict[str, list[str]]:
+def _parts_of(plan: DECLARATION.Plan = ()) -> dict[str, list[str]]:
     """The split jobs' parts on this tree (`declaration.job_parts`): lean-audit's Lake packages, lean-suites' suites (`AFTER_LEAN`),
-    each one in `suite_parts` as its parts `SUITE:K/P`."""
+    and where ``plan`` names one of pytest's (`pytest:SUITE`), pytest's (the others), each one in `suite_parts` as its parts
+    `SUITE:K/P`."""
     files = tracked_files(ROOT)
     if files is None:
         raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
     by = suite_parts()
-    return {"lean-audit": _lean_audit().packages(files),
-            "lean-suites": [x for s in AFTER_LEAN for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]}
+
+    def each(names: list[str]) -> list[str]:
+        return [x for s in names for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]
+
+    pytest = any(s.startswith("pytest:") for shard in plan for s in shard)
+    return {"lean-audit": _lean_audit().packages(files), "lean-suites": each(list(AFTER_LEAN)),
+            **({"pytest": each([s.name for s in SUITES.discover() if s.name not in AFTER_LEAN])} if pytest else {})}
 
 
 def shard_parts() -> list[str]:
