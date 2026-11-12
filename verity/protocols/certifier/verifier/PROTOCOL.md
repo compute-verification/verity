@@ -30,7 +30,9 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.LinkWindow`;
-- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`).
+- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
+- an active network certifier's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
+  (`verity/network-rows/v1`), over the certifier program's `NetworkCertifier.Rows`.
 
 ## Zero knowledge: what ties the checks, and the named gap
 

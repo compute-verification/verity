@@ -33,6 +33,7 @@ package's.
 | `network-check` | `verity/network-certificate/v4` | `NetworkCheck.Check` | one spatial unit's certified link-windows: every egress link in order, then every ingress link, under the certifier's LMS key in its session | `audit.py`'s `Audit` (`check_link`, `check_ingress_link`) |
 | `network-records` | `verity/network-records/v3` | `NetworkCheck.Records` | the same audit over raw, committed and certified records, with the egress grid compared or not | `audit.py`'s `Audit` |
 | `network-period` | `verity/certifier/v0` | `NetworkCheck.Period` | a certification period, the onsite configuration's communication component (below) | `tests/period_case.py` |
+| `network-rows` | `verity/network-rows/v1` | `NetworkCheck.RowsAudit` | an active network certifier's run: each record held to its certified head and its certificate to the key in the session, then the certifier program's rows audit (`NetworkCertifier.Rows`), which refuses cells cut, clocked or ordered otherwise than the schedule, and a schedule with a response cap | `warden.py`'s `audit`, stricter in the three ways `NetworkCertifier.Rows` names |
 | `network-check-difftest` | none | `NetworkCheck.Difftest` | that `certificate.py`'s encodings are `NetworkCheck.Certificate`'s, byte for byte | `certificate.py` |
 
 The other modules:
@@ -97,7 +98,7 @@ script still writes them.
 ## How to run it
 
 ~~~sh
-cd verity/protocols/certifier/verifier/lean && lake build      # the four executables, under .lake/build/bin/
+cd verity/protocols/certifier/verifier/lean && lake build      # the five executables, under .lake/build/bin/
 .lake/build/bin/network-check id                          # verity/network-certificate/v4
 ~~~
 
