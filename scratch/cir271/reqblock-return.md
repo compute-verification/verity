@@ -13,6 +13,11 @@ All runs were on vy-nebius-cpu-13, from `scratch/cir271/` on `cursor/circuits-ci
      - 42 prompt ids or fewer: `AllReduceMultimem` and `RMSNormFusedCudaVector8` are missing (r20261112-234945-6a7d, at 4 layers and at all layers). At 43 none is missing.
      - The cause is the route: a prefill of M rows takes the fused MNNVL all-reduce while M ≤ `fused_max_tokens(6144, 8)` = 524,288 // 12,288 = 42 (`verity/definitions/registry/tp_allreduce.py:131`, `:258-263`; `frontend/rules/vllm_bindings/collectives.py:152`). Past that it takes multimem plus the fused CUDA norm.
      - Under 32 prompt ids a 30th Definition, `LlBf16SplitKGemm`, appears (at 8 and 16, r20261112-233124-a438). It is not in the (256, 32) Program.
+     - At all 78 layers (r20261112-234536-99bb), with T 1:
+       - 1 prompt id: 73,968 calls, 4 Definitions missing;
+       - 16: 628,248 calls, 4 missing;
+       - 64: 2,403,192 calls in 184 bindings, none missing;
+       - 256: 9,497,976 calls in 569 bindings, none missing.
    - Eight ranks: one rank holds all 29 Definitions. The node's 629 bindings at (256, 32) are rank 0's 622 plus seven more `EmbeddingShard` bindings, one per rank (run r20261112-202908-e9ba). The eight ranks are needed for the collectives' wires: with fewer, every other rank's partial is a free input (`pipeline/tp/wires.py:36-37`).
    - Select: greedy has one select path. The node calls `TokenSelect_v1{V=154880}`. The served registration (VLLM-412) checks `GreedySelect_v1{V=154880,N=7744}`, which is not on `main`. No second path is needed.
    - Kinds of serving cut at (43, 2), from its families (run r20261112-234945-6a7d): CUT, COORDS, COLS, SLICES, PARTS, KCHUNKS, CHAINS, STAGES and EXPERTS, plus rows that are their own unit. WIDE_COORDS and FINAL come in through PARTS: DeepGemm's GEMM part is `ScaledMmFp8BlockSharedScale`, and the final norm is outside the layers (`serving_templates.py:16-89`; inferred from the dictionaries, not from a unit list).

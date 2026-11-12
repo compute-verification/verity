@@ -10,15 +10,21 @@ import json
 import re
 import resource
 import sys
-import tempfile
 import time
 import traceback
 from collections import Counter
 from pathlib import Path
 
+import importlib.util  # noqa: E402
+
 sys.path.insert(0, str(Path.cwd()))
 from tests.pipeline.test_tp_wires import in_order, proof_blocks  # noqa: E402
-from tests.program.predict.test_steps import GREEDY, _class_g, _session  # noqa: E402
+from tests.program.predict.test_steps import GREEDY, _session  # noqa: E402
+
+# `test_steps._class_g` reads a workload file that isn't in the tree; compile_cost's φ is class G's registration (node1.py's).
+spec = importlib.util.spec_from_file_location("compile_cost", Path.cwd().parents[1] / "benchmarks/compile_cost/run.py")
+cc = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cc)
 from verity_vllm.pipeline.tp import wires as TW  # noqa: E402
 from verity_vllm.program.predict.tp_steps import compile_tp  # noqa: E402
 
@@ -30,8 +36,7 @@ t0, rec = time.perf_counter(), {"layers": layers, "LP": lp, "outputs": 2}
 try:
     once = {**GREEDY, "max_tokens": 2, "ignore_eos": True}
     advice, ingress = _session([(lp, 2, once)], [[(0, 0, lp)], [(0, lp, 1)]])
-    with tempfile.TemporaryDirectory() as hf:
-        c = compile_tp(_class_g(Path(hf), layers=layers), advice, ingress)
+    c = compile_tp(cc.registered(0, layers, "eager"), advice, ingress)
     rec["compile_s"] = round(time.perf_counter() - t0, 1)
     live = [b for b in c.bindings if b is not None]
     sites = TW.sites_circuit(c.bindings, "class-g")
