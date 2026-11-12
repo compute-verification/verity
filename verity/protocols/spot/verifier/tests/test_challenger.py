@@ -434,3 +434,30 @@ def test_a_session_out_of_its_form_is_refused(session, part, coin_key):
 def test_a_staging_out_of_its_form_is_refused(rows, shared):
     with pytest.raises(C.CoinError, match="^a staging is"):
         C.RunRecord().stage(rows, shared)
+
+
+def _round(tree: str, stream: str) -> str:
+    """A release log line opening a round of stream `stream` of the coin tree `tree`."""
+    return C.canonical_json_text({"after": "cd", "coins": "ef", "event": C.OPEN_EVENT, "n": 1, "round": 0,
+                                  "stream": stream, "tree": tree})
+
+
+def test_the_members_sessions_are_opened_one_after_another():
+    """`members_order` lists the trees a release log opens rounds of where each tree's rounds are together and end with
+    a second round of its ``session`` stream, its closing round, before the next tree's first; it refuses a round of
+    the next tree before a tree's closing round and a round of a tree after its own, and lists a tree again that is
+    opened after another's. A line that opens no round may come anywhere."""
+    s, rep = C.CT.SESSION, "circuit/rep0"
+    tree = C.canonical_json_text({"event": C.TREE_EVENT, "key": "02", "nonce": "03", "root": "01", "spec": {}})
+    root = C.canonical_json_text({"event": "root", "index": 0, "label": "draw", "received_at": 0, "root": "ab"})
+    release = C.canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "draw", "released_at": 0})
+    assert C.members_order([tree, root, release]) == []
+    assert C.members_order([_round("01", s), _round("01", rep), _round("01", s), _round("02", s),
+                            _round("02", s)]) == ["01", "02"]
+    assert C.members_order([_round("01", s), tree, root, _round("01", s), release, _round("02", s)]) == ["01", "02"]
+    assert C.members_order([_round("01", s), _round("02", s)]) is None
+    assert C.members_order([_round("01", s), _round("01", rep), _round("02", s)]) is None
+    assert C.members_order([_round("01", s), _round("01", s), _round("01", rep)]) is None
+    assert C.members_order([_round("01", s), _round("01", s), _round("02", rep), _round("01", rep)]) is None
+    assert C.members_order([_round("01", s), _round("01", s), _round("02", s), _round("02", s),
+                            _round("01", s)]) == ["01", "02", "01"]

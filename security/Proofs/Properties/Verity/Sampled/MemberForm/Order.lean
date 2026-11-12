@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.RoundsRead
 public import Proofs.Properties.Verity.Sampled.RootB
+public import Proofs.Properties.Verity.Sampled.Window.Trees
 
 /-!
 # The members' sessions, one after another, in the read of the release log
@@ -27,6 +28,11 @@ gives of that read:
   `membersTreeReason` accepts, the three hold of the read at the sessions' trees, each session's closing round
   answering the bytes its evidence's SHA-512 names (`answers_of_hex`), and each session's tree less its closing round
   is the session's as v2's one-statement check holds one (`sessionTreeReason`).
+* **Acceptance gives the order** (`Accepted`, `Accepted.opensInOrder`, `Accepted.opensLast`, `Accepted.specs`): a
+  log that is the read of lines the members' check accepts has every opening of a session's tree
+  (`opening_session`), the sessions' rounds one session after another (`Verity.Sampled.OpensInOrder`), so an opening
+  of a tree opened before is of the last tree opened (`Verity.Sampled.OpensLast`), and each tree's streams named
+  once.
 -/
 
 @[expose] public section
@@ -433,6 +439,25 @@ theorem opens_in_order (hT : coinTreesOf lines = .ok trees) (hR : readLog label 
   · rw [Array.getElem?_toList, Array.getElem?_eq_getElem hj, eρ]
   · rw [Array.getElem?_toList, Array.getElem?_eq_getElem hj', eρ']
 
+/-- **Every opening the read shows is of a session's tree**: where `coinTreesOf` accepts the release log's lines,
+`readLog` reads them, `membersOrder` reads them as the trees `used` and `tree` numbers each session's tree as the
+read does, an opening of the `i`-th tree is of some session's, `i` its number. -/
+theorem opening_session (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
+    {used : Array String} (hO : membersOrder lines = some used) {tree : ℕ → ℕ}
+    (htree : ∀ j ρ, used[j]? = some ρ → (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j))
+    {r : Verity.Release} (hr : r ∈ log) {i s n : ℕ} (hf : r.frame = .opening i s n) :
+    ∃ j, j < used.size ∧ tree j = i := by
+  have hF := coinTreesOf_fold recs hT
+  obtain ⟨pre, post, he⟩ := List.append_of_mem hr
+  obtain ⟨preL, l, postL, ρ, name, k, hls, hro, hkey, -, -⟩ := readLog_opening hR hF he hf
+  obtain ⟨A, B, hused, -⟩ := membersOrder_order hO hls (openOf_opensRound hro.1)
+  have hmem : ρ ∈ used.toList := by
+    rw [hused]
+    exact List.mem_append_right _ List.mem_cons_self
+  obtain ⟨j, hj⟩ := List.getElem?_of_mem hmem
+  rw [Array.getElem?_toList] at hj
+  exact ⟨j, (Array.getElem?_eq_some_iff.1 hj).1, Option.some.inj ((htree j ρ hj).symm.trans (keyAt_idx hkey))⟩
+
 /-- **A session's closing round, in the read**: where `coinTreesOf` accepts the release log's lines, `readLog` reads
 them and `membersOrder` reads them as trees none named twice, a tree that shows round 1 of its stream named the
 session's opened has in the read an opening `x` of that stream of it (`KeyAt`), named so in the specs of the `Hello`s
@@ -622,6 +647,46 @@ theorem answers_of_hex {ev : String} {a b : ByteArray} (h : Flock.unhex ev = .ok
   rw [he] at h
   exact (Except.ok.inj ((FlockComplete.JsonRT.unhex_hexOf (Flock.Sha512.hash b)).symm.trans h)).symm
 
+/-- **Each session's tree, by the members' check**: where `membersTreeReason` accepts the sessions `records`, each
+session's record names a logged tree, the one `usedOf` lists at the session's place, which less its closing round is
+the session's as `sessionTreeReason` holds one and shows round 1 of its session stream opened after the session's
+evidence's SHA-512 in hex. -/
+theorem sessions_trees {records : Array (String × Array (String × Option ℕ) × Json × String)}
+    (hM : membersTreeReason trees lines records = none) (j : ℕ)
+    (x : String × Array (String × Option ℕ) × Json × String) (hx : records[j]? = some x) :
+    ∃ t ∈ trees, getD (getD x.2.2.1 "coin_tree") "root" = Json.str t.root ∧ (usedOf records)[j]? = some t.root ∧
+      sessionTreeReason #[t.unclosed] x.2.1 x.2.2.1 = none ∧
+      ∃ o ∈ t.opened, o.stream = TREE_SESSION ∧ o.round = 1 ∧ o.after = x.2.2.2 := by
+  obtain ⟨hall, -, -⟩ := membersTreeReason_none hM
+  obtain ⟨t, ht, hroot, o, ho, hc, hS⟩ := memberTreeReason_none (hall x (Array.mem_of_getElem? hx))
+  obtain ⟨hs, hk, -, ha⟩ := closes_fields hc
+  exact ⟨t, ht, hroot, by rw [usedOf_getElem? hx, hroot, strOf_str], hS, o,
+    Array.mem_of_getElem? (show t.opened[t.opened.size - 1]? = some o from ho), hs, hk, ha⟩
+
+/-- **The sessions' trees as the read numbers them**: where `coinTreesOf` accepts the release log's lines, `readLog`
+reads them and `membersTreeReason` accepts the sessions `records`, a numbering `tree` gives each session's tree its
+place among the trees the read holds. -/
+theorem members_tree (hT : coinTreesOf lines = .ok trees) (hR : readLog label after recs ξ lines = some log)
+    {records : Array (String × Array (String × Option ℕ) × Json × String)}
+    (hM : membersTreeReason trees lines records = none) :
+    ∃ tree : ℕ → ℕ, ∀ (j : ℕ) (ρ : String), (usedOf records)[j]? = some ρ →
+      (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j) := by
+  obtain ⟨-, hnod, hO⟩ := membersTreeReason_none hM
+  have hidx : ∀ (j : ℕ) (ρ : String), (usedOf records)[j]? = some ρ →
+      ∃ i, (heldTrees trees).findIdx? (·.1 == ρ) = some i := by
+    intro j ρ hρ
+    have hjlt : j < records.size := by
+      have := (Array.getElem?_eq_some_iff.1 hρ).1
+      rwa [usedOf_size] at this
+    obtain ⟨t, ht, -, hu, -, o, ho, hs, hk, -⟩ := sessions_trees hM j _ (Array.getElem?_eq_getElem hjlt)
+    obtain rfl : t.root = ρ := Option.some.inj (hu.symm.trans hρ)
+    obtain ⟨_, _, _, i, _, _, -, -, hkey, -, -, -, -⟩ := closing_read hT hR hO hnod ht ho hs hk
+    exact ⟨i, keyAt_idx hkey⟩
+  refine ⟨fun j => (((usedOf records)[j]?).bind fun ρ => (heldTrees trees).findIdx? (·.1 == ρ)).getD 0,
+    fun j ρ hρ => ?_⟩
+  obtain ⟨i, hi⟩ := hidx j ρ hρ
+  simp only [hρ, Option.bind_some, hi, Option.getD_some]
+
 /-- **The members' sessions on the read**: where `coinTreesOf` accepts the release log's lines, `readLog` reads them
 and `membersTreeReason` accepts the sessions `records` against them, there is a numbering `tree` of the sessions'
 trees, as the read numbers trees, at which:
@@ -648,32 +713,9 @@ theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
         ∀ q ∈ pre, ∀ j', j' < records.size → ∀ s' n', q.frame = .opening (tree j') s' n' → j' ≤ j) ∧
       ∀ pre r post, log = pre ++ r :: post → ∀ j, j < records.size → ∀ s n, r.frame = .opening (tree j) s n →
         ∀ j' x', j' < j → records[j']? = some x' → ∃ q ∈ pre, Flock.unhex x'.2.2.2 = .ok q.answers := by
-  obtain ⟨hall, hnod, hO⟩ := membersTreeReason_none hM
-  have hsess : ∀ (j : ℕ) (x : String × Array (String × Option ℕ) × Json × String), records[j]? = some x → ∃ t ∈ trees,
-      getD (getD x.2.2.1 "coin_tree") "root" = Json.str t.root ∧ (usedOf records)[j]? = some t.root ∧
-      sessionTreeReason #[t.unclosed] x.2.1 x.2.2.1 = none ∧
-      ∃ o ∈ t.opened, o.stream = TREE_SESSION ∧ o.round = 1 ∧ o.after = x.2.2.2 := by
-    intro j x hx
-    obtain ⟨t, ht, hroot, o, ho, hc, hS⟩ := memberTreeReason_none (hall x (Array.mem_of_getElem? hx))
-    obtain ⟨hs, hk, -, ha⟩ := closes_fields hc
-    exact ⟨t, ht, hroot, by rw [usedOf_getElem? hx, hroot, strOf_str], hS, o,
-      Array.mem_of_getElem? (show t.opened[t.opened.size - 1]? = some o from ho), hs, hk, ha⟩
-  have hidx : ∀ (j : ℕ) (ρ : String), (usedOf records)[j]? = some ρ →
-      ∃ i, (heldTrees trees).findIdx? (·.1 == ρ) = some i := by
-    intro j ρ hρ
-    have hjlt : j < records.size := by
-      have := (Array.getElem?_eq_some_iff.1 hρ).1
-      rwa [usedOf_size] at this
-    obtain ⟨t, ht, -, hu, -, o, ho, hs, hk, -⟩ := hsess j _ (Array.getElem?_eq_getElem hjlt)
-    obtain rfl : t.root = ρ := Option.some.inj (hu.symm.trans hρ)
-    obtain ⟨_, _, _, i, _, _, -, -, hkey, -, -, -, -⟩ := closing_read hT hR hO hnod ht ho hs hk
-    exact ⟨i, keyAt_idx hkey⟩
-  obtain ⟨tree, htree⟩ : ∃ tree : ℕ → ℕ, ∀ (j : ℕ) (ρ : String), (usedOf records)[j]? = some ρ →
-      (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j) := by
-    refine ⟨fun j => (((usedOf records)[j]?).bind fun ρ => (heldTrees trees).findIdx? (·.1 == ρ)).getD 0,
-      fun j ρ hρ => ?_⟩
-    obtain ⟨i, hi⟩ := hidx j ρ hρ
-    simp only [hρ, Option.bind_some, hi, Option.getD_some]
+  obtain ⟨-, hnod, hO⟩ := membersTreeReason_none hM
+  have hsess := sessions_trees hM
+  obtain ⟨tree, htree⟩ := members_tree hT hR hM
   refine ⟨tree, fun j x hx => ?_, ?_, ?_⟩
   · obtain ⟨t, ht, hroot, hu, hS, o, ho, hs, hk, ha⟩ := hsess j x hx
     obtain ⟨Lc, c, L₂, i, s, n, he, hcf, hkey, hname, hcount, hun, hlast⟩ :=
@@ -691,5 +733,41 @@ theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
       evidence_before hT hR hO hnod htree ht hu ho hs hk he (by rw [usedOf_size]; exact hj) hr hlt
     rw [ha] at hun
     exact ⟨q, hq, hun⟩
+
+/-! ## Acceptance gives the order -/
+
+/-- **The members' check accepted the log's lines**: the device's log `log` is v2's read (`readLog`) of release log
+lines `coinTreesOf` accepts, against which `Spot.Challenger.membersTreeReason` accepts some sessions' records and
+evidence. It is what the per-member form's acceptance gives of a play's log. -/
+def Accepted (log : List Verity.Release) : Prop :=
+  ∃ (label : String) (after : ByteArray) (recs : List Json) (ξ : ByteArray) (lines : List String)
+    (trees : Array LoggedTree) (records : Array (String × Array (String × Option ℕ) × Json × String)),
+    coinTreesOf lines = .ok trees ∧ readLog label after recs ξ lines = some log ∧
+      membersTreeReason trees lines records = none
+
+/-- **Acceptance gives the sessions one after another** (`Verity.Sampled.OpensInOrder`): where the members' check
+accepts the log's lines, some numbering `tree` of as many sessions' trees has every opening the log shows of a
+session's tree, and every round opened before a round of session `j`'s tree of that tree or an earlier session's. -/
+theorem Accepted.opensInOrder {log : List Verity.Release} (h : Accepted log) :
+    ∃ (tree : ℕ → ℕ) (m : ℕ), (∀ r ∈ log, ∀ i s n, r.frame = .opening i s n → ∃ j, j < m ∧ tree j = i) ∧
+      Verity.Sampled.OpensInOrder tree m log := by
+  obtain ⟨label, after, recs, ξ, lines, trees, records, hT, hR, hM⟩ := h
+  obtain ⟨-, hnod, hO⟩ := membersTreeReason_none hM
+  obtain ⟨tree, htree⟩ := members_tree hT hR hM
+  refine ⟨tree, (usedOf records).size, fun r hr i s n hf => opening_session hT hR hO htree hr hf, ?_⟩
+  intro pre r post he j hj s n hr q hq j' hj' s' n' hq'
+  exact opens_in_order hT hR hO hnod htree he hj hr hq hj' hq'
+
+/-- **Acceptance gives each opening of a tree opened before as the last tree's** (`Verity.Sampled.OpensLast`): the
+sessions' rounds are opened one session after another (`Accepted.opensInOrder`, `opensLast_of_sessions`). -/
+theorem Accepted.opensLast {log : List Verity.Release} (h : Accepted log) : Verity.Sampled.OpensLast log := by
+  obtain ⟨tree, m, hall, hord⟩ := h.opensInOrder
+  exact Verity.Sampled.opensLast_of_sessions hall hord
+
+/-- **Acceptance gives each tree's streams named once** (`readLog_nodup`). -/
+theorem Accepted.specs {log : List Verity.Release} (h : Accepted log) :
+    ∀ sp ∈ helloSpecs log, sp.streams.toList.Nodup := by
+  obtain ⟨label, after, recs, ξ, lines, trees, records, hT, hR, -⟩ := h
+  exact readLog_nodup hT hR
 
 end Verity.Sampled.MemberForm

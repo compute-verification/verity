@@ -34,11 +34,11 @@ last round the log shows opened of its tree is that one (`TreeOpening.closes`, `
 is the session's as `sessionTreeReason` holds one, so the closing round is the one opening beyond the record's that
 passes. `membersTreeReason` holds the members' sessions to them: each so, one tree a session, every tree a session's,
 and the log opening the sessions' trees one after another in the sessions' order, no round of a tree before the
-closing round of the tree before it or after its own (`membersOrder`, `MEMBERS_ORDER`).
+closing round of the tree before it or after its own (`membersOrder`, `members_order`, `MEMBERS_ORDER`).
 
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`), `challenger_session_trees` (`sessions_tree_reason`
 over the log's trees and the request's records, each with its tables), each `{"refused": why}` where Python refuses,
-and `challenger_sample_link_first` (`sample_link_first`).
+`challenger_sample_link_first` (`sample_link_first`) and `challenger_members_order` (`members_order`).
 -/
 module
 
@@ -416,11 +416,13 @@ def membersOrderFrom : Array String → Option String → Bool → List String �
       else if closed ∨ last = none then membersOrderFrom (roots.push root) (some root) false ls
       else none
 
-/-- **The members' sessions one after another**, in the release log's lines `log`: the trees it opens rounds of, in
-the order it first opens each, where every round it opens is of the tree opened last, before that tree's second
-round of its stream `TREE_SESSION` (its closing round), or the first of the next tree, after it; `none` where a round
-of a tree is opened before the closing round of the tree opened before it, or after its own. A tree opened again
-after another is listed again, so a list without a tree twice shows each tree's rounds together. O(the log's lines). -/
+/-- `members_order`, **the members' sessions one after another**, in the release log's lines `log`: the trees it
+opens rounds of, in the order it first opens each, where every round it opens is of the tree opened last, before that
+tree's second round of its stream `TREE_SESSION` (its closing round), or the first of the next tree, after it; `none`
+where a round of a tree is opened before the closing round of the tree opened before it, or after its own. A tree
+opened again after another is listed again, so a list without a tree twice shows each tree's rounds together. Only a
+line opening a round is read (`openOf`): a coin tree's own line, which releases no coin of a round, may come
+anywhere. O(the log's lines). -/
 def membersOrder (log : List String) : Option (Array String) := membersOrderFrom #[] none false log
 
 /-- **The members' sessions' coins, each session closed before the next begins**: why the members' `--zk` sessions
@@ -470,6 +472,10 @@ private def recordT : Json := Json.mkObj [("coin_tree", Json.mkObj [("root", Jso
 #guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" TREE_SESSION, openAtT "01" "circuit/rep0"] == none
 #guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" TREE_SESSION, openAtT "02" TREE_SESSION,
   openAtT "02" TREE_SESSION, openAtT "01" TREE_SESSION] == some #["01", "02", "01"]
+#guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" TREE_SESSION, openAtT "02" "circuit/rep0",
+  openAtT "01" "circuit/rep0"] == none
+#guard membersOrder [openAtT "01" TREE_SESSION, treeT, rootT, openAtT "01" TREE_SESSION, releaseT,
+  openAtT "02" TREE_SESSION] == some #["01", "02"]
 
 /-! Two members' sessions as an honest challenger's release log shows them: each tree sampled, its link points opened
 after its link's roots, one round of its table's first rep, then its closing round after its evidence, the second
@@ -579,5 +585,17 @@ def sampleLinkFirstPiece (j : Json) : V Json := do
   let after ← Flock.unhex a
   let why := if sampleLinkFirst label after lines.tail then Json.null else Json.str SAMPLE_LINK_FIRST
   return Json.mkObj [("reason", why)]
+
+/-- `{"log", "used"}` to `members_order`'s over the release log's lines `log`, `{"order", "reason"}`: the trees the
+log opens rounds of, one after another (`membersOrder`), null where it doesn't; and null where they are `used`, the
+sessions' trees in the sessions' order, else `MEMBERS_ORDER`. -/
+def membersOrderPiece (j : Json) : V Json := do
+  unless keys? j == some #["log", "used"] do throw "a request's keys are log, used"
+  let lines ← logOf j
+  let .arr us := getD j "used" | throw "used is not a list of strings"
+  let used ← us.mapM fun | .str s => pure s | _ => throw "used is not a list of strings"
+  let order := membersOrder lines
+  let why := if order ≠ some used then Json.str MEMBERS_ORDER else Json.null
+  return Json.mkObj [("order", order.elim Json.null fun rs => Json.arr (rs.map Json.str)), ("reason", why)]
 
 end Spot.Challenger

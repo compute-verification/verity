@@ -154,6 +154,55 @@ theorem opensLast_of_inOrder {tree : ℕ → ℕ} {Lg : List Release}
     (List.getElem?_eq_some_iff.1 hv').1 s' n' (by rw [h2]; exact hqf)
   omega
 
+/-- **The sessions held one after another open each tree opened before last**, where every opening is of a session's
+tree (`OpensInOrder`, at any numbering `tree` of the sessions' trees). Had another tree been opened first after the
+opening's own, its session would be at or before the opening's, and the opening's at or before its. -/
+theorem opensLast_of_sessions {tree : ℕ → ℕ} {m : ℕ} {Lg : List Release}
+    (hall : ∀ r ∈ Lg, ∀ i s n, r.frame = .opening i s n → ∃ j, j < m ∧ tree j = i)
+    (h : OpensInOrder tree m Lg) : OpensLast Lg := by
+  intro L₁ x L₂ i s n he hx u hu
+  have hul := (List.getElem?_eq_some_iff.1 hu).1
+  have hvl : (openedTrees L₁).length - 1 < (openedTrees L₁).length := by omega
+  have hv : (openedTrees L₁)[(openedTrees L₁).length - 1]? = some (openedTrees L₁)[(openedTrees L₁).length - 1] :=
+    List.getElem?_eq_getElem hvl
+  obtain ⟨P, q, P₂, s', n', hL, hq, -, hlen⟩ := openedTrees_first_at hv
+  by_contra hne
+  have hup : (openedTrees P)[u]? = some i := by
+    obtain ⟨e, he'⟩ := openedTrees_append P (q :: P₂)
+    rw [← hL] at he'
+    have hlt : u < (openedTrees P).length := by omega
+    rw [he', List.getElem?_append_left hlt] at hu
+    exact hu
+  obtain ⟨q₀, hq₀, s₀, n₀, hq₀f⟩ := mem_openedTrees (List.mem_of_getElem? hup)
+  have hqm : q ∈ L₁ := by
+    rw [hL]
+    exact List.mem_append_right _ List.mem_cons_self
+  have hxm : x ∈ Lg := by
+    rw [he]
+    exact List.mem_append_right _ List.mem_cons_self
+  have hqg : q ∈ Lg := by
+    rw [he]
+    exact List.mem_append_left _ hqm
+  obtain ⟨j, hj, hji⟩ := hall x hxm i s n hx
+  obtain ⟨j', hj', hji'⟩ := hall q hqg _ s' n' hq
+  have hxj : x.frame = .opening (tree j) s n := by
+    rw [hji]
+    exact hx
+  have hqj : q.frame = .opening (tree j') s' n' := by
+    rw [hji']
+    exact hq
+  have hq₀j : q₀.frame = .opening (tree j) s₀ n₀ := by
+    rw [hji]
+    exact hq₀f
+  have h1 : j' ≤ j := h L₁ x L₂ he j hj s n hxj q hqm j' hj' s' n' hqj
+  have h2 : j ≤ j' := h P q (P₂ ++ x :: L₂) (by rw [he, hL, List.append_assoc, List.cons_append]) j' hj' s' n' hqj
+    q₀ hq₀ j hj s₀ n₀ hq₀j
+  have hii : (openedTrees L₁)[(openedTrees L₁).length - 1] = i :=
+    hji'.symm.trans ((congrArg tree (Nat.le_antisymm h1 h2)).trans hji)
+  rw [hii] at hv
+  have huv := ((openedTrees_nodup L₁).getElem?_inj hul).1 (hu.trans hv.symm)
+  omega
+
 /-! ## The sessions' rounds in a log -/
 
 section Sessions

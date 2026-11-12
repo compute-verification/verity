@@ -43,7 +43,11 @@ its link unopened, a tree two sessions use, or one none does; and a tree that op
 stream's next round, the link's stream again, a round or a stream the record leaves out). A sample's release log's order
 (`SAMPLE_LINK_FIRST`: `sample_link_first`, `Spot.Challenger.sampleLinkFirst`) is a sample's coins as `READ`'s
 with every tree round after the sample and each tree's link first (`_release_log`), then a link opened before the
-sample's last coin, a round of another stream opened first, each malformed request. The release logs of `RELEASED`,
+sample's last coin, a round of another stream opened first, each malformed request. The members' sessions' order
+(`MEMBERS_ORDER`: `members_order`, `Spot.Challenger.membersOrder`) is members' sessions' rounds one member after
+another, each ended by its closing round, among lines that open no round; then a round of the next member's tree
+opened before a member's closing round, a round of a member's tree opened after its own, a member's closing round
+dropped, the sessions' trees in another order or not the log's, each malformed request. The release logs of `RELEASED`,
 `READ` and `DRAW_COINS` hold tree lines among their roots and releases too, and `RELEASED` a root or a release
 relabelled a tree's. Each piece answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared
 too.
@@ -2121,6 +2125,15 @@ def sample_link_first(j: Any) -> Any:
     return {"reason": None if Ch.sample_link_first(j["label"], after, log[1:]) else Ch.SAMPLE_LINK_FIRST}
 
 
+def members_order(j: Any) -> Any:
+    _request(j, ["log", "used"])
+    log, used = _log(j["log"]), j["used"]
+    if type(used) is not list or not all(type(u) is str for u in used):
+        raise D.Reject("used is not a list of strings")
+    order = Ch.members_order(log)
+    return {"order": order, "reason": None if order == used else Ch.MEMBERS_ORDER}
+
+
 TABLES = ["circuit", "circuit-00", "circuit-01", "circuit-63"]
 
 
@@ -2536,6 +2549,86 @@ def sample_link_first_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+MEMBERS_ORDER_NAMES = ["honest", "early", "late", "unclosed", "used-order", "used-other", "request"]
+
+
+def _round_line(rng: random.Random, root: Any, stream: Any, k: int) -> str:
+    """A release log line opening round `k` of stream `stream` of the tree `root`."""
+    return canonical_json_text({"after": rng.randbytes(64).hex(), "coins": rng.randbytes(64).hex(),
+                                "event": Ch.OPEN_EVENT, "n": rng.randint(0, 3), "round": k, "stream": stream,
+                                "tree": root})
+
+
+def _member_rounds(rng: random.Random, root: str) -> list[str]:
+    """A member's session's rounds as its tree `root`'s lines: its link's (``session`` round 0), one to three rounds
+    of its table's reps, then its closing round (``session`` round 1)."""
+    lines, opened = [_round_line(rng, root, CT.SESSION, 0)], Counter()
+    for _ in range(rng.randint(1, 3)):
+        s = f"circuit/rep{rng.randrange(2)}"
+        lines.append(_round_line(rng, root, s, opened[s]))
+        opened[s] += 1
+    return lines + [_round_line(rng, root, CT.SESSION, 1)]
+
+
+def _aside_line(rng: random.Random, roots: list[str]) -> str:
+    """A release log line that opens no round: a coin tree's own, a root's, a round's that names no tree or a tree
+    that is no string, one that is not its own canonical JSON, or no JSON."""
+    root = rng.choice(roots) if roots else rng.randbytes(64).hex()
+    line = _round_line(rng, root, CT.SESSION, 0)
+    return rng.choice([
+        canonical_json_text({"event": Ch.TREE_EVENT, "key": rng.randbytes(8).hex(), "nonce": rng.randbytes(8).hex(),
+                             "root": root, "spec": {}}),
+        canonical_json_text({"event": "root", "index": 0, "label": "draw", "received_at": 0,
+                             "root": rng.randbytes(64).hex()}),
+        _edit(line, tree=DROP), _edit(line, tree=rng.choice([5, None, [root]])), _edit(line, event="open"),
+        line[:-1] + " }", "x"])
+
+
+def members_order_case(rng: random.Random, name: str) -> Any:
+    """Members' sessions' rounds one member after another in a release log (`_member_rounds`), among lines that open
+    no round (`_aside_line`), and the sessions' trees in order; then (`early`) a round of the next member's tree
+    opened before a member's closing round, (`late`) a round of a member's tree opened after its closing round,
+    (`unclosed`) a member before the last without its closing round, (`used-order`) the sessions' trees in another
+    order, (`used-other`) one of them dropped or another added; or (`request`) a malformed request."""
+    rng = _seeded(rng)
+    n = rng.randint(0, 4) if name in ("honest", "request", "late", "used-other") else rng.randint(2, 4)
+    n = max(n, 1) if name == "late" else n
+    roots = [rng.randbytes(64).hex() for _ in range(n)]
+    blocks = [_member_rounds(rng, root) for root in roots]
+    used = list(roots)
+    match name:
+        case "early":
+            k = rng.randrange(n - 1)
+            line = blocks[k + 1].pop(rng.randrange(len(blocks[k + 1])))
+            blocks[k].insert(rng.randrange(len(blocks[k])), line)
+        case "late":
+            k = rng.randrange(n)
+            later = blocks[rng.randrange(k, n)]
+            line = _round_line(rng, roots[k], rng.choice([CT.SESSION, "circuit/rep0"]), 2)
+            later.insert(rng.randint(len(later) if later is blocks[k] else 0, len(later)), line)
+        case "unclosed":
+            blocks[rng.randrange(n - 1)].pop()
+        case "used-order":
+            i, k = rng.sample(range(n), 2)
+            used[i], used[k] = used[k], used[i]
+        case "used-other":
+            if used and rng.random() < 0.5:
+                used.pop(rng.randrange(n))
+            else:
+                used.insert(rng.randint(0, n), rng.randbytes(64).hex())
+    log = [line for block in blocks for line in block]
+    for _ in range(rng.randint(0, 6)):
+        log.insert(rng.randint(0, len(log)), _aside_line(rng, roots))
+    j = {"log": log, "used": used}
+    if name == "request":
+        k = rng.choice(["log", "used", None])
+        if k is None:
+            j = rng.choice([_body(j, used=DROP), {**j, "x": 1}, None])
+        else:
+            j[k] = {"log": rng.choice([None, "x", log + [5]]), "used": rng.choice([None, "x", used + [5], {}])}[k]
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -2576,6 +2669,8 @@ SESSION_TREES = D.Port(PIECES, "challenger_session_trees", session_trees,
                        _cases(session_trees_case, SESSION_TREES_NAMES), package=PACKAGE, of_record="lean")
 SAMPLE_LINK_FIRST = D.Port(PIECES, "challenger_sample_link_first", sample_link_first,
                            _cases(sample_link_first_case, SAMPLE_LINK_FIRST_NAMES), package=PACKAGE, of_record="lean")
+MEMBERS_ORDER = D.Port(PIECES, "challenger_members_order", members_order,
+                       _cases(members_order_case, MEMBERS_ORDER_NAMES), package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -2590,7 +2685,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (WITHIN, within_case, WITHIN_NAMES, 100),
         (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
         (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200),
-        (SAMPLE_LINK_FIRST, sample_link_first_case, SAMPLE_LINK_FIRST_NAMES, 200)]
+        (SAMPLE_LINK_FIRST, sample_link_first_case, SAMPLE_LINK_FIRST_NAMES, 200),
+        (MEMBERS_ORDER, members_order_case, MEMBERS_ORDER_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])

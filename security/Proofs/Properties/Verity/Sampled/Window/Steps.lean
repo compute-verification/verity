@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Window.Counts
 public import Proofs.Properties.Verity.Sampled.Window.Closing
+public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
 /-!
 # Sampled proofs' coupling over a window: the members' steps, from each session's read
@@ -13,11 +14,13 @@ evidence the session's closing round reveals).
 
 * **The sessions in the sample's order** (`drawnBefore`): the session of the member at place `i` is the one after as
   many sessions as members before `i` have a proof block in the sample.
-* **What the verdict gives at a window** (`WindowSessions`, the premise): at the sample `S`, the log opens at most as
-  many trees as members `S` draws, each naming its streams once, an opening of a tree opened before being of the last
-  tree opened; and each drawn member has a session's verdict at its statement whose record carries the member's part
-  of `S`, is the record sent for its session, decodes to what the verifier's read holds the log to at that session
-  (`SessionRead`), and whose proof files are decoded from the evidence its closing round reveals.
+* **What the verdict gives at a window** (`WindowSessions`, the premise): at the sample `S`, the log is the read of
+  lines the members' check accepts (`MemberForm.Accepted`) and opens at most as many trees as members `S` draws; and
+  each drawn member has a session's verdict at its statement whose record carries the member's part of `S`, is the
+  record sent for its session, decodes to what the verifier's read holds the log to at that session (`SessionRead`),
+  and whose proof files are decoded from the evidence its closing round reveals. The members' check gives each tree's
+  streams named once (`WindowSessions.specs`) and an opening of a tree opened before as the last tree's
+  (`WindowSessions.order`).
 * **A session's first stop and answered stops** (`link_stop`, `answered_count`): the first stop of a session that
   has a tree is at an opening asking for both link points' coordinates, and an answered stop's opening asks for its
   submission's count, so a trace off the empty classes at their counts is off the empty classes.
@@ -222,8 +225,9 @@ structure SessionSpecAt (x : Exchange) (tb : String) (v : ℕ) (text : String) (
   sha512 : spec.sha512Digests = true
   dg : spec.dg = Flock.Sha512.hash
 
-/-- **What the verdict gives at a window**, at the sample `S` and the play `x`: each tree the log opens names its
-streams once (`specs`); an opening of a tree opened before is of the last tree opened (`order`); the log opens at
+/-- **What the verdict gives at a window**, at the sample `S` and the play `x`: the log is the read of release log
+lines the members' check accepts (`members`, `MemberForm.Accepted`: `Spot.Challenger.membersTreeReason`, which
+refuses a round of a session's tree opened before the closing round of the session before it); the log opens at
 most as many trees as members have a proof block in `S` (`trees`); and each member `m` with a proof block in `S`, at
 place `i`, has a session's verdict (`SessionVerdict`) at a statement that is `m`'s whose record carries `m`'s part of
 `S` as its sample, is the record sent for the session after as many sessions as drawn members come before `m`,
@@ -231,8 +235,7 @@ decodes to what the verifier's read holds the log to at that session, a tree the
 `filesDec` decodes from the evidence `ev` the session's closing round reveals (`session`). -/
 structure WindowSessions (W : Window) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (S : Finset (Fin W.nJ)) (x : Exchange) : Prop where
-  specs : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup
-  order : OpensLast x.log
+  members : MemberForm.Accepted x.log
   trees : (openedTrees x.log).length ≤ drawnBefore W.ms S W.ms.length
   session : ∀ (i : ℕ) (m : Member W.nJ), W.ms[i]? = some m → (m.part S).Nonempty →
     ∃ (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String) (s : _root_.Spot.OneStageZk.RunFiles)
@@ -245,6 +248,20 @@ structure WindowSessions (W : Window) (tb : String) (ev : ℕ → Exchange → O
       SessionRead x.log #[tb] (drawnBefore W.ms S i) record J sess w ∧
       (openedTrees x.log)[drawnBefore W.ms S i]? = some τ ∧
       ev (drawnBefore W.ms S i) x = some w ∧ filesDec w = proofs
+
+/-- **Each tree the log opens names its streams once**, by the members' check (`MemberForm.Accepted.specs`). -/
+theorem WindowSessions.specs {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
+    {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
+    (h : WindowSessions W tb ev filesDec S x) : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup :=
+  h.members.specs
+
+/-- **An opening of a tree opened before is of the last tree opened**, by the members' check: it refuses a log that
+opens a round of a session's tree before the closing round of the session before it, or after its own
+(`MemberForm.Accepted.opensLast`). -/
+theorem WindowSessions.order {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
+    {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
+    (h : WindowSessions W tb ev filesDec S x) : OpensLast x.log :=
+  h.members.opensLast
 
 /-- **A drawn member's session, with the session `--zk` sets up at the member**: `WindowSessions.session` with the
 session's shape at a member of one table (`Member.spec_at`). -/

@@ -865,6 +865,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
+   ("challenger_members_order", Challenger.membersOrderPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
