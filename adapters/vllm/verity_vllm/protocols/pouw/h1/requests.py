@@ -271,9 +271,9 @@ def _root64(h: Any) -> bool:
 
 def table_root(row: Mapping[str, Any], name: str) -> Any:
     """Manifest row `row`'s root of its call's table `name` (its ``tables``' ``a`` or ``z``, `pouw_h1.H1Run.manifest`);
-    None for a row that carries no ``tables`` object."""
+    None for a row whose ``tables`` is absent or empty."""
     tables = row.get("tables")
-    return tables.get(name) if isinstance(tables, Mapping) else None
+    return tables.get(name) if tables else None
 
 
 def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:

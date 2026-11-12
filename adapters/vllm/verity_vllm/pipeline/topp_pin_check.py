@@ -60,7 +60,7 @@ def kernel(out: Path) -> dict:
     for B in drain_batches(num_sm):
         for order in ("in order", "reversed"):
             idx = list(range(B)) if order == "in order" else list(range(B))[::-1]
-            rec = {"B": B, "order": order}
+            rec: dict = {"B": B, "order": order}
             for arm, entry, S in (("pinned", pinned, S_reg), ("vllm", original, vllm_s(B))):
                 kb = keep(entry, idx)
                 moved = [r for j, r in enumerate(idx) if not np.array_equal(kb[j], alone[r])]

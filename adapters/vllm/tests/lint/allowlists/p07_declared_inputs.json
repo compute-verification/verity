@@ -30,7 +30,6 @@
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "manifest", "detail": "VERITY_TREE"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "manifest", "detail": "os.environ.get"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "requested_tree", "detail": "VERITY_TREE"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "broad-except", "symbol": "_tuned_gemm_arch_family", "detail": "except Exception"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
@@ -68,9 +67,6 @@
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "_real_rows", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
-    {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "Collector.on_step", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"},
-    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "environ", "symbol": "inductor_cache_dir", "detail": "TORCHINDUCTOR_CACHE_DIR"},
-    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "environ", "symbol": "triton_cache_dir", "detail": "TRITON_CACHE_DIR"}
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"}
   ]
 }
