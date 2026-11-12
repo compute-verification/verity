@@ -16,7 +16,15 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_cublas_names import _node
-from tests.pipeline.test_row import GLM53, ROW, TP_DENSE, TP_MOE, _row, _timeline, _tp_row
+from tests.pipeline.test_row import (
+    GLM53,
+    ROW,
+    TP_DENSE,
+    TP_MOE,
+    _row,
+    _timeline,
+    _tp_row,
+)
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
@@ -302,7 +310,8 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
                    prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
         assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")
-    for names_none in ({}, {"build_dirs": None}, {"build_dirs": {}}, {"build_dirs": {"native_collect": ""}}, {"build_dirs": {"fa2": "/x"}}):
+    no_dir: tuple[dict, ...] = ({}, {"build_dirs": None}, {"build_dirs": {}}, {"build_dirs": {"native_collect": ""}}, {"build_dirs": {"fa2": "/x"}})
+    for names_none in no_dir:
         rel.write_text(json.dumps({"tag": "r16-int-3", **names_none}))                 # a release that names no collector build dir
         r = prepared()
         assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_default")
