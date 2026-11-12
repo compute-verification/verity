@@ -125,8 +125,6 @@ One line for each subpackage of `verity_vllm/`, and for what sits beside it:
 verity_vllm/
   llm.py             LLM, the pinned engine as a library
   config.py          workload files, checkpoint pins, protocol names; settings.py: every environment variable it reads
-  errors.py, log.py  the one refusal type (Refused); the logger every module logs through (init_logger)
-  target_family.py   the device class a workload's id declares, and the target-family preflight held to it
   engine/            the pinned engine: its build, profiles, served switches (served.py); hooks.py owns every runtime patch
   pipeline/          stage drivers (Build, Match, Commit; tp/ for TP > 1), the endpoint (serve_*.py), cli.py, circuit_db.py
   program/           Programs: the torch frontend (frontend/) lowers the served model onto registered Definitions
@@ -152,15 +150,6 @@ tools/               scripts run by path: advice_compile.py, ratchet_gate.py, su
 Imports point down a fixed layer order, with `pipeline` at the top and `config` at the bottom:
 `tests/lint/test_p09_layering.py` states the order and holds the package to it. `tests/regression/` holds the reference
 regression, skipped unless `VERITY_REGRESSION=1`.
-
-The modules directly under `verity_vllm/` are the package's face. Where one declares `__all__`, it lists the names
-that library code and code outside the adapter read from it; a name only the tests read is not listed. `verity_vllm`
-gives outside code `EnginePin`, `EngineSpec`, `LLM` and `TargetProfile`. `llm.py` adds `protocol_context` and
-`resolve_options`, which the benchmark harness's tests read. `errors.py` gives every module `Refused`, and `log.py`
-gives `init_logger`, `configure` and `VerityLogger`. `target_family.py` gives the package `device_token_of_row` and
-`declared_profile`, and the command line its `Options` and `main`. `config.py` and `settings.py` declare none. The
-command line is run and not imported: outside code calls `verity-vllm` or `python -m verity_vllm.pipeline.cli`, and
-takes from that module only `main`.
 
 ## Running
 
