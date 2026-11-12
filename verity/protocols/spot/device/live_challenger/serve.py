@@ -2,7 +2,7 @@
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
-    python3 verity/composite/device/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON --session ID
+    python3 verity/protocols/spot/device/live_challenger/serve.py --out DIR --port PORT --scheme SCHEME --families JSON --session ID
         [--epoch E] [--peer NAME [--peers FILE]] [--key DIR] [--params W,H] [--keygen-workers N] [--host NAME]
         [--root HEX] [--secret-file FILE] [--sign-lock FILE] [--withhold]
 
@@ -62,7 +62,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
 from verity.protocols.spot.device import remote  # noqa: E402
 from verity.protocols.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402

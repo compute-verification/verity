@@ -1,6 +1,6 @@
 #!/bin/bash
 # vy-challenger-setup GATE_KEYS [--lock]: the auditor host's accounts and state (vy-challenger-1; RT4-INT-17, -18), as root, safe to
-# rerun. verity/composite/device/live_challenger/auditor.py says what runs there and why.
+# rerun. verity/protocols/spot/device/live_challenger/auditor.py says what runs there and why.
 #
 #   - `auditor`: a system user with no login, home /var/lib/vy-challenger (0700, so research can't enter it): the challenger key
 #     (key/, made by `auditor.py keygen`), the ledger (windows.jsonl, append-only by chattr +a, which only root can lift), the
@@ -63,7 +63,7 @@ mv -f "$tmp" "$ak"
 echo "research's authorized_keys: $n keys, each forced to vy-challenger-gate; lanes that open:${lanes:- none}"
 
 s=/etc/sudoers.d/60-vy-challenger
-printf '%s\n' "# vy-challenger-setup: research runs the challenger's gate as root, and nothing else (verity/composite/device/live_challenger/auditor.py)" \
+printf '%s\n' "# vy-challenger-setup: research runs the challenger's gate as root, and nothing else (verity/protocols/spot/device/live_challenger/auditor.py)" \
   'research ALL=(root) NOPASSWD: /usr/local/sbin/vy-challenger-gate --ssh *' > "$s.tmp"
 visudo -cqf "$s.tmp" || { rm -f "$s.tmp"; die "visudo refuses $s"; }
 chmod 0440 "$s.tmp"

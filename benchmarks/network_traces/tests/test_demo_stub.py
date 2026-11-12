@@ -19,7 +19,7 @@ from verity.protocols.certifier.verifier.release import with_release
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/composite/device/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/spot/device/live_challenger"))
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
 import warden_serve as ws  # noqa: E402

@@ -59,7 +59,7 @@ Open premises (`open`):
 - **Python**: `verity.protocols.certifier.verifier`. Code outside this directory imports every module but `boundary`,
   `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
-  `served_rows`, `warden`); `verity/composite/device/live_challenger`; the tests of `../../pouw/verifier` and
+  `served_rows`, `warden`); `verity/protocols/spot/device/live_challenger`; the tests of `../../pouw/verifier` and
   `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`,
   `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests (`network/tests`)
   and vector script (`lean/scripts`) import it too. `../../spot`, `../../flock` and `../../recursion` import none.
@@ -413,7 +413,7 @@ From `verity`, `advice_check`, `compile_slice` and `served_statics` take the cir
 those and the hm96 leaves, and `charge_chain` and `window_charge` those and hm96, and from SPOT the produced rows.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 
-The coin link (`coin_link`, run by `verity/composite/device/live_challenger/coin_link.py`) carries a window's session
+The coin link (`coin_link`, run by `verity/protocols/spot/device/live_challenger/coin_link.py`) carries a window's session
 between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
 grids, exempts only the verified, expected, once-only coin openings, and counts everything else
 (`protocol/coin-link.md`).

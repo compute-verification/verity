@@ -488,7 +488,7 @@ def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces
     assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
     verifier_host = (RS / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
     assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
-    serve = (ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py").read_text()
+    serve = (ROOT / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "serve.py").read_text()
     assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
         "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
 

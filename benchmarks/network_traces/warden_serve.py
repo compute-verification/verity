@@ -23,14 +23,14 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 
 **What it can't enforce here.**
 - Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+  gate's `warden-rehearse` (`verity/protocols/spot/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
   certifier's host clock (`origin_unix`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
-  is H = 20 (the auditor gate's default, `verity/composite/device/live_challenger/auditor.py`).
+  is H = 20 (the auditor gate's default, `verity/protocols/spot/device/live_challenger/auditor.py`).
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`

@@ -1,5 +1,5 @@
 # Sourced by a pod whose `flock-circuit serve` takes its sessions' coin trees from the auditor's challenger
-# (`serve --tree-from`): verity/composite/device/live_challenger/serve.py, its coins the Lean verifier's `IO.getRandomBytes`
+# (`serve --tree-from`): verity/protocols/spot/device/live_challenger/serve.py, its coins the Lean verifier's `IO.getRandomBytes`
 # (`one_stage.verifier.coins`, the sampled-proofs-verifier built here with lake), a test LMS key and a fresh session secret
 # in the pod's scratch, none of it the prover's. One challenger serves one `serve` process: its session closes after that
 # server's last session, and the challenger exits 0 once it closes.
@@ -50,7 +50,7 @@ challenger_start() {
   mkdir -p "$dir" "$CHALLENGER_WORK/$name"
   CHALLENGER_SECRET=$CHALLENGER_WORK/$name/secret
   "$CHALLENGER_PY" -c 'import secrets; print(secrets.token_hex(32))' > "$CHALLENGER_SECRET" || return 1
-  "$CHALLENGER_PY" "$CHALLENGER_REPO/verity/composite/device/live_challenger/serve.py" --out "$dir" --port 0 \
+  "$CHALLENGER_PY" "$CHALLENGER_REPO/verity/protocols/spot/device/live_challenger/serve.py" --out "$dir" --port 0 \
     --scheme verity/flock/tree-from/v1 --families '[["positions", 1]]' --session "$name" --key "$CHALLENGER_WORK/$name/key" \
     --params "${CHALLENGER_PARAMS:-4,3}" --keygen-workers 1 --secret-file "$CHALLENGER_SECRET" \
     > "$dir/challenger.out" 2> "$dir/challenger.err" &

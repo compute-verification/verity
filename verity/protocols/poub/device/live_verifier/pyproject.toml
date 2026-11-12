@@ -27,10 +27,10 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # auditor_line.py --boundary, which the stub verifier's run is read with: the network certifiers' records and audit
           "verity/protocols/certifier", "verity/protocols/certifier/prover",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
-          "verity/composite/device/live_challenger/serve.py",
+          "verity/protocols/spot/device/live_challenger/serve.py",
           # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its
           # publish imports from the pinned tree
           "tools/research/src/research",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
           "verity/protocols/poub/device/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
+          "verity/protocols/spot/device/live_challenger/__init__.py"]

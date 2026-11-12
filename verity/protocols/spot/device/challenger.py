@@ -93,7 +93,7 @@ operator stages the record before any session and closes it after the last, and 
 can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
-auditor (`verity/composite/device/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
+auditor (`verity/protocols/spot/device/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
 entry, under the
 challenger's key, when a prover reserves a window (its request, start and expiry), when it opens the reserved session for
 the window's root, before its first coin, and when the session ends; a window gets one session.  A prover's period is two

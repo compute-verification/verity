@@ -219,23 +219,23 @@ def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, mon
     marker it can't read lets nothing through."""
     marker = tmp_path / "auditor"
     monkeypatch.setenv("AUDITOR_FILE", str(marker))
-    marker.write_text("# the challenger only\nbash verity/composite/device/live_challenger/run.sh\n")
-    for i, command in enumerate(([PY, "-c", "print('no')"], ["bash", "verity/composite/device/live_challenger/run.sh", "--x"],
-                                 ["nice", "-n", "19", "bash", "verity/composite/device/live_challenger/run.sh"],
+    marker.write_text("# the challenger only\nbash verity/protocols/spot/device/live_challenger/run.sh\n")
+    for i, command in enumerate(([PY, "-c", "print('no')"], ["bash", "verity/protocols/spot/device/live_challenger/run.sh", "--x"],
+                                 ["nice", "-n", "19", "bash", "verity/protocols/spot/device/live_challenger/run.sh"],
                                  ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py",
-                                  "--", "bash", "verity/composite/device/live_challenger/run.sh"])):
+                                  "--", "bash", "verity/protocols/spot/device/live_challenger/run.sh"])):
         req, runs_root = _request(tmp_path, f"off{i}", command)
         out = remote.launch_request(req)
         assert out["started"] is False and "auditor host" in out["refused"] and str(marker) in out["refused"], command
-        assert "`bash verity/composite/device/live_challenger/run.sh`" in out["refused"]
+        assert "`bash verity/protocols/spot/device/live_challenger/run.sh`" in out["refused"]
         assert R.summarize(runs_root / f"off{i}")["state"] == "refused" and not (runs_root / f"off{i}" / "job.json").exists()
-    req, runs_root = _request(tmp_path, "challenger", ["bash", "verity/composite/device/live_challenger/run.sh"])
+    req, runs_root = _request(tmp_path, "challenger", ["bash", "verity/protocols/spot/device/live_challenger/run.sh"])
     doc = json.loads(req.read_text()); doc["cwd"] = str(tmp_path); req.write_text(json.dumps(doc))   # no run.sh here: the run fails
     assert remote.launch_request(req)["started"]
     _wait_terminal(runs_root / "challenger")
     marker.chmod(0)
     if not os.access(marker, os.R_OK):                     # root reads it anyway
-        req, _ = _request(tmp_path, "unreadable", ["bash", "verity/composite/device/live_challenger/run.sh"])
+        req, _ = _request(tmp_path, "unreadable", ["bash", "verity/protocols/spot/device/live_challenger/run.sh"])
         out = remote.launch_request(req)
         assert out["started"] is False and "runs only its own service" in out["refused"]
 
@@ -278,14 +278,14 @@ def test_a_machine_registered_as_an_auditor_host_takes_no_research_run(tmp_path,
     where a lane's key would otherwise fail at ssh and leave the launcher waking a running VM for 15 minutes."""
     f = tmp_path / "m.toml"
     f.write_text('[machines.c]\nprovider="ssh"\nhost="203.0.113.7"\nuser="vy-admin"\nproject="verity"\n'
-                 'auditor="verity/composite/device/live_challenger/auditor.py"\n')
+                 'auditor="verity/protocols/spot/device/live_challenger/auditor.py"\n')
     monkeypatch.setenv("RESEARCH_MACHINES", str(f))
     monkeypatch.setenv("RESEARCH_MACHINES_D", "off")
     monkeypatch.setattr(remote, "ssh_run", lambda *a, **k: pytest.fail("ssh to an auditor host"), raising=False)
     from research import cli
     rc = cli.main(["run", "--on", "c", "--project", "verity", "--no-custody-r2", "--", "true"])
     err = capsys.readouterr().err
-    assert rc == 3 and "auditor host" in err and "verity/composite/device/live_challenger/auditor.py" in err
+    assert rc == 3 and "auditor host" in err and "verity/protocols/spot/device/live_challenger/auditor.py" in err
 
 
 def test_machines_resolution(tmp_path, monkeypatch):

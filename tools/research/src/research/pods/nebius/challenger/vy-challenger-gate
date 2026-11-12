@@ -1,5 +1,5 @@
 #!/bin/sh
-# vy-challenger-gate: the one way into the auditor host's challenger (verity/composite/device/live_challenger/auditor.py, RT4-INT-18).
+# vy-challenger-gate: the one way into the auditor host's challenger (verity/protocols/spot/device/live_challenger/auditor.py, RT4-INT-18).
 # research's ssh keys there are forced to this command (`vy-challenger-gate LANE`, or no LANE for a key that reads only;
 # vy-challenger-setup), which takes the request from SSH_ORIGINAL_COMMAND and runs the gate as root through sudoers'
 # 60-vy-challenger, the key's lane the opener (`by`, RT4-INT-24); vy-admin runs `sudo vy-challenger-gate VERB ...` itself. The gate

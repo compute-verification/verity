@@ -59,7 +59,7 @@ leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the tree m
 archived with the int8 checkpoints' manifest
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
-    git archive --format=tar.gz -o gate-tree.tgz COMMIT verity verity/composite/device/live_challenger \\
+    git archive --format=tar.gz -o gate-tree.tgz COMMIT verity verity/protocols/spot/device/live_challenger \\
       adapters/vllm/manifests/checkpoints-int8.json
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\

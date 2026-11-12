@@ -2,7 +2,7 @@
 # Publish the auditor host's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
 # the watchers loop `challenger-publish` (infra/control/watchers.toml), so no agent VM has to be up for it:
 #
-#   verity/composite/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor host's gate, research@204.12.178.84
+#   verity/protocols/spot/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor host's gate, research@204.12.178.84
 #
 # It reads both through the gate's `ledger` and `fetch SESSION` verbs: as research, with a key the host forces to the gate (the
 # pod's RunPod key, which reads only), or as vy-admin, through `sudo vy-challenger-gate`. $VY_CHALLENGER_SSH_KEY is the ssh key

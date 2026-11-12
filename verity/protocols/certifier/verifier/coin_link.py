@@ -2,7 +2,7 @@
 path a window's live coins take from the challenger to the server it audits, counted and re-clocked on the certifier's
 own grids.
 
-The challenger (`spot.remote`, served by `verity/composite/device/live_challenger/serve.py`) and this link run on one auditor
+The challenger (`spot.remote`, served by `verity/protocols/spot/device/live_challenger/serve.py`) and this link run on one auditor
 host (`trusted-host`), the device that runs the server's network certifier. The link takes each connection from the
 prover's side (the prover's client, on the server), opens one to the challenger for it, and carries `remote`'s frames
 both ways, one connection at a time, in the challenger's order:

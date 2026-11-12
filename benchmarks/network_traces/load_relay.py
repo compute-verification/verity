@@ -18,7 +18,7 @@ registrations the verifier pins each load value from (`blocks.pins`).
     python benchmarks/network_traces/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
 The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-relay``,
-``verity/composite/device/live_challenger/auditor.py``), in three parts:
+``verity/protocols/spot/device/live_challenger/auditor.py``), in three parts:
 
 * **The store** (`write_store`, ``write``): interface 1's public weights stream under `DEMO_SEED`, generated once on
   the auditor's store disk as ``<shape>.bin`` with its record ``<shape>.json``, kept only when its tensors' SHA-256

@@ -2193,6 +2193,11 @@
       "paths": {
         "verity/difftest/": "tools/difftest/"
       }
+    },
+    {
+      "paths": {
+        "verity/composite/device/live_challenger/": "verity/protocols/spot/device/live_challenger/"
+      }
     }
   ]
 }

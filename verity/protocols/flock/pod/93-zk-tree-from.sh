@@ -3,7 +3,7 @@
 # sourced: the proving build of flock-circuit and the Lean flock-verify). From a clone:
 #   research run --on auto --source . --as LANE --project verity --cwd clone --cpus 16 --mem-gb 32 \
 #     -- bash verity/protocols/flock/pod/93-zk-tree-from.sh
-# The challengers are challenger.sh's (verity/composite/device/live_challenger/serve.py on the Lean verifier's coins, a test LMS key and
+# The challengers are challenger.sh's (verity/protocols/spot/device/live_challenger/serve.py on the Lean verifier's coins, a test LMS key and
 # a session secret outside $OUT). The statement is 91-plain-hidden.sh's (tests/plain_hidden.py: RoPE d64 at 32 instances,
 # hidden outputs, the verifier's own program and partition), each session sampling all 32 (--draw subset:32, as every
 # soundness claim is about a sampled session):

@@ -47,7 +47,7 @@ artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify",
 worker_gb = 6
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
-# `verity/composite/device/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
+# `verity/protocols/spot/device/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
 # `benchmarks/pous/p2_v1` and p2_stage's modules: served_bandwidth's session over the toy's P2 store (`bandwidth.py`, which
@@ -65,7 +65,7 @@ worker_gb = 6
 # through bash in a toy tree, with `demos/vllm/published.sh`, the list of files a Commit run publishes.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
-inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/composite/device/live_challenger",
+inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/spot/device/live_challenger",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",

@@ -4,7 +4,7 @@ the verifier's check of what it served.
 
 The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.connect_when_listening`) to a
 challenger started over a live epoch's layout, scheme `pouw_h1_challenger.SCHEME` and `pouw_h1_challenger.families` (S)
-as ``FAMILIES`` (`verity/composite/device/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
+as ``FAMILIES`` (`verity/protocols/spot/device/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
 (``session``: S) and, once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``)
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C

@@ -154,7 +154,7 @@ paths = [
     "verity/circuits/lean",
     "verity/commitments/lean",
     "verity/commitments/lms/lean",
-    "verity/composite/device/live_challenger",
+    "verity/protocols/spot/device/live_challenger",
     "verity/protocols/interface",
     "verity/protocols/flock/verifier",
     "verity/protocols/spot/verifier/lean",

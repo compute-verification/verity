@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-STUB = HERE.parents[1] / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = HERE.parents[1] / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def _load():
@@ -63,7 +63,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     pg = sz.program(M, setup.cls, sz.TEMPLATES, at.G, at.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in h.rounds["honest"]]
 
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **kw: [sys.executable, str(STUB), *real(*a, **kw)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))

@@ -7,12 +7,12 @@ adapters/vllm/tests/program/predict/test_window_circuit.py -> verity/protocols/c
 adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/prover/__init__.py
 adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/verifier/__init__.py
 adapters/vllm/tests/program/predict/test_window_rows.py -> verity/protocols/certifier/verifier/active.py
-adapters/vllm/tests/protocols/challenger_host.py -> verity/composite/device/live_challenger/models.py
+adapters/vllm/tests/protocols/challenger_host.py -> verity/protocols/spot/device/live_challenger/models.py
 adapters/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prove
 adapters/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prove/live.py
 adapters/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/hidden_zk
 adapters/vllm/tests/protocols/pouw_h1_gpu.py -> benchmarks/pouw/served_h1/producer.py
-adapters/vllm/tests/protocols/test_pouw_h1_circuits.py -> verity/composite/device/live_challenger/auditor.py
+adapters/vllm/tests/protocols/test_pouw_h1_circuits.py -> verity/protocols/spot/device/live_challenger/auditor.py
 adapters/vllm/verity_vllm/config.py -> benchmarks/pous
 adapters/vllm/verity_vllm/config.py -> benchmarks/remote_session
 adapters/vllm/verity_vllm/config.py -> benchmarks/torch_gpu/p2_stage

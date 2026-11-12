@@ -67,12 +67,12 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
 
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
-    """The auditor host's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
+    """The auditor host's `warden-rehearse` (`verity/protocols/spot/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
     gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
     minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
     origin's delay and 30 s for the key and the check."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
     args = ws.parser().parse_args(argv[2:])
@@ -95,7 +95,7 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
     stream of the request's shape relayed to the sink tunnels' local ends for its program, the endpoint given the
     gate's `LOAD_READY_S`; a request without a load passes none. The gate's shapes are `load_relay`'s, and its
     `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 46 at H200."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     program, sinks = "ab" * 64, [("127.0.0.1", 50001 + i) for i in range(4)]
     req = {"device": "warden", "requests": 7, "scan": True,
@@ -119,7 +119,7 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
     """`warden-rehearse` always passes its temperature and top_p (0 and 1 by default), and `rehearse` puts both on
     every request, so an endpoint's own generation config never applies; the arrivals, prompts, lengths and seeds stay
     the seed's, so `warden_minutes` still bounds the run."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     given = ws.parser().parse_args(
         A.warden_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
@@ -147,7 +147,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
@@ -185,7 +185,7 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
     bounds a prompt by its KI and the tokens by its KO. w63k4's class refuses the class of record's schedule (65
     egress cells past its KO + 1 = 5), so a w63k4 run needs its own."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     assert A.SCAN_CLASS == sz.W63.name and set(A.SCAN_CLASSES) == {"w63", "w63k4"} <= set(sz.SETUPS)
@@ -213,7 +213,7 @@ def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows
     default (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's
     most requests are 1064 execution phases of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
@@ -243,7 +243,7 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     windows (`groups`), which `warden_group_minutes` covers with the origin's delay and 30 s for the key and the
     check. Without `--window-per-group` the prompts go at the gate's arrivals."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     prompts = [[70001, 3], [5], [7]]
@@ -286,7 +286,7 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
     it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
     run."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     lo, hi = A.SCAN_BUCKET_MS
@@ -320,7 +320,7 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     `rehearse` takes `--prompts` only with `--ids` and `--window-per-group` only with `--prompts`, and a group is at most
     `lanes` prompts."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import scan_zk as sz
     longest = [[(1 << A.WARDEN_PROMPT_ID_BITS) - 1] * A.WARDEN_PROMPT_IDS[1]]
@@ -377,7 +377,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     the bytes the network certifier certified, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     import demo_stub as D
     import scan_zk as sz

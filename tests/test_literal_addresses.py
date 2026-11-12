@@ -105,7 +105,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/tests/test_retention.py": 2,
     "tools/research/tests/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
-    "verity/composite/device/live_challenger/publish.sh": 2,
+    "verity/protocols/spot/device/live_challenger/publish.sh": 2,
     "benchmarks/network_traces/site.json": 1,
     "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 2,
     "benchmarks/numerical/tests/bench/data/flock-cells/6d1295ed.json": 3,

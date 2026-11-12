@@ -423,9 +423,9 @@ owner = "infra"
 
 # ---- the auditor host: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
 # --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
-# through vy-challenger-gate (verity/composite/device/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
+# through vy-challenger-gate (verity/protocols/spot/device/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
-# `git archive COMMIT verity verity/composite/device/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json
+# `git archive COMMIT verity verity/protocols/spot/device/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json
 # | ssh vy-admin@HOST sudo
 # vy-challenger-pin COMMIT`, then `sudo runuser -u
 # auditor -- python3 -I /opt/vy-challenger/current/verity/composite/device/live_challenger/auditor.py keygen` once.
