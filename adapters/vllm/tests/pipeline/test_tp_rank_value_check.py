@@ -18,7 +18,7 @@ import torch
 
 from tests.check.opened import commit_host_steps
 from verity_vllm.pipeline.commit import baseline_state
-from verity_vllm.pipeline.tp import rank_worker as RW
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
 
 OUT, NORM = "model.layers.0.mlp.experts/out", "model.norm/0"
@@ -65,7 +65,7 @@ class _Compare:
         self.uninstalled += 1
 
 
-class _Rank(RW.TP2CaptureWorkerExtension):
+class _Rank(TP2CaptureWorkerExtension):
     _tp2_commit: dict[str, Any]
 
 
