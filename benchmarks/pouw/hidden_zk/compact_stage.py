@@ -46,7 +46,7 @@ _POW10 = [np.uint32(10 ** i) for i in range(1, 10)]
 #: per digit count, which of a token's 12 rendered bytes (10 digits, its separator, one spare) it keeps
 _KEEP = np.array([[j >= 10 - d for j in range(10)] + [True, False] for d in range(11)], dtype=bool)
 _root: list[Path] = []
-_spools: list["Spool"] = []
+_spools: list[Spool] = []
 
 
 def set_root(path: Path) -> None:
@@ -323,7 +323,7 @@ def _live_block(ops: np.ndarray, lens: np.ndarray, g0: int, alive: np.ndarray) -
 class _Rows:
     """A `CompactLayout`'s ``rows_a`` (``side`` 0) or ``rows_b`` (1), read off the spool."""
 
-    def __init__(self, lay: "CompactLayout", side: int):
+    def __init__(self, lay: CompactLayout, side: int):
         self.lay, self.side = lay, side
 
     def __len__(self) -> int:
