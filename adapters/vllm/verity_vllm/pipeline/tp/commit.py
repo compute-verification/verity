@@ -55,7 +55,13 @@ from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
 from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
-from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
+from verity_vllm.records.schema_ids import (
+    LATE_READ_CHECK_SCHEMA,
+    TP_SAMPLED_REPLAY_SCHEMA,
+    TP_VALUE_CHECK_SCHEMA,
+    TP_WEIGHTS_PIN_SCHEMA,
+    XRANK_COLLECTIVES_FOLD_SCHEMA,
+)
 
 __all__ = ["Options", "main"]
 
@@ -735,7 +741,7 @@ def main(args: Options) -> int:
                 raise SystemExit("fail-closed: value-check install did not reach every rank")
             result = run_workload(eng, reqs, sampling)
             vres = llm.collective_rpc("tp2_commit_value_check", timeout=args.rpc_timeout)
-        vcheck = {"schema": "verity/commit-integ/value-check-tp/v1", "label": "measured", "tp": args.tp, "tokens_equal_ref": result["tokens"] == tokens_ref,
+        vcheck = {"schema": TP_VALUE_CHECK_SCHEMA, "label": "measured", "tp": args.tp, "tokens_equal_ref": result["tokens"] == tokens_ref,
                   "per_rank": {int(v["rank"]): v for v in vres}, "ranks_answered": sorted(int(v["rank"]) for v in vres),
                   "verdict": ("PASS" if len(vres) == world and all(v.get("verdict") == "PASS" for v in vres) and result["tokens"] == tokens_ref else "FAIL"),
                   "method": (vres[0].get("method") if vres else None)}
@@ -817,8 +823,8 @@ def main(args: Options) -> int:
     from verity_vllm.check.match import xrank_collectives as _XC
     xr_comp: dict[str, Any] = _XC.fold_pairs(xrank_pairs) if xrank_pairs else {"result": None, "pairs": 0, "why": "no instrumented pair"}
     xr_comp["per_pair_artifacts"] = [str(out / f"xrank_pair{p}.json") for p in range(len(xrank_pairs)) if (out / f"xrank_pair{p}.json").exists()]
-    (out / "xrank_collectives.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives-fold/v1", "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
-    (out / "weights_pin.json").write_text(json.dumps({"schema": "verity-sweep/tp-weights-pin/v1", "tp": args.tp} | wp_comp, indent=1, default=str) + "\n")
+    (out / "xrank_collectives.json").write_text(json.dumps({"schema": XRANK_COLLECTIVES_FOLD_SCHEMA, "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
+    (out / "weights_pin.json").write_text(json.dumps({"schema": TP_WEIGHTS_PIN_SCHEMA, "tp": args.tp} | wp_comp, indent=1, default=str) + "\n")
     # the peer-input BINDER: the fold Match's peer_binding digests (fold peers_r[s,k] leaf == recorder
     # partial of rank 1-r at (s,k)) against the recorder rows the match oracle compared the COMMITTED partials to (bit-exact) -- by value,
     # both directions, every (step, k) of every rank.  False -> FAIL named; absent -> None (◐) unless --require-fold-match (then FAIL named)
@@ -849,7 +855,7 @@ def main(args: Options) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"[tp2commit] coverage.json sampled_replay annotate failed: {e!r}", flush=True)
     if replay_cfg is not None:
-        (out / "sampled_replay.json").write_text(json.dumps({"schema": "verity-sweep/tp-sampled-replay/v1", "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
+        (out / "sampled_replay.json").write_text(json.dumps({"schema": TP_SAMPLED_REPLAY_SCHEMA, "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
                                                              "per_pair_artifacts": [str(out / f"finalize_pair{r['pair']}.json") for r in rows if r["arm"] != "control"],
                                                              "note": "per-rank full records (strata, mismatches, programs) live in finalize_pair<k>.json[rank].sampled_replay",
                                                              "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(set(xrank_families) | {u["family"] for u in C2.list_of(sr_comp, "unreplayable") if u.get("evaluated_by")}),
