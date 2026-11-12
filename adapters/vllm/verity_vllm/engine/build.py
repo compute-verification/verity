@@ -18,8 +18,8 @@ from typing import Any
 
 import torch
 
-from verity_vllm.engine import env as engine_env, handle, served
-
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import handle, served
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
 
@@ -75,16 +75,16 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
         cc, sc, mc = vc.cache_config, vc.scheduler_config, vc.model_config
         doc["enable_prefix_caching"] = bool(getattr(cc, "enable_prefix_caching", None)) if getattr(cc, "enable_prefix_caching", None) is not None else None
         doc["enable_chunked_prefill"] = bool(getattr(sc, "enable_chunked_prefill", None)) if getattr(sc, "enable_chunked_prefill", None) is not None else None
-        doc["max_num_batched_tokens"] = int(getattr(sc, "max_num_batched_tokens")) if getattr(sc, "max_num_batched_tokens", None) is not None else None
-        doc["long_prefill_token_threshold"] = (int(getattr(sc, "long_prefill_token_threshold"))
+        doc["max_num_batched_tokens"] = int(sc.max_num_batched_tokens) if getattr(sc, "max_num_batched_tokens", None) is not None else None
+        doc["long_prefill_token_threshold"] = (int(sc.long_prefill_token_threshold)
                                                if getattr(sc, "long_prefill_token_threshold", None) is not None else None)
         tp = getattr(getattr(vc, "parallel_config", None), "tensor_parallel_size", None)
         doc["tensor_parallel_size"] = int(tp) if tp is not None else None
-        doc["max_num_seqs"] = int(getattr(sc, "max_num_seqs")) if getattr(sc, "max_num_seqs", None) is not None else None
-        doc["max_model_len"] = int(getattr(mc, "max_model_len")) if getattr(mc, "max_model_len", None) is not None else None
+        doc["max_num_seqs"] = int(sc.max_num_seqs) if getattr(sc, "max_num_seqs", None) is not None else None
+        doc["max_model_len"] = int(mc.max_model_len) if getattr(mc, "max_model_len", None) is not None else None
         doc["dtype"] = str(getattr(mc, "dtype", None))
-        doc["block_size"] = int(getattr(cc, "block_size")) if getattr(cc, "block_size", None) is not None else None
-        doc["gpu_memory_utilization"] = float(getattr(cc, "gpu_memory_utilization")) if getattr(cc, "gpu_memory_utilization", None) is not None else None
+        doc["block_size"] = int(cc.block_size) if getattr(cc, "block_size", None) is not None else None
+        doc["gpu_memory_utilization"] = float(cc.gpu_memory_utilization) if getattr(cc, "gpu_memory_utilization", None) is not None else None
         doc["async_scheduling"] = resolved_async_scheduling(llm)      # resolved, not the CLI default
         import vllm.envs as envs
         doc["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
@@ -265,7 +265,7 @@ def flash_attn_versions(model: Any) -> set:
     for _, mod in model.named_modules():
         impl = getattr(mod, "impl", None)
         if impl is not None and hasattr(impl, "vllm_flash_attn_version"):
-            vs.add(getattr(impl, "vllm_flash_attn_version"))
+            vs.add(impl.vllm_flash_attn_version)
     return vs
 
 
