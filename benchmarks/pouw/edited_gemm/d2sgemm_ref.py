@@ -15,6 +15,7 @@ didn't reject.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import struct
 import sys
@@ -22,8 +23,12 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from derive import NCT, tile_receipts
+# floored_gemm's derive.py from its file, under a name no other directory's script has: nothing goes on `sys.path`
+_spec = importlib.util.spec_from_file_location(
+    "floored_gemm_derive", Path(__file__).resolve().parent.parent / "floored_gemm" / "derive.py")
+_derive = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_derive)
+NCT, tile_receipts = _derive.NCT, _derive.tile_receipts
 
 T = 128
 TOP = 126
