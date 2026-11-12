@@ -59,3 +59,8 @@ root = "Spot.PlanCheckMain"
 [[lean_exe]]
 name = "site-difftest"
 root = "Spot.SiteDifftestMain"
+
+# Scratch: `Spot.Bits.check` on a round's circuit files. Not a default target.
+[[lean_exe]]
+name = "bits-check-probe"
+root = "Spot.BitsCheckProbe"
