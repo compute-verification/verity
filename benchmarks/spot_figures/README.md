@@ -57,7 +57,12 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
 
   A `serve_tax` card gives each server configuration's serve tax, what its change to the serving engine costs on
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
-  its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
+  its parts. A part has a name, its share with its range, its source, and how it got its share (`status`: `modeled`
+  from the code and a measured rate, `simulated` on served traces, or `measured` on the served engine); a priced tax
+  is the sum of its parts, and a card where it isn't is refused. (A)'s parts are the certified-tick rule, the step
+  record, the two-stage boundary commitment, the history tables, the token commits with the replay-block edge
+  snapshot, and the deterministic top-k, and the break-even planner's `Case.tax` reads each by name.
+  `total_cost.py priced-card` prices a card from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
 
   A `serving_rate` card is the engine's measured computed tokens, prompt and output, a GPU-second on the mix its
@@ -272,8 +277,8 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     prints beside them the gates as a count of the sample gives them: the blocks it checks (`--checked`, the
     sessions unless stated) times that. `--largest-classes` does the same by classes.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
-    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
-    the extractor's waits at each cap, per run (`--waits-k`).
+    (`--target`), gives the most gates that keep the collision term there, and beside them the term of the limit on
+    the extractor's waits at each limit, per run (`--waits-k`).
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
