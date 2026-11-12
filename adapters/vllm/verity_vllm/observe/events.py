@@ -35,6 +35,9 @@ from typing import Any
 
 from verity_vllm.records.schema_ids import CAPTURE_LOG_SCHEMA
 
+__all__ = ["DispatchEnter", "DispatchExit", "Event", "Note", "Root", "RunEnd", "RunHeader", "SampleEnd", "StepEnd",
+           "StepLink", "StepStart", "StorageAlloc", "StorageFree", "TritonLaunch", "ViewDesc", "views_in"]
+
 SCHEMA = CAPTURE_LOG_SCHEMA
 
 # torch dtype name (without the "torch." prefix) -> bytes per element.  The pure side never imports torch.

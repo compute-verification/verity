@@ -31,6 +31,15 @@ from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.records import required_manifest
 
+__all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMOTED_DTYPE_BYTES",
+           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM", "SCHEDULE_READERS",
+           "SCHEMA", "SERVED_FAMILY", "SERVED_IDS", "SERVED_LOGITS", "SERVED_POSITIONS", "SERVED_SAMPLED",
+           "TP_PARTIAL_MEMBER", "TP_SHARD_MEMBER", "alias_family", "batch_launch_shortfall", "canonical_identity",
+           "collector_path", "components_fold_digest", "is_token_select", "layer_of", "lifted_bot", "load_program",
+           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "program_dirs_for", "programs_for",
+           "promoted_observation", "segment_steps", "spec_family", "spec_statics", "split_name", "tp_ranks_fold_digest",
+           "wrapper_prefix_of"]
+
 SCHEMA = required_manifest.SCHEMA
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
