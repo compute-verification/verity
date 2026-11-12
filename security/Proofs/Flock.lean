@@ -54,6 +54,7 @@ public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
