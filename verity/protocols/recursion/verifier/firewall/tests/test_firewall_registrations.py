@@ -1,11 +1,14 @@
 """Rule 5 through the Lean ZK server's processes: `core-firewall values --state DIR` numbers each registration on the
 ZK server's record (`Firewall.Record.register`), its record `be64 n` first and its record tag over that number, and
 `core-firewall session --salt-key FILE` admits the registrations a statement's value commitments read, each once and
-oldest first (`admitReads`), before anything of its outer session reaches the auditor. A statement that reads one passed
-over, or whose roots no registration of the server's holds, or holds under another key, is its recursive session's stop
-and reaches nothing of the auditor. An interior session's registration is under a key the service drew for the session,
-which the record holds beside it with that key's tag under the server's key. Each record of commit sessions'
-registrations is the one `verity_flock.firewall` writes for the same ops, byte for byte.
+oldest first (`admitReads`), at the auditor's answer to its outer session's `Register` and before the prover receives
+it. A statement that reads one passed over, or whose roots no registration of the server's holds, or holds under
+another key, is its recursive session's stop, and of it only `Register` reaches the auditor. An interior session's
+registration is under a key the service drew for the session, which the record holds beside it with that key's tag
+under the server's key. A tree the verifier lists after the draw in that answer is known content: it reads no
+registration and is recorded, the loop cuts the list off before the prover receives the answer, and a list that is not
+exactly the statement's own known trees is the session's stop. Each record of commit sessions' registrations is the one
+`verity_flock.firewall` writes for the same ops, byte for byte.
 The statements are public files' headers only (`Flock.Firewall.Salts.treesOf` reads no more), so no session sets up
 (`test_firewall_session_loop`)."""
 
@@ -14,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import stat
@@ -45,6 +49,12 @@ CUT = "the prover ended the session before its Finish"
 LEAVES = 3
 #: every statement's hm96 trees here: name, domain id and schema, each of `LEAVES` leaves
 TREES = [("a", os.urandom(64), SCHEMAS[0]), ("b", os.urandom(64), SCHEMAS[2])]
+#: a tree at known content: none of a registration's, at a domain of its own
+K = ("k", os.urandom(64), SCHEMAS[1])
+#: the auditor's answer to `Register` as the prover receives it: the draw of a sample of none
+DRAW = b"\x06" + struct.pack("<I", 4) + b"null"
+LIST = "the verifier's list of known trees"
+OTHER = "the verifier lists its domain as known content with another leaf count, schema or root"
 
 
 @pytest.fixture(scope="module")
@@ -191,14 +201,16 @@ def test_values_without_its_state_is_refused(exe, tmp_path):
     assert p.returncode == 2 and p.stderr.decode().startswith("usage: core-firewall values --state DIR --salt-key FILE")
 
 
-def _session(exe, state: Path, s: str, pub: Path, key: Path, tmp: Path) -> tuple[str | None, list]:
-    """One outer session of `s` at L0 through `core-firewall session --salt-key`, cut after its `Register`: the loop's
-    refusal of it (None if admitted), and what the auditor received."""
-    auditor = Auditor()
+def _session(exe, state: Path, s: str, pub: Path, key: Path, tmp: Path, known: bytes = b"") -> tuple[str | None, list]:
+    """One outer session of `s` at L0 through `core-firewall session --salt-key`, cut after its `Register`, which the
+    auditor answers with the draw and then `known`: the loop's refusal of it (None if admitted, the prover then
+    receiving the draw alone), and what the auditor received."""
+    auditor = Auditor(known)
     lp = Loop(exe, state, s, "L0", auditor, tmp, public=pub, flags=("--salt-key", str(key)))
     c = lp.connect()
     resp = call(c, REGISTER)
-    why = None if resp[:1] == b"\x06" else refusal(resp).removeprefix(R.REFUSED)
+    assert resp == DRAW or resp[:1] == b"\x03", resp[:40]
+    why = None if resp == DRAW else refusal(resp).removeprefix(R.REFUSED)
     c.close()
     slot_left(state)
     lp.close()
@@ -211,8 +223,8 @@ def test_the_loop_admits_each_registration_once_oldest_first(exe, tmp_path):
     0 with it; one reading 0 and 2 admits 2 and skips 1, a failure of its stream; one reading 1 is refused, since 1 was
     passed over; one reading only 0 again is served and admits nothing; one whose roots no registration holds, or that
     reads 3 under another key (its record tag is not that key's), is refused. On a stream of budget 1, a statement reading
-    5 skips 3 and 4, and the stream stops at its budget. None of the refused reaches the auditor, each is its recursive
-    session's stop, and the record is Python's for the same ops."""
+    5 skips 3 and 4, and the stream stops at its budget. Of each refused only `Register` reaches the auditor, each is its
+    recursive session's stop, and the record is Python's for the same ops."""
     state, key, other = tmp_path / "state", tmp_path / "salt.key", tmp_path / "other.key"
     fw, py = FW.Firewall(state), FW.Firewall(tmp_path / "py")
     for f in (fw, py):
@@ -241,7 +253,7 @@ def test_the_loop_admits_each_registration_once_oldest_first(exe, tmp_path):
         got, sent = _session(exe, state, s, public(tmp_path / f"{s}.pub", rs), k, tmp_path)
         stop = why is not None and not why.startswith("stream ")
         assert got == (None if why is None else f"recursive session {s} stopped at L0: {why}" if stop else why), (s, got)
-        assert sent == ([] if why is not None else [[REGISTER]]), (s, sent)
+        assert sent == [[REGISTER]], (s, sent)
         with py.slot(s, "L0"):
             py.admit(s, "L0", timed=True)
             try:
@@ -282,7 +294,8 @@ def test_an_interior_registration_is_under_its_sessions_own_key(exe, tmp_path):
     answers neither. The loop, which holds `k`, checks the key's tag, then the record tag under the key: a statement
     reading the registration is admitted, and one reading it under another salt key, with the line's key or its tag
     changed, with a key one byte longer (its record and both tags made as the server would), or with neither on the
-    line, is refused, reaching nothing of the auditor. The record's state directory is its user's alone."""
+    line, is refused, only its `Register` having reached the auditor. The record's state directory is its user's
+    alone."""
     state, key, other = tmp_path / "state", tmp_path / "salt.key", tmp_path / "other.key"
     fw = FW.Firewall(state)
     for _ in range(6):
@@ -320,9 +333,179 @@ def test_an_interior_registration_is_under_its_sessions_own_key(exe, tmp_path):
         _put(state, at, line)
         got_why, sent = _session(exe, state, sid, public(tmp_path / f"{sid}.pub", roots), kf, tmp_path)
         want = None if why is None else f"recursive session {sid} stopped at L0: {why}"
-        assert got_why == want and sent == ([] if why else [[REGISTER]]), (sid, got_why, sent)
+        assert got_why == want and sent == [[REGISTER]], (sid, got_why, sent)
     events = [(e["event"], e.get("n")) for e in FW.Firewall(state).record() if e["event"] in ("admit", "skip")]
     assert events == [("admit", 0)]
+
+
+def known_entry(tree: tuple[str, bytes, str], root: bytes, n: int = LEAVES) -> bytes:
+    """The entry of `tree` (its name, domain id and schema) at `root`, of `n` leaves, in the verifier's list of a
+    statement's known trees: `D ‖ be64 N ‖ u8 schema ‖ ROOT`."""
+    _, dom, sc = tree
+    return dom + struct.pack(">Q", n) + bytes([SCHEMAS.index(sc)]) + root
+
+
+def known_list(*entries: bytes) -> bytes:
+    """The verifier's list of the known trees `entries`, as it follows the draw in its answer to `Register`."""
+    return struct.pack(">I", len(entries)) + b"".join(entries)
+
+
+class Server:
+    """A ZK server's state with one registration, a table at each of `TREES` (`roots`), `sessions` recursive sessions
+    of one statement open on it, and Python's record of the same ops."""
+
+    def __init__(self, exe: Path, tmp: Path, sessions: int):
+        self.exe, self.tmp, self.state, self.key = exe, tmp, tmp / "state", tmp / "salt.key"
+        self.py = FW.Firewall(tmp / "py")
+        for f in (FW.Firewall(self.state), self.py):
+            for _ in range(sessions):
+                f.finish(f.open("t", ["L0"]))
+        v = Values(exe, self.state, self.key)
+        s, got = v.commit()
+        _, rec = v.register(s)
+        self.py.register(lambda n: rec)
+        v.close()
+        self.roots = [r for r, _ in got]
+
+    def session(self, s: str, trees: list, roots: list[bytes], known: bytes, reads: list[int] | str,
+                entries: tuple[bytes, ...] = ()) -> None:
+        """The outer session of `s` whose statement holds `trees` at `roots`, the auditor listing `known` after its
+        draw. It reads the registrations `reads` and passes `entries` as known content, or, where `reads` is a
+        refusal's reason, is its recursive session's stop for it; either way only its `Register` reaches the auditor
+        and the record is Python's for the same ops."""
+        got, sent = _session(self.exe, self.state, s, public(self.tmp / f"{s}.pub", roots, trees), self.key, self.tmp, known)
+        assert sent == [[REGISTER]], (s, sent)
+        with self.py.slot(s, "L0"):
+            self.py.admit(s, "L0", timed=True)
+            if isinstance(reads, str):
+                assert got == f"recursive session {s} stopped at L0: {reads}", (s, got)
+                with pytest.raises(FW.Refused, match=re.escape(reads)):
+                    self.py.admit_reads(s, "L0", reads, entries)
+            else:
+                assert got is None, (s, got)
+                self.py.admit_reads(s, "L0", reads, entries)
+                self.py.stop(s, "L0", CUT)
+        assert record(self.state) == record(self.tmp / "py"), s
+
+    def events(self) -> list[tuple]:
+        """The record's admissions, skips and known trees, in order."""
+        return [(e["event"], e.get("n", e.get("tree"))) for e in FW.Firewall(self.state).record()
+                if e["event"] in ("admit", "skip", "known")]
+
+
+def test_a_statement_holding_a_known_row_is_admitted_under_the_key(exe, tmp_path):
+    """A statement holds a tree at known content beside two value commitments of registration 0, and the verifier lists
+    that tree after its draw. Under the key the loop admits the statement: it records the known tree, then admits the
+    registration, and the prover receives the draw without the list. A second statement of the same trees records its
+    known tree again and admits nothing, and one whose only tree the verifier lists reads no registration at all."""
+    z = Server(exe, tmp_path, 3)
+    root = os.urandom(64)
+    entry = known_entry(K, root)
+    z.session("r0000", [*TREES, K], [*z.roots, root], known_list(entry), [0], (entry,))
+    z.session("r0001", [*TREES, K], [*z.roots, root], known_list(entry), [0], (entry,))
+    z.session("r0002", [K], [root], known_list(entry), [], (entry,))
+    assert z.events() == [("known", entry.hex()), ("admit", 0), ("known", entry.hex()), ("known", entry.hex())]
+
+
+def test_a_statement_holding_a_row_whose_salt_the_stack_chose_is_refused(exe, tmp_path):
+    """A row the stack committed under a salt of its own has a root that no registration holds and the verifier never
+    computed. Whether the verifier lists nothing, or lists the tree it computed at that domain, the statement is its
+    recursive session's stop under the key: nothing is admitted and no known tree recorded."""
+    z = Server(exe, tmp_path, 2)
+    own, root = os.urandom(64), os.urandom(64)
+    z.session("r0000", [*TREES, K], [*z.roots, own], b"", f"row k: {NO_HOLDER}")
+    z.session("r0001", [*TREES, K], [*z.roots, own], known_list(known_entry(K, root)), f"row k: {OTHER}")
+    assert z.events() == []
+
+
+def test_a_value_commitment_listed_as_known_content_is_refused(exe, tmp_path):
+    """An entry whose root is the root of a table of a registration on the record, at the table's own domain or at
+    another: a value commitment of the server's is admitted as one, never passed as known content, so the stack gets no
+    second way to have a registration read."""
+    z = Server(exe, tmp_path, 2)
+    why = "its root is a table's of registration 0, and a value commitment of the ZK server's is no known content"
+    z.session("r0000", TREES, z.roots, known_list(known_entry(TREES[0], z.roots[0])), f"known tree 0: {why}")
+    z.session("r0001", [*TREES, K], [*z.roots, z.roots[1]], known_list(known_entry(K, os.urandom(64)), known_entry(K, z.roots[1])),
+              f"known tree 1: {why}")
+    assert z.events() == []
+
+
+def test_a_list_with_two_entries_of_one_domain_is_refused(exe, tmp_path):
+    """Two entries of one domain, the same tree twice or two roots: the list names a tree once."""
+    z = Server(exe, tmp_path, 2)
+    root = os.urandom(64)
+    entry = known_entry(K, root)
+    why = "known tree 1: a second entry of its domain"
+    z.session("r0000", [*TREES, K], [*z.roots, root], known_list(entry, entry), why)
+    z.session("r0001", [*TREES, K], [*z.roots, root], known_list(entry, known_entry(K, os.urandom(64))), why)
+    assert z.events() == []
+
+
+def test_a_tree_that_differs_from_its_entry_is_refused(exe, tmp_path):
+    """A tree of the statement at a listed domain with another leaf count, another schema or another root than the
+    entry's: at a domain the verifier lists, the statement holds the verifier's tree or is stopped."""
+    z = Server(exe, tmp_path, 3)
+    root = os.urandom(64)
+    lists = [known_list(known_entry(K, root, LEAVES + 1)), known_list(known_entry(("k", K[1], SCHEMAS[0]), root)),
+             known_list(known_entry(K, os.urandom(64)))]
+    for i, known in enumerate(lists):
+        z.session(f"r000{i}", [*TREES, K], [*z.roots, root], known, f"row k: {OTHER}")
+    assert z.events() == []
+
+
+def test_a_list_that_does_not_parse_is_refused(exe, tmp_path):
+    """Bytes after the draw that are no list: fewer than a count, a count its entries don't end at (one byte short, one
+    entry short, a byte past the last), a schema that is none of the three, an entry of no leaf. Each is the session's
+    stop, as a statement the verifier never listed anything for would be."""
+    z = Server(exe, tmp_path, 6)
+    root = os.urandom(64)
+    entry = known_entry(K, root)
+    whole = known_list(entry)
+    cases = [
+        (b"\0", "1 bytes, where its count is 4"),
+        (whole[:-1], "140 bytes, where its 1 entries end at 141"),
+        (struct.pack(">I", 2) + entry, "141 bytes, where its 2 entries end at 278"),
+        (whole + b"\0", "142 bytes, where its 1 entries end at 141"),
+        (known_list(entry[:72] + b"\x03" + root), f"entry 0 of schema 3, none of [{', '.join(SCHEMAS)}]'s"),
+        (known_list(known_entry(K, root, 0)), "entry 0 of no leaf"),
+    ]
+    for i, (known, why) in enumerate(cases):
+        z.session(f"r000{i}", [*TREES, K], [*z.roots, root], known, f"{LIST}: {why}")
+    assert z.events() == []
+
+
+def test_an_entry_at_no_tree_of_the_statement_is_refused(exe, tmp_path):
+    """An entry at whose domain the statement has no tree: the list is the statement's own known trees and nothing
+    else, so a list can't differ between two statements that pass with the same trees."""
+    z = Server(exe, tmp_path, 2)
+    root = os.urandom(64)
+    why = "the statement has no tree at its domain, and the verifier lists a statement's own trees"
+    z.session("r0000", TREES, z.roots, known_list(known_entry(K, root)), f"known tree 0: {why}")
+    z.session("r0001", [*TREES, K], [*z.roots, root],
+              known_list(known_entry(K, root), known_entry(("x", os.urandom(64), SCHEMAS[0]), os.urandom(64))),
+              f"known tree 1: {why}")
+    assert z.events() == []
+
+
+def test_a_loop_without_the_key_cuts_the_list_and_records_nothing(exe, tmp_path):
+    """Without `--salt-key` the loop admits no registration and holds no tree to the list, and the prover still receives
+    the draw alone: the list is the release side's to read, never the prover's."""
+    state = tmp_path / "state"
+    fw, py = FW.Firewall(state), FW.Firewall(tmp_path / "py")
+    for f in (fw, py):
+        f.finish(f.open("t", ["L0"]))
+    auditor = Auditor(known_list(known_entry(K, os.urandom(64))))
+    lp = Loop(exe, state, "r0000", "L0", auditor, tmp_path)
+    c = lp.connect()
+    assert call(c, REGISTER) == DRAW
+    c.close()
+    slot_left(state)
+    lp.close()
+    assert auditor.got == [[REGISTER]]
+    with py.slot("r0000", "L0"):
+        py.admit("r0000", "L0", timed=True)
+        py.stop("r0000", "L0", CUT)
+    assert record(state) == record(tmp_path / "py")
 
 
 def test_the_loop_refuses_a_statement_it_cannot_read_under_its_key(exe, tmp_path):
