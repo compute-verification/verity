@@ -59,8 +59,8 @@ def test_json_and_toml_hold_the_same_numbers(tmp_path, monkeypatch, capsys):
     assert (vfold["warp_inst"], vfold["thread_inst_per_entry"], vfold["ms"]) == (1000, 32.0, 2.9)
     assert vfold["class_per_entry"] == {"ALU": 0.6, "MMA": 0.4}
     assert (tmp_path / "v.toml").read_text().splitlines()[1:] == [
-        "s2048x8 = { entries = 1000, vedit = 1.00000, vsum = 2.00000, vfold = 3.00000, vfold_x = 2.50000, "
-        "t_vsum = 5.000e-07, sums_thread_inst = 6.40, vfold_issue_pct = 41.5 }",
+        ("s2048x8 = { entries = 1000, vedit = 1.00000, vsum = 2.00000, vfold = 3.00000, vfold_x = 2.50000, "
+         "t_vsum = 5.000e-07, sums_thread_inst = 6.40, vfold_issue_pct = 41.5 }"),
         "s8192x8 = { entries = 4000, vsum = 8.00000, t_vsum = nan, sums_thread_inst = nan }"]
 
 
