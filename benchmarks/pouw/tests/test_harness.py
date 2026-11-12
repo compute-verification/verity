@@ -15,18 +15,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.protocols.pouw.verifier import serving
+
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import arm as A  # noqa: E402
-import baselines as B  # noqa: E402
-import bench as H  # noqa: E402
-import chain as CH  # noqa: E402
-import derive as DV  # noqa: E402
-import fill as F  # noqa: E402
-import identity as I  # noqa: E402
-import report as R  # noqa: E402
-import schedule as S  # noqa: E402
-import shapes as SH  # noqa: E402
+import arm as A
+import baselines as B
+import bench as H
+import chain as CH
+import derive as DV
+import fill as F
+import identity as I
+import report as R
+import schedule as S
+import shapes as SH
 import torch_baselines as TB
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
@@ -646,6 +648,12 @@ def test_shape_report_rejects_an_arm_that_skips_work_and_gives_panel_numbers_for
     assert len(b.rejected) == 1
 
 
+def test_an_arms_work_over_the_shapes_macs_is_exact_and_a_string_that_is_no_number_raises():
+    assert (H.w_ratio("12", 8), H.w_ratio("3/2", 3), H.w_ratio("0", 5)) == ("3/2", "1/2", "0")
+    with pytest.raises(ValueError):
+        H.w_ratio("unknown", 8)
+
+
 # ---- identity ------------------------------------------------------------------------------------------------------------------
 
 
@@ -710,7 +718,8 @@ def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_wit
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
-                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1")):
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1"),
+                ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
 
@@ -1420,13 +1429,8 @@ def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_tak
     v0.4's one ``after`` can't be split that way, so it gets no side chain."""
     assert isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
     assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS and A.DEFERRED <= A.MOVABLE
-    try:
-        from verity.protocols.pouw.verifier import serving
-    except ImportError:
-        serving = None
-    if serving is not None:
-        assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
-        assert A.DEFERRED == serving.DEFERRED.side
+    assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
+    assert A.DEFERRED == serving.DEFERRED.side
     f = {g: (lambda s, g=g: g) for g in A.GROUPS + ("before", "after", "hash")}
     parts, named = A.phase_parts({g: f[g] for g in ("forming", "gemm", "screen")})
     assert named and {p: [fn(0) for fn in fns] for p, fns in parts.items()} == {
