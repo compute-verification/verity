@@ -102,6 +102,21 @@ def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: 
                     f"FAULTS {faults}")
 
 
+@pytest.mark.parametrize("binding", ["absent", None, {}])
+def test_a_commit_whose_binding_is_absent_null_or_empty_links_no_account_either(tmp_path: Path, said: Lines, binding: Any) -> None:
+    bare, s = sources(tmp_path, binding={}), sources(tmp_path)
+    if binding == "absent":
+        del s.row["commit"]["binding"]
+    else:
+        s.row["commit"]["binding"] = binding
+    arr = {"r0": 0, "r1": 1}
+    kw, facts = C2.executed_prefix_kw(bare, executed(), LINKAGE, arr, LABELS)
+    assert C2.executed_prefix_kw(s, executed(), LINKAGE, arr, LABELS) == (kw, facts)
+    assert all("a_r is not linked" in v["faults"][1] for v in kw["executed_prefix"].values())
+    first, second = said()
+    assert first == second and first.startswith("WARNING [delta] not-executed class -> sampled_replay(executed_prefix=): ")
+
+
 def test_with_no_early_stop_the_facts_pass_quietly_and_a_sample_of_k_takes_none(tmp_path: Path, said: Lines) -> None:
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     linked = {"coverage": LINKED["coverage"] | {"commit_account_link": LINKED["coverage"]["commit_account_link"] | {"served_by_request": {"r0": 4, "r1": 4}}}}
@@ -160,6 +175,28 @@ def test_a_disagreement_fails_the_commit_s_coverage_by_name(tmp_path: Path, said
     assert failed.row["commit"]["coverage"] == {"ok": False, "error": "an identity is unbound"}, "an earlier failure keeps its own reason"
     absent = sources(tmp_path)
     assert not reconciled(absent, None)["not_executed_reconciliation"]["ok"] and "coverage" not in absent.row["commit"]
+
+
+@pytest.mark.parametrize("binding", ["absent", None, {}, {"population": None}, {"population": {}}, {"population": {"manifest": None}},
+                                     {"population": {"manifest": {}}}, {"population": {"manifest": {"not_executed_by_rule": None}}}])
+@pytest.mark.parametrize("population", ["absent", None, {}, {"not_executed_by_rule": None}])
+def test_a_commit_or_a_population_that_names_no_class_is_reconciled_as_one_whose_class_is_null(
+        tmp_path: Path, said: Lines, binding: Any, population: Any) -> None:
+    null = sources(tmp_path)
+    null.row["commit"]["binding"]["population"]["manifest"]["not_executed_by_rule"] = None
+    want = reconciled(null, None)["not_executed_reconciliation"]
+    assert not want["ok"] and want["problems"]
+    s, sr = sources(tmp_path), Record()
+    if binding == "absent":
+        del s.row["commit"]["binding"]
+    else:
+        s.row["commit"]["binding"] = binding
+    if population != "absent":
+        sr["population"] = population
+    C2.reconcile(s, sr, {}, None, executed(), {"executed_prefix": {}})
+    assert sr["not_executed_reconciliation"] == want and s.row["commit"]["not_executed_reconciliation"] is sr["not_executed_reconciliation"]
+    first, second = said()
+    assert first == second and first.startswith("WARNING [delta] not-executed reconciliation (pair 0): DISAGREE ")
 
 
 def test_nothing_is_reconciled_without_the_class_or_without_an_early_stop(tmp_path: Path, said: Lines) -> None:
