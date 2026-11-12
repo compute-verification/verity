@@ -48,7 +48,7 @@ ON_A_NODE = ("the continued job's checkpoints differ from the unbroken job's in 
              "attention kernel doesn't repeat its own bits, and then one step run twice gives two gradients with "
              "nothing wrong in the job. A node's CPU repeats them and its verdict is the test's: run the suite there "
              '(`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-             'uv run tools/verity/check/suites.py training_slowdown"`) before changing the job')
+             'uv run tools/verity/check/suites.py benchmarks/training_slowdown"`) before changing the job')
 
 
 def differ(whole: dict, cut: dict) -> str:
