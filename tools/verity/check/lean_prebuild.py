@@ -2,15 +2,15 @@
 """`python tools/verity/check/lean_prebuild.py COMMIT [HEAD ...] --on MACHINE --mem-gb N [--base REV | --whole] [--pool NAME]
 [--as LANE] [--timeout S] [--dry-run]`: a Lean change built before the candidate that holds it, off the check slots.
 
-A candidate's Lean audit restores every module a run has built before and compiles the rest: the modules at or above its
-own Lean change, which no run has built while the change waits. It then replays through the kernel each module whose
-`.olean` files, or those of any module below it, no replay has passed with (`replay_keys` of `tools/verity/lean/check.py`):
-everything above the change, recompiled or not. Both are then on the queue's path, in the candidate's records run or its
-first shard. This does them where no check waits: the Lean audit of a ready mark's merge (`tools/verity/lean/warm.py --base
-BASE --out DIR`, in the node's Lean slots of pool `audit`), as a `research run` of the tree in MACHINE's pool NAME (default
-`research`, whose cores no check slot holds), with N GB reserved in the machine's ledger. The run leaves what it built in MACHINE's own caches, the
-ones a check there reads, and among its files (`common.MARK_AUDIT_OUT`): the bundles of the module versions it compiled and
-the pack of the Lean verdicts it stored. Every later check's launcher lists those (`lean_audit.shared_bundles`,
+A candidate's Lean audit restores every module a run has built before and compiles the rest: the modules at or above its own
+Lean change, which no run has built while the change waits. It then replays through the kernel each module whose `.olean`
+files, or those of any module below it, no replay has passed with (`replay_keys` of `tools/verity/lean/check.py`): everything
+above the change, recompiled or not. Both are then on the queue's path, in the candidate's records run or its first shard.
+This does them where no check waits: the Lean audit of a ready mark's merge (`tools/verity/lean/warm.py --base BASE --out
+DIR`, in the node's Lean slots of pool `audit`), as a `research run` of the tree in MACHINE's pool NAME (default `research`,
+whose cores no check slot holds), with N GB reserved in the machine's ledger. The run leaves what it built in MACHINE's own
+caches, the ones a check there reads, and among its files (`common.MARK_AUDIT_OUT`): the bundles of the module versions it
+compiled and the pack of the Lean verdicts it stored. Every later check's launcher lists those (`lean_audit.shared_bundles`,
 `check.verdict_packs`: the newest such runs', and, however old, those of a run whose command names the head of a PR the
 launcher's tree holds, `heads`), so the candidate's audit restores them on whichever machine it runs.
 
