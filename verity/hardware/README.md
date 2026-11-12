@@ -183,41 +183,60 @@ is so of an interface and not of the storage path. The interfaces come first, in
 states neither a rate nor its read, a storage path that does not name disk leaves of the file's, each once, and a
 leaf or an interface named `storage`.
 
-`Registration.node_entry(node, card, host, ways=nodes.ways_out(node, host))`, in the Site
-(`site/__init__.py`), gives the entry a node file's table, its GPU card's table and its ways out register, under the
-host id its caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the
-sheet's device memory, the host's leaves `host/NAME`, and for each way out that has a rate a link under its id from
-the host to the outside. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
+`Registration.node_entry(node, card, host, host_card=..., ways=nodes.ways_out(node, host),
+leaves=nodes.leaves(node, host))`, in the Site (`site/__init__.py`), gives the entry a node file's table, its GPU
+card's and host card's tables, its ways out and its leaves register, under the host id its caller passes: the card's
+sheet, the site at its unit of time, the host with its on-chip state in bits (eight times the host card's
+`store.chip`) and the rate each tier's leaves share, each device `host/gpuI` with one `hbm` leaf at the sheet's device
+memory, the host's leaves `host/NAME` at their rates, and for each way out a link under its id from the host to the
+outside. `node_figures` of the same tables gives the auditor's figures for the host and its leaves, which the Site's
+check holds the entry's to. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
 It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host
 with less memory than the node has. Its message gives the commands that read both on the node. The Site imports
-neither the cards nor the node files, so its caller hands it the ways out, and it holds them to the file's tables:
-each by name and in order, with a rate exactly where the file states one. A rate's value is `ways_out`'s reading.
+neither the cards nor the node files, so its caller hands it the ways out and the leaves, and it holds them to the
+file's tables: each way by name and in order, with a rate exactly where the file states one, and each leaf by name,
+tier and bytes. A rate's value is `ways_out`'s or `leaves`' reading.
 
-A way out's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up. That
-is what is so of a node none of whose ways out the auditor's hardware sits on, so `onsite` refuses the node by
-`uncertified`. Where a network certifier stands in front of such a node without splitting its interface (a process on
+A way out's link is a boundary link that no certifier splits, at its rate in bits a second. That is what is so of a
+node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no certifier splits them
+(`Link.unmediated`, from the way's kind): an interface that reads no line rate, whose link states no capacity ("no
+line rate stated"), and the storage path ("storage path"). `onsite` takes their reasons, and a site with either is
+not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
+until a certifier splits it. Where a network certifier stands in front of such a node without splitting its interface (a process on
 another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key))` registers it too:
 the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
 interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no
 registration says that every bit leaves through a certifier that does not hold the wire. The storage path's rate is
 not in a certifier's links and no certifier is linked to the path: a certifier that did split the interface would
-still leave the path's link bare.
+leave the path's link, and the site would still not be mediated.
 
-An entry always registers a link out. An interface with no rate registers no link and takes no certifier, so naming
-one on a node none of whose interfaces has a rate is refused. A file that states no interface gives no entry, since
-the entry would not say how the node reaches the outside, and neither does a file none of whose ways out has a rate.
-Each message says what to read or state.
+An entry always registers a link out. An interface with no rate takes no certifier, so naming one on a node none of
+whose interfaces has a rate is refused. A file that states no interface gives no entry, since the entry would not say
+how the node reaches the outside. Each message says what to read or state.
+
+An auditor's host has no node file: `clock_drift(host, cards.load(sku))`, beside `node_entry`, reads the card of the
+time base its device's clock reads (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
+(`ClockPremise`: `ClockRateWithin(<host>, <drift.max>)`, the number, its mark and its source) or, for a `ceiling`, the
+figure `Auditor.drift` takes. A number marked `premise` never becomes that figure, so a row that reads a drift the
+auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is refused. A certifier
+`node_entry` adds states the drift of its host's clock (`clock=`, through `device_drift`: the figure, or none for a
+premise), `Auditor.of_files(..., clocks={device: clock})` holds the same, and `ClockPremise.premised(device)` is the
+device's `Account.Premised` (device, drift, premise).
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.hardware.site import Auditor, Registration, check, node_figures
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
-entry = log.node_entry(node, gpu, host="node0", ways=nodes.ways_out(node, "node0"))
-site = check(log.append(entry), Auditor.of_files([gpu]))
+host = cards.load(node["host"]["sku"])
+ways, leaves = nodes.ways_out(node, "node0"), nodes.leaves(node, "node0")
+entry = log.node_entry(node, gpu, "node0", host_card=host, ways=ways, leaves=leaves)
+memory, figures = node_figures(node, host, "node0", ways=ways, leaves=leaves)
+site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
 ~~~
 
-`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses both by `uncertified`:
-the eight-card node by its interface's link and its storage path's, with a stand-in certifier or without one, and the
-H200 node, whose entry holds the storage path's link alone, by that (`tests/test_nodes.py`).
+`remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`
+refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in certifier or without one, and
+accepts the H200 node, both of whose links say why no certifier splits them, once a memory challenger reaches its host
+(`tests/test_nodes.py`).

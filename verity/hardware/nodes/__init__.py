@@ -12,7 +12,7 @@ number is an entry ``{value, unit, mark, source}`` under the cards' rules (``ver
 a number is not written as one, and a leaf or an interface with no read on record has no table. A kind is the card
 and its count, never a host's name, and a file names no machine, no address and no provider: whoever registers a node
 gives its host's id (``verity.hardware.site.Registration.node_entry``, which gives no entry of a file with no ``dram``
-or no ``disk`` leaf, none of a file with no interface, and none of a file with no way out that has a rate).
+or no ``disk`` leaf, and none of a file with no interface).
 Stdlib and the cards only.
 
 **A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
@@ -33,15 +33,18 @@ the one that bounds the node's disks together, ``leaves``'s for ``disk``. A serv
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.hardware.site import Auditor, Registration, check, node_figures
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
-entry = log.node_entry(node, gpu, host="node0", ways=nodes.ways_out(node, "node0"))
-site = check(log.append(entry), Auditor.of_files([gpu]))
+host = cards.load(node["host"]["sku"])
+ways, leaves = nodes.ways_out(node, "node0"), nodes.leaves(node, "node0")
+entry = log.node_entry(node, gpu, "node0", host_card=host, ways=ways, leaves=leaves)
+memory, figures = node_figures(node, host, "node0", ways=ways, leaves=leaves)
+site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
 site.units                          # ('node0/gpu0', ..., 'node0/gpu7')
 site.tiers("node0")                 # {'hbm': 824633720832, 'dram': 1872605741056, 'disk': 6266358333440}
-[(k.id, k.beta) for k in site.boundary("node0")]   # [('node0/eth0', 400), ('node0/storage', 5585)], bits a nanosecond
+[(k.id, k.beta) for k in site.boundary("node0")]   # [('node0/eth0', 400000000000), ('node0/storage', 5584738461544)]
 each, tier = nodes.leaves(node, "node0")
 [(leaf.id, leaf.bw) for leaf in each]   # [('node0/dram', 9011200000000), ('node0/vda', 5584738461544), ...], bit/s
 tier                                # {'dram': 9011200000000, 'disk': 5584738461544}, each tier's leaves together
