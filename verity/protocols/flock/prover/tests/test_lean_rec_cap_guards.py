@@ -4,7 +4,7 @@ They are what refuses a V* list whose RecCap statements are missing, at another 
 and a table or unit name `RecCoins.checkCap` / `RecCoins.check` must refuse, at the deployed shapes; no cheaper test covers
 those shapes (`test_lean_rec_coins` checks the rest of `checkCap`'s refusals). They build no whole V* list: the deployed
 list is `test_rec_vstar_checks.py::test_the_verifiers_statements_are_the_ones_v_star_stages`', on the compiled verifier,
-and its equality with the stager's whole list is what holds the RecCaps' order, which `RecVStar.statements`' checks don't.
+and its equality with the stager's whole list is what holds their order, which `RecVStar.statements`' checks don't.
 Flock's `lean-audit.json` lists the module under `exempt`."""
 from __future__ import annotations
 
