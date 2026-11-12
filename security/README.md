@@ -70,8 +70,8 @@ incorrect set of the trace the extractor recovers.
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until proved
-     (PoUW's: `verity/protocols/pouw/verifier/`). The policy's is proved (`Vocab.inferenceOnlySound`);
-     `Vocab.Holds` lists what its claim leaves unsaid.
+     (PoUW's: `verity/protocols/pouw/verifier/`). The policy's is proved of the case as sent
+     (`Vocab.inferenceOnlySound`); its link to the committed files is two missing checks (`Vocab.Holds`).
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes

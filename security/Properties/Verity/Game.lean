@@ -97,7 +97,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
   log's first record registers, and the Program lays out a registered circuit whose inference blocks each have at most
   `Γ` gates and read at most `α` fresh input bits per gate, `Γ` and `α` the policy's own parameters. The claim reads
   the play's messages alone: no field of the vocabulary enters it, and it says nothing of the committed files' circuit
-  (`Vocab.Holds` lists what it leaves unsaid).
+  until two missing checks hold the case's wires to the committed record's and the case's unit to the committed `Γ`'s
+  (`Vocab.Holds` names both, and lists what else it leaves unsaid).
 * **Each compiled check's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   subprotocols whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
@@ -830,14 +831,20 @@ carry; θ holds what the log's first record registers; and that Program lays out
 blocks each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
 `Γ` and `α` the parameters the composite names for the policy. It reads no field of the vocabulary.
 
-What it does not say:
+The clause is proved of the case as sent (`Vocab.inferenceOnlySound`), and of nothing more: what links that case to the
+committed files is two checks the verifier lacks, which no code enforces, so the clause says nothing of the committed
+files until both exist. Neither is a premise of the claim.
 
-* **That the committed values follow the Program.** The circuit it speaks of is the Program's own layout. SPOT's
-  claim is on the committed files' units, and nothing here holds the rows a unit commits to the Program's gates or a
-  wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled units, and no protocol
-  calls it.
-* **`Γ` in PoUW's unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the committed files' circuit
-  (`computed`). No statement gives how many of those a Program gate is.
+1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
+   SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
+   a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled units, and no
+   protocol calls it.
+2. **The case's unit is the committed `Γ`'s unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the
+   committed files' circuit (`computed`). No check holds the one unit to the other, or gives how many of those a
+   Program gate is.
+
+What else it does not say:
+
 * **That the Program is the registered compiler's output.** No compiled check runs the registered compiler or holds
   the record to the registration log's builder item, so the Program and the record are the ones the prover sent under
   the digests the composite ties, not the compiler's output on committed advice. This is a check the verifier lacks,
@@ -947,8 +954,10 @@ def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 
 /-- **The inference-only policy's target**: every case of the policy in the play's messages is
 `Properties.Remote.PolicyHeld`, the policy on the Program its compiled check judges, at the policy's own `Γ` and `α`
-(`Holds`, which lists what that leaves unsaid). `Proofs.Properties.Verity.InferenceOnly` proves it of every vocabulary
-at both composites: the composite's acceptance holds each of its cases to its check's, so the event is empty. -/
+(`Holds`, which lists what that leaves unsaid). `Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent,
+for every vocabulary at both composites: the composite's acceptance holds each of its cases to its check's, so the event
+is empty. The link from that case to the committed files is the two checks `Holds` names as missing, so the composites'
+soundness still counts this target in its trust gap. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 
 /-- **PoUS's target**: at least `S` bits of device memory held on average. -/

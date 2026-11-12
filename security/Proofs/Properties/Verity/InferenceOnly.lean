@@ -19,7 +19,10 @@ therefore empty, and the target holds of every vocabulary, device and strategy w
 The claim is not empty of content on an accepted play: the policy's component accepting gives the case the claim reads
 (`policyCase_of_component`), so there `PolicyHeld` holds of a case that exists.
 
-What the claim leaves unsaid is listed at `Vocab.Holds`.
+This is the clause of the case as sent. The link from that case to the committed files is two checks the verifier
+lacks (the case's wires are the committed record's wires, and the case's unit is the committed `Γ`'s unit), which
+`Vocab.Holds` names with what else the claim leaves unsaid; until both exist, the composites' soundness keeps this
+target in its trust gap.
 -/
 
 @[expose] public section

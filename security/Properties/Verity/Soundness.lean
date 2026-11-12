@@ -56,7 +56,8 @@ until each piece defines its own: v2's reading of the committed files, the posit
 the device's log each subprotocol read, the extractor and the finders, the gates computed, the world, the wipe and the
 play read at its boundary, and the published certificates, thresholds, errors and collision terms. The inference-only
 policy's target reads none of them: its claim is on its own case in the play's messages, and
-`Proofs.Properties.Verity.InferenceOnly` proves it.
+`Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent. The link from that case to the committed files is
+two checks the verifier lacks (`Vocab.Holds` names them), so the target stays a hypothesis here.
 -/
 
 @[expose] public section
