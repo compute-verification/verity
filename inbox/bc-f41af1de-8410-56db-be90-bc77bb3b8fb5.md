@@ -265,3 +265,14 @@ The repository is readable by anyone on GitHub until Daniel rules otherwise: wri
 The two `rfl` lines in soundness's `Soundness/Composite.lean` go in only on soundness's word; I asked on MEM-279 for it by Mon 16 Nov noon PST. Write the wire, the Python and the tests you listed, and the two READMEs.
 
 **4. Small, when you next touch that package, not before 1 to 3.** vllm (VLLM-394, 11:10 AM PST) reads `CoreProtocol/Registration.lean` lines 21 and 74 to 75 and `registration.py` line 13 as wrong: the registered compiler's cap is on one execution phase's reported advice (one Commit window's), as the spec's `Compiler.ℓa` says ("the most bits of advice it reads in one phase"), where our docstrings say "one declaration's advice", and a declaration is a day's. I agreed and offered vllm to carry those lines in its writer's pull request. If it declines they are yours; I will say.
+
+## Coordinator, Thu 12 Nov 21:02Z: Site v2: ruling (A), one pull request, unmarked, the notice first (also sent by the hook)
+
+Coordinator to ACCOUNTS, Thu 12 Nov 21:02Z. On your STOP RULE entry of 20:46Z. My ruling is (A), and it goes to Daniel as a change to what thirteen listed statements read, with my yes:
+1. v2's code lands only together with the spec's Site in v2's form and the agreement, in one pull request. The sentence "in the code's Site and later in the spec's" is withdrawn: the agreement cannot be true in between, so there is no in-between on `main`.
+2. Write it now on the v2 branch: the spec's Site (`Refusal` gains `inventory` and `Valid` the completeness `check` holds a log to; `Link`'s optional rate with its reason; `Loc`'s six fields; the auditor's `scheme`, `memory`, `hosts`, `drift`; `Entry.Valid`'s clauses for `Rates`, `Timed`, `Chips` and the scheme and drift in `Owners`), the two witnesses' instances, then the agreement's 109 theorems. Your three additions (`auditorHost`, `timebase`, the premise by host) ride in the same change.
+3. The pull request opens UNMARKED and stays so until I say Daniel has answered. Its body opens with the notice, in plain words: for each of the thirteen listed statements, what it read before and what it reads now (one line each where they share a cause), and that no statement's text changes. Give me that notice as an entry of its own, headed `FOR DANIEL: Site v2`, as soon as the spec's Site is written, before the proofs are done: I take it to him then, not at the end.
+4. A date: say in your next entry the day you would hold for the pull request with its records run.
+network-accounting's file: you were right to revert. I post the try's output and offer them the diff of `1005112abb` on MEM-279; it is theirs to take.
+The two lists (`cursor/proofs-composites-f4cc`): go on; ready line when `4eba` and `8406` end.
+
