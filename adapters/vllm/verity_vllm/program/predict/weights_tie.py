@@ -16,7 +16,7 @@ over the field's bytes to the verifier's SHA-512 of them. An embedding's table (
 table (`interface.Table`), its rows ``hm96-sha512/row-seg/v1`` leaves its reads open as such (`interface.seg_ports`); a
 template's port has one row schema, so a table's own chain hashes `TABLE_TAG` before the field's bytes, and its rows pend an
 odd count of bytes where a shard's (after a header safetensors aligns to 8 bytes) and every other chain's pend an even
-count: they are templates of their own. The window registers the work design over every unit (`Tie.law`, ``work:N`` for its N
+count: they are templates of their own. The window registers the work design over every unit (`Tie.design`, ``work:N`` for its N
 units), which the records audit's stream samples at the rate N/N, so every unit is proved by the sample: the tie has no
 output class, which a sampled audit refuses.
 
@@ -44,8 +44,8 @@ window, written by core's registrar. ``--served-dir``: a committer serving anoth
 arm), its registration committing them; ``--forge-digest``: its last units' digests forged to X's. ``verify``: the verifier's
 tie of X (``DIR/tie.json``: its circuit's SHA-512, run root and units) and the records audit's ``--registered`` file
 (``DIR/registered.json``: the registration's entries, held to the verifier's weights record, and the supplied values).
-``--law`` is the tie's own design by default (`Tie.law`). ``pins``: the registration's roots, written only once that
-audit's ``summary.json`` accepted the tie and its draw holds every unit (`checked_pins`).
+``pins``: the registration's roots, written only once that audit's ``summary.json`` accepted the tie and its sample
+holds every unit (`checked_pins`).
 """
 from __future__ import annotations
 
@@ -221,10 +221,10 @@ class Tie:
     def units(self) -> int:
         return sum(len(c.rows) for c in self.chains)
 
-    def law(self) -> dict[str, Any]:
+    def design(self) -> dict[str, Any]:
         """The design the window registers: work over every unit, which the audit's stream samples at the rate N/N, since a
         unit left unproved breaks its chain."""
-        return {"law": "work", "k": self.units()}
+        return D.parse_design(f"work:{self.units()}")
 
     def record(self, win: IF.Window, rows: dict[str, np.ndarray], forge_digest: bool = False) -> None:
         """Record every unit into ``win``, each row unit's data its parameter's row of ``rows`` (by parameter, ``(leaves,
@@ -336,8 +336,8 @@ def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifes
            kv_cache_dtype: str = "auto", forge_digest: bool = False) -> tuple[dict[str, Any], Tie, IF.Window]:
     """The committer's weights registration of X under its 32-byte ``key`` (`records.weights_registration`: each rooted
     weight parameter's `window_weights.weight_value`, the roots `weights_registration` registers) and its tie window of X,
-    every unit recorded, under ``law`` (default the tie's own, `Tie.law`): -> (the registration, the tie, the window, to
-    close and write). ``served``: the words it serves
+    every unit recorded, under the given sampling design (default the tie's own, `Tie.design`): -> (the registration,
+    the tie, the window, to close and write). ``served``: the words it serves
     by field (`window_weights.record_words`' form; default X's own), which the registration commits, so a committer serving
     another checkpoint's words as X's (the refused arm) registers their roots; ``forge_digest``: its last units' digests X's."""
     t = tie(registered, checkpoint_dir, checkpoints_manifest, run_id=run_id, grain=grain, kv_cache_dtype=kv_cache_dtype)
@@ -347,7 +347,7 @@ def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifes
         raise ValueError(f"no words served for {missing}")
     registration = WeightsRegistration(program=t.program, repo=t.model["repo"], revision=t.model["revision"], grain=t.grain,
                                        values={p: v.entry() for p, v in values.items()}, unrooted=t.unrooted).dump()
-    win = t.window(law or t.law(), cap, values)
+    win = t.window(law or t.design(), cap, values)
     t.record(win, {p: WW._rows(p, words[_field(p)]) for p in t.entries}, forge_digest)
     return registration, t, win
 
@@ -371,7 +371,7 @@ def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dic
                  cap: int) -> dict[str, str]:
     """The verifier's pins of the registration's roots (`window_weights.registration_pins`), only once the records audit
     of its tie window accepted it: refused (ValueError) unless ``summary`` (``records_audit.py audit``'s ``summary.json``)
-    is an accepting audit, not a forged arm's, of the verifier's own tie circuit and run root, whose draw holds every unit
+    is an accepting audit, not a forged arm's, of the verifier's own tie circuit and run root, whose sample holds every unit
     of the tie and nothing else, and that held the registration's root for every weight, as the pin and as the window's
     root."""
     pins, want = WW.registration_pins(registration, record), audit_inputs(registration, record, t, law, cap)
@@ -379,10 +379,10 @@ def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dic
         raise ValueError("the records audit of the tie didn't accept it: no root is pinned")
     if (summary.get("circuit"), summary.get("run_root")) != (want["circuit"], want["run"]):
         raise ValueError("the records audit was of another circuit or run than the verifier's tie of the checkpoint")
-    drawn, held = summary.get("draw"), summary.get("registered")
-    if summary.get("population") != want["units"] or not isinstance(drawn, list) or sorted(drawn) != list(range(want["units"])):
-        got = len(drawn) if isinstance(drawn, list) else drawn
-        raise ValueError(f"the records audit drew {got} of {summary.get('population')} units, not every one of the tie's "
+    sampled, held = summary.get("draw"), summary.get("registered")
+    if summary.get("population") != want["units"] or not isinstance(sampled, list) or sorted(sampled) != list(range(want["units"])):
+        got = len(sampled) if isinstance(sampled, list) else sampled
+        raise ValueError(f"the records audit sampled {got} of {summary.get('population')} units, not every one of the tie's "
                          f"{want['units']}")
     for what in ("pins", "roots"):
         got = held.get(what) if isinstance(held, dict) else None
@@ -479,7 +479,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
         return 0
     record = WW.weights_record(registered, x.checkpoint_dir, manifest, grain=grain)
     t = tie(registered, x.checkpoint_dir, manifest, run_id=x.run_id, grain=grain, record=record)
-    law = law or t.law()
+    law = law or t.design()
     registration = json.loads(Path(a.registration).read_text())
     out = Path(a.out)
     if isinstance(a, VerifyOptions):

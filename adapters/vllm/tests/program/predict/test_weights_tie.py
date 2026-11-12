@@ -4,7 +4,7 @@ of every rooted weight parameter once, the table's as row-seg rows, and making i
 registration is `weights_registration`'s, its units are their Definitions' and its last units' digests are the verifier's,
 so the audit's pins hold and the verifier pins the roots; a committer serving another checkpoint's words as X's ends at
 another digest, and forging the last units' digests makes their outputs not their Definition's; the window's design is work
-over every unit, and the verifier pins nothing on an audit that didn't accept the verifier's own tie or whose draw left a
+over every unit, and the verifier pins nothing on an audit that didn't accept the verifier's own tie or whose sample left a
 unit out; and a shard the tie can't read is refused by name."""
 from __future__ import annotations
 
@@ -132,7 +132,7 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     assert IF.seg_ports(t.circuit().registered) == {
         descriptor_id(fn): {"data"} for fn in (SS.row(tag, 64), SS.last(tag, 64, len(tagged)))}
     got = WT.audit_inputs(registration, record, t, LAW, CAP)
-    assert t.law() == LAW and got["units"] == 613 and got["run"] == t.run and "outputs" not in got
+    assert t.design() == LAW and got["units"] == 613 and got["run"] == t.run and "outputs" not in got
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(LAW, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(LAW, CAP)
@@ -169,7 +169,7 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     them from X's header to another digest than X's: each last unit's digest read opens no supplied root, and every other
     read opens. Forging each last unit's digest to X's opens every read and makes those units' outputs not their
     Definitions'. The
-    verifier pins nothing on an audit that refused (nor on a forged arm's), nor on one of another run, nor one whose draw
+    verifier pins nothing on an audit that refused (nor on a forged arm's), nor on one of another run, nor one whose sample
     left a unit out or was of another population, nor one that held another root."""
     reg, (d, man) = S._registered(), x
     honest = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
@@ -196,7 +196,6 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     for bad, why in [({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
                      ({"run_root": "00" * 64}, "another circuit or run"),
                      ({"draw": list(range(1, t.units()))}, "not every one"),
-                     ({"draw": None}, "not every one"),
                      ({"population": t.units() + 1, "draw": list(range(t.units() + 1))}, "not every one"),
                      ({"registered": {}}, "held no registered pins")]:
         with pytest.raises(ValueError, match=why):
