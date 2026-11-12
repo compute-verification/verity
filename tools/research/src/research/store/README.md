@@ -458,7 +458,9 @@ prints the table; the groups are:
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
-  `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
+  `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), `ready_verdict` on `commit:<sha>`, by the executor
+  (a JSON object: the verdict of that commit's `ready:` check once none of its merge-gate tasks is still to end, which the
+  queue's loop reads in place of asking the executor), and `executor_shadow` on `commit:<sha>`, by drive
   (`research.executor`); `nightly_check` on `commit:<sha>`, by the control pod's nightly check;
   `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
