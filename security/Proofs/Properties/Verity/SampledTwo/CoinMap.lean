@@ -110,9 +110,9 @@ noncomputable def openW {ν : ByteArray} {spec : Flock.CoinTree.Spec} {t : TreeS
 
 /-- At an `ite` node: the tape placed by `fX` or `fY`, as the condition decides. -/
 noncomputable def placeIte {β : Type} {c : Prop} :
-    (dc : Decidable c) → (X Y : Game β) → (s : Strategy (@ite _ c dc X Y)) →
-      ((s : Strategy X) → Tape X s → Tape X s) → ((s : Strategy Y) → Tape Y s → Tape Y s) →
-        Tape (@ite _ c dc X Y) s → Tape (@ite _ c dc X Y) s
+    (dc : Decidable c) → (G₁ G₂ : Game β) → (s : Strategy (@ite _ c dc G₁ G₂)) →
+      ((s : Strategy G₁) → Tape G₁ s → Tape G₁ s) → ((s : Strategy G₂) → Tape G₂ s → Tape G₂ s) →
+        Tape (@ite _ c dc G₁ G₂) s → Tape (@ite _ c dc G₁ G₂) s
   | .isTrue _, _, _, s, fX, _ => fX s
   | .isFalse _, _, _, s, _, fY => fY s
 
@@ -225,10 +225,14 @@ def devBits (L : Locate) (i : ℕ) : List Verity.Release → List Verity.Release
   | pre, rl :: log =>
     (if locAt L pre rl.frame rl.answers = some i then rl.coins else []) ++ devBits L i (pre ++ [rl]) log
 
+/-- The number below `2^n` whose bit `j < n` is `g j`. -/
+def natOfBits : ℕ → (ℕ → Bool) → ℕ
+  | 0, _ => 0
+  | n + 1, g => 2 * natOfBits n (fun j => g (j + 1)) + (g 0).toNat
+
 /-- The element of GF(2^128) whose bit `j < 128` is `g j` (`F128.bit`'s order: `lo`'s bits, then `hi`'s). -/
 def elemOfBits (g : ℕ → Bool) : Flock.F128 :=
-  ⟨UInt64.ofNat ((List.range 64).foldr (fun j a => 2 * a + if g j then 1 else 0) 0),
-    UInt64.ofNat ((List.range 64).foldr (fun j a => 2 * a + if g (64 + j) then 1 else 0) 0)⟩
+  ⟨UInt64.ofNat (natOfBits 64 g), UInt64.ofNat (natOfBits 64 fun j => g (64 + j))⟩
 
 /-- **The device's release for round `i` in a log** (`Reading.dev`): the coin whose element `j` is the bits
 `128 j` to `128 j + 127` the releases the locator puts on round `i` carry, padded with zeros; none where it puts none, or
@@ -245,8 +249,8 @@ def bitsOf {n : ℕ} (e : Fin n → Fin 128 → Bool) : List Bool :=
 
 /-- The hiding term at an `ite` node. -/
 noncomputable def gapIte {β : Type} {c : Prop} :
-    (dc : Decidable c) → (X Y : Game β) → (s : Strategy (@ite _ c dc X Y)) →
-      ((s : Strategy X) → ℝ≥0∞) → ((s : Strategy Y) → ℝ≥0∞) → ℝ≥0∞
+    (dc : Decidable c) → (G₁ G₂ : Game β) → (s : Strategy (@ite _ c dc G₁ G₂)) →
+      ((s : Strategy G₁) → ℝ≥0∞) → ((s : Strategy G₂) → ℝ≥0∞) → ℝ≥0∞
   | .isTrue _, _, _, s, gX, _ => gX s
   | .isFalse _, _, _, s, _, gY => gY s
 
