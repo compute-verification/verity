@@ -72,15 +72,16 @@ prof.apply_env()
 import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
+from verity_vllm.engine.handle import scheduler_or_none  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
-from verity_vllm.commit import challenge as CH, opened as OV, step_rows as SR  # noqa: E402
-from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
+from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
+from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
 
-# automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
+# automatic stage telemetry of THIS process: the engine's build, warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
@@ -208,7 +209,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
     finished: set[str] = set()
     step_t: list[float] = []
     step_tokens: list[int] = []
-    it, forwards = 0, AR.ForwardCounter(eng, AR.scheduler_of(engine.llm))
+    it, forwards = 0, AR.ForwardCounter(eng, scheduler_or_none(engine.llm))
     t0 = time.perf_counter()
     while pending or eng.has_unfinished_requests():
         while pending and int(requests[pending[0]].get("arrive_step") or 0) <= forwards.n:
@@ -241,11 +242,6 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
     gen = sum(len(v) for v in tokens.values())
     return {"wall_s": t1 - t0, "iterations": it, "step_wall_s": walls, "step_tokens_out": step_tokens, "generated_tokens": gen,
             "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "finish_reasons": finish, "t_last_step": step_t[-1]}
-
-
-# the compiled check's steps are sampled by the run root's first 4 bytes, seed = int(run_root.hex()[:8], 16): no coin, so a prover
-# steers them by committing again, in at most about 2^32 tries.  Recorded on value_correspondence.compiled_check.seed_source; no rule recomputes or grades it.
-COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
 
 
 def admission_lag(wl: dict) -> int:
@@ -348,66 +344,6 @@ def baseline_state(engine: va.Engine) -> dict:
             "wrapped_forwards": sum(1 for _, m in model.named_modules() if "forward" in m.__dict__),
             "sampler_hooks": (len(smp._forward_hooks) + len(smp._forward_pre_hooks)) if isinstance(smp, torch.nn.Module) else 0,
             "cuda_alloc_mib": int(torch.cuda.memory_allocated() >> 20) if torch.cuda.is_available() else 0}
-
-
-def _process_state() -> dict[str, Any]:
-    import threading
-    st: dict[str, Any] = {"threads": threading.active_count(), "gc_enabled": gc.isenabled(), "gc_threshold": list(gc.get_threshold()),
-                          "gc_count": list(gc.get_count()), "gc_tracked_objects": len(gc.get_objects()), "gc_frozen": gc.get_freeze_count(),
-                          "switch_interval_s": sys.getswitchinterval(), "torch_threads": torch.get_num_threads(),
-                          "torch_interop_threads": torch.get_num_interop_threads()}
-    with contextlib.suppress(Exception):
-        st["affinity_cores"] = len(os.sched_getaffinity(0))
-    with contextlib.suppress(Exception):
-        with open("/proc/self/status") as f:
-            for line in f:
-                if line.startswith(("VmRSS", "Threads")):
-                    k, v = line.split(":", 1)
-                    st[k.strip().lower()] = v.strip()
-    return st
-
-
-def cuda_census() -> dict[int, tuple[int, str]]:
-    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (the hot worker's post-job residue audit
-    diffs this against the census taken right after the engine build; storage held only from C++ is invisible here, so a residue that shows
-    in torch.cuda.memory_allocated but not in the census points at a native holder)."""
-    out: dict[int, tuple[int, str]] = {}
-    for o in gc.get_objects():
-        try:
-            if isinstance(o, torch.Tensor) and o.is_cuda and o.numel() > 0:
-                st = o.untyped_storage()
-                p = int(st.data_ptr())
-                if p not in out:
-                    out[p] = (int(st.nbytes()), type(o).__name__)
-        except Exception:  # noqa: BLE001
-            pass
-    return out
-
-
-def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str]], top: int = 6) -> dict:
-    """Python-visible CUDA storages present now but absent from the baseline census: count, MiB, the largest few with their holders."""
-    new = {p: v for p, v in now.items() if p not in base}
-    largest = sorted(new.items(), key=lambda kv: -kv[1][0])[:top]
-    holders = []
-    if largest:
-        want = {p for p, _ in largest}
-        for o in gc.get_objects():
-            try:
-                if isinstance(o, torch.Tensor) and o.is_cuda and int(o.untyped_storage().data_ptr()) in want:
-                    refs = []
-                    for r in gc.get_referrers(o)[:6]:
-                        if isinstance(r, dict):          # an instance __dict__: name the owner
-                            owners = [type(x).__name__ for x in gc.get_referrers(r) if getattr(x, "__dict__", None) is r]
-                            refs.append("dict<-" + (owners[0] if owners else "?"))
-                        else:
-                            refs.append(type(r).__name__)
-                    holders.append({"mib": round(o.untyped_storage().nbytes() / 2**20, 1), "shape": list(o.shape), "dtype": str(o.dtype), "referrers": refs})
-                    want.discard(int(o.untyped_storage().data_ptr()))
-                    if not want:
-                        break
-            except Exception:  # noqa: BLE001
-                pass
-    return {"count": len(new), "mib": round(sum(v[0] for v in new.values()) / 2**20, 1), "largest": holders}
 
 
 def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
@@ -886,45 +822,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     return res
 
 
-# hot-engine reuse: `verity_vllm.pipeline.hot serve` sets _HOT = {"jobs": n, "restart_reason": why} and calls
-# main(argv) once per Commit job.  The first job builds the engine and parks it here (with the exact kwargs set and the pristine baseline
-# taken BEFORE any committer); later jobs reuse it when `engine_kwargs_for` yields the same kwargs / env flags / checkpoint (else the job is
-# refused with HOT-KEY-MISMATCH and the worker restarts, reason recorded).  Every committer built in a job is registered in _HOT["coms"] so
-# the worker can close it (uninstall + worker stop + pool shutdown) and re-check the engine is pristine after the job.  _HOT is None in a
-# plain (cold) process: nothing below changes.  A grouped Commit (`commit_group`) sets it too, with ``group`` (`group_reuse`) and ``last``.
-_HOT: dict[str, Any] | None = None
-
-HOT_UNSAFE = ("compiled_taps", "arms", "only_arm", "late_read", "value_check", "arena_unchecked", "profile_hooks", "moe_source")
-
-
-def hot_unsafe_reasons(args: Options) -> list[str]:
-    """Why a job must run in a fresh (cold) process: flags that mutate module/process state beyond the committer's lifetime."""
-    why = []
-    if args.compiled_taps != "off":
-        why.append(f"--compiled-taps {args.compiled_taps} (Inductor hooks / runner patches are process-wide)")
-    if args.arms:
-        why.append("--arms (multi-committer arms)")
-    if args.only_arm == "control" or (args.only_arm and args.compiled_taps != "off"):
-        why.append(f"--only-arm {args.only_arm} (paired-process protocol)")
-    if args.late_read:
-        why.append("--late-read (mutates native_collect.GATHER_FLUSH_LEAVES)")
-    if args.value_check:
-        why.append("--value-check (reference taps)")
-    if args.arena_mb and args.arena_unchecked:
-        why.append("--arena-unchecked (negative test)")
-    if args.moe_source == "on":
-        why.append("--moe-source on")
-    if str(args.committer).startswith("plugin:"):
-        why.append("plugin committer")
-    if settings.VERITY_FAULT:
-        why.append(f"VERITY_FAULT={settings.raw('VERITY_FAULT')!r} (deliberate fault: negative test)")
-    if settings.raw("VERITY_SWITCH"):
-        why.append("VERITY_SWITCH (interpreter switch interval is process-wide)")
-    if args.remote_verifier:
-        why.append("--remote-verifier (the store binder goes on the engine at its build)")
-    return why
-
-
 def resolve_staging(args: Options) -> Options:
     """The collector's staging defaults made explicit before anything reads them (the replay planner, the collector record, the
     replay's ring): an omitted --window-mb is `native_collect.window_mb_default` when every committer kind is the windowed worker
@@ -1036,9 +933,7 @@ class Options:
     remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.remote_bandwidth.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.protocols.remote_bandwidth.in_place)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
-    memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
@@ -1046,26 +941,16 @@ class Options:
     required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
     moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
-    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="served = the "
+    compiled_taps: str = option("--compiled-taps", choices=["off", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
                                 "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
-                                "--only-arm control (verity_vllm/ops/served_commit.sh).  kernels = P_compiled: acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [withdrawn as the workload's path] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
-    compiled_ring_rows: int = option("--compiled-ring-rows", type=int, default=0, help="rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
-    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
+                                "--only-arm control (verity_vllm/ops/served_commit.sh)")
+    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by `verity-vllm compiled-merge` from both processes")
 
 
-def main(args: Options, argv: list[str] | None = None) -> None:
-    global TL
+def main(args: Options) -> None:
     _rs = RS.session_of(args)
-    if settings.VERITY_HOT_SUBMIT and _HOT is None:
-        # route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
-        # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
-        # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
-        from verity_vllm.pipeline import hot as _HC
-        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(settings.HOT_ROOT),
-                            idle_s=settings.HOT_IDLE, timeout_s=settings.HOT_TIMEOUT))
-    TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
     if (tracedump := settings.VERITY_TRACEDUMP) is not None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
@@ -1086,43 +971,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
-    if _HOT is not None:
-        _unsafe = hot_unsafe_reasons(args)
-        if _unsafe:
-            # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
-            raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
     args = resolve_staging(args)
     _planner = RB.prepare(args)
-    compiled_src = None
     fault = settings.VERITY_FAULT
-    compiled_kernels = None
-    if args.compiled_taps == "kernels":
-        if args.only_arm == "control":
-            raise SystemExit("--compiled-taps kernels is the treatment process; the control runs with --compiled-taps off --only-arm control")
-        if args.arms:
-            raise SystemExit("--compiled-taps kernels: single committer only (no --arms)")
-        if not getattr(args, "required_manifest", None):
-            raise SystemExit("--compiled-taps kernels needs --required-manifest (verity_vllm.acquire.compiled build ... from the control process's Inductor dir)")
-        from verity_vllm.engine import engine_profile as _prof
-        from verity_vllm.acquire.sources.compiled_kernel_source import CompiledKernelSource
-
-        _prof.apply_env()
-        compiled_kernels = CompiledKernelSource(fault=fault if fault.startswith("compiled_") else None)
-        compiled_kernels.install_hooks()                       # before vLLM compiles: the generated wrappers carry the hook lines
-        print(f"[delta] COMPILED KERNEL TAPS (P_compiled): Inductor wrapper hooks {compiled_kernels.hooks_info}, fault {compiled_kernels.fault!r}", flush=True)
-    if args.compiled_taps == "on":
-        if args.only_arm == "control":
-            raise SystemExit("--compiled-taps on is the treatment process; the control process runs with --compiled-taps off --only-arm control")
-        if args.arms:
-            raise SystemExit("--compiled-taps on: single committer only (no --arms)")
-        from verity_vllm.engine import engine_profile as _prof
-        from verity_vllm.acquire.sources.compiled_source import CompiledGraphSource
-
-        _prof.apply_env()                                    # before any vllm import (build_engine does the same, idempotent)
-        compiled_src = CompiledGraphSource(rows=args.compiled_ring_rows)
-        compiled_src.prepare()
-        print(f"[delta] COMPILED TAPS: record ops will be compiled into the graphs (ring rows {args.compiled_ring_rows}, fault {compiled_src.fault!r}, "
-              f"runner patches {compiled_src.stats.get('patched_runners')}); vLLM compile cache disabled", flush=True)
     served = None
     if args.compiled_taps == "served":
         if args.only_arm == "control" or args.arms or not args.required_manifest:
@@ -1143,23 +994,16 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         from verity_vllm.commit.partition import require_partition
         required_manifest = require_partition(json.load(open(args.required_manifest)), args.programs_root, args.program_dir)
         print(f"[delta] required-value manifest {args.required_manifest}: {required_manifest['populations']['identities']} identities {required_manifest['populations']['by_family']} digest {required_manifest['manifest_digest'][:16]} (Program {str(required_manifest['program_digest'])[:16]})", flush=True)
-        if args.compiled_taps == "kernels":
-            compiled_kernels.set_role_maps(required_manifest)          # BEFORE the engine compiles: capture-time copies + eager acquisitions bind the manifest's roles
-            print(f"[delta] compiled kernel taps: argument roles from the manifest's role_maps {compiled_kernels.hooks_info.get('role_maps')} "
-                  f"({'signature-resolved per launch site' if compiled_kernels.role_maps else 'ABSENT -> name-keyed table'})", flush=True)
     staging_environ(args)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    if compiled_src is not None:
-        compiled_src.use_plan(required_manifest, out / "compiled_source_plan")     # [v2 acquire] the engine build's wrap_model wraps the plan's boundaries
     # the collector's fail-fast watchdog writes this marker (then _exit(3)) when a "collector dead" run does not fail
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
-    TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
-             hot_job=(_HOT or {}).get("jobs"))
+    TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload))
     # `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
     # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
@@ -1185,36 +1029,13 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
-    _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --remote-verifier: the session's engine is built here
-    _live = (_HOT or {}).get("eng")
-    if _live is not None:
-        # hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
-        # checkpoint record, `engine_kwargs_for` = the same code path build_engine takes).  Anything else is a genuine restart trigger.
-        _kw, _envf, _cp = va.engine_kwargs_for(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
-                                               target=_ekw["target"], execution=_ekw["execution"])
-        _want = {"kwargs": _kw, "env_flags": _envf, "checkpoint": _cp}
-        _have = {"kwargs": dict(_live.kwargs), "env_flags": dict(_live.env_flags), "checkpoint": dict(_live.cp)}
-        if json.dumps(_want, sort_keys=True, default=str) != json.dumps(_have, sort_keys=True, default=str):
-            _diff = sorted(k for k in set(_want["kwargs"]) | set(_have["kwargs"]) if _want["kwargs"].get(k) != _have["kwargs"].get(k))
-            raise SystemExit(f"HOT-KEY-MISMATCH: live engine differs from the job's engine (kwargs keys {_diff or 'same'}; env_flags "
-                             f"{_want['env_flags'] == _have['env_flags']}; checkpoint {_want['checkpoint'] == _have['checkpoint']})")
-        eng = _live
-        TL.event("engine.reuse", "mark", model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"), engine_reused=True,
-                 hot_job=_HOT["jobs"], build_s_saved=round(eng.build_s, 3), engine_age_s=round(time.time() - _HOT.get("t_built", time.time()), 1))
-        print(f"[delta] HOT: engine reused (job {_HOT['jobs']} of this worker; saves the {eng.build_s:.1f}s build; engine age "
-              f"{time.time() - _HOT.get('t_built', time.time()):.0f}s; {eng.cp['repo']} max_num_seqs {eng.kwargs.get('max_num_seqs')})", flush=True)
-    else:
-        TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
-        eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
-                              target=_ekw["target"], execution=_ekw["execution"])     # the row's execution decides enforce_eager (header: versions.json)
-        TL.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
-               engine_reused=False, restart_reason=((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
-                                                    or "fresh process (one commit_delta per Commit stage)"))
-        if _HOT is not None:
-            gc.collect()
-            torch.cuda.synchronize()
-            _HOT.update(eng=eng, t_built=time.time(), base0=baseline_state(eng), cuda0=cuda_census())   # pristine baseline BEFORE any committer of any job
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
+    _rs is not None and _rs.before_build(_ekw)
+    TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
+    eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
+                          target=_ekw["target"], execution=_ekw["execution"])     # the row's execution decides enforce_eager (header: versions.json)
+    TL.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
+           engine_reused=False, restart_reason="fresh process (one commit_delta per Commit stage)")
     # the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli and served is not None:
@@ -1224,35 +1045,21 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] required classes (served): {required_classes}", flush=True)
     elif not required_classes_cli:
         required_classes, hidden_family = classes_of_record(required_manifest, eng.model, fa_version)
-        if compiled_kernels is not None:
-            # the execution's leaf class is P_compiled's kernel buffers, not the eager module outputs (never fired: not wrapped)
-            required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
-            print(f"[delta] required classes (P_compiled): {required_classes}", flush=True)
     print(f"[delta] engine attention: vllm_flash_attn_version={fa_version}; required classes {','.join(required_classes)}", flush=True)
-    print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
-          f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
+    print(f"[delta] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
     _rs is not None and _rs.check(eng.llm, eng.runner)
     versions = va.versions_doc(eng)
     versions["served"] = SV.require(eng.llm, wl, _ekw["target"], out)
     flip_weight_rec: dict | None = None                    # --flip-weight NEGATIVE TEST record (set once, before register_weights)
     versions["git_head"] = git_head()
     versions["source_identity"] = source_identity_doc      # resolved_path / repo_root / git_sha per package + sys.path[0]
-    versions["argv"] = list(argv) if argv is not None else sys.argv
-    # hot/cold process + engine reused or restarted (+ reason) in the record itself, not only on the timeline
-    versions["hot"] = {"hot_process": _HOT is not None, "engine_reused": _live is not None,
-                       "restart_reason": None if _live is not None else ((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
-                                                                          or "fresh process (one commit_delta per Commit stage)"),
-                       "worker_job": (_HOT or {}).get("jobs"), "worker_pid": os.getpid() if _HOT is not None else None,
-                       "engine_built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((_HOT or {}).get("t_built") or time.time())),
-                       # process state that decides the speed of the CPU-bound phases (register_weights, forked replay): a hot worker measured
-                       # ~+5 s on each vs a cold process -- these numbers are for locating the cause, not a verdict field
-                       "process_state": _process_state()}
+    versions["argv"] = sys.argv
     versions["engine_kwargs"] = {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")}
     # the RESOLVED async-scheduling mode (scheduler_config after the build), same fact the RunHeader attests
     versions["engine_kwargs"]["async_scheduling"] = va.resolved_async_scheduling(eng.llm)
     versions["enforce_eager"] = eng.kwargs.get("enforce_eager")
     # what is actually compiled / graphed in THIS process (CompilationMode, CUDAGraphMode, capture sizes, splitting ops):
-    # recorded for every attempt, control and treatment alike -- the paired processes must agree (compiled_commit.sh checks)
+    # recorded for every attempt, control and treatment alike -- the paired processes must agree (compiled_merge checks)
     from verity_vllm.acquire.sources.compiled_source import compile_settings as _compile_settings
 
     versions["compilation"] = _compile_settings(eng.llm)
@@ -1265,7 +1072,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # Inductor output code of every compiled piece (wrapper module = one piece: its launch program `call()` and the Triton kernel sources
         # it embeds) is digested from THIS process's Inductor cache dir (kernel_identity.collect, W1c's rule: kernel_set_sha256 = sha256 of the
         # sorted {(kernel name, source sha256)}); control and treatment record it, compiled_merge compares the two kernel sets.  Requires a
-        # per-process TORCHINDUCTOR_CACHE_DIR and VLLM_DISABLE_COMPILE_CACHE=1 (compiled_commit.sh sets both), else the dir is shared/empty.
+        # per-process TORCHINDUCTOR_CACHE_DIR and VLLM_DISABLE_COMPILE_CACHE=1 (ops/served_commit.sh sets both), else the dir is shared/empty.
         gk = va.generated_kernels_of_this_process()                    # same helper as the record path (RunHeader.compilation.generated_kernels)
         versions["compilation"]["generated_kernels"] = gk
         if gk.get("error"):
@@ -1274,27 +1081,10 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             (out / "inductor_kernels.json").write_text(json.dumps(gk, indent=1, default=str) + "\n")
             print(f"[delta] generated kernels (Inductor output code, per-process dir {gk['per_process_cache_dir']}): pieces {gk['wrappers']} "
                   f"distinct kernel sources {gk['distinct_kernel_sources']} kernel_set {gk['kernel_set_sha256'][:16]} call_set {gk['call_set_sha256'][:16]}", flush=True)
-    if compiled_kernels is not None:
-        compiled_kernels.note_engine(eng.llm)
-        versions["compiled_source"] = compiled_kernels.summary()
-        print(f"[delta] compiled kernel source: capture sizes {sorted(compiled_kernels.capture_sizes)}, slots {len(compiled_kernels.slots)} "
-              f"({compiled_kernels.stats['slot_bytes'] >> 20} MiB) written at graph capture: copies {compiled_kernels.stats['capture_copies']}, "
-              f"unknown-kernel args {compiled_kernels.stats['unknown_kernel_args']}, errors {compiled_kernels.errors}", flush=True)
-        if compiled_kernels.errors or not compiled_kernels.slots:
-            raise SystemExit(f"--compiled-taps kernels: no captured slots / errors {compiled_kernels.errors}")
     if served is not None:
         versions.update(served.engine(eng))
         print(f"[delta] served source: slots {len(served.src.slots)} plans {len(served.src.plans)} written at graph capture, "
               f"{len(served.src.modules)} identities every step", flush=True)
-    if compiled_src is not None:
-        if compiled_src.model is None:
-            raise SystemExit(f"--compiled-taps on: the model was not wrapped before compilation (runner patch missed; errors {compiled_src.errors})")
-        if compiled_src.errors:
-            raise SystemExit(f"--compiled-taps on: errors while wrapping/renumbering: {compiled_src.errors}")
-        versions["compiled_source"] = compiled_src.summary()
-        print(f"[delta] compiled source: {len(compiled_src.wrapped)} modules wrapped before compile; renumber {compiled_src.renumber}; slots {len(compiled_src.slots)} "
-              f"({compiled_src.stats['slot_bytes'] >> 20} MiB) written during warm-up/capture: capture calls {compiled_src.stats['capture_calls']}, eager calls "
-              f"{compiled_src.stats['eager_calls']}, captured keys {len(compiled_src.captured_keys)}", flush=True)
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
 
     base = baseline_state(eng)
@@ -1315,22 +1105,9 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
-        if _HOT is not None:
-            _HOT.setdefault("coms", []).append(GR.adopt(_HOT, com))          # closed after the job (hot worker, grouped Commit: on the group's pinned pool)
-        if compiled_kernels is not None:
-            if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
-                raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
-            compiled_kernels.attach(com, required_manifest)
-            com.program_digest = SR.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
-            print(f"[delta] compiled kernel source attached -> committer {com.name}; program digest (P_compiled) {required_manifest['program_digest'][:16]}", flush=True)
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
             com.program_digest = SR.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
-        if compiled_src is not None:
-            if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
-                raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
-            compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
-            print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
         _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
                                 required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
                                 fa_version=fa_version, cb_plan=cb_plan, served=served)
@@ -1562,7 +1339,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 raise SystemExit(f"--flip-weight did not change the element ({_before} -> {flip_weight_rec['after']}): pick another value")
             print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- checkpoint_binding (the weights pin) MUST FAIL naming {_fw[0]}", flush=True)
         with TL.span("prep.register_weights", kind=kind):
-            w = GR.register_weights(_HOT, com, args.weights_hash)
+            w = com.register_weights()
         TL.end("prep.committer_setup", kind=kind)
         print(f"[delta] weight registration ({kind}): {w}", flush=True)
         # the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
@@ -1604,7 +1381,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _wor_rec["derived"] = WR.derivation_provenance(_pd, args.checkpoint_dir, args.checkpoints, None)
                         _wor_rec["derived"]["tool"] = "verity_vllm.pipeline.commit (in-process --checkpoint-dir fallback)"
                     (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
-                _live_wd = GR.live_digests(_HOT, eng.model, WR.live_param_digests)
+                _live_wd = WR.live_param_digests(eng.model)
                 print(f"[delta] weights of record ({kind}): root {str(_wor_rec.get('root_of_record'))[:16]} fields {_wor_rec.get('n_pinned')}/{_wor_rec.get('n_fields')} pinned, "
                       f"unpinned {len(_wor_rec.get('unpinned') or [])}, unresolved {len(_wor_rec.get('unresolved') or [])}, shards pinned {(_wor_rec.get('checkpoint') or {}).get('all_shards_pinned')}; "
                       f"live digests {_live_wd.get('n')} tensors in {_live_wd.get('wall_s')} s", flush=True)
@@ -1695,8 +1472,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             _lock = _rs.begin() if _rs is not None and arm != "control" and _rs.lockstep is None else None
             if arm != "control":
                 com.reset()
-                if compiled_src is not None:
-                    compiled_src.stats_reset_step_counters()
                 if served is not None:
                     served.src.begin_run()
                 com.install()
@@ -1803,7 +1578,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # binding map + identity coverage against the collector-independent expected population, and openings sampled
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
-                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None), after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
+                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1, after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))
@@ -1924,85 +1699,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     vc_result = rc.run_root.hex() == args.expect_root
                 row["commit"]["value_correspondence"] = {"method": " + ".join(vc_methods), "result": vc_result,
                                                          "note": "coverage + openings cannot see a late read or a relabel (brief §4); live evidence = root equality vs an independent run / replay"}
-                if compiled_kernels is not None:
-                    # C2 of record: stratified sampled exact replay of P_compiled's kernel relations from the
-                    # committed bytes + ordered boundary linkage (ids(s) == token(s-1); argmax lm_head(hidden_s) == token(s)); seed from the run root
-                    from verity_vllm.check.replay.compiled_kernel_check import CompiledKernelCheck
-
-                    row["commit"]["compiled_source"] = compiled_kernels.summary()
-                    row["commit"]["compilation"] = versions["compilation"]
-                    # tokens / arrivals / declared prompts per request `r<i>` (workload order) + the engine's per-step row order (B>=2)
-                    _order = {str(q.get("request_id")): f"r{i}" for i, q in enumerate(reqs)}
-                    _toks = {_order.get(str(k), str(k)): v for k, v in r["tokens"].items()}
-                    _arr = {f"r{i}": int(q.get("arrive_step") or 0) for i, q in enumerate(reqs)}
-                    _prompts = {f"r{i}": list(q.get("prompt_token_ids") or [])[int(q.get("cached") or 0):] for i, q in enumerate(reqs)}   # the prefill's rows
-                    _rows = {int(st): [(_rid_of(_order, rid), lo, hi) for rid, lo, hi in rows] for st, rows in (getattr(com, "step_rows", None) or {}).items()} or None
-                    _caps = {f"r{i}": int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for i, q in enumerate(reqs)}
-                    _sched = engine_schedule(_rows, _arr, _caps)                  # the linkage's k = s - arrival counts on the committed-step axis too
-                    if _sched["use"] == "observed":
-                        _arr = {**_arr, **{k: int(v) for k, v in _sched["observed_arrive_steps"].items() if k in _arr}}
-                    try:
-                        ckc = CompiledKernelCheck(com, eng.model, _toks, seed=CH.kernel_check_seed(rc.run_root), request_rows=_rows, arrivals=_arr,
-                                                  prompts=_prompts, seed_source=COMPILED_REPLAY_SEED_SOURCE).run(required_manifest)
-                    except Exception as e:  # noqa: BLE001
-                        import traceback as _tb
-
-                        ckc = {"ok": False, "error": repr(e)[:300], "traceback": _tb.format_exc()[-1200:], "launches_checked": 0}
-                        print(f"[delta] compiled kernel check raised:\n{_tb.format_exc()[-1200:]}", flush=True)
-                    # record shape of the C2 form (A) graded by the finalizer: components.sampled_replay + components.boundary_linkage
-                    lk0 = ckc.get("linkage") or {}
-                    _kinds = sorted((ckc.get("by_kind") or {}).keys())
-                    sr_rec = {"result": bool(ckc.get("ok")) and not ckc.get("error"),
-                              "population": {"n": required_manifest["populations"]["identities"], "digest": required_manifest.get("manifest_digest") or required_manifest.get("digest"),
-                                             "source": "P_compiled x query required manifest (compiled_manifest.py from the control process's Inductor output code)",
-                                             "per_step": required_manifest["populations"].get("per_step")},
-                              "n": ckc.get("launches_checked"), "outputs_checked": ckc.get("outputs_checked"), "outputs_exact": ckc.get("outputs_exact"),
-                              "launches_exact": ckc.get("launches_exact"), "launches_missing": ckc.get("launches_missing"),
-                              "strata": {"mechanisms": _kinds, "requests": required_manifest.get("requests"), "ranks": ["n/a (tp1: rank 0)"],
-                                         "steps": ckc.get("sampled_steps"), "phases": ["prefill (uncaptured: hooks acquire directly)", "decode (CUDA-graph replay: slot drain per step)"],
-                                         "pieces": f"every piece ({required_manifest['program']['pieces']}) x every kernel kind of a sampled step",
-                                         "lifetime": "n/a (unwindowed: per-launch static slots written at graph capture, drained before the step's root)"},
-                              "seed": ckc.get("seed"), "unreplayable": [], "by_kind": ckc.get("by_kind"), "mismatches": ckc.get("mismatch"), "missing": ckc.get("missing"),
-                              "errors": ckc.get("errors"), "why": ckc.get("error") or ("all sampled launches replay bit-for-bit from the committed bytes" if ckc.get("ok") else "see mismatches/missing/errors"),
-                              "method": "sampled-exact-replay: P_compiled kernel relations (compiled_relations.py) evaluated on the committed input buffers + registered weights, "
-                                        "compared bit-for-bit with the committed output buffers (compiled_kernel_check.py)"}
-                    link_rec = {"result": bool(lk0.get("ok")), "method": "per-(request, engine step) token gate under graph replay: embedding ids(s) == sampled token(s-1); "
-                                                                   "argmax lm_head(final_norm_out(s)) == sampled token(s) (eager lm_head on the committed final hidden)",
-                                "checked": int(lk0.get("ids_checked", 0)) + int(lk0.get("argmax_checked", 0)), "ids": f"{lk0.get('ids_equal')}/{lk0.get('ids_checked')}",
-                                "argmax": f"{lk0.get('argmax_equal')}/{lk0.get('argmax_checked')}", "mismatch": lk0.get("mismatch"),
-                                # per-(step, request) attribution: the gate ran over EVERY committed step x every
-                                # request row of the step (complete) -- the compiled row's stand-in for form (B)'s attribution at B>=2
-                                "attribution": lk0.get("attribution"),
-                                "why": None if lk0.get("ok") else "a step's ids / argmax does not tie to the request's own tokens (engine outputs == control arm)"}
-                    neg_rec = {"suite": "VERITY_FAULT compiled_omit:<kernel> (one launch's buffers never acquired under replay -> C1 coverage FAIL) ; "
-                                        "compiled_late_drain (slots read one step late under replay = post-overwrite read -> C2 linkage FAIL)",
-                               "artifact": "negatives/ beside this attempt's commit/ (treatment processes with the fault; verdict.json each)", "results": None}
-                    # the components are ADDED to the composite the O1 gate reads (commit_verdict: components.
-                    # sampled_replay / boundary_linkage stand in for the top level only when the method says sampled-exact-replay); result = AND.
-                    # `components` / `vc_methods` / `vc_result` are the shared locals the composite below is built from (the dict is
-                    # (re)assigned to row.commit.value_correspondence after the compiled/root/oracle blocks); the compiled-only top-level
-                    # fields are merged in right after that assignment (`_compiled_vc_extra`).
-                    components.update({"sampled_replay": sr_rec, "boundary_linkage": link_rec, "negatives": neg_rec})
-                    vc_methods.insert(0, "sampled-exact-replay (P_compiled kernel relations from committed bytes; compiled_kernel_check.py) + boundary linkage")
-                    vc_result = bool(ckc.get("ok")) if vc_result is None else (vc_result and bool(ckc.get("ok")))
-                    _compiled_vc_extra = {"population": required_manifest["populations"], "n": ckc.get("launches_checked"), "seed": ckc.get("seed"),
-                                          "sampled_steps": ckc.get("sampled_steps"), "compiled_check": ckc}
-                    cs = row["commit"]["compiled_source"]["stats"]
-                    lk = ckc.get("linkage") or {}
-                    _ae = ckc.get("autotune_equivalence") or {}
-                    if _ae:
-                        print(f"[delta] AUTOTUNE EQUIVALENCE (pair {pair}): " + "; ".join(
-                            f"{k}: {v.get('n_candidates')} candidates, {v.get('shown')}/{v.get('launches')} launches shown{'' if v.get('all_shown') else ' (NOT shown: ' + str(v.get('why'))[:90] + ')'}"
-                            if (v.get("n_candidates") or 0) > 1 else f"{k}: 1 candidate" for k, v in sorted(_ae.items())), flush=True)
-                    print(f"[delta] COMPILED KERNELS (pair {pair}): steps {cs['steps']} replayed {cs['replayed_steps']} eager {cs['eager_steps']} replay-drains {cs['replay_drains']} "
-                          f"eager-acq {cs['eager_acquisitions']} omitted {cs['omitted']} outside-step {cs['hook_calls_outside_step']}; C2 {'OK' if ckc.get('ok') else 'FAIL'}: launches "
-                          f"{ckc.get('launches_exact')}/{ckc.get('launches_checked')} exact, missing {ckc.get('launches_missing')}, outputs {ckc.get('outputs_exact')}/{ckc.get('outputs_checked')}, "
-                          f"by kind {ckc.get('by_kind')}, linkage ids {lk.get('ids_equal')}/{lk.get('ids_checked')} argmax {lk.get('argmax_equal')}/{lk.get('argmax_checked')} "
-                          f"positions {lk.get('pos_equal', 0)}/{lk.get('pos_checked', 0)} "
-                          f"attribution {(lk.get('attribution') or {}).get('pairs_checked')}/{(lk.get('attribution') or {}).get('pairs_total')} pairs over "
-                          f"{(lk.get('attribution') or {}).get('steps_checked')}/{(lk.get('attribution') or {}).get('population_steps')} steps complete={(lk.get('attribution') or {}).get('complete')} "
-                          f"coincident {(lk.get('attribution') or {}).get('coincident_pairs')} (tokens-only {(lk.get('attribution') or {}).get('coincident_pairs_tokens')}) "
-                          f"steps {ckc.get('sampled_steps')} {ckc.get('mismatch', [])[:2]} {ckc.get('missing', [])[:2]} {ckc.get('errors', [])[:1]} {ckc.get('error', '')}", flush=True)
                 if served is not None:
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
                     _chal, _chal_rec = CC.replay_challenge(rc, args.replay_challenge)
@@ -2012,35 +1708,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                     vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")
                     vc_result = _sc2["ok"] if vc_result is None else (vc_result and _sc2["ok"])
                     print(f"[delta] SERVED C2 (pair {pair}): {_sc2['line']}", flush=True)
-                if compiled_src is not None:
-                    # C2 under graph replay: no Python tap can observe a value inside a replayed graph, so correspondence is
-                    # checked from the committed bytes alone (Linear re-execution from committed inputs, lm_head(norm) == logits, greedy
-                    # argmax == sampled ids, embed-in(s+1) == sampled(s)); a late drain (VERITY_FAULT=compiled_late_drain) fails here
-                    from verity_vllm.check.compiled_value_check import CompiledValueCheck
-
-                    row["commit"]["compiled_source"] = compiled_src.summary()
-                    row["commit"]["compilation"] = versions["compilation"]
-                    try:
-                        cvc = CompiledValueCheck(com, eng.model, eng.runner, sampling).run()
-                    except Exception as e:  # noqa: BLE001
-                        cvc = {"ok": False, "error": repr(e)[:300], "checked": 0}
-                    row["commit"]["value_correspondence"]["compiled_check"] = cvc
-                    row["commit"]["value_correspondence"]["method"] += " + compiled_value_check (committed-bytes relations; compiled_value_check.py)"
-                    vc_result = bool(cvc.get("ok")) if vc_result is None else (vc_result and bool(cvc.get("ok")))
-                    row["commit"]["value_correspondence"]["result"] = vc_result
-                    cs = row["commit"]["compiled_source"]["stats"]
-                    print(f"[delta] COMPILED (pair {pair}): steps {cs['steps']} replay-drains {cs['replay_drains']} eager-drains {cs['eager_drains']} direct-steps {cs['direct_steps']} "
-                          f"direct-calls {cs['direct_calls']} unwritten-skipped {cs['unwritten_skipped']} refused-capture-alloc {cs['refused_capture_alloc']} shape-mismatch {cs['shape_mismatch']}; "
-                          f"VALUE CHECK {'OK' if cvc.get('ok') else 'FAIL'}: reexec {cvc.get('reexec_equal')}/{cvc.get('reexec_checked')} logits {cvc.get('logits_equal')}/{cvc.get('logits_checked')} "
-                          f"argmax {cvc.get('argmax_equal')}/{cvc.get('argmax_checked')} chain {cvc.get('chain_equal')}/{cvc.get('chain_checked')} "
-                          f"mismatch {cvc.get('reexec_mismatch', [])[:2]} {cvc.get('chain_mismatch', [])[:2]} {cvc.get('error', '')}", flush=True)
-                    components["root_compare"] = {"result": vc_result, "run_root": rc.run_root.hex(), "expect_root": args.expect_root,
-                                                  "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod)",
-                                                  "why": None if vc_result else f"run root {rc.run_root.hex()[:16]} != expected root {str(args.expect_root)[:16]} (--expect-root)"}
                 row["commit"]["value_correspondence"] = {"method": " + ".join(vc_methods), "result": vc_result, "components": components, "why": None,
                                                          "note": "coverage + openings cannot see a late read or a relabel (brief §4); live evidence = the Match oracle of this attempt / an independent pinned root / replay"}
-                if compiled_kernels is not None:
-                    row["commit"]["value_correspondence"].update(_compiled_vc_extra)          # the C2-of-record fields (compiled_check = the full report)
                 if served is not None:
                     row["commit"]["value_correspondence"].update(_sc2["value_correspondence"])
                 if getattr(args, "match_dir", None):
@@ -2170,25 +1839,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 route_pin_stamp(row["commit"])
                 row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = (RB.pending_verdict if pair in deferred else commit_verdict)(
                     row["commit"], row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=d, required_classes=required_classes)
-                if compiled_kernels is not None and row["commit"]["commit_pass"]:
-                    ckc = row["commit"]["value_correspondence"]["compiled_check"]
-                    if not ckc.get("ok"):
-                        row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"compiled C2 FAIL: {ckc.get('launches_exact')}/{ckc.get('launches_checked')} launches exact, "
-                                                                                                    f"missing {ckc.get('launches_missing')}, linkage {ckc.get('linkage')} {ckc.get('error', '')}")
                 if served is not None and row["commit"]["commit_pass"]:
                     scc = row["commit"]["value_correspondence"]["compiled_check"]
                     if not scc.get("ok"):
                         row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"served C2 FAIL: {scc.get('equal')}/{scc.get('checked')} values exact, "
                                                                                                     f"steps unrun {scc.get('steps_unrun')} {scc.get('error') or ''}")
-                if compiled_src is not None and row["commit"]["commit_pass"]:
-                    # the compiled boundary's own fail-closed conditions (C2 value relations; no refused/mis-shaped in-graph acquisition)
-                    cvc = row["commit"]["value_correspondence"]["compiled_check"]
-                    cs = row["commit"]["compiled_source"]["stats"]
-                    if not cvc.get("ok"):
-                        row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, f"compiled value check FAIL: {cvc.get('equal')}/{cvc.get('checked')} relations hold ({cvc.get('error', '')})"
-                    elif cs["refused_capture_alloc"] or cs["shape_mismatch"] or cs["oversize_in_capture"]:
-                        row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"compiled ring refused acquisitions: refused_capture_alloc {cs['refused_capture_alloc']} "
-                                                                                                    f"shape_mismatch {cs['shape_mismatch']} oversize_in_capture {cs['oversize_in_capture']}")
                 if not row["commit"]["commit_pass"]:
                     print(f"[delta] COMMIT {'FAIL' if row['commit']['commit_pass'] is False else 'PENDING'} (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
                 row["root_equal_expected"] = (rc.run_root.hex() == args.expect_root) if args.expect_root else None
@@ -2242,7 +1897,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         print(f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {_why}", flush=True)
     TL.start("closure.summary")
     if args.only_arm:
-        # one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
+        # one arm per process: the paired summary (delta, CI) is produced by compiled_merge from both runs.jsonl files
         summary = {"schema": SCHEMA + "/only-arm", "only_arm": args.only_arm, "runs": len(rows), "versions": versions, "declaration": decl,
                    "wall_s": [r["wall_s"] for r in rows], "commit_pass": (RB.pass_of(rows) if args.only_arm == "instrumented" else None),
                    "table_md": f"only-arm {args.only_arm}: {len(rows)} runs, wall {[round(r['wall_s'], 4) for r in rows]}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}

@@ -9,7 +9,7 @@ committed false output word, a false output claim, a flipped internal bit). The 
 (`stage.py` says why), so it then refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`). `summarize.py` counts
 that refusal in `lean_refused_no_program`, apart from Lean's acceptances (`lean_accepted`), and never as an acceptance.
 
-Three kinds of type (`stage.py`'s docstring has each):
+Four kinds of type (`stage.py`'s docstring has each):
 
 - a Definition proved as one proof block (`UNITS`: the FP8 GEMM coordinate with scale groups of 128, the W8A8 GEMM
   coordinate), staged by `class_statement.stage_unit` on PoUW's row convention, each input's output held to the Program's
@@ -22,7 +22,9 @@ Three kinds of type (`stage.py`'s docstring has each):
   K = 6144; any other by `census:NAME`, the name verbatim), one whole Definition a proof block, staged like a `UNITS`
   type on bf16 rows, held to the Program's reference; FlashInfer's FP8 linear and its quantisation part, the MoE router
   and DSA's indexer query (`fi`, `fi-quant`, `router-row`, `router-slots`, `dsa-q-row`) are their Boolean `_v2`
-  templates as served, flat, their MUFU reads in gates.
+  templates as served, flat, their MUFU reads in gates;
+- a table read (`READS`: `table-read`, a sparse MLA history table's read at its capacity), staged as serving stages a read,
+  on the verifier's own read template (`flock-read-tmpl`), each honest read's row held to the table's.
 
 Files:
 
@@ -39,6 +41,12 @@ Files:
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
   a second ÷ the block's MACs), marginal and amortized at each size. A unit may carry its own sizes (`UNIT@N,N`), and a
   census type's size may be `full` or `full/D` (the most instances a statement holds at the block's k_log, over D).
+  `PT_STATEMENTS` proves statements staged elsewhere as they are. It times one prover on the device; K provers at once are
+  `benchmarks/one_stage/server_rate.py`'s, which times them on the verifier's clock.
+- `stage_window.py WINDOW_DIR OUT (--member K | --pick P N)`: a served window's member (a TP Commit's `--serving-rows`
+  window, or `verity-vllm tp-serving-rows`') as its served statement for `PT_STATEMENTS`: the verifier's circuit for its
+  template bound to the window's digests, and the window's own bodies (its `inst.bin` is the prover's: keep OUT private).
+  `server_rate.py` takes OUT as `Z/<type>/c<n>/stage`.
 - `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
   host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
   docstring has the file's format and each limit. `prove` keeps what a Lean verifier on another node reads of each
@@ -47,8 +55,9 @@ Files:
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
-  `stage.py`'s `census:NAME` and `full/D` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s,
-  with the paths the key hashes (`KEY_PATHS` in each) held to the tree.
+  `stage.py`'s `census:NAME` and `full/D` on a stub stager, `stage_window.py`'s member choice and public-body check, and
+  `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in each) held to
+  the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
   doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.

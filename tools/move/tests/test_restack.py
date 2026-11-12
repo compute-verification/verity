@@ -191,8 +191,10 @@ def test_a_clone_without_the_merge_drivers_gets_them_registered_or_nothing_runs_
     """A checkout whose `.gitattributes` names merge drivers its clone defines none of has them registered before any branch
     (`DRIVERS`), since without them a lock merges as text and the restack stops where its owner's merge wouldn't. When the
     interpreter can't register them, no branch is restacked, the exit is 2, and the refusal names each driver and the command
-    that registers them."""
-    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"})
+    that registers them. Git's own drivers (`union`, which the tree gives every `.gitignore`) are none of them: no clone
+    defines one, so a check that asked for it would refuse every branch."""
+    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"
+                                                  ".gitignore merge=union\n*.bin merge=binary\n*.txt merge=text\n"})
     monkeypatch.chdir(repo)
     assert RS.missing_drivers() == ["lean-audit", "lean-imports"]
     monkeypatch.setattr(RS, "DRIVERS", "raise SystemExit('no research here')")
@@ -974,3 +976,138 @@ def test_a_scratch_worktree_is_added_and_forgotten_holding_the_clones_worktree_l
     RS.drop_worktree(str(wt), str(repo))
     assert seen == [("worktree", "add", "held"), ("reset", "--hard", "free"), ("worktree", "prune", "held")]
     assert not wt.exists() and str(wt) not in git(repo, "worktree", "list")
+
+
+LAYOUT_MAP = """[roots]
+old = {}
+new = {}
+
+[paths]
+"old/lib/__init__.py" = "new/lib/__init__.py"
+"old/lib/a.py" = "new/lib/a.py"
+
+[retired]
+paths = ["old/lib/"]
+
+[modules]
+"old.lib" = "new.lib"
+"old.lib.a" = "new.lib.a"
+
+[rewrite]
+exclude = ["tools/move/**"]
+"""
+ROWS = "tools/move/layout_map.rows.toml"
+RECORD = "tools/research/src/research/store/moves.json"
+#: what the branch adds: two files under the path the map retires, one in a directory that stays, and a reader of them
+ADDED = {"old/lib/added.py": "import old.lib.a\n", "old/lib/sub/deep.py": "", "stays/extra.py": "import old.lib.a\n",
+         "doc.md": "See old/lib/added.py and `old.lib.sub.deep`.\n"}
+
+
+@pytest.fixture
+def real(tmp_path, monkeypatch):
+    """main: `old` (a package and its reader), then `base` (`layout.py` itself and a map that retires `old/lib/`), then the
+    move's commit, written by that script and named by its move line. A branch `pr` starts at `old`."""
+    for name in ("SCRIPT", "SCRIPT_ARGS", "KEEP"):          # `carry` and `main` set them: put back after the test
+        monkeypatch.setattr(RS, name, getattr(RS, name))
+    r = tmp_path / "real"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    commit(r, "old", {"old/lib/__init__.py": "", "old/lib/a.py": "X = 1\n", "use.py": "import old.lib.a\n",
+                      RECORD: '{"moves": []}\n'})
+    git(r, "branch", "pr")
+    commit(r, "base", {"tools/move/layout.py": (HERE.parent / "layout.py").read_text(), "tools/move/layout_map.toml": LAYOUT_MAP})
+    subprocess.run([sys.executable, "tools/move/layout.py", "--map", "tools/move/layout_map.toml", "--no-lock"], cwd=r,
+                   check=True, capture_output=True)
+    commit(r, "layout: the package moves\n\nLayout-move: tools/move/layout_map.toml --no-lock")
+    monkeypatch.chdir(r)
+    return r
+
+
+def cross(repo: Path, branch: str = "pr") -> dict:
+    """`branch` carried across the moves main has, found by their lines, as `restack.py BRANCH` does."""
+    return RS.carry(branch, RS.moves_on("main", branch, str(repo)), "main", cwd=str(repo), main="main")
+
+
+def test_a_branchs_file_under_a_retired_path_with_no_row_is_refused_by_name_with_the_fix(real, capsys):
+    """The map was written from main's tree: it has no row for a file the branch adds under a directory it empties, and
+    the script would leave the file where nothing else is. The crossing stops as `no-row`, an outcome of its own (a
+    failed script is `script-failed`, with the tail of its output): it names each file, and its first line, the one
+    drive's queue reports, says where the row goes. The file in a directory that stays is not named."""
+    head = on(real, "pr", ("add files", ADDED))
+    r = cross(real)
+    assert r["status"] == "no-row" and r["step"] == "script" and "result" not in r, r
+    assert r["files"] == ["old/lib/added.py", "old/lib/sub/deep.py"]
+    first = r["error"].splitlines()[0]
+    assert first.startswith("no row for 2 tracked files under a path the map retires: ") and ROWS in first[:300]
+    assert RS.line(r).startswith("pr: no-row  [plain merge ") and "\n      old/lib/added.py\n      old/lib/sub/deep.py" in RS.line(r)
+    capsys.readouterr()
+    assert RS.main(["pr", "--main", "main", "--json"]) == 1
+    assert [x["status"] for x in json.loads(capsys.readouterr().out)] == ["no-row"]
+    assert git(real, "rev-parse", "pr") == head
+
+
+def test_with_its_row_in_the_branchs_rows_file_the_file_moves_and_the_result_holds_no_rows_file(real):
+    """The fix the refusal names: the branch commits `NAME.rows.toml` beside the map, the script reads it after the map, and
+    the branch's files move with every reference to them, a file row and a directory row alike. The script deletes the
+    rows file and `restack.py` does not put the branch's copy back (as it does the branch's other `tools/move/` files),
+    so the result holds none; `moves.json` is main's, the map's rows alone; and the result has nothing left to cross."""
+    on(real, "pr", ("add files", ADDED),
+       ("their rows", {ROWS: '[paths]\n"old/lib/added.py" = "new/lib/added.py"\n"old/lib/sub/" = "new/lib/sub/"\n'}))
+    r = cross(real)
+    assert r["status"] == "clean", r
+    got = paths(real, r["result"])
+    assert {"new/lib/added.py", "new/lib/sub/deep.py", "new/lib/a.py", "new/lib/__init__.py", "stays/extra.py"} <= got
+    assert not any(p.startswith("old/") or p.endswith(RS.ROWS_SUFFIX) for p in got), sorted(got)
+    assert show(real, r["result"], "new/lib/added.py") == show(real, r["result"], "stays/extra.py") == "import new.lib.a\n"
+    assert show(real, r["result"], "doc.md") == "See new/lib/added.py and `new.lib.sub.deep`.\n"
+    assert show(real, r["result"], RECORD) == show(real, "main", RECORD)
+    assert next(s for s in r["steps"] if s["step"] == "script")["restored"] == []
+    assert RS.restack(r["result"], RS.moves_on("main", "pr", str(real))[0][0], "main", cwd=str(real))["status"] == "up-to-date"
+
+
+def test_a_crossing_that_skipped_a_move_and_stops_at_files_with_no_row_says_both(late, monkeypatch, capsys):
+    """The two rules together: the outcome is the stop's, `no-row` with its files and its fix, and the move skipped before it
+    stays named under it, in the text and in `--json`. There is no result, so nothing is pushed and no command to confirm
+    the skip with is given: the rows file comes first, and the crossing after it is the one that says `clean-skipped`."""
+    repo, first, second = late["repo"], late["first"], late["second"]
+    run, said = RS.run_script, "no row for 1 tracked file under a path the map retires: a row in the rows file\n  app/added.py"
+
+    def no_row(merged, base, python, cwd):
+        if merged != base:                                     # the branch's tree: the move's own check runs on its base
+            raise RS.NoRow(said)
+        return run(merged, base, python, cwd)
+
+    monkeypatch.setattr(RS, "run_script", no_row)
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--push-to", "pr-crossed", "--json"]) == 1
+    out = capsys.readouterr()
+    [r] = json.loads(out.out)
+    assert (r["status"], r["step"], r["files"], r["move"]) == ("no-row", "script", ["app/added.py"], second)
+    assert ([s["move"] for s in r["skipped"]], r["crossed"]) == ([first], []) and not {"result", "confirm", "pushed"} & set(r)
+    assert "--push-to pr-crossed: pr is no-row; nothing pushed" in out.err
+    text = RS.line(r)
+    assert text.startswith("pr: no-row  [plain merge ") and "\n    no row for 1 tracked file " in text
+    assert f"\n      app/added.py\n    skipped the move {first[:12]} (tools/move/layout.py --map " in text
+    assert text.endswith("Look for that map's old names in what the branch adds.")
+
+
+def test_a_row_of_the_rows_file_that_contradicts_a_row_of_the_map_is_refused(real):
+    """A branch's rows add to the map and never change it: a row sending a file the map moves somewhere else stops the
+    crossing, as a failed script whose output names the row and where the map sends the file."""
+    on(real, "pr", ("add a file", {"old/lib/added.py": ""}),
+       ("rows", {ROWS: '[paths]\n"old/lib/added.py" = "new/lib/added.py"\n"old/lib/a.py" = "elsewhere/a.py"\n'}))
+    r = cross(real)
+    assert r["status"] == "script-failed" and "result" not in r, r
+    assert r["error"].startswith(f"exit 1: {ROWS}: ")
+    assert "'old/lib/a.py' = 'elsewhere/a.py': the map sends it to 'new/lib/a.py'" in r["error"]
+
+
+def test_a_branch_with_no_rows_file_crosses_as_before(real):
+    """Nothing of the rows file is read where a branch has none: the result is main's moved tree with the branch's own
+    changes, at the paths the map gives them."""
+    on(real, "pr", ("edit and add", {"old/lib/a.py": "X = 2\n", "stays/extra.py": "import old.lib.a\n"}))
+    r = cross(real)
+    assert r["status"] == "clean", r
+    assert paths(real, r["result"]) == paths(real, "main") | {"stays/extra.py"}
+    assert show(real, r["result"], "new/lib/a.py") == "X = 2\n" and show(real, r["result"], "stays/extra.py") == "import new.lib.a\n"
+    assert all(show(real, r["result"], p) == show(real, "main", p) for p in paths(real, "main") - {"new/lib/a.py"})

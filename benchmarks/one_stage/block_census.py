@@ -14,9 +14,10 @@ width of least leakage-weighted proving cost (`width_pick`, the row's own width 
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
 input (a constant) is no proof block.
 
-Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (an upper
-bound, `m1_families.estimate`), its served MACs and the bytes of the rows it opens (a row per parameter and per returned
-field). Beside them, every row's own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
+Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (its leaves'
+ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with its reads inline, as `m1_families` says),
+its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
+own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
 
     python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR
 """
@@ -62,10 +63,14 @@ def misfit(e: dict) -> str | None:
 
 def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
-    list of options coarse to fine, an option the units it takes."""
+    list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
+    has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one)."""
     base = spec_base(spec)
     if base in ST.PARTS:
-        return [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in ST.PARTS[base]]
+        for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
+            got = [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in c]
+            if all(got):
+                return got
     if base in ST.CUT or base in ST.CHAINS or base in ST.STAGES:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:

@@ -71,7 +71,6 @@ untraced = [
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/pipeline/test_boundary_plan.py",
-    "tests/pipeline/test_commit_group.py",
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
     "tests/pipeline/test_gpu_lease.py",
@@ -96,7 +95,7 @@ untraced = [
     "tests/tools/test_suite_parts.py",
 ]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
-# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
+# which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
 # package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
 # fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
@@ -107,9 +106,10 @@ untraced = [
 # period-open's --circuit-files with infra's gate (verity/composite/device/live_challenger/auditor.py), and the in-process gate
 # (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/composite/device/live_challenger/models.py);
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
-# (benchmarks/one_stage/glm53_*.json);
+# (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
+# they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
 # tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
-# reference decode it imports); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
+# reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
@@ -128,15 +128,18 @@ inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_conf
           "benchmarks/remote_session/store_layout.py", "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json",
           "verity/composite/device/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
+          "benchmarks/pous/p2_v1/load.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
-          "benchmarks/one_stage/glm53_prefill_tp8_step0.json",
+          "benchmarks/one_stage/glm53_prefill_tp8_step0.json", "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
+          "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json", "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
+          "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16.json", "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json",
           "ruff.toml", "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
           "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
           "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
-          "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/treelock.py", "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
           "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
@@ -281,7 +284,6 @@ paths = ["adapters/vllm/verity_vllm", "verity"]
 [[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_serve_remote.py",
-    "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
 paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier"]
@@ -330,3 +332,21 @@ paths = ["adapters/vllm/verity_vllm/pipeline", "verity/circuits"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_dead_code_tests_for.py", "tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
 paths = ["adapters/vllm/tests", "adapters/vllm/verity_vllm"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/tools/test_description_sizes.py"]
+paths = [
+    "adapters/vllm/tools/description_sizes.py",
+    "adapters/vllm/tools/description_sizes.json",
+    "adapters/vllm/tests/tools/allowlists/description_sizes.json",
+    "adapters/vllm/verity_vllm",
+    "verity",
+    "benchmarks/one_stage/glm53_all_families_tp8_step16.json",
+    "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json",
+    "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
+    "benchmarks/one_stage/glm53_prefill_tp8_step0.json",
+    "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
+    "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16.json",
+    "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json",
+    "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
+]

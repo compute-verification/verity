@@ -1567,7 +1567,7 @@ in `ReplayStep_v1`'s scheduling order:
   - The replay step (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
     walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
     `looked (W + A)×1` after `used`, the candidates whose lookup it read, which `replay_vectors --EW` holds to the
-    replay's `_KV.hit` calls.
+    replay's `BlockPool.hit` calls (`verity_vllm.pipeline.advice_code.pool`).
   - `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
     `CacheStep_v1`'s `_in_fields` order:
 
@@ -1675,7 +1675,7 @@ Its step rows are held to the committed ``srv`` row, which the verifier holds by
 registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
-chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice, is v1 charging the length terms too:
+chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice except under the certified tick, is v1 charging the length terms too:
 `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
 857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
@@ -2052,7 +2052,8 @@ cut into a cell or reaches the server, and it fails at once. It is never clamped
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
-them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
+them; an uncapped schedule hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the cap
+with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`WardenParams.lengths`, id form only, none by default) are what the network certifier signs of the
 requests it released, beside its cells: each one's place in the release order, its request's bytes, its response's
@@ -2068,10 +2069,11 @@ outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the netwo
   it, so it is never a server's failure;
 - lays each execution phase's releases out a row a slot stride in two tables, `lengths` and `fails`, K =
   `WardenParams.stride_releases` slots a row whatever the load, commits each as it commits its cells' rows, and signs
-  one head for the link's execution phase, once, that lists both (`connection_rows`, whose docstring has the slots,
-  the head and the registration). It signs execution phase w's head at the close of execution phase w + 1, where every
-  connection released in w has ended, so a period's last execution phase needs the one after it. An execution phase
-  whose records, or the next one's, weren't published complete has no head.
+  one head for the link's execution phase, once, that lists both, and after them the content rows' tables where the
+  schedule has them (`connection_rows`, whose docstring has the slots, the head and the registration). It signs
+  execution phase w's head at the close of execution phase w + 1, where every connection released in w has ended,
+  so a period's last execution phase needs the one after it. An execution phase whose records, or the next one's,
+  weren't published complete has no head.
 
 The tables say what the same execution phases' records say, in another order: the network certifier writes both from
 the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. The form
@@ -2095,6 +2097,79 @@ more, naming the longest stride that fits. The prover's side (`blocks`) builds e
 registered reads from the network certifier's opening and refuses request rows that give another row than the signed
 one. The period check reads schedules without lengths rows only: nothing yet ties the request row to the compute
 side's committed values or reads the block's verdict and failures.
+
+**The content rows** (`WardenParams.content`, with lengths rows only, none by default; `content_rows`) are three
+rows of a released connection that hold what it carried: its request (u32 bytes, the bytes, zeros to its class's
+size), its response (u32 m, then O u32 ids, the ids of the m `DATA` cells released before its `END` or `FAIL` and
+zeros to O) and its end (a fails slot's layout: (0, n) after an `END` and (1, n) after a `FAIL`, n the `DATA` cells
+released before it, where a fails slot counts them before a `FAIL` alone). A row's size is its class's, a size of
+prompt ids and a size of ids released, each a power of two.
+
+- **The classes** are the schedule's: a list of (P, O, rows), in order, which may hold two of one (P, O), a stop
+  class and a no-stop class of one size. Class i has three tables, `request.i`, `response.i` and `end.i`, each of
+  `rows` rows whatever the load. The head lists them after `lengths` and `fails`, in the schedule's order, and is
+  signed once. `rows` is at most the lengths table's slots, since an execution phase releases no more.
+- **A row's place.** Row r of class i's tables is the execution phase's r-th release, in release order, among those
+  filed in class i. A release has its three rows at one r.
+- **The filing** is one function with one caller (`content_rows.file`, which `connection_rows.tables` calls): the
+  first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
+  nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
+  argument. A release that fits no class, or whose class's rows are all held, has no content row, and no later class
+  takes it; its lengths slot holds its lengths all the same.
+- **A row of zero bytes** is what every row past the held ones is (`content_rows.empty_rows`). As a request row it
+  reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a response row it
+  reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held connection that
+  ended before any id have the same response row and the same end row, and only the request row tells them apart.
+- **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
+  cells' ids, as it cut and released them and never from the server's report, four bytes an id, from the release to
+  the hand that carries it: the lengths rows' hand, at the close of the next execution phase. On its tick the device
+  only hands. Whoever takes the hand lays the tables, commits them and signs the head
+  (`benchmarks/network_traces/warden_serve.py`: its publisher process, which holds the key). A connection whose
+  client goes away after its release ends as its server does, in its `END` or a server's `FAIL`, and has its rows.
+- **An execution phase that is not handed**, because its records or the next one's weren't published complete, has
+  no content rows and no head: no read of a row of it opens.
+- **What is public.** The head and the registration hold each table's name, rows, row size, domain and root. The
+  classes, their order and their rows are the schedule's, in the parameters' digest, and the roots are hiding.
+  Nothing in them is a function of the load: not how many rows are held, in which class, or any length.
+
+The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
+digest, records, heads and certificates. As for the lengths rows, that the tables say what the records say rests on
+the network certifier's own code (`trusted-host`). The head of execution phase w exists from the close of execution
+phase w + 1. Nothing here orders its signature or its registration against the compute audit's coins.
+
+**The response tie's proof block** (`verity.protocols.certifier.prover.response_tie`, in no Spec) is one a
+connection, of one of two Definitions by the kind of its class: `ResponseTieStop` in a stop class and
+`ResponseTieNoStop` in a no-stop class. Each has the one static O and no optional port, so each is a circuit file
+and a session of its own, and each takes every connection its kind of class holds, however it ended. It reads the
+compute side's committed row of the connection's O ids, the network certifier's end row and, in a stop class, the
+compute side's committed stop word (`StopRule16_v1`'s, n + finish·2^13), and no cell. Its gates compute the
+response row: the count, then the first count ids and zeros to O.
+
+- **A stop class.** The block checks that the stop word's finish is not 0, that n is at most O and that the end
+  row's class is 0 or 1. Where the connection ended in its `END` (class 0) the count is n, and `at` is in no check:
+  the signed row holds the count to the network certifier's. Where the network certifier failed the connection
+  after the engine finished it (class 1) the count is `at`, and the block checks that `at` is at most n. Soundness
+  needs that check, and the check alone does not give it: the ids past n in the committed egress row are held by
+  nothing, so without it a server could commit ids it chose there, send them, and have the connection failed.
+- **A no-stop class.** The block checks that the end row's class is 0 or 1 and that `at` is at most O, and the
+  count is `at`. It takes an aborted connection and one that ended in its `END` (past the stop rule's most ids, a
+  body's own stop strings, a `min_tokens`).
+
+**The premise of both forms is open.** The block computes the network certifier's row from the committed row and
+holds nothing about where the committed ids came from: either form is sound only where the compute audit holds the
+committed ids below the count to be the Program's outputs. Nothing in the tree holds that today, for either kind of
+class: the stop rule's proof block holds the stop word to the rule over the committed ids, and holds none of those
+ids to the Program. A no-stop class's form has, beside that, no committed count.
+
+Its outputs are a verdict and the row. Where a check fails the row's count word is all ones, a count no response
+row has, so a statement that registers the row as a read of the signed one opens its root on no refused input,
+whether or not anything reads the verdict. Every switch is computed and none is witness. A row is the block's
+output whole, so O is at most 4,096 (`content_rows.check_ids`). Flock's composer takes a statement only where one
+of its rows is 112 bytes or more (`verity_flock.circuit`'s `compose`), and the block's longest row is 4·(O + 1)
+bytes: a statement of it is taken only from O = 32, so a tied class under 32 ids has no statement today. That is
+a fact of the composer and no rule of the classes: the gates are bound from O = 2, and circuit-check doesn't see
+it. The block has its reference (`refusals`, `outputs`). The network certifier's tables hold the end row it reads
+and the response row it returns ("The content rows"); no statement registers its reads of them yet.
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).

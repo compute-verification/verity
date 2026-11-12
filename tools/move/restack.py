@@ -45,9 +45,11 @@ for M's map's old names in what the branch adds. A carry that skipped a move nev
 running it is the owner saying the skip is right. Where no later move's base contains it, no merge of a base brings M in,
 and the branch is refused as above. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
-id), `up-to-date`, `clean-skipped` (the result's id; a move was skipped), `conflicted` (the step and the files),
-`script-failed` (the script's exit code and the tail of its
-output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
+id), `up-to-date`, `clean-skipped` (the result's id; a move was skipped), `conflicted` (the step and the files), `no-row`
+(the branch holds tracked files under a path the move's map retires, and no row moves them: each file, and the fix, a row
+for it in the rows file the branch commits beside the map, `NAME.rows.toml`, which `layout.py` reads after the map and
+deletes, so no result holds one), `script-failed` (the script's exit code and the tail of its output), `locks-stale` (the
+last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
 and its owner regenerates them with `check.py --update`; `--push-to` pushes it; a pinned `TRUSTED.sha256` in
 conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
 pushes a clean result of one branch to a new branch on `--remote`, never one that skipped a move, and refuses a name that
@@ -78,6 +80,11 @@ SCRIPT_ARGS: tuple[str, ...] = ()
 #: what a script takes on a branch's tree rather than main's: layout.py notes the branch's own references to a directory the map
 #: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
 BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
+#: layout.py's exit when tracked files under a path its map retires have no row (its `NO_ROW`): its stderr then holds the
+#: fix in its first line and each file on a line of its own, indented by two spaces
+NO_ROW = 3
+#: what a map's rows file is named by, beside the map (layout.py's `ROWS_SUFFIX`): the script deletes the one it read
+ROWS_SUFFIX = ".rows.toml"
 SCRIPT_DIR = "tools/move"
 #: the mover's limit on the text files it reads, in the file every move script reads it from. A crossing runs the script with
 #: none: a file under the limit on the move's base was rewritten by the move, and the branch's copy, grown past it, must be
@@ -111,10 +118,20 @@ CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", 
 #: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
 #: at a merge its owner's clone would make clean
 DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
+#: git's own merge drivers, which no clone defines: `.gitattributes` gives every `.gitignore` `merge=union`
+GIT_OWN = frozenset({"text", "binary", "union"})
 
 
 class ScriptFailed(Exception):
     pass
+
+
+class NoRow(ScriptFailed):
+    """layout.py stopped on tracked files with no row (`NO_ROW`): what it said, and the files it named."""
+
+    def __init__(self, said: str):
+        super().__init__(said)
+        self.files = [line[2:] for line in said.splitlines()[1:] if line.startswith("  ")]
 
 
 def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
@@ -170,11 +187,11 @@ def out(*args: str, cwd: str | None = None) -> str:
 
 def missing_drivers(cwd: str | None = None) -> list[str]:
     """The merge drivers the checkout's `.gitattributes` names (`merge=NAME`) that its clone's config defines no
-    `merge.NAME.driver` for."""
+    `merge.NAME.driver` for. Git's own (`GIT_OWN`) need none."""
     attrs, names = os.path.join(out("rev-parse", "--show-toplevel", cwd=cwd), ".gitattributes"), []
     if os.path.isfile(attrs):
         with open(attrs) as f:
-            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())))
+            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())) - GIT_OWN)
     have = git("config", "--get-regexp", r"^merge\..*\.driver$", cwd=cwd, ok=(0, 1)).stdout.decode().splitlines()
     got = {key.split(".")[1] for key, _, _ in (line.partition(" ") for line in have) if key.count(".") == 2}
     return [n for n in names if n not in got]
@@ -287,7 +304,8 @@ def swap(path: str, old: bytes, new: bytes) -> None:
 def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
     """Check `merged` out in a scratch worktree, run `base`'s layout script at its root with no limit on the text it reads
     (`LIMIT`), and return the tree it leaves (every change staged, ignored files left out), the `tools/move/` paths whose
-    branch copy was put back, and the tail of the script's output."""
+    branch copy was put back, and the tail of the script's output. A rows file the script deleted is spent, and the branch's
+    copy of it is not put back."""
     script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
@@ -307,11 +325,14 @@ def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[st
                 git("reset", "-q", "--soft", overlay, cwd=wt)
             p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
+            if p.returncode == NO_ROW and SCRIPT == LINE_SCRIPT["Layout-move"]:
+                raise NoRow(p.stderr.decode(errors="replace").strip())
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
             if limit and os.path.exists(os.path.join(wt, LIMIT_IN)):
                 swap(os.path.join(wt, LIMIT_IN), NO_LIMIT, limit[0])    # the script's file as it left it, with its limit again
             git("add", "-A", cwd=wt)
+            restored = [f for f in restored if not f.endswith(ROWS_SUFFIX) or os.path.lexists(os.path.join(wt, f))]
             for path in restored:
                 if path in mine:
                     git("checkout", merged, "--", path, cwd=wt)
@@ -482,6 +503,8 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             r["steps"].append({"step": "base", "commit": tip})
         try:
             tree, restored, output = run_script(tip, base, python, cwd)
+        except NoRow as e:
+            return {**r, "status": "no-row", "step": "script", "files": e.files, "error": str(e)}
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
         ran = True
@@ -607,8 +630,8 @@ def line(r: dict) -> str:
                     f"with the moves named, which skips none:\n    {shlex.join(r['confirm'])}")
     if r["status"] in ("clean", "clean-skipped", "up-to-date"):
         return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]" + skipped
-    if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after", "no-moves"):
-        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after", "no-moves") else ""
+    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "based-after", "no-moves"):
+        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "no-row", "based-after", "no-moves") else ""
         return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ") + skipped
     return (f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n"
             + "".join(f"    {f}\n" for f in r["files"]) + skipped.lstrip("\n"))

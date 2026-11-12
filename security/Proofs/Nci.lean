@@ -1,20 +1,14 @@
 module
 
-public import Proofs.Nci.Inequalities
-public import Proofs.Nci.LoomisWhitney
 public import Proofs.Nci.Cut
 public import Proofs.Nci.CutWitness
+public import Proofs.Nci.Untied
 public import Proofs.Nci.CutCharged
 public import Proofs.Core
-public import Proofs.Nci.Chain
-public import Proofs.Nci.Throttling
-public import Proofs.Nci.Support
-public import Proofs.Nci.Reads
 public import Proofs.Nci.Pull
 public import Proofs.Nci.Rate
 public import Proofs.Nci.Threads
 public import Proofs.Nci.Layered
-public import Proofs.Nci.Contained
 public import Proofs.Nci.Fit
 public import Proofs.Nci.FitKeep
 public import Proofs.Nci.FitSlotsWitness
@@ -22,11 +16,6 @@ public import Proofs.Nci.WeightsSlotsWitness
 public import Proofs.Nci.FitRate
 public import Proofs.Nci.FitWitness
 public import Proofs.Nci.Dampener
-public import Proofs.Nci.Info
-public import Proofs.Nci.Transfers
-public import Proofs.Nci.Fmt
-public import Proofs.Nci.Fmt2
-public import Proofs.Nci.Training
 public import Proofs.Nci.Remote
 public import Proofs.Nci.RemotePeriod
 public import Proofs.Nci.Capability

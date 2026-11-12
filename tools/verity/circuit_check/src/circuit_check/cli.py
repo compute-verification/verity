@@ -16,6 +16,7 @@
                                                                     NAME's targets from its slice alone (`units.sliced`)
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
+    circuit-check --structural split/ SparseMlaHeadEnd_v1{...}       a split (struct_slots), its nets wired to lookup slots
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
@@ -1413,8 +1414,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
                          "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")
     ap.add_argument("-q", "--quiet", action="store_true")
-    ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl",
-                    help="hold this flock-ir-tmpl template to the one target's flat lowering instead of running the property "
+    ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl|DIR",
+                    help="hold this flock-ir-tmpl template, or the split in this directory (its nets wired to lookup slots, "
+                         "circuit_check.structural_slots), to the one target's flat lowering instead of running the property "
                          "checks (circuit_check.structural): accepted by construction, else on every input, else on random ones")
     ap.add_argument("--exhaustive-bits", type=int, default=ST.EXHAUSTIVE_BITS,
                     help="with --structural: evaluate on every input when the template has at most this many input bits")

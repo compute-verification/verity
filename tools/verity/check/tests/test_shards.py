@@ -62,12 +62,12 @@ def test_the_plans_are_the_documented_ones():
     build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
         3: ((*NAMED, "pytest", *BESIDE_AUDIT),
-            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "lean-changed"),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement"),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
-            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "lean-changed", "circuit-check:2/4"),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
-        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*", "lean-changed"), (*build, *BESIDE_BUILD, "lean-agreement"),
+        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*", "lean-suites:verity-lean-audit"), (*build, *BESIDE_BUILD, "lean-agreement"),
             ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST))}
 
 
@@ -312,17 +312,17 @@ def test_a_shards_result_names_its_plan_commit_config_and_each_steps_parts(tmp_p
     from research.merge import SHARD_KIND
 
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20260927-010000-abcd")
-    sh = CHECK.shard("2/5")
+    sh = CHECK.shard("3/5")
     done = [{"step": "preflight-lock", "status": "passed", "seconds": 1.0},
-            {"step": "lean-audit", "status": "passed", "rc": 0, "seconds": 2.0},
-            {"step": "lean-changed", "status": "passed", "rc": 0, "seconds": 3.0}]
+            {"step": "lean-build", "status": "passed", "rc": 0, "seconds": 2.0},
+            {"step": "lean-suites", "status": "passed", "rc": 0, "seconds": 3.0}]
     CHECK.write_result(tmp_path, True, done, shard=sh)
     r = RES.check(tmp_path, "r20260927-010000-abcd")
     assert r.valid, r.errors
     assert CHECK.SHARD_KIND == SHARD_KIND == r.doc["kind"] != "check/v1"
     head = subprocess.run(["git", "rev-parse", "HEAD", "HEAD:tools/verity/check"], cwd=ROOT, capture_output=True, text=True).stdout.split()
     assert r.doc["shard"] == {**sh, "commit": head[0], "config": head[1]}
-    assert [s.get("parts") for s in r.doc["steps"]] == [None, [p for p in sh["parts"] if p.startswith("lean-audit:")], ["lean-changed"]]
+    assert [s.get("parts") for s in r.doc["steps"]] == [None, ["lean-build"], [p for p in sh["parts"] if p.startswith("lean-suites:")]]
     CHECK.write_result(tmp_path, True, done[:1])
     assert json.loads((tmp_path / "result.json").read_text())["kind"] == "check/v1", "an unsharded check is as it was"
 

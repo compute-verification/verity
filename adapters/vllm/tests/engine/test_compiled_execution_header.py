@@ -161,7 +161,7 @@ def test_prepare_compiled_process_cache_gives_a_fresh_marked_dir_and_disables_th
     assert os.environ["TORCHINDUCTOR_CACHE_DIR"] == out["inductor_cache_dir"] != "/tmp/torchinductor_root"
     assert os.path.isdir(out["inductor_cache_dir"]) and not os.listdir(out["inductor_cache_dir"])
     assert os.environ[A._VERITY_INDUCTOR_DIR_MARK] == "1" and os.environ["VLLM_DISABLE_COMPILE_CACHE"] == "1"
-    # an explicitly marked dir (compiled_commit.sh) is kept
+    # an explicitly marked dir (ops/served_commit.sh) is kept
     again = A.prepare_compiled_process_cache()
     assert again["inductor_cache_dir"] == out["inductor_cache_dir"]
 

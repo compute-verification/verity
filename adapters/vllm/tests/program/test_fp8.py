@@ -24,7 +24,7 @@ if sys.version_info < (3, 12):  # pragma: no cover
     pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
 
 from verity.circuits import Program, bind
-from verity_vllm.correspondence.capture_identities import _coll_range
+from tests.program.capture_check import coll_range as _coll_range
 from verity.circuits.evaluation import evaluate_region
 from verity.definitions.registry import fp8 as F
 from verity.definitions.numerics import fp8_twins

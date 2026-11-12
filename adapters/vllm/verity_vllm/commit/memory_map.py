@@ -1,36 +1,26 @@
-"""A request Program's KV rows from the circuit, and the pages the engine wrote them to: each row's leaves, the step it is born
-at and its last structural reader's, from the Program of record and its census (`census_of`, `rows`, cached beside each
-request Build by `pipeline.memory_map`), and each request's pages from the slots the Commit committed (`tables`) in the
-engine's page layout (`page_of`).  A memory map lays its blocks out from them (PoUB's, opt-in, `commit --memory-map`).
+"""A request Program's KV rows from the circuit: each row's leaves, the step it is born at and its last structural reader's,
+from the Program of record and its census (`census_of`, `rows`, cached beside each request Build by `pipeline.memory_map`).
 
 ~~~text
-row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
-          of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read
-          as a Call; a row past INDEX_TOPK reads its `kv` through a concentrator (`ROUTED`), whose history is the rows it
-          reads.  A layer's rows are the rows its Calls share, in the order its Calls first read them (its positions), K and V
-          paired by position.  DSA's indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting
-          leaves them uncredited until the map packs them
+row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row of a
+          sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read as a
+          Call; a row past INDEX_TOPK reads its `kv` through a concentrator, or under table reads through its reads of the
+          (request, layer) history table (`ROUTED`), whose history is the rows it reads.  A layer's rows are the rows its Calls
+          share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's indexer keys are no
+          rows: their 132-byte rows pack across blocks, and memory accounting leaves them uncredited until the map packs them
 born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
           an operand, a gather that may select one included, whichever it selected): the circuit's requirement
           (`requirement.from_census`) over the Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
 cached    a warm request's positions 0..C-1 (`Rows.cached`): rows its Program reads from its cached-prefix input (bf16
           [L, 2, C, row], `kv_prefix.seed`: layer l's K and V rows at the l-th history opened), which other requests computed,
           one a cached page (its producer, the prefix plan's); such a row's `born` and `last` are its first and last reader's
-          in the warm Program.  The warm request writes none of them: its first C / block_size pages are its producers'
-          (`tables`), so a page two requests share is written once
-page      `block_size` slots in each layer as the engine lays them out (`page_of`, from its cache tensor): a K plane then a
-          V plane, a slot one row ("planes"), one plane whose slot holds a position's K and V head by head ("packed",
-          `packed`), or one plane of latent rows ("latent"); a request's position q sits at slot
-          `tables[request][q // block_size] * block_size + q % block_size`, its pages the ones the engine wrote its KV to
-          (`tables`, from the slots the Commit committed) or, for its cached positions, its producers', vLLM's null block
-          being page 0
-step      the engine's: request r's step s is `arrive[r] + s`
+          in the warm Program.  The warm request writes none of them
 ~~~
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from verity.definitions.circuits.census import census, step_ends
@@ -45,11 +35,10 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 KV = ("kc", "vc")
 #: the Definitions, by name, whose cached parameter is one plane of MLA latent rows (FA3's sparse MLA, each version)
 LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
-#: the concentrators, by name, through which a row past INDEX_TOPK reads its layer's latent rows, and the parameter holding
-#: those (`DsaButterflyRowsPad`'s pad is no row)
-ROUTED = {"DsaButterflyRows": "rows", "DsaButterflyRowsPad": "rows"}
-#: vLLM's null block, no request's page
-NULL_PAGE = 0
+#: the Definitions, by name, through which a row past INDEX_TOPK reads its layer's latent rows, and the parameter holding
+#: those: the concentrators (`DsaButterflyRowsPad`'s pad is no row), and under table reads the history table's reads
+#: (`program.dsa_table`), whose table is the block's history
+ROUTED = {"DsaButterflyRows": "rows", "DsaButterflyRowsPad": "rows", "DsaHistoryReads": "hist"}
 
 #: leaves `[lo, hi)` of the output of node `j` of the Program's function (the Commit's instance rows' `['n', j, lo, hi]`), or
 #: (`CACHED`, k, lo, hi) of root input node k: a cached row, which the warm request reads and never computes
@@ -69,9 +58,9 @@ class Row:
 
 @dataclass(frozen=True)
 class Rows:
-    """A request Program's KV rows, ``layers[l][plane][position]`` (from `rows`, plane 0 K and 1 V, or one plane of latent rows;
-    after `packed`, one plane), each `row_bytes` bytes of `word_bytes`-byte words, over its `steps` steps; positions below
-    `cached` are a warm Program's cached prefix, which other requests wrote."""
+    """A request Program's KV rows, ``layers[l][plane][position]`` (from `rows`, plane 0 K and 1 V, or one plane of latent rows),
+    each `row_bytes` bytes of `word_bytes`-byte words, over its `steps` steps; positions below `cached` are a warm Program's
+    cached prefix, which other requests wrote."""
 
     layers: tuple[tuple[tuple[Row, ...], ...], ...]
     row_bytes: int
@@ -82,50 +71,6 @@ class Rows:
     @property
     def positions(self) -> int:
         return len(self.layers[0][0]) if self.layers else 0
-
-
-@dataclass(frozen=True)
-class Page:
-    """One layer's KV page as the engine lays it out: `pages` pages of `block_size` slots, "planes" (a K plane then a V
-    plane), "packed" (a slot holds a position's K and V, `head_words` words of each per head in turn) or "latent" (a slot
-    holds a position's latent row, of `head_words` words)."""
-
-    form: str
-    pages: int
-    block_size: int
-    head_words: int
-
-
-def page_of(shape: Sequence[int], stride: Sequence[int], itemsize: int, rs: Rows) -> Page:
-    """The page of a layer's KV cache tensor (its shape, strides in elements and element bytes) holding `rs`'s rows: vLLM
-    0.28's FlashAttention ``[pages, heads, block_size, 2 * head]`` slot-major (strides ``(bs*H*2D, 2D, H*2D, 1)``) is
-    "packed", ``[pages, 2, block_size, heads, head]`` contiguous "planes", and MLA's ``[pages, block_size, row]`` contiguous
-    (bound squeezed of its one head) "latent", for latent rows; any other layout is refused."""
-    words, shape, stride = rs.row_bytes // rs.word_bytes, tuple(map(int, shape)), tuple(map(int, stride))
-    planes = len(rs.layers[0]) if rs.layers else 0
-    if itemsize != rs.word_bytes:
-        raise ValueError(f"a KV cache of {itemsize}-byte elements holds rows of {rs.word_bytes}-byte words")
-    if len(shape) == 3 and planes == 1:
-        nb, bs, w = shape
-        if w == words and stride == (bs * w, w, 1):
-            return Page("latent", nb, bs, w)
-    if len(shape) == 4 and planes == 2:
-        nb, h, bs, d2 = shape
-        if h * d2 == 2 * words and stride == (bs * h * d2, d2, h * d2, 1):
-            return Page("packed", nb, bs, d2 // 2)
-    if len(shape) == 5 and planes == 2:
-        nb, two, bs, h, d = shape
-        if two == 2 and h * d == words and stride == (2 * bs * h * d, bs * h * d, h * d, d, 1):
-            return Page("planes", nb, bs, d)
-    raise ValueError(f"a KV cache {list(shape)} at strides {list(stride)} is no page memory-map/v1 lays out {planes} plane(s) of "
-                     f"rows of {words} words in")
-
-
-def packed(rs: Rows) -> Rows:
-    """`rs` with a layer's K and V rows of a position as one row (its group the K row's leaves, then the V row's), the one
-    plane of a "packed" page; its payload interleaves them head by head."""
-    return replace(rs, row_bytes=2 * rs.row_bytes, layers=tuple(
-        (tuple(Row(k.group + v.group, max(k.born, v.born), max(k.last, v.last)) for k, v in zip(*kv)),) for kv in rs.layers))
 
 
 def _cut(refs, width: int, inputs: int, what: str, cached: bool = False) -> list[tuple[Slice, ...]]:
@@ -158,8 +103,8 @@ def _member(nd, i: int, m: int) -> Coll:
 
 
 def _history(nodes, a: Coll) -> Coll:
-    """`a`, or where it is the output of one concentrator (`ROUTED`, a Call or a batch member), the history it routes the rows from:
-    a row past INDEX_TOPK reads its layer's rows through it."""
+    """`a`, or where it is the output of one concentrator or history table read (`ROUTED`, a Call or a batch member), the history
+    it routes or reads the rows from: a row past INDEX_TOPK reads its layer's rows through it."""
     rs = runs(a.refs)
     if not rs or rs[0][0] != "n" or any((s, j) != rs[0][:2] for s, j, _, _ in rs):
         return a
@@ -282,51 +227,3 @@ def rows_of(doc: Mapping[str, Any]) -> Rows:
     """The `Rows` `rows_doc` wrote."""
     return Rows(tuple(tuple(tuple(Row(tuple(("n", *s) if len(s) == 3 else tuple(s) for s in g), b, l) for b, l, g in plane) for plane in kv)
                       for kv in doc["layers"]), int(doc["row_bytes"]), int(doc["word_bytes"]), int(doc["steps"]), int(doc.get("cached", 0)))
-
-
-def _producers(requests: Mapping[str, Rows], producers: Mapping[str, Sequence[str]] | None, block_size: int) -> dict[str, list[str]]:
-    """Each warm request's producers, one a cached page, refused unless they are its `Rows.cached` positions' whole pages."""
-    out = {r: [str(p) for p in (producers or {}).get(r, ())] for r in requests}
-    for r, rs in requests.items():
-        if len(out[r]) * block_size != rs.cached:
-            raise ValueError(f"request {r}'s Program reads {rs.cached} cached rows, and {len(out[r])} producing requests are named "
-                             f"for them: one a whole cached page of {block_size} slots")
-    return {r: ps for r, ps in out.items() if ps}
-
-
-def tables(requests: Mapping[str, Rows], arrive: Mapping[str, int], slots: Callable[[str, int], Sequence[int]],
-           block_size: int, producers: Mapping[str, Sequence[str]] | None = None) -> dict[str, list[int]]:
-    """Each request's pages as the engine wrote its KV: `slots(request, step)` the slot of each row it computed at that engine
-    step, in position order (vLLM's slot mapping, position q at ``page * block_size + q % block_size``).  The rows a step wrote
-    are the ones its Program writes there, else it is refused, and so is a page that isn't one page throughout or a request
-    holding a page twice.  A warm request (`Rows.cached`, a prefix-cache hit) writes from position C: its first C / block_size
-    pages are the ones `producers[request]` (the request that computed each, the prefix plan's) wrote, refused unless that
-    request of the session computed the whole page itself."""
-    producers = _producers(requests, producers, block_size)
-    out: dict[str, list[int]] = {}
-    for r, rs in requests.items():
-        born, pages, q = [x.born for x in rs.layers[0][0]], [NULL_PAGE] * -(-rs.positions // block_size), rs.cached
-        for s in range(rs.steps):
-            got, n = [int(v) for v in slots(r, arrive[r] + s)], born[rs.cached:].count(s)
-            if len(got) != n or born[q:q + n] != [s] * n:
-                raise ValueError(f"request {r} wrote {len(got)} KV rows at step {arrive[r] + s}, where its Program writes {n} from position {q}")
-            for p, slot in enumerate(got, start=q):
-                page, off = divmod(slot, block_size)
-                if off != p % block_size or page == NULL_PAGE or pages[p // block_size] not in (NULL_PAGE, page):
-                    raise ValueError(f"request {r}'s position {p} went to slot {slot} (page {page}, offset {off}), its page "
-                                     f"{p // block_size} being {pages[p // block_size]}")
-                pages[p // block_size] = page
-            q += n
-        if q != rs.positions:
-            raise ValueError(f"request {r}'s {rs.positions} positions took pages {pages[:8]}{'...' if len(pages) > 8 else ''} over {q} rows")
-        out[r] = pages
-    for r, ps in producers.items():
-        for b, p in enumerate(ps):
-            if p not in out or requests[p].cached > b * block_size or requests[p].positions < (b + 1) * block_size:
-                raise ValueError(f"request {r}'s cached page {b} was computed by {p}, "
-                                 f"{'no request of the session' if p not in out else 'whose Program did not compute it whole'}")
-            out[r][b] = out[p][b]
-    for r, pages in out.items():
-        if len(set(pages)) != len(pages):
-            raise ValueError(f"request {r}'s {requests[r].positions} positions took pages {pages[:8]}{'...' if len(pages) > 8 else ''}")
-    return out

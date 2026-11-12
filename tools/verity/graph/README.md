@@ -1,14 +1,17 @@
 # `verity graph`
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
-with one result cache, one artifact store and one event stream; drive only reads results. This package is Verity's side:
+with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
 the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
-verity graph [--json] [--family F ...] [--root DIR]   # the graph; --json prints its canonical bytes
+verity graph [--json [--packed]] [--family F ...] [--root DIR]
+                                                       # the graph; --json prints its canonical bytes, --packed packed (below)
+verity graph unpack [FILE]                             # the canonical bytes of the graph/v2 a packed listing packs
 verity graph run ID --work DIR [--graph FILE]          # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error);
-                                                       # FILE: a listing of this checkout or ID's part of it: no lister runs
+                                                       # FILE: a listing of this checkout, packed or not, or ID's part of
+                                                       # it: no lister runs
 verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                                        # every task, serially, in order, uncached (exit 0: all passed);
                                                        # events/v1 to FILE (default DIR/events.jsonl), DIR/results.json
@@ -20,9 +23,9 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 
 1. Keys come from declared inputs, not traced reads. A sandbox enforces the declaration: an undeclared read is an error.
 2. Keys include repository paths. A pure move reruns what it moved, once.
-3. Runners report facts. What gates, what may stay red and what a red triggers is drive's configuration, never a runner's.
+3. Runners report facts. What gates, what may stay red and what a red triggers is the verified queue's configuration, never a runner's.
 4. `tasks.toml` holds families (tens of entries), not one row per task.
-5. No `owner` field anywhere in the graph, results or events: who is paged is drive's policy, from paths. The listing
+5. No `owner` field anywhere in the graph, results or events: who is paged is the verified queue's policy, from paths. The listing
    refuses one in a table or a task, and `contract.result_errors` in a result.
 
 ## Layout
@@ -30,13 +33,13 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | path | what |
 | --- | --- |
 | `verity_graph/contract.py` | schema names, `canonical`, `file_digest`, `env_digest`, `key`, `result_errors` |
-| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys; a task's part (`part`, `given`) |
+| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys; a task's part (`part`, `given`); the packed listing (`pack`, `unpack`) |
 | `verity_graph/families/<family>.py` | a family's lister, `tasks(root: Path, files: list[str]) -> list[dict]` |
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
 | `verity_graph/local.py` | the serial reference executor |
 | `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
-| `tasks.toml` | `[env.<name>]` and `[family.<name>]` tables |
+| `tasks.toml` | `[slot]`, `[env.<name>]` and `[family.<name>]` tables |
 | `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
 In a module's name a family's or kind's `-` is written `_`: family `test-file` is `families/test_file.py`, kind
@@ -84,6 +87,18 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
   claims one of the highest `priority` first, ahead of any order of its own (`timeout_s`, ids), so a chain never waits behind
   the tasks off it. In a task's graph (`graph.task_graph`), which holds none of the tasks that read it, a priority counts the
   chains that graph holds.
+
+### Packed
+
+Most of a listing's bytes are paths and ids it repeats: the test files of a suite share most of their thousands of inputs,
+and a Lean module reads the `olean` and `axioms` of each of the hundreds of modules its compile loads.
+`verity graph --json --packed` prints the listing as `verity-graph/v2-packed` (`graph.pack`), the same document but for
+each task's `inputs` and `reads`: its inputs are runs of indices into `files`' paths in order, and its reads, under each
+output name it reads, runs of indices into `tasks`. A run is two integers, how far past the previous run's end it starts
+(the first, past 0) and how many consecutive indices it holds, so `[0, 3, 2, 1]` is indices 0, 1, 2 and 5. Unpacking
+(`graph.unpack`, `verity graph unpack`) gives back the graph/v2 document, its canonical bytes `verity graph --json`'s: each
+task's inputs in order and its reads sorted by task and output, as graph/v2 has them. `verity graph run --graph` takes a
+packed listing as it takes graph/v2.
 
 ## The key rule
 
@@ -169,7 +184,7 @@ runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
-| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
+| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
 | `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/protocols/flock/agreement` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
 | `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits by test file, or of one that declares `parts`, by test id; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
@@ -181,7 +196,7 @@ runs them, one task a step:
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
-failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+failed suite with its failed tests (`detail.failed`), which the verified queue names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
@@ -189,16 +204,17 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
-lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
-the executor's check (`research.drive.SLIM_STEPS`).
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. The verified
+queue's loop counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a
+train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `research.vqueue_slim`).
 
 ## Writing a family
 
 A family's lister returns graph/v2 tasks without `priority` and `key`, for the tree at `root`, reading nothing but files under
 `root` (its `files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's
 template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an
-input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
+input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, a path two things land on, and
+resources (a table's or a task's) past `[slot]`, the largest slot an executor leases a task, which no slot would ever take.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
 (`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
 whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.

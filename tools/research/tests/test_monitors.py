@@ -612,6 +612,18 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
+def test_drift_pages_on_a_node_whose_null_device_is_broken_with_the_command_that_repairs_it():
+    fault = {"what": "/dev/null has mode 644, not 666: a redirect to it fails for every user but root", "fix": "sudo chmod 666 /dev/null"}
+    rep = {"vy-nebius-cpu-1": {"commit": "c", "strays": [], "entries": [{"path": "/a", "state": "stale", "restart": None}],
+                               "distrusted": [], "null_device": fault},
+           "vy-nebius-cpu-2": {"commit": "c", "strays": [], "entries": [], "distrusted": [], "null_device": None}}
+    null, stale = M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(rep), "")))))
+    assert (null.key, null.severity) == ("vy-nebius-cpu-1:null-device", "page") and stale.key == "vy-nebius-cpu-1:stale"
+    assert null.text == ("*vy-nebius-cpu-1: /dev/null has mode 644, not 666: a redirect to it fails for every user but root*. "
+                         "Repair it on the node: `sudo chmod 666 /dev/null`.")
+    assert null.cleared.startswith("*Cleared:* vy-nebius-cpu-1's null device")
+
+
 def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tmp_path):
     assert "unpreserved" in M.RETIRED and "unpreserved" not in {m.id for m in M.MONITORS}
     state = M.new_state()
@@ -1596,53 +1608,28 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
 
 
-def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path, monkeypatch):
-    """Main must not go days with no passing post-landing check and nobody outside ci hearing. The relay reads
-    drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
-    oldest landing after it: main's first-parent commits (drive's merges), not GitHub's compare, which lists each PR's own
-    commits, dated when their branch made them."""
-    state = tmp_path / M.DRIVE_STATE
-    state.parent.mkdir(parents=True)
-    verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
-    state.write_text(json.dumps({"drive": {"postland": {"verified": verified}}}))
-    monkeypatch.setenv("RESEARCH_DEPLOY_REPO", str(tmp_path / "repo"))
-    since = T0 - 3 * 3600 - 60                                              # drive's first landing past it, 3 h 1 min ago
-
-    def git(*landings):
-        log = "".join(f"{i:040x} {int(t)}\n" for i, t in enumerate(landings))
-        return Run((has("fetch"), (0, "", "")), (lambda a, _i: f"{verified}..FETCH_HEAD" in a and "--first-parent" in a,
-                                                  (0, log, "")))
-
-    run = git(T0 - 60, T0 - 1800, since)                                    # git log lists the newest first
-    log = tmp_path / M.DRIVE_LOG
-    log.parent.mkdir(parents=True)
-    log.write_text(f"{M.iso(T0 - 31 * 60)} tick rc=0 1\n{M.iso(T0 - 31 * 60)} other line\n")      # drive's last tick: 31 min ago
-    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
-    assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
-    assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "3 landing(s)" in f.text
-    assert ["git", "-C", str(tmp_path / "repo"), "fetch", "-q", "origin", "main"] in [c for c, _ in run.calls]
-    assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=git())) == [], "main is its last verified commit"
-    with open(log, "a") as fh:
-        fh.write(f"{M.iso(T0 - 120)} tick rc=1 1\n")
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "drive ticks: its own _behind alarm rings"
-    log.unlink()
-
-    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
-    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
-        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path, run=git(T0 - 60, since)), now,
-               M.AlertDir(alerts), by="test", force=True)
-    lines = (alerts / "monitors.jsonl").read_text().splitlines()
-    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
-        ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]
+def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queue_decides_nothing(tmp_path):
+    """`main` moves only through the verified queue, so a loop stopped or stuck must not go hours with nobody outside ci
+    hearing: the relay times the queue's silence from its decisions file's last `at`, rings ci and top past 3 h and again each
+    further hour, and a file it can't read is the monitor's own error, not a quiet pass."""
     decisions = tmp_path / M.VQUEUE_DECISIONS
     decisions.parent.mkdir(parents=True)
     decisions.write_text(json.dumps({"action": "ring", "at": M.iso(T0 - 600)}) + "\n")
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], (
-        "the verified queue decides (ci, 9 Nov): drive's stale verified commit no longer rings")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path)) == [], "the queue decided 10 min ago"
     decisions.write_text(json.dumps({"action": "advance", "at": M.iso(T0 - 4 * 3600 - 60)}) + "\n")
-    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path))
     assert f.key == "vqueue:4" and f.owners == ("ci", "top") and "decided nothing for 4 h" in f.text
+
+    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
+    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path), now, M.AlertDir(alerts), by="test",
+               force=True)
+    lines = (alerts / "monitors.jsonl").read_text().splitlines()
+    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
+        ("event", "unverified-main|vqueue:5", ["ci", "top"])]
+    decisions.unlink()
+    with pytest.raises(FileNotFoundError):
+        M.unverified_main(M.Ctx(now=T0, root=tmp_path))
 
 
 def test_the_nightly_check_rings_infra_once_main_has_had_no_outcome_for_36_hours(tmp_path):

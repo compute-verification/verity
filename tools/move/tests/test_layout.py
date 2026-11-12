@@ -154,7 +154,7 @@ def test_a_text_file_over_the_limit_stops_the_move_which_names_it_until_the_map_
 
 def test_the_maps_paths_as_a_trie_match_what_the_list_of_them_longest_first_matches():
     """`_paths` finds the map's old paths with one regex over every file. Written as a list, `re` tries each path at every
-    character: nine of a run's ten minutes on a draft of the one map (LEAN-258). `alternation` writes the same set as a
+    character: nine of a run's ten minutes on a draft of the one map. `alternation` writes the same set as a
     trie, and a branch crosses a move only if both find the same spans: the longest path that matches, or a shorter one
     where what follows refuses the longer (`a/b/c.py` before `a/b/c`, and `a/b` in `a/b/c-d`)."""
     words = ["a/b", "a/b/c", "a/b/c.py", "a/bc", "a.b", "a", "x-y", "x-y/z", "tools/x+y", "tools/x", "census", "(odd)/[p]"]
@@ -234,6 +234,107 @@ def test_a_relative_path_through_a_moved_directory_is_normalized_though_neither_
     subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
                    capture_output=True)
     assert (r / "pkg/lake-manifest.json").read_text() == manifest.replace("../old/lms/lean/../../../keep/flock", "../keep/flock")
+
+
+LAKEFILE = '''name = "requirer"
+path = "inner"
+
+[[require]]
+name = "inner"
+path = "inner"
+
+[[require]]
+name = "deep"
+path = "sub/deep"
+
+[[lean_lib]]
+name = "inner"
+'''
+LAKE_MANIFEST = '''{"packages": [{"type": "path", "name": "inner", "dir": "inner"},
+              {"type": "path", "name": "deep", "dir": "sub/deep"},
+              {"type": "git", "name": "inner", "dir": "inner"}]}
+'''
+
+
+def _lake_tree(tmp_path: Path, *maps: str, manifest: str = LAKE_MANIFEST) -> tuple[Path, list[subprocess.CompletedProcess]]:
+    """A package `outer/` that requires two packages inside its own directory by paths with no `./`, as Lake takes them,
+    after each of `maps` has run on it in turn."""
+    r = tmp_path / "repo"
+    files = {"outer/lakefile.toml": LAKEFILE, "outer/lake-manifest.json": manifest, "outer/inner/lakefile.toml": "",
+             "outer/sub/deep/lakefile.lean": "", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    runs = []
+    for i, m in enumerate(maps):
+        (tmp_path / f"map{i}.toml").write_text("[roots]\nold = {}\nnew = {}\n\n" + m)
+        runs.append(subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / f"map{i}.toml"),
+                                    "--no-lock"], capture_output=True, text=True))
+        git(r, "add", "-A")
+        git(r, "commit", "-q", "--allow-empty", "-m", f"map {i}")
+    return r, runs
+
+
+def _lake_dirs(r: Path, package: str) -> tuple[list[str], list[str]]:
+    return (L.lake_dirs("lakefile.toml", (r / package / "lakefile.toml").read_text()),
+            L.lake_dirs("lake-manifest.json", (r / package / "lake-manifest.json").read_text()))
+
+
+def test_a_lake_package_inside_the_one_that_requires_it_is_followed_when_it_leaves(tmp_path):
+    """Lake reads a requirement's `path` and a manifest's `dir` from the package's own directory, with or without `./`, and a
+    package inside the requiring one is written as its bare name (`path = "composition"`). No other reader takes one word
+    for a path: left as written, the commit is certified a pure move, since only paths changed, of a tree whose package
+    can no longer find its requirement. Only those two are read so: a `name`, a `path` outside a requirement and a fetched
+    package's `dir` stay. A later map that moves the requirer rewrites the path again, and each map run again changes
+    nothing."""
+    leave = ('[paths]\n"outer/inner/" = "apart/inner/"\n"outer/sub/deep/" = "apart/deep/"\n\n'
+             '[modules]\n"outer.inner" = "apart.inner"\n"outer.sub.deep" = "apart.deep"\n')
+    away = '[paths]\n"outer/" = "far/away/outer/"\n\n[modules]\n"outer" = "far.away.outer"\n'
+    r, (first,) = _lake_tree(tmp_path / "one", leave)
+    assert first.returncode == 0, first.stderr
+    assert _lake_dirs(r, "outer") == (["../apart/inner", "../apart/deep"], ["../apart/inner", "../apart/deep"])
+    assert (r / "outer/lakefile.toml").read_text() == LAKEFILE.replace('name = "inner"\npath = "inner"',
+                                                                       'name = "inner"\npath = "../apart/inner"') \
+        .replace('"sub/deep"', '"../apart/deep"')
+    assert '{"type": "git", "name": "inner", "dir": "inner"}' in (r / "outer/lake-manifest.json").read_text()
+    r, runs = _lake_tree(tmp_path / "two", leave, away, leave, away)
+    assert [p.returncode for p in runs] == [0, 0, 0, 0], [p.stderr for p in runs]
+    assert _lake_dirs(r, "far/away/outer") == (["../../../apart/inner", "../../../apart/deep"],) * 2
+    assert git(r, "diff", "--stat", "HEAD~2", "HEAD") == ""
+
+
+def test_a_lake_package_that_moves_with_the_one_that_requires_it_keeps_its_path(tmp_path):
+    r, (run,) = _lake_tree(tmp_path, '[paths]\n"outer/" = "far/outer/"\n\n[modules]\n"outer" = "far.outer"\n')
+    assert run.returncode == 0, run.stderr
+    assert _lake_dirs(r, "far/outer") == (["inner", "sub/deep"], ["inner", "sub/deep"])
+    assert (r / "far/outer/lakefile.toml").read_text() == LAKEFILE
+
+
+def test_a_move_that_leaves_a_lake_path_naming_no_package_stops(tmp_path):
+    """A map can still part a package from the path that names it: by excluding the requirer's Lake files from the rewrite.
+    The certificate would pass, since nothing but paths changed, and the Lean build would fail in a candidate; so the mover
+    stops and names the file and the path."""
+    r, (run,) = _lake_tree(tmp_path, '[paths]\n"outer/inner/" = "apart/inner/"\n\n[modules]\n"outer.inner" = "apart.inner"\n\n'
+                                     '[rewrite]\nexclude = ["outer/*"]\n')
+    assert run.returncode != 0
+    assert "outer/lakefile.toml: inner (it named outer/inner)" in run.stderr, run.stderr
+    assert "outer/lake-manifest.json: inner (it named outer/inner)" in run.stderr
+    assert "sub/deep" not in run.stderr
+
+
+def test_a_lake_file_that_does_not_parse_stops_the_move(tmp_path):
+    """The mover can't say that a Lake file it can't read still names its packages, so it stops and names the file rather
+    than take it to hold no path. A Lake file of a shape Lake wouldn't write holds none."""
+    _, (run,) = _lake_tree(tmp_path, '[paths]\n"outer/inner/" = "apart/inner/"\n\n[modules]\n"outer.inner" = "apart.inner"\n',
+                           manifest='{"packages": [')
+    assert run.returncode != 0
+    assert "outer/lake-manifest.json: not a Lake file the mover can read" in run.stderr, run.stderr
+    assert L.lake_dirs("lake-manifest.json", "") == [] == L.lake_dirs("lake-manifest.json", '{"packages": {"dir": "x"}}')
+    assert L.lake_dirs("lakefile.toml", 'require = "inner"\n') == [] == L.lake_dirs("README.md", "not TOML [")
+    assert L.lake_dirs("lake-manifest.json", '[{"type": "path", "dir": "x"}]') == []
 
 
 def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
@@ -834,3 +935,152 @@ def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
     assert got == ['"x\\"y"', 'br##"r"#"##', '"z"']
+
+
+ROWS_MAP = """[roots]
+old = {}
+new = {}
+
+[paths]
+"old/lib/__init__.py" = "new/lib/__init__.py"
+"old/lib/a.py" = "new/lib/a.py"
+"old/whole/" = "new/whole/"
+
+[retired]
+paths = ["old/lib/"]
+
+[drop]
+paths = ["old/lib/gone.py"]
+
+[modules]
+"old.lib" = "new.lib"
+"old.lib.a" = "new.lib.a"
+"old.whole" = "new.whole"
+
+[rewrite]
+exclude = ["tools/move/**"]
+"""
+#: what an open branch adds: three files under the path the map retires, one in a directory that stays, and their readers
+ADDED = {"old/lib/added.py": "import old.lib.a\n", "old/lib/sub/deep.py": "", "old/lib/sub/deeper/x.py": "",
+         "stays/extra.py": "", "doc.md": "See old/lib/added.py, old/lib/sub/ and `old.lib.sub.deep`.\n"}
+ROWS = "tools/move/layout_map.rows.toml"
+MAP_AT = "tools/move/layout_map.toml"
+
+
+def rows_repo(tmp_path: Path, rows: str | None, name: str = "repo", map_text: str = ROWS_MAP) -> Path:
+    """A checkout whose map retires `old/lib/`, with a branch's files in it (`ADDED`) and its rows file when `rows` is given."""
+    r = tmp_path / name
+    files = {"old/lib/__init__.py": "", "old/lib/a.py": "X = 1\n", "old/lib/gone.py": "", "old/whole/w.py": "",
+             "stays/s.py": "", "use.py": "import old.lib.a\n", MAP_AT: map_text,
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n', **ADDED}
+    if rows is not None:
+        files[ROWS] = rows
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "a branch, merged with the move's base")
+    return r
+
+
+def layout(r: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", MAP_AT, "--no-lock", *args], cwd=r,
+                          capture_output=True, text=True)
+
+
+def test_a_tracked_file_under_a_retired_path_with_no_row_stops_the_move_by_name_with_an_exit_of_its_own(tmp_path):
+    """The map is written from main's tree, so a file a branch adds under a directory the map empties has no row and would
+    stay behind. The move stops before it changes anything, with `NO_ROW` (not the 1 of any other failure), the fix and
+    the rows file's name in the first line of stderr, and each file on a line of its own. A file in a directory the map
+    does not retire is not named: nothing says it should have moved."""
+    r = rows_repo(tmp_path, None)
+    p = layout(r)
+    first, *named = p.stderr.splitlines()
+    assert p.returncode == L.NO_ROW == 3, p.stdout + p.stderr
+    assert first.startswith("no row for 3 tracked files under a path the map retires: ") and ROWS in first and "[paths]" in first
+    assert named == ["  old/lib/added.py", "  old/lib/sub/deep.py", "  old/lib/sub/deeper/x.py"]
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_row_of_the_rows_file_moves_its_file_and_rewrites_its_references_as_a_row_of_the_map_does(tmp_path):
+    """The rows file is read after the map: a file row and a directory row move the branch's files, and every reference to
+    them is rewritten, a module name too, though the rows file declares none. A row the map already has changes nothing.
+    The tree is, file for file, the one the same rows give as rows of the map; the rows file is deleted once read, so a
+    second run finds none and changes nothing; and `moves.json` records the map's rows alone."""
+    rows = '[paths]\n"old/lib/added.py" = "new/lib/added.py"\n"old/lib/sub/" = "new/lib/sub/"\n"old/whole/" = "new/whole/"\n'
+    r = rows_repo(tmp_path, rows)
+    assert layout(r, "--dry-run").returncode == 0 and git(r, "status", "--porcelain") == "", "a dry run reads it and keeps it"
+    p = layout(r)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert f"rows read from {ROWS}: 2" in p.stdout
+    assert (r / "new/lib/added.py").read_text() == "import new.lib.a\n"
+    assert (r / "new/lib/sub/deep.py").is_file() and (r / "new/lib/sub/deeper/x.py").is_file() and not (r / "old").exists()
+    assert (r / "doc.md").read_text() == "See new/lib/added.py, new/lib/sub/ and `new.lib.sub.deep`.\n"
+    assert (r / "stays/extra.py").is_file() and not (r / ROWS).exists()
+    moves = json.loads((r / "tools/research/src/research/store/moves.json").read_text())["moves"]
+    assert moves == [{"paths": {"old/lib/__init__.py": "new/lib/__init__.py", "old/lib/a.py": "new/lib/a.py",
+                                "old/whole/": "new/whole/"}}]
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "moved")
+    assert layout(r).returncode == 0 and git(r, "status", "--porcelain") == ""
+
+    in_map = ROWS_MAP.replace('"old/whole/" = "new/whole/"\n', '"old/whole/" = "new/whole/"\n"old/lib/added.py" = '
+                              '"new/lib/added.py"\n"old/lib/sub/" = "new/lib/sub/"\n')
+    in_map = in_map.replace('"old.whole" = "new.whole"\n', '"old.lib.added" = "new.lib.added"\n"old.lib.sub" = "new.lib.sub"\n'
+                            '"old.whole" = "new.whole"\n')
+    m = rows_repo(tmp_path, None, "as-map-rows", in_map)
+    assert layout(m).returncode == 0
+    git(m, "add", "-A")
+    trees = [{line.split("\t")[1]: line for line in git(repo, "ls-files", "-s").splitlines()
+              if not line.endswith(("/layout_map.toml", "/moves.json"))} for repo in (m, r)]
+    assert trees[0] == trees[1] and "new/lib/sub/deeper/x.py" in trees[0]
+
+
+@pytest.mark.parametrize("rows, why", [
+    ('[paths]\n"old/lib/a.py" = "elsewhere/a.py"\n', "'old/lib/a.py' = 'elsewhere/a.py': the map sends it to 'new/lib/a.py'"),
+    ('[paths]\n"old/whole/w.py" = "elsewhere/w.py"\n', "'old/whole/w.py' = 'elsewhere/w.py': the map sends it to 'new/whole/w.py'"),
+    ('[paths]\n"old/whole/" = "elsewhere/"\n', "'old/whole/' = 'elsewhere/': the map sends it to 'new/whole/'"),
+    ('[paths]\n"old/" = "elsewhere/"\n', "'old/': the map names 4 paths at or under it (old/lib/__init__.py, ...)"),
+    ('[paths]\n"old/lib/gone.py" = "new/lib/gone.py"\n', "'old/lib/gone.py': the map deletes it"),
+    ('[paths]\n"old/lib/missing.py" = "new/lib/missing.py"\n', "'old/lib/missing.py': no tracked file is at it"),
+    ('[paths]\n"old/lib/nothing/" = "new/lib/nothing/"\n', "'old/lib/nothing/': no tracked file is under it"),
+    ('[paths]\n"old/lib/added.py" = "new/lib/"\n', "'old/lib/added.py' = 'new/lib/': a file to a file"),
+    ('[paths]\n"old/lib/added.py" = "new/lib/added.py"\n\n[retired]\npaths = []\n', "holds [paths] alone, not ['retired']"),
+    ("[paths\n", "Expected"),
+])
+def test_a_rows_file_that_changes_what_the_map_says_or_moves_nothing_is_refused_and_nothing_moves(tmp_path, rows, why):
+    """A branch's rows add to the map and never change it: a row for a path the map sends elsewhere (by its own row or a
+    directory's) or deletes, a directory row over paths the map names (it would take main's files with it), a row no
+    tracked file is at or under (a path mistyped would leave its file behind unsaid), a file sent to a directory, and any
+    table but [paths] each stop the move with the row and the reason, exit 1, before anything changes."""
+    r = rows_repo(tmp_path, rows)
+    p = layout(r)
+    assert p.returncode == 1 and p.stderr.startswith(f"{ROWS}: ") and why in p.stderr, p.stdout + p.stderr
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_rows_file_renaming_a_module_the_map_renames_another_way_is_refused(tmp_path):
+    """`old/lib/a.py` and a directory `old/lib/a/` share the module name `old.lib.a`. The map sends the file to `new.lib.a`;
+    a row sending the directory elsewhere would rename that module a second way, in every file that imports it."""
+    r = rows_repo(tmp_path, '[paths]\n"old/lib/a/" = "other/a/"\n"old/lib/added.py" = "new/lib/added.py"\n'
+                            '"old/lib/sub/" = "new/lib/sub/"\n')
+    (r / "old/lib/a").mkdir()
+    (r / "old/lib/a/z.py").write_text("")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "a directory named as a module is")
+    p = layout(r)
+    assert p.returncode == 1 and "module old.lib.a: the map renames it new.lib.a, and these rows other.a" in p.stderr, p.stderr
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_rows_file_outside_the_checkout_is_refused(tmp_path):
+    """The rows file is its branch's own, a tracked file beside the map: one beside a map kept outside the checkout is
+    nobody's commit, and deleting it once read would lose it."""
+    r = rows_repo(tmp_path, None)
+    (tmp_path / "map.toml").write_text(ROWS_MAP)
+    (tmp_path / "map.rows.toml").write_text('[paths]\n"old/lib/added.py" = "new/lib/added.py"\n')
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                       capture_output=True, text=True)
+    assert p.returncode == 1 and "a rows file is its branch's own" in p.stderr, p.stdout + p.stderr
+    assert (tmp_path / "map.rows.toml").is_file() and git(r, "status", "--porcelain") == ""

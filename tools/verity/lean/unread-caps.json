@@ -14,12 +14,12 @@
    "declarations": 56
   },
   "Proofs/Core": {
-   "modules": 6,
-   "declarations": 144
+   "modules": 4,
+   "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 267,
-   "declarations": 2217
+   "modules": 272,
+   "declarations": 2283
   },
   "Proofs/Nci": {
    "modules": 1,

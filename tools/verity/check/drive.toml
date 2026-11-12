@@ -1,139 +1,96 @@
-# Drive's flags, their one source: `research queue drive` reads this file at `main` in the queue's clone on every tick
-# (`DriveFlags`, `drive_flags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
-# restart, and a temporary setting is a commit here too. A `--config FILE` on drive's machine is refused, naming each key, unless
-# every key it sets has this file's value; a command-line flag overrides its key only where `command_line` lets it. Before it
-# syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
-# each machine of `on`, each of `landing_gates` and `warn_gates` (`drive_names`). Its owner is the handle whose `owns` in
-# .agents/skills/using-slack/registry.json covers it; drive runs from it on the control pod.
+# The verified queue's flags, their one source: its loop (`research queue vqueue`) reads this file at `main` each tick
+# (`DriveFlags`, `flags_at` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
+# restart, and a temporary setting is a commit here too. The ready mark's preflight reads `landing_gates`, `warn_gates` and
+# `land_into` here at `main`, each key alone (`gates_at`, `land_into_key`). tests/test_drive_toml.py fails on a key the strict
+# parse doesn't take and on one whose code was deleted (`DELETED_KEYS`). Its owner is the handle whose `owns` in
+# .agents/skills/using-slack/registry.json covers it.
 
-# the keys drive's command line (the control pod's /data/drive/args) may override: `--on`; any other flag there that sets a key
-# refuses the tick. The landing order is no key: it is drive's priority file (`--priority-file`), read again at each sync
+# parsed (`DriveFlags`) and read by no other code. The loop's own `--on` overrides `on`, and the landing order is no key: it
+# is the loop's priority file (`research queue vqueue --priority-file`), read each tick
 command_line = ["on"]
-# the machines train.sh launches drive's lock run and its after-landing run on (a machine, or `auto`)
+# the machines (a machine, or `auto`) the verified queue's runs take, the run beside each candidate's check and each records
+# run, each shard its share of them, unless the loop's `--on` names others
 on = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
-# after a landing that changes Lean, a lock or the spec, run lean-audit alone on `checked`'s tip (the lock run, `train.sh TIP
-# MACHINES --deferred lean-audit`) and commit the lock records it regenerated onto `checked` (`Lock records regenerated for
-# ...`), ahead of the after-landing run, which then checks a commit with those records (`--no-regenerate`): `main` moves only
-# to one. false: no lock run, and a landing that leaves a record stale is red in the after-landing run
+# parsed (`DriveFlags`) and read by no other code: a candidate with a member that changes Lean, a lock or a spec takes a
+# records run before its check, which regenerates its lock records (`research.vqueue_records`), unless the loop runs with
+# `--no-records`
 regenerate_locks = true
-# scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
-# its merge onto `next` at the sync, which leaves out what they refuse; the
-# vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
-# below it, so a gate is priced at a sync's N PRs, not one:
-# ratchet_gate caches each change's verdict and judges it once per `main` (uncached, every sync judges all N again).
-# It is left out while `main` moves only on a full check of a prefix of `next`: that check runs the vLLM lints over the
-# whole tree, and each move of `main` would judge every member again, cold.
-# A ready mark admits a PR: its merge onto `next` at the sync (a conflict, these gates) is the only check before it joins, and
-# the sync runs no preflight.
-# unread_gate (tools/verity/lean/unread_gate.py) refuses a merge that grows a package's unread Lean modules past its cap; one
-# it can't judge yet (no recorded check has published facts for the merge's Lean, as after a Lean landing until its lock run
-# ends) waits on `next` with its mark, and the next sync tries again.
+# scripts a head passes at its ready mark's preflight (`Preflight._gates`), each run as it is at `main`, so the change it
+# judges can't weaken it, as `python3 PATH MAIN HEAD --json` (`run_gate`): exit 0 passes, 1 with its failures refuses, and
+# anything else can't judge, a note that refuses nothing (`gate_refusal`). The verified queue's candidates run none.
+# unread_gate (tools/verity/lean/unread_gate.py) refuses a change that grows a package's unread Lean modules past its cap
 landing_gates = ["tools/verity/lean/unread_gate.py"]
-# scripts run as the landing gates are, whose failure keeps no PR out: the ready mark prints it as a warning, and drive lands
-# the PR and tells its owner and drive's `CI` once a head (`tell_warned`), the owner fixing it in their next PR. A Markdown
-# file a merge puts over its cap (tests/test_repository.py)
+# scripts the preflight runs as it runs the landing gates, whose failure refuses nothing: the ready mark prints it as a
+# warning. A Markdown file a change puts over its cap (tests/test_repository.py)
 warn_gates = ["tools/verity/check/gates/markdown_caps.py"]
-# the check's steps whose red after a landing drive never reverts: it names the culprit, each merge ratchet-gate's log fails,
-# and rings its lane and the owner of what failed once, the lane fixing it forward in its next PR; the next run's ratchet-gate
-# judges only the merges above the tip it judged
+# the check's steps whose failure holds no candidate where the whole check gates (the loop's `--gate check`): its verdict
+# leaves them out beside policy.toml's `off_gate` (`vqueue_slim._gate`), and what a candidate failed of one that the run
+# beside its base's check didn't is rung once, ratchet-gate's to the lane of each member whose merge it fails; nothing is
+# held or ejected for it (`Loop._off_gate`)
 warn_steps = ["ratchet-gate"]
-# how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change as any other;
-# the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
+# parsed (`DriveFlags`: "review", its one value) and read by no other code: the verified queue takes a PR on its land verdict,
+# or on its ready mark alone under the low-risk lane (`World.ready`)
 land = "review"
-# the landing branch: "main", where the verified queue's loop lands each batch once its candidate's check passed. A mark's
-# preflight and `research queue status` judge a head's merges of an old `next` against it, so a head that merged `main` is
-# marked. "checked" was drive's: its review landing fast-forwarded `checked`, and `main` followed to a fully checked commit
+# the landing branch: "main", where the verified queue's loop lands each batch, and onto which the ready mark's preflight
+# merges a head (`Preflight._fetch`). A mark's preflight and `research queue status` judge a head's merges of an old `next`
+# against it, so a head that merged `main` is marked
 land_into = "main"
-# the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
-# run, every step from nothing, holds every landing for as long as it runs; circuit-check reuses its per-target passes either
-# way. The nightly `audit-main` (`--no-cache`, no circuit cache) checks every part cold, so it checks that reuse daily
+# these three keys and `executor_enqueue` are parsed (`DriveFlags`) and read by no other code: the loop's `--gate` checks each
+# candidate (graph2's task check with a run beside it, or the whole check as `--shards` shards)
 after_landing_no_cache = false
-# after_landing_shards = N runs the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh
-# --deferred STEPS --shard K/N`), so it takes about its longest shard, after one run of circuit-check's records step that every
-# shard's circuit-check starts from (`train.sh --cc-records`); 1 (absent) is one run of every step; "auto" (or "auto:MAX", at
-# most MAX shards) takes N and each shard's parts from the shard planner (`check.py --shard-plan`, made once a tip beside the
-# records step), each shard `train.sh --shard auto:K/N --shard-plan-file PLAN`, and runs unsharded when no plan is made
 after_landing_shards = 3
-# the task executor (`research.executor`): "off"; "shadow", each tip the after-landing run checks is enqueued too, at priority
-# 1, the executor listing its task graph on a worker (`verity tasks list --json --kind after-landing`, labelled `tasks_graph`
-# on commit:<sha>), and its verdicts compared with the run's by that graph's keys, a record per tip that `research queue
-# shadow-report` prints; "on" (once 3 tips in a row agree fully) checks each tip in two places. The executor runs every
-# after-landing step but lean-agreement and ratchet-gate: the tip is enqueued as graph/v2 (`verity graph`, labelled
-# `verity_graph` on commit:<sha>; each suite a task, the Flock suite's in parts), its tasks' results (`result` on task:<key>)
-# judged by policy.toml as a run's failures are, a red naming the landing whose change touches what the failed task depends
-# on; the graph's own lean-agreement task counts for nothing. Beside it drive launches `train.sh TIP ON --deferred
-# lean-agreement,ratchet-gate` on `on` (the preflights and lean-agreement's lean-build with them; lean-agreement left out when
-# nothing it checks changed), with the --base and --ratchet-base a run of every step takes, its reds named as a run's. `main` follows once every task on the gate passed, the graph has a task of every other job `main` waits for, and that
-# run passed its preflights and its steps on the gate: a red ratchet-gate, off it (policy.toml's `off_gate`), holds `main` no
-# more than in a run of every step
 executor = "shadow"
-# the task executor's enqueue command, the words of its argv (`research.executor.QueueTransport`), run with `--priority N
-# --check after-landing:SHA` (and `--schema verity-graph/v2` when on); unset, each tip the executor would check is recorded
-# incomplete in shadow, and when on is told to drive's `CI`, so nothing checks it and `main` stays. "on" needs a command that
-# takes those arguments and an executor that labels each graph (`verity_graph`) and each task's result/v1 (`result`) as
-# `research.executor` reads them
 # executor_enqueue = ["CMD", "ARG"]
-# every sync, members with a land verdict go below those waiting for one, so a member waiting for its review holds only itself;
-# one that gains its verdict goes after those already moved, so none below it is merged again. A held member goes to `next`'s
-# top every sync, this on or not
+# parsed (`DriveFlags`) and read by no other code
 verdict_first = true
 # the verdict carry (`research.carry`): a PR marked ready at its head with no land verdict there takes its newest verdict at an
 # older head, a land by a non-owner, when each commit since merges, as the queue would, commits on `checked` or `main` or another
 # PR's head with a land verdict and no hold, or changes only what the checks regenerate (pins, lock records); a hold at the head,
-# or one newer than that land, keeps it. "off"; "shadow", the verified queue (`research queue vqueue`, `World._carry`) and drive
-# log `would carry #N's land from OLD to NEW (why)` or `would not carry ...` and write nothing; "on", the verified queue counts
-# the PR as reviewed and writes nothing, and drive writes the land verdict at the head as ci's, its ref naming both heads
+# or one newer than that land, keeps it. "off"; "shadow", the verified queue (`research queue vqueue`, `World._carry`) logs
+# `would carry #N's land from OLD to NEW (why)` or `would not carry ...` and writes nothing; "on", it counts the PR as
+# reviewed and writes nothing
 verdict_carry = "on"
-# who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it, and the
-# minutes it waits before each ring (`Driver._bottom`; by default `DriveFlags`' two handles after 30): the reviewer pool reviews
-# `next`'s bottom as it comes, so drive rings only the pool's owner, and only when the pool falls behind
+# these three keys are parsed (`DriveFlags`) and read by no other code
 bottom_ring = ["@ci"]
 bottom_wait_min = 30
-# how many restacks across a move the syncs run at once in the background: one `restack.py` per head merged above a move it
-# lacks, each rewriting a whole tree on one core, its PR waiting off `next` until a later sync reads the result. The control
-# pod has 4 cores, and the tick needs one
 restack_jobs = 3
-# the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
-# `checked` on their ready mark alone (no land verdict), each whose merge onto `checked`'s tip changes nothing
-# `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;
-# the after-landing run checks them, and a red one names its culprit as any red does. The next sync rebuilds `next` on what it
-# landed.
-# false: drive lands only on review
+# the low-risk lane: the verified queue takes a ready PR on its ready mark alone (no land verdict) when it isn't held and
+# its change, against its merge base with `main`, touches nothing `lowrisk_excludes` names, or it is a move's PR, whatever
+# it touches, whose map, from `main`, is certified rerun on its batch's tip; under `signed_verdicts`, no move changing
+# `SIGNED_GUARDS` (`World.ready`). false: no PR is taken without a land verdict, its own or one the verdict carry carries. `lowrisk_per_tick` is parsed
+# (`DriveFlags`) and read by no other code
 lowrisk_lane = true
 lowrisk_per_tick = 20
-# what keeps a change off the low-risk lane: a directory from the root (ending in `/`), or a file name glob (any directory).
+# what keeps a change off the low-risk lane: a directory from the root (ending in `/`), one file by its path from the root (a
+# `/` before its end), or a file name glob (no `/`: any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers, and the soundness-path Python (AGENTS.md's SOUNDNESS_PATH
 # under verity/ml/); and the guards that hold everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import boundaries, SOUNDNESS_PATH, verifier cost), the check and this file
 # (tools/verity/check/), the graph lister that lists the executor's gating tasks (tools/verity/graph/), the merge drivers
-# (.gitattributes), and the landing rules themselves (drive.py, queue.py); and what
+# (.gitattributes), and the landing rules themselves (queue.py; drive.py matches no file); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
-# the agent guard and its hooks (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
+# the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
+# (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/", "verity/ml/randomness/",  # as a branch based below the layout names them: the verified queue reads a PR's own diff
-                    "verity/core/", "verity/claims/", "verity/configuration/deploy/", "verity/configuration/wire/", "verity/definitions/evaluate/", "verity/definitions/requirement/", "verity/difftest/", "verity/hardware/site/", "verity/hardware/world/", "record.py", "registration.py", "verity/protocols/certifier/device/", "verity/protocols/certifier/verifier/", "verity/protocols/flock/sigma/", "verity/protocols/flock/verifier/", "verity/protocols/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/onsite/verifier/", "verity/protocols/poub/verifier/", "verity/protocols/pous/device/", "verity/protocols/pous/lean/", "verity/protocols/pous/verifier/", "verity/protocols/pouw/verifier/", "verity/protocols/recursion/verifier/", "verity/protocols/remote/verifier/", "verity/protocols/spot/", "verity/protocols/tests/", "reporting.py",
+                    "verity/core/", "verity/claims/", "verity/configuration/deploy/", "verity/configuration/wire/", "verity/definitions/evaluate/", "verity/definitions/requirement/", "verity/difftest/", "verity/hardware/site/", "verity/hardware/world/", "record.py", "registration.py", "verity/protocols/certifier/device/", "verity/protocols/certifier/verifier/", "verity/protocols/flock/sigma/", "verity/protocols/flock/verifier/", "verity/protocols/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/onsite/verifier/", "verity/protocols/poub/verifier/", "verity/protocols/pous/device/", "verity/protocols/pous/lean/", "verity/protocols/pous/verifier/", "verity/protocols/pouw/verifier/", "verity/protocols/recursion/verifier/", "verity/protocols/remote/verifier/", "verity/protocols/remote/verifier/composition/", "verity/protocols/spot/", "verity/protocols/tests/", "reporting.py",
                     "__init__.py",
                     "verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/", "verity/definitions/kernels/", "verity/commitments/", "verity/definitions/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes", "drive.py",
                     "queue.py",
-                    "infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
+                    "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections
 # and holds count unsigned (`research.labelauth`). `ready`, `judge` and `review` sign what they can either way, and refuse
 # what they can't once it is on. true is refused while the low-risk lane could land a change to the registry, labelauth.py,
-# queue.py or drive.py (`SIGNED_GUARDS`)
+# queue.py or landing.py (`SIGNED_GUARDS`)
 signed_verdicts = false
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
-# it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
+# it is stale: `research queue status` says so (`research.stale`); 0 is off
 stale_days = 3
-# days idle before drive closes such a PR, with a comment, its branch kept; never one with a hold label, a draft that says
-# "keep open", or one on `next`; 0 is off
+# parsed (`DriveFlags`: 0, or at least `stale_days`) and read by no other code
 stale_close_days = 7
 # open PRs the stale rule never judges, each kept open by its owner with a reason
 stale_keep = []
-# the unlandable rule, hourly: close each open PR based on `main` that nothing will land as it is, its head contained by a PR
-# of the same owner that landed on `checked`, or its change on `checked` already (each file it changes there as its head has
-# it), with a comment naming which and how to keep it open, its branch kept; never one marked ready at its head, on `next`,
-# with a hold label, a draft that says "keep open", one of `stale_keep`, or one reopened at the head drive closed it at.
-# "on"; "log", only log each it would close (`would close #N: why`); "off"
+# parsed (`DriveFlags`) and read by no other code
 close_unlandable = "log"

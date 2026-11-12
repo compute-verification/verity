@@ -205,6 +205,25 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `figures.py` | `render` |
 | `lean.py` | `status(name)`, `weakest(cites)` |
 
+## What it writes and what loads it
+
+`periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
+Neither writes a file unless told where.
+
+This package has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). A loader puts this directory on
+`sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
+way its suite names what it reads here among its `inputs`, so this lists every loader:
+
+~~~sh
+git grep -n verity/protocols/inference_only/rho -- '*pyproject.toml'
+~~~
+
+Among them, `verity/protocols/inference_only/nci` calls `theorem.multiple_bound` for its slowdown `D`, and
+`benchmarks/circuit_properties` reads a model's shapes (`instances`, `params`). In the other direction, `families.py`
+reads `verity/protocols/inference_only/nci/algorithms.json` when a family names an algorithm of that library (a family
+of kind `nci`), and `params.py` reads `verity/protocols/inference_only/nci/calibrations.json` for the calibrated
+policy's `Γ` and `K` and the range of `K`.
+
 ## Status
 
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,

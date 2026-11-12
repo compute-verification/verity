@@ -23,7 +23,11 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`verity/protocols/pous/device/timed_audit.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
+"""`--seed` for the `V3` arm's `verity/protocols/pous/device/timed_audit.py` and the `MC` arm's `memory_challenger/live.py`:
+an audit's challenges, and so its controls' verdicts, are fixed."""
+MC_CHANGED = [9, 8]
+"""Of the 105 blocks each of the `MC` arm's two sessions draws under `SEED` from the small case's 192, those whose index is a
+multiple of 10: the blocks its value and tampered controls change."""
 
 
 def _bench():
@@ -519,10 +523,13 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
     the honest sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one
     for a flipped bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time
     edited after signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
-    and no profile is issued; a session's public part is its commitment, its verdict and its coin openings."""
-    bench = _bench()
+    and no profile is issued; a session's public part is its commitment, its verdict and its coin openings.  The sessions'
+    coins are `SEED`'s, in the honest audit and in every control, so which blocks a control's sessions draw, and with them
+    its count of wrong answers and its verdicts, are the same on every run (`MC_CHANGED`)."""
+    bench, live = _bench(), _live()
     assert bench.IMPLS["p2-v3-mc-gpu"] is bench.P2V3McGpu
-    body = bench.P2V3McGpu().run(_args(tmp_path, k=105), WS, tmp_path, backend=_backend(), params=_small(), research=True)
+    body = bench.P2V3McGpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small(),
+                                 research=True)
     gates, m = body["gates"], body["metrics"]
     for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "codec", "timed_audit", "value_control",
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
@@ -542,11 +549,22 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
         assert set(rec["public"]) == {"commitment", "verdict", "openings"} and rec["public"]["verdict"] == {"accepted": False}
         assert rec["witness"]["reasons"] == ["signature scheme 'test/lms-sha512/n64-w1-h1/v0' is not accepted"]
         assert rec["witness"]["reasons_under_signer"] == []
-    tampered = m["tampered_control"]
-    assert tampered["wrong"] > 0 and tampered["late"] == 0 and tampered["audits_accepted_under_signer"] == 0
+    sessions = [live.seeded_session(bytes.fromhex(SEED), j)[1].hex() for j in range(2)]
+    drawn = [[a["index"] for a in rec["answers"]] for rec in honest["records"]]
+    assert [sum(i % 10 == 0 for i in indices) for indices in drawn] == MC_CHANGED
+    value, late, tampered = m["value_control"], m["late_control"], m["tampered_control"]
+    for control in (honest, value, late, m["recompute_control"], tampered):
+        assert control["seed"] == SEED and control["audits"] == 2 and control["audits_accepted"] == 0
+        assert [rec["public"]["commitment"]["session"] for rec in control["records"]] == sessions
+    for control in (value, tampered):
+        assert [[a["index"] for a in rec["answers"]] for rec in control["records"]] == drawn
+        assert [sum(not a["correct"] for a in rec["answers"]) for rec in control["records"]] == MC_CHANGED
+        assert control["wrong"] == sum(MC_CHANGED) and control["late"] == 0 and control["audits_accepted_under_signer"] == 0
     assert all(any(r.endswith("answers are not their blocks of C") for r in rec["witness"]["reasons_under_signer"])
                for rec in tampered["records"])
-    assert m["late_control"]["late"] == 2 and all(len(rec["answers"]) == 10 for rec in m["late_control"]["records"])
+    assert late["late"] == 2 and late["wrong"] == 0 and late["audits_accepted_under_signer"] == 0
+    assert all(len(rec["answers"]) == 10 for rec in late["records"])
+    assert m["recompute_control"]["wrong"] == 0 and m["recompute_control"]["recomputed_answers"] > 0
     assert m["signature_control"] == {"sessions": 2, "unedited_accepted": 2, "flipped_rejected": 2, "edited_rejected": 2,
                                       "passed": True}
     assert len(bytes.fromhex(honest["records"][0]["public"]["openings"][0]["salt"])) == 192 and nb == 16
@@ -606,6 +624,24 @@ def test_the_memory_challenger_catches_a_flipped_bit_in_a_blocks_last_byte():
     doc, answered = _mc_at_the_p2_point(500_000 + p2.RTT_ALLOWANCE_CAP_NS, tamper=frozenset(range(1 << 16)))
     assert answered == 2 * 105 and doc["wrong"] == 2 * 105 and doc["late"] == 0
     assert doc["audits_accepted_under_signer"] == doc["audits_accepted"] == 0
+
+
+@pytest.mark.parametrize("clock, signer", [("wall", "test"), ("logical", "lms")])
+def test_a_seeded_session_is_refused_off_the_logical_clock_and_off_the_test_signer(clock, signer, tmp_path, capsys):
+    """`--seed` fixes a session's coins, so only a test takes it: on the wall clock, or under S1's LMS, `audit` refuses before
+    it reads its store, makes a key or opens a connection, and the command line before it reads READY."""
+    live = _live()
+    key, log = tmp_path / "key", tmp_path / "sessions.log"
+    kw = {"signer": signer, **({"lms_key": key, "session_log_path": log} if signer == "lms" else {}),
+          **({"clock": live.LogicalClock()} if clock == "logical" else {})}
+    with pytest.raises(ValueError, match="on the logical clock under the test signer alone"):
+        live.audit("127.0.0.1", 1, None, b"", b"", audits=1, pings=1, seed=bytes.fromhex(SEED), **kw)
+    argv = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json"),
+            "--clock", clock, "--signer", signer, "--seed", SEED]
+    with pytest.raises(SystemExit) as stop:
+        live.main(argv + (["--lms-key", str(key), "--session-log", str(log)] if signer == "lms" else []))
+    assert stop.value.code == 2 and live.SEEDED_ONLY in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize("record", ["lean", "python"])

@@ -41,7 +41,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
                "seconds_per_vu", "track", "scope", "label", "note", "assumptions", "omitted", "domain", "breakthrough",
                "lane", "question", "cited-by", "row", "sweep", "arm", "stage", "source", "superseded_by", "of-record", "goal", "abandoned", "withdrawn", "replay_set", "replay_expect", "interaction_attempt_of", "hash", "sharing", "fold",
                "pipeline", "kernel_outcome", "kernel_reason", "memory-line-of-record", "run_of_record", "unit_lowering",
-               "compile_cost")
+               "compile_cost", "training-slowdown")
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
@@ -97,6 +97,8 @@ def test_check_is_enum_and_bool_only_and_reads_values_as_the_catalog_does():
     assert "old spelling of 'verifier'" in vocab.check("checker", "x") and vocab.is_known("checker") is False and vocab.key("checker") is None
     assert "is a ref" in vocab.check("result_artifact", "art:" + "0" * 64) and "not in the vocabulary" in vocab.check("nonesuch", 1)
     assert vocab.is_known("verified")
+    assert vocab.check("training-slowdown", "a" * 64 + "/101/final") is None
+    assert "does not match" in vocab.check("training-slowdown", "a" * 64 + "/101/test")
 
 
 def test_canonical_spellings_and_coercion():

@@ -79,6 +79,8 @@ PLAN = C._load("plan")
 LA = C._lean_audit()
 ROOT = C.ROOT
 VERIFIER = C.FLOCK_LEAN.relative_to(ROOT).as_posix()
+#: the Lean verifier's package and the packages of the tree it requires by path: what `lake build` there reads
+VERIFIER_PACKAGES = [VERIFIER, *(p.rstrip("/") for p in C.required_in_tree(VERIFIER + "/"))]
 
 #: what each build makes, under the artifact name its readers' `needs` list
 OUTPUTS = {"lean-build": [f"lean-build:{VERIFIER}/.lake/build"],
@@ -88,10 +90,10 @@ OUTPUTS = {"lean-build": [f"lean-build:{VERIFIER}/.lake/build"],
 #: suite's key reads; what its step key reads of the machine (the kernel release, `rustc -vV`, the slot's paths) check's own
 #: cache keys where the task runs, as `PLACED` is set there
 STEP_INPUTS = {
-    "lean-build": [VERIFIER],
+    "lean-build": VERIFIER_PACKAGES,
     "flock-circuit-build": ["verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live", "verity/protocols/flock/prover/flock-*-b684b12.patch"],
     "flock-rust-tests": ["verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live", "verity/protocols/flock/prover/flock-*-b684b12.patch"],
-    "lean-agreement": ["verity/protocols/flock/agreement", VERIFIER],
+    "lean-agreement": ["verity/protocols/flock/agreement", *VERIFIER_PACKAGES],
 }
 #: a worker slot's size, by what a task asks: most tasks a 16-core, 64 GB slot; a Lake package's audit the same with a
 #: Lean build's disk, or a 32-core, 128 GB one when it reads `security` (Mathlib, ArkLib: `lean_slot`); a suite that runs in

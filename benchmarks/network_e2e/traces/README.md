@@ -57,6 +57,11 @@ end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eo
   same host (`--tick-from`; `corpus.py tick TRACE_DIR` prints them) or given (`--tick-ms`). The hook also records the
   scheduler's KV pool (`engine.json`), which the replay reads. `tick.sh`: GLM-5.3's load point under the tick on a whole
   H200 node, beside the same load admitted on arrival, then the advice v1 over both (its header has its command).
+- `ids.sh`: the id front (`verity-vllm ids-front`) before a server that is up under the tick, for a network certifier
+  whose egress is the id form: vLLM's own server answers in HTTP, and the front sends the certifier only the output ids,
+  one id event each, then the trailer. With a command it runs the certifier's side through the front on the same host
+  and stops the front after it; without one the front serves a certifier that runs elsewhere (its header has its
+  command).
 - `run.sh`: the job on a leased GPU of a node (its header has its command and resources). `join.sh`: its summaries,
   comparison and the scheduler replay's table on a CPU node, for a GPU job run with `JOIN=0`. A summarized corpus is
   published in the evidence store as `vllm-trace-corpus/v1`, which `benchmarks/network_e2e/encodings/trace_corpus.py`

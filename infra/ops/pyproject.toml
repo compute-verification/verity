@@ -27,6 +27,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "tests/test_agent_watch.py",
     "tests/test_agent_watch_relay.py",
+    "tests/test_control_door.py",
     "tests/test_deploy.py",
     "tests/test_drive_sh.py",
     "tests/test_keeper.py",
@@ -39,7 +40,10 @@ untraced = [
 # watch's relay (infra/control) is tested here too, with research.slack.
 inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json",
           "infra/control/agent_watch_relay.py", "infra/control/agent_watch_timers.json", "infra/control/agent_watch_nodes.json",
+          # the pod's wrapper of the watch, held here to handing it its credentials file as a path
+          "infra/control/agent_watch.sh",
           "tools/research/src/research/slack.py", "tools/research/src/research/linear.py",
+          "tools/research/src/research/goals.py",
           "tools/research/src/research/vocabulary.py", "tests/test_retired_terms.py",
           "tools/research/src/research/notes_sync.py",
           "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",
@@ -61,7 +65,9 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the
           # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
-          "tools/research/src/research/store/labels_sync.py"]
+          "tools/research/src/research/store/labels_sync.py",
+          # the pod's door: its gate and its setup, with research's side of it (pods/door.py, and budgets.py's notes_sync above)
+          "infra/control/vy-control-gate", "infra/control/door_setup.sh"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

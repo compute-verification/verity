@@ -7,23 +7,28 @@
 #
 # Inside the serve's gpu-lease (GPU_LEASE_UUID set) it wipes that card, the one the engine then loads on; outside one it
 # takes a card of its own (`gpu-lease 1 --wait`) and gives it back after. It refuses (exit 3, no answer, the reason in
-# DIR/refused.txt) a card that isn't idle, any process on it or more than WIPE_IDLE_MIB (1024) of its memory in use, and
-# a challenger command whose ssh key (-i) isn't on this node; it kills nothing. The memory challenger is vy-auditor-2's,
-# through infra's wipe gate, as in Demo B:
+# DIR/refused.txt) a card that isn't idle, any process on it or more than WIPE_IDLE_MIB (1024) of its memory in use, a
+# challenger command whose ssh key (-i) isn't on this node, and a run with no challenger key pinned; it kills nothing.
+# The memory challenger is vy-auditor-2's, through infra's wipe gate, as in Demo B:
 #   WIPE_CHALLENGER  its host (vy-auditor-2)
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)
+#   WIPE_KEY_SHA512  the SHA-512 of its public key (the gate's `party_key wipe`), in 128 lowercase hex digits: the one
+#                    key the verifier trusts, a session signed under another rejected. By default vy-auditor-2's wipe
+#                    party's (TRUSTED_SHA512 below), so another challenger needs its own. The pin is the
+#                    deployment's, never read from the session it judges: set empty, or in a tree that pins none,
+#                    no key is pinned and the piece refuses
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
-# scratch copy of verity/core (WIPE_PROTOCOL_EXE names one built already), never in this tree's .lake, which
-# served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
-# summary.json, which names the program that decided and its host under `decided_by` and the SHA-512 of the challenger key
-# the verdict trusted under `key_sha512`), lake-build.log, answer.json (wipe.json's answer, whatever its verdict) and
-# served.json (the serve dir and window the wipe precedes, the server, the card, the lease, the run). The leg's case,
-# which holds the challenger's signed session, goes to SERVE_DIR/private/wipe (0700) instead, and there served_case.py
-# (with PY, default python3) writes the composite's piece beside it: case.json and the leg's own answer.json. Its last
-# line is `WIPE {...}`.
+# scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
+# this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
+# summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
+# the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
+# answer.json (wipe.json's answer, whatever its verdict) and served.json (the serve dir and window the wipe precedes,
+# the server, the card, the lease, the run). The leg's case, which holds the challenger's signed session, goes to
+# SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the composite's
+# piece beside it: case.json and the leg's own answer.json. Its last line is `WIPE {...}`.
 # Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -37,11 +42,17 @@ DIR=$(cd "$DIR" && pwd)
 CH=${WIPE_CHALLENGER:-vy-auditor-2} ADDR=${WIPE_ADDRESS:-10.96.0.36:47611} READS=${WIPE_READS:-5500}
 CMD=${WIPE_COMMAND:-ssh -i $HOME/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36}
 NODE=${WIPE_NODE:-$(hostname)} IDLE_MIB=${WIPE_IDLE_MIB:-1024} DEMO=${WIPE_DEMO:-$HERE/demo.sh}
+# the SHA-512 of the public key of vy-auditor-2's wipe party as its host made it (the gate's `party_key wipe`)
+TRUSTED_SHA512=c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb4198fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252
+PIN=${WIPE_KEY_SHA512-$TRUSTED_SHA512}
 refuse() { echo "WIPE REFUSED: $*" | tee "$DIR/refused.txt"; exit 3; }
 
-if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Lean judge
+if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key, the gate's key, the Lean judge
   rm -f "$DIR"/{answer,served,summary,wipe,wipe.case}.json "$DIR/refused.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
+  [ -n "$PIN" ] || refuse "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of $CH's" \
+    "wipe party (its gate's party_key wipe), the one key the wipe trusts"
+  [[ $PIN =~ ^[0-9a-f]{128}$ ]] || refuse "WIPE_KEY_SHA512 is a key's SHA-512 in 128 lowercase hex digits, not $PIN"
   read -r -a C <<< "$CMD"
   KEY=
   for ((i = 0; i + 1 < ${#C[@]}; i++)); do [ "${C[$i]}" = -i ] && KEY=${C[$((i + 1))]}; done
@@ -51,7 +62,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Le
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
     L=verity/protocols/pous/device/lean
-    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ "$L" verity/difftest/lean verity/protocols/interface verity/protocols/flock/verifier verity/commitments/attest/lean verity/commitments/lms/lean verity/commitments/randomness | tar -C "$S" -x
+    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
     (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \
@@ -80,7 +91,7 @@ USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$CAR
 unset PYTHONPATH VIRTUAL_ENV
 rc=0
 OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
-  --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
+  --trusted-sha512 "$PIN" --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
 HEADLINE=$(python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" <<'EOF'
 import json, os, sys
 from pathlib import Path

@@ -15,9 +15,13 @@ sudoers can't check arguments (a `*` there matches spaces, so `cmd x *` lets thr
 SUDO_UID / SUDO_GID; run without sudo, or by root, it refuses. Each form is parsed into the exact argv that runs, and anything
 not listed is refused (exit 3) with why, before anything runs:
 
-  systemd-run runs the command as the caller (`--uid`/`--gid` are added when absent) or, for a job's unit, as a job user: a user
-  that is not root, not vy-admin and in none of PRIVILEGED_GROUPS. Only the options and unit properties listed in SCOPE_OPTIONS,
-  UNIT_OPTIONS and PROPERTIES pass: a property such as ExecStartPre=+..., User= or a foreign EnvironmentFile= would act as root.
+  systemd-run runs the command as the caller (`--uid`/`--gid` are added when absent) or, for a job's unit, as a job user: an
+  account root has listed in the group JOB_GROUP (vy-job), that is also not root, not vy-admin and in none of
+  PRIVILEGED_GROUPS. Any other account is refused, a daemon's (polkitd, messagebus) among them: some are root by another
+  name. Root (vy-admin, after the lock-out) lists an account made for jobs and nothing else:
+  `sudo groupadd -f --system vy-job && sudo usermod -aG vy-job USER`. Only the options and unit properties listed in
+  SCOPE_OPTIONS, UNIT_OPTIONS and PROPERTIES pass: a property such as ExecStartPre=+..., User= or a foreign EnvironmentFile=
+  would act as root.
   An EnvironmentFile= must be a regular file the caller owns. A leading `setpriv --reuid=UID --regid=GID --init-groups --`
   that drops to the caller is removed, since `--uid`/`--gid` do the same (systemd-run calls initgroups).
   `env` takes only the variables ENV_OK matches (PATH, HOME, CUDA_*, ...): never LD_*, PYTHON* or BASH_ENV, which act on root.
@@ -42,6 +46,9 @@ CGROUP = Path("/sys/fs/cgroup")
 SYSTEMCTL = "/usr/bin/systemctl"
 PRIVILEGED_GROUPS = frozenset({"root", "sudo", "admin", "wheel", "adm", "docker", "lxd", "systemd-journal", "vy-admin", "disk", "shadow"})
 NO_JOB_USERS = frozenset({"root", "vy-admin"})
+#: the job users' group. An account is a job user only once root lists it here, so the accounts a caller may act as are the ones
+#: `getent group vy-job` prints and no other
+JOB_GROUP = "vy-job"
 ENV_OK = re.compile(r"^(PATH|HOME|USER|LOGNAME|LANG|LC_[A-Z]+|TZ|CUDA_[A-Z_]+|NVIDIA_[A-Z_]+|OMP_NUM_THREADS|OPENBLAS_NUM_THREADS|"
                     r"MKL_NUM_THREADS|NUMEXPR_NUM_THREADS|FILL[A-Z_]*|GPU_LEASE_[A-Z_]+|VY_[A-Z0-9_]+)$")
 CPUS = re.compile(r"^\d+(-\d+)?(,\d+(-\d+)?)*$")
@@ -62,6 +69,10 @@ PROPERTIES = frozenset({
     "KillMode", "SendSIGKILL", "TimeoutStopSec", "EnvironmentFile",
 })
 EMPTY_ONLY = frozenset({"CapabilityBoundingSet", "AmbientCapabilities"})
+#: the namespace types RestrictNamespaces= may name here: only `yes` (make none) or a space-separated list out of these narrows the
+#: unit; `no`, a `~` list or any other value widens it. jobuser.check_namespaces (NAMESPACES) holds the same set for the launcher's
+#: side; the two agree by test_nebius_lockout, since this file is installed on a node as a lone `python3 -I` script and cannot import it
+NAMESPACES = frozenset({"user", "mnt", "net"})
 HF_BIND = ("/workspace/jobs/hf", "/workspace/hf")
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
 #: every form, as the usage line lists them; jobuser.py asks for root through this helper once it reads "job-reclaim" here
@@ -141,16 +152,45 @@ def env_vars(pairs: list[str]) -> dict[str, str]:
 
 
 def job_user(name: str) -> pwd.struct_passwd:
+    """The passwd entry of the job user `name` (a name or a uid); Refused for any account that isn't one. An allow list: the
+    account's name is in JOB_GROUP's member list, and it is still not root, not one of NO_JOB_USERS and in none of
+    PRIVILEGED_GROUPS. Only the member list counts, not a primary group: it is the one line root writes to grant it
+    (`usermod -aG`) and reads to see every job user, an account's gid can come to equal the group's with nobody granting it,
+    and as a primary group it would be the group of every file a job writes."""
     try:
         pw = pwd.getpwnam(name) if not name.isdigit() else pwd.getpwuid(int(name))
     except KeyError:
         raise Refused(f"no user {name}") from None
     if pw.pw_uid == 0 or pw.pw_name in NO_JOB_USERS:
         raise Refused(f"{pw.pw_name} can't be a job user")
-    groups = {g.gr_name for g in grp.getgrall() if pw.pw_name in g.gr_mem} | {grp.getgrgid(pw.pw_gid).gr_name}
-    if bad := groups & PRIVILEGED_GROUPS:
+    try:
+        primary = grp.getgrgid(pw.pw_gid).gr_name
+    except KeyError:
+        raise Refused(f"{pw.pw_name}'s group {pw.pw_gid} has no entry: not a job user") from None
+    listed = {g.gr_name for g in grp.getgrall() if pw.pw_name in g.gr_mem}
+    if bad := (listed | {primary}) & PRIVILEGED_GROUPS:
         raise Refused(f"{pw.pw_name} is in {', '.join(sorted(bad))}: not a job user")
+    if JOB_GROUP not in listed:
+        only = f" ({JOB_GROUP} as its primary group doesn't count)" if primary == JOB_GROUP else ""
+        raise Refused(f"{pw.pw_name} is not a job user: it is not listed in group {JOB_GROUP}{only}. If the account was made to run "
+                      f"jobs and nothing else, root (vy-admin, after the lock-out) lists it: "
+                      f"sudo groupadd -f --system {JOB_GROUP} && sudo usermod -aG {JOB_GROUP} {pw.pw_name}")
     return pw
+
+
+def _restrict_namespaces(value: str) -> None:
+    """Refuse a RestrictNamespaces= that would widen the unit. systemd reads this property as a boolean or a whitespace-separated
+    list of namespace types: `yes` makes none (the launcher's default), a list of NAMESPACES makes only those, but `no`/`false`/`0`
+    make every type, and a `~`-prefixed list all but those. The launcher (jobuser.check_namespaces) only ever sends `yes` or a
+    sorted subset of NAMESPACES, so hold a direct caller to the same: `yes`, or a non-empty list naming NAMESPACES only. A property
+    repeated with different values is checked here on each occurrence, so a widening one is caught even when systemd would take the
+    last."""
+    types = value.split()
+    if value == "yes" or (types and all(t in NAMESPACES for t in types)):
+        return
+    raise Refused(f"RestrictNamespaces={value!r} would widen the unit: only `yes` (make no namespace) or a space-separated list of "
+                  f"{', '.join(sorted(NAMESPACES))} is allowed (systemd reads anything else, e.g. no or a ~list, as every namespace "
+                  "type or all but some)")
 
 
 def _strip_setpriv(cmd: list[str], uid: int, gid: int) -> list[str]:
@@ -182,6 +222,8 @@ def systemd_run(args: list[str], uid: int, gid: int, user=job_user) -> list[str]
                     raise Refused(f"EnvironmentFile {p}: no such file") from None
                 if not p.is_file() or p.is_symlink() or st.st_uid != uid:
                     raise Refused(f"EnvironmentFile {p} is not a file of the caller's")
+            elif k == "RestrictNamespaces":
+                _restrict_namespaces(v)
             out += ["-p", f"{k}={v}"]
         elif o == "--unit":
             out.append(f"--unit={_unit(next(it, ''))}")

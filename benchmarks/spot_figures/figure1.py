@@ -12,6 +12,12 @@ a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
 proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
+That is the `assumed` reading of serving's rate, the default.  Under `serving="measured"` (`SERVING`) a scope serves
+at the model's `serving_rate` card's computed tokens a GPU-second instead: its requests are its GPU-seconds times the
+rate over a request's tokens, a replay takes the request's tokens over the rate, and no MACs a token enters either;
+the scope's GPUs stay rho's.  The output then says which rate it read (`serving`), every caption says so too
+(`reading_note`), and each exfiltration row names the rate beside the rate at which its bound would reach `SERVING_GOAL`
+(`at_reading`).
 
 **Costs**, in the scope's GPU-seconds: a replay costs the `replay` card's factor times its request served at serving's
 MFU; proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the dense peak, plus its
@@ -82,8 +88,7 @@ import cards as spot_cards
 from verity.protocols.reporting import PERIODS
 from verity.protocols.spot import plancheck
 from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
-                                                           two_stage_design)
-from verity.circuits.partition_v2 import unit_class
+                                                           two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
@@ -115,8 +120,23 @@ OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
 #: form's N: its program is a population program, each instance reading only its own share of each Input node
 #: (`partition.fanout`)
 FANOUT = 1
+
+
+def returned_bits(served: float) -> int:
+    """The bits a replay block returns, which a served window's two-stage registration publishes
+    (`WindowCommitmentRecord.returned`) and under which no served cap prices it (`plancheck.two`'s `returned`).
+    Modelled, and read from no registration: the model's replay block is one request whose only outputs are its tokens'
+    select words, which is what the `served_bits` input `served` counts, so it returns that input."""
+    return ceil(served)
+
+
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
+#: where serving's rate comes from: rho's fleet utilization on the dense peak, or the model's `serving_rate` card, the
+#: engine's measured computed tokens a GPU-second, read only when asked for
+SERVING = ("assumed", "measured")
+#: the exfiltration capacity a row at the measured reading is held against, in bits: 300 GB
+SERVING_GOAL = 8 * 300e9
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
               "skipped_work": "Every block: serving commits every proof block's outputs, and a replay block is a "
@@ -175,10 +195,14 @@ def _k(definition: str) -> int:
     return int(m.group(1))
 
 
-def slot_cards(model: str) -> dict:
+def slot_cards(model: str, serving: str = "assumed") -> dict:
     """The model's `spot-card/v1` cards Figure 1 reads, the optional ones only where they exist: `references` is the
-    list of every one."""
+    list of every one.  The `serving_rate` card is among them only under the measured reading."""
+    if serving not in SERVING:
+        raise ValueError(f"serving's rate is one of {SERVING}, not {serving!r}")
     out = {s: spot_cards.load(s, model) for s in ("workload", "proof_overhead", "commitment", "replay", "design")}
+    if serving == "measured":
+        out["serving_rate"] = spot_cards.load("serving_rate", model)
     if inf := spot_cards.load("infiltration", model, required=False):
         out["infiltration"] = inf
     return out | ({"references": refs} if (refs := spot_cards.load_all("references", model)) else {})
@@ -189,13 +213,15 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
     return InputCard(value, unit, c["status"], f"{c['slot']} card's {field}{art}: {c['source']}", c["provisional"])
 
 
-def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCard]:
+def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assumed") -> dict[str, InputCard]:
     """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
-    the census's mean or, under `request="workload"`, the `workload` card's."""
+    the census's mean or, under `request="workload"`, the `workload` card's.  Under `serving="measured"` the inputs
+    hold the `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of
+    rho's utilization; under the default they hold none, whatever cards exist."""
     if request not in REQUESTS:
         raise ValueError(f"a request is one of {REQUESTS}, not {request!r}")
-    sc = slot_cards(model)
+    sc = slot_cards(model, serving)
     design, work, po = sc["design"], sc["workload"], sc["proof_overhead"]
     if po["value"]["model_overhead"] is None:
         raise ValueError(f"{model}'s proof_overhead card has no model_overhead: Figure 1's vertical line needs one")
@@ -253,6 +279,8 @@ def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCar
         out["params"] = out["ref_params"]
     if request == "workload":
         out["tokens_per_request"] = _card(work, work["value"]["tokens"], "token", "tokens")
+    if (rate := sc.get("serving_rate")) is not None:
+        out["serving_rate"] = _card(rate, rate["value"]["tokens_per_gpu_second"], "token/GPU-s", "tokens_per_gpu_second")
     tokens, bits = out["tokens_per_request"].value, round(8 * out["token_bytes"].value)
     out["served_bits"] = InputCard(tokens * bits, "bit", "modeled",
                                    f"every one of a request's {tokens:,} tokens served as the token select's output "
@@ -348,14 +376,27 @@ class Scope:
 PRIMARY, SECONDARY = "world year", "datacenter year"
 
 
+def token_seconds(c: dict[str, InputCard], served_macs: float) -> float:
+    """The GPU-seconds serving takes a computed token: its FLOP at rho's fleet utilization on the dense peak, or under
+    the measured reading the `serving_rate` card's rate inverted, with no MACs a token in it."""
+    if "serving_rate" in c:
+        return 1 / c["serving_rate"].value
+    return 2 * served_macs / (c["mfu_serve"].value * c["peak_flops"].value)
+
+
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
+    """Each scope's GPU-seconds and the requests it serves in them: at rho's fleet utilization on the dense peak, or
+    under the measured reading at the `serving_rate` card's tokens a GPU-second over a request's own tokens.  The
+    GPUs are rho's and the census's under either."""
     flop_request = c["tokens_per_request"].value * 2 * part.served_macs
+    rate = c.get("serving_rate")
     out = []
     for who in ("world", "datacenter"):
         for period, seconds in PERIODS:
             gs = c[f"{who}_gpus"].value * seconds
-            out.append(Scope(who, period, gs, gs * c["mfu_serve"].value * c["peak_flops"].value / flop_request,
-                             flop_request))
+            requests = (gs * rate.value / c["tokens_per_request"].value if rate is not None
+                        else gs * c["mfu_serve"].value * c["peak_flops"].value / flop_request)
+            out.append(Scope(who, period, gs, requests, flop_request))
     return out
 
 
@@ -384,20 +425,69 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
     n = round(s.requests * tokens * part.blocks)
     work = 2 * part.macs / part.blocks
     boundary = (tokens + 1) * c["token_bytes"].value
+    replay = (c["replay_factor"].value * tokens / c["serving_rate"].value if "serving_rate" in c
+              else c["replay_factor"].value * s.flop_request / (mfu * peak))
 
     def dot(macs: float) -> Grain:
         return Grain("proof block", n, work, part.widest_bits, part.bytes / part.blocks, overhead * 2 * macs / peak)
 
     cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
                        fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
-                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
+                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8), table=x.get("table_blocks", inf))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)
     return Model(s, dot(part.macs_by_count), dot(part.macs_by_work),
                  Grain("request", round(s.requests), s.flop_request, c["output_cap"].value, boundary,
                        overhead * tokens * 2 * part.macs / peak),
-                 ReplayGrain(round(s.requests), c["replay_factor"].value * s.flop_request / (mfu * peak), boundary),
+                 ReplayGrain(round(s.requests), replay, boundary),
                  1 / c["hash_rate"].value, c["delta"].value, fill, tokens * part.blocks, cells, c["served_bits"].value)
+
+
+def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
+    """What an output at the measured reading says of the rate it read: the `serving_rate` card's value, whether the
+    card is provisional, and beside it the rate rho's utilization comes to on this circuit, which the assumed
+    reading serves at."""
+    card = sc["serving_rate"]
+    return {"reading": "measured", **card["value"], "provisional": card["provisional"],
+            "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
+
+
+#: the verification phase a two-stage bound holds at, said in every caption that prints a bound beside the measured rate
+REGISTRATION_NOTE = ("A two-stage bound holds at its verification phase's size: the first stage samples a whole "
+                     "number of the phase's requests, never fewer than one, and the plan is priced and bounded at "
+                     "that count. No bound here is what serving costs at a smaller verification phase.")
+
+
+def outdir(out: Path, serving: str) -> Path:
+    """Where a reading's files go: `out` at the assumed reading and `out/measured` at the measured one, so no file at
+    the measured reading has the path the default writes."""
+    return out if serving == SERVING[0] else out / serving
+
+
+def reading_note(serving: dict) -> str:
+    """What every caption at the measured reading carries: the rate the figure was planned at, whether it is a floor
+    (and that its bounds then are), what it stands in place of, and the verification phase its bounds hold at
+    (`REGISTRATION_NOTE`)."""
+    rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
+    what = ("above which the engine computed no more" if serving["saturated"]
+            else "a lower bound: no rate above it was served")
+    goal = f"{SERVING_GOAL / 8e9:,.0f} GB"
+    floor = ("" if serving["saturated"] else f" Each bound here is then a lower bound on the bound at the engine's own "
+             f"rate: one under {goal} does not show that {goal} is met.")
+    return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at rho's "
+            f"fleet utilization, {assumed:,.5g} on this circuit: the scope's GPUs are the same, and its requests "
+            f"{rate / assumed:.2g} of that reading's.{floor} {REGISTRATION_NOTE}")
+
+
+def at_reading(serving: dict | None, bound: float) -> dict:
+    """What an exfiltration row at the measured reading names beside its bound: the rate, whether a rate above it gave
+    no more, and the rate at which the bound would reach `SERVING_GOAL`.  That rate is by proportion: a scope's requests
+    go as the rate and the bound is taken to go as the requests; nothing is planned again.  Nothing under the default."""
+    if not serving:
+        return {}
+    rate = serving["tokens_per_gpu_second"]
+    return {"tokens_per_gpu_second": rate, "saturated": serving["saturated"],
+            "tokens_per_gpu_second_at_goal_by_proportion": rate * SERVING_GOAL / bound if bound > 0 else None}
 
 
 def _priced(g: Grain, fill: float) -> Grain:
@@ -519,15 +609,9 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
     return out
 
 
-def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class")
-    return w
-
-
-def split_cells(cells: Sequence[Cell], merged: int) -> list[Cell]:
-    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
-    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+def split_cells(cells: Sequence[Cell], merged: int | str | None) -> list[Cell]:
+    """The cells in the strata of a two-stage design whose row's `merged` is this (`optimize.two_stage_strata`)."""
+    return two_stage_strata(cells, merged)
 
 
 def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: float, served: float | None = None,
@@ -539,7 +623,7 @@ def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: floa
     certifies, rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside
     them; a point Lean refuses is an error."""
     d = plancheck.two(split_cells(cells, row["merged"]), row["k"], replay_blocks, row["q"], delta, served, union,
-                      row["theta"], fanout=FANOUT)
+                      row["theta"], fanout=FANOUT, returned=None if served is None else returned_bits(served))
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
@@ -594,10 +678,17 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
-    class's bits and the merged one by the widest class it holds (`all` when it is the only one)."""
+    class's bits and the merged one by the widest class it holds (`all` when it is the only one); where each width is
+    a stratum (`merged` None), by `w` and the width's place among the widths; a by-template design's (`merged`
+    "template"), by each cell's position."""
     out = {k: row[k] for k in PLAN if k in row}
     if isinstance(k := out.get("k"), dict):
-        out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
+        if row.get("merged") == "template":
+            out["k"] = {str(t): v for t, v in k.items()}
+        elif "merged" in row and row["merged"] is None:
+            out["k"] = {f"w{t}": v for t, v in k.items()}
+        else:
+            out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
     return out
 
 
@@ -764,19 +855,21 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 
 
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
-        request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True) -> dict:
+        request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True,
+        serving: str = "assumed") -> dict:
     """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
     (default all), with Lean checking every design unless `lean` is off: every point of every curve one job
-    (`checked_point`) on `workers` processes (`processes`), the JSON the same at any number."""
+    (`checked_point`) on `workers` processes (`processes`), the JSON the same at any number.  `serving` is where
+    serving's rate comes from (`SERVING`); the measured reading's JSON says so (`serving`), the default's is as it was."""
     with processes(workers, lean) as each:
-        return _run(model_name, points, scope_names, request, designs, each, lean)
+        return _run(model_name, points, scope_names, request, designs, each, lean, serving)
 
 
 def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, request: str,
-         designs: tuple[str, ...] | None, each, lean: bool) -> dict:
+         designs: tuple[str, ...] | None, each, lean: bool, serving: str = "assumed") -> dict:
     planned = {panel: [d for d in ds if designs is None or d in designs] for panel, ds in DESIGNS.items()}
-    sc = slot_cards(model_name)
-    c = cards(model_name, request)
+    sc = slot_cards(model_name, serving)
+    c = cards(model_name, request, serving)
     part = TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
     fill = Fill.of(c["partition"].value["strata"], c["proof_blocks"].value)
     xs = overheads(c, points)
@@ -786,6 +879,9 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
     notes = reference_notes(sc.get("references", []), refs)
     for panel, sentences in c["notes"].value.items():
         notes.setdefault(panel, []).extend(sentences)
+    if serving == "measured":
+        for panel in ("exfiltration", "exfiltration_appendix", "infiltration", "skipped_work"):
+            notes.setdefault(panel, []).append(reading_note(reading(sc, c, part)))
     shown = {panel: [r for r in rows if r["main"]] for panel, rows in refs.items()}
     shown["exfiltration_appendix"] = [r for r in refs["exfiltration"] if not r["main"]]
     chosen = [s for s in scopes(c, part) if scope_names is None or s.name in scope_names]
@@ -829,7 +925,7 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                                                    (base.served, c["tokens_per_request"].value,
                                                     round(base.served / c["tokens_per_request"].value),
                                                     base.blocks_per_request, served_total(base)) if capped else None)}
-    return {
+    return ({"serving": reading(sc, c, part)} if serving == "measured" else {}) | {
         "schema": SCHEMA, "model": model_name, "request": request,
         "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                  "precision": plancheck.TWO_P} if lean else None,
@@ -860,7 +956,8 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
 
 def at_overhead(out: dict) -> list[dict]:
     """Each series' point at the vertical line: the figure's table, skipped work in AND gates too, with the design's
-    serve-time hashing as a share of the scope's compute (outside the budget only under one-stage) and its fill."""
+    serve-time hashing as a share of the scope's compute (outside the budget only under one-stage) and its fill.  An
+    exfiltration row at the measured reading names the rate it read (`at_reading`)."""
     x = out["vertical"]["x"]
     rows = []
     for panel in ("exfiltration", "skipped_work"):
@@ -873,5 +970,6 @@ def at_overhead(out: dict) -> list[dict]:
                          "main": s["main"], "bound": s["y"][i], "share": s["share"][i], "capped": s["capped"][i],
                          "serve_hash_share": sc["serve_hash_share" if one else "boundary_hash_share"],
                          "serve_hash_in_budget": not one, "fill": (s["plan"][i] or {}).get("fill")}
-                        | ({"ands": s["y"][i] * p["and_per_flop"]} if "and_per_flop" in p else {}))
+                        | ({"ands": s["y"][i] * p["and_per_flop"]} if "and_per_flop" in p else {})
+                        | (at_reading(out.get("serving"), s["y"][i]) if panel == "exfiltration" else {}))
     return rows

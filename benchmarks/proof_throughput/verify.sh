@@ -25,17 +25,19 @@ S=$(mktemp -d "$W/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 
-# the Lean verifier, built once per tree of verity/protocols/flock/verifier (as benchmarks/pouw/hidden_zk/job.sh builds it)
-KEY=$(cd verity/protocols/flock/verifier && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+# the Lean verifier, built once per tree of verity/protocols/flock/verifier and the packages it requires by path (as
+# benchmarks/pouw/hidden_zk/job.sh builds it)
+KEY=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
 L=$W/lean-$KEY
 (
   exec 8>"$W/lean.lock"; flock 8
   if [ ! -x "$L/.lake/build/bin/flock-verify" ]; then
-    rm -rf "$L.tmp" && mkdir -p "$L.tmp" && (cd verity/protocols/flock/verifier && tar --exclude=.lake -cf - .) | tar -xf - -C "$L.tmp" \
-      && (cd "$L.tmp" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
+    rm -rf "$L.tmp" && P=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier "$L.tmp") && ln -s "${P#"$L.tmp/"}/.lake" "$L.tmp/.lake" \
+      && (cd "$P" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
   fi
 )
 LEAN=$L/.lake/build/bin/flock-verify
+. "$REPO/verity/protocols/spot/verifier/one_stage/verifier_env.sh"
 [ -x "$LEAN" ] || { tail -20 "$O/lake-build.log"; log "Lean build failed"; exit 1; }
 sha256sum "$LEAN" | cut -d' ' -f1 > "$O/lean.sha256"; echo "$KEY" > "$O/lean.key"
 PYBIN=$W/py/bin/python3
@@ -66,8 +68,8 @@ log "verifying $WORKLOAD B=$B: $(ls -d "$BD"/sessions/*/ | wc -l) sessions, circ
 
 verify_one() {   # verify_one SESSION_DIR: one VERDICT line with the session's time and peak memory
   local s=${1%/} t; t=$(mktemp "$S/time.XXXXXX")
-  # shellcheck disable=SC2086
-  /usr/bin/time -f '%e %U %S %M' -o "$t" "$LEAN" verify --statement verity/flock-circuit --coins tree --circuit "$BD/circuit.txt" \
+  # shellcheck disable=SC2046,SC2086
+  /usr/bin/time -f '%e %U %S %M' -o "$t" $(verifier_env) "$LEAN" verify --statement verity/flock-circuit --coins tree --circuit "$BD/circuit.txt" \
     --public "$PUB" --partition "$PART" $DRAW_FLAGS --session "$s" > "$t.out" 2> "$t.err"
   local rc=$?
   "$PYBIN" -m verity_proof_throughput lean-verdict --session "$(basename "$s")" --rc $rc --time "$t" --stdout "$t.out" --stderr "$t.err"
@@ -76,9 +78,9 @@ if [ "${PROFILE:-0}" = 1 ]; then
   # one timed session under perf (DWARF call graphs: Lean's C keeps no frame pointers), with the verifier's own phase times
   s=$(ls -d "$BD"/sessions/*/ | grep -v warm | head -1); s=${s%/}
   log "profiling $(basename "$s")"
-  # shellcheck disable=SC2086
+  # shellcheck disable=SC2046,SC2086
   /usr/bin/time -f '%e %U %S %M' -o "$O/profile.time" perf record -F "${PERF_HZ:-49}" --call-graph dwarf,32768 -o "$S/perf.data" \
-    "$LEAN" verify --statement verity/flock-circuit --coins tree --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
+    $(verifier_env) "$LEAN" verify --statement verity/flock-circuit --coins tree --circuit "$BD/circuit.txt" --public "$PUB" --partition "$PART" \
     $DRAW_FLAGS --session "$s" > "$O/profile.stdout" 2> "$O/profile.stderr"
   log "perf: exit $?, $(cat "$O/profile.time")"
   perf report -i "$S/perf.data" --no-children --sort symbol --stdio -g none --percent-limit 0.2 2>> "$O/perf.err" | head -400 > "$O/perf-self.txt"

@@ -1,7 +1,7 @@
 module
 
 public import Std.Data.HashSet
-public import Flock.Program
+public import Circuits.Program
 
 /-!
 # The NCI policy's check of a declared division

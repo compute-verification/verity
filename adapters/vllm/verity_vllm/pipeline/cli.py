@@ -28,25 +28,20 @@ PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
 COMMANDS: dict[str, tuple[str, str]] = {
-    "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
     "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
-    "capture-identities": ("verity_vllm.correspondence.capture_identities", "capture identities vs the canonical B1 circuit"),
     "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
-    "commit-group": ("verity_vllm.pipeline.commit_group", "the Commits of several rows of one engine, in one process under one GPU lease"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
-    "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
+    "compiled": ("verity_vllm.acquire.compiled", "hold the Build an Execution=compiled row's treatment ran with to the one it rederived (verify)"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
-    "conformance": ("verity_vllm.program.frontend.conformance", "conformance record of the registered library"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
-    "descriptor-equivalence": ("verity_vllm.program.descriptor_equivalence", "correspondence of two encodings of one program"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
@@ -60,8 +55,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
-    "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
-    "kernel-identity": ("verity_vllm.engine.kernel_identity", "generated-kernel identity"),
+    "ids-front": ("verity_vllm.pipeline.ids_front", "the network certifier's id form in front of vLLM's own OpenAI server"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
@@ -72,14 +66,11 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
     "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
-    "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
-    "served": ("verity_vllm.acquire.served", "the served-compiled Program and required-value manifest (build), the GEMM routes it needs (routes)"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
     "served-pin": ("verity_vllm.acquire.served_artifact", "a served row's pinned compile artifact: seed a fresh Inductor dir with its autotune winners (seed), check a dir's (check)"),
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
-    "serving-view": ("verity_vllm.pipeline.serving_view", "a served row's Programs as vLLM serves them (engine steps, requests, model runner, ranks)"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
@@ -93,12 +84,10 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
-    "sampling-rng": ("verity_vllm.program.sampling_rng", "sampler noise recomputation"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
-    "telemetry-admission": ("verity_vllm.pipeline.telemetry.admission_commands", "empirical admission planner"),
     "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
     "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
@@ -139,7 +128,6 @@ MACHINE: dict[str, str] = {
     "RunEnv.hidden_so_fa3_guarded": "/workspace/cp/fa2/build/fa3_matReqG/verity_fa3_matReqG.so",
     "RunEnv.norm_tap_so": "/workspace/cp/norm_tap/build/verity_norm_tap.so",
     "RunEnv.router_tap_so": "/workspace/cp/router_tap/build/verity_router_tap.so",
-    "RunEnv.hot_root": "/workspace/cp/hot",
     "RunEnv.guard_preserve_file": "/root/dm/guard.preserve",
     "RunEnv.pod_guard": "/root/dm/pod_guard.sh",
 }
@@ -239,15 +227,6 @@ def _parse(command: str, argv: list[str], environ: Mapping[str, str]) -> tuple[a
         _add_options(by_name[name], cls, environ)
     ns = parser.parse_args(argv)
     return by_name[ns._sub], _options(subs[ns._sub], ns, environ), mod
-
-
-def set_environment(environ: Mapping[str, str], keep: tuple[str, ...] = ()) -> None:
-    """Make the process environment ``environ``, but for the ``keep`` keys the process has, which keep their values: each row of a grouped
-    Commit (`commit_group`) runs in its own row's environment, on the devices the lease of its first row set."""
-    held = {k: os.environ[k] for k in keep if k in os.environ}
-    os.environ.clear()
-    os.environ.update(environ)
-    os.environ.update(held)
 
 
 def process_settings(environ: MutableMapping[str, str]) -> None:

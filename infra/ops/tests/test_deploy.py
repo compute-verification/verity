@@ -8,6 +8,7 @@ import fnmatch
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tomllib
@@ -373,6 +374,36 @@ def test_a_trust_store_that_holds_a_distrusted_root_is_drift_until_the_upgrade_r
     assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
 
 
+def test_a_null_device_that_is_not_the_character_device_1_3_with_mode_666_is_drift_with_the_command_that_repairs_it(
+        world, tmp_path, monkeypatch):
+    whole = [stat.S_IFCHR | 0o666, 1, 3]
+    assert deploy.null_fault(whole) is None
+    closed = deploy.null_fault([stat.S_IFCHR | 0o644, 1, 3])
+    assert "has mode 644, not 666" in closed["what"] and closed["fix"] == "sudo chmod 666 /dev/null"
+    remake = "sudo rm -f /dev/null && sudo mknod -m 666 /dev/null c 1 3"
+    for seen, what in (([stat.S_IFREG | 0o666, 0, 0], "is a regular file, not the character device 1,3"),
+                       ([stat.S_IFDIR | 0o755, 0, 0], "is a directory, not the character device 1,3"),
+                       ([stat.S_IFCHR | 0o666, 1, 5], "is the character device 1,5, not the character device 1,3"),
+                       ("FileNotFoundError: [Errno 2] No such file or directory: '/dev/null'", "can't be read (FileNotFoundError")):
+        assert what in deploy.null_fault(seen)["what"] and deploy.null_fault(seen)["fix"] == remake, seen
+    n = world["nodes"]["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["null_device"] is None and deploy.clean(rep), "this machine's own null device, as the probe reads it"
+    null = tmp_path / "null"
+    null.write_text("a regular file where the device was\n")
+    null.chmod(0o644)
+    monkeypatch.setattr(deploy, "NULL", str(null))
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["null_device"] == deploy.null_fault([stat.S_IFREG | 0o644, 0, 0]) and not deploy.clean(rep)
+    line = next(ln for ln in deploy.render("n", "origin/main", rep).splitlines() if ln.startswith("  null     "))
+    assert f"{null} is a regular file" in line and line.endswith(f"(sudo rm -f {null} && sudo mknod -m 666 {null} c 1 3)")
+    null.unlink()
+    assert "can't be read (FileNotFoundError" in deploy.drift(n, "origin/main", local, world["repo"])["null_device"]["what"]
+    assert deploy.main(["drift", "--no-fetch"], run=local, manifest=world["manifest"], repo=world["repo"]) == 1
+
+
 def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
     def down(stderr: bytes):
         return lambda node, argv, stdin: subprocess.CompletedProcess(argv, 255, b"", stderr)
@@ -512,6 +543,42 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
+def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
+    """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
+    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record."""
+    nodes = deploy.load()
+    twin = nodes["vy-nebius-cpu-12"]
+    want = sorted(twin.entries, key=lambda e: e.path)
+    assert want
+    for n in range(14, 18):
+        node = nodes[f"vy-nebius-cpu-{n}"]
+        assert sorted(node.entries, key=lambda e: e.path) == want, node.name
+        assert (node.managed, node.record, node.admin, node.quiet) == (twin.managed, twin.record, twin.admin, twin.quiet), node.name
+
+
+USERNS = "/etc/sysctl.d/61-vy-userns.conf"
+
+
+def test_every_machine_with_check_slots_or_a_research_pool_lets_an_unprivileged_process_make_a_user_namespace():
+    """A check's Lean builds and a training job's steps run in a user namespace: every CPU node and vy-nebius-2 take the setting,
+    no auditor-trusted or gated node does, and a copy made by hand under another 61-vy-userns name is a stray there, which
+    `research deploy attic` moves, so no node carries two."""
+    nodes = deploy.load()
+    want = {n for n in nodes if re.fullmatch(r"vy-nebius-cpu-\d+", n)} | {"vy-nebius-2"}
+    assert len(want) > 2
+    got = {n.name for n in nodes.values() if USERNS in {e.path for e in n.entries}}
+    assert got == want
+    assert not [n.name for n in nodes.values() if n.admin and n.name in got]
+    for name in sorted(want):
+        managed = nodes[name].managed
+        assert any(fnmatch.fnmatch(USERNS.replace(".conf", "-byhand.conf"), p) for p in managed), name
+        assert any(fnmatch.fnmatch(USERNS, p) for p in managed), name
+        assert not any(fnmatch.fnmatch("/etc/sysctl.d/90-vy-mptcp-off.conf", p) for p in managed), name
+    entry = next(e for e in nodes["vy-nebius-2"].entries if e.path == USERNS)
+    keys = [ln.split("=")[0].strip() for ln in (deploy.SRC / entry.src).read_text().splitlines() if ln and not ln.startswith("#")]
+    assert keys == ["kernel.apparmor_restrict_unprivileged_userns", "kernel.unprivileged_userns_clone"]
+
+
 def test_every_switched_unit_is_one_deploy_installs_on_its_node():
     """The lock-out switches each tmux loop to its unit: every unit it starts, and every file of its own, is one deploy.toml installs."""
     import importlib.util
@@ -542,6 +609,34 @@ def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
     registry = json.loads((deploy.SRC / ".agents/skills/using-slack/registry.json").read_text())
     handles = {h["handle"] for h in registry["handles"]}
     assert not [(e["path"], e.get("owner")) for e in entries if e.get("owner") not in handles]
+
+
+LEASE_SH, LEASE_STOP = "/home/research/.research/lease.sh", "/usr/local/sbin/vy-nebius-stop"
+
+
+def test_every_node_that_runs_the_lease_loop_gets_the_loop_and_the_stop_command_and_none_gets_one_without_the_other():
+    """The loop stops its machine only through the stop command, so deploy keeps the pair in step: both come from the tree on
+    the same nodes. Those hold every node the manifest gives a lease unit or a deadline, and every CPU node, where vm_setup.sh
+    writes the unit at first boot. A node with only one of the two runs a loop of one revision against a stop command of
+    another, or a loop deploy never brings up to date."""
+    nodes = deploy.load()
+
+    def on(path):
+        return {n.name for n in nodes.values() if path in {e.path for e in n.entries}}
+
+    loop, stop = on(LEASE_SH), on(LEASE_STOP)
+    assert loop and loop == stop, f"one without the other on {sorted(loop ^ stop)}"
+    cpu = {n for n in nodes if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
+    assert len(cpu) > 2 and not sorted(cpu - loop), "every CPU node"
+    generated = sorted({e.path for n in nodes.values() for e in n.entries if e.by and re.search(r"/vy-(lease|deadline)", e.path)})
+    assert len(generated) >= 5, generated
+    for path in generated:
+        assert on(path) and not sorted(on(path) - loop), path
+    for name in sorted(loop):
+        entries = {e.path: e for e in nodes[name].entries}
+        assert entries[LEASE_SH].src == "tools/research/src/research/pods/sh/lease.sh", name
+        assert entries[LEASE_STOP].src == "tools/research/src/research/pods/nebius/vm_stop.sh", name
+        assert entries[LEASE_SH].run == ["systemd:vy-lease"], "what drift names to restart once the file is installed"
 
 
 PODS = deploy.MANIFEST.parent
@@ -578,6 +673,10 @@ def _apt_conf(text: str) -> tuple[dict[str, str], dict[str, list[str]], list[str
 
 UPGRADES = {"/etc/apt/apt.conf.d/52vy-trust": "apt-security-updates.conf",
             "/etc/needrestart/conf.d/50-vy.conf": "needrestart-list-only.conf"}
+#: the nodes that take neither file, each with why in one line. A VM whose systemd timers run apt's daily passes is never one.
+UPGRADES_EXEMPT = {
+    "vy-control-verity": "a RunPod container whose watchers run under their own supervisor, with no systemd timers: the files would never act",
+}
 # package names as apt has them on a node: what an unattended pass never moves, and what it must be free to
 HELD = ["linux-image-6.11.0-1016-nvidia", "linux-modules-6.11.0-1016-nvidia", "linux-modules-nvidia-580-open-6.11.0-1016-nvidia",
         "linux-headers-6.8.0-149-generic", "linux-image-virtual", "linux-tools-common", "linux-firmware", "linux-libc-dev",
@@ -590,14 +689,19 @@ FREE = ["ca-certificates", "libnss3", "libc6", "libc6-dev", "libssl3t64", "opens
 
 
 def test_every_node_takes_ubuntus_security_pocket_unattended_and_holds_the_kernel_and_the_driver():
-    """A node's unattended upgrades. Every node gets both files, and installing them restarts nothing. The origins are Ubuntu's
-    release and security pockets alone, with the stock file's cleared first, so -updates or a third-party repository listed
-    there stays out. No whitelist: a strict one holds every other package back, a relaxed one changes nothing. The kernel, the
-    driver and the boot chain are held by the start of their names, and nothing a node needs current is. No reboot, a journal
-    line a pass, and needrestart only lists what a window should restart."""
+    """A node's unattended upgrades. Every node gets both files but the ones `UPGRADES_EXEMPT` names, which get neither, and
+    installing them restarts nothing. An exemption is stale, and fails, once deploy.toml has no such node or gives it a file.
+    The origins are Ubuntu's release and security pockets alone, with the stock file's cleared first, so -updates or a
+    third-party repository listed there stays out. No whitelist: a strict one holds every other package back, a relaxed one
+    changes nothing. The kernel, the driver and the boot chain are held by the start of their names, and nothing a node needs
+    current is. No reboot, a journal line a pass, and needrestart only lists what a window should restart."""
     nodes, rel = deploy.load(), PODS.relative_to(deploy.SRC).as_posix()
+    assert not [n for n in UPGRADES_EXEMPT if n not in nodes], "UPGRADES_EXEMPT names a node deploy.toml no longer has: delete its row"
     for node in nodes.values():
         entries = {e.path: e for e in node.entries}
+        if node.name in UPGRADES_EXEMPT:
+            assert not [p for p in UPGRADES if p in entries], f"{node.name} takes an unattended-upgrades file: delete its UPGRADES_EXEMPT row"
+            continue
         for path, name in UPGRADES.items():
             assert path in entries, f"{node.name} lacks {path}"
             assert (entries[path].src, entries[path].run, entries[path].hold) == (f"{rel}/{name}", [], None), (node.name, path)
