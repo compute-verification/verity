@@ -5,7 +5,6 @@ circuit share the digest and differ in identity; two hosts building the same pro
 under other applicability conditions is refused with every differing field named."""
 
 import json
-import sys
 
 import pytest
 
@@ -64,9 +63,9 @@ def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_
 
 def test_canonical_bytes_take_and_refuse_what_json_does():
     """json's encoder walks the value, with no Python frame a level and its own watch for a value that holds itself: a
-    value nested deeper than the interpreter's recursion limit has its bytes, one that holds itself is a ValueError, and
-    one JSON cannot hold is a TypeError that names its type."""
-    deep = sys.getrecursionlimit() + 500
+    value nested 2,000 deep, twice the frames an interpreter allows by default, has its bytes, one that holds itself is a
+    ValueError, and one JSON cannot hold is a TypeError that names its type."""
+    deep = 2000  # a number, not the interpreter's limit now: code this process ran earlier may have raised that
     in_lists, in_dicts = 0, 0
     for _ in range(deep):
         in_lists, in_dicts = [in_lists], {"k": in_dicts}
