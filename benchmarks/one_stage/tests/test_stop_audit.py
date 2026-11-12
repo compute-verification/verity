@@ -210,35 +210,36 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
 def _generic(why: str | None) -> str | None:
     """`two_stage.stop_order`'s reason in `Record.across`'s names: the stop stream is the later one, and the class's
     boundary stream the earlier."""
-    for mine, leans in (("the stop sample's", "the later sample's"), ("the class's boundary registration", "the earlier registration"),
+    for mine, leans in (("the stop sample", "the later sample"), ("the class's boundary registration", "the earlier registration"),
                         ("the boundary registration's", "the earlier registration's"),
                         ("the stop registration", "the later registration")):
         why = why if why is None else why.replace(mine, leans)
     return why
 
 
-def _released(seed: str, *commits: tuple[str, int]) -> tuple[T.OneSession, dict[str, bytes]]:
-    """One session of the test's challenger that received ``commits``' digests in that order, each followed by its
-    count of coins, released and read whole. -> the challenger and the bytes read after each digest."""
-    one, read = T.OneSession(seed), {}
+def _released(seed: str, *commits: tuple[str, int]) -> tuple[T.OneSession, dict[str, bytes], dict[str, str]]:
+    """One session of the test's challenger that received ``commits``' digests in that order, each in a family of its
+    own and followed by its count of coins, released and read whole. -> the challenger, the bytes read after each
+    digest and the family they were read from."""
+    one, read, family = T.OneSession(seed), {}, {}
     for digest, coins in commits:
         one.commit(bytes.fromhex(digest))
-        read[digest] = one(64 * coins)
-    return one, read
+        read[digest], family[digest] = one(64 * coins), one.label
+    return one, read, family
 
 
 def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_path, monkeypatch):
     """`Record.across` (the Lean verifier's piece, as `stop_audit.across` calls it) against the Python on one
     hand-off, verdict by verdict: ``logged`` against the boundary stream's log's digests (`resume`'s test), ``order``
     against `two_stage.stop_order`, reason for reason, ``audit``, its ``accepted`` and its ``complete``, against
-    `boundary_audit` on the outcome record, and ``case`` against the four. Twelve written cases: no input is drawn,
+    `boundary_audit` on the outcome record, and ``case`` against the four. Thirteen written cases: no input is drawn,
     and none is one the Lean refuses, so the two sides are held to each other on these and no further. Case 1: the
     hand-off with a boundary outcome that accepted and is complete, on the first stage's session and on one made by
-    hand. Case 2: a stop record on a
+    hand, the two registrations' coins each in a family of its own. Case 2: a stop record on a
     boundary record never logged; an empty log; and, on sessions of the test's challenger that received the two
     registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
-    coin opened and not read, and no evidence. Case 3: the boundary stream's audit record missing, refused, and
-    another registration's. Case 4: that audit record accepted with an entry that did not run."""
+    coin opened and not read, no evidence, and no family named. Case 3: the boundary stream's audit record missing,
+    refused, and another registration's. Case 4: that audit record accepted with an entry that did not run."""
     stage1 = _stage1(tmp_path, monkeypatch, "across")
     r, s = _resume(stage1), stage1["stop"]
     earlier, later = stage1["registration"], s["registration"]
@@ -247,8 +248,9 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     others = {**accepted, "registration": "00" * 64, "audit": {**accepted["audit"], "registration_digest": "00" * 64}}
 
     def handed(seed: str, *commits: tuple[str, int], read: int | None = None) -> dict:
-        one, got = _released(seed, *commits)
-        return {"evidence": one.evidence(later), "read": got[later][:read].hex()}
+        one, got, family = _released(seed, *commits)
+        return {"evidence": one.evidence(later), "read": got[later][:read].hex(), "family": family[later]}
+    assert s["family"] == T.AC.family(1) != stage1["family"] == T.AC.family(0)
     cases = {
         "accepted": (1, {}, None, accepted, None),
         "by hand": (1, handed("by-hand", (earlier, 1), (later, 2)), None, accepted, None),
@@ -259,19 +261,20 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         "no receipt": (2, handed("no-receipt", (later, 1)), None, accepted, "no coin released after the earlier registration"),
         "not read whole": (2, handed("short", (earlier, 1), (later, 2), read=64), None, accepted, "a coin opened and not read"),
         "no evidence": (2, {"evidence": None}, None, accepted, "published no signed log"),
+        "no family": (2, {"family": None}, None, accepted, "read no coins of a challenger's family"),
         "no audit record": (3, {}, None, None, None),
         "a refused audit record": (3, {}, None, refused, None),
         "another registration's audit record": (3, {}, None, others, None),
         "an audit record that accepted and is not complete": (4, {}, None, SMALL.incomplete(stage1), None),
     }
-    assert len(cases) == 12 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 6 + [3] * 3 + [4]
+    assert len(cases) == 13 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 7 + [3] * 3 + [4]
     for name, (case, stop, log, outcome, why) in cases.items():
         mine = {**stage1, "stop": {**s, **stop}}
         log = list(r.first.stream.log) if log is None else log
         previous = mine["stop"]["record"]["previous"]
         logged = previous in [SA.R.digest(rec) for rec in log]
-        order = T.TS.stop_order(mine["stop"]["evidence"], r.layout.run, previous, SA.R.digest(mine["stop"]["record"]),
-                                bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
+        order = T.TS.stop_order(mine["stop"]["evidence"], r.layout.run, mine["stop"]["family"], previous,
+                                SA.R.digest(mine["stop"]["record"]), bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
         audit = SA.boundary_audit(previous, outcome)
         lean = SA.across(mine, NS(layout=r.layout, stream=NS(log=log)), outcome)
         assert "refused" not in lean, (name, lean)

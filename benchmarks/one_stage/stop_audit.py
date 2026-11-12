@@ -33,8 +33,8 @@
       cross-stream-order   Lean's verdict on the read across the two streams (`across`: the Lean verifier's piece
                            ``across``, `Record.across`), never ``stage1.json``'s ``order``: the stop record's
                            ``previous`` is a record of the boundary stream's log, and the challenger's signed log
-                           shows the boundary registration's coins before the stop registration's, which the stop
-                           sample read whole
+                           shows the boundary registration's coins before the stop registration's, each in a
+                           family of its own, and the stop sample read the stop stream's family whole
       boundary-audit       the boundary stream's outcome on that record (``--boundary-outcome``, a record of that
                            stream's `Stream.records`): null when none is handed; refused when it is not that
                            registration's accept, or Lean's verdict on its audit record refuses it; null, with
@@ -263,8 +263,9 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Sto
     """The class's stop stream again from its ``stage1.json``, under the verifier's own check template, stop rule and
     sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
     record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
-    registered (R1 to R7) and sampled again on the bytes its sample read. `Unlogged` when that log holds no such
-    record; ValueError when the first stage sampled no stop block, or
+    registered (R1 to R7) and sampled again on the bytes its sample read, as coins of the challenger's family the
+    first stage read them from (``stage1.json``'s, as `two_stage.resume` takes a class's own). `Unlogged` when that
+    log holds no such record; ValueError when the first stage sampled no stop block, or
     the Spec, the record, its registration or the sample isn't ``stage1.json``'s; `service.Refused` as the streams
     refuse."""
     s = stage1.get("stop")
@@ -277,8 +278,10 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Sto
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
     received, boundary = logged[s["record"]["previous"]]
+    coins = TS.Staged(bytes.fromhex(s["read"]))
+    coins.family = s.get("family")
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
-                      challenger=TS.CHALLENGER, coins=TS.Staged(bytes.fromhex(s["read"])), log=[boundary])
+                      challenger=TS.CHALLENGER, coins=coins, log=[boundary])
     if stream.spec.digest() != s["spec"]:
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(stage1["commit"], check, stop, boundary)
@@ -313,12 +316,12 @@ def reads(r: Resumed) -> dict[str, Any]:
 def link(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
     window's root, the boundary stream's own log (``first``'s `Stream.log`), the boundary stream's audit record
-    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence and the
-    bytes it read (``stage1``'s ``stop``)."""
+    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence, the
+    challenger's family it read those coins from and the bytes it read (``stage1``'s ``stop``)."""
     s = stage1["stop"]
     return {"window": stage1.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
             "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None,
-            "later": dict(s["record"]), "coins": s.get("evidence"), "read": s["read"]}
+            "later": dict(s["record"]), "coins": s.get("evidence"), "family": s.get("family"), "read": s["read"]}
 
 
 def across(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
