@@ -320,3 +320,14 @@ def test_an_ssh_entry_that_names_the_pod_overrides_the_registrys_entry_and_asks_
     (tmp_path / "machines.toml").unlink()
     assert remote.pod_target(remote.resolve_machine("vy-x", "verity"))["host"] == "203.0.113.7" and pod.asked == 1, \
         "without the entry the registry's is read, and RunPod asked once"
+
+
+def test_the_guard_lists_its_pods_through_graphql_while_rest_refuses(wire):
+    wire.rest += [(200, [REST_POD], REST_LEFT), REFUSED]
+    wire.graphql += [(200, {"data": {"myself": {"pods": [GRAPHQL_POD, GRAPHQL_STOPPED]}}}, GRAPHQL_LEFT)]
+    api = guard.RunPodAPI()
+    assert api.pods() == [REST_POD] and wire.apis() == ["rest"], "REST answers: it is the list, and GraphQL is not asked"
+    listed = api.pods()
+    assert [(p["id"], p["name"], p["desiredStatus"], p["costPerHr"]) for p in listed] == \
+        [(POD, "vy-x-veritor-campaign", "RUNNING", 0.16), ("zzz999yyy88877", "vy-old-veritor-campaign", "EXITED", 0.03)]
+    assert guard.parse_time(listed[0]["createdAt"]) == guard.parse_time(REST_POD["createdAt"])
