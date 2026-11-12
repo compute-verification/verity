@@ -69026,3 +69026,94 @@ Your 03:13Z message is read; the mailbox has nothing after its 02:40Z section.
 **For your wait on #9066** [read, `git ls-remote` and each candidate's first-parent log, 03:13Z]: three candidates are on origin, `62bf29346f76` (01:33Z), `6ccb2112eeee` (02:57Z, 40 pull requests) and `c7694241f2f1` (03:04Z, 42). Each holds #8934 and #8914. None holds #9066, #8940, #9051 or any of the planner's four.
 
 **Waiting on:** #9066 on `main` (for #8950), and #8934 and #8940 on `main` (for the `TwoAt.lean` pull request, whose body will say it is a rename only). No run of mine is out.
+
+## WIRED, Thu 12 Nov 03:18Z: `8050` exit 0 (the restated `SpotKSTwo` and `SpotExfilTwo` elaborate and the Flock root builds); the three conditions and `SecondWiresMove` are stated on the scratch at `f8df31eb0807`, their try is `r20261112-031243-c71c`, verdict about 04:30Z; #8940 is not on `main`
+
+Tags: [run] a run of mine (id given) or a command run now, [read] a file read now (place given), [relayed], [derived] reasoned from what I read and not compiled, [guess]. Times from `date -u`. Mailbox read 02:34Z, 02:49Z and 03:18Z: eight sections, the last your 02:25Z one [run]. Your rulings there are taken as given: option (1) for the ten theorems; the five modules are restated after pull request 3 and not before the ruling on a replay block's inputs; `wiresMove` does not stay a hypothesis of a listed guarantee.
+
+**1. `r20261112-015317-8050`: done, exit 0** [run: `research status`, and the log's verdict lines]
+
+- Tree: the scratch at `d4f7c11c8598`, which holds #8940's marked head `58a598e615b1` and so `main` `be9a3d566905`.
+- `security/Proofs/Flock/SamplingGeneric/Guarantees.lean`: Lean exit 0 in 1,991 s. None of its 3 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. This is the file that states `Flock.Guarantees.SpotKSTwo` and `SpotExfilTwo` over the connected program under their own names and proves them.
+- `security/Proofs/Flock.lean`: Lean exit 0 in 1,946 s; the build of its imports completed, 12,440 jobs. It holds no theorem.
+- Not covered by it: the two commits after `d4f7c11c8598` (the deletion of `AddressesAt.lean` and the lock's hand-written lines) and this turn's statements. Run `c71c` (section 5) covers the Lean of them. No lock was checked by any run.
+
+**2. The three conditions, as the check would read them** [read, at the scratch head: `security/Proofs/Flock/SpotFlock/WiresTie.lean`; the check's own text: `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean` on `main`, lines 432 to 447, 616 to 647 and 832 to 834]
+
+| condition | what it asks, one line | the fields it reads | its cost |
+|---|---|---|---|
+| `rowsUnder own` | at the rows of each port a wire names, each run's last unit reads a row under `per`: `row + (count - 1)·step < per` | each wire's `template` and `port`; of the `Rows` entry they find, `per` and each run's `row`, `count`, `step` | one comparison a run. A run is one entry of the rows the replay block's Definition gives, whatever its `count` |
+| `namesOnce ps` | no two parts have one template name | each part's `template` | one comparison a pair of templates |
+| `wiresWide cs own` | for each wire, every bit under the `bits` of each port of the wire's name in the reader's circuit file is a bit the writer's circuit file writes on the wire's output row | reader's file: each port's `name` and `bits`. Writer's file: `outRowPorts`, each output port's words, the output rows' names, `upv`, `leavesOut`, and whether a returned leaf's column is a computed row of the unit net | a wire: the reader's port's bits against one unit's returned leaves of the writer. As written it tests each bit against each leaf; a check would mark a file's written bits once and compare |
+
+- None walks the unrolled circuit [derived, from the definitions]: the first reads the rows the design derives, the second the parts, the third two circuit files' port tables and one unit's leaves. None reads a unit of a batch, a gate of the unit net, or `sourceBits`.
+- The third is not "of one width" [derived]. Equal widths is more than is needed and not enough: what is needed is that the writer writes every bit the reader can read, and a writer's output row may hold words no returned leaf writes (`Bits.outGate` is none there). So the condition is stated as the inclusion.
+- **`SecondStage.Own` does not hold what the third reads** [read: `SecondStage.lean`, lines 329 to 345; `Run.lean`, lines 68 to 92 and 134]. It holds each template's reference header (`refs`), whose `frame_v3.schemas` names a port's schema and no width [read: `SecondStage.lean`, line 733]. The circuit file is named by SHA-512 in the auditor's params (`Run.Interior.circuits`) and parsed by each session's verifier. So the check's change hands `SecondStage.check` each template's parsed file, or a summary of it (each input row's `name` and `bits`, each output row's `name` and written bits). The model has the files as `h.ms[t].1`; `circuitsOf h` names them.
+- **A correction to my 01:57Z reason 3** [read: `verity/protocols/spot/verifier/lean/Spot/Select.lean`, lines 252 to 258]. `Select.replayCells` refuses a template query that does not name each template of the replay block once. So on the verifier's path two templates of one name do not pass where `replayCells` ran. [not read] Whether `Partition.strata`, which names the parts (`Run.lean`, lines 223 to 225), can repeat a name. The gap is the model's: `Held.names` is a free field. Either the check asks `namesOnce` (one line, refuses nothing the verifier accepts today if the parts' names are the query's) or `Held` carries it; that choice is the assignee's.
+- The first and second are additions to `wiresOk` under which the verifier refuses more and accepts nothing new [derived].
+
+**3. `SecondWiresMove`** [read: the scratch at `f8df31eb0807`; not compiled yet, run `c71c`]
+
+```lean
+def rowsUnder (own : Spot.SecondStage.Own) : Bool :=
+  (own.wires.getD #[]).all fun w => (Spot.SecondStage.rowsOf own w.template w.port).all fun r =>
+    r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < r.per)
+
+def namesOnce (ps : Array Spot.SecondStage.Part) : Bool := decide (ps.toList.map (·.template)).Nodup
+
+def writesBit (c : _root_.Flock.Circuit) (port : String) (β : ℕ) : Bool :=
+  (List.range c.upv).any fun k => (List.range (c.leavesOut.getD k #[]).size).any fun j =>
+    (Spot.Bits.outGate c 1 0 k j (β % 16)).isSome &&
+      decide (Spot.Bits.outRowBit c 0 k j (β % 16) = some (Spot.Bits.RowPos.mk port 0 β))
+
+def wiresWide (cs : Array (String × _root_.Flock.Circuit)) (own : Spot.SecondStage.Own) : Bool :=
+  (own.wires.getD #[]).all fun w =>
+    match cs.find? (·.1 == w.template), cs.find? (·.1 == w.writer) with
+    | some r, some x => r.2.ports.all fun p => p.name != w.port ||
+        (List.range p.bits).all fun β => writesBit x.2 w.wport β
+    | _, _ => false
+
+def circuitsOf (h : Held) : Array (String × _root_.Flock.Circuit) :=
+  ((List.range h.ms.length).map fun t => (h.names.getD t "", (h.ms.getD t default).1)).toArray
+
+def SecondWiresMove : Prop :=
+  ∀ (h : Held) (st : Roots) (rec draw : Lean.Json) (c₀ : FlockDeploy.Coin),
+    descOk h = true → wiresCheckedAt h st rec draw c₀ = true →
+    rowsUnder (ownOf h st rec draw c₀) = true → namesOnce (partsAt h (h.reg.sample (src c₀)).size) = true →
+    wiresWide (circuitsOf h) (ownOf h st rec draw c₀) = true →
+      wiresMove h = true
+```
+
+- It is a statement with no proof, and nothing lists it [read]. `SecondWiresCovered` keeps `wiresMove h = true` as a named hypothesis, as you ruled, until the check's change lands.
+- Why I think it is true, step by step for a source bit of member `t`, unit `u`, at a port a wire `w` names and no link names [derived, on paper; none of it compiled]:
+  1. `descOk h` gives `fillOk` and `filesOk` at the replay layout: `0 < n_t`, the layout has slot `u / n_t`, and the writer's file has room for that slot's units (`ScopeDesc.lean`, lines 133 to 135 and 191 to 202; `Code.lean`, lines 289 to 299). I take `descOk h` and not `(two h s).isSome` because I did not find that `two h` gives `fillOk`.
+  2. The check's first clause and `namesOnce` give `fits` at the reader's own cell size, so `rowAt` returns a row for cell position `u % n_t`; `rowsUnder` puts it under `per`; so `cellRow` is some.
+  3. The check's second clause and `namesOnce` give `per` = the writer's units a replay block, so the writer's unit is inside its file by step 1.
+  4. The check's third clause gives that no link names the writer's port, and, since written bits of the members sit at distinct positions, that the gate found is not one the boundary record holds.
+  5. `wiresWide` gives the writer's bit: the reader's bit index is under its port's `bits` (`Spot/Bits.lean`, lines 158 to 163), and `outGate` and `outRowBit` do not depend on the unit (lines 224 to 231 and 616 to 625).
+- The check's fourth clause (writer first) is not used here; it is `writersFirst`'s.
+- Three lemmas the proof needs that are in no file [derived]: `rowAt` on runs `fits` accepts returns the run's row for every unit under the cell size (a loop invariant of the bisection); the members' written bits sit at distinct positions; the writer's unit of a slot is inside its file.
+- [guess] The paper derivation may have missed a case. My first draft of this statement on Wed was false, which is why each step above names the line it reads.
+
+**4. What it changes for pull request 3, and its body** [derived unless tagged]
+
+- The scratch's Lean for pull request 3 is unchanged by this turn; `WiresTie.lean` is statements only and is in no pull request. Say if you want it in pull request 3 (it adds one module no guarantee reads to the cap).
+- The body's three sentences, drafted [read: my draft, `pr3-body-draft.md`]:
+  1. "No registration is shown to meet their premises. Each takes `SpotFlock.AddressesWired h (wireMap h) (returned h)`, which the lock lists as open (PRF-460, due 2026-11-30). Nothing in the tree proves it at any registration."
+  2. "That premise is false at the served design today. The second stage on `main` reads every parameter of a replay block at a value the interior record registers (the second-stage driver, since #8448 and #8875), so the address property is false at the served design until the guarantees say which record a replay block's input is opened under. In the model it fails at a run the model accepts in which a session reads a linked port at a value the interior record registers; the side-by-side premise `Addresses` fails there too. This is read off the code; it is not proved in Lean." [relayed: FRAME's 02:13Z entry, its title and section 2; I read none of the driver's files myself]
+  3. "Each takes `SpotFlock.wiredOk h = true` as a hypothesis and says nothing at a registration that fails it. Until round 2's check of the wires decides three more conditions, the restated guarantees say nothing at a registration that fails `wiresMove h`, and nothing the verifier runs decides it."
+- **One question, yours to rule** [relayed: FRAME's 02:13Z entry, sections 3 and 5]. FRAME's #9080 states `AddressesConnected h : sourcesNamed h = true → AddressesWired h (wireMap h) (returned h)` and says `AddressesWired` at `wireMap h` with no condition asks more than is true. The scratch's two guarantees take `AddressesWired` bare. Options: (a) the guarantees take `AddressesConnected h` as the open premise in place of `AddressesWired`, with `sourcesNamed h = true` a hypothesis beside `wiredOk h`; (b) `sourcesNamed h` is a sixth conjunct of `wiredOk h`. Either is a few lines in `WiredKS.lean` and `Guarantees.lean` [derived]. I lean to (a): `wiredOk`'s docstring then stays what the map needs, and the lock's open line names the premise FRAME proves toward. `sourcesNamed h` walks `sourceBits`, as `wiresMove h` does, so it too needs its descriptor-cost condition (each input row of each file named by a link or a wire) from the check's change.
+
+**5. Runs, heads, hours**
+
+- `r20261112-031243-c71c`: launched 03:12Z on vy-nebius-cpu-9 at the scratch head `f8df31eb0807`, waiting for a slot at 03:16Z [run]. Files in order: `SpotFlock/WiresTie.lean`, `SpotFlock/WireMap.lean`, `Proofs/Flock.lean`. [guess] It starts about 03:30Z; `WiresTie.lean`'s verdict about 04:05Z; the whole run about 04:30Z, from `8050`'s two files at about 33 min each.
+- #8940: `ready` at `58a598e6`, admitted, not on `main`; `main` is `be9a3d566905` [run: `git fetch origin main`, `research queue status`, 03:15Z].
+- #9043: head `972a687a0583`, not marked [run: `research queue status`]. Prepared ahead on my own branch `cursor/proofs-wired-b8f4` at `a1c76b378b49`: #9043's head, #8940's marked head merged in, and the three files restated for `CheckedRun h.stage`; both merges are clean and the cap is 270 modules and 2,272 declarations against `main`'s 265 and 2,130 [run: `git merge`, `git show …:tools/verity/lean/unread-caps.json`]. Its three restated files have not been tried on #8940's marked head: run `1865` tried them on #8940's old head.
+- The scratch `cursor/proofs-wired-5d1b` is at `f8df31eb0807`, pushed [run: `git ls-remote`].
+
+**6. Next, with hours** [guess for every hour]
+
+- When `c71c` ends (about 04:30Z): its verdict in an entry; fix anything red. Then one run of the five files of #9043 on `a1c76b378b49`, about an hour.
+- When #8940 is on `main`: `main` merged into `cursor/proofs-wired-7ac3` with the three restated files, the quick suites and one records run at that head (about 90 min from the merge), the body updated, and the head sent to you to mark. If #8940 is not on `main` at 08:00Z I say so then.
+- Pull request 2 (`rewires_wireMap`): opened within two hours of #9043's marked head.
+- If you say the proof of `SecondWiresMove` is mine, it starts with the three lemmas of section 3, after #9043's head is sent.
