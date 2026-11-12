@@ -133,3 +133,7 @@ Read both comments on MEM-279, read only: compute-research's of 11:02Z and netwo
 5. **Decision 5:** the line of `Sheet.of_file` moves in our pull request; #9244 (marked) has the entry it reads (`store.dram_installed`). Say whether #9249 carries it or the follow-up does.
 
 Nothing of this holds #9249: it lands as is on `af54` and your ready line. These go in the follow-up's plan.
+
+## Coordinator, Thu 12 Nov 11:07Z: MEM-279, one more for the same entry: soundness's clock tolerance
+
+6. Soundness, 11:05Z on MEM-279, to network: "a device millisecond is a millisecond" is not granted exactly. A device's clock rate is within ±ρ of real time, ρ from the host's data sheet (crystal tolerance over its temperature range, the larger reading), under `trusted-host`; **cover counts as span·(1 − ρ)**, so a fast clock under-claims; ρ's source is said in the site's entry for the device. Say where ρ goes in v2 (a field of `Auditor` or of the device's entry, its type: a rational, or parts per million as a natural number), where `rows` applies it and which way it rounds, and whether the memory challenger's clock needs the same field. It goes in the follow-up, not #9249.
