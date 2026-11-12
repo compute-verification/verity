@@ -51,8 +51,7 @@ gives its outcome (`prove`, `outcome_of`).
   (`interior_rows.interior`'s ``returns``); the verifier's reads name round 1's entry for it, unit j of the i-th
   sampled block reading row ``sample[i]·per + at[j]``, and so do the params. Where the record commits none, the
   return's port is verified at the interior's own root and round 2 refuses that read (``second-read``): the run
-  reports it and exits 1. `return_salts` reads the salts of the rows the sampled proof blocks' returns read, which a
-  check of a return's content would take; nothing is handed them, and no salt is written anywhere.
+  reports it and exits 1. The serve's salts of those rows go to the prover's commitment alone: round 2 is handed none.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
 instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws. An inlined
@@ -458,29 +457,6 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     return Replayed(again, d, it, Path(directory), record, ireg, draw, tie, launches)
 
 
-def return_salts(c: BR.Committed, d: Design, sample: Sequence[int], drawn: Sequence[int]) -> dict[str, dict[int, str]]:
-    """What a check of a return's content would take from the serve (round 2 has none, and nothing hands them to it):
-    for each return whose value round 1's record commits as a port, by sampled proof block (its interior slot among
-    ``drawn``), the salt of the row of that port its unit writes (`interior_rows.Return.rows`: `second_stage`'s linked
-    row), from the serve's salts. A row's salt opens the row to whoever holds its ``b || c``, which a session's public
-    file does: a salt of a row of ids is a value, and stays with the prover. Empty on a record that commits no return."""
-    lo, out = 0, {}
-    for m, n in zip(d.members, d.cells, strict=True):
-        for x in d.returns:
-            if x.template != m.template or x.value not in c.salts:
-                continue
-            rows, got = x.rows(sample), {}
-            for u in drawn:
-                if lo <= u < lo + len(rows):
-                    row = rows[u - lo]
-                    if (row + 1) * CS.SALT_BYTES > len(c.salts[x.value]):
-                        raise ValueError(f"{x.value}: the serve holds no salt of its row {row}, which slot {u}'s return reads")
-                    got[int(u)] = c.salts[x.value][row * CS.SALT_BYTES:(row + 1) * CS.SALT_BYTES].hex()
-            out[x.value] = got
-        lo += len(sample) * n
-    return out
-
-
 def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], boundary: Mapping[str, Any],
                    sample: Sequence[int]) -> dict[str, dict[str, Any]]:
     """The verifier's own ``--registered`` file of each member (by member key), from the two registrations' records
@@ -703,15 +679,13 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
                      and o.get("replay_sample") == [])))
 
 
-def prove(a: argparse.Namespace, r: Replayed, c: BR.Committed, out: Path,
+def prove(a: argparse.Namespace, r: Replayed, out: Path,
           proofs: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any], list[dict] | None, dict[str, Any]]:
     """The verifier's half of the second stage on a registered interior ``r`` (`replayed`): the one-stage audit of the
     stream's second sample over the written window (`second_stage`). It hands over, by template, the composer and
     Definition (`composer`, on the check's own templates); by member key, the reads each port is verified against
     (`verifier_reads`); the second stage's draw, law and receipt; and the verifier's own window (`Design.window`) and
-    copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`). ``c``: the
-    class's commitment, for the slots whose return's row the serve holds a salt of (`return_salts`): the report names
-    the slots, never a salt.
+    copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`).
     -> (a5's summary, what the run reports, the sessions' statements, the params)."""
     d, sample, layout = r.design, r.sample, r.first.layout
     mine = d.window(r.first.registration.digest, sample)
@@ -726,7 +700,6 @@ def prove(a: argparse.Namespace, r: Replayed, c: BR.Committed, out: Path,
         dict(proofs), out,
         {"two_stage": "interior", "class": [layout.prompt, layout.outputs], "window": r.first.pub["window"]},
         replay=(layout.program, d.key), tie=r.tie)
-    got["return_salts"] = {v: sorted(by) for v, by in return_salts(c, d, sample, s.get("draw") or []).items()}
     return s, got, stmts, dict(proofs)
 
 
@@ -837,7 +810,7 @@ def _second(a: argparse.Namespace) -> int:
                                  "registered": [e["value"] for e in r.record.get("registered", ())],
                                  "links": [[x.template, x.port, x.value] for x in r.design.links],
                                  "returns": [[x.template, x.port, x.value] for x in r.design.returns]})
-        s, got, stmts, proofs = prove(a, r, c, out, json.loads(Path(a.proofs).read_text()) if a.proofs else None)
+        s, got, stmts, proofs = prove(a, r, out, json.loads(Path(a.proofs).read_text()) if a.proofs else None)
         summary.update(got)
         published = draws.evidence()
         summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}

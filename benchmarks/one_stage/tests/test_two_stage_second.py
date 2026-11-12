@@ -176,22 +176,6 @@ def test_the_interior_commits_the_return_under_the_serves_salts_and_its_header_o
     assert entry == port.header(at) and LK.Port.of(mine, f"{TID}/o0").root != port.root
 
 
-def test_the_return_salts_are_the_serves_at_each_sampled_blocks_row_and_none_on_a_record_without_the_port(run):
-    """A check of a return's content would take, for each sampled proof block, the salt of the row its unit writes in
-    round 1's port: the row of the block's own span and unit, from the serve's salts. A class whose files hold no
-    salts of the port has none."""
-    again, r, c = run["again"], run["r"], run["class"]
-    sample, drawn = [int(u) for u in again.sample.units], list(r.draw.units)
-    assert TS.return_salts(replace(c, salts={p: c.salts[p] for p in BR.PORTS}), r.design, sample, drawn) == {}
-    got = TS.return_salts(c, r.design, sample, drawn)
-    assert list(got) == ["o0"] and sorted(got["o0"]) == drawn
-    for u in drawn:
-        row = sample[u // O] * O + u % O
-        assert got["o0"][u] == c.salts["o0"][row * CS.SALT_BYTES:(row + 1) * CS.SALT_BYTES].hex()
-    with pytest.raises(ValueError, match="holds no salt of its row"):
-        TS.return_salts(replace(c, salts={**c.salts, "o0": c.salts["o0"][:CS.SALT_BYTES]}), r.design, [N - 1] * Q, drawn)
-
-
 @pytest.mark.slow
 def test_a_serve_under_another_nonce_commits_under_another_run(tmp_path, served):
     """The small record's run is its serve nonce's (`boundary_rows.run_root`). A challenger host opens a run's root
