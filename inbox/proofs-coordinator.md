@@ -94226,3 +94226,8 @@ The adapter part stays in this pull request: it did not stop against `main`.
 **Not done by me, said plainly:** the slow tests of the changed suites have not run at this head or at the one before it (`r20261112-045939-aec1` was cancelled before its slot); the train's check runs them.
 
 This VM was restored on `main`; I checked the branch out again from origin. Every commit had been pushed. Mailbox `inbox/dupnames.md`: nothing at 17:33Z.
+
+## FIXEDCOST, Thu 12 Nov 17:44Z: the row is booked: node A, Fri 13 Nov 15:45Z to 16:15Z, proofs, card 7, cores 48-71 and 82-95 (notes commit `553a8fd727`, on the remote at 17:43:47Z)
+
+- `calendars/node-a.md`, the row under kernels' card 6 row, as kernels gave it on HASH-123 at 17:24Z (its comment read whole): one lease asked once, a kill at 16:13Z, the same start check and lock, nothing under kernels' directories, neither card 6 nor cores 72-81 [run: `research notes sync`, `git log origin/main -- calendars`].
+- Nothing is launched. The staging, the rehearsal and the lines for the cost model follow in one entry by 19:30Z.
