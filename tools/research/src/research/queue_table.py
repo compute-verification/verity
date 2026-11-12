@@ -12,7 +12,9 @@ Each row is one number with its unit, over three windows: now, the last hour, an
                             the result files under `out/results`
   GitHub                    the open PRs and their heads, and each counted head's subject and nearest first parents, which
                             say whether a restack made it and from which head
-  the nodes                 `/proc/stat` twice, a few seconds apart, and `slot.py --status --json` for each slots file
+  the nodes                 `/proc/stat` twice, a few seconds apart, and `slot.py --status --json` for each slots file, which
+                            the table adds up by whose runs take its slots (`slot_groups`): the check slots, the executor's,
+                            the shared pool `research run --on auto` places a run in, and each lane's own pool
 
 A mark is the first `ready = true` label after the last `ready = false` among the labels the head that landed stands on: its
 own, and those of each head a restack across a move made it from (`carried`), since the queue carries a mark and a land verdict
@@ -37,6 +39,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+
+from .auto import SPILL_POOL
 
 CONTROL = "vy-control-verity"
 #: the live loop's directory on the control pod: its decision log, its log, and the flags it runs with (`--on`: the check nodes)
@@ -72,6 +76,8 @@ RESTACK = re.compile(r"Merge [0-9a-f]{7,40} \(the layout move\) into ([0-9a-f]{7
 COMMITS_A_QUERY = 100
 #: a cell of a window that ended in the past (`--until`) whose number is only read from the machines as they are
 PAST = "not read: the window ended in the past"
+#: the lanes' own pools are each named up to this many; more are added up, with their names listed (`slot_groups`)
+OWN_POOLS_NAMED = 4
 
 CONTROL_SCRIPT = r'''
 import ast, json, re, shlex, subprocess, sys
@@ -881,6 +887,66 @@ def declares(m: dict) -> str:
     return says + (f": **over, {m['most'] / m['declared']:.1f} times**" if m["most"] > m["declared"] else ": within it")
 
 
+def slot_groups(doc: dict) -> list[dict]:
+    """The nodes' slots added up by whose runs take them, in the order the table prints them: the check slots and the
+    executor's, on the check nodes; the shared pool, on every CPU node read; then the lanes' own pools, on the check nodes,
+    each alone while there are at most `OWN_POOLS_NAMED`, else as one sum.  The shared pool is `auto.SPILL_POOL`, the one
+    `research run --on auto` places a run in: a launch asks every CPU node for it (`auto.spill`) and sends the run where it
+    finds a place.  Every other pool but the check slots and the executor's is a lane's own: a run takes its slots only when
+    sent to it by name (`research run --pool`), so its free slots start no run that waits in the shared pool's line.
+
+    Each is `{group, pools, nodes, slots, busy, blocked, waiting, free, longest}`: `group` is `check`, `executor`, `shared`
+    or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it; `free` are the slots nothing
+    holds and nothing blocks; `longest` is the node with the longest line and the runs in it, None with no run in line.  A
+    run waits in the line it joined, one node's and one pool's, so a slot free on another node starts none of them either."""
+    checks = set(doc["check_nodes"])
+    found: dict[tuple[str, str], list[tuple[str, dict]]] = {}
+    for n, d in doc["nodes"].items():
+        for s in d["slots"]:
+            group = {"check": "check", "executor": "executor", SPILL_POOL: "shared"}.get(s["pool"], "own")
+            if group == "shared" or n in checks:
+                found.setdefault((group, s["pool"]), []).append((n, s))
+    out = []
+
+    def add(group: str, pools: list[str]) -> None:
+        entries = [e for p in pools for e in found.get((group, p), [])]
+        if not entries:
+            return
+        line: dict[str, int] = {}
+        for n, s in entries:
+            line[n] = line.get(n, 0) + s["waiting"]
+        total = {k: sum(s[k] for _, s in entries) for k in ("slots", "busy", "blocked", "waiting")}
+        node = max(sorted(line), key=line.get)
+        out.append({"group": group, "pools": pools, "nodes": len({n for n, s in entries if s["slots"]}), **total,
+                    "free": total["slots"] - total["busy"] - total["blocked"],
+                    "longest": {"node": node, "waiting": line[node]} if line[node] else None})
+
+    add("check", ["check"])
+    add("executor", ["executor"])
+    add("shared", [SPILL_POOL])
+    # a slots file that lists no slot and has no line is no pool to name
+    own = sorted(p for (g, p), entries in found.items() if g == "own" and any(s["slots"] or s["waiting"] for _, s in entries))
+    for pools in [own] if len(own) > OWN_POOLS_NAMED else [[p] for p in own]:
+        add("own", pools)
+    return out
+
+
+def slots_text(g: dict) -> str:
+    """One of `slot_groups` in the table's words.  The shared pool's free slots are counted out, being the places a run
+    launched with `--on auto` can take now; the shared pool's line and the check slots' name the node that holds over half
+    of it."""
+    pools, longest = g["pools"], g["longest"]
+    name = {"check": "check slots", "executor": "executor slots",
+            "shared": f"{pools[0]} slots, the shared pool `--on auto` places runs in, on every CPU node with one ({g['nodes']})"
+            }.get(g["group"]) or (f"{pools[0]} slots, a lane's own pool" if len(pools) == 1 else
+                                  f"lanes' own pools, which `--on auto` places no run in ({', '.join(pools)})")
+    free = f"{g['free']} free, " if g["group"] == "shared" else ""
+    line = f"{g['waiting']} runs in line"
+    if g["group"] in ("check", "shared") and longest and 2 * longest["waiting"] > g["waiting"]:
+        line += f", {longest['waiting']} of them on {longest['node'].replace('vy-nebius-', '')}"
+    return f"{name}: {g['busy']} of {g['slots']} busy, {g['blocked']} free but blocked, {free}{line}"
+
+
 def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()) -> list[dict]:
     """The rows: each `{row, name, now, hour, day, target, how}`; a cell that could not be read says what it needs.
     ``readings`` are this machine's saved ones, for the rows that only see what is running when the command reads."""
@@ -1177,16 +1243,15 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
 
     cores_row("Cores busy over cores paid, the check nodes", checks)
     cores_row("Cores busy over cores paid, every CPU node", sorted(doc["nodes"]))
-    pools: dict[str, list[int]] = {}
-    for n in checks:
-        for s in doc["nodes"][n]["slots"]:
-            p = pools.setdefault(s["pool"] if s["pool"] in ("check", "executor") else "lane", [0, 0, 0, 0])
-            for i, k in enumerate(("slots", "busy", "blocked", "waiting")):
-                p[i] += s[k]
-    add("7", "Slots busy over slots, the check nodes", past or "; ".join(f"{k} slots: {v[1]} of {v[0]} busy, {v[2]} free but blocked, {v[3]} runs in line"
-                                                                        for k, v in sorted(pools.items())) or "not read", "", "", "",
-        "`slot.py --status --json` for each slots file; the lane pools share cores with each other and with the check slots, so slots "
-        "add up to more than the cores")
+    add("7", "Slots busy over slots, the check nodes", past or "; ".join(map(slots_text, slot_groups(doc))) or "not read", "", "", "",
+        "`slot.py --status --json` for each slots file, added up by whose runs take its slots: the check slots and the executor's, "
+        "on the check nodes; the shared pool, the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU "
+        "node read, since a launch asks each of them; and the lanes' own pools, on the check nodes, each taking only the runs "
+        "sent to it by name (`--pool`). Free: nothing holds the slot and nothing blocks it, though a run asking more memory than "
+        "the slot reserves may still wait; node 2's share, which takes an `--on auto` run when no pool has a place for it, is not "
+        "read. A run waits in the line it joined, one node's and one pool's, so a slot free elsewhere starts none of the runs in "
+        "line: a node is named when over half of a line is its own. The pools share cores with each other and with the check "
+        "slots, so slots add up to more than the cores")
     mem = {(n, name_): gb for n, d in doc["nodes"].items() for s in d["slots"] for name_, gb in (s.get("mem") or {}).items()}
     going = [dict(r, cores=r["scope_cpu_s"] / (doc["nodes"][r["node"]]["now"] - r["took"])) for r in runs.values()
              if r["kind"] == "shard" and r.get("scope_cpu_s") and r.get("took") and doc["nodes"][r["node"]]["now"] > r["took"]]
@@ -1471,7 +1536,9 @@ def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: b
     except OSError as e:
         print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
               file=sys.stderr)
-    print(json.dumps({"at": doc["now"], "rows": rows, "rounds": rounds(doc), "errors": doc["errors"], "data": doc}, default=str)
+    # `pools`: the slots as the table adds them up, which the machines only say of now, so none for a window that ended
+    print(json.dumps({"at": doc["now"], "rows": rows, "rounds": rounds(doc), "pools": None if end is not None else slot_groups(doc),
+                      "errors": doc["errors"], "data": doc}, default=str)
           if as_json else render_rounds(rounds(doc), doc) if by_round else render(rows, doc, short))
     return 0
 

@@ -212,8 +212,9 @@ def test_the_table_holds_each_number_over_its_windows():
     assert cache["hour"] == "50% from the cache (10 of 20 tasks in 1 checks)" and cache["day"] == "65% from the cache (40 of 62 tasks in 3 checks)"
     assert rows["Cores busy over cores paid, the check nodes"]["now"] == "25 of 100 (25%)"
     assert rows["Cores busy over cores paid, the check nodes"]["hour"] == "30 of 100 (30%), the average over the last 60 min"
-    assert rows["Slots busy over slots, the check nodes"]["now"] == ("check slots: 1 of 2 busy, 0 free but blocked, 0 runs in line; "
-                                                                    "lane slots: 4 of 4 busy, 0 free but blocked, 3 runs in line")
+    assert rows["Slots busy over slots, the check nodes"]["now"] == (
+        "check slots: 1 of 2 busy, 0 free but blocked, 0 runs in line; research slots, the shared pool `--on auto` places runs in, on "
+        "every CPU node with one (1): 4 of 4 busy, 0 free but blocked, 0 free, 3 runs in line, 3 of them on cpu-1")
     assert rows["Reserved against used, a check's shard"]["now"] == ("1 of the 1 running, the ones whose cgroup was found: cores p50 12, most 12, of 96 in its slot; memory without the "
                                                                     "page cache p50 40 GiB, most 40 GiB; peak with the page cache most 120 GiB, "
                                                                     "of 300 GiB reserved")
@@ -229,6 +230,82 @@ def test_the_table_holds_each_number_over_its_windows():
     assert rows["The loop's tick: minutes between tick ends"]["hour"] == "p50 4.0, p90 4.0 min (n=2)"
     assert rows["Green candidate: verdict to `main`"]["day"] == "p50 5, p90 5 min (n=1)"
     assert all(set(r) == {"row", "name", "now", "hour", "day", "target", "how"} for r in rows.values())
+
+
+SLOTS_ROW = "Slots busy over slots, the check nodes"
+
+
+def slots_doc() -> dict:
+    """The day on three CPU nodes, cpu-1 and cpu-7 the check nodes. Every run in line for a check slot is on cpu-7, while
+    cpu-1 has one free; the shared pool is full on both, with most of its line on cpu-7, and its free slots are on cpu-3,
+    which is no check node; lean-train, a lane's own pool, is idle on both cpu-1 and cpu-3; kernels lists no slot."""
+    d = doc()
+    cpu1 = d["nodes"]["vy-nebius-cpu-1"]
+
+    def slots(*pools: tuple) -> list[dict]:
+        return [dict(zip(("pool", "slots", "busy", "blocked", "waiting"), p), mem={}) for p in pools]
+
+    cpu1["slots"] = slots(("check", 2, 1, 0, 0), ("executor", 4, 1, 0, 3), ("research", 4, 4, 0, 1), ("lean-train", 3, 0, 1, 0))
+    d["check_nodes"] = ["vy-nebius-cpu-1", "vy-nebius-cpu-7"]
+    d["nodes"]["vy-nebius-cpu-7"] = dict(cpu1, runs=[], slots=slots(("check", 2, 2, 0, 3), ("executor", 2, 0, 0, 0),
+                                                                    ("research", 12, 12, 0, 5), ("kernels", 0, 0, 0, 0)))
+    d["nodes"]["vy-nebius-cpu-3"] = dict(cpu1, runs=[], slots=slots(("check", 2, 0, 0, 0), ("research", 6, 2, 1, 1),
+                                                                    ("lean-train", 9, 0, 0, 0)))
+    return d
+
+
+def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(monkeypatch, tmp_path, capsys):
+    d = slots_doc()
+    check = "check slots: 3 of 4 busy, 0 free but blocked, 3 runs in line, 3 of them on cpu-7"
+    executor = "executor slots: 1 of 6 busy, 0 free but blocked, 3 runs in line"            # as it was: its line names no node
+    shared = "research slots, the shared pool `--on auto` places runs in, on every CPU node with one (3): "
+    own = "lean-train slots, a lane's own pool: 0 of 3 busy, 1 free but blocked, 0 runs in line"     # cpu-3's nine are no check node's
+    text = f"{check}; {executor}; {shared}18 of 22 busy, 1 free but blocked, 3 free, 7 runs in line, 5 of them on cpu-7; {own}"
+    row = {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]
+    assert row["now"] == text
+    assert "the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU node read" in row["how"]
+    groups = [
+        {"group": "check", "pools": ["check"], "nodes": 2, "slots": 4, "busy": 3, "blocked": 0, "waiting": 3, "free": 1,
+         "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}},
+        {"group": "executor", "pools": ["executor"], "nodes": 2, "slots": 6, "busy": 1, "blocked": 0, "waiting": 3, "free": 5,
+         "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}},
+        {"group": "shared", "pools": ["research"], "nodes": 3, "slots": 22, "busy": 18, "blocked": 1, "waiting": 7, "free": 3,
+         "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}},
+        {"group": "own", "pools": ["lean-train"], "nodes": 1, "slots": 3, "busy": 0, "blocked": 1, "waiting": 0, "free": 2,
+         "longest": None}]
+    assert qt.slot_groups(d) == groups
+
+    # the command's own output: the row as printed, and as JSON beside the nodes' slots files, whose fields are as they were
+    monkeypatch.setattr(qt, "collect", lambda *a, **kw: d)
+    monkeypatch.setattr(qt, "STATE", tmp_path / "queue-table.json")
+    assert qt.main(short=True) == 0
+    assert f"| 7 | {SLOTS_ROW} | {text} |" in capsys.readouterr().out
+    assert qt.main(as_json=True) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert {r["name"]: r for r in out["rows"]}[SLOTS_ROW]["now"] == text and out["pools"] == groups
+    assert out["data"]["nodes"]["vy-nebius-cpu-7"]["slots"][2] == {"pool": "research", "slots": 12, "busy": 12, "blocked": 0,
+                                                                  "waiting": 5, "mem": {}}
+    assert all(set(s) == {"pool", "slots", "busy", "blocked", "waiting", "mem"} for n in out["data"]["nodes"].values() for s in n["slots"])
+
+    # a line no node holds over half of names none, and the node with the longest stays in the JSON
+    d["nodes"]["vy-nebius-cpu-3"]["slots"][1]["waiting"] = 4
+    assert f"{shared}18 of 22 busy, 1 free but blocked, 3 free, 10 runs in line; " in {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"]
+    assert qt.slot_groups(d)[2]["longest"] == {"node": "vy-nebius-cpu-7", "waiting": 5}
+
+    # past `OWN_POOLS_NAMED` the lanes' own pools are one sum, with their names
+    d["nodes"]["vy-nebius-cpu-7"]["slots"] += [{"pool": p, "slots": 2, "busy": 1, "blocked": 0, "waiting": 1, "mem": {}}
+                                               for p in ("proofs", "network", "soundness", "tries")]
+    assert {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"].endswith(
+        "; lanes' own pools, which `--on auto` places no run in (lean-train, network, proofs, soundness, tries): 4 of 11 busy, "
+        "1 free but blocked, 4 runs in line")
+    assert [g["group"] for g in qt.slot_groups(d)] == ["check", "executor", "shared", "own"]
+
+    # a window that ended in the past has no slots of its own: the machines only say what they hold now
+    monkeypatch.setattr(qt, "window_end", lambda until, now: qt.ts(at("02:00")))
+    monkeypatch.setattr(qt, "collect", lambda *a, **kw: qt.cut(dict(slots_doc(), read=qt.ts(at("03:00"))), qt.ts(at("02:00"))))
+    assert qt.main(as_json=True, until=at("02:00")) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["pools"] is None and {r["name"]: r for r in out["rows"]}[SLOTS_ROW]["now"] == qt.PAST
 
 
 def test_a_round_is_plain_only_when_its_candidate_is_known_to_change_no_lean():
