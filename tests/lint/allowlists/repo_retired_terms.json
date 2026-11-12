@@ -934,7 +934,7 @@
     {"file": "security/Proofs/Flock/Claims/KS/ZkBatchSim.lean", "count": 51},
     {"file": "security/Proofs/Flock/Claims/KS/ZkBound.lean", "count": 41},
     {"file": "security/Proofs/Flock/Claims/KS/ZkBoundJ.lean", "count": 46},
-    {"file": "security/Proofs/Flock/Claims/KS/ZkBoundW.lean", "count": 82},
+    {"file": "security/Proofs/Flock/Claims/KS/ZkBoundW.lean", "count": 72},
     {"file": "security/Proofs/Flock/Claims/KS/ZkClash0.lean", "count": 21},
     {"file": "security/Proofs/Flock/Claims/KS/ZkClashL.lean", "count": 11},
     {"file": "security/Proofs/Flock/Claims/KS/ZkClashPads.lean", "count": 7},
@@ -5475,6 +5475,12 @@
     {"file": "adapters/vllm/verity_vllm/pipeline/advice_code/by_class.py", "count": 13},
     {"file": "benchmarks/network_e2e/encodings/by_class.py", "count": 7},
     {"file": "benchmarks/network_e2e/encodings/tests/test_by_class.py", "count": 18},
-    {"file": "verity/protocols/flock/verifier/Flock/WitnessZk.lean", "count": 7}
+    {"file": "verity/protocols/flock/verifier/Flock/WitnessZk.lean", "count": 7},
+    {"file": "security/Definitions/Claims/SamplingTable.lean", "count": 4},
+    {"file": "security/Proofs/Flock/Claims/KS/KSTable.lean", "count": 9},
+    {"file": "security/Proofs/Flock/Claims/KS/KSTableOne.lean", "count": 1},
+    {"file": "security/Proofs/Flock/Claims/KS/ZkKSTable.lean", "count": 2},
+    {"file": "security/Proofs/Flock/Claims/KS/ZkKSTableNumbers.lean", "count": 7},
+    {"file": "security/Proofs/Flock/SamplingGeneric/OneVerifierTables.lean", "count": 2}
   ]
 }

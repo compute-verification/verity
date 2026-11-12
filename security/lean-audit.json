@@ -3921,6 +3921,10 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
+   },
+   "Claims.Flock.KSTable": {
+    "fails": "Claims.Flock.KSTable_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
    }
   },
   "not": {
@@ -4012,7 +4016,11 @@
    "Claims.Encodings.RegLink.Opens": "a registration link's contract, the code fact the linked compiler's statements take of a link (`Claims.Encodings.CompilerKSLinked`, `Claims.Encodings.CompilerKSRegLinked`, closed and unproved, stated in Proofs.Flock.Encodings), no claim",
    "Claims.Sampling.BextAtCostLe": "a helper the claims read: `B_ext` at a time budget costs at most a bound in expectation, which `Compiled.KSAt` reads",
    "Claims.Sampling.Design.Two.FirstRate": "a helper the claims read: a first stage that catches each replay block at a rate, which `CapTwo` reads",
-   "Claims.Sampling.Design.Two.SecondRate": "a helper the claims read: a second stage that samples each cell at a rate, which `CapTwo` reads"
+   "Claims.Sampling.Design.Two.SecondRate": "a helper the claims read: a second stage that samples each cell at a rate, which `CapTwo` reads",
+   "Claims.SamplingGeneric.FlockArgKSTable": "proved of every Flock record, decoder, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockArgKSTable`)",
+   "Claims.SamplingGeneric.FlockKSTable": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSTable`)",
+   "Claims.SamplingGeneric.FlockKSRegTable": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSRegTable`)",
+   "Claims.SamplingGeneric.FlockRerunsTable": "proved of every Flock record, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockRerunsTable`)"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -4644,6 +4652,10 @@
   },
   "Flock.SecurityProofs.SpotFirstHitTwo": {
    "nontrivial": "Claims.SamplingGeneric.compilerFirstHitTwoXAt_nontrivial"
+  },
+  "Flock.SecurityProofs.MaskedKSTable": {
+   "honest": ["Flock.SecurityProofs.MaskedKSTable_honest"],
+   "nontrivial": "Flock.SecurityProofs.MaskedKSTable_nontrivial"
   }
  },
  "unwitnessed": {
@@ -11256,6 +11268,21 @@
    },
    "type_hash": "0759a70bbd6545c1088cb7165cd6e06810ba0fa9758373812e93f22b1a2dc804"
   },
+  "Claims.Flock.KSTable_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.KSTable_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Exists fun N => Exists fun ε => Not (Claims.Flock.KSTable H D N ε)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Flock.ListWithin"],
+    "reads": []
+   },
+   "type_hash": "0716a3d1d9bc37a2f5995e05a2ada225b5c77ff05be1e81e82750ef26e24f6ec"
+  },
   "Claims.Flock.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -15386,6 +15413,52 @@
    },
    "type_hash": "8ae2fd10ac92d291c2283d26141b3c31e7f06f2fdb2e5d212280951b15876d7b",
    "unfolded_hash": "7da7b31fc745cf3916021e210ad7423f0aa879a96bf961a4235b4b451f50fc87"
+  },
+  "Flock.SecurityProofs.MaskedKSTable": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.MaskedKSTable : Flock.Guarantees.MaskedKSTable"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Flock.ListWithin"],
+    "reads": []
+   },
+   "type_hash": "aec8d751b0de2a791f975fc2d8b2502008a2ede361823e619595068f469d68d5",
+   "unfolded_hash": "49a01dee3ce609390f6a2d33d0b40abda93a9a19fd4fd26f1e0f645e6b0a3cde"
+  },
+  "Flock.SecurityProofs.MaskedKSTable_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.MaskedKSTable_honest :",
+    "  Claims.Flock.ListWithin (FlockDeploy.deployZk Flock.Readable.relation).len",
+    "    (FlockDeploy.deployZk Flock.Readable.relation).enc (FlockDeploy.deployZk Flock.Readable.relation).θ",
+    "    (FlockDeploy.deployZk Flock.Readable.relation).decode"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1f254770fefb036b51bf30078349c874980639b4e83e10e3032bbfc4436bef0e",
+   "unfolded_hash": "df70d420656e5fe61f306602d6fcc1c5949c4ead4874f65920b72ab062a1d58d"
+  },
+  "Flock.SecurityProofs.MaskedKSTable_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.MaskedKSTable_nontrivial :",
+    "  Not (Claims.Flock.KSTable FlockDeploy.sha512 (Claims.Witness.Flock.ksD Bool) Claims.Witness.Flock.ksN fun x x_1 => 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Flock.ListWithin"],
+    "reads": []
+   },
+   "type_hash": "4776a4b9a34b698b42752cabef82f4027a52f5fec3096ffaff8095e6affae58c"
   },
   "Flock.SecurityProofs.MaskedZK": {
    "owner": "@proofs",
@@ -27677,7 +27750,8 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
+   "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -34173,6 +34247,18 @@
     "Claims.Sampling.lightBits": "573935eff52fd4e7e854b689bb6b874bbf3dd7be792e11ada4150bdd3ab61720",
     "Claims.Sampling.lightOf": "d848ab05205d283ebe42d5f70d7032b752c0e739173bcf857721eb52572c83eb",
     "Claims.Sampling.servedBits": "fd1af0d5b30633a67b2904336bd420c55227b25b3245d102fd436a4736c8c84c"
+   }
+  },
+  "Definitions.Claims.SamplingTable": {
+   "digest": "5add499f54ba7b2dafd631d1367fae4b0cf4caa8367ec9cdfda4709703c36f76",
+   "definitions": {
+    "Claims.Flock.ETable": "b5e699fd09ad832dc9fd6cfc752d227b860147cf63ded1023264fc54605592c0",
+    "Claims.Flock.KSTable": "10f989758acced0ba7669299754dfee7164895ca2673c34f13711ebda47be28b",
+    "Claims.Flock.RTable": "8e45242be38309c2558e853d9214aaaa7f11df6f2a7dc4297349b73f0980ea4a",
+    "Claims.Flock.assembleTable": "41a4a450d30662dd87a85faf5a1a11e2c4cad8c2b44479275d34d144454976cf",
+    "Claims.Flock.checkTable": "35a465cc1d50d5ebc0886c0457e3d40ac952ba9c95fd06f91ead9f8575a3f3bf",
+    "Claims.Flock.kTable": "4ffe25f456490e0d389ea1ef9ff618f2ac968f9ead6a1e705fc7d914438e2620",
+    "Claims.Flock.κTable": "6a690e80f4df4ec96e53842e3379670d0b4839e3e6a3557d96447ac47db2a454"
    }
   },
   "Definitions.Claims.SamplingTwo": {
@@ -48113,6 +48199,18 @@
     "FlockDeploy.zcNs": "f503ce928abe2a662c5c82679921cb0387cad352d40e5bdd1aa7de62fbeff350"
    }
   },
+  "Proofs.Flock.Claims.KS.TableErrJ": {
+   "digest": "fd0e91bf124584f94d10c2fe19d0f51ad278574c80b70110a5d597c5cbd76438",
+   "definitions": {
+    "FlockDeploy.KS.tableErrJ": "0d95502a2614f84ee8761be2ed914fd7580269d1b5d15fe4fce25dfece72f6ac"
+   }
+  },
+  "Proofs.Flock.Claims.KS.ZkTables": {
+   "digest": "5892ee48f67f051b2fce655f5c065141f3cbcce3aad3839db9e333bfa146f143",
+   "definitions": {
+    "FlockDeploy.KS.wordLenJ": "101554a8052aaaa73e46f0a8af70114329f27a81678d47c9c9f5a80764d63065"
+   }
+  },
   "Proofs.Flock.Claims.Numbers": {
    "digest": "89c96571182ae99074d5002c63088bcc498a74bb461264da0430437ebee39392",
    "definitions": {
@@ -49317,6 +49415,12 @@
    "digest": "64fc5a37e656be5cf9707d0898d98862a1da9e545a50af1edaa810fca33df3f5",
    "definitions": {
     "Claims.Witness.Flock.ksD": "87897a2f9a1e219ade726c7f2e60ed7d1b01311b15346dbd19410b978eb6b05b"
+   }
+  },
+  "Proofs.Flock.Claims.Witnesses.KSTable": {
+   "digest": "4d0810ae6e10bd38e4f8945604d9483c8d4f5ed068688c1cb46b57c61e287f20",
+   "definitions": {
+    "Claims.Witness.Flock.ksN": "9324a4c7992addd99b902119f3bc698969dfaf52e83ca0331d72a8ab79c83e9a"
    }
   },
   "Proofs.Flock.Claims.Witnesses.Recursion": {
@@ -50769,9 +50873,10 @@
    }
   },
   "Proofs.Flock.Masked.Statement": {
-   "digest": "7d8c42005bac5e57d0c2f20974600bce0249aa48cdb2795f9735a446bcc0d90b",
+   "digest": "212e1da8fafd4a88c7dd9c75cca21021f66a8cc6a422f8735f0b08f02e328c4a",
    "definitions": {
     "Flock.Guarantees.MaskedKS": "c8908fff7f287ba2818e37cbdd4f1eecf190c499ce27072921adfa7dd7ac137d",
+    "Flock.Guarantees.MaskedKSTable": "094ad4594f31e25a928ad1b8e2ed3c5c1260bf16d005019ec7d056d3dd73bd58",
     "Flock.Guarantees.MaskedZK": "04e53db942e9f36a07ad69d8fbb46e252b8c17a27df9c07b5f08f92810a0b98e"
    }
   },
