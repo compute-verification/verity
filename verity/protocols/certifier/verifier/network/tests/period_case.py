@@ -52,6 +52,9 @@ sample (a work sampling design's) and its bound on incorrect proof blocks, every
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`), as is one whose units read their state off the chain
 (`state-misindexed`, `MISREADS`) and one whose row 0 isn't opened to the empty state (`state-unpinned`, `UNPINS`).
+The tied audits run one class circuit, one Program a case, whose SHA-512 is the parameters' `circuit` (`_held`), and
+an execution phase whose tied audit runs another, or under another `circuit`, is refused (`circuit-swapped`,
+`UNHOLDS`).
 An answer whose profile samples more than its level holds is refused
 in either form (`OVERSAMPLED`): a compute audit's (`audit-oversampled`, tied or not; `tied-oversampled`, the tied audit
 of the aimed scan) and a scan's (`answer-oversampled`), each under a registration that samples within its population.
@@ -114,8 +117,8 @@ UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
-ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
-                    "session", "windows"]
+ROWS_PARAMS_KEYS = ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan",
+                    "schedule", "session", "windows"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
@@ -199,6 +202,8 @@ class Params:
     #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
     schedule: WardenParams | None = None
     scan: Scan | None = None
+    #: the rows form's class circuit, its window circuit's Program's SHA-512; None in the clock form
+    circuit: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -709,8 +714,11 @@ def params(j) -> Params:
         raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
                        f"schedule can carry (Schedule.caps), not these {len(cells)}")
+    circuit = None
+    if "circuit" in j and not DIGEST.fullmatch(circuit := _of(j["circuit"], str, "circuit")):
+        raise D.Reject("circuit: not a SHA-512 digest")
     return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
-                  schedule, scan)
+                  schedule, scan, circuit)
 
 
 def _registration(j, ctx: str) -> dict:
@@ -1059,6 +1067,12 @@ def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
         for a, r in zip(p.audits, audits))
 
 
+def _held(p: Params, audits: list[dict], reg: dict) -> bool:
+    """`held`: each audit the scan's `prog` is an output of (`_tied_audits`) is registered under the parameters' class
+    circuit (`runsCircuit`), none with no class circuit."""
+    return all(p.circuit is not None and audits[i].get("program") == p.circuit for i in _tied_audits(audits, reg))
+
+
 def _prog_tied(audits: list[dict], reg: dict) -> bool:
     """`progTied`: some audit is tied to the scan's `prog` (`_tied_audits`)."""
     return bool(_tied_audits(audits, reg))
@@ -1164,6 +1178,8 @@ def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
     return None if _state_empty(p, reg) else UNPINNED
 
 
+#: `heldCheck`'s refusal, after its execution phase's number.
+UNHELD = "the tied audit's window circuit is not the registered class circuit"
 #: `okCheck`'s refusal, after its execution phase's number.
 UNOK = "the scan's ok bits are not the schedule's constants"
 #: `okCheck`'s refusal where the schedule has no constants, after its execution phase's number and before why.
@@ -1267,6 +1283,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         else:
             findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
                          if not scan_ok.held(consts, reg)]
+        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNHELD}") for i, reg in enumerate(c.windows)
+                     if not _held(p, c.audits, reg)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -1328,7 +1346,7 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
-    "rows-state-unpinned": REJECT,
+    "rows-state-unpinned": REJECT, "rows-circuit-swapped": REJECT,
     "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
@@ -1654,6 +1672,10 @@ UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra",
 STATE_PLACES = ("roots", "registered", "activations")
 #: the program a tied audit's window's `activations` names
 WINDOW_PROGRAM = "stand-in/window"
+#: How `rows-circuit-swapped` breaks the class circuit's hold while every tie, wiring and state holds: the aimed
+#: execution phase's tied audit registered under a Program of one more unit, its answer and population that Program's
+#: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
+UNHOLDS = ("audit", "params")
 #: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
 #: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
 #: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
@@ -1970,7 +1992,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # one slot entries' template per audit: one-stage names a template's ports by its descriptor id; an audit that
     # selects has select entries and scan slots, as a window circuit's last position reads its slots' occupancy
     owners = rp.sample(range(n_audits), n_windows) if rows else []
-    selects = {i for i in owners if rp.random() < 0.5} | ({owners[t]} if m == "tied-slots-sampled" else set())
+    select = rows and (rp.random() < 0.5 or m == "tied-slots-sampled")
+    selects = set(owners) if select else set()
     lanes = sched.lanes if rows else 0
     ties = {w: {"audit": i, "key": (k := SELECT_KEY if i in selects else SLOT_KEY), "chunks": [
                 {"port": entries_port(k, j), "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
@@ -1980,6 +2003,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
+    unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
     # each audit's `SCAN_STATE`, the state tree of the link-window tied to it, whose leaf 0 the scan opens
     trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
              for i in range(n_audits)} if rows else {}
@@ -2219,26 +2243,46 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         shown = {"registrations": []} if aimed and m == "form" else {"clock": _cert_json(clock)}
         windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates]} | shown)
 
-    audit_params, audit_regs, audits = [], [], []
+    audit_params, audit_regs, audits, untied = [], [], [], []
     slots = sched.window // sched.every * sched.lanes if rows else 0
+    # the class circuit, the one window circuit every tied audit runs: its units, its slot entries' template (whose
+    # members `prog-unwired`'s `members` puts one off a slot each, and whose body its `body` renames) and scan slots
+    off = (rp.choice([1, -1]) if slots > 1 else 1) if unwire == "members" else 0
+    twos = m in ("tied-sampled", "tied-stratum-oversampled", "tied-strata-sizes") or by_template
+    n_class = r.randint(2 if twos else 1, 40) if rows else 0
+    class_split = r.randint(1, n_class - 1) if n_class > 1 and r.random() < 0.3 else None
+    class_outs = r.sample(UNIT_BYTES, 1 if class_split is None else 2) if rows else []
+    class_slots = (rp.randint(1, 2),) if select else ()
+
+    def shape_of(n: int, split: int | None, outs: list[int]) -> tuple[tuple[int, int], ...]:
+        return ((n, outs[0]),) if split is None or split >= n else ((split, outs[0]), (n - split, outs[1]))
+
+    circuit = program_sha512(json.loads(audit_descriptor(
+        shape_of(n_class, class_split, class_outs), (slots + off,), unwire == "body", select, class_slots))) \
+        if rows else None
     for i in range(n_audits):
         sampled = i == a and m == "tied-sampled"
         partial = i == a and by_template
         # the tied audit in two strata, each whole, then one past its size or their sizes no longer the level's
         halves = i == a and m in ("tied-stratum-oversampled", "tied-strata-sizes")
-        entries = tuple(slots + (rp.choice([1, -1]) if slots > 1 else 1)
-                        if w == first + t and unwire == "members" else slots
-                        for w, x in ties.items() if x["audit"] == i)
-        renamed = rows and unwire == "body" and ties[first + t]["audit"] == i
-        scan_slots = (rp.randint(1, 2),) if i in selects else ()
-        units = r.randint(2 if sampled or partial or halves else 1, 40)
+        in_class = i in tied
+        entries = (slots + off,) if in_class else ()
+        renamed = rows and unwire == "body" and in_class
+        scan_slots = class_slots if in_class else ()
+        swapped = unhold == "audit" and i == ties[first + t]["audit"]
+        units = (n_class + 1 if swapped else n_class) if in_class else \
+            r.randint(2 if sampled or partial or halves else 1, 40)
         n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
         units += sum(entries) + sum(scan_slots)
-        split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
-        outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
-        shape = ((n_prog, outs[0]),) if split is None else ((split, outs[0]), (n_prog - split, outs[1]))
-        desc = json.loads(audit_descriptor(shape, entries, renamed, i in selects, scan_slots))
+        if in_class:
+            split, outs = class_split, class_outs
+        else:
+            split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
+            outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
+        desc = json.loads(audit_descriptor(shape_of(n_prog, split, outs), entries, renamed, i in selects, scan_slots))
         prog = program_sha512(desc)
+        if not in_class:
+            untied.append(prog)
         # `tied-sampled`: one or two of the tied audit's proof blocks, the demo's sample
         k, strata = r.randint(1, min(2, units - 1)) if sampled else units if i in tied else r.randint(1, units), None
         law = {"k": k, "law": "subset"}
@@ -2318,7 +2362,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
-        case_params |= {"cells": bound.caps(n_windows), "scan": scan, "schedule": schedule_json(bound)}
+        case_params |= {"cells": bound.caps(n_windows), "circuit": circuit, "scan": scan,
+                        "schedule": schedule_json(bound)}
+        if unhold == "params":
+            case_params["circuit"] = r.choice([hashlib.sha512(b"another class circuit").hexdigest(), program, *untied])
     else:
         case_params["sync_set"] = {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]}
     c_json = {"audits": audit_regs, "windows": window_regs}
@@ -2374,7 +2421,8 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
                   p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
                   p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
-                  *_bad_caps(s, p), *bad_scans(p)]
+                  p | {"circuit": p["circuit"][:-2]}, p | {"circuit": p["circuit"].upper()}, p | {"circuit": 0},
+                  p | {"circuit": None}, *_bad_caps(s, p), *bad_scans(p)]
 
 
 def bad_cells(p: dict) -> list[dict]:

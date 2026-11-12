@@ -759,11 +759,21 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert p["circuit"] == audit["registration"]["program"]
+    window_record = tmp_path / "window-circuit.json"
+    window_record.write_text(json.dumps({"format": SP.CIRCUIT, "program": audit["registration"]["program"]}))
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(block_audit(progs, sampled=k)))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64))
+        assert (got["verdict"], got["reason"]) == ("reject", f"execution phase 0: {PC.UNHELD}"), got
+    with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
+        SP.rows_case(run, scan, v3c=v3c)
+    (unnamed := tmp_path / "no-circuit.json").write_text(json.dumps({"format": SP.CIRCUIT}))
+    with pytest.raises(SystemExit, match="record naming its program$"):
+        SP.circuit_of_record(unnamed)
     unok = sz.frame(sz.set_of("egress"), "o0", [[1]] * (T - 1) + [[0]], 16, salts=sz.ok_salts(T))
     for named in ([*roots[:-1], {**roots[-1], "root": unok.root.hex()}], roots[:-1], roots[:-len(oks)]):
         stated = registration(named)
