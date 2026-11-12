@@ -11,19 +11,22 @@ gates on both sides. The Program is read under three statements (`STATED`): noth
 (`work.Layout`: the batch's words as rows by positions), and the layout naming the rope tables positional, a premise
 the reading lists. Under each, the Program's reading is never above the trace's: every product it charges is one the
 trace's M holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F, and at its own,
-are at most what the trace's M gives under the same choice of sub-work. With nothing stated or the layout alone it
-charges nothing, so the same invariant is also held on a dense step with no table lookup (`_dense`), whose circuit
-alone is charged. Where the readings differ, the Program's is below, each for one cause:
+are at most what the trace's M gives under the same choice of sub-work. With the layout alone it charges nothing, and
+with nothing stated less than with the rope tables named, so the same invariant is also held on a dense step with no
+table lookup (`_dense`), whose circuit alone is charged. Where the readings differ, the Program's is below, each for
+one cause:
 
 - Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
   multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
   since a Program doesn't name a token's axis; every rate downstream follows.
-- Gathered rows: every product of two operands that depend on θ′ reads the embedding's rows, which no op a Program
-  states can be shown to make position-specific (the rope tables are inputs of unstated values, the causal mask a
-  constant laid along an axis the Program doesn't name), so the Program charges nothing on this step; the trace's M
-  holds its products after the rope and the mask. The layout alone changes nothing: every member of the mask's batch
-  reads two positions' rows, a query's and a key's. Naming the rope tables makes Q and K specific, and the Program
-  charges the projections downstream of them, leaving the gathered products where the trace does.
+- Gathered rows: every product of two operands that depend on θ′ reads the embedding's rows. From the circuit alone
+  they become specific only at a softmax over the causal mask, whose rows and columns the mask makes differ
+  (`test_value_reading` holds that rule to the values), so the Program charges the projections downstream of the
+  softmax and its P·V, its rows' and columns', and leaves those through the rope tables (inputs of unstated values)
+  and the softmax's backward; the trace's M holds its products after the rope and the mask. The layout alone charges
+  nothing: every member of the mask's batch reads two positions' rows, a query's and a key's. Naming the rope tables
+  makes Q and K specific, and the Program charges the projections downstream of them, leaving the gathered products
+  where the trace does.
 - The dots only the Program writes as products: the softmax's backward, two `DotRef`s a row, carries the same rows,
   and the sums and means the frontend writes as a product with a repeated constant are `θ`'s.
 - The head's products and attention's: from `HEAD_K` the Program gives no bound, since it doesn't say which products
@@ -314,15 +317,17 @@ def test_the_programs_bound_is_never_above_the_traces(readings):
     """Derives the step, captures it and reads it under each statement at each k (about a minute): what it catches is
     a Program reading, from the circuit alone or with its layout stated, that charges work the trace's M doesn't hold,
     a β above the trace's, or more blocks than the trace's M gives under the same choice of sub-work and F, at any k of
-    the dial. With nothing stated, or the layout alone, it charges nothing."""
+    the dial. With the layout alone it charges nothing, and with nothing stated less than with the rope tables named."""
     r = readings
     never_above(r)
     for k in KS:
         assert trace_blocks(r.fig[k]) > 0
-        assert r.work["nothing", k].groups == r.work["layout", k].groups == []
-        rope = r.work["rope", k]
-        assert rope.premises == ("buf_cos", "buf_sin") and rope.groups and all(g.weight == (False, True)
-                                                                                for g in rope.groups)
+        assert r.work["layout", k].groups == []
+        rope, alone = r.work["rope", k], r.work["nothing", k]
+        for it in (rope, alone):
+            assert it.groups and all(g.weight == (False, True) for g in it.groups)
+        assert rope.premises == ("buf_cos", "buf_sin") and alone.premises == ()
+        assert sum(g.macs for g in alone.groups) < sum(g.macs for g in rope.groups)
         assert rope.left_out["gathered"] == r.he[k]["gathered_macs"]
 
 
@@ -345,8 +350,8 @@ def test_a_dense_steps_circuit_alone_is_charged_and_never_above_its_trace():
 @pytest.mark.slow
 def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
     """Each of the Program's products (m, K, n) is a shape the trace has a product of, each operand's rate at most
-    the least the trace's products of that shape pay it, under every statement; from the circuit alone, or with the
-    layout and no input named positional, every product with two θ′ operands carries the embedding's rows."""
+    the least the trace's products of that shape pay it, under every statement; with the layout and no input named
+    positional, every product with two θ′ operands carries the embedding's rows."""
     r = readings
     traced = sum(row["count"] * row["macs"] for row in r.rows[KS[0]])
     for (name, k), it in r.work.items():
@@ -364,7 +369,7 @@ def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
             assert math.isfinite(least[0]), g.dims
             assert g.rates[0] <= least[0] + 1e-9 and g.rates[1] <= least[1] + 1e-9, (name, g.dims, g.rates, least)
         assert it.r_step is None and it.left_out["self"] == 0
-        if name != "rope":
+        if name == "layout":
             dots = [g for g in it.products if g.product.startswith("DotRef")]
             assert {g.reason for g in lins} == {"gathered"} and {g.reason for g in dots} == {"gathered", "theta"}
 

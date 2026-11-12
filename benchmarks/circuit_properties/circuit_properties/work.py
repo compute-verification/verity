@@ -25,11 +25,10 @@ For `min_cut.bound`'s inputs it reads:
   and the product's token side.
 * Which are charged (`Work.groups`; the others are `Work.left_out` by why): a product both of whose operands depend on
   θ′ in every word ("theta" else), neither of which carries a gather's rows ("gathered"), whose operands are no one
-  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op,
-  since no op a Program states can be shown to make them specific to a position (a mask's and a rope table's
-  positions are an axis the Program doesn't name), but not through a carry: a carried word reads no current input, so
-  it is no row's. A weight gradient and attention's products are both products of two activations, which a Program
-  tells apart only by where their outputs go, which its author chooses.
+  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op until
+  the rule below makes them specific, but not through a carry: a carried word reads no current input, so it is no
+  row's. A weight gradient and attention's products are both products of two activations, which a Program tells apart
+  only by where their outputs go, which its author chooses.
 * Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
   source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
   the least contraction of a product of two θ′ operands that widens it 4K-fold or more, one of them reading no input,
@@ -51,13 +50,38 @@ say which products are the head's. So every error of the reading is less work or
 reading of the same step, and a bound true but weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
-Two limits follow. A Program with no scan has no carried word, so no θ′ and no bound. And from the circuit alone,
-every product downstream of a gather by the batch is left out: a model whose first op is a table lookup by its tokens
-is charged nothing.
+A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
+the two, for generic weights; a product is charged only on specific operands, so no two MACs it charges read one pair
+of values. From the circuit alone, with nothing stated, one rule makes values specific, and every op it can't decide
+gives a gathered value:
 
-`Layout` states, beside the Program, the one thing that limit needs: which external input holds the tokens and how its
-words lay out as rows by positions (the last axis the positions). It is off by default, and under it rows become
-specific to a position by three rules and no other, none from an input's name, shape or size:
+* A softmax's rows (`masked_rows`): each a row of a product's outputs, through one-to-one ops on constants
+  (`INJECTIVE`), plus a constant. A group of rows over one product differs pairwise where each reads another member of
+  the product and the constant's rows, as the Program states them, differ: in which words are −inf, or in the finite
+  ones after the first's is subtracted, since a softmax is unchanged by a shift. The constant's add alone makes
+  nothing specific: rows that differ by a shift give one softmax.
+* A softmax's columns: one column of each of one sequence of those rows, each slice another column, differ where the
+  constant's columns there differ and each has a finite word, since two keys of one token give columns whose ratio is
+  the exponential of the constant's difference.
+* A product's output (`product_status`) is specific where its x's slices are such rows or columns, or x is specific
+  and read one to one, and w's rows differ: w specific and read one to one, a free input's, or a product's output
+  whose columns w's rows read, each another.
+* A primitive's output stays specific only where it is one to one in a specific argument read one to one, at the
+  constants it reads (`INJECTIVE`'s ops, a multiply's constant nonzero); an op outside it gives a gathered value, so an
+  op with a specific argument is not specific by that alone.
+
+The rule holds on a batch in which no row starts with a run of one token, and, where no positional table reaches the
+rows, no row's prefix repeats a shorter one: such a batch makes two positions' values equal at every layer, under any
+rule that reads only the circuit and the trace's reading alike. It doesn't reach a softmax's backward, so the input
+gradients of the first attention's queries and keys, which `Layout`'s rules charge, stay gathered.
+
+Two limits follow. A Program with no scan has no carried word, so no θ′ and no bound. And a value the rule can't show
+specific stays a gather's rows: a model whose first op is a table lookup by its tokens is charged only downstream of a
+softmax over a constant that differs between its rows.
+
+`Layout` states, beside the Program, which external input holds the tokens and how its words lay out as rows by
+positions (the last axis the positions). It is off by default, and under it rows become specific to a position by
+three rules and no other, none from an input's name, shape or size:
 
 * (a) A batch's members are positions only where data flow shows it: a member reads the gathered rows of one
   position's index word, one to one; a member reading two positions' rows (a score's query and key) is none.
@@ -78,11 +102,12 @@ from __future__ import annotations
 import bisect
 import math
 import re
+import struct
 import sys
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, Sequence
 
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import is_input, is_registered
@@ -157,6 +182,80 @@ class Status(NamedTuple):
 
 
 THETA = Status(False, False, False, False, frozenset())
+
+
+def unknown(st: Status) -> bool:
+    """Whether an array's values are the current inputs', which the Program neither states nor computes from θ."""
+    return st.reach and not (st.dep or st.gathered or st.specific or st.stated)
+
+
+def unspecific(st: Status, sts) -> Status:
+    """``st`` where a rule couldn't keep its words specific: its gather's rows those of every argument's that carries
+    them or is specific."""
+    sts = list(sts)
+    return st._replace(specific=False, gathered=any(s.gathered or s.specific for s in sts),
+                       keys=frozenset().union(*(s.keys for s in sts)))
+
+
+NEG_INF = 0xFF800000
+
+
+def _finite(b: int) -> bool:
+    return (b >> 23) & 0xFF != 0xFF
+
+
+def _float(b: int) -> float:
+    return struct.unpack("<f", struct.pack("<I", b & 0xFFFFFFFF))[0]
+
+
+def _const(f) -> int:
+    m = re.fullmatch(r"Const\d+\[0x([0-9a-fA-F]+)\]", f.name)
+    if m is None:
+        raise ValueError(f"{f.id}: a primitive of no arguments that is no constant")
+    return int(m.group(1), 16)
+
+
+def _shape(bits) -> tuple | None:
+    """A softmax row's constants up to what a softmax ignores: which are -inf, and the finite ones less the first;
+    None where none is finite or one is NaN or +inf."""
+    bits = list(bits)
+    if any(b != NEG_INF and not _finite(b) for b in bits):
+        return None
+    fin = [_float(b) for b in bits if b != NEG_INF]
+    if not fin:
+        return None
+    return tuple(b == NEG_INF for b in bits), tuple(v - fin[0] for v in fin)
+
+
+def _generic(name: str, vs: list, f):
+    """A primitive's word from its arguments' (`Reader.summary`'s ``value``): a finite data word "g" added to a
+    constant is the constant where it is infinite and data otherwise, compared with one is unequal, and a select or an
+    and of constants decides."""
+    if any(v is None for v in vs):
+        return None
+    if all(isinstance(v, tuple) for v in vs):
+        return ("c", f.evaluate(*(v[1] for v in vs)))
+    c = [v[1] for v in vs if isinstance(v, tuple)]
+    if name == "F32Add" and len(vs) == 2 and c:
+        return ("c", c[0]) if not _finite(c[0]) else "g"
+    if name == "F32Eq" and len(vs) == 2 and c:
+        return ("c", 0)
+    if name == "BitAnd" and ("c", 0) in vs:
+        return ("c", 0)
+    if name == "SelectF32" and isinstance(vs[0], tuple):
+        return vs[1] if vs[0][1] else vs[2]
+    return None
+
+
+def _nonzero(b: int) -> bool:
+    return _finite(b) and bool(b & 0x7FFFFFFF)
+
+
+#: the primitives that keep a specific word's outputs distinct, each with what a constant it reads must be
+INJECTIVE = {"F32Add": _finite, "F32Sub": _finite, "F32Mul": _nonzero, "F32Div": _nonzero, "F32Fma": _nonzero,
+             "F32Neg": _finite, "F32ExpRn": _finite, "F32Sqrt": _finite, "Bf16ToF32": _finite}
+#: the reference registry's softmax over a row
+SOFTMAXES = (re.compile(r"SoftmaxRef_v\d+"),)
 
 
 def join(sts, weights=None) -> Status:
@@ -562,6 +661,8 @@ class Summary:
     sites: list[Site] = field(default_factory=list)
     #: (callee summary, activations a parent activation, bindings (callee param, a, b, space, idx, lo, hi))
     children: list[tuple[Summary, int, list]] = field(default_factory=list)
+    #: beside each child: the body node it is a call of and the members (a scan's iterations) it stands for
+    at: list[tuple[int, Sequence[int]]] = field(default_factory=list)
 
 
 def _width(t) -> int:
@@ -778,6 +879,211 @@ class Reader:
             n = a.refs.count
             return (rate / n, bits / n) if n else (0.0, 0.0)
 
+        words_of: dict = {}
+
+        def words(a) -> list:
+            if id(a) not in words_of:
+                words_of[id(a)] = (a, list(a.refs))
+            return words_of[id(a)][1]
+
+        def one_to_one(a) -> bool:
+            w = words(a)
+            return len(set(w)) == len(w)
+
+        def member_words(nd, i: int, m: int) -> list:
+            """The words member ``m`` of node ``nd`` reads of its argument ``i``."""
+            w, per = words(nd.args[i]), nd.fn.signature()[0][i][1].leaves
+            return w[m * per:(m + 1) * per] if nd.form == "batch" and nd.axes[i] is not None else w
+
+        value_of: dict = {}
+
+        def value(space: str, j: int, leaf: int):
+            """A word as a generic f32 value would leave it: ("c", bits) where it is that constant whatever the data,
+            "g" where it is data the constants don't decide (a finite value), None where the rules here can't say."""
+            if space != "n":
+                return None if ctx[j] and any(s.stated for _e, s in ctx[j]) else "g"
+            if (j, leaf) in value_of:
+                return value_of[j, leaf]
+            nd = body.nodes[j]
+            f = nd.fn
+            out: object = "g"
+            if not isinstance(f, PrimitiveDefinition) or is_input(f):
+                out = "g"
+            elif not nd.args:
+                out = ("c", _const(f))
+            else:
+                m = leaf if nd.form == "batch" else 0
+                vs = [value(*member_words(nd, i, m)[0]) for i in range(len(nd.args))]
+                out = _generic(f.name, vs, f)
+            value_of[j, leaf] = out
+            return out
+
+        def unselected(space: str, j: int, leaf: int):
+            """The word a select gives where its condition is false whatever the data, else the word itself."""
+            nd = body.nodes[j] if space == "n" else None
+            if nd is None or not isinstance(nd.fn, PrimitiveDefinition) or nd.fn.name != "SelectF32":
+                return space, j, leaf
+            m = leaf if nd.form == "batch" else 0
+            c, b = member_words(nd, 0, m)[0], member_words(nd, 2, m)[0]
+            return unselected(*b) if value(*c) == ("c", 0) else None
+
+        def scaled(space: str, j: int, leaf: int):
+            """The word a chain of `INJECTIVE` ops, each by constants alone, reads of data, else the word itself."""
+            nd = body.nodes[j] if space == "n" else None
+            if nd is None or not isinstance(nd.fn, PrimitiveDefinition) or nd.fn.name not in INJECTIVE or not nd.args:
+                return space, j, leaf
+            m = leaf if nd.form == "batch" else 0
+            ws = [member_words(nd, i, m)[0] for i in range(len(nd.args))]
+            vs = [value(*w) for w in ws]
+            data = [w for w, v in zip(ws, vs) if not isinstance(v, tuple)]
+            if len(data) != 1 or not all(INJECTIVE[nd.fn.name](v[1]) for v in vs if isinstance(v, tuple)):
+                return space, j, leaf
+            return scaled(*data[0])
+
+        rows_of: list = []
+
+        def softmax(nd) -> bool:
+            return nd.form in ("call", "batch") and any(p.fullmatch(i) for p in SOFTMAXES for i in ids(nd.fn))
+
+        def masked_rows() -> frozenset:
+            """The rows (node, member) of the body's softmaxes that differ from every other row of theirs: each reads,
+            word for word, an f32 add of one member of a product (its row; through `scaled`) and a constant, every two
+            rows of a product with constants that differ in which words are -inf or by more than a shift, each with a
+            finite one."""
+            if rows_of:
+                return rows_of[0]
+            groups: dict = {}
+            info: dict = {}
+            for j, nd in enumerate(body.nodes):
+                if not softmax(nd) or len(nd.args) != 1 or (nd.form == "batch" and nd.axes[0] is None):
+                    continue
+                for r in range(nd.n if nd.form == "batch" else 1):
+                    row = row_of(member_words(nd, 0, r))
+                    if row is None:
+                        continue
+                    prod, at, consts = row
+                    info[j, r] = (prod, consts)
+                    groups.setdefault(prod, []).append(((j, r), at, _shape(consts)))
+            ok = set()
+            for rows in groups.values():
+                if len({at for _r, at, _p in rows}) == len(rows) == len({p for _r, _a, p in rows}):
+                    ok |= {r for r, _a, _p in rows}
+            rows_of.extend((frozenset(ok), info))
+            return rows_of[0]
+
+        def row_of(ws: list):
+            """(the product, its leaves, the constants' `_shape`) a softmax row reads as an f32 add of the two, or
+            None."""
+            if not ws or {s_ for s_, _j, _l in ws} != {"n"} or len({j_ for _s, j_, _l in ws}) != 1:
+                return None
+            e = body.nodes[ws[0][1]]
+            if not isinstance(e.fn, PrimitiveDefinition) or e.fn.name != "F32Add" or e.form != "batch" or \
+                    len(e.args) != 2 or e.axes != (0, 0):
+                return None
+            got = []
+            for _s, _j, leaf in ws:
+                a, b = (member_words(e, i, leaf)[0] for i in (0, 1))
+                va, vb = value(*a), value(*b)
+                if isinstance(va, tuple) == isinstance(vb, tuple):
+                    return None
+                d, c = (b, va) if isinstance(va, tuple) else (a, vb)
+                got.append((scaled(*d), c[1]))
+            data = [d for d, _c in got]
+            if {s_ for s_, _j, _l in data} != {"n"} or len({j_ for _s, j_, _l in data}) != 1 or \
+                    self.product(body.nodes[data[0][1]].fn) is None:
+                return None
+            at = tuple(leaf for _s, _j, leaf in data)
+            if _shape(c for _d, c in got) is None or at != tuple(range(at[0], at[0] + len(at))) or at[0] % len(at):
+                return None
+            return data[0][1], at, tuple(c for _d, c in got)
+
+        def softmax_rows(a, K: int, n: int) -> bool:
+            """Whether argument ``a``'s ``n`` slices of ``K`` words differ pairwise as a softmax's rows or columns that
+            the mask makes differ, through selects whose conditions are false: each slice a row `masked_rows` finds
+            differs, every slice another; or each slice one column of one sequence of a product's rows, every slice
+            another column and the mask's columns there pairwise different, each with a finite word."""
+            if not words(a) or len(words(a)) != n * K or not one_to_one(a):
+                return False
+            got = [unselected(*w) for w in words(a)]
+            if None in got or {s_ for s_, _j, _l in got} != {"n"}:
+                return False
+            width = {}
+            for _s, j, _l in got:
+                sm = body.nodes[j]
+                if not softmax(sm):
+                    return False
+                width[j] = sm.out.leaves // (sm.n if sm.form == "batch" else 1)
+            cells = [((j, leaf // width[j]), leaf % width[j]) for _s, j, leaf in got]
+            slices = [cells[m * K:(m + 1) * K] for m in range(n)]
+            ok, info = masked_rows(), rows_of[1]
+            if all(len({r for r, _c in sl}) == 1 and [c for _r, c in sl] == list(range(K)) for sl in slices):
+                rows = {sl[0][0] for sl in slices}
+                return len(rows) == n and rows <= ok
+            seq = [r for r, _c in slices[0]]
+            if len(set(seq)) != K or any(r not in info for r in seq) or len({info[r][0] for r in seq}) != 1:
+                return False
+            cols = []
+            for sl in slices:
+                if [r for r, _c in sl] != seq or len({c for _r, c in sl}) != 1:
+                    return False
+                c = sl[0][1]
+                col = tuple(info[r][1][c] for r in seq)
+                if not any(_finite(b) for b in col) or any(b != NEG_INF and not _finite(b) for b in col):
+                    return False
+                cols.append((c, col))
+            return len({c for c, _col in cols}) == n == len({col for _c, col in cols})
+
+        def distinct_rows(nd, i: int, K: int) -> bool:
+            """Whether argument ``i`` of product ``nd``'s slices of ``K`` words differ pairwise wherever its words
+            could: it is specific and read one to one, or no gather's rows reach it and it depends on θ, or it is a
+            view, one row of words a column, of a product of a gather's rows by a weight."""
+            a = nd.args[i]
+            st = arg_status(a)
+            if st.specific:
+                return one_to_one(a)
+            if not st.gathered:
+                return not st.stated and not unknown(st)
+            w = words(a)
+            if not w or len(w) % K or {s_ for s_, _j, _l in w} != {"n"} or len({j_ for _s, j_, _l in w}) != 1:
+                return False
+            src = body.nodes[w[0][1]]
+            p = self.product(src.fn)
+            if p is None or src.form != "batch":
+                return False
+            names = [n_ for n_, _t in src.fn.signature()[0]]
+            if arg_status(src.args[names.index(p.w)]).data:
+                return False
+            n_out = src.out.leaves // src.n
+            cols = [leaf % n_out for _s, _j, leaf in w[::K]]
+            return len(set(cols)) == len(cols)
+
+        def product_status(nd, ix: int, iw: int, base: Status) -> Status:
+            """A product's output is specific where its rows by members and its columns both differ."""
+            params = nd.fn.signature()[0]
+            K = min(_unit(params[ix][1]), _unit(params[iw][1]))
+            mapped = nd.form == "batch" and nd.axes[ix] is not None
+            n = nd.n if mapped else 1
+            rows = softmax_rows(nd.args[ix], K, n) or (arg_status(nd.args[ix]).specific and one_to_one(nd.args[ix]))
+            cols = not (nd.form == "batch" and nd.axes[iw] is not None) and distinct_rows(nd, iw, K)
+            if rows and cols:
+                return base._replace(specific=True, gathered=False, keys=frozenset())
+            return unspecific(base, [arg_status(a) for a in nd.args])
+
+        def primitive_status(f, nd, sts: list, base: Status) -> Status:
+            """A primitive's output is specific where it reads a specific word one to one, by an op that no generic value
+            of that word and no constant it reads can make two of its outputs equal (`INJECTIVE`), and no other
+            argument is an input's values the Program doesn't state."""
+            if not base.specific or any(unknown(s) for s in sts):
+                return unspecific(base, sts) if base.specific else base
+            ok = f.name in INJECTIVE and any(
+                s.specific and (nd.form != "batch" or (nd.axes[i] is not None and one_to_one(nd.args[i])))
+                for i, s in enumerate(sts))
+            for i, s in enumerate(sts):
+                if ok and s.stated:
+                    cs = [value(*w) for w in words(nd.args[i])]
+                    ok = all(isinstance(c, tuple) and INJECTIVE[f.name](c[1]) for c in cs)
+            return base if ok else unspecific(base, sts)
+
         for k, nd in enumerate(body.nodes):
             f, leaves = nd.fn, nd.out.leaves
             if is_input(f):
@@ -806,7 +1112,7 @@ class Reader:
                 elif lay is not None:
                     prof.append(by_position(nd, f.params, computed(sts, rate, bits), True))
                 else:
-                    prof.append(((leaves, computed(sts, rate, bits)),))
+                    prof.append(((leaves, primitive_status(f, nd, sts, computed(sts, rate, bits))),))
                 continue
             p = self.product(f)
             if p is not None and nd.form in ("call", "batch"):
@@ -828,11 +1134,13 @@ class Reader:
                 S.sites.append(site)
                 out = min(float(site.out_width), gemm_rate(site, self.k))
                 base = computed((arg_status(a) for a in nd.args), out, bits)
-                prof.append(by_position(nd, params, base, False) if lay is not None else ((leaves, base),))
+                prof.append(by_position(nd, params, base, False) if lay is not None else
+                            ((leaves, product_status(nd, ix, iw, base)),))
                 continue
             if nd.form == "call":
                 C = self.summary(f, tuple(arg_profile(a) for a in nd.args), depth)
                 S.children.append((C, 1, [b for i, a in enumerate(nd.args) for b in bindings(i, a, False)]))
+                S.at.append((k, (0,)))
                 prof.append(capped(C.ret, rate, bits))
             elif nd.form == "batch" and lay is not None:
                 params, _ = f.signature()
@@ -846,13 +1154,14 @@ class Reader:
                     else:
                         groups.append([1, cctx])
                 bs = [b for i, (a, ax) in enumerate(zip(nd.args, nd.axes)) for b in bindings(i, a, ax is not None)]
-                out, at = [], 0
+                out, at, m0 = [], 0, 0
                 for count, cctx in groups:
                     C = self.summary(f, cctx, depth)
                     S.children.append((C, count, bs))
+                    S.at.append((k, range(m0, m0 + count)))
                     per = C.ret[-1][0]
                     out.extend((at + m * per + e, s) for m in range(count) for e, s in C.ret)
-                    at += count * per
+                    at, m0 = at + count * per, m0 + count
                 prof.append(capped(runs_of(out) or ((leaves, THETA),), rate, bits))
             elif nd.form == "batch":
                 params, _ = f.signature()
@@ -861,12 +1170,17 @@ class Reader:
                 C = self.summary(f, cctx, depth)
                 S.children.append((C, nd.n, [b for i, (a, ax) in enumerate(zip(nd.args, nd.axes))
                                              for b in bindings(i, a, ax is not None)]))
+                S.at.append((k, range(nd.n)))
                 per = C.ret[-1][0]
-                prof.append(capped(runs_of([(m * per + e, s) for m in range(nd.n) for e, s in C.ret])
-                                   if len(C.ret) == 1 or nd.n * len(C.ret) <= 4096 else ((leaves, whole(C.ret)),),
+                ret = C.ret
+                sts = [arg_status(a) for a in nd.args]
+                if not any(s.specific and ax is not None and one_to_one(a) for s, a, ax in zip(sts, nd.args, nd.axes)):
+                    ret = runs_of([(e, unspecific(s, sts) if s.specific else s) for e, s in ret])
+                prof.append(capped(runs_of([(m * per + e, s) for m in range(nd.n) for e, s in ret])
+                                   if len(ret) == 1 or nd.n * len(ret) <= 4096 else ((leaves, whole(ret)),),
                                    rate, bits))
             elif nd.form == "scan":
-                prof.append(capped(self.scan(S, nd, depth, arg_profile, arg_status, bindings), rate, bits))
+                prof.append(capped(self.scan(S, k, nd, depth, arg_profile, arg_status, bindings), rate, bits))
             else:
                 raise ValueError(f"{fn.id} node {k}: form {nd.form!r}")
         S.ret = seq_profile(body.ret) if lay is not None else \
@@ -876,7 +1190,7 @@ class Reader:
         self.memo[key] = S
         return S
 
-    def scan(self, S: Summary, nd, depth: int, arg_profile, arg_status, bindings) -> Profile:
+    def scan(self, S: Summary, k: int, nd, depth: int, arg_profile, arg_status, bindings) -> Profile:
         """A scan's iterations by context: the first's carry `first`'s, each next one's the carry the one before
         returned, until a context repeats. A carried value reads none of the current iteration's inputs, and outside
         every scan, the init and the shared arguments are the loop's, not an iteration's."""
@@ -911,19 +1225,17 @@ class Reader:
             C = self.summary(step, ctx, inner)
             seq.append((ctx, C))
             carry = carried(drop(runs_of(_cut(C.ret, 0, carry_leaves)), gone), params[0][1])
-        counts = [1] * len(seq)
-        last = len(seq) - 1
+        its: list[list[int]] = [[i] for i in range(len(seq))]
         if len(seq) < n:
             s0 = seen[(carry, *xs, *shared)]
-            cycle = len(seq) - s0
-            full, rem = divmod(n - len(seq), cycle)
-            for i in range(cycle):
-                counts[s0 + i] += full + (i < rem)
-            last = s0 + (n - len(seq) - 1) % cycle
+            for j in range(len(seq), n):
+                its[s0 + (j - len(seq)) % (len(seq) - s0)].append(j)
+        last = next(i for i, js in enumerate(its) if js[-1] == n - 1)
         for i, (_ctx, C) in enumerate(seq):
             bs = [b for j, a in enumerate(nd.args) if j or i == 0
                   for b in bindings(j, a, 1 <= j <= nx)]
-            S.children.append((C, counts[i], bs))
+            S.children.append((C, len(its[i]), bs))
+            S.at.append((k, tuple(its[i])))
         ys = join(whole(_cut(C.ret, carry_leaves, C.ret[-1][0])) for _ctx, C in seq)
         y_leaves = ret.leaves - carry_leaves
         return runs_of([*_cut(seq[last][1].ret, 0, carry_leaves), (carry_leaves + n * y_leaves, ys)])
@@ -1112,6 +1424,31 @@ def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k:
 def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout | None = None) -> Work:
     """The work ``program`` holds at a policy's k (module docstring), from the circuit alone or with ``layout``
     stated beside it."""
+    return _read(program, k, products, lookups, layout)[0]
+
+
+def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout | None = None):
+    """Each product call of ``program``'s circuit, every member and iteration its own, with its `Site` and the reason
+    `read` leaves it out ("" where it is charged): the reading's decisions on the circuit's own calls."""
+    from verity.circuits.layout import FunctionCall
+
+    _work, R, root, reasons = _read(program, k, products, lookups, layout)
+    circ = program.circuit
+
+    def walk(S: Summary, scope):
+        nodes = scope.spec.body.nodes
+        for i, site in enumerate(S.sites):
+            if (S.sid, i) in reasons:
+                for m in range(site.n if nodes[site.node].form == "batch" else 1):
+                    yield FunctionCall(circ, scope, site.node, m), site, reasons[S.sid, i]
+        for (C, _n, _b), (node, members) in zip(S.children, S.at, strict=True):
+            for m in members:
+                yield from walk(C, scope.child(node, m))
+
+    yield from walk(root, circ.root_scope)
+
+
+def _read(program, k: float, products, lookups, layout: Layout | None):
     gates = boolean_gates(program)
     R = Reader(program, k, products, lookups, layout)
     root = R.root()
@@ -1132,21 +1469,22 @@ def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout |
     cls.overlaps()
     ops = []
     for s in order:
-        for site in s.sites:
+        for i, site in enumerate(s.sites):
             xs, ws = ([(s.sid, *v) for v in src] for src in site.sources)
             for vs in (xs, ws):
                 for v in vs[1:]:
                     cls.union(vs[0], v)
             if count.get(s.sid, 0) * site.n * site.macs:
-                ops.append((s, site, xs[0] if xs else None, ws[0] if ws else None))
-    sites = [site for _s, site, _x, _w in ops]
+                ops.append((s, i, site, xs[0] if xs else None, ws[0] if ws else None))
+    sites = [site for _s, _i, site, _x, _w in ops]
     r_step = adapter_rank(sites)
     seq = least_sequence(sites)
     keep = 1 - SHARED_PREFIX / seq if seq else 1.0
     bk = min_cut().beta(k)
     most = min(min_cut().BF16, bk) if bk is not None else min_cut().BF16
     groups: dict = {}
-    for s, site, x, w in ops:
+    reasons: dict = {}
+    for s, i, site, x, w in ops:
         n = count[s.sid] * site.n
         if not (site.x.aff and site.w.aff):
             reason = "theta"
@@ -1158,6 +1496,7 @@ def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout |
             reason = "activations"
         else:
             reason = ""
+        reasons[s.sid, i] = reason
         weight = (not site.x.data, not site.w.data)
         beta = tuple(round(operand_beta(r, p, not wt, r_step, k, most), 9)
                      for r, p, wt in zip(site.rates, site.passed(), weight))
@@ -1170,7 +1509,7 @@ def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout |
             g[2].add(frozenset((cls.find(x), cls.find(w))))
     out = [Group(key[0], key[1], key[2], key[3], key[4], m, o, frozenset(e), *key[5:])
            for key, (m, o, e) in sorted(groups.items(), key=lambda kv: repr(kv[0]))]
-    return Work(k, gates, out, r_step, keep, layout, tuple(sorted(R.taken)))
+    return Work(k, gates, out, r_step, keep, layout, tuple(sorted(R.taken))), R, root, reasons
 
 
 def clique(edges) -> int:
