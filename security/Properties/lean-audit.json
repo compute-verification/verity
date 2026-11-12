@@ -77,6 +77,7 @@
   "Properties.Accounting.Remote.Schedule",
   "Properties.Accounting.Remote.Live",
   "Properties.Accounting.Remote.Subprotocol",
+  "Properties.Accounting.Remote.SubprotocolDeployed",
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
@@ -1085,12 +1086,9 @@
    }
   },
   "not": {
-   "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "a closed statement: the `LineHeldAtSubprotocolBy` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_iff`, `Iff.rfl`), whose witnesses are this statement's",
    "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
-   "Properties.RemoteAudit.Subprotocol.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim"
   }
  },
  "witnesses": {
@@ -2419,7 +2417,8 @@
     "Properties.Accounting.Remote.Line.Premises",
     "Properties.Accounting.Remote.Line.Record",
     "Properties.Accounting.Remote.Schedule",
-    "Properties.Accounting.Remote.Subprotocol"
+    "Properties.Accounting.Remote.Subprotocol",
+    "Properties.Accounting.Remote.SubprotocolDeployed"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
@@ -2464,6 +2463,11 @@
    "imports": ["RemoteAudit", "Properties.Accounting.Remote.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.Accounting.Remote.SubprotocolDeployed": {
+   "imports": ["Properties.Accounting.Remote.Subprotocol"],
+   "except": [],
+   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Accounting.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
   },
   "Properties.Spot.Bits": {
    "imports": ["Definitions.Claims.Sampling", "Spot.Bits"],
@@ -23423,16 +23427,13 @@
    }
   },
   "Properties.Accounting.Remote.Subprotocol": {
-   "digest": "2ce8ee9cf861fe640b9319dfc022bfb8b027fbcc908e75b88dcb17a31c3786ce",
+   "digest": "baefef31499c9baa404495b95880ef9bfe9df09e940942bd1b09b05f181b524a",
    "definitions": {
-    "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "39766f97e5ab8136f3e347101806cd299e484f3a2fe3f3c7f0e6b67a0fc5f3db",
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "5fc90912a6b189249808541a053d8d89b883764124ce64eb0781e90572d0520b",
     "Properties.RemoteAudit.Subprotocol.HonestSchedule": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
-    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "6eb5a768792e17e57446394e98723dde8eb0c6d9c055ee6127a2565f8d9e3aaf",
     "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": "59354073f7e7b662a1701a83fbf84fbd39579e4cf0883216533374cf173659b9",
     "Properties.RemoteAudit.Subprotocol.LineHeldBy": "7937a4a637647400d1cd889e9c69f65d7362f56c0893981bae517be5b231d46b",
     "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80",
-    "Properties.RemoteAudit.Subprotocol.PublishedEps": "602e59d6e1ee0893199459628a76fef1d944b48391c6e5b6e196c7f977b68c0e",
     "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "9e7658d9ad6bfd062b2b5601fff6cfdddcdd435cb1692f222debe9d51296f602",
     "Properties.RemoteAudit.Subprotocol.ReadBy": "b6bb8c08db864db7b362e5bc4eae9246e510634f345595a098d15c38867ccaf4",
     "Properties.RemoteAudit.Subprotocol.groupsBy": "158c1d4767d23fcbb4b0f277fb71816a87a4dfad310df14d4f5bd010ac8e44d8",
@@ -23444,6 +23445,14 @@
     "Properties.RemoteAudit.Subprotocol.paceBy": "ffe59f9943bbe1369fabf94a6d962e2aa26ef93b3feb6c8c311b7929826de8fe",
     "Properties.RemoteAudit.Subprotocol.quietIngress": "8b16be2ac77baf6987ae14f5345941589075996ae63e5f6a144c9b06d772fb49",
     "Properties.RemoteAudit.Subprotocol.traceBy": "a0c77c62142ab0734b25f19c39b1eb487c5e873c3eb94d7e8eed1807bf65dc62"
+   }
+  },
+  "Properties.Accounting.Remote.SubprotocolDeployed": {
+   "digest": "dd518d2b0def9f4973adade1e12eee95e77a3bfc7e79f82956e6905fbc5677f3",
+   "definitions": {
+    "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "39766f97e5ab8136f3e347101806cd299e484f3a2fe3f3c7f0e6b67a0fc5f3db",
+    "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "6eb5a768792e17e57446394e98723dde8eb0c6d9c055ee6127a2565f8d9e3aaf",
+    "Properties.RemoteAudit.Subprotocol.PublishedEps": "602e59d6e1ee0893199459628a76fef1d944b48391c6e5b6e196c7f977b68c0e"
    }
   },
   "Properties.Accounting.Requirement": {

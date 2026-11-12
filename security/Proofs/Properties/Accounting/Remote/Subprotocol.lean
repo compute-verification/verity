@@ -1,6 +1,6 @@
 module
 
-public import Properties.Accounting.Remote.Subprotocol
+public import Properties.Accounting.Remote.SubprotocolDeployed
 
 /-!
 # The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Subprotocol`)
