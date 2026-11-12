@@ -99447,3 +99447,26 @@ In plain words. Section 4's branch now holds the period's bound stated at SPOT[F
   - `r20261112-185229-dc89`, the records run of #9346's head merged with `main` at `0582899c4392`, on cpu-7, in its Lean slot since 19:26Z, still running. I report its verdict when it ends.
 - **Still open from my 19:18Z entry** [read: the mailbox's newest section is yours of 18:30Z]: whether to correct the three sentences of #9149's body, body only; which pricing circuits' test means; whether a row at the plan's exact numerals may stand in a Lean file; whether circuits needs `TwoOneWaitAvgNumbers.lean` as a pull request of its own on #9346's head.
 - **Next**: read the three runs, fix what they report, push the branch, run the records run and the quick tier at the pushed head, open the pull request unmarked and send its ready line. Due Fri 13 Nov 18:00Z; I expect it tonight if the runs pass [guess].
+
+## GATHER, Thu 12 Nov 20:12Z: the tree is now at `f461ac0edeb2` (`main` `5f0c008aa040` merged, no stop, #9375 not in it); one run launched at 512 sampled tokens of GLM-5.3's vocabulary, the size you recommended, to say what a CPU node carries
+
+A correction first: the heading of my last entry says 20:06Z; I pushed it at 20:05Z [run: `date -u` after the push]. I wrote that hour before reading it.
+
+**1. The new head.**
+
+- [run: `git merge`, 20:07Z; `git push`, 20:10:59Z] `cursor/proofs-gather-served-select-b88b` is at `f461ac0edeb25ade8f3757517cf4f56b865af50f`: one merge commit on `4d085c76b411`, of `main` at `5f0c008aa040` (92 commits). No stop.
+- [run: `git merge-base --is-ancestor`, `git grep`, 20:07Z] #9375's head `bafae2eaec2e` is not on that `main`, and neither served setting's name is in the merged tree, so this merge is before that landing.
+- [run: `git diff --stat 0582899c4392 5f0c008aa040`] What moved in what the rehearsal reads: `benchmarks/one_stage/a5.py`, 24 lines (the audit's coins record gains `verified`, the audit's result gains `case_v2`); nothing under `adapters/vllm/verity_vllm/pipeline/`, `verity/protocols/spot/` or `verity/protocols/flock/`, and none of the files of our pieces.
+- [run: the probe at V = 2,560, 4 outputs, 20:08Z, log `design-probe-2560-after-main.log`] The same design: 20 templates, 19 wires, 20 links, one return held, `returned` = `o0`.
+- [run: local pytest of the three named files at `f461ac0edeb2`, 20:10Z] `test_interior_rows.py -k pieces` 8 passed; `test_two_stage_second.py`, the whole file this time, 8 passed in 25 s (my earlier "5 passed" was a selection of 5 of its 8); `test_boundary_rows.py`, the two tests of the return's refusal, 2 passed.
+- [run: `research run`, 20:11Z] The small rehearsal at this head: `r20261112-201105-2608`, vy-nebius-cpu-6, V = 2,560.
+- [run: `research cancel`, 20:11Z] I cancelled `r20261112-195441-f067`, the same rehearsal at the head before this merge: it had waited 17 minutes with no slot and its check never started, so it only held a place in the line. `5a5c` and `c30d` (at `08528b27dcc8`) stay in line as you said.
+
+**2. A run at the size you recommended.** [run: `research run`, 20:07Z] `r20261112-200647-be5a`, vy-nebius-cpu-10, 16 cores, 128 GB, 240 minutes at most, at `4d085c76b411`: the same script with `SMALL_ARGS="--inline --units 20 --v 154880 --outputs 256 --spans 4"`.
+
+- [derived] At the script's rate 2/6 it samples two of four spans of 256 output tokens: 512 sampled tokens, so the 19 chunk members are at m = 33 and the combine member at m = 34 if a unit is a block (item 3 of my last entry). It answers the question none of the runs in line does: whether a pool node carries the 20 members at the largest sample the recommendation allows, how long each session takes and what the job peaks at.
+- [run: a probe on the VM, 20:05Z, log `evaluate-probe-154880.log`] Why I asked 240 minutes: the stand-in serve takes each id from the Definition by the reference evaluator, 2.5 to 3.0 s a token at V = 154,880 (the same id as `greedy_stages.twin` on each of three rows, which takes 1 ms), so its 1,024 tokens are about 46 minutes on one core before `first` starts [derived]. That cost is the stand-in's alone; a real serve has the engine's ids.
+- [guess] In line behind STOPS' pair on that node; a slot after 20:40Z, an end between 22:00Z and 23:30Z.
+- It is one run and not a duplicate of STOPS' pair. Tell me if you would rather it did not hold the node and I cancel it.
+
+**Next.** I end my turn on the runs: `df04` and `86b4` (STOPS', running since 20:02Z), `5a5c`, `c30d`, `2608`, `be5a` (mine, waiting), `8a02` (the driver's suite, running).
