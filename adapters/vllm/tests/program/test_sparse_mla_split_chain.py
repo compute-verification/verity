@@ -81,6 +81,7 @@ def test_a_split_head_is_its_chains(T: int, NS: int, G: int) -> None:
     assert np.array_equal(got, _head(T, NS, DR, DV, BN, 0.0625, qn, qr, kv))
 
 
+@pytest.mark.slow
 def test_a_token_is_its_split_chains_at_the_served_statics() -> None:
     """GLM-5.3's statics at T = 130 in two splits: split 0 two full blocks, split 1 a block of 2 keys, each ended in eight
     column blocks of 64; the 8 heads' chains are the whole `SparseMlaSplit_v1` Call."""
