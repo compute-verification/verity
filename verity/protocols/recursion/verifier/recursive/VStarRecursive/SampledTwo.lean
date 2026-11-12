@@ -11,7 +11,8 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   auditor's, fixed before any coin:
   * `boundary`: the boundary registration's parameters, as the stream's run reads them (`OneStage.paramsParsed`); its
     program's proof blocks under its query are one stratum, the replay block's one Definition (`ONE_DEFINITION`), so a
-    share of replay blocks by count is their share by weight;
+    share of replay blocks by count is their share by weight; it names the challenger at the interior's key
+    (`ONE_KEY`), so both stages' coins are read under one key;
   * `rule`: the selection, two-stage only (`Select.Rule.twoStage`);
   * `values` and `public`: the Spec's boundary values (`{"name", "registered"}`) and the items both registrations
     show; `challenger`: the challenger's name its receipts carry; `delta`: the audit records' δ;
@@ -76,6 +77,9 @@ def ONE_DEFINITION : String :=
     "one Definition's, so a share of them by count is a share by weight"
 
 /-- The refusal of public outputs: no verdict this form computes reports any. -/
+def ONE_KEY : String :=
+  "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
+
 def OUTPUTS_REFUSED : String :=
   "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 
@@ -147,6 +151,9 @@ def paramsOfJson (j : Json) : V Params := do
   let it := getD j "interior"
   keysAre it #["members", "params", "replay", "values"] "the interior's parameters"
   let ip := getD it "params"
+  let key := getD (getD (getD j "boundary") "challenger") "key"
+  if key matches .null then throw ONE_KEY
+  if !jeq key (getD (getD ip "challenger") "key") then throw ONE_KEY
   let interior ← paramsAt (Json.mkObj (without ip "proofs"))
   let circuits ← Spot.Run.templateCircuits (getD ip "proofs") interior.verifier.query
   let .obj _ := getD it "replay" | throw "the interior's replay is not a program object"
