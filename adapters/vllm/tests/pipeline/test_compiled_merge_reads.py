@@ -1,7 +1,7 @@
 """`compiled-merge` on arms whose records leave a block out: a treatment run with no Commit record, a Commit record without its
 openings, coverage, value correspondence or compiled source, a process whose versions identify no generated kernels or list none
-by name, and a round's verdict without run roots.  A block that is absent, null or empty reads alike.  Torch-free: the arms'
-records are written here; the pairing and its refusals are `test_compiled_merge.py`."""
+by name, and a round's verdict without run roots.  A block that is absent, null, empty or zero reads alike: the merge tests
+each for its truth.  Torch-free: the arms' records are written here; the pairing and its refusals are `test_compiled_merge.py`."""
 from __future__ import annotations
 
 import copy
@@ -16,6 +16,8 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import compiled_merge as cm
 
 ABSENT = "<absent>"
+#: what stands in a block's place where a record has none: the block left out, null, and each empty or zero value
+NOTHING = [ABSENT, None, {}, [], "", 0, False]
 NOT_IDENTIFIED = "served path: generated kernels not identified in both arms (inductor_kernels.json)"
 #: what the summary lists for each treatment run, and what it lists for the run of `process("served", "aa")`
 PER_RUN: dict[str, Any] = {"openings_verified": True, "coverage": True, "value_correspondence": True, "compiled_source": {"pieces": 3},
@@ -70,7 +72,7 @@ def test_a_run_of_each_arm_merges_and_the_summary_lists_the_treatment_runs_commi
     assert verdict["run_roots"] == ["aa"] and verdict["first_fail_reason"] is None
 
 
-@pytest.mark.parametrize("commit", [ABSENT, None, {}])
+@pytest.mark.parametrize("commit", NOTHING)
 def test_a_treatment_run_without_a_commit_record_fails_the_pair_and_gives_no_reason(tmp_path: Path, commit: Any) -> None:
     treatment = process("served", "aa")
     stand_in(treatment["runs"][0], "commit", commit)
@@ -91,7 +93,7 @@ def test_a_treatment_run_whose_commit_failed_fails_the_pair_by_its_reason(tmp_pa
 
 
 @pytest.mark.parametrize("part, listed", PARTS)
-@pytest.mark.parametrize("value", [ABSENT, None, {}])
+@pytest.mark.parametrize("value", NOTHING)
 def test_a_commit_record_without_a_part_lists_nothing_for_it(tmp_path: Path, part: str, listed: str, value: Any) -> None:
     treatment = process("served", "aa")
     stand_in(treatment["runs"][0]["commit"], part, value)
@@ -108,7 +110,7 @@ def test_two_rounds_join_their_verdicts_run_roots_in_round_order(tmp_path: Path)
 
 
 @pytest.mark.parametrize("without, joined", [(0, ["bb"]), (1, ["aa"])])
-@pytest.mark.parametrize("value", [ABSENT, None, []])
+@pytest.mark.parametrize("value", NOTHING)
 def test_a_rounds_verdict_without_run_roots_adds_none(tmp_path: Path, without: int, joined: list[str], value: Any) -> None:
     treatment = [process("served", "aa"), process("served", "bb")]
     stand_in(treatment[without]["verdict"], "run_roots", value)
@@ -117,7 +119,7 @@ def test_a_rounds_verdict_without_run_roots_adds_none(tmp_path: Path, without: i
 
 
 @pytest.mark.parametrize("arm", [0, 1])
-@pytest.mark.parametrize("value", [ABSENT, None, {}])
+@pytest.mark.parametrize("value", NOTHING)
 def test_an_arm_whose_versions_identify_no_generated_kernels_is_refused(tmp_path: Path, arm: int, value: Any) -> None:
     arms = [process("off"), process("served", "aa")]
     stand_in(arms[arm]["versions"]["compilation"], "generated_kernels", value)
@@ -130,7 +132,7 @@ def test_an_arm_whose_versions_identify_no_generated_kernels_is_refused(tmp_path
 
 
 @pytest.mark.parametrize("arm, only", [(0, "only_treatment"), (1, "only_control")])
-@pytest.mark.parametrize("value", [ABSENT, None, {}])
+@pytest.mark.parametrize("value", NOTHING)
 def test_an_arm_that_lists_no_kernel_by_name_leaves_the_others_kernels_as_the_difference(tmp_path: Path, arm: int, only: str,
                                                                                           value: Any) -> None:
     arms = [process("off"), process("served", "aa")]
