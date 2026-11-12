@@ -14,7 +14,11 @@ position isn't where the request's last row ended (`continuity`: no position is 
 from a prefix-cache hit at first scheduling or at a resume from preemption), a finish the advice can't say (a stop string; an
 abort outside a Commit window; an abort mid-prefill, before the request's first output, since an aborted request's Program
 ends at its last kept output; an abort while it waits after a preemption, since it has no row in the step it is freed at), a
-request that arrived and never ran, and a row after an abort's step.  A request its client aborted before it was ever
+request that arrived and never ran, and a row after an abort's step.  Under a launch that decodes speculatively a decode row
+is its request's last known token and then draft tokens (a draft row), and the request's next row starts past the tokens the
+row emitted, its kept drafts and one more: a draft row's advice row is a `decode` row of its length, with no field for the
+count (`window_advice`).  That reading is the sync scheduler's; under async scheduling a row starts where the scheduler
+expects the row before it to keep every draft, and a trace with a draft row there is refused.  A request its client aborted before it was ever
 scheduled has no row and no output, so the advice drops it, exactly; the Commit record keeps it, aborted after 0 ids, and must
 hold no output for it.  A cache hit's KV `sources` are the runs of earlier-computed positions whose requests share the hit's
 tokens, read
@@ -72,6 +76,7 @@ from verity_vllm.engine import step_trace as ST
 
 from . import advice_windows as AW
 from . import window_advice as WA
+from .advice_code.schedule import speculative
 
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
@@ -247,6 +252,28 @@ def _dropped(reqs: dict[str, _Req], outside: dict[str, dict[str, Any]], io: dict
     return gone
 
 
+def _drafting(recs: list[dict[str, Any]]) -> tuple[int, bool]:
+    """The drafts a decode row carries under the trace's header (0: it states none), and whether its scheduler is async."""
+    config = next((r["config"] for r in recs if r["kind"] == "header" and "config" in r), {})
+    return speculative(config), bool(config.get("async_scheduling"))
+
+
+def _draft_emitted(s: int, rid: str, start: int, n: int, emitted: int, drafting: tuple[int, bool]) -> int:
+    """The tokens request rid's draft row at step s emitted, its kept drafts and one more: its next row starts that far past
+    `start`. Refused: more drafts than the header states, async scheduling, and a draft row that emitted nothing."""
+    K, asynchronous = drafting
+    if n - 1 > K:
+        raise ValueError(f"step {s}: request {rid}'s row is {n} positions from {start}, past its prompt, and the trace's header "
+                         + (f"drafts {K} tokens a row" if K else "states no draft"))
+    if asynchronous:
+        raise ValueError(f"step {s}: request {rid}'s row carries {n - 1} drafts under async scheduling, where a row starts where "
+                         f"the scheduler expects the row before it to keep every draft: what a draft row kept is read off its "
+                         f"request's next row's start, which holds under the sync scheduler alone")
+    if not 1 <= emitted <= n:
+        raise ValueError(f"step {s}: request {rid}'s draft row of {n} positions emitted {emitted} tokens, not 1 to {n}")
+    return emitted
+
+
 def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None = None, *, tau: float = 0.1,
                carry: tuple[Left, ...] | None = None) -> Built:
     """The run's advice from a step trace and, when given, the Commit record's requests (their `user` ids, the lengths the trace
@@ -273,6 +300,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     steps = ST.steps(recs)
     outside = {r["request"]: r for r in recs if r["kind"] == "finish"}
     built: list[list[tuple[_Req, int, int, int, bool]]] = []
+    drafting, emits = _drafting(recs), {}
     for st in steps:
         s = st["step"]
         rows = []
@@ -300,8 +328,11 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 raise ValueError(f"step {s}: request {rid}'s row starts at {start}, not where its last row ended ({q.computed})")
             rows.append((q, start, n, hit, resume))
             q.computed = start + n
-        for q, start, n, _, _ in rows:
-            _cover(q.made, start, start + n)
+            if n > 1 and start >= q.prompt_len and not resume:
+                emits[s, len(rows) - 1] = _draft_emitted(s, rid, start, n, int(st["emitted"].get(rid, 0)), drafting)
+                q.computed = start + emits[s, len(rows) - 1]
+        for j, (q, start, n, _, _) in enumerate(rows):
+            _cover(q.made, start, start + emits.get((s, j), n))
         out_rows = []
         for q, start, n, hit, resume in rows:
             sources: tuple[I1.Source, ...] = ()
@@ -355,25 +386,27 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     if io is not None and (extra := sorted(set(io) - set(reqs))):
         raise ValueError(f"the Commit record holds {len(extra)} requests the trace never saw: {extra[:3]}")
     i1_steps = tuple(I1.StepAdvice(tuple(
-        I1.Row(q.index, "decode" if n == 1 and start >= q.prompt_len else "prefill", start, n, hit, resume, sources)
-        for q, start, n, hit, resume, sources in rows)) for rows in built)
+        I1.Row(q.index, "decode" if (n == 1 or (s, j) in emits) and start >= q.prompt_len else "prefill", start, n, hit, resume, sources)
+        for j, (q, start, n, hit, resume, sources) in enumerate(rows))) for s, rows in enumerate(built))
     clocked = all("t" in st for st in steps)
     t0 = steps[0]["t"] if clocked and steps else 0.0
     bucket = [math.floor((st["t"] - t0) / tau) if clocked else st["step"] for st in steps]
-    # the kept outputs in I1's order (step, then row): a row keeps its sample when it reaches the request's known tokens
+    # the kept outputs in I1's order (step, then row): a row keeps its sample when it reaches the request's known tokens, and a
+    # draft row the tokens it emitted
     kept = [x.state.kept for x in carried] + [0] * (len(advice_reqs) - len(carried))
     known = [q.prompt_len + k for q, k in zip(advice_reqs, kept)]
     release = []
     for s, st in enumerate(i1_steps):
-        for row in st.rows:
+        for j, row in enumerate(st.rows):
             r = row.request
-            if row.start + row.n == known[r] and kept[r] < advice_reqs[r].output_len:
-                release.append(bucket[s])
-                kept[r] += 1
-                known[r] += 1
+            m = min(emits[s, j], advice_reqs[r].output_len - kept[r]) if (s, j) in emits else int(
+                row.start + row.n == known[r] and kept[r] < advice_reqs[r].output_len)
+            release += [bucket[s]] * m
+            kept[r] += m
+            known[r] += m
     rule = {"rule": "engine clock", "tau_s": tau} if clocked else {"rule": "step index"}
     try:
-        if not window:
+        if not window and not emits:
             I1.Advice(tuple(q.i1() for q in advice_reqs), i1_steps, tuple(release))
         a = WA.Advice(tuple(advice_reqs), i1_steps, tuple(release), tuple(x.state for x in carried))
     except I1.MalformedAdvice as e:

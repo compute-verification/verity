@@ -34,6 +34,13 @@ after a stop. Where it's freed and what it frees are those rows', so the record 
 and one that aborts a request is version 2, version 1's layout with each request's finish a u2 (eos 0, length 1, abort 2), one
 advice bit more a request. So every window has one encoding, and `decode` refuses any other string: a version 1 one that
 version 0 can say, a version 2 one that aborts nothing, a finish of 3.
+
+**A draft row** (speculative decoding) is a decode row of more than one position: its request's last known token, then the
+draft tokens the step verifies. It keeps some of its drafts and its request's outputs grow by those and one more, so the
+request's next row starts that far on: a draft row's kept count is its request's next row's start less its own, less one, and
+the row has no field for it. A request's last row keeps what its ``output_len`` still lacks, so a window holds a draft row
+only with the row that says what it kept, or with its request's last output (`drafts`). A window with a draft row is
+version 3, version 2's layout, which I1 v0 can't say: every row of it emits one output.
 """
 from __future__ import annotations
 
@@ -55,6 +62,7 @@ from verity.protocols.certifier.verifier.advice import (  # the advice's parts, 
 SCHEMA = "verity-vllm/window-advice/v1"
 VERSION = 1
 ABORTS = 2  # the version of a window that aborts a request
+DRAFTS = 3  # the version of a window with a draft row
 FINISHES = (*I1.FINISHES, "abort")
 
 
@@ -155,6 +163,46 @@ class _Replay(NamedTuple):
     outputs: tuple[Output, ...]
     first: tuple[int, ...]  # each request's first step here (a carried one's: 0)
     close: tuple[Close, ...]
+    drafts: dict[tuple[int, int], tuple[int, int]]  # (step, row) of each draft row that emits -> (its drafts, those it kept)
+
+
+def _draft(row: Row) -> bool:
+    return row.kind == "decode" and row.n > 1
+
+
+def _later(steps: tuple[StepAdvice, ...]) -> dict[tuple[int, int], Row]:
+    """Each draft row's (step, row) -> its request's next row, for the draft rows that have one."""
+    out: dict[tuple[int, int], Row] = {}
+    nxt: dict[int, Row] = {}
+    for s in range(len(steps) - 1, -1, -1):
+        for j in range(len(steps[s].rows) - 1, -1, -1):
+            row = steps[s].rows[j]
+            if _draft(row) and row.request in nxt:
+                out[s, j] = nxt[row.request]
+            nxt[row.request] = row
+    return out
+
+
+def _kept_drafts(where: str, r: int, row: Row, known: int, lacks: int, nxt: Row | None) -> int:
+    """The drafts request r's draft row kept, where r has ``known`` tokens and lacks ``lacks`` outputs: what its next row
+    ``nxt`` says by its start, at most what the request lacks after the row's own token, and that for its last row."""
+    if row.preempted or row.start != known - 1 or known - 1 < 0:
+        raise MalformedAdvice(f"{where}: a draft row is request {r}'s last known token, at {known - 1}, then its drafts, and "
+                              f"resumes nothing (it starts at {row.start})")
+    d, most = row.n - 1, lacks - 1
+    if nxt is None:
+        if most > d:
+            raise MalformedAdvice(f"{where}: request {r}'s draft row is its last here and leaves it outputs to keep: what a "
+                                  f"draft row kept is read off its request's next row, which this window doesn't hold")
+        return most
+    if nxt.preempted:
+        raise MalformedAdvice(f"{where}: request {r}'s row after its draft row resumes it, so its start doesn't say what the "
+                              f"draft row kept")
+    c = min(nxt.start - row.start - 1, most)
+    if not 0 <= c <= d:
+        raise MalformedAdvice(f"{where}: request {r}'s next row starts at {nxt.start}, {nxt.start - row.start - 1} past its draft "
+                              f"row's token, which carries {d} drafts")
+    return c
 
 
 def _replay(carried: tuple[Carried, ...], requests: tuple[RequestAdvice, ...], steps: tuple[StepAdvice, ...]) -> _Replay:
@@ -175,6 +223,7 @@ def _replay(carried: tuple[Carried, ...], requests: tuple[RequestAdvice, ...], s
         computed[r], kept[r], C[r], made[r] = c.computed, c.kept, c.C, [list(x) for x in c.made]
     first: list[int] = [0] * n
     outputs: list[Output] = []
+    later, drafts = _later(steps), {}
     for s, step in enumerate(steps):
         for j, row in enumerate(step.rows):
             r = row.request
@@ -199,6 +248,21 @@ def _replay(carried: tuple[Carried, ...], requests: tuple[RequestAdvice, ...], s
             elif row.start != computed[r]:
                 raise MalformedAdvice(f"{where}: request {r} continues at {computed[r]}, not {row.start}")
             end = row.start + row.n
+            if _draft(row):
+                if row.start < req.prompt_len:
+                    raise MalformedAdvice(f"{where}: a draft row follows its request's first output, and position {row.start} "
+                                          f"is in request {r}'s {req.prompt_len}-token prompt")
+                if kept[r] < req.output_len:
+                    c = _kept_drafts(where, r, row, known[r], req.output_len - kept[r], later.get((s, j)))
+                    drafts[s, j] = (row.n - 1, c)
+                    outputs += [Output(s, j, r, kept[r] + i) for i in range(c + 1)]
+                    kept[r], known[r], last[r] = kept[r] + c + 1, known[r] + c + 1, s
+                    end = row.start + c + 1
+                else:
+                    end = min(end, known[r])
+                computed[r] = end
+                _cover(made[r], row.start, end)
+                continue
             if end > known[r]:
                 raise MalformedAdvice(f"{where}: positions to {end}, past request {r}'s {known[r]} known tokens")
             kind = "decode" if row.n == 1 and row.start >= req.prompt_len else "prefill"
@@ -225,7 +289,7 @@ def _replay(carried: tuple[Carried, ...], requests: tuple[RequestAdvice, ...], s
         raise MalformedAdvice(f"requests {len(first)} … {R - 1} have no row")
     close = tuple(Close(r, Carried(C[r], computed[r], kept[r], tuple(map(tuple, made[r]))), kept[r] < q.output_len)
                   for r, q in enumerate(requests) if kept[r] < q.output_len or (steps and last[r] == len(steps) - 1))
-    return _Replay(tuple(outputs), tuple(first), close)
+    return _Replay(tuple(outputs), tuple(first), close, drafts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,7 +327,10 @@ class Advice:
 
     @property
     def version(self) -> int:
-        """2 when the window aborts a request, else 0 when it is I1 v0's (nothing carried in, nothing left to carry), else 1."""
+        """3 when the window holds a draft row, else 2 when it aborts a request, else 0 when it is I1 v0's (nothing carried
+        in, nothing left to carry), else 1."""
+        if any(_draft(row) for st in self.steps for row in st.rows):
+            return DRAFTS
         if any(q.finish == "abort" for q in self.requests):
             return ABORTS
         return 0 if not self.carried and not any(c.must for c in close(self)) else VERSION
@@ -271,7 +338,7 @@ class Advice:
     def i1(self) -> I1.Advice:
         """The window as I1 v0's `Advice`; only a version 0 window is one."""
         if self.version:
-            raise MalformedAdvice("a window that carries a request in or out, or aborts one, isn't I1 v0 advice")
+            raise MalformedAdvice("a window that carries a request in or out, aborts one or holds a draft row isn't I1 v0 advice")
         return I1.Advice(tuple(q.i1() for q in self.requests), self.steps, self.release)
 
 
@@ -283,6 +350,11 @@ def outputs(advice: Advice) -> tuple[Output, ...]:
 def close(advice: Advice) -> tuple[Close, ...]:
     """The state the window leaves to the next (`Close`), in request order."""
     return _replay(advice.carried, advice.requests, advice.steps).close
+
+
+def drafts(advice: Advice) -> dict[tuple[int, int], tuple[int, int]]:
+    """Each draft row that emits, by (step, index in the step): the drafts it carries and those it kept (the module's text)."""
+    return _replay(advice.carried, advice.requests, advice.steps).drafts
 
 
 #: what `NotFollowing` names, in the order `follows` checks a carried request: not one the last window left, in its order; a
@@ -404,7 +476,7 @@ class _Layout(NamedTuple):
 
 
 def _layout(advice: Advice) -> _Layout:
-    """A version 1 or 2 window's bit string and each part's length in bits."""
+    """A window's bit string past version 0, and each part's length in bits."""
     w = _widths(advice)
     version = advice.version
     out = _Writer()
@@ -432,7 +504,7 @@ def _layout(advice: Advice) -> _Layout:
             out.put(byte, 8)
         out.put(q.prompt_len, w.len)
         out.put(q.output_len, w.len)
-        out.put(FINISHES.index(q.finish), 2 if version == ABORTS else 1)
+        out.put(FINISHES.index(q.finish), 2 if version >= ABORTS else 1)
         requests.append(out.bits - mark)
     steps = []
     for st in advice.steps:
@@ -473,9 +545,9 @@ def decode(data: bytes) -> Advice:
     if version == I1.VERSION:
         a = I1.decode(data)
         return Advice(a.requests, a.steps, a.release)
-    if version not in (VERSION, ABORTS):
-        raise MalformedAdvice(f"window advice version {version}, not {I1.VERSION}, {VERSION} or {ABORTS}")
-    w_finish = 2 if version == ABORTS else 1
+    if version not in (VERSION, ABORTS, DRAFTS):
+        raise MalformedAdvice(f"window advice version {version}, not {I1.VERSION}, {VERSION}, {ABORTS} or {DRAFTS}")
+    w_finish = 2 if version >= ABORTS else 1
     n_carried, n_requests, n_steps = rd.uvar(), rd.uvar(), rd.uvar()
     w_len, w_rel, w_src = rd.get(WIDTH_BITS), rd.get(WIDTH_BITS), rd.get(WIDTH_BITS)
     w_req = max(n_requests - 1, 0).bit_length()
@@ -519,7 +591,9 @@ def decode(data: bytes) -> Advice:
     if not advice.version:
         raise MalformedAdvice("a window that carries nothing in or out and aborts nothing is I1 v0's, version 0")
     if advice.version != version:
-        raise MalformedAdvice(f"a window that aborts no request is version {advice.version}, not {version}")
+        raise MalformedAdvice(f"a window that aborts no request is version {advice.version}, not {version}" if version == ABORTS else
+                              f"a window with {'a' if advice.version == DRAFTS else 'no'} draft row is version {advice.version}, "
+                              f"not {version}")
     if _widths(advice) != (w_req, w_len, w_rel, w_src):
         raise MalformedAdvice(f"widths (len {w_len}, release {w_rel}, sources {w_src}) aren't the least that hold the window's "
                               f"values, {_widths(advice)[1:]}")
