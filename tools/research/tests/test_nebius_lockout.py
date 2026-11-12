@@ -548,6 +548,37 @@ def test_vy_sudo_and_both_allowlists_take_a_unit_that_may_make_the_namespaces_it
         assert LO.allowed("research", "root", " ".join(argv[2:]), p), p.file
 
 
+def _unit_ns(*props: str) -> list[str]:
+    """vy-sudo's arguments for a job's unit carrying each `RestrictNamespaces=<value>` of `props`, each as its own `-p`."""
+    head = ["--unit=research-job-r1", "--uid=vyjob", "--wait", "--pipe"]
+    return [*head, *(x for v in props for x in ("-p", f"RestrictNamespaces={v}")), "--", "true"]
+
+
+def test_vy_sudo_refuses_a_restrict_namespaces_value_that_would_widen_the_unit():
+    """RestrictNamespaces= only narrows at `yes` (no namespace) or a space-separated list out of NAMESPACES (only those); `no`, a
+    `~` list, a type outside the set, or anything else widens the unit, so vy-sudo refuses it. The set is the launcher's
+    (jobuser.check_namespaces), held equal here because vy-sudo is a lone `python3 -I` script on the node and can't import it."""
+    assert set(VS.NAMESPACES) == set(jobuser.NAMESPACES)
+    job = _pw(pw_gid=990)
+    allowed = ("yes", "user", "mnt", "net", "user mnt", "net user", "user mnt net", "user user", "  user   mnt ")
+    for value in allowed:
+        out = VS.systemd_run(_unit_ns(value), CALLER, CALLER_GID, user=job)
+        assert [a for a in out if a.startswith("RestrictNamespaces=")] == [f"RestrictNamespaces={value}"], value
+    widening = ("", "no", "false", "0", "off", "~", "~user", "~user mnt", "yes mnt", "YES", "Yes", "User", "MNT",
+                "user,mnt", "user,net", "pid", "cgroup", "uts", "ipc", "user pid", "bogus", "all")
+    for value in widening:
+        with pytest.raises(VS.Refused, match="RestrictNamespaces"):
+            VS.systemd_run(_unit_ns(value), CALLER, CALLER_GID, user=job)
+    # a property repeated with different values: vy-sudo checks each occurrence, so a widening one is caught wherever it sits,
+    # whichever systemd would take last
+    assert VS.systemd_run(_unit_ns("user", "mnt"), CALLER, CALLER_GID, user=job).count("RestrictNamespaces=user") == 1
+    for pair in (("user", "no"), ("no", "user"), ("yes", "~net")):
+        with pytest.raises(VS.Refused, match="RestrictNamespaces"):
+            VS.systemd_run(_unit_ns(*pair), CALLER, CALLER_GID, user=job)
+    with pytest.raises(VS.Refused, match="widen the unit: only .* mnt, net, user"):
+        VS.systemd_run(_unit_ns("no"), CALLER, CALLER_GID, user=job)
+
+
 def test_job_user_is_never_root_or_a_privileged_account():
     for name in ("root", "0", "no-such-user-vy"):
         with pytest.raises(VS.Refused):
