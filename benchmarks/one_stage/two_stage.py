@@ -732,8 +732,9 @@ def interior_source(window: CS.Binding, sample: Sequence[int]) -> Callable[[dict
 
 def statements(audit_dir: Path, window: CS.Binding) -> list[dict]:
     """Each member session's statement as round 2 takes it (``{"template", "header", "draw", "registered"}``): its
-    template, its public file's header, its session record's ``unit_draw`` and the reads it was verified against. A
-    member the second stage drew nothing of has no session and no statement."""
+    template, its public file's header (the one its session proved: the member's as staged before the sample, or, under
+    ``--sampled-only``, restaged at its sampled proof blocks, `a5.sampled_only`), its session record's ``unit_draw`` and
+    the reads it was verified against. A member the second stage drew nothing of has no session and no statement."""
     import a0
 
     out = []
@@ -742,7 +743,9 @@ def statements(audit_dir: Path, window: CS.Binding) -> list[dict]:
         if rec is None:
             continue
         reads = st / "registered.json"
-        out.append({"template": m.template, "header": a0.public_header(st, m.n),
+        sampled = next((st / "sampled").glob("pub-*.bin"), None)   # the member restaged at its sampled proof blocks
+        header = a0.public_header(st, m.n) if sampled is None else a0.public_header(sampled.parent, int(sampled.name[4:-4]))
+        out.append({"template": m.template, "header": header,
                     "draw": json.loads(rec.read_text()).get("unit_draw"),
                     "registered": json.loads(reads.read_text()) if reads.exists() else None})
     return out
@@ -1116,6 +1119,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="a class whose replay block gives round 2 no wires (refused without this): commit and prove its "
                         "sampled proof blocks with no link and no wire, each port at its own rows. Nothing then ties a "
                         "block to another or to round 1: round 2 refuses the statements (second-wires) and this exits 1")
+    g.add_argument("--sampled-only", action="store_true",
+                   help="stage each member's statement, after the sample, at its sampled proof blocks alone (each port's "
+                        "table the rows those blocks read), its session's sample every unit of it; without this a "
+                        "member's statement holds every slot of its part")
     g.add_argument("--proofs", help="the auditor's params (service.template_circuits); without them a development run's "
                                     "are built after the sample (references)")
     g.add_argument("--m0-pythonpath", required=True)

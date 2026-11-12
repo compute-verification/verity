@@ -430,7 +430,7 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
                 "agree": r["verifiers"]["agree"]}
 
     vs = base["verdicts"]
-    port = next(iter(session_roots), None)
+    port = next(iter(session_roots), "")
     neg = {"verifier-of-record-did-not-run (C2)": decide(verdicts={k: {**v, "accepted": None} if v.get("of_record") else v
                                                                    for k, v in vs.items()}),
            "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),

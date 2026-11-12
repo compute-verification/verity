@@ -536,13 +536,14 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     return neg
 
 
-def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
+def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path, of: dict | None = None) -> dict[str, dict]:
     """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
     registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
     value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
     ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
-    verifier's reads (`Flock.Registered.checkComplete`)."""
-    st, n = mm["st"], mm["m"].n
+    verifier's reads (`Flock.Registered.checkComplete`). ``of``: the statement the session proved (its ``st`` and its
+    instances ``n``) where it is not the member's as staged before the sample (`sampled_only`)."""
+    st, n = (of["st"], of["n"]) if of else (mm["st"], mm["m"].n)
     honest = json.loads(st["registered_file"].read_text())
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
     p = honest["ports"][port]
@@ -673,6 +674,38 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     with open(got["inst"], "rb") as f:
         if dict(json.loads(f.readline()), rows=False) != mm["header"]:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
+
+
+#: why an audit whose sessions' statements hold only their sampled proof blocks (``--sampled-only``) has no per-member case
+SAMPLED_CASE_WHY = ("a statement of only its sampled proof blocks is staged after the sample; the per-member case names each "
+                    "member's public file as staged before it")
+
+
+def sampled_only(mm: dict, local: list[int]) -> dict:
+    """Staged member ``mm`` (`stage`) restaged at its proved units ``local`` alone (`two_stage_drawn.restage`), under
+    ``sampled/`` of its directory: each port's table the rows those units read, each with its path to the registered
+    root, the header's slots, range, classes and roots theirs. -> the statement its session proves and Lean verifies
+    (``st``, its instances ``n`` and its ``header``), every unit of it sampled. The member's files staged before the
+    sample are left as they were; the verifier's registered reads are the member's own, every slot's."""
+    import two_stage_drawn as TD
+
+    m, st = mm["m"], mm["st"]
+    d = st["dir"] / "sampled"
+    d.mkdir(exist_ok=True)
+    header, private, body = TD.split((st["dir"] / f"inst-{m.n}.bin").read_bytes(), (st["dir"] / f"pub-{m.n}.bin").read_bytes())
+    ports = [(str(p[0]), int(p[1])) for p in st["meta"]["ports"]]
+    new, new_private, new_body, held = TD.restage(header, private, body, ports, int(st["meta"]["vus_per_block"]), local)
+    if not all(h["root"] and h["domain"] for h in held.values()):
+        raise RuntimeError(f"member {mm['k']}'s tables are not under its header's roots: {held}")
+    link(st["dir"] / "circuit.txt", d / "circuit.txt")
+    if (st["dir"] / "tables").is_dir():
+        (d / "tables").mkdir(exist_ok=True)
+        for f in sorted((st["dir"] / "tables").glob("*.u32")):
+            link(f, d / "tables" / f.name)
+    TD.write(d, new, new_private, new_body)
+    n = len(local)
+    return {"st": {**st, "dir": d, "public": a0.sha512_file(d / f"pub-{n}.bin")}, "n": n,
+            "header": dict(new, rows=False)}
 
 
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
@@ -888,29 +921,34 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         # a plain session is served the stream's stratified sample itself, its one member the whole window (`plain_refusal`)
         session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
                                      ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
-        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
+        of = {"st": mm["st"], "n": m.n, "header": mm["header"]}
+        if getattr(a, "sampled_only", False) and not plain(a) and len(local) < m.n:
+            # the statement holds only the proved units, and its session samples every one of them
+            of = {**sampled_only(mm, local), "slots": local}
+            session_draw, session_law = ({"law": "subset", "population": of["n"], "k": of["n"], "units": list(range(of["n"]))},
+                                         {"law": "subset", "k": of["n"]})
+        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
         return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
-                "session_law": session_law}
+                "session_law": session_law, **of}
 
     def member_session(i: int, s: dict) -> dict:
         """Staged member ``s``'s (`staged`) `--zk` session: submitted to the audit's proof server, Lean's verify its verdict
         of record, else (`proof_server`) on port ``port + i`` (``i`` its place among the members with proved units,
         `port_refusal`), behind the ZK server under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
-        mm, local, sdir, session_draw, session_law = s["mm"], s["local"], s["sdir"], s["session_draw"], s["session_law"]
-        m = mm["m"]
+        local, sdir, session_draw, session_law = s["local"], s["sdir"], s["session_draw"], s["session_law"]
+        st, n = s["st"], s["n"]
         if server is not None:
-            st = mm["st"]
             h = server.submit(Statement(pin=st["pin"], circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
-                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin",
+                                        instances=st["dir"] / f"inst-{n}.bin", public=st["dir"] / f"pub-{n}.bin",
                                         tmpl_unit=st.get("tmpl_unit")),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
-                              verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
+                              verdict=lambda _: a0.lean_verify(a.lean, st, n, sdir, zk=True))
             return {**s, "handle": h}
         t = time.time()
-        env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
+        env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, st)
+        record, live = a0.session(a.bin, st, n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout,
                                   tree_from=None if relay is None else relay.flags)
         session_s = round(time.time() - t, 1)
@@ -960,24 +998,31 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             s = collected(s)
         mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
         m, k, session_s = mm["m"], mm["k"], s["session_s"]
+        st, n, header, slots = s["st"], s["n"], s["header"], s.get("slots")
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         got = {f"m0-verifier/m{k}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
-                                     and (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"] and v.ok,
+                                     and (live or {}).get("roots") == header["frame_v3"]["roots"] and v.ok,
                                      "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()},
                f"lean-draw/m{k}": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}}
         if plain(a):
             flags = ("--coins", "tree", "--stratified", str(drawn_law["k"]))
-            got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
+            got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, st, n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
-            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True)
+            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, st, n, sdir, zk=True)
             got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
-                "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {mine.held(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
-                "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
+                # a closure's are `proved`; a statement of only its proved units names each by its place among them
+                "served": [u for u in (m.base + (x if slots is None else slots[x]) for x in draw_t.get("units", [])
+                                       if slots is None or x < len(slots)) if u in drawn_units],
+                # such a statement's roots are its own tables', which the registration doesn't hold: its reads are held
+                # at the registered roots instead (the verifier's registered reads)
+                "roots": {} if slots is not None else {mine.held(m, p_name): r
+                                                       for p_name, r in ((live or {}).get("roots") or {}).items()},
+                "sampled_only": slots is not None, "st": st, "n": n,
+                "proved": a0.proved_units(header, live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                               "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
@@ -1023,11 +1068,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         verdicts.update(got["verdicts"])
         if mm["m"].key in reads:
             row_verdicts[mm["m"].key] = got["lean_verify"]
-            linked = linked or (mm, got["sdir"])
+            linked = linked or (mm, got["sdir"], {"st": got["st"], "n": got["n"]})
         statement[mm["m"].key] = got["statement"]
         sessions += got["sessions"]
         if got["challenger"] is not None:
             summary.setdefault("challengers", {})[f"m{mm['k']}"] = got["challenger"]
+    restaged = any(got["sampled_only"] for got in done)
+    if restaged and not session_roots:   # no session's roots are the registration's: the record takes none to hold
+        session_roots = None
+    per_member = SAMPLED_CASE_WHY if restaged else members_proof(members, done, not plain(a))
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
@@ -1036,7 +1085,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a)))
+                   per_member=per_member)
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1060,7 +1109,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
-                   per_member=members_proof(members, done, not plain(a)),
+                   per_member=per_member,
                    coins=AC.evidence(a.coins.evidence(), segment) if relay is not None else None, window_root=a.window_root,
                    family=stream.family(draw) if relay is not None else None)
     result["draw_counts"] = counts
@@ -1109,7 +1158,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
                                            tie(a)))
-        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots or {}, served=sorted(served_units)))
         neg.update(coin_neg)
         if linked is not None:
             neg.update(registered_negatives(a, *linked))
