@@ -1418,6 +1418,29 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     assert docs[CPU1] == pool(slot("r0"), slot("r1")), "what was read is not rewritten"
 
 
+@pytest.mark.parametrize(("docs", "first", "second", "out"), [
+    ({N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))},
+     (CPU1, "research"), (CPU5, "research"), f"{CPU1}'s research pool skipped: {auto.NO_START}: {NOT_STARTED}; "),
+    ({N2: share(free=48), CPU1: pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)},
+     (N2, None), (CPU1, "research"), f"({N2} takes no job: {auto.NO_START}: {NOT_STARTED}; ")],
+    ids=["a-pool-then-the-next-pool", "the-queue-then-a-pool"])
+def test_a_job_placed_again_past_a_machine_that_starts_no_run_keeps_each_placement_with_its_own_run(
+        docs, first, second, out, tmp_path, monkeypatch, capsys):
+    """A job placed again is a second run, on another machine, for another reason. Each launch carries the placement that
+    sent it there: the refused run's is the first choice, as it was said before the machine refused, and the run that starts
+    carries the second, whose reason says why the first machine is out. Neither carries the other's."""
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {first[0]: ("CannotStart", NOT_STARTED), second[0]: None})
+    assert main(RUN) == 0
+    refused, started = (kw["auto"] for kw in launched)
+    assert (refused["machine"], refused["pool"]) == first and (started["machine"], started["pool"]) == second
+    assert [kw["machine_name"] for kw in launched] == [first[0], second[0]], "each record names the machine its launch went to"
+    assert NOT_STARTED not in " ".join(refused["said"]) and second[0] not in refused["said"][0].split(" (")[0]
+    assert started["said"][0].startswith(f"spilled to {second[0]}'s research pool, from ") and out in started["said"][0]
+    assert f" on {second[0]}'s research pool" in started["said"][1], "and when it should start there"
+    printed = capsys.readouterr().err.splitlines()
+    assert all(f"research run --on auto: {line}" in printed for kw in launched for line in kw["auto"]["said"]), "the words it printed"
+
+
 @pytest.mark.parametrize("refusal", [
     ("Refused", "/src has uncommitted changes; commit them (an unpushed commit is fine) or the snapshot would be mislabeled as HEAD", RAISED),
     ("Refused", "/workspace/research/src/abc has no .git, as git couldn't reach the machine (RESEARCH_SHIP=stream), and "
