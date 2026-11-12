@@ -546,6 +546,7 @@
       "owns": [
         "tools/verity/lean/",
         "tools/lean/",
+        "benchmarks/lean_records/",
         ".agents/skills/lean-proofs/",
         "security/"
       ],
