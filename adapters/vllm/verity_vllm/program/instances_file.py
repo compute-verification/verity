@@ -20,6 +20,7 @@ read as a copy of the first one's list.  `query.program_view.iter_instance_rows`
 from __future__ import annotations
 
 import collections
+import contextlib
 import gzip
 import json
 import os
@@ -225,9 +226,11 @@ class ParallelGzip:
 
     def __init__(self, path: str, *, level: int = INSTANCES_GZ_LEVEL, threads: int | None = None, block: int = GZ_BLOCK) -> None:
         self.level, self.block, self.threads = level, block, threads or gz_threads()
-        self.f = open(path, "wb")
-        self.f.write(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff")
-        self.pool = ThreadPoolExecutor(self.threads)
+        with contextlib.ExitStack() as opening:   # a constructor that fails closes the file; one that returns leaves it to close()
+            self.f = opening.enter_context(open(path, "wb"))
+            self.f.write(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff")
+            self.pool = ThreadPoolExecutor(self.threads)
+            opening.pop_all()
         self.pending: collections.deque = collections.deque()
         self.parts: list[str] = []
         self.n = 0

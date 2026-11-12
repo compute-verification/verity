@@ -23,8 +23,12 @@ from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.required_manifest import RequiredManifest
 
+__all__ = ["form_b_families"]
+
 #: what `query_population` names a manifest it was handed (the replay is handed the parsed JSON, not its path)
 HANDED = "the required-value manifest the replay was handed"
+#: how many of a finding's identities `query_population` names in full (each finding's `first`, beside its count `n`)
+FIRST = 6
 
 
 #: named in population() whenever a Program carries attention rows: what the row relation does not read (a Q_fine_v1 research item, not a
@@ -188,7 +192,7 @@ class _Reach:
 
 
 def _reach(man: RequiredManifest | None, addresses: dict[tuple, dict], evaluated: set[tuple], by_key: dict[tuple, Mapping[str, Any]],
-           aliases: dict[str, tuple[str, int]], executed_prefix: dict[str, dict] | None, first_n: int) -> _Reach:
+           aliases: dict[str, tuple[str, int]], executed_prefix: dict[str, dict] | None) -> _Reach:
     """Every Program-row address against Q(P): reached (an evaluable VU), not executed (at or past its request's n_exec), or grouped
     under the class that says why it has no VU; with the findings the reconciliation fails on."""
     # --- reach: identities with >= 1 evaluable VU; evaluated: identities under an evaluated (request, step, module) -------------------
@@ -216,7 +220,7 @@ def _reach(man: RequiredManifest | None, addresses: dict[tuple, dict], evaluated
         fam = str(ident["family"]) if ident is not None else _address_family(op, mem, a)
         if man is not None and ident is None:
             n_outside += 1
-            if len(outside) < first_n:
+            if len(outside) < FIRST:
                 outside.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "spec": a["spec"], "class": a["class"]})
             # not a required identity: it is NOT counted toward the reach of Q(P) (the replay does not enlarge the population)
         elif ident is not None:
@@ -228,11 +232,11 @@ def _reach(man: RequiredManifest | None, addresses: dict[tuple, dict], evaluated
             height = ((int(hi) - int(lo)) // int(width)) if (hi is not None and isinstance(width, int) and width > 0) else None
             if height is not None and height != int(a["rows"]):
                 n_rows_disagree += 1
-                if len(rows_disagree) < first_n:
+                if len(rows_disagree) < FIRST:
                     rows_disagree.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "manifest_height": height, "program_rows": a["rows"]})
             if isinstance(ident.get("rows"), int) and height is not None and int(ident["rows"]) != height:
                 n_rows_annot += 1
-                if len(rows_annot) < first_n:
+                if len(rows_annot) < FIRST:
                     rows_annot.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "rows_annotation": ident["rows"], "height": height})
         if ident is not None:
             req_ids[str(rid)] += 1
@@ -271,7 +275,7 @@ def _reach(man: RequiredManifest | None, addresses: dict[tuple, dict], evaluated
         for k, ident in by_key.items():
             if k not in seen_keys:
                 n_missing += 1
-                if len(missing) < first_n:
+                if len(missing) < FIRST:
                     missing.append({"request_id": k[0], "step": k[1], "op_path": k[2], "member": k[3], "invocation": k[4], "family": ident.get("family"),
                                     "spec": ident.get("spec")})
     return _Reach(reached=reached, reached_rows=reached_rows, evald=evald, not_exec=not_exec, not_exec_req=not_exec_req,
@@ -410,7 +414,7 @@ def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict]
     return manifest_cut
 
 
-def _unreachable_by_alias(man: RequiredManifest | None, aliases: dict[str, tuple[str, int]], first_n: int) -> tuple[int, list[dict]]:
+def _unreachable_by_alias(man: RequiredManifest | None, aliases: dict[str, tuple[str, int]]) -> tuple[int, list[dict]]:
     """(count, the first few) of the identities at invocation >= 1 that no alias entry maps a Program path to."""
     # an identity at invocation >= 1 is addressed ONLY through `op_path_aliases` (a shared module's k-th call, at the
     # first layer's path); one that is the image of no alias entry is unreachable from every Program row -- the 960 + 960 on the TP2 B1 row
@@ -423,7 +427,7 @@ def _unreachable_by_alias(man: RequiredManifest | None, aliases: dict[str, tuple
             inv = int(ident.get("invocation", 0) or 0)
             if inv >= 1 and (str(ident.get("op_path")), inv) not in alias_images:
                 n_unreachable += 1
-                if len(unreachable) < first_n:
+                if len(unreachable) < FIRST:
                     unreachable.append({"request_id": ident.get("request_id"), "step": ident.get("step"), "op_path": ident.get("op_path"),
                                         "invocation": inv, "family": ident.get("family"), "rank": ident.get("rank", 0)})
     return n_unreachable, unreachable
@@ -565,7 +569,7 @@ def _not_executed_by_rule(man: RequiredManifest | None, executed_prefix: dict[st
 
 
 def query_population(manifest: RequiredManifest | dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
-                     strata: dict[str, dict] | None = None, first_n: int = 6, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
+                     strata: dict[str, dict] | None = None, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
     """Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
     `manifest`: the required-value manifest of the row (Q_module(P): the module-boundary population over the Program, families selected by
     the canonical VU query; the traversal adapter's or the inventory's -- the same identities either way); None = no manifest supplied,
@@ -597,7 +601,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     aliases = alias_table(man)
     req = _required(man, addresses, executed_prefix)
     fam_total, total = req.fam_total, sum(req.fam_total.values())
-    reach = _reach(man, addresses, evaluated, req.by_key, aliases, executed_prefix, first_n)
+    reach = _reach(man, addresses, evaluated, req.by_key, aliases, executed_prefix)
     not_exec, past_stop = reach.not_exec, reach.past_stop
     kind_by_family, batch_level, batch_slots_req = _not_executed_without_rows(req.non_row_idents, executed_prefix or {}, reach)
     uncovered = _uncovered_by_class(reach.groups, fam_total, req.keyed, not_exec, reach.keyed_not_exec)
@@ -609,7 +613,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     n_not_exec = sum(not_exec.values())
     ep_faults: list[dict[str, Any]] = [{"request_id": r, "faults": e.get("faults")} for r, e in sorted((executed_prefix or {}).items()) if e.get("faults")]
     manifest_cut = _manifest_cut(man, executed_prefix, reach.req_max_step, reach.not_exec_req)
-    n_unreachable, unreachable = _unreachable_by_alias(man, aliases, first_n)
+    n_unreachable, unreachable = _unreachable_by_alias(man, aliases)
     (n_outside, outside), (n_missing, missing) = reach.outside, reach.missing
     (n_rows_disagree, rows_disagree), (n_rows_annot, rows_annot) = reach.rows_disagree, reach.rows_annot
     ranks_equal = (sorted(req.ranks_seen) == sorted(int(r) for r in ranks)) if man is not None else None
@@ -625,9 +629,9 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
               "ranks": {"replay": [int(r) for r in ranks], "manifest": sorted(req.ranks_seen) if man is not None else None, "equal": ranks_equal},
               "accounted": (n_reached + n_uncovered + n_not_exec == total) if man is not None else None,
               "unstated_families": [u["family"] for u in uncovered if u["class"] == "unstated"],
-              "controller_rows_disagree": {"n": len(ctrl_disagree), "first": ctrl_disagree[:first_n]},   # [R4 c2] header vs the replay's own count
-              "executed_prefix_rule": {"applied": bool(executed_prefix), "faults": ep_faults, "evaluated_past_stop": {"n": len(past_stop), "first": past_stop[:first_n]},
-                                       "manifest_cut_before_classification": {"n": len(manifest_cut), "first": manifest_cut[:first_n]}}}
+              "controller_rows_disagree": {"n": len(ctrl_disagree), "first": ctrl_disagree[:FIRST]},   # [R4 c2] header vs the replay's own count
+              "executed_prefix_rule": {"applied": bool(executed_prefix), "faults": ep_faults, "evaluated_past_stop": {"n": len(past_stop), "first": past_stop[:FIRST]},
+                                       "manifest_cut_before_classification": {"n": len(manifest_cut), "first": manifest_cut[:FIRST]}}}
     if refused is not None:
         checks["manifest_refused"] = {"field": refused.field, "why": str(refused)}
     checks["ok"] = (False if refused is not None else None if man is None else     # None = not reconciled (no Q(P) supplied), stated

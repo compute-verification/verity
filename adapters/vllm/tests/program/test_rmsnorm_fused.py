@@ -18,19 +18,13 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 
 def _numerics():
-    try:
-        from verity.definitions.numerics import rms_relation
-        from verity.definitions.numerics import rms_triton_model as RM
-    except Exception as e:  # pragma: no cover
-        pytest.skip(f"verity.definitions.numerics not importable: {e}")
+    from verity.definitions.numerics import rms_relation
+    from verity.definitions.numerics import rms_triton_model as RM
     try:
         RM.build()                                     # into the _jit cache; a no-op when fresh
     except Exception as e:  # noqa: BLE001  -- no compiler / compile failure: skip, do not fail
         pytest.skip(f"librms_triton_model.so not buildable here: {type(e).__name__}: {e}")
-    try:
-        rms_relation.tables("cuda")
-    except Exception as e:  # pragma: no cover
-        pytest.skip(str(e))
+    rms_relation.tables("cuda")
 
 
 def _standalone(spec):
