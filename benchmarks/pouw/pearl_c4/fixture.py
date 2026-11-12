@@ -17,10 +17,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
+import twin as T
 
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.definitions.kernels.tc import group_sum_total_batch
@@ -30,9 +30,6 @@ from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.verifier import audit as AU
 from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import twin as T
 
 SHAPE = (128, 128, 1024)
 WEIGHT = 1
