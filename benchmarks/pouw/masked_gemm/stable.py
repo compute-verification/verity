@@ -5,6 +5,8 @@ no receipts and with duo at L = 32, and the gate's verdict for each arm.
 python3 stable.py BENCH.jsonl GATE.jsonl > table.md
 """
 
+from __future__ import annotations
+
 import json
 import math
 import re
@@ -17,16 +19,19 @@ GROUPS = {"Llama linears": ["qkv", "o", "gate_up", "down"], "4096^3": ["sq4096"]
           "attention QK^T": ["qk2k", "qk8k"], "attention PV": ["pv2k", "pv8k"]}
 
 
-def gate_verdicts(path):
+def gate_verdicts(path: str) -> dict[str, list[bool]]:
+    """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        for key, v in json.loads(line).items():
-            if isinstance(v, bool) and key not in ("ok", "receipts"):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            for key, v in json.loads(line).items():
+                if isinstance(v, bool) and key not in ("ok", "receipts"):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
-def arm_gate(name, checks):
+def arm_gate(name: str, checks: dict[str, list[bool]]) -> str:
+    """The gate's verdict for one arm: pass, FAIL or unchecked, over every check the arm rests on, at every gate shape."""
     keys = [key for key in checks if re.fullmatch(rf"(U|R|XA|XB|G)_{re.escape(name)}", key)]
     if not keys:
         return "unchecked"
@@ -40,7 +45,9 @@ def arm_gate(name, checks):
     return "pass" if all(key in checks and all(checks[key]) for key in keys) else "FAIL"
 
 
-def cheapest(arms, pats, al, base, verdict):
+def cheapest(arms: dict[str, dict], pats: list[str], al: str, base: str, verdict: dict[str, str]) -> tuple[float, str] | None:
+    """The fastest arm of ``pats`` at alphabet ``al`` that passed the gate, as (its time over ``base``'s, its name); None
+    when none passed."""
     best = None
     for pat in pats:
         name = pat.format(a=al)
@@ -51,12 +58,15 @@ def cheapest(arms, pats, al, base, verdict):
     return best
 
 
-def geo(xs):
+def geo(xs: list[float]) -> float:
+    """The geometric mean (NaN of none)."""
     return math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")
 
 
-def main(bench, gate):
-    rows = [json.loads(line) for line in open(bench) if line.strip()]
+def main(bench: str, gate: str) -> None:
+    """Print the table of one bench file and one gate file."""
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f if line.strip()]
     checks = gate_verdicts(gate)
     names = sorted({a for j in rows for a in j["arms"]})
     verdict = {a: arm_gate(a, checks) for a in names}
