@@ -1533,6 +1533,17 @@ class World:
             self._listed[check] = self.tasks.graph_v2(check)
         return self._listed[check]
 
+    @contextlib.contextmanager
+    def one_read(self):
+        """A `_listed` of its own inside: the graphs a read lists inside (a candidate's and its base's) are dropped once it
+        ends, so the loop holds one read's at a time: a check's graph of thousands of tasks and millions of reads is
+        gigabytes in memory."""
+        kept, self._listed = self._listed, {}
+        try:
+            yield
+        finally:
+            self._listed = kept
+
     def _verdict_of(self, sha: str) -> dict | None:
         """`graph2_verdict` of ``sha``, read once while a snapshot keeps them (`_theirs`): a subprocess each, and a base's is
         read for each candidate on it that failed or waits on its listing."""
@@ -2302,7 +2313,8 @@ class Loop:
                 self.reads.hits += 1
                 return _unshadowed(kept), kept
         if self.graph2_shadow:
-            j = self.world.verdict(sha, base, p.since(sha), p.since(base))
+            with self.world.one_read() if self.reads is not None else contextlib.nullcontext():
+                j = self.world.verdict(sha, base, p.since(sha), p.since(base))
             self.fresh_left -= 1
         else:
             j = Judged(Verdict(PENDING), note="graph2's shadow isn't read (--no-graph2-shadow)")
@@ -3373,7 +3385,8 @@ class Loop:
                             kept.append(sha)
                             continue
                         over = True
-                    j = w.verdict(sha, base, t.past.since(sha), t.past.since(base))
+                    with w.one_read():
+                        j = w.verdict(sha, base, t.past.since(sha), t.past.since(base))
                 except Exception as e:  # noqa: BLE001 -- the gate's tick goes on whatever reading the shadow raises
                     j = Judged(Verdict(PENDING), note=f"its read failed ({type(e).__name__}: {e})"[:300])
                     w.log(f"research queue vqueue: ready:{sha[:12]}, followed in shadow: {j.note}")

@@ -5074,3 +5074,44 @@ def test_under_gate_check_a_tick_reads_one_candidate_s_graph2_reading_afresh_and
     loop.tick()
     loop.tick()
     assert read == [low, high, low, high]
+
+
+def _wide(sha: str, n: int = 300) -> dict:
+    """A graph/v2 listing of ``sha`` shaped as a real check's is, at a small scale: a few keyed tasks, and many that each read
+    every one listed before them (a real one has thousands of tasks and millions of reads, gigabytes once parsed)."""
+    def task(k: int) -> dict:
+        return {"id": f"t{k}", "kind": "test-file", "env": "py", "argv": ["t"], "vars": {}, "inputs": ["a.txt"],
+                "reads": [{"task": f"t{j}", "output": "out"} for j in range(k)] if k >= 3 else [],
+                "outputs": [{"name": "out", "path": f"t{k}.out"}], **({} if k >= 3 else {"key": f"sha512:{sha[:8]}-{k}"})}
+
+    return {"schema": GRAPH_V2, "commit": sha, "files": {f: f"sha512:{f}" for f in (*SPEC, "a.txt")},
+            "envs": {"py": {"digest": "sha512:env", "spec": list(SPEC)}}, "tasks": [task(k) for k in range(n)]}
+
+
+def test_under_gate_check_a_shadow_read_holds_one_candidate_s_graphs_at_a_time(env, monkeypatch):
+    """A candidate's shadow read lists its check's graph and its base's, each gigabytes for a real check, so a tick holds
+    those of one read at a time (`World.one_read`), however many it reads: three candidates read afresh in one tick peak
+    under two and a half graphs' memory, where graphs kept for the whole snapshot would hold three and more."""
+    import tracemalloc
+
+    for k in (1, 2, 3):
+        env.put(k, {f"{k}.txt": f"{k}\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3, g2_fresh=3)
+    built = [r["sha"] for _ in range(3) for r in loop.tick() if r["action"] == "build"]
+    assert len(built) == 3
+    for sha in built:
+        env.graph2.list_graph(f"ready:{sha}", _wide(sha))
+    tracemalloc.start()
+    try:
+        got = loop.world.tasks.graph_v2(f"ready:{built[0]}")
+        one = tracemalloc.get_traced_memory()[0]
+        del got
+        loop.reads.docs.clear()
+        tracemalloc.reset_peak()
+        base = tracemalloc.get_traced_memory()[0]
+        loop.tick()
+        peak = tracemalloc.get_traced_memory()[1] - base
+    finally:
+        tracemalloc.stop()
+    assert loop.reads.hits == 0 and len(loop.reads.used) == 3
+    assert peak < 2.5 * one, f"a tick of three shadow reads peaked at {peak / one:.1f} graphs"
