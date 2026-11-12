@@ -329,18 +329,6 @@ owner = "compute-research"
 day = "2026-11-13"
 
 [[not_yet]]
-path = "verity/hardware/cards/__init__.py"
-to = "into the hardware file"
-owner = "compute-research"
-day = "2026-11-14 22:00 PST"
-
-[[not_yet]]
-path = "verity/hardware/nodes/__init__.py"
-to = "into the hardware file"
-owner = "compute-research"
-day = "2026-11-14 22:00 PST"
-
-[[not_yet]]
 path = "verity/hardware/site/"
 to = "verity/device.py"
 owner = "top"

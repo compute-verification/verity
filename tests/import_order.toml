@@ -334,6 +334,9 @@ loaded_by = [
 paths = [
     "verity/hardware",
 ]
+loads = [
+    "verity/device.py",
+]
 
 [[place]]
 paths = [
