@@ -80,6 +80,7 @@
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
+  "Properties.Pous.WipeCount",
   "Properties.Challenger",
   "Properties.Firewall",
   "Properties.Core.Site",
@@ -482,6 +483,16 @@
    "owner": "@network-accounting",
    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060",
    "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "NetTiming.Guarantees.SpanCovers": {
+   "owner": "@network-accounting",
+   "issue": "NET-355",
+   "due": "2026-11-30"
+  },
+  "MemoryChallenger.Properties.CountRan": {
+   "owner": "@network-accounting",
+   "issue": "NET-353",
    "due": "2026-11-30"
   },
   "Pous.Component.AcceptsAll": {
@@ -1010,6 +1021,10 @@
   "Properties.Flock.Nets"
  ],
  "witnesses": {
+  "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
+   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeCountTied_honest"],
+   "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_nontrivial"
+  },
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
@@ -1964,7 +1979,7 @@
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity"
    ],
-   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe"],
+   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe", "Properties.Pous.WipeCount"],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Pous.Period": {
@@ -2159,6 +2174,15 @@
    "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
    "except": [],
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`), never a proof"
+  },
+  "Properties.Pous.WipeCount": {
+   "imports": [
+    "MemoryChallenger.WipeProtocol",
+    "Definitions.NetworkCertifier.Premises",
+    "Definitions.NetworkCertifier.Guarantees.Marks"
+   ],
+   "except": [],
+   "why": "an accepted wipe's count over its span is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`), the network certifier's device premise (`Definitions.NetworkCertifier.Premises`) and the device model's lines for a span (`Definitions.NetworkCertifier.Guarantees.Marks`), never a proof"
   },
   "Properties.Pous.Wipe": {
    "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
@@ -2698,6 +2722,15 @@
    },
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2",
    "unfolded_hash": "b688d3cdc94be6a2dbd630c2222347e7d857758aebe1c9cec900ad2257953a8b"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
+   "owner": "@soundness"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_honest": {
+   "owner": "@soundness"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_nontrivial": {
+   "owner": "@soundness"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "owner": "@memory-accounting",
@@ -10969,6 +11002,10 @@
    },
    "Properties.RemoteAudit.Line.lineRegistered": {
     "function": "RemoteAudit.Line.lineOfRegistered",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied": {
+    "function": "MemoryChallenger.WipeProtocol.protocol.check",
     "outcome": "accept"
    },
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
