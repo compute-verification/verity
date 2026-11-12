@@ -86,10 +86,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   restricted to its units (`Member.sizes`: the parameters fix each stratum's size in a member, and nothing the prover
   sends moves a unit between strata), and its public file's units are exactly its member's, in order
   (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
-  evidence's `proved_units`. The registration is held to the members before any statement's session: the members'
-  units are its population, each member one range of it (`laidHeld`), and each of its roots is exactly one member's,
-  the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no member's or two members'
-  refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is held to its slice of the
+  evidence's `proved_units` (`membersRun_proved`). The registration is held to the members before any statement's
+  session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
+  exactly one member's, the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no
+  member's or two members' refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is
+  held to its slice of the
   registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
   bare ports, and the member's count of units as its instances. A member may read registered values, with its own
   registered file as the one statement's, and a value is one tree for every member (`classHeld`): two members' ports of
@@ -1254,6 +1255,27 @@ theorem runMembers_files {slice : Member → Json} {ms : Array Member} {sts : Ar
   obtain ⟨files, hf, _⟩ := Flock.HmNets.bind_ok h
   exact fun m hm => membersFiles_ok hf m (Array.mem_def.1 hm)
 
+/-- **Where every session of the per-member form's run accepted, the units they proved are the evidence's**: the
+units the accepted sessions proved (`Run.proved`, each session's read off its member's public file, `push`), sorted,
+are `want`. So a unit of `want` no accepted session proved refuses the run, as does a unit two sessions prove. -/
+theorem runMembers_proved {slice : Member → Json} {ms : Array Member} {sts : Array StatementFiles} {want : Array Nat}
+    {bs : Core.Blobs} {r : Run} (h : runMembers slice ms sts want bs = .ok r) (hall : r.all = true) :
+    r.proved.qsort (· < ·) = want := by
+  unfold runMembers at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨r', _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hp, h⟩ := Flock.HmNets.bind_ok h
+  have hr : r' = r := Except.ok.inj h
+  subst hr
+  rw [hall] at hp
+  have hp' : provedHeld _ want = .ok () := hp
+  unfold provedHeld at hp'
+  split at hp'
+  · cases hp'
+  · rename_i hne
+    simpa using hne
+
 /-- **The bytes a closing round's digest is of**: the number of `parts` in an 8-byte big-endian word, then each
 part's length in such a word and its bytes, as a frame holds its parts (`Flock.FV3.input`). `evidenceParts` reads the
 parts back, so the digest fixes each part's bytes, not a digest of them. -/
@@ -1348,6 +1370,17 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
   exact ⟨roots, hr, runMembers_files h⟩
+
+/-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
+evidence's `proved_units`** (`runMembers_proved`), which the record's checks hold to the sample (`Record.checks`'
+`proved`): a sampled unit whose member has no accepted session of this run refuses it. -/
+theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r)
+    (hall : r.all = true) : r.proved.qsort (· < ·) = e.base.provedUnits := by
+  unfold membersRun at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  exact runMembers_proved h hall
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
