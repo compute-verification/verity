@@ -80,8 +80,8 @@ def main(a: Options) -> None:
             problems.append(f"compilation setting differs: {k}: control {cc.get(k)!r} vs treatment {ct.get(k)!r}")
     if cc.get("enforce_eager") is not False:
         problems.append(f"control is not compiled (enforce_eager={cc.get('enforce_eager')!r})")
-    if ct.get("compiled_taps") not in ("on", "kernels", "served"):  # kernels = the S3 path of record (P_compiled kernel buffers); on = withdrawn record ops
-        problems.append("treatment process did not run with --compiled-taps on|kernels|served")
+    if ct.get("compiled_taps") not in ("kernels", "served"):  # kernels = the S3 path of record (P_compiled kernel buffers)
+        problems.append("treatment process did not run with --compiled-taps kernels|served")
     if cc.get("compiled_taps") not in (None, "off"):
         problems.append("control process ran with compiled taps")
     # the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over

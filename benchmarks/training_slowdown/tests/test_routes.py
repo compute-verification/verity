@@ -13,6 +13,7 @@ from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
 from training_slowdown.routes import ema, subset
 from training_slowdown.routes._optimizers import newton_schulz
+from training_slowdown.traced import trace_step
 
 
 def test_subsets_schedule_ramps_holds_then_falls_to_zero():
@@ -238,7 +239,7 @@ def loop(tmp_path, **over):
         model, optimizers = route.build(cfg.start.shape, cfg.dials)
         stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
         run.train(te, cfg, route, stream, model, optimizers)
-    return te.finish({}), outputs, model, theta, run.trace_step(cfg, route, model, optimizers, "cpu")
+    return te.finish({}), outputs, model, theta, trace_step(cfg, route, model, optimizers, "cpu")
 
 
 def test_an_ema_runs_checkpoints_are_the_average_of_the_weights_it_wrote(tmp_path):

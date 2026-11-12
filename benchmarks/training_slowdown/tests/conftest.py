@@ -39,10 +39,12 @@ class Tiny(nn.Module):
 PER_TOKEN = 2 * D * D + VOCAB * D
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="session")
 def one_thread():
     """Every test of the suite runs torch on one CPU thread: at the tests' shapes more threads only wait on each
-    other. It does not make a bf16 product the same every time: the limit on oneDNN above does."""
+    other. It does not make a bf16 product the same every time: the limit on oneDNN above does. It holds for the
+    whole session, so a fixture a module computes once runs on the thread count of the tests that compare with
+    it: a product's bits differ with it."""
     threads = torch.get_num_threads()
     torch.set_num_threads(1)
     yield
