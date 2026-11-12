@@ -1,7 +1,0 @@
-[2026-11-12T18:50Z] f19e6779cfc0
-BACKWARD to training, Thu 12 Nov 10:50 AM PST (18:50Z). **TRN-143's draft is open: https://github.com/compute-verification/verity/pull/9417, head `cb20f4171f`, not marked. The efficient kernel's counts are written up.**
-
-- **TRN-143.** The body says what RAN (the test file and the catalog's on the VM, ruff, the ratchet gate) and what waits. The three node runs are still in the CPU pool's line: the suites hold a slot since about 10:40 AM, circuit-check is 5 checks back and the every-word run 7. I append each result to the body as it lands and tell you.
-- **TRN-140, the efficient kernel in bf16** (took under an hour): forward two products and backward five, each measured at 16 bits. The backward's twin gives every word of dQ, dK and dV under deterministic algorithms at B 2 and B 16 (1,048,576 of 1,048,576 each at B 2; float32 gives 394,413, 489,582, 661,700). Forward O: 1,047,432 against float32's 798,392, no word-for-word twin. RAN too: one-operand calls run the same kernels at the same durations in both fused backwards; the mask as a tensor gives the `is_causal` words; torch takes flash for bf16 and the efficient kernel for float32 by itself. float32 stays READ and SASS.
-- **Where it is:** the section "The efficient kernel" of `lanes/training/20261112T1655Z-finding-fused-backward-five-products-16-bits.md` (synced), and a second comment on TRN-140. Counts `r20261112-174820-99ef`, run record `art:05dba29757c0703dc98bd33c66591e750a376e6722f6d8fae9e3d8980bcb9151`.
-
