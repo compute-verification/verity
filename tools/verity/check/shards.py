@@ -3,7 +3,7 @@ allows, where ci.toml's `[[plan]]`s are written by hand (they stay, as fallbacks
 
 Its tasks are the check's parts with the test steps split by suite: each suite of pytest and of lean-suites (`pytest:SUITE`,
 `lean-suites:SUITE`), each Lake package's audit (`lean-audit:PKG`), circuit-check's `circuit-check:K/M` (its ci.toml
-`shards`), and every other job whole (the builds, ratchet-gate) but those of `NO_SHARD`.  A suite that declares `[tool.verity.tests]
+`shards`), and every other job whole (the builds, ratchet-gate).  A suite that declares `[tool.verity.tests]
 parts = P` is its P parts by test id, `JOB:SUITE:K/P`, each at 1/P of its seconds; another measured past `SPLIT_S` is split by test
 file into M = ceil(seconds / `SPLIT_S`) parts (`split_m`, at most one per file), `pytest:SUITE:K/M`, each `suites.py SUITE:K/M`
 (`suites.partition`: its files packed longest first by their recorded seconds) and priced at its share of the suite's seconds.
@@ -44,9 +44,6 @@ CHEAP_S = 300.0
 DEFAULT_S = 60.0
 #: the jobs split by suite
 SUITE_JOBS = ("pytest", "lean-suites")
-#: the jobs no shard runs, of an auto plan or of ci.toml's plans (`check.py`'s `shard`), though a `--deferred` run names them:
-#: lean-changed, off the merge gate, whose failures (a stale record, a broken build) the audit reports too
-NO_SHARD = ("lean-changed",)
 #: a suite measured past this many seconds is split by test file into ceil(seconds / SPLIT_S) parts (`tasks.py list --split-s`,
 #: `check.py --shard-plan --split-s`)
 SPLIT_S = 900.0
@@ -86,7 +83,7 @@ def parts(all_parts: list[str], suites: list[str], after_lean: list[str], lean: 
     """The auto plan's parts from a check's (`declaration.all_parts`): `pytest` as `pytest:SUITE` for each suite (but those of
     ``after_lean`` when the tree has the Lean verifier, ``lean``), lean-suites' parts (`lean-suites:SUITE`, those) as they are,
     or none without it; a suite ``splits`` puts in M > 1 parts by test file as `JOB:SUITE:K/M`, K = 1..M, and pytest's suite that
-    declares P parts by test id (``declared``) as `pytest:SUITE:K/P`, as lean-suites' already are; none of `NO_SHARD`'s."""
+    declares P parts by test id (``declared``) as `pytest:SUITE:K/P`, as lean-suites' already are."""
     splits, declared = splits or {}, declared or {}
 
     def each(job: str, s: str) -> list[str]:
@@ -96,8 +93,6 @@ def parts(all_parts: list[str], suites: list[str], after_lean: list[str], lean: 
     out = []
     for p in all_parts:
         job, name, spec = suite_part(p)
-        if job in NO_SHARD:
-            continue
         if p == "pytest":
             out += [x for s in suites if not (lean and s in after_lean) for x in each("pytest", s)]
         elif job == "lean-suites":
