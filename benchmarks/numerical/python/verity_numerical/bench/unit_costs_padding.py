@@ -1,4 +1,4 @@
-"""Front F6's padding table: what proving an audit's sampled proof blocks in fixed-shape sessions costs over their own nonzeros, per
+"""The padding table: what proving an audit's sampled proof blocks in fixed-shape sessions costs over their own nonzeros, per
 workload and bucket menu, at unit = one subcircuit with :mod:`unit_costs`' per-unit nonzeros (registered lowering where one
 exists).
 
@@ -41,7 +41,29 @@ import argparse
 import json
 import math
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from .unit_costs import retree
+
+__all__ = [
+    "DELTA",
+    "SAMPLERS",
+    "Unit",
+    "assign",
+    "evaluate",
+    "hyper",
+    "main",
+    "menu_dp",
+    "menu_max",
+    "menu_natural",
+    "menu_pow2",
+    "padding",
+    "render",
+    "tail_split",
+    "units_of",
+    "upper_q",
+]
 
 DELTA = 2.0 ** -40
 BS = (1, 16, 256, 4096)
@@ -358,10 +380,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--inventory", required=True, help="unit_costs' unit-costs.json")
     ap.add_argument("--out", required=True, help="directory for padding.json and padding.md")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
-    from .unit_costs import retree
-
     inv = json.loads(Path(a.inventory).read_text())
     if "token_select" not in inv:
         retree(inv)

@@ -340,7 +340,7 @@ def _added(root: Path, source: str | Path) -> int:
 
     path = jobs._relative_spec(source, root)
     if served_table.spec_path(served_table.spec_name(path)) != path:
-        raise ValueError(f"{path} isn't a spec of benchmarks/specs, so its points' runs can't be looked up on the store's "
+        raise ValueError(f"{path} isn't a spec of {served_table.SPECS}, so its points' runs can't be looked up on the store's "
                          "remote since it was added: move it there, or pass --local-only")
     return served_table.spec_added(root, served_table.spec_name(path))
 
