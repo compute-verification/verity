@@ -16,6 +16,7 @@ import pytest
 from verity.configuration.deploy import config as K
 from verity.configuration.deploy.manifest import Channel
 from verity.configuration.wire import Refused
+from verity.protocols.spot.verifier.service import Law
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
@@ -177,6 +178,20 @@ def test_a_component_declaring_a_channel_to_an_undeclared_party_is_refused():
     assert e.value.name == "declaration" and "oracle" in e.value.detail
 
 
+@pytest.mark.parametrize("fixed", ["subset:1", "stratified:1", "work:1", "work-rate:1/8", "bernoulli:1/8"])
+def test_a_served_windows_rule_that_is_no_rate_is_refused_by_name_with_the_rate_to_state(fixed):
+    """The served window's audit states the configuration's rule to its stream, which takes a rate: the file's own rule is
+    one, and a configuration whose rule is a fixed count, or a work rate, for which the window has no work table, is
+    refused at its check, by name, with the rate to state in its place."""
+    cfg = K.parse(CONFIG.read_text())
+    assert Law(cfg["service"]["law"]).text == cfg["service"]["law"]
+    K.check(cfg, REG.components, REG.workloads)
+    cfg["service"]["law"] = fixed
+    with pytest.raises(Refused) as e:
+        K.check(cfg, REG.components, REG.workloads)
+    assert e.value.name == "law" and repr(fixed) in e.value.detail and "rate:K/N" in e.value.detail
+
+
 # --- the run -----------------------------------------------------------------------------------------------------------
 
 def stand_in(tmp: Path, name: str, body: str) -> str:
@@ -200,7 +215,9 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert rc == 0
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "prover", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
-    assert hooks["POUS_ARGS"].startswith("--rounds 320 ") and hooks["SLOTS"] == "4" and hooks["V3C_LAW"] == "subset:1"
+    assert hooks["POUS_ARGS"].startswith("--rounds 320 ") and hooks["SLOTS"] == "4"
+    # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
+    assert Law(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     assert {"WIPE_CMD", "SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)
     assert hooks["WIPE_KEY_SHA512"] == "1" * 128
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
