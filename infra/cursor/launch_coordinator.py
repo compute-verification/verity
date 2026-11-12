@@ -110,6 +110,10 @@ def agent_id(handle: str, generation: int) -> str:
     return f"bc-{uuid.uuid5(NAMESPACE, f'{handle}/{generation}')}"
 
 
+def user_key() -> str:
+    return os.environ.get("CURSOR_API_KEY", "")
+
+
 def call(method: str, path: str, key: str, body: dict | None = None) -> tuple[int, dict]:
     auth = base64.b64encode(f"{key}:".encode()).decode()
     data = json.dumps(body).encode() if body is not None else None
@@ -167,7 +171,7 @@ def brief(handle: str, author: str, new_slice: bool, thread: str, env_name: str,
 
 
 def launch(args: argparse.Namespace) -> None:
-    key = os.environ.get("CURSOR_API_KEY", "")
+    key = user_key()
     if not key and not (args.dry_run and args.text_file):
         sys.exit("set CURSOR_API_KEY (Daniel's user key; a service-account key is refused by the broker)")
     entry(args.handle)
@@ -200,7 +204,7 @@ def launch(args: argparse.Namespace) -> None:
 
 
 def archive(args: argparse.Namespace) -> None:
-    key = os.environ.get("CURSOR_API_KEY") or sys.exit("set CURSOR_API_KEY")
+    key = user_key() or sys.exit("set CURSOR_API_KEY")
     ok(*call("POST", f"/v1/agents/{args.agent}/archive", key, {}), f"archive {args.agent}")
     print(f"archived {args.agent}")
 
@@ -244,7 +248,7 @@ def tell(args: argparse.Namespace) -> None:
             print(f"{handle}\t{agent}\thttps://cursor.com/agents/{agent}")
         print(f"\n{'a plain follow-up' if args.no_steer else 'a steer'} to each of these {len(to)}, saying:\n{text}")
         return
-    key = os.environ.get("CURSOR_API_KEY") or sys.exit("set CURSOR_API_KEY (Daniel's user key); nothing sent")
+    key = user_key() or sys.exit("set CURSOR_API_KEY (Daniel's user key); nothing sent")
     body = {"prompt": {"text": text}} if args.no_steer else {"prompt": {"text": text}, "delivery": "steer"}
     failed = []
     for handle, agent in to:
