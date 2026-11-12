@@ -56,12 +56,13 @@ untraced = [
 # leak_bounds counts K over the census's reference datacenter and the world, one link a machine: the world is rho's
 # world fleet and its machine's GPUs, and the weights are the workload card's parameters. A scope's requests are by
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
-# total_cost.py and the cards they read); where asked, the census's request and GPU peak at the workload card's MACs
-# a token. `verity bench certifier_term`'s runner runs it.
+# total_cost.py, the second stage's bound it imports and the cards they read); where asked, the census's request and
+# GPU peak at the workload card's MACs a token. `verity bench certifier_term`'s runner runs it.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
           "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
-          "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven",
+          "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/second_stage.py",
+          "benchmarks/spot_figures/breakeven",
           "benchmarks/certifier_term/run.py",
           "adapters/vllm/workloads",
           "adapters/vllm/verity_vllm/__init__.py",

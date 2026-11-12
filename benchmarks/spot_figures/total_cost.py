@@ -64,7 +64,10 @@ sessions it refuses: each point carries the count, and at β = `RATIO_BUDGET` th
 (`session_designs`): the two with one session a block type, and those with sessions of at most 1, 16, 64 and 200
 tables (`TABLES`; a session of the proof system holds at most `SESSION_TABLES`).  A design that meets a limit of the
 code that runs a second stage today (`limits`: a session's tables, the challenger's release log, the second draw's
-live coins) is printed as out of reach, with the first limit it meets.  `breakeven` gives each patterns'-form
+live coins) is printed as out of reach, with the first limit it meets.  Each two-stage point with a design carries
+the coins its second stage reads first and Lean's bound on the chance it refuses an honest run on them
+(`second_stage`): the bound a point plots is for a deployment whose second stage has those coins, and on fewer it
+refuses every run.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
 Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
@@ -90,6 +93,7 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
+import second_stage
 from verity.protocols.spot import plancheck
 from verity.protocols.spot.device import challenger
 from verity.protocols.spot.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
@@ -541,11 +545,12 @@ def _plan(row: dict | None) -> dict | None:
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a verification phase samples and what one
-    costs (`REG`), and the computed share of its design's proving.  A two-stage line's `form` and its verification
-    phase's replay blocks (`span`) come with it; with `lean`, Lean's check of each line's designs
+    costs (`REG`), the computed share of its design's proving, and the coins its second stage reads with Lean's
+    bound on the chance it refuses an honest run (`second_stage.at_design`).  A two-stage line's `form` and its
+    verification phase's replay blocks (`span`) come with it; with `lean`, Lean's check of each line's designs
     (`figure1.lean_check`, `figure1.lean_two`).  Where the budget pays for no sampled replay block of a verification
     phase there is no design: the point is the trivial one, every replay block charged whole, with nothing for Lean to
-    check."""
+    check and no second stage."""
     name, m, g, budget, computed, form, span, lean, *rest = job
     beside = bool(rest and rest[0])
     served = f1.served_total(m)
@@ -580,7 +585,8 @@ def _point(job: tuple) -> dict:
         return {"exfiltration": {"y": min(count, served), "count": count, "binds": "served", "plan": None,
                                  **({"lean": None, "planner": None, "theta": None} if lean else {}),
                                  "registration_sample": 0, "shared": 0.0, "padding": 0.0, "sessions": 0.0,
-                                 "sample_budgets": one / phase, "limit": None, "computed_proving": None, **forms},
+                                 "sample_budgets": one / phase, "limit": None, "computed_proving": None,
+                                 "second_stage": None, **forms},
                 "infiltration": {"y": g.replay_blocks * top, "plan": None}}
     count, checked = (f1.lean_two(cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
                       else (row["bound"], {}))
@@ -589,7 +595,8 @@ def _point(job: tuple) -> dict:
                              "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG if k in row}, "sample_budgets": one / phase,
                              "limit": limits(cells, row)["limit"] if span else None,
-                             "computed_proving": computed_proving(cells, row, computed), **forms},
+                             "computed_proving": computed_proving(cells, row, computed),
+                             "second_stage": second_stage.at_design(cells, row), **forms},
             "infiltration": {"y": write_form(cells, row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
@@ -1000,8 +1007,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
                                   **{k: [r[k] for r in rows]
-                                     for k in ("binds", "count", *REG, "limit", "computed_proving", "lean", "planner",
-                                               "theta")
+                                     for k in ("binds", "count", *REG, "limit", "computed_proving", "second_stage",
+                                               "lean", "planner", "theta")
                                      if k in rows[0]},
                                   **({"forms": [r.get("forms") for r in rows]}
                                      if any("forms" in r for r in rows) else {}),

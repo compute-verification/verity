@@ -17,7 +17,8 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 * `flockLaw_second`: `secondLaw`'s Flock law is the work law at `k = 1`, its strata the cells in order, template by
   template and in each by sampled replay block (`cellPairs`), cell `(t, i)` exactly
-  `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`).
+  `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`), and each stratum whole (`cellStratum`: its
+  template, unit work and its floor `k_t` too).
 * `selectSecond_ok`: an accepted second stage passed `secondProblem`, drew its units from the coins under that sampling
   design, and proves each of them.
 * `positions_second`: the cells, in order, are the units `[0, |sample|·Σ n_t)`; `sizes_second`: cell `(t, i)` is `n_t`
@@ -78,10 +79,10 @@ private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Spot.D
   by_cases ha : 0 ≤ a <;> simp [ha, Array.mapM_eq_mapM_toList] at h
   exact h.symm
 
-/-- A cell object of `secondLaw` that parses is `[o + i·n, o + (i+1)·n)` sampling `k`. -/
+/-- A cell object of `secondLaw` that parses is `[o + i·n, o + (i+1)·n)` sampling `k`, of unit work and floor `k`. -/
 private theorem stratum_cell {o n k i r t : ℕ} {ws : Flock.Draw.WorkStratum}
     (h : Spot.Draw.stratum? true (Select.cellObj o n k i r t) = some ws) :
-    (ws.units, ws.k) = (#[(o + i * n, o + (i + 1) * n)], k) := by
+    ws = { template := s!"{r}/{t}", units := #[(o + i * n, o + (i + 1) * n)], k := k, work := 1, floor := k } := by
   unfold Spot.Draw.stratum? at h
   simp only [getD_cellObj_template, getD_cellObj_units, getD_cellObj_k, getD_cellObj_work, getD_cellObj_floor,
     nat_toJson, ↓reduceIte] at h
@@ -137,11 +138,20 @@ theorem strata_second (sample ns ks : Array ℕ) :
         Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0) z.1 := by
   simp only [cellPairs, List.map_flatMap, List.map_map, Function.comp_def]
 
-/-- **`secondLaw`'s Flock law**: the work law at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
-theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
+/-- Cell `(t, i)`'s stratum over the replay sample `sample`: its template the sampled replay block's and the template's
+indices, its units and count `cellOf`'s, of unit work, its floor its count. -/
+def cellStratum (sample ns ks : Array ℕ) (z : ℕ × ℕ) : Flock.Draw.WorkStratum :=
+  { template := s!"{sample.getD z.2 0}/{z.1}",
+    units := #[(cellOff sample.size ns z.1 + z.2 * ns.getD z.1 0,
+      cellOff sample.size ns z.1 + (z.2 + 1) * ns.getD z.1 0)],
+    k := ks.getD z.1 0, work := 1, floor := ks.getD z.1 0 }
+
+/-- **The second stage's sampling design as Flock parses it, stratum by stratum**: the work design at `k = 1`, its
+strata the cells' in order (`cellStratum` over `cellPairs`). -/
+theorem flockLaw_second_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
     (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
-      ws.toList.map (fun s => (s.units, s.k)) = (cellPairs sample.size ns.size).map (cellOf sample.size ns ks) := by
+      ws.toList = (cellPairs sample.size ns.size).map (cellStratum sample ns ks) := by
   unfold Draw.flockLaw at h
   rw [getD_secondLaw_law] at h
   dsimp only at h
@@ -161,8 +171,17 @@ theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Dra
       refine ⟨_, rfl, ?_⟩
       have hF := mapM_forall₂ _ _ _ hss
       rw [List.toList_toArray, strata_second] at hF
-      exact forall₂_map_eq (fun _ _ hb => stratum_cell hb) hF
+      have hm := forall₂_map_eq (g := id) (ψ := cellStratum sample ns ks) (fun _ _ hb => stratum_cell hb) hF
+      rwa [List.map_id] at hm
     · exact absurd h (throw_ne _ _)
+
+/-- **`secondLaw`'s Flock law**: the work law at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
+theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
+    (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
+    ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
+      ws.toList.map (fun s => (s.units, s.k)) = (cellPairs sample.size ns.size).map (cellOf sample.size ns ks) := by
+  obtain ⟨ws, rfl, hws⟩ := flockLaw_second_strata sample ns ks m parsed h
+  exact ⟨ws, rfl, by rw [hws, List.map_map]; exact List.map_congr_left fun _ _ => rfl⟩
 
 theorem getD_draw_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
     getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
