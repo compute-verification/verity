@@ -128,8 +128,9 @@ def served_under(arm: str | None, site: Path, private: Path | None) -> dict[str,
         return {}
     fixed = {k: v for k, v in served.env.items() if S.PRIVATE not in v}
     ours = S.replace(served, plugin=(), tick=False, rows={}, env=fixed if private is None else served.env)
-    if fixed and all(os.environ.get(k) == v for k, v in fixed.items()):
-        S.check_plugins(dict(os.environ), ours)
+    job = dict(os.environ)
+    if fixed and all(job.get(k) == v for k, v in fixed.items()):
+        S.check_plugins(job, ours)
         return {}
     under = S.server_env(ours, site, S.plugin_site(site, ours), None, 0.0, 0.0, private=private)
     S.check_plugins(under, ours)
@@ -341,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_under": {"plugins": [entry for entry, _ in served.general], "by": "the replay" if under else "the job",
-                            "env": {k: os.environ.get(k) for k, v in served.env.items() if S.PRIVATE not in v}} if served else None,
+                            "env": {k: v for k, v in served.env.items() if S.PRIVATE not in v}} if served else None,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], **compare(w, got)}
