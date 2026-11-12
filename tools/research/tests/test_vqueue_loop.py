@@ -3542,10 +3542,10 @@ def test_the_loops_landings_post_through_it_on_its_clock_and_the_one_beside_each
 
 #: the steps each of the three shards of a check that gates holds beside the preflights, in these tests: pytest's suites are
 #: split over the last two
-PLAN = (("lean-changed", "flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
+PLAN = (("flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
         ("pytest", "flock-rust-tests"), ("pytest", "circuit-check", "ratchet-gate"))
 #: an auto plan's six shards of the same steps, pytest's suites split over three of them
-PLAN6 = (("lean-changed", "flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "lean-suites"),
+PLAN6 = (("flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "lean-suites"),
          ("pytest", "flock-rust-tests"), ("pytest",), ("pytest", "circuit-check"), ("ratchet-gate",))
 OLD, NEW = "tests/test_x.py::test_old", "tests/test_x.py::test_new"
 
