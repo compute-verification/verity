@@ -480,7 +480,7 @@ def test_the_families_built_on_demand_and_lifts_are_budgeted():
     the lifting's gates are budgeted, ⊥ is a constant, and a lift takes its primitive's class, a free one's budgeted."""
     cases = {
         "GatherI32x64_v1": "gathers", "LGatherRow16x5_v1": "gathers", "LGatherRow32x8o7fc00000_v1": "gathers",
-        "And3_v1": "compare_select", "Xor17_v1": "compare_select", "LiveCount8_v1": "roundings", "SplitsForSMS4_v1": "roundings",
+        "And3_v1": "compare_select", "Xor17_v1": "compare_select", "LiveCount8_v1": None, "SplitsForSMS4_v1": None,
         "LSelect32_v1": "compare_select", "LFixedSelect3x32_v1": "compare_select", "LIsEOS2_v1": "compare_select",
         "LEnable_v1": "compare_select", "LEmitNext[H=4]_v1": "compare_select", "LBot32_v1": "const",
         "Lifted[F32Add_v1]_v2": "roundings", "Lifted[I32Add_v1]_v2": "roundings", "Lifted[Const32[0x00000000]_v1]_v2":
@@ -843,5 +843,5 @@ def test_the_table_is_pinned():
     assert P.digest() == PINNED, P.digest()
 
 
-PINNED = ("9d2ce91d019e29a91a9f180cdfa204a9bfeda9c71a755d60c795564330c4963d"
-          "a872af5a8c69326f1e319fcc9b8d7cc2b4fea1c7f60c714f23ec1571e1173f8f")
+PINNED = ("072d21203cf170d46f352890c3312024cf6be890831d2fa1b36201038653ad8c"
+          "d132e30a9241c2846e16f0c0069c473774865492e12fd3ea45ac63452f55afe7")

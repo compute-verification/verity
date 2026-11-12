@@ -44,6 +44,9 @@ if TYPE_CHECKING:
     from verity.protocols.poub.verifier.audit import Tiles
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+#: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
+#: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
+KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
 
 
 class TorchBacking:
@@ -154,8 +157,6 @@ class WeightRegion:
     codec: Codec = IDENTITY
     receipt: Receipt | None = None
     encode: bool = False
-    live: Any = None
-    """The object the model holds (its parameter), whose storage the binder checks stays put (`Binder.moved`)."""
 
 
 def model_weights(runner: Any) -> list[WeightRegion]:
@@ -165,12 +166,8 @@ def model_weights(runner: Any) -> list[WeightRegion]:
         if p.numel() == 0 or p.data_ptr() in seen:
             continue
         seen.add(p.data_ptr())
-        out.append(WeightRegion(name, p.data, f"param:{name}", live=p))
+        out.append(WeightRegion(name, p.data, f"param:{name}"))
     return out
-
-
-def _where(t: Any) -> tuple:
-    return t.data_ptr(), tuple(t.shape), tuple(t.stride())
 
 
 def _check_disjoint(starts: list[tuple[int, np.ndarray]], plane_bytes: int) -> None:
@@ -261,14 +258,12 @@ class Binder:
         self._segments: Sequence[Segment] = ()
         self.unregistered: dict[str, int] = {}
         self.slots = 0
-        self.tensors: list[tuple[str, Callable[[], Any], tuple]] = []
-        self.model: Any = None
         self.filler: Any = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
     def on_load(self, runner: Any) -> None:
-        room, self.model = self.weight_blocks, _unwrap(runner.model)
+        room = self.weight_blocks
         for w in self.weights(runner):
             b = TorchBacking.of_tensor(w.tensor, self.block_bytes)
             nbytes = w.tensor.numel() * w.tensor.element_size()
@@ -281,7 +276,6 @@ class Binder:
                 self.unregistered[f"{w.name}[tail]"] = nbytes - b.nbytes
             self.store.register(w.name, "hbm", "weights", b, block_bytes=self.block_bytes, codec=w.codec,
                                 receipt=w.receipt or self.receipt, source=w.source, encode=w.encode)
-            self._held(w.name, lambda t=w.tensor if w.live is None else w.live: t)
 
     def on_kv(self, runner: Any, kv_cache_config: Any) -> None:
         """Register the KV pool: each attention layer's pages a region (`PagedBacking`, so layers that share one
@@ -290,7 +284,10 @@ class Binder:
         if not caches:
             raise RuntimeError("the model runner bound no KV caches")
         slots = int(runner.cache_config.block_size)
-        kbs = getattr(runner, "_kernel_block_sizes", None) or [slots]
+        kbs = next((v for v in (getattr(runner, name, None) for name in KERNEL_BLOCK_SIZES) if v), None)
+        if kbs is None:
+            raise RuntimeError(f"the model runner names no kernel block sizes ({' or '.join(KERNEL_BLOCK_SIZES)}) to hold to "
+                               f"the manager's {slots}")
         if any(int(k) != slots for k in kbs):
             raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
         pages = int(kv_cache_config.num_blocks)
@@ -301,8 +298,7 @@ class Binder:
             return
         flats: dict[int, Any] = {}
         backings, starts, layout = [], [], None
-        for i, t in enumerate(caches):
-            self._held(f"kv[{i}]", lambda i=i: runner.kv_caches[i])
+        for t in caches:
             phys = page_layout(t, pages, slots)
             key = t.untyped_storage().data_ptr()
             flat = flats.setdefault(key, storage_bytes(t))
@@ -334,15 +330,6 @@ class Binder:
         self.store.register("filler", "hbm", "filler", TorchBacking(self.filler, self.filler.numel()),
                             block_bytes=self.block_bytes, codec=IDENTITY, receipt=self.receipt, source="filler:zeros",
                             encode=False)
-        self._held("filler", lambda: self.filler)
-
-    def _held(self, name: str, live: Callable[[], Any]) -> None:
-        self.tensors.append((name, live, _where(live())))
-
-    def moved(self) -> list[str]:
-        """The registered tensors whose storage, size or strides are no longer those at registration: a reader that
-        holds their device addresses (`benchmarks/remote_session/inplace.py`) would read memory the store left."""
-        return [name for name, live, was in self.tensors if _where(live()) != was]
 
     # --- the scheduler's steps --------------------------------------------------------------------------------------
 

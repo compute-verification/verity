@@ -2,8 +2,8 @@
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, the served
-    workloads' Definitions (ml.definitions) on the catalog and the kernels, and the protocols' circuit builders
-    (ml.protocols) on the catalog and their protocols;
+    workloads' Definitions (ml.definitions) on the catalog, the kernels and the commitments' gates, and the protocols'
+    circuit builders (ml.protocols) on the catalog and their protocols;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
@@ -62,8 +62,11 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
-    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
-    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
+    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads.
+    # A Definition that hashes builds on the commitments' SHA-512 gates (`ml.commitments.gates.sha512`) rather than a second
+    # copy of the compression: `ml.commitments` imports only `ml.circuits` and `ml.crypto`, so there is no cycle, and no core
+    # unit may import `ml.definitions`, so no verifier reaches more.
+    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels", "ml.commitments"},
     # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
@@ -307,9 +310,6 @@ BENCHMARKS_IMPORTERS = {
                                                                           "(`benchmarks/remote_session`, "
                                                                           "`config.REMOTE_SESSION`) and `paged.py` "
                                                                           "(`benchmarks/vllm_encoded`)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
-                                                                            "`inplace` (`benchmarks/remote_session`)",
-    "adapters/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
@@ -335,10 +335,8 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
-    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py",
-                     "adapters/vllm/tests/engine/int8_store_gpu.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
-                    "and `benchmarks/vllm_encoded/paged.py`"),
+    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
+                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
     "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path

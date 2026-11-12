@@ -10,8 +10,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test_classes and test_attacks cross-check the threaded class and the shard attack against verity/protocols/inference_only/nci's
 # implementations, imported by path (slowdown.py imports catalog.py). families.Nci reads the `verity/protocols/inference_only/nci` library's algorithms
 # and their traits. test_envelopes pins theorem.multiple_bound to the Lean text of the remote slowdown's definition
-# and guarantee, and test_min_cut pins rho/min_cut.py to the min-cut bound's (alphaHE, shareF, and HE's and
-# HEShared's conclusions).
+# and guarantee, and test_min_cut pins rho/min_cut.py to the min-cut bound's (alphaHE, shareF, workHEOn, and HE's,
+# HEShared's and HECharged's conclusions).
 # The monitoring periods are core's reporting grid's (rho/params.py), stdlib only. The output bits an incorrect proof
 # block injects are the widest public size class of a block's outputs (rho/params.py and tiers.py read
 # verity.circuits.partition_v2, which imports its package). The registry also reads core's per-window delta

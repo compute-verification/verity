@@ -496,7 +496,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -629,14 +629,16 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
 
-def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unless_no_cache(tmp_path, monkeypatch):
+def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them(tmp_path, monkeypatch):
     """A launch sends the newest recorded checks' packs as URLs the run fetches, never the packs: fetching and combining them on
     the launcher held each shard's launch some ten minutes.  `--verdicts-in` travels beside them, never in their place: a stale
-    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes."""
+    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes.  An
+    uncached launch sends them too, with the commit's own recorded checks' first (`commit_packs`): its fresh suites are
+    compared with every pass the commit was recorded with, not only those its slot holds."""
     import subprocess
     import sys
 
-    real, launched, listed = subprocess.run, [], []
+    real, launched, listed, commits = subprocess.run, [], [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -645,8 +647,9 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def url_file(d: Path) -> Path:
+    def url_file(d: Path, commit: str | None = None) -> Path:
         listed.append(d / CHECK.VERDICT_URLS)
+        commits.append(commit)
         listed[-1].write_text("[]")
         return listed[-1]
 
@@ -672,16 +675,17 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
     [(tail, sends, env, _)] = launched
     assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 3
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 4      # the nightly `audit-main`
     [(_, sends, env, head)] = launched
-    assert sends == [] and CHECK.VERDICT_URLS_ENV not in env
+    assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
         "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
     launched.clear()
-    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs)
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 4
+    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs and the suites')
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 5
     [(tail, sends, _, _)] = launched
     assert tail[-2:] == ["--no-cache", "--circuit-cache"] and str(listed[-1]) in sends
+    assert commits == [None, None, None, CHECK._rev("HEAD"), CHECK._rev("HEAD")] and commits[-1]
     (bad := tmp_path / "bad.tar.gz").write_bytes(b"not a pack")
     for given, why in ((bad, "refused"), (tmp_path / "absent.tar.gz", "no such pack")):
         with pytest.raises(SystemExit, match=why):
@@ -745,7 +749,7 @@ def test_a_launch_that_needs_the_agreement_sends_its_urls_and_fetches_nothing(tm
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(research.store.local, "LocalStore", Store)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
     _remote(monkeypatch, remote := _Remote())
     pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
@@ -820,7 +824,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
@@ -1581,6 +1585,22 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     assert after["lean-changed"].startswith("skipped: --no-cache")
 
 
+def test_an_uncached_check_runs_its_steps_with_lakes_artifact_cache_off(tmp_path, monkeypatch):
+    """`--no-cache` compiles what it tests: its steps (the verifier's `lake build`, and the Lean steps and suites after it,
+    which build and run Lean too) run with Lake's local artifact cache off, where Lake would unpack what an earlier build on
+    the node left there instead of compiling it.  A cached check's steps get no Lake setting, the caller's neither."""
+    monkeypatch.setenv("LAKE_ARTIFACT_CACHE", "true")
+    names = ("lean-build", "lean-suites", "pytest")
+    for cache, want in ((False, "false"), (True, "unset")):
+        out = tmp_path / f"cache-{cache}"
+        out.mkdir()
+        probe = "import os, sys; open(sys.argv[1], 'w').write(os.environ.get('LAKE_ARTIFACT_CACHE', 'unset'))"
+        _fake_run(monkeypatch, [[(s, _py(probe, out / f"{s}.said"), tmp_path)] for s in names])
+        ok, done = CHECK.run(out, 2, cache)
+        assert ok, done
+        assert {s: (out / f"{s}.said").read_text() for s in names} == dict.fromkeys(names, want)
+
+
 def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_other_check_does(tmp_path, monkeypatch):
     """The nightly (`--no-cache`, unsharded): pytest and lean-suites each run their suites, then the opt-in tests of those suites
     (`OPT_IN`) in runs of their own.  A shard's or a deferred run's parts and a cached check leave them out, so no candidate pays
@@ -1826,7 +1846,7 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
 
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)

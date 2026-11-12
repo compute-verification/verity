@@ -666,8 +666,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
-    "benchmarks/pouw/accel_v31/v31.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
     "verity/protocols/pouw/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
     "verity/protocols/pouw/clear/clear_audit.py::Verdict":
@@ -680,10 +678,6 @@ KNOWN: dict[str, str] = {
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
     "benchmarks/pouw/harness/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "benchmarks/pouw/highutil/period.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/highutil/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
     "benchmarks/pouw/machine_model/verity_machine_model/eps.py::Machine":
@@ -781,7 +775,6 @@ KNOWN: dict[str, str] = {
         "homonym, one distribution's settings from the environment: rename (ci)",
     "tools/move/layout.py::Layout": "homonym, a layout move's directory map: rename (ci)",
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
-    "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
     # verity/core/
     "verity/commitments/attest/__init__.py::Period":

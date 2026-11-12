@@ -27,7 +27,8 @@
 #      OS, rec_live --tree-test-os, a test's coins)
 #      RELEASE=0 (1: the recursive session through the ZK server's release side, 85's RELEASE: the inner session opens it,
 #      oprove proves its parts in order through the Lean session loop and holds each to its release window; one inner
-#      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= RELEASE_BUDGET= (85's)
+#      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= (85's)
+#      RELEASE_BUDGET= (85's: the stream's failure budget, at least 1, which RELEASE=1 needs)
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
 #      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done

@@ -67,7 +67,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
@@ -217,14 +217,28 @@ def parameter_gates(program: Program, value: str) -> range:
     names = [name for name, _ in program.fn.signature()[0]]
     if value not in names:
         raise ValueError(f"{value!r} is not a parameter of the program ({names})")
-    first = end = None
-    for _space, _idx, lo, hi in ref_runs(program.input_coll(names.index(value)).refs):
-        if end is not None and lo != end:
-            raise ValueError(f"parameter {value!r}: its gates are not one interval")
-        first, end = lo if first is None else first, hi
-    if first is None:
+    if (gates := _gates(program, names.index(value))) is None:
         raise ValueError(f"parameter {value!r}: its gates are not one interval")
-    return range(first, end)
+    return gates
+
+
+def held_gates(program: Program, values: Iterable[str]) -> list[range]:
+    """The Input gates of each of `values` that is a parameter of the program whose gates are one non-empty interval
+    (`parameter_gates`, Lean's `Registered.Param.gates`), in `values`' order. Without `values` it reads nothing of the program,
+    which may be a decoded one (`codec.DecodedProgram`, an old record's) without a signature."""
+    if not (values := list(values)):
+        return []
+    names = [name for name, _ in program.fn.signature()[0]]
+    return [g for v in values if v in names and (g := _gates(program, names.index(v))) is not None]
+
+
+def _gates(program: Program, pi: int) -> range | None:
+    first = end = None
+    for _space, _idx, lo, hi in ref_runs(program.input_coll(pi).refs):
+        if end is not None and lo != end:
+            return None
+        first, end = lo if first is None else first, hi
+    return None if first is None or end == first else range(first, end)
 
 
 def row_leaves(program: Program, value: str, words: int, schema: str = SCHEMA) -> int:
@@ -660,7 +674,7 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
 __all__ = ["BLOCK", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]

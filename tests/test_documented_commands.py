@@ -48,8 +48,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, the command as parsed) -> "owner: why", each a documented command line that didn't parse when this test landed
 KNOWN = {
     ("benchmarks/commitments/README.md", "verity bench commitments"): "proofs: says it doesn't apply (no run.py or run.sh)",
-    ("demos/README.md", "verity demo dither_full_util"): "top: says it runs nothing yet (no runner on main)",
-    ("demos/dither_full_util/README.md", "verity demo dither_full_util"): "compute-accounting: says it runs nothing yet",
+    ("archive/examples/dither_full_util/README.md", "verity demo dither_full_util"):
+        "compute-accounting: archived with its demo, which ran nothing",
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",

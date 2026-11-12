@@ -11,12 +11,13 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
-* **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
+* **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
   window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); and for a v2 record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
-  rule or its reset restarts it, for a verifier with a pool (`PoolChained`);
+  rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
+  its proof blocks don't each read alone (`R8`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
@@ -45,7 +46,7 @@ namespace Properties.Spot
 
 open OneStage (Params Commitment Evidence Public)
 
-/-! ## The registration: R1–R7 against the verifier's own copies -/
+/-! ## The registration: R1–R8 against the verifier's own copies -/
 
 /-- The verifier expects a v2 record: it expects values registered. -/
 def ExpectsV2 (v : Registration.Verifier) : Prop := v.registered.isEmpty = false
@@ -119,6 +120,23 @@ def R4 (rec : Json) (v : Registration.Verifier) : Prop :=
 
 /-- R5: the record's anchors are the verifier's. -/
 def R5 (rec : Json) (v : Registration.Verifier) : Prop := jeq (getD rec "anchors") (.arr v.anchors)
+
+/-- R8: every name the verifier lists as tied is a parameter of the program, neither registered nor held, whose gates
+are one interval of run Input nodes (`Registration.tiedBad`); and under a template query that applies to the verifier's
+program, its proof blocks each read their own leaves of every run Input node but a parameter's the verifier expects
+registered or lists as tied (`Partition.readAlone`, of `Partition.sharedInputs`, outside `Registration.heldGates` and
+`Registration.tiedGates`): no batch of more than one member broadcasts one or reads a leaf of one twice, and no two
+instance nodes read one leaf. A value one proof block computes that the program takes as an Input joins no proof
+blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read could hold rows one of them computed.
+R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
+let through (`Registration.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
+`Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
+port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit. That the rows under that root are
+the outputs of the proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed
+with those into a theorem: unproved. -/
+def R8 (v : Registration.Verifier) : Prop :=
+  (Registration.tiedBad v).isEmpty = true ∧
+    Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/
@@ -268,11 +286,11 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
     v.outputs.any (·.1 == want.value) = false → ∀ x ∈ v.pinned.find? (·.1 == want.value), ∀ e,
       Registration.entryOf rec want.value = some e → jeq (getD e "root") (.str x.2) = true
 
-/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
+/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
 chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered. -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v)
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v
 
 /-! ## The sample: the registered law over the registered population -/
 
@@ -397,7 +415,7 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : 
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
     delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
 
-/-- What the check accepts: the registration keeps R1–R7 with `law` the verifier's agreed law as derived, the sample is a
+/-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed law as derived, the sample is a
 sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
 values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
 (`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and

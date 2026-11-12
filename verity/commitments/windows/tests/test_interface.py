@@ -135,6 +135,30 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
+def test_a_windows_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
+    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one draw a port in
+    the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
+    of one window draw other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
+    port's index its nonce."""
+    win, _ins, _outs = window()
+    ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
+    drawn = []
+
+    def urandom(n: int) -> bytes:
+        drawn.append(hashlib.shake_256(b"os %d" % len(drawn)).digest(n))
+        return drawn[-1]
+
+    with monkeypatch.context() as mp:
+        mp.setattr(CS.os, "urandom", urandom)
+        c = win.close()
+    assert [c.salts[p] for p in ports] == drawn[:len(ports)]
+    assert all(len(c.salts[p]) == CS.SALT_BYTES * len(c.rows[p]) > 0 for p in ports)
+    one, two = win.close(), win.close()
+    assert all(one.salts[p] != two.salts[p] and one.roots[p] != two.roots[p] for p in ports)
+    keyed = win.close(salt_key=bytes(range(32)))
+    assert [keyed.salts[p] for p in ports] == [CS.salts(bytes(range(32)), k, len(keyed.rows[p])) for k, p in enumerate(ports)]
+
+
 def test_close_concatenates_each_templates_words_once(monkeypatch):
     """Every member's rows are views of one array per port, not each a copy of its whole template's words: close's memory
     was members × units (249 GB at the decoder's 353,092 units)."""
