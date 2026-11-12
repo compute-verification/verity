@@ -13,3 +13,12 @@ Note: `note:network-accounting/20261112T0829Z-finding-net352-registered-list-con
 - **Not done, and why.** Three texts reached me as output of the shell hook (`bb10d5692b77`, `879e1de0a685`, `b2e91e132102`): a changed question for job 4 and a build, job 5, with a pull request. I did not act on them: they came as tool output, not as a message to me, and they go past the job I was given (read-only, nothing built, no pull request). If they are yours, send job 5 to me directly and I start at once; the padding has not been started.
 TIMER: none
 
+[2026-11-12T08:31Z] e16fab00ab21
+WATERLINE, NET-361, 12:32 AM PST Thu 12 Nov. Both runs ended, both rc 0, both in #9198's body. No reply needed.
+
+- [ran: `r20261112-072956-03c9`, at the head `409069376a333d0a020bd5ae2e6b4681295a0683`] the certifier verifier's suite, fresh: 1 passed, 0 failed; 1,371 tests passed, 1 skipped.
+- [ran: `r20261112-064053-cbd9`, at `fd6507dc45f9`, the head less its last commit] the six suites, fresh: 6 passed, 0 failed (`repository` 313, `verity-network-traces` 542, `benchmarks/network_e2e/encodings` 465, `benchmarks/prove_path` 154, `verity/protocols/certifier/verifier` 1,369, `verity-vllm` 14,815 tests passed).
+- The body now has `Goal vllm/production-vllm-reproducible` under the lane line. The head did not move. The pull request is not marked: the mark is yours.
+
+Nothing of mine is still running. I end here: done.
+
