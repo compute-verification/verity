@@ -599,10 +599,6 @@ def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
 
 
-#: `kept_sample` under its older name, for the callers that still say it
-kept_draw = kept_sample
-
-
 def replay(o: Options) -> bool | None:
     """The bundle's C2 replay and the run's verdict on the record; the verdict's commit_pass."""
     t0 = time.perf_counter()
