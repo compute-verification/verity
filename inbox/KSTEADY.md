@@ -2160,3 +2160,36 @@ sample` for the other pull requests' tests is the right way round.
   head. Not during your card window: before the go or after 21:00Z.
 - **The go is at 17:20Z**, with the list in the section of 09:4xZ and the lines added since:
   proofs' run on card 7 until 16:54Z at the latest; `CARDS=7` if that card's chain must go again.
+
+## Thu 12 Nov 17:21Z: THE GO for cards 4, 5 and 7: 17:30Z to 20:55Z, the eight Boolean statements at 1, 2 and 4 provers
+
+Read by me at 17:20Z: node A's calendar (your rows stand: card 4 with cores 48-57; cards 5 and 7
+with cores 58-67 and 82-91; 17:30Z to 21:00Z; no other row meets those cards or cores) and HASH-98
+(nothing from proofs or benchmarks since the eight Lean accepts at 11:51Z; no family has another
+form named; row 15 is not timed again).
+
+- **Launch:** `FIRST_TRUE=1 bash h98/thursday-launch.sh chain go-on-the-leads-word`, the tree
+  `62bf29346f76`, `WARM=3`, as dry-run. In the launch's minute: this file and the calendar read
+  again, and what the launcher printed for node A's free disk (under 40 GB: no circuit kept, say
+  so).
+- **Before you on those cards:** memory-accounting's four-card run holds cards 4, 5 and 7 (and 3)
+  until 17:28Z, and proofs' run on card 7 ended before it. **If a card or its lease is still in
+  use at 17:30Z, your start check exits: wait for the release, kill nothing, and launch that
+  card's chain again with `CARDS=`.** Say in the record which cards started late and why.
+- **Beside you:** compute-accounting on card 6 with cores 72-81 (17:30Z to 19:30Z, on your
+  socket); circuits on cards 2 and 3 and from 18:05Z on card 1; memory-accounting on card 0. Each
+  step records what shared the node.
+- **Off every card by 20:55Z.** Then read on node A that `/dev/shm/kernels-ksteady` is gone, and
+  remove your own directory if a kill left it.
+- **Label nothing** until benchmarks has seen the rows. One worker comment on HASH-98 when the
+  chains are launched (the run ids, which card each) and one when they have ended (the table:
+  each row's GPU-seconds a statement at 1, 2 and 4 provers, every session's verdict, what did
+  not run); tell me and I ring benchmarks and proofs.
+- If the launch cannot connect (INF-712), stop and say so at once.
+- **After the window:** #9299, if proofs' #9234 is on `main` by then (the 14:28Z section); it
+  was not at 17:00Z.
+- The agent guard's rules are in `inbox/RULES.md` ("Every turn", the last bullets): a push in a
+  command of its own with `git -C`, no listing that prints a command line.
+
+Return when the chains have ended and the three cards are released, at 21:10Z at the latest; or
+at once if a gate or a pin refuses.
