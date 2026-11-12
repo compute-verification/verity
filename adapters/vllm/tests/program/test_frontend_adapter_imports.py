@@ -1,9 +1,9 @@
 """`verity_vllm.program.frontend` imports the rest of the adapter only through the names its docstring lists.
 
 The translator is to become an adapter of its own, so every name its modules take from `verity_vllm` outside their
-directory is written down once, in the package's docstring, with what it is for. These tests hold that list to the
-code both ways. They read the source and import nothing, so an import inside a function or under `TYPE_CHECKING`
-counts like any other.
+directory is written down once, in the docstring of `verity_vllm.program.frontend.__init__`, with what it is for.
+These tests hold that list to the code both ways. They read the source and import nothing, so an import inside a
+function or under `TYPE_CHECKING` counts like any other.
 """
 from __future__ import annotations
 
@@ -70,10 +70,9 @@ def test_the_scan_reads_every_way_a_module_imports():
         "    importlib.import_module('verity_vllm.errors')\n"
         "    importlib.import_module('vllm.envs')\n"
     )
-    assert sorted(names_in(source)) == [
-        "verity_vllm.config", "verity_vllm.engine.env", "verity_vllm.engine.hooks", "verity_vllm.errors",
-        "verity_vllm.log.init_logger", "verity_vllm.program.inputs", "verity_vllm.program.prune.kept_records",
-        "verity_vllm.settings"]
+    assert sorted(name.removeprefix("verity_vllm.") for name in names_in(source)) == [
+        "config", "engine.env", "engine.hooks", "errors", "log.init_logger", "program.inputs",
+        "program.prune.kept_records", "settings"]
 
 
 def test_every_import_of_the_adapter_is_listed():
