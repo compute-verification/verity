@@ -69586,3 +69586,65 @@ Tags: [run] a command run now or a run's fetched log (id given), [read] a file r
 - [run] Both refused verdicts print the handed Program's digest under `program_sha512`, which is the field the first step of your ruling rewords.
 
 For the table: no new row. The level walk is on a branch (`cursor/kernels-unit-walk-0242` at `e6ab4d9a98`), not on `main` and not run on a card; the head block's statement at two provers stays 2.1425 GPU-seconds a statement, measured (`r20261111-115454-5832`, `vy-dc-h200-3`, SPOT[Flock]'s prover from branches, not the served engine), until kernels' Thursday 15:45Z row; 1.42 to 1.62 with the walk is modeled.
+
+## HEADTIME, Thu 12 Nov 03:54Z: HASH-98: the timed statements of rows 1, 2 and 15 are the ones we staged, on the circuit file's whole SHA-512; rows 1 and 2 time `SparseMlaHeadBlock_v2`, the Boolean Definition `main` names for the census's block type `SparseMlaHeadBlock_v1` (one proof block, same inputs and outputs, but not the census's AND count, which is an estimate); row 15 has a pin of ours, `0bd0add320930b34`, and times the word Definition itself
+
+**The line for HASH-98, as I would word it.** Rows 1, 2 and 15 time the statements proofs staged: each timed run's own staging record equals ours on the circuit file's whole SHA-512 (`4b31e7caba011398…`, `be5bca5c30515dc4…`, `0bd0add320930b34…`). Rows 1 and 2 time `SparseMlaHeadBlock_v2`, the Boolean Definition that `main` names for the census's block type `SparseMlaHeadBlock_v1`: the same inputs and outputs, one unit a proof block, proof blocks of 2^27. The census's AND count for them is an estimate, not the timed circuit's. Row 15 times `SparseMlaCombine_v1` under its own name.
+
+**What I compared, all read or run now.**
+
+- [read] The census: the card in the tree (`benchmarks/sampling_plan/glm53_blocks.json:217`, `:257`, `:471`) and the census kernels' table reads (`art:471350fa6bf2…`, `census.json`, its `definitions`). Both hold the three block types under the same names with the same numbers.
+- [read] Our staged statements: `stage.json` of row 1 and row 2 in the store (`art:860142a5a87d…`, `out/row1/`, `out/row2/`; row 1's is also on `vy-dc-h200-3`), and row 15's in the staging run's own files (`r20261110-161919-afe0`, exit 0, run files `art:4b00db434cc1…`, `out/types/15.stage.json`). All three were staged at `c6cadd0e32`.
+- [read] The timed statements: the `rate.json` of each of kernels' labelled runs, whose `stage` block is the staging record the proof server ran on. Row 1: `r20261111-015333-38d6`, `r20261111-030920-8d4a`, `r20261111-030932-2be4` (1, 2 and 4 provers). Row 2: `r20261111-015413-6a5c`, `r20261111-030943-4f05`, `r20261111-030957-d8db`. Row 15: `r20261111-024727-c0c5` (1) and `r20261111-032209-d4dd` (2 and 4). The run ids and their arts are from kernels' `ksteady-jobs/h98/types.json`.
+- [read] In all nine timed steps the `stage` block equals ours on every one of these fields: `circuit_sha512` (all 128 digits), `class_sha512`, `definition`, `word`, `census`, `ands`, `nets`, `unit_nnz`, `k_log`, `unit_log`, `vus_per_block`, `in_rows`, `row_schemas`, `circuit_bytes`. Every session of each step was accepted (121, 126 and 132 at 1, 2 and 4 provers; none refused).
+- [run] On my VM, `main` `be9a3d566905`, a 0.3 s Python call that builds no gate: `verity.definitions.boolean.boolean_version` of the census's `SparseMlaHeadBlock_v1{…}` is the staged `SparseMlaHeadBlock_v2{…}`, and `serving_rows.template` of that `_v2` has the census's `_v1` name as its `word`, for `FIRST=false` and `FIRST=true`.
+
+**Rows 1 and 2: one proof block under two names; the AND count is not the same.**
+
+| | the census, `SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=…,BN=64}` | staged and timed, `SparseMlaHeadBlock_v2{…}` |
+|---|---|---|
+| `FIRST=false`, input bits | 615,584 (rows of 1,024, 128, 73,728, 4, 16 and 2,048 bytes) | 615,584 (8,192 + 1,024 + 589,824 + 32 + 128 + 16,384) |
+| `FIRST=true`, input bits | 599,040 | 599,040 (8,192 + 1,024 + 589,824) |
+| output bits, both | 16,544 | 16,544 (32 + 128 + 16,384) |
+| proof block, both | 2^27 | 2^27, one unit a proof block, 256 proof blocks a statement |
+| AND gates, `FIRST=false` | 37,568,903, an estimate | 30,893,497, the unit's own (31,981,569 rows, 2^25) |
+| AND gates, `FIRST=true` | 36,251,588, an estimate | 29,482,383 (30,572,545 rows, 2^25) |
+| pin | none: the census names a block type, not a circuit | `4b31e7caba0113987350c49c…acb6b0b5` and `be5bca5c30515dc443efd888…95ca646a` |
+
+- [read] All of the table is from the files above. The census's rows in bytes are the staged rows' bits over 8, row for row.
+- [read] Why the two names are one proof block: a Boolean Definition names the word Definition it computes, and a partition's template is read through that link (`adapters/vllm/verity_vllm/pipeline/serving_templates.py:223-226`; `verity/definitions/boolean.py:136-138`). The staging records the link (`benchmarks/served_units/stage.py:424`: `definition` the `_v2`, `word` the `_v1`), and the proving table puts a timed row on its census block type by that `word` (`benchmarks/harness/verity_bench/prove_records.py:245-246`).
+- [read] Why the AND counts differ: the census's is an estimate of the word Definition, each leaf lowered once and multiplied by how often it is held (`benchmarks/one_stage/m1_families.py:6-9`; `benchmarks/one_stage/block_census.py:17-18`). The timed circuit has 0.822 and 0.813 of it. The proving table does not read the census's AND count (`benchmarks/harness/verity_bench/prove.py` has no `ands`): a row's seconds are the timed statement's and its number of blocks is the census's.
+- [read] Which is proved and which was measured: the measured one is `_v2`, and it is the one `main` proves for this block type wherever the partition names the Boolean version, which is what `boolean_version` returns. The word Definition staged under its own `_v1` name is another circuit of the same function, and it was not timed: my run `r20261111-210932-261d` (exit 0, its job log) staged it at 39,246,118 AND gates, 40,337,409 unit rows (2^26), a 69.4 GB circuit file, pin `51f48a702538…`, and the Lean verifier accepted its session. The same run staged `SparseMlaHeadBlock_v3` at 30,892,005 AND gates and 31,981,569 rows, pin `5c6d4557a6eb…`. So the line should name `_v2` and its pins, not "the `_v1` block".
+
+**Row 15: we have a pin, and it is the timed statement's.**
+
+- [read] The pin is `0bd0add320930b347889bc237b9b9054b85690ac583f9ae6a7f71deeefdba76efc7c86623f35264ee2881974b919feac10c86abbc56f091da3067a3486935e9c`, from `r20261110-161919-afe0`'s `out/types/15.stage.json`; its row file says both form checks accepted it. [read] Kernels' `c0c5` and `d4dd` ran on the same circuit file (the whole digest and the 13 other fields equal), at 4,096 proof blocks a statement.
+- [read] Census against staged: input bits 10,400 in both (5 × 32 + 5 × 2,048), output bits 1,024 in both, proof blocks of 2^23 in both, one unit a proof block. AND gates: the census's estimate 1,560,795, the circuit's own 1,676,431 (1,694,721 rows, 2^21).
+- [read] What was timed is the word Definition under its own name: its `definition`, `word` and `census` are all `SparseMlaCombine_v1{NSPLIT=5,DV=64,INV=Fa3InvSum_v1}`. [run] On `main`, `boolean_version` of it is `SparseMlaCombine_v2{NSPLIT=5,DV=64,INV={"fn":"Fa3InvSum_v2"}}` (the same VM call), which is another circuit. [read] I found no staging of that `_v2` at these statics in the notes of proofs, kernels, circuits or vllm.
+- [guess] So rows 1 and 2 time the Boolean Definition and row 15 the word Definition. If the line has to say each row times the Boolean version, row 15 needs one staging of `SparseMlaCombine_v2` and one timed step. The `_v1` staging took 222 s and 4.8 GB [read: its `stage.json`]. [relayed] Row 15 is 0.03% of proving time, so this does not move Friday's figure.
+
+**Three things I did not establish, said so there is no guess in the line.**
+
+- [read] `c6cadd0e32` is not an ancestor of `main` (`git merge-base --is-ancestor` says no). The `_v2` head block's own lines in `boolean_sparse_mla.py` are the same text there and on `main`; I did not diff what it calls. Whether `main` stages these three pins today is not run: one head block staging is 4,583 s and 203 GB.
+- [read] In both cases where the word Definition itself was staged, the circuit has more AND gates than the census's figure, which its docstring calls an upper bound: the head block 39,246,118 against 37,568,903, the combine 1,676,431 against 1,560,795. I did not find why. It does not touch the proving figure; it is a question for circuits about the census.
+- [relayed] That our pins for rows 3 to 14 and 16 equal the labelled rows' is your statement; I compared rows 1, 2 and 15 only.
+
+**The Lean verifier's seconds on these statements: the whole core beside the pooled machine** (your 03:08Z ask; nothing rerun, and `946a` and `9052` are not rerun). [read] All from my 02:54Z entry and its runs; the Lean verifier of `main` `be9a3d566905`, `--zk`, whole kept sessions from the card, core-seconds a session; the statement is read once a call on top.
+
+| statement | a pooled machine at nice 19, checked up to the missing Program (what the cost model's runs read) | one whole core, checked up to the missing Program | one whole core, checked to the end with its Program, accepted |
+|---|---|---|---|
+| the head block's, 256 proof blocks | 250.0 (`r20261111-081919-d4ef`, `vy-nebius-cpu-11`, tree `c6cadd0e32`) | 154.790, 155.895 | 159.878, 160.286 (127.6 s to read the statement, 40.9 GiB) |
+| the split head's scores, 256 proof blocks | 47.086 (`r20261111-211713-1e63`) | 47.740 | 49.883 |
+| its values, 128 columns | 12.811 (`r20261111-214534-17ab`) | 13.176, 13.028 | 13.721, 13.764 |
+| its values, 64 columns | 7.949 (`r20261111-211639-20e3`) | 7.909, 8.197 | 8.280, 8.525 |
+| its values, 32 columns | 5.768 (`r20261111-214610-bdd6`) | 5.843, 5.913 | 6.038, 6.141 |
+
+- [read] The whole-core columns are `r20261112-022350-52e3` (exit 0, `vy-dc-h200-3`, each call alone on one core).
+- [read] Only the head block's figure moves: the cost model charges 250.0 where a whole core takes 160, 1.56 times. The split head's pooled figures are within 3% of the whole core's up to the same point and 4 to 8% under its complete check.
+
+**Your 03:50Z section (`vy-dc-h200-3` stops at 05:30Z).**
+
+- [read] The staged statements there are already in the store, bytes and all: `r20261112-023842-d85d` (exit 0), run files `art:80b3775089ed…`, `out/staged/`, 19.6 GB: the head block's `FIRST=false` statement (pin `4b31e7caba011398`), the split head's scores statement and its values statements at 128, 64 and 32 columns, each with `circuit.txt`, `inst.bin`, `pub.bin`, `pin.txt` and `stage.json`. [run] The node's `/workspace/cache/proofs-headprof/staged/` holds those same five directories and nothing else (listed at 03:54Z). No new run is launched.
+- [run] Nothing of mine runs on `vy-dc-h200-3` (load 0.03 at 03:54Z) and I plan no timing there. Neither job needs a node: the level walk was a read (my 03:50Z entry) and HASH-98's rows are read from the store. What else is under `/workspace/cache/proofs-headprof/` is builds, which a run rebuilds.
+
+For the table: no new measurement. The Lean verifier on the head block's statement is 159.9 and 160.3 core-seconds a session, measured on one whole core and accepted (`r20261112-022350-52e3`, `main` `be9a3d566905`, not the served engine: a kept session from a branch-built prover); the cost model's two runs charge 250.0, measured on a pooled machine at nice 19 (`r20261111-081919-d4ef`), and are not rerun. Rows 1, 2 and 15 of HASH-98: the timed statements are ours on the whole digest (read); rows 1 and 2 are `SparseMlaHeadBlock_v2`, 30,893,497 and 29,482,383 AND gates, not the census's 37,568,903 and 36,251,588.
