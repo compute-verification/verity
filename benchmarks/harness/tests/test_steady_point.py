@@ -1231,6 +1231,8 @@ def test_a_statement_in_the_store_is_fetched_into_the_scratch_and_leaves_no_copy
 NOT_FETCHED = [
     ({"listed": ""}, "the store lists no file of the `staged` of row 'gemm64'.*`research run --store-read`"),
     ({"listed": "[]"}, "the store lists no file of the `staged` of row 'gemm64'"),
+    ({"listed": "not a listing"}, r"the store's listing of the `staged` of row 'gemm64'.*bytes \(JSONDecodeError"),
+    ({"listed": json.dumps([{"path": "out/row1/x"}])}, r"isn't each file with its bytes \(KeyError"),
     ({"listed": json.dumps([{"path": "out/row1/x", "bytes": 1 << 62}])}, "held twice while it is fetched, and the disk"),
     ({"fetch_exit": 1}, r"fetching the `staged` of row 'gemm64', art:5+/out/row1, failed \(exit 1\): out/fetch.log"),
     ({"pin.txt": None}, "holds no staged statement in the store"),

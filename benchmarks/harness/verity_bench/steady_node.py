@@ -171,9 +171,10 @@ def fetched(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner, a
     fetch = [sys.executable, *FETCH, art, "--store", str(store), "--path", directory]
     rc, text = ask([*fetch, "--list", "--json"])
     try:
-        size = sum(file["bytes"] for file in json.loads(text)) if rc == 0 else None
-    except (ValueError, TypeError, KeyError):
-        size = None
+        size = sum(file["bytes"] for file in json.loads(text)) if rc == 0 else 0
+    except (ValueError, TypeError, KeyError) as error:
+        raise Refused(f"the store's listing of the `staged` of row {row.type!r}, {row.staged}, isn't each file with its "
+                      f"bytes ({type(error).__name__}: {text.strip()[-300:]!r})") from error
     if not size:
         raise Refused(f"the store lists no file of the `staged` of row {row.type!r}, {row.staged} (exit {rc}: "
                       f"{text.strip()[-300:]!r}): a run reads the store with the key `research run --store-read` gives "
@@ -243,11 +244,11 @@ def cards_near(cpus: Sequence[int], ask: Asker) -> dict[str, Any]:
     where: dict[int, int] = {}
     for line in text.splitlines() if rc == 0 else ():
         index, _, address = (part.strip() for part in line.partition(","))
-        try:
-            # nvidia-smi writes the address with eight digits of domain and in capitals, the kernel with four and without
-            where[int(index)] = int((DEVICES / address[-12:].lower() / "numa_node").read_text())
-        except (OSError, ValueError):
-            continue
+        # nvidia-smi writes the address with eight digits of domain and in capitals, the kernel with four and without
+        said = DEVICES / address[-12:].lower() / "numa_node"
+        node = said.read_text().strip() if index.isdigit() and said.is_file() else ""
+        if re.fullmatch(r"-?\d+", node):
+            where[int(index)] = int(node)
     if not (cards := sorted(index for index, node in where.items() if node == held[0])):
         return {"numa_nodes": held, "cards": None, "why": (
             f"none of the node's {len(where)} cards says it is on NUMA node {held[0]}" if rc == 0 else
