@@ -191,12 +191,35 @@ def test_inside_the_sandbox_a_tree_bound_at_the_fixed_path_is_read_there_and_wri
 @pytest.mark.parametrize("start", ["", "pkg", "pkg/src/deep"])
 def test_with_at_cmd_starts_in_the_fixed_paths_copy_of_the_directory_it_was_started_in(tmp_path, start):
     """Lake names a source by the directory it runs in, so CMD starts under FIXED, wherever in the tree it was started
-    and however that directory was spelled (a slot tree is a link)."""
+    and however that directory was spelled (a slot tree is a link): its physical directory, which Lean reads, is there."""
     real, link = linked_tree(tmp_path)
     r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(link / "pkg" / ".lake"), "--",
-                        "pwd"], cwd=link / start, capture_output=True, text=True)
+                        "pwd", "-P"], cwd=link / start, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == str(Path(FIXED) / start)
+
+
+@needs_unshare
+def test_at_refuses_a_var_tmp_that_is_a_link(tmp_path):
+    """Where /var/tmp is a link, its private tmpfs and FIXED land at the link's target, and a build bound there would name
+    its sources under that path, which no other build's name. So `--at` reads CMD's physical directory (`pwd -P`) and
+    refuses, with the fix, unless it is under FIXED. Here /var/tmp is made a link in a mount namespace of the test's own,
+    by a directory bound over /var that holds the link."""
+    if Path("/var").resolve() in [tmp_path.resolve(), *tmp_path.resolve().parents]:
+        pytest.skip("the test's directory is under /var, which it covers")
+    real, _ = linked_tree(tmp_path)
+    (var := tmp_path / "var").mkdir()
+    (target := tmp_path / "target").mkdir()
+    (var / "tmp").symlink_to(target)
+    r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
+                        'mount --bind "$0" /var && readlink /var/tmp && exec "$@"', str(var),
+                        *UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--",
+                        "pwd", "-P"], cwd=real / "pkg", capture_output=True, text=True)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert r.stdout.splitlines() == [str(target)], "only the outer shell's readlink: CMD never ran"
+    assert f"the bound tree is at {target.resolve()}/verity/pkg, not under {FIXED}" in r.stderr, r.stderr
+    assert "is a link here" in r.stderr and "Make /var/tmp a directory of its own on this host" in r.stderr
+    assert list(target.iterdir()) == [], "the sandbox's tmpfs and FIXED were its own"
 
 
 @needs_unshare

@@ -14,7 +14,8 @@
 # directory it was started in (one under TREE). Lean writes a source's absolute path into what it compiles, so a build
 # that reads its sources under FIXED gives the same bytes wherever TREE is. FIXED is a name in /var/tmp, made in this
 # sandbox's private tmpfs there and gone with it: nothing is made on the host, and two sandboxes at once each have
-# their own. Where /var/tmp got no private tmpfs, --at refuses: a tree bound elsewhere would compile to other bytes.
+# their own. Where /var/tmp got no private tmpfs, or is a link (CMD's physical directory is not under FIXED), --at
+# refuses: a tree bound elsewhere would compile to other bytes.
 # CMD is PID 1, so every process a build starts (compile-time code included) ends with it.
 set -euo pipefail
 rw=()
@@ -86,6 +87,13 @@ if [ -n "$at" ]; then
   mkdir "$at"
   mount --rbind "$tree" "$at"
   cd "$at${here#"$tree"}"
+  case "$(pwd -P)/" in
+    "$at"/*) ;;
+    *) echo "sandbox.sh: --at $at: the bound tree is at $(pwd -P), not under $at: /var/tmp, or a directory above it, is a" \
+         "link here, so a build would name its sources under a path no other build's name. Make /var/tmp a directory of" \
+         "its own on this host." >&2
+       exit 2;;
+  esac
 fi
 # a compiler writes its temporary files under TMPDIR, which a job sets outside the RW_DIRs (a node's /workspace/tmp)
 tmp=
