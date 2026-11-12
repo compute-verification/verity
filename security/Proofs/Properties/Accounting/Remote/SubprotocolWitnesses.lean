@@ -716,9 +716,9 @@ theorem qBytesAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : RemoteA
     (pub : RemoteAudit.Protocol.Public),
     QBytesBy (fun _ _ => some sm) T () node r pub ∧
       ¬ QBytesBy (fun _ _ => some sm) { T with correct := fun _ _ => ∅ } () node r pub := by
-  have h0 : (Toy.trace (Ω := Unit)).incorrect () = 0 := by simp [Trace.incorrect, Toy.trace]
+  have h0 : (Toy.trace (Ω := Unit)).incorrect () = 0 := by simp [Trace.incorrect, Toy.trace]; decide
   have h1 : ({ Toy.trace (Ω := Unit) with correct := fun _ _ => ∅ } : Trace Unit).incorrect () = 1 := by
-    simp [Trace.incorrect, Toy.trace]
+    simp [Trace.incorrect, Toy.trace]; decide
   refine ⟨Toy.node, Toy.rec, Toy.sm, Toy.trace, ⟨⟨0, 1⟩, RemoteAudit.Codec.BLOCK_BYTES * 4⟩, ?_, ?_⟩
   · simp only [QBytesBy, toy_receipts, h0]
     omega
