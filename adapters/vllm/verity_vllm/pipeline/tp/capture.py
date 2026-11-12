@@ -52,17 +52,8 @@ from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 prof.apply_env()
 
 
-def parse_engine_args(items: list[str]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for it in items:
-        if "=" not in it:
-            raise SystemExit(f"--engine-arg expects key=value, got {it!r}")
-        k, v = it.split("=", 1)
-        try:
-            out[k] = json.loads(v)
-        except json.JSONDecodeError:
-            out[k] = v
-    return out
+#: the engine's `--engine-arg` parser, under the name the TP Commit, the Match arms and two benchmarks import from here
+parse_engine_args = va.parse_engine_args
 
 
 def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
