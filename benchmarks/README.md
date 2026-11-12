@@ -84,6 +84,23 @@ Some files here still break these rules: a kernel or a store the integration loa
 holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
 for a new benchmark.
 
+## Metrics
+
+`metrics.toml` declares the numbers a lead is held to, one `[[metric]]` each, and the console's Metrics tab shows each
+one's history from the evidence store. A metric's value is a measurement in a run's `result.json` named by its `id`,
+`OWNER/NAME`, which the benchmark records it under (`serve_tax`'s `Model.metric`), so a value without a run doesn't
+exist. Its keys:
+
+- `id`, `title`, `owner` (a handle in `.agents/skills/using-slack/registry.json`, the id's prefix) and `unit`, the
+  unit its measurements carry.
+- `better`: `lower` or `higher`.
+- `command`: the one command that measures it, whose script's directory records it under `id`.
+- `every`: how often it is measured (`7d`, `12h`); a value older than that is stale.
+- Optional: `floor`, the number it must not cross; `goal`, the plan's goal it serves; `tags`, a list of words.
+
+`tests/test_metrics_registry.py` refuses a repeated id, an unknown owner, an id outside its owner's prefix, a `better`
+other than `lower` or `higher`, and a command whose script is missing or whose directory never names the id.
+
 ## Index
 
 Every directory has one row, in the group of what it measures; `tests/test_benchmarks_index.py` holds the rows to the
