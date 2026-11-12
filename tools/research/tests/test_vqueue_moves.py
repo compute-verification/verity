@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import random
+import tomllib
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -192,7 +193,8 @@ def test_path_rows_are_the_map_rows_whose_old_and_new_words_are_paths_words_in_i
             '"verity/old/" = "verity/new/"\n')
     assert path_rows(text) == [("verity/old/", "verity/new/"), ("a/b.py", "c/b.py"), ("docs/a.md", "docs/b.md")]
     assert path_rows('[words]\nx = 1\n"a/b" = 1\n"c/d" = ["e/f"]\n') == [] and path_rows('words = "a/b"\n') == [] and path_rows("[rewrite]\nexclude = []\n") == []
-    assert path_rows("[words\n") == []
+    with pytest.raises(tomllib.TOMLDecodeError):
+        path_rows("[words\n")
     assert path_rows('words_in = ["x"]\n[words]\n"p/q" = "r/s"\n') == [("p/q", "r/s")]
 
 
@@ -526,3 +528,12 @@ def test_a_regeneration_on_a_tip_whose_members_change_the_move_scripts_is_refuse
     commit, why, report = w.q._regenerated(tip, env.o.gh.prs[1], m.main)
     assert (commit, report) == (None, None) and why.startswith(f"the members below it change {Q.RENAME} from `main`"), why
     assert m.calls() == []
+
+
+def test_a_move_whose_map_doesnt_parse_on_its_tip_is_refused_before_anything_runs(env):
+    m = Moved(env)
+    m.move(1, verdict=False)
+    env.put(2, {MAP: "[words\n"})
+    recs = env.loop(policy).tick()
+    (skip,) = [r for r in recs if r["action"] == "skip"]
+    assert f"its map {MAP} at " in skip["why"] and " doesn't parse (" in skip["why"] and m.calls() == [], skip

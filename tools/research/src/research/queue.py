@@ -1089,11 +1089,9 @@ MOVE_SCRIPTS = (f"{MOVE_DIR}*.py",)
 def path_rows(text: str) -> list[tuple[str, str]]:
     """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
     included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
-    goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  None of a map that doesn't parse."""
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return []
+    goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  A map that doesn't parse raises
+    `tomllib.TOMLDecodeError`."""
+    data = tomllib.loads(text)
     tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
     rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
     return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
@@ -2360,7 +2358,10 @@ class Queue:
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
                           f"until those members land on `{into}`"), None
-        rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
+        try:
+            rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
+        except tomllib.TOMLDecodeError as e:
+            return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
         with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
@@ -2382,13 +2383,13 @@ class Queue:
                 c = subprocess.run([sys.executable, str(check), tip, commit, *(f"--map={o}={n}" for o, n in rows), "--json"],
                                    cwd=wt, capture_output=True, text=True, env=_script_env())
                 said = f"`{MOVE_CHECK} {tip[:12]} {commit[:12]}`" + (f" with {len(rows)} --map rows" if rows else "")
+                judge = f"{said} couldn't judge its move regenerated on {tip[:12]} (exit {c.returncode})"
                 try:
                     report = json.loads(c.stdout)
-                except ValueError:
-                    report = None
+                except ValueError as e:
+                    return None, f"{judge}: no JSON report ({e}): {_tail(c, 4)}", None
                 if not isinstance(report, dict):
-                    return None, f"{said} couldn't judge its move regenerated on {tip[:12]} (exit {c.returncode}): {_tail(c, 4)}", \
-                        None
+                    return None, f"{judge}: {_tail(c, 4)}", None
                 if c.returncode or report.get("certified") is not True:
                     refused = "; ".join(f"{f.get('path')}: {f.get('reason')}" for f in (report.get("refusals") or [])[:3])
                     return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified ({said} exit "
