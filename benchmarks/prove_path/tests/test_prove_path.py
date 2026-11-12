@@ -958,9 +958,9 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
     others = [PP.registered_of_serve(other, None, None, cap) for other, cap in (
         ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
         ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
-        ({**serve, "engine": ENGINE}, reg.cap_bits),
-        ({**serve, "engine": {**ENGINE, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": 1024}}}, reg.cap_bits),
         (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
+    others += [replace(reg, phi=PP.phi_of_serve({**serve, "engine": engine})) for engine in (
+        ENGINE, {**ENGINE, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": 1024}})]
     digests = {PP.I2Compiler(r, {}, "", name=SERVER[0], code=SERVER[1]).digest for r in others}
     assert len(digests) == len(others) and one.digest not in digests
 
