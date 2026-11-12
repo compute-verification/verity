@@ -96207,3 +96207,23 @@ not searched].
 - **What it does at this head** [run: a probe of `registration.check` on the VM, Python only]: a record whose registered values are only certified ones is accepted with the entries and refused without them (`keys`, as today); with the program's own value beside one, `R7-values` without the entries; a certified root other than the verifier's is the new code `R7-certified`; leaves, words, domain and word bits are today's `R7-leaves`, `R7-words`, `R7-domain`, `R7-word_bits`; a name that is both certified and a registered parameter, or an entry in another form, is a `ValueError` before the record is read. **The Lean does not read the key yet**, so at this head `verifier.check` and `Stream.register` with entries fail closed (`DISAGREE`): network can write against the signature, not yet run against it. Files so far: `one_stage/registration.py`, `one_stage/verifier.py`, `service.py` (all under `verity/protocols/spot/verifier/`); to come: `lean/Spot/Registration.lean`, `lean/Spot/OneStage.lean`, `security/Properties/Spot.lean`, `security/Proofs/Properties/Spot.lean`, `security/Proofs/Properties/Spot/Pinned.lean`, three test files, the two locks.
 
 For the table: R7's admission | RELAX | `cursor/proofs-r7-certified-b6a0` at `0b8617b4e4db` pushed, Python signature fixed (`certified`), Lean next | first checkpoint by 19:52Z
+
+## CROSSCLOSE, Thu 12 Nov 19:08Z: two turns of this agent ran at once from 18:59:44Z; this one, the older, stops here, and the turn that wrote the 19:06Z and 19:07Z entries carries all the work
+
+- [read] I am the turn that wrote the entries up to 18:50Z. I was asleep between polls when the VM was booted anew at
+  18:59:44Z (`uptime -s`), one second after the chat's last message (18:59:43Z in `cursor-cloud`'s run details; the
+  chat is now named "CROSSCLOSE: lean's question on verify-members"). I went on running beside the new turn and cannot
+  read the message it was started with: eleven of the sixteen shell commands the guard logged under this id by
+  19:03:28Z were not mine (`/tmp/agent-guard-events.jsonl`), and the 19:06Z and 19:07Z entries are not mine.
+- [derived] Two writers under one name would double entries and runs, so I stop with this entry. Since 18:50Z I wrote
+  no other entry, launched no run and pushed nothing else, and I left the other turn's worktree alone (this entry is
+  from a worktree of its own).
+- [read] The one result of mine not in an entry: the by-name pass over `main` `30d6fcc92ff7`..`0582899c4392` against
+  lean's head `e209a56847d4`, both ways: 24 word hits, none real. It and the rest of what I knew are in
+  `/tmp/close/NOTE-from-the-older-turn.md` on the VM, for the other turn.
+- [read] The old VM's trial worktrees and their local commits (`c04d04289624`, `89f60e213c20`, `4a910e71732a`) went
+  with it (`/agent/repos/wt` was absent at 19:03Z). Every close is pushed: `cursor/proofs-landing-closes-99d1` at
+  `ceffc70c0052`.
+- [guess] A message sent to this id through the guard's inbox reaches whichever turn runs a shell command first; I run
+  none after this push. A resume while a turn of this agent still runs may start two again.
+- Open choices: none from this turn.
