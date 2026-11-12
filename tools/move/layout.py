@@ -167,16 +167,17 @@ def is_shell(path: str, text: str) -> bool:
 
 def lake_dirs(name: str, text: str) -> list[str]:
     """The directories of other packages that a Lake file named `name` holds, as written and in the file's order: a
-    lakefile's path requirements, a manifest's path packages. Empty for any other file, and for one that doesn't parse."""
-    try:
-        if name == "lakefile.toml":
-            return [r["path"] for r in tomllib.loads(text).get("require", []) if isinstance(r.get("path"), str)]
-        if name == "lake-manifest.json":
-            return [p["dir"] for p in json.loads(text).get("packages", [])
-                    if p.get("type") == "path" and isinstance(p.get("dir"), str)]
-    except (ValueError, AttributeError, TypeError):
-        pass
-    return []
+    lakefile's path requirements, a manifest's path packages. Empty for any other file and for an empty one. A Lake file
+    that doesn't parse raises `ValueError`: its paths can't be read, so nothing can say they still name their packages."""
+    if name not in LAKE_FILES or not text.strip():
+        return []
+    if name == "lakefile.toml":
+        held, key, kind = tomllib.loads(text).get("require", []), "path", None
+    else:
+        data = json.loads(text)
+        held, key, kind = data.get("packages", []) if isinstance(data, dict) else [], "dir", "path"
+    return [e[key] for e in (held if isinstance(held, list) else [])
+            if isinstance(e, dict) and isinstance(e.get(key), str) and (kind is None or e.get("type") == kind)]
 
 
 def lake_spans(name: str, text: str) -> list[tuple[int, int]]:
@@ -717,10 +718,9 @@ class Run:
                 raise SystemExit(f"{p}: the rewrite would change a guarantee or reads record")
         lost = []
         for p, before in sorted(lake_before.items()):
-            text = self._read(p) or ""
-            after, named = self._lake_packages(p, text, self.new_files), lake_dirs(posixpath.basename(p), text)
-            lost += [f"  {p}: {named[i]} (it named {was})\n" for i, was in enumerate(before)
-                     if was is not None and i < len(after) and after[i] is None]
+            after = self._lake_packages(p, self._read(p) or "", self.new_files)
+            lost += [f"  {p}: {after[i][0]} (it named {was})\n" for i, (_, was) in enumerate(before)
+                     if was is not None and i < len(after) and after[i][1] is None]
         if lost:
             raise SystemExit("the move would leave a Lake package's path to another package naming no package, so neither "
                              "it nor what requires it would build:\n" + "".join(lost)
@@ -1058,13 +1058,19 @@ class Run:
             text = text[:a] + new + text[b:]
         return text
 
-    def _lake_packages(self, path: str, text: str, files: set[str]) -> list[str | None]:
-        """Each directory Lake file `path` names (`lake_dirs`) as the package's directory among `files`, or None where
-        that holds no lakefile."""
+    def _lake_packages(self, path: str, text: str, files: set[str]) -> list[tuple[str, str | None]]:
+        """Each directory Lake file `path` names (`lake_dirs`), as written, with the package's directory among `files`, or
+        None where that holds no lakefile. A Lake file that doesn't parse stops the move: its paths can't be checked."""
+        try:
+            dirs = lake_dirs(posixpath.basename(path), text)
+        except ValueError as e:
+            raise SystemExit(f"{path}: not a Lake file the mover can read ({e}), so it can't say that the paths it holds "
+                             "to other packages still name them after the move: fix the file first, in a change of its "
+                             "own") from e
         out = []
-        for d in lake_dirs(posixpath.basename(path), text):
+        for d in dirs:
             at = posixpath.normpath(posixpath.join(posixpath.dirname(path), d))
-            out.append(at if {f"{at}/lakefile.toml", f"{at}/lakefile.lean"} & files else None)
+            out.append((d, at if {f"{at}/lakefile.toml", f"{at}/lakefile.lean"} & files else None))
         return out
 
     def _short_form(self, new: str) -> str:

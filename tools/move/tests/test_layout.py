@@ -256,11 +256,11 @@ LAKE_MANIFEST = '''{"packages": [{"type": "path", "name": "inner", "dir": "inner
 '''
 
 
-def _lake_tree(tmp_path: Path, *maps: str) -> tuple[Path, list[subprocess.CompletedProcess]]:
+def _lake_tree(tmp_path: Path, *maps: str, manifest: str = LAKE_MANIFEST) -> tuple[Path, list[subprocess.CompletedProcess]]:
     """A package `outer/` that requires two packages inside its own directory by paths with no `./`, as Lake takes them,
     after each of `maps` has run on it in turn."""
     r = tmp_path / "repo"
-    files = {"outer/lakefile.toml": LAKEFILE, "outer/lake-manifest.json": LAKE_MANIFEST, "outer/inner/lakefile.toml": "",
+    files = {"outer/lakefile.toml": LAKEFILE, "outer/lake-manifest.json": manifest, "outer/inner/lakefile.toml": "",
              "outer/sub/deep/lakefile.lean": "", "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
@@ -323,6 +323,18 @@ def test_a_move_that_leaves_a_lake_path_naming_no_package_stops(tmp_path):
     assert "outer/lakefile.toml: inner (it named outer/inner)" in run.stderr, run.stderr
     assert "outer/lake-manifest.json: inner (it named outer/inner)" in run.stderr
     assert "sub/deep" not in run.stderr
+
+
+def test_a_lake_file_that_does_not_parse_stops_the_move(tmp_path):
+    """The mover can't say that a Lake file it can't read still names its packages, so it stops and names the file rather
+    than take it to hold no path. A Lake file of a shape Lake wouldn't write holds none."""
+    _, (run,) = _lake_tree(tmp_path, '[paths]\n"outer/inner/" = "apart/inner/"\n\n[modules]\n"outer.inner" = "apart.inner"\n',
+                           manifest='{"packages": [')
+    assert run.returncode != 0
+    assert "outer/lake-manifest.json: not a Lake file the mover can read" in run.stderr, run.stderr
+    assert L.lake_dirs("lake-manifest.json", "") == [] == L.lake_dirs("lake-manifest.json", '{"packages": {"dir": "x"}}')
+    assert L.lake_dirs("lakefile.toml", 'require = "inner"\n') == [] == L.lake_dirs("README.md", "not TOML [")
+    assert L.lake_dirs("lake-manifest.json", '[{"type": "path", "dir": "x"}]') == []
 
 
 def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
