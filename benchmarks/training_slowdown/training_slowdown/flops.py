@@ -10,7 +10,9 @@ optimizer alike. It counts, in multiply-accumulates (MACs):
   (`cdist`, `pdist`) at one MAC per coordinate pair, and `embedding_bag` at one per index and column;
 - a fused attention kernel as the ops the math kernel computes attention by, which are the ones a step's trace holds
   (`Counter._attention`): the forward's two scalings and two products, and in the backward the products and scalings
-  of the gradients the step asks for. A job's record is the same under either kernel;
+  of the gradients the step asks for. A job's record has the same ops, shapes and MACs under either kernel. The
+  dtype the kernel computes them in is not the same: a fused kernel's is the query's, and the math kernel computes
+  a 16-bit call in float32;
 - elementwise multiplications (`mul`, `div`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and
   `_foreach_` forms), one MAC per output element, so a matmul written as a broadcast product or quotient is counted
   too, and a fused optimizer step at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`);
@@ -833,7 +835,10 @@ class Counter(TorchDispatchMode):
     def _attention(self, func, args, kwargs, tags: dict[int, Tag], bwd: bool) -> Tag:
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'
         provenance: they are the ops a step's trace holds (`capture` traces under the math kernel), so a job's record
-        is one record under either kernel. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the product of q's
+        has the same ops, shapes and MACs under either kernel. Their dtype is the query's (`_shaped`), the one a fused
+        kernel computes the call in; the math kernel computes a 16-bit call from operands it casts up to float32, so
+        under it the same ops run in float32, and a trace, which is taken under it, prices them at the query's
+        (`capture.products.priced_dtype`). With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the product of q's
         batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
 
         - forward: the scalings of q and of kᵀ (`mul`, each by the root of the scale); the scores (`bmm`, [n, L, E] by
@@ -843,6 +848,9 @@ class Counter(TorchDispatchMode):
         - backward, for the gradients the step asks for: v's product ([n, S, L] by [n, L, Ev]); the weights' ([n, L, Ev]
           by [n, Ev, S]) where q, k or the mask asks, and with it dropout's scaling; and for each of q and k its
           product ([n, L, S] by [n, S, E]; [n, E, L] by [n, L, S]) and its scaling.
+
+        The card's fused backward computes the scores again, a fifth product, which this count leaves out because a
+        circuit reads the forward's.
 
         What the step asks for is the kernel's own word where it takes one (`grad_input_mask`), else which of q, k and v
         require a gradient. A kernel that takes no such word computes all three gradients whatever `autograd.grad` was
