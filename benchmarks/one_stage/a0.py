@@ -382,7 +382,8 @@ def lean_read_no_proof(v: dict) -> bool:
 def lean_answered(verifiers: dict | None) -> bool:
     """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
     writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
-    fails its check either way."""
+    fails its check either way. History tables the Lean itself refuses for the Python's reason are its answer
+    (`verifier.check`'s `R.HISTORY`)."""
     return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
 
 
@@ -394,17 +395,6 @@ def negative(v: Verdict) -> dict:
     answered = lean_answered(v.verifiers)
     return {"refused": not v.ok and answered, "codes": list(v.codes),
             **({} if answered else {"lean": (v.verifiers or {}).get("lean")})}
-
-
-def history_negative(v: Verdict) -> dict:
-    """`negative` for a history table's registered root that is not the table's. The Python refuses it with a reason
-    and no code (`R.HistoryRefused`) and the Lean's own answer is a refusal too, so the verifier's verdict is `R.HISTORY`
-    alone for whatever stands in the Lean's place, a Lean that could not run included (`verifier.check`). Only the
-    Lean's own check of the root gives the Python's reason: refused only where the two reasons are one; else the row
-    carries both (``reasons``)."""
-    why = v.detail.get(R.HISTORY) or {}
-    refused = v.codes == (R.HISTORY,) and isinstance(why.get("lean"), str) and why["lean"] == why.get("python")
-    return {"refused": refused, "codes": list(v.codes), **({"reasons": dict(why)} if why and not refused else {})}
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:

@@ -1097,7 +1097,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
             v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
-            neg["history-root-not-its-writers-strings"] = a0.history_negative(v)
+            neg["history-root-not-its-writers-strings"] = a0.negative(v)
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = a0.negative(v)
         neg.update(wiring_negatives(mine.members, publics))
