@@ -306,10 +306,10 @@ def test_a_product_it_doesnt_read_is_refused(steps) -> None:
 REST = 500
 
 
-def _trace(rows: list[dict], cell: float, gates_per_mac: float = 2.0) -> dict:
+def _trace(rows: list[dict], cell, gates_per_mac: float = 2.0) -> dict:
     """The circuit's product `rows` as training's slowdown code writes a step's (its capture's .products.json): identical rows
-    one row with their count, each at the Definition whose gates are `cell`, a MAC at `gates_per_mac`, and the step's |C|
-    its products' and `REST`; a flash attention's products as torch's math path has them, each the whole rectangle of the bmm
+    one row with their count, each at the Definition whose gates are `cell` (or `cell(row)`), a MAC at `gates_per_mac`, and
+    the step's |C| its products' and `REST`; a flash attention's products as torch's math path has them, each the whole rectangle of the bmm
     it stands for, and the backward's scores, which the math path saves, none."""
     merged: dict = {}
     for r in rows:
@@ -318,7 +318,7 @@ def _trace(rows: list[dict], cell: float, gates_per_mac: float = 2.0) -> dict:
             row = {"phase": r["phase"], "op": "bmm" if r["product"] else r["op"], "dims": d, "token_dims": r["token_dims"],
                    "macs": math.prod(d.values()),
                    "outputs": d["batch"] * d["m"] * d["n"], "affected": [True, True], "widths": list(r["widths"][0]),
-                   "cell_gates": cell, "gates_per_mac": gates_per_mac}
+                   "cell_gates": cell(r) if callable(cell) else cell, "gates_per_mac": gates_per_mac}
             key = json.dumps(row, sort_keys=True)
             merged[key] = {"count": merged.get(key, {}).get("count", 0) + 1, **row}
     rows = list(merged.values())
@@ -390,9 +390,11 @@ def test_against_a_trace_of_the_cards_attention(steps, unit_prices) -> None:
     "attention", and there they differ in three columns alone: the count, by the backward's scores, which the math path saves;
     N, the head Definitions' multiply-adds against whole rectangles, and O, the outputs they compute against the rectangles',
     both only where the scores are (at T = BN the blocks a row visits are the whole rectangle). A head's |C| isn't split by
-    product: each attention key's circuit gates are None, and `C`'s attention is the heads' |C|."""
+    product: each attention key's circuit gates are None, and `C`'s attention is the heads' |C|. Each trace row is at the
+    stand-in Definition of its circuit row's output words (`HE_BITS`)."""
     out = G.read(G.load_handover(steps(torch.bfloat16, CC).path), CODE)
-    a = G.against(out, _trace(out["products"], 2.0), CODE)
+    by_width = {b_y: gates for gates, (_, b_y) in CODE.work.HE_BITS.items()}
+    a = G.against(out, _trace(out["products"], lambda r: by_width[max(r["out_widths"])]), CODE)
     scores = fused_keys(out, ("scores",))
     assert differences(a, out) == {"count": {k for k in scores if k[0] == "backward"}, "N": scores, "O": scores}
     assert all(r["circuit"]["gates"] is None for r in a["rows"] if r["op"] == "attention")
