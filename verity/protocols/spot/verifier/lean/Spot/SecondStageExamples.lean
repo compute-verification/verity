@@ -710,4 +710,55 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }
 
+/-- `own` with its interior registration registering values `vs`. -/
+private def exHolding (vs : Array String) (own : Own := exOwn) : Own :=
+  { own with interior := own.interior.setObjVal! "registered"
+      (Json.arr (vs.map fun v => Json.mkObj [("value", Json.str v)])) }
+
+/-- A read's template, as round 2 knows one by its id. -/
+private def exRead : String := "EmbeddingRead_v1{V=8,H=2}"
+
+/-- The read's ports' links, each at a value of its own name. -/
+private def exReadLinks : Array Link :=
+  (#["tok", "root", "domain", "row", "salt", "path"] : Array String).map fun p => (⟨exRead, p, p⟩ : Link)
+
+/-- What the verifier fills of the read: its table's root and domain, its key, and the 1 its verdict port reads. -/
+private def exFilled : Array (String × Array (Array (String × String))) :=
+  #[("root", #[#[("history", "t/root")]]), ("domain", #[#[("history", "t/domain")]]),
+    ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE, VERDICT_ONE])]
+
+/-- An interior registration registering the read's parameters and the verdict's value, the read's reference
+statement reading its verdict port at that value. -/
+private def exReading : Own :=
+  { exHolding #["tok", "root", "domain", "row", "salt", "path", "one"] with
+    links := some exReadLinks
+    supplied := exFilled
+    refReads := #[(exRead, Json.mkObj [("ports", Json.mkObj [("o1", Json.mkObj [("value", "one")])])])] }
+
+-- a value the interior registration registers is one the verifier holds without the prover: pinned or held to an
+-- earlier record, or filled from its own bytes, never from a root of the interior record
+#guard inputsFailure exOwn == none
+#guard inputsFailure (exHolding #["logits"]) == some "logits"
+#guard inputsFailure { exHolding #["logits"] with fixed := #["logits"] } == none
+#guard inputsFailure { exHolding #["i"] with supplied := #[("i", #[#[("bytes", "00000003")]])] } == none
+#guard inputsFailure { exHolding #["p"] with supplied := #[("p", #[#[("port", "x")]])] } == some "p"
+-- or the opened row of a read whose root, domain and key the verifier holds and whose verdict it holds to 1
+#guard inputsFailure exReading == none
+#guard inputsFailure { exReading with supplied := exFilled.filter (·.1 != "tok") } == some "tok"
+#guard inputsFailure { exReading with supplied := exFilled.filter (·.1 != "root") } == some "root"
+#guard inputsFailure { exReading with supplied := exFilled.filter (·.1 != "one") } == some "row"
+#guard inputsFailure { exReading with supplied := exFilled.map fun (v, rows) =>
+  (v, if v == "one" then #[VERDICT_ONE, #[("bytes", "00000000")]] else rows) } == some "row"
+#guard inputsFailure { exReading with refReads := #[] } == some "row"
+#guard inputsFailure { exReading with links := some (exReadLinks.push ⟨"Other_v1", "x", "row"⟩) } == some "row"
+#guard inputsFailure { exReading with
+  links := some (exReadLinks.filter (·.port != "tok"))
+  wires := some #[⟨exRead, "tok", "Pair_v0", "o0"⟩]
+  supplied := exFilled.filter (·.1 != "tok")
+  interior := (exHolding #["root", "domain", "row", "salt", "path", "one"]).interior } == none
+-- the code is reported beside the others, whatever else fails or passes
+#guard (check true (exHolding #["logits"]) none).codes == #["second-inputs", "second-statements"]
+#guard (exCheck true (exHolding #["logits"]) #[exHonest]).codes == #["second-inputs"]
+#guard (exCheck true { exHolding #["logits"] with fixed := #["logits"] } #[exHonest]).codes.isEmpty
+
 end Spot.SecondStage

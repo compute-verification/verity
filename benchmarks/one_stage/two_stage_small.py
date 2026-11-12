@@ -34,6 +34,9 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_token
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 #: round 2's code for a session's read it doesn't take: here the return's, at the interior's own port
 UNHELD = "second-read"
+#: round 2's code for a value the interior registration registers that a replay block's input may not read: here the
+#: sampler's ``logits``, which the prover registers after the first stage's sample
+INPUTS = "second-inputs"
 #: round 2's code for a replay block it derives no wires from: an inlined class's
 UNWIRED = "second-wires"
 
@@ -66,18 +69,20 @@ def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int =
 def expect(summary: Mapping[str, Any], code: str = UNHELD) -> dict[str, bool]:
     """A ``two_stage.py second`` summary against the run a record of round 1 with no port for the block's return gives,
     check by check: every check before the sample passed, each session's circuit file is its template's params', every
-    Lean verdict accepted, every negative refused, round 2 refuses the statements by ``code`` alone (`UNHELD`; an
-    unlinked run's, `UNWIRED`), and the stream's outcome is refused by its interior record's statements check, with
-    that code alone, its replay sample's record failing nothing."""
+    Lean verdict accepted, every negative refused, round 2 refuses the statements by ``code`` (`UNHELD`; an unlinked
+    run's, `UNWIRED`), after `INPUTS` where the design links a parameter the interior registers (the linked run's
+    ``logits``; an unlinked run links none), and by nothing else, and the stream's outcome is refused by its interior
+    record's statements check, with those codes alone, its replay sample's record failing nothing."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
     negatives = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (audit.get("negatives") or {}).values()]
+    codes = [INPUTS, code] if code == UNHELD else [code]
     return {"before_draw": bool(audit.get("checks_before_draw")) and all(audit["checks_before_draw"].values()),
             "pins": bool(summary.get("pins")) and all(summary["pins"].values()),
             "lean_verdicts": bool(inner.get("verdicts")) and all(v is True for v in inner["verdicts"].values()),
             "negatives": bool(negatives) and all(negatives),
-            "round_two": r2.get("codes") == [code],
-            "outcome": o.get("accepted") is False and o.get("statements") == [code]
+            "round_two": r2.get("codes") == codes,
+            "outcome": o.get("accepted") is False and o.get("statements") == codes
             and o.get("interior") == ["statements"] and o.get("replay_sample") == []}
 
 
