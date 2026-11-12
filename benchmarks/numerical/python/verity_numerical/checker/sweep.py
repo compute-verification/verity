@@ -1,4 +1,4 @@
-"""Run the WP2 reference checker over ``bench-instances/v1``: every positive must be accepted with the recorded word
+"""Run the reference checker over ``bench-instances/v1``: every positive must be accepted with the recorded word
 (and, for ``vu-k1536``, reproduce every recorded intermediate accumulator), every ``wrong`` negative must be rejected
 with its claimed word and accepted with the correct one, every ``reject`` negative must be rejected whatever is claimed.
 

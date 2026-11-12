@@ -1,8 +1,8 @@
-"""The exhaustive WP1 comparison: one recorded pod run (stage ``wp1.exhaustive``), prints counts, writes a JSON summary.
+"""The exhaustive comparison of the reference evaluators: one recorded pod run (stage ``wp1.exhaustive``), prints counts, writes a JSON summary.
 
     python exhaustive_driver.py --out $RESEARCH_RUN_DIR [--harness PATH] [--random N] [--procs P] [--pytest]
 
-Steps (the letters are the lane's test plan):
+Steps:
   0  the fast pytest suite of this directory (``--pytest``; includes the z3 proof of D3 when z3 is importable)
   a  every BF16 encoding x three multipliers: hawkeye_close vs silicon decode, non-finite flagged alike
   b  every 256 x 256 significand product, both signs

@@ -770,7 +770,7 @@ def modular_queries(p: Params = REAL, *, timeout_ms: int = 20_000) -> list[Query
 def integer_queries(p: Params = REAL, *, timeout_ms: int = 20_000, targeted: bool = True) -> list[QueryResult]:
     out = [z3_gadget(spec, p, timeout_ms=timeout_ms) for spec in SPECS.values()]
     if targeted:
-        # the handoff's named targets, as dropped predicates: each must turn the UNSAT into a SAT (the bound matters)
+        # the named bounds, as dropped predicates: each must turn the UNSAT into a SAT (the bound matters)
         out.append(z3_gadget(SPECS["group_max"], p, timeout_ms=timeout_ms, drop=("attained",), label="excessive E: without `attained`"))
         out.append(z3_gadget(SPECS["group_max"], p, timeout_ms=timeout_ms, drop=("onehot",), label="false selector: without `onehot`"))
         out.append(z3_gadget(SPECS["align_state"], p, timeout_ms=timeout_ms, drop=("rem",), label="remainder: without `rem`"))
