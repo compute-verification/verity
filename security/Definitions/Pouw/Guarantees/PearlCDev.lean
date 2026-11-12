@@ -16,9 +16,9 @@ hardware figure in it; the gap at a named record is the statement at that record
 
 * `GapDevRev1K`: per unit, from TT_OUT rev1 at W1 (`TTOutPearlCDevRev1W1`).
 * `SampledDevRev1K`: per audit tile, from TT_OUT rev1 per audit tile at W1 (`TTOutTilePearlCDevRev1W1`).
-* `HiddenFlockDevRev1K`: per audit tile under Flock's hidden audit over a TileRead session `F` (`F.audit`), at `t·δzk(q)`
-  more error than the sampled audit, given T3 at the session (`TileReadSound`) and the binding (`TileReadBinds`), the
-  two open obligations `Definitions.Pouw.Guarantees.PearlCFlockTile` names.
+* `HiddenFlockDevRev1K`: per audit tile under Flock's hidden audit over a TileRead session `F` (`F.audit`), at
+  `t·δzk(q)` more error than the sampled audit, given T3 at the session (`TileReadSound`) and the binding
+  (`TileReadBinds`), the two open obligations `Definitions.Pouw.Guarantees.PearlCFlockTile` names.
 
 Each proof is `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` (`Proofs.Pouw.PearlC.DevGap`).
 -/
@@ -30,8 +30,8 @@ namespace Pouw.Guarantees.PearlC
 open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
 
 /-- **The served form's gap per unit, at every device record.** For every W1 setting `dv`, salt bytes `salt`, device
-record `d`, semantics `sem`, cap `ρ`, kernel forming `c` and shapes `Ss`: if the honest kernel's `W_ref` is within `ω` of
-the capped credit on `Ss` (`KernelWithin`), TT_OUT rev1 at W1 gives `G_g` on the domain restricted to `Ss` at
+record `d`, semantics `sem`, cap `ρ`, kernel forming `c` and shapes `Ss`: if the honest kernel's `W_ref` is within `ω`
+of the capped credit on `Ss` (`KernelWithin`), TT_OUT rev1 at W1 gives `G_g` on the domain restricted to `Ss` at
 `g = 1 − (1 − 1/400)/ω`. -/
 def GapDevRev1K : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
