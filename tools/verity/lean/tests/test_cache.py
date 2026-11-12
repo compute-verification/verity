@@ -1062,7 +1062,7 @@ def no_unshare(tmp_path: Path, monkeypatch) -> None:
     stub.mkdir()
     (stub / "unshare").write_text("#!/bin/sh\nexit 1\n")
     (stub / "unshare").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{stub}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(stub), prepend=os.pathsep)
 
 
 def linked(pkg: Path, *caches: Path) -> list[str]:
