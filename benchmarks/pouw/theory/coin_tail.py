@@ -41,6 +41,7 @@ import json
 import math
 import random
 import sys
+from collections.abc import Callable, Iterator
 from fractions import Fraction
 
 LN2 = math.log(2)
@@ -95,7 +96,7 @@ def lsum(*xs: float) -> float:
     return m + math.log2(sum(2.0 ** (x - m) for x in xs))
 
 
-def crossing(lo: int, hi: int, falling, rising) -> int:
+def crossing(lo: int, hi: int, falling: Callable[[int], float], rising: Callable[[int], float]) -> int:
     """The least `i` in `[lo, hi]` with `falling(i) ≤ rising(i)` (or `hi`)."""
     while lo < hi:
         mid = (lo + hi) // 2
@@ -161,7 +162,7 @@ def needed_slack(L: dict) -> Fraction:
     return max(Fraction(0), (128 * (R - 1) - 128 * L["tiles"] * MEAN_RATE) / L["stock"])
 
 
-def grid(m_rows: int, tiles_log2: int, dense: int, growth: float):
+def grid(m_rows: int, tiles_log2: int, dense: int, growth: float) -> Iterator[tuple[int, int]]:
     rb = (16 * ((m_rows + 15) // 16)) // 16
     limit = 2**tiles_log2
 

@@ -190,8 +190,8 @@ CANDIDATES = [
         "name": "FP16/BF16 MMA, f32 accumulate (HMMA.*.F32)", "device": "all", "cls": "DECOMPOSE", "D": 1, "escape": False,
         "isa": "mma.sync...f32.f16.f16.f32 / .bf16: int8 operands are exact in f16 (<2048) and bf16 (<256), the product "
                "is exact in f32 (<2^24 accumulate), so one HMMA computes an exact int8 dot product",
-        "reason": "exact for int8, but fp16/bf16 tensor TOPS <= int8's at D=1, so <= 1.0x int8 (ties at most); decision "
-                  "81's per-form LP already lets the cheater pick its best form (IMMA16832 wins)",
+        "reason": "exact for int8, but fp16/bf16 tensor TOPS <= int8's at D=1, so <= 1.0x int8 (ties at most); the "
+                  "per-form LP already lets the cheater pick its best form (IMMA16832 wins)",
     },
     {
         "name": "FP16/BF16 MMA, f16 accumulate (HMMA.*.F16)", "device": "all", "cls": "LOW-PRECISION", "D": None,
