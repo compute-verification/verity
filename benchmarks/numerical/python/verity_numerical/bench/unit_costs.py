@@ -81,6 +81,26 @@ from verity.protocols.pouw.prover.circuit.plan import record_k
 from verity_flock import ir_lower, lowerings
 from verity_flock import subcircuit_templates as TM
 
+__all__ = [
+    "METRICS",
+    "affine",
+    "argmax_scan_counts",
+    "argmax_step",
+    "argmax_tree",
+    "at",
+    "attention_steps",
+    "block_excess",
+    "build",
+    "inventory",
+    "main",
+    "registered",
+    "render",
+    "retree",
+    "sample_count",
+    "sample_size",
+    "work",
+]
+
 METRICS = ("inputs", "ands", "output_copies", "committed", "nnz_AB", "lookups")
 EPSILON = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)

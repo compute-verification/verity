@@ -13,9 +13,9 @@ as a Boolean circuit. It has three parts:
 - `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
 
 **What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one. The
-modules without a list (`bench.unit_costs`, `bench.unit_costs_menu`, `bench.unit_costs_prover`) have no reader outside it,
-and `settings` also answers each setting it declares as an attribute. Its readers outside this directory are Flock's prover
-and pod scripts (`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
+modules without a list (`bench.unit_costs_menu`, `bench.unit_costs_prover`) have no reader outside it, and `settings` also
+answers each setting it declares as an attribute. Its readers outside this directory are Flock's prover and pod scripts
+(`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
 (`bench.contract`, `bench.instances`, `reference.hawkeye_close`), and `proof_throughput/`, `judge.py` and
 `latency_compare.py` (`bench.contract`, `bench.latency`). Several benchmarks' scripts start `bench.generate` as a command, so
 what it prints is read too.
