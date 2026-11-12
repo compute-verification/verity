@@ -126,6 +126,9 @@ inputs = [
     # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
     # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover
     "benchmarks/served_units/stage.py", "benchmarks/one_stage/server_rate.py",
+    # the kit's fingerprint and files are the keys and shapes PoUW's own writer of a run's result writes, which a test
+    # runs beside the kit for the same inputs
+    "benchmarks/pouw/run_result.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
