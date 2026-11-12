@@ -797,11 +797,12 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-1")
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", "6b3d704c8" * 4 + "abcd")
     monkeypatch.chdir(tmp_path)
-    real, tickets = SLOT.join, []
+    real, tickets, names = SLOT.join, [], []
 
     def join(d, priority=False, who=None, **kw):
         ticket, fd = real(d, priority, who)
         tickets.append(json.loads(ticket.read_text()))
+        names.append(ticket.name)
         return ticket, fd
 
     def execvpe(f, argv, env):
@@ -816,7 +817,8 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "commit": "6b3d704c8" * 4 + "abcd", "by": "lander"}
     who = tmp_path / "check-a.who"
     assert tickets == [me] and stat.S_IMODE(who.stat().st_mode) == 0o664
-    assert json.loads(who.read_text()) == {**me, "joined": "2026-10-01T09:00:00Z", "took": "2026-10-01T09:00:00Z"}
+    assert json.loads(who.read_text()) == {**me, "ticket": names[0], "reserves_gib": 0, "joined": "2026-10-01T09:00:00Z",
+                                           "took": "2026-10-01T09:00:00Z"}, "its place in the line and what it reserves too"
     assert sorted(p.name for p in tmp_path.iterdir()) == ["check-a.lock", "check-a.who", SLOT.LINE, "slots"]
     assert SLOT.asker()["by"] == "https://cursor.com/agents/bc-1"
 
@@ -907,10 +909,23 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
         os.close(fd)
 
 
-def test_a_small_check_passes_lane_waiters_ahead_that_only_memory_keeps_from_starting(tmp_path, monkeypatch):
-    """A 400-448 GB run at the head of the line waited on memory while 7 slots sat idle, and every small
-    check behind it waited too. A waiter asking at most BACKFILL_MAX_GB doesn't count a lane waiter ahead whose ask exceeds the
-    memory free now; one with no ask, one that would fit, and a priority waiter still hold the line."""
+def _locks(tmp_path: Path, holders: dict[str, int]) -> Path:
+    """A /proc whose locks file says each slot of ``holders`` (its `check-NAME.lock` in ``tmp_path``) is held by its pid."""
+    proc, lines = tmp_path / "proc", []
+    proc.mkdir(exist_ok=True)
+    for name, pid in holders.items():
+        lock = tmp_path / f"check-{name}.lock"
+        lock.touch()
+        st = lock.stat()
+        lines.append(f"{len(lines) + 1}: FLOCK  ADVISORY  WRITE {pid} {os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 0 EOF")
+    (proc / "locks").write_text("\n".join(lines) + "\n")
+    return proc
+
+
+def test_a_waiter_passes_the_lane_waiters_ahead_that_only_memory_keeps_from_starting(tmp_path, monkeypatch):
+    """A 400-448 GB run at the head of the line waited on memory while 7 slots sat idle, and every check behind it waited
+    too. A waiter, whatever it asks itself, doesn't count a lane waiter ahead whose ask exceeds the memory free now; one with
+    no ask, one that would fit, and a priority waiter still hold the line."""
     line = tmp_path / SLOT.LINE
     line.mkdir()
     monkeypatch.setenv(SLOT.RUN_MEM_ENV, "448")
@@ -922,12 +937,159 @@ def test_a_small_check_passes_lane_waiters_ahead_that_only_memory_keeps_from_sta
     assert SLOT.ahead(small, free_gb=500) == 1, "a head that would fit keeps its turn"
     monkeypatch.delenv(SLOT.RUN_MEM_ENV)
     plain, pfd = SLOT.join(tmp_path, who=SLOT.asker())
-    assert SLOT.ahead(plain, free_gb=300) == 1, "a waiter with no ask (the small one ahead) always counts"
+    assert SLOT.ahead(plain, free_gb=300) == 1, "the small one ahead fits, so it keeps its turn"
     train, tfd = SLOT.join(tmp_path, priority=True, who={"mem_gb": 900})
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "72")
     late, lfd = SLOT.join(tmp_path, who=SLOT.asker())
-    assert SLOT.ahead(late, free_gb=300) == 3, "a priority waiter is never passed"
+    assert SLOT.ahead(late, free_gb=300) == 3, "a priority waiter is never passed, nor one with no ask, nor one that fits"
+    assert SLOT.ahead(late, free_gb=10) == 2, "with 10 GiB free the small one waits on memory too; the other two still count"
     for fd in (bfd, sfd, pfd, tfd, lfd):
         os.close(fd)
+
+
+def test_a_waiter_holds_its_place_once_it_would_start_if_the_runs_that_passed_it_ended(tmp_path, monkeypatch):
+    """Passing a waiter that memory keeps costs it nothing while it couldn't start anyway. Once its ask fits in what is free
+    and what the runs that came after it reserve, every run that passed it would keep it out longer, and a stream of them
+    for ever: from then on it counts, and waits only for the runs that already hold a slot."""
+    (tmp_path / "slots").write_text("".join(f"{name} {i}\n" for i, name in enumerate("abcdef")))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    (tmp_path / SLOT.LINE).mkdir()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "448")                              # 417.2 GiB
+    big, bfd = SLOT.join(tmp_path, who=SLOT.asker())
+    joined = int(big.name.split("-")[0])
+
+    def holds(slot: str, pid: int, **who) -> None:
+        (tmp_path / f"check-{slot}.who").write_text(json.dumps({"pid": pid, **who}))
+
+    def passed(ticket: str) -> float:
+        return SLOT.passed_gb(ticket, tmp_path, proc)
+
+    holds("a", 11, ticket=f"{joined + 1:020d}-11", reserves_gib=68)
+    holds("b", 12, ticket=f"{joined + 2:020d}-12", reserves_gib=15)
+    holds("c", 13, ticket=f"{joined - 1:020d}-13", reserves_gib=200)         # it joined the line before the head did
+    holds("d", 14, ticket=f"{joined + 3:020d}-14", reserves_gib=40)          # it ended: another process holds its slot now
+    holds("e", 15, mem_gb=64)                                                # an older slot.py's record: no ticket, no figure
+    holds("f", 16, ticket=f"{SLOT.PRIORITY}{joined + 4:020d}-16", reserves_gib=150)      # a train check
+    proc = _locks(tmp_path, {"a": 11, "b": 12, "c": 13, "d": 99, "e": 15, "f": 16})
+    assert passed(big.name) == 83, "the two lane runs that joined after it and still hold their slots"
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "72")
+    late, lfd = SLOT.join(tmp_path, who=SLOT.asker())
+    assert SLOT.ahead(late, free_gb=300, passed=passed) == 0, "300 free and 83 with its passers: it couldn't start without them"
+    assert SLOT.ahead(late, free_gb=340, passed=passed) == 1, "340 free and 83: it would start if they ended, so nothing passes it"
+    assert SLOT.ahead(late, free_gb=340) == 0, "without the passers' figure it is passed for as long as memory keeps it"
+    rows = SLOT.waiting(tmp_path / SLOT.LINE, NOW, passed=passed)
+    assert [r.get("passed_gib") for r in rows] == [83, None], "named for the waiter that was passed, not for one nobody passed"
+    assert SLOT.waiter_text(rows[0]).endswith("; runs that came after it reserve 83 GB of the 418 GB it waits for")
+    assert "reserve" not in SLOT.waiter_text(rows[1])
+    assert SLOT.status_doc(NOW, proc)["waiters"][0]["passed_gib"] == 83, "`--status --json` names it, for a placement to read"
+    assert SLOT.status([], tmp_path, NOW, proc)[0].endswith("reserve 83 GB of the 418 GB it waits for")
+    for fd in (bfd, lfd):
+        os.close(fd)
+
+
+def _pool_line(tmp_path: Path, monkeypatch, slots: int, busy: int, memory: list[int]):
+    """A pool of ``slots`` slots without mem=, the first ``busy`` held by runs that came before its line, on a machine with
+    ``memory[0]`` GiB free before the pool's own runs reserve theirs. `arrive(ask)`: a run joins the line asking ``ask`` GB
+    (None: no ask) and takes a slot, whose name it gives, or stops waiting after 30 s (None), a ticket then keeping its place
+    in the line. `end(slot)`: the run in ``slot`` ends, and its reservation with it."""
+    (tmp_path / "slots").write_text("".join(f"b{i} {i}\n" for i in range(slots)))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    held = {f"b{i}": _hold(tmp_path / f"check-b{i}.lock") for i in range(busy)}
+    kept, t, real_take = [], [NOW], SLOT.take
+
+    def take(*a, **kw):
+        got = real_take(*a, **kw)
+        if got:
+            held[got[0]["name"]] = got[1]
+        return got
+
+    def reserved(priority=False, peaks=None):
+        return int(sum(json.loads(f.read_text())["gb"] for f in SLOT.RAMLOCK.glob("check-*.json")) * 1e9) >> 30
+
+    def execvpe(f, argv, env):
+        raise Exec(env["CHECK_SLOT"])
+
+    def sleep(s):
+        t[0] += timedelta(seconds=s)
+
+    monkeypatch.setattr(SLOT, "take", take)
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: memory[0])
+    monkeypatch.setattr(SLOT, "reserved_gb", reserved)
+    monkeypatch.setattr(SLOT, "holder", lambda lock, proc=None: os.getpid() if SLOT.locked(lock) else None)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+
+    def arrive(ask):
+        if ask is None:
+            monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
+        else:
+            monkeypatch.setenv(SLOT.RUN_MEM_ENV, str(ask))
+        try:
+            assert SLOT.main(["--wait-max", "30", "--", "run"], now=lambda: t[0], sleep=sleep) == SLOT.NOT_STARTED
+        except Exec as e:
+            return str(e)
+        kept.append(SLOT.join(tmp_path, who=SLOT.asker()))
+        return None
+
+    def end(slot):
+        os.close(held.pop(slot))
+        (SLOT.RAMLOCK / f"check-{slot}.json").unlink()
+
+    return arrive, end
+
+
+def test_a_run_of_any_size_passes_a_head_that_memory_keeps_until_the_head_would_start_without_its_passers(tmp_path, monkeypatch,
+                                                                                                         capsys):
+    """The 448 GB head with 300 GiB free: a run asking 72 GB takes a slot behind it as one asking 16 does, since both fit.
+    When a run from before the head ends and the head would fit but for the 151 GiB its passers reserve, the next run that
+    fits waits behind it, and so does every one after, until the passers have ended and the head's memory is free."""
+    memory = [300]
+    arrive, end = _pool_line(tmp_path, monkeypatch, slots=8, busy=1, memory=memory)
+    assert arrive(448) is None
+    assert "b1: 300 GB of memory free, under the 418 GB a check here may peak at" in capsys.readouterr().err
+    assert [arrive(72), arrive(16), arrive(72)] == ["b1", "b2", "b3"], "each fits what is free, so none stands behind the head"
+    memory[0] = 420                                                          # 270 free now, and 421 with what its passers reserve
+    capsys.readouterr()
+    assert arrive(16) is None, "the head would start if its passers ended: no run passes it now, however small"
+    err = capsys.readouterr().err
+    assert "slot: 1 check(s) ahead in line" in err
+    assert "runs that came after it reserve 151 GB of the 418 GB it waits for" in err, "the line's listing says what holds it"
+    end("b1")
+    end("b2")
+    assert arrive(16) is None, "353 free and 68 with the passer left: the head still holds the line as its passers end"
+    end("b3")
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "448")
+    assert SLOT.blocked(SLOT.asking(SLOT.parse("b1 1"))[0], NOW) is None, "its passers gone, the head's 418 GiB are free"
+
+
+def test_a_line_behind_a_head_that_memory_keeps_starts_each_run_whose_ask_is_free(tmp_path, monkeypatch, capsys):
+    """Twelve runs stood beside 11 idle slots: the head asked 128 GB with 113 GiB free, the next asked 72 GB, which were
+    free, and stood behind it, and every smaller run stood behind that one and behind a run with no ask. Each run whose ask
+    is free now starts as it comes, each of the others says what memory it waits for, and the head is passed only while it
+    couldn't start even with what its passers reserve."""
+    memory = [113]
+    arrive, end = _pool_line(tmp_path, monkeypatch, slots=14, busy=3, memory=memory)
+    took, said = [], []
+    for ask in (128, 72, None, 16, 2, 16, 32, 32, 32, 48, 32, None):
+        took.append(arrive(ask))
+        said.append(capsys.readouterr().err)
+    assert took == [None, "b3", "b4", "b5", "b6", "b7", None, None, None, None, None, "b8"]
+    assert "b3: 113 GB of memory free, under the 120 GB a check here may peak at" in said[0]
+    short = "14 GB of memory free (99 GB more is reserved by live runs that haven't reached it), under the "
+    for i, need in ((6, 30), (7, 30), (8, 30), (9, 45), (10, 30)):
+        assert f"b8: {short}{need} GB a check here may peak at" in said[i]
+    assert not any("ahead in line" in s for s in said), "no run stands behind another: each starts, or names the memory it lacks"
+    head = min(p.name for p in (tmp_path / SLOT.LINE).iterdir())
+    assert SLOT.passed_gb(head, tmp_path) == 100, "the 72, 16, 2 and 16 GB runs' 68 + 15 + 2 + 15 GiB; the two with no ask reserve none"
+    memory[0] = 123                                                          # 24 free now, and 124 with what its passers reserve
+    assert arrive(2) is None, "the head would start if its passers ended, so a run that fits now waits behind it"
+    err = capsys.readouterr().err
+    assert "slot: 1 check(s) ahead in line" in err, "behind the head alone: the five that wait on memory hold no one"
+    assert "runs that came after it reserve 100 GB of the 120 GB it waits for" in err
+    for slot in ("b3", "b5", "b6", "b7"):
+        end(slot)
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "128")
+    assert SLOT.blocked(SLOT.asking(SLOT.parse("b3 3"))[0], NOW) is None, "its passers gone, the head's 120 GiB are free"
 
 
 def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
