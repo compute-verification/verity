@@ -14,10 +14,12 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# What the tests import of `verity` beside this unit, and what `lake` reads to build `core-periods-difftest`: the core
-# interface's package, the difftest harness's Lean, and these files of Flock's verifier (`Flock.Canon` and what it
-# imports, and the package's configuration).
-inputs = ["verity/__init__.py", "verity/protocols/interface",
+# What the tests import of `verity` beside this unit (the reporting grid, whose monitoring periods the block count is
+# checked over), and what `lake` reads to build `core-periods-difftest`: the core interface's package, the difftest
+# harness's Lean, and these files of Flock's verifier (`Flock.Canon` and what it imports, and the package's
+# configuration).
+inputs = ["verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/reporting.py",
+          "verity/protocols/interface",
           "verity/difftest/lean", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
           "verity/protocols/flock/verifier/Flock/Field.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean",

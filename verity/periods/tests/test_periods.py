@@ -1,11 +1,12 @@
-"""`verity.periods`: spans, cuts and the monitoring period, their JSON, and the monitoring periods results are
-presented for."""
+"""`verity.periods`: spans, cuts and the monitoring period, their JSON, and the blocks a monitoring period of the
+reporting grid holds."""
 
 from __future__ import annotations
 
 import pytest
 
-from verity.periods import MONITORING_PERIODS, Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
+from verity.periods import Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
+from verity.protocols import reporting
 
 
 def test_a_span_stops_after_its_last_tick():
@@ -75,7 +76,7 @@ def test_the_json_round_trips_and_accepts_only_what_it_writes():
 
 
 def test_the_monitoring_periods_are_a_week_a_month_and_a_year():
-    assert MONITORING_PERIODS == (("week", 604800), ("month", 2592000), ("year", 31536000))
+    assert reporting.PERIODS == (("week", 604800), ("month", 2592000), ("year", 31536000))
 
 
 @pytest.mark.parametrize("seconds, block_s", [(10, 3), (9, 3), (2, 3), (0, 1), (7, 7)])
@@ -88,7 +89,7 @@ def test_the_block_count_is_a_machines_monitoring_periods_execution_blocks(secon
 
 
 def test_the_block_count_of_the_reference_deployment():
-    assert {name: block_count(s, 600, 12500) for name, s in MONITORING_PERIODS} == {
+    assert {name: block_count(s, 600, 12500) for name, s in reporting.PERIODS} == {
         "week": 12_600_000, "month": 54_000_000, "year": 657_000_000}
 
 
