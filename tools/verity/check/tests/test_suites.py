@@ -2143,6 +2143,86 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
 
 
+def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportion_to_its_seconds(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    big, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("big", "a", "b"))
+    heavy = S.Suite("heavy", "h", (), (), parallel=True, worker_gb=16)
+    [alone, rest] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
+    assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
+    assert (rest.suites, rest.procs, rest.gb) == ([a, b], 8, 40.0), "the rest in their order, on what it leaves"
+    assert [(x.suites, x.procs) for x in S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None)] == [([big], 6), ([a, b], 1)], \
+        "a suite never timed runs in the rest's lane, counted at nothing"
+    assert S.wide_lanes([big], [600.0], 20, 100.0) == [S.Lane([big], 20, 100.0)], "one suite"
+    assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
+    assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
+    assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
+        "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def _line_end(S, lanes, cost) -> float:
+    """When a plan's parallel suites end on a simulated clock: each lane from 0, its suites one after another, each lasting
+    ``cost(suite, workers)`` at the workers its lane gives it (`wide_workers`)."""
+    return max(sum(cost(s, S.wide_workers(s, lane.procs, lane.gb)) for s in lane.suites) for lane in lanes)
+
+
+def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_path, monkeypatch):
+    """A suite's seconds on n workers are max(its longest test, its tests' seconds / n), as for verity/definitions, whose one
+    long test bounds it, beside circuit_check, which its workers' count bounds. One after another on 16 processes the line
+    lasts the sum of the suites; in two lanes on twice the processes, each about as many as it had alone, it ends near the
+    longer of the longest suite's seconds and the rest's, and before the line of one lane on all 32."""
+    S = _suites(monkeypatch, tmp_path)
+    work = {"cc": (16_000, 100), "defs": (3_200, 600), "pouw": (3_200, 50), "ops": (1_600, 20)}
+    suites = [S.Suite(n, n, (), (), parallel=True) for n in work]
+
+    def cost(s, n: int) -> float:
+        total, longest = work[s.name]
+        return max(longest, total / n)
+
+    seconds = [cost(s, 16) for s in suites]
+    big, rest = seconds[0], sum(seconds[1:])
+    lanes = S.wide_lanes(suites, seconds, 32, None)
+    assert [x.suites for x in lanes] == [suites[:1], suites[1:]]
+    end = _line_end(S, lanes, cost)
+    assert end <= 1.05 * max(big, rest) and end < _line_end(S, [S.Lane(suites, 32, None)], cost) < sum(seconds)
+    gb = 32 * S.TEST_PROCESS_GB
+    held = S.wide_lanes(suites, seconds, 64, gb)
+    assert sum(x.gb for x in held) == gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
+                                                 for x in held for s in x.suites), "each lane's workers fit its share of the GB"
+    assert _line_end(S, held, cost) <= 1.05 * max(big, rest), "the memory bounds the workers as the processes did"
+
+
+def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
+    """End to end: three parallel suites whose recorded seconds put the longest beside the other two, on 4 of 6 processes and 2,
+    pass as the same suites under the same keys as in one lane (no recorded seconds)."""
+    import json
+
+    root = tmp_path / "tree"
+    test = "def test_a():\n    pass\n\ndef test_b():\n    pass\n"
+    _env_workspace(root, {"big": test, "mid": test, "small": test})
+    for name in ("big", "mid", "small"):
+        f = root / name / "pyproject.toml"
+        f.write_text(f.read_text() + "\n[tool.verity.tests]\nparallel = true\n")
+    _git(root, "commit", "-qam", "all three are parallel")
+    (tmp_path / "cache").mkdir()
+
+    def line(durations: dict | None) -> tuple[str, list[tuple]]:
+        (tmp_path / "cache" / "durations.json").unlink(missing_ok=True)
+        if durations:
+            (tmp_path / "cache" / "durations.json").write_text(json.dumps(durations))
+        out = tmp_path / "out.json"
+        p = _run_suite(root, tmp_path, "--fresh", "--jobs", "6", "--json", str(out))
+        assert p.returncode == 0, p.stdout + p.stderr
+        return p.stdout, sorted((r["name"], r["status"], r["key"], r["counts"]) for r in json.loads(out.read_text()))
+
+    out, one = line(None)
+    assert "beside" not in out and all(re.search(rf"passed  {n} .* on 6 workers", out) for n in ("big", "mid", "small")), out
+    out, two = line({"big": 100.0, "mid": 30.0, "small": 20.0})
+    assert "suites: big on 4 processes beside 2 parallel suites one at a time on 2" in out, out
+    assert re.search(r"passed  big .* on 4 workers", out) and all(re.search(rf"passed  {n} .* on 2 workers", out)
+                                                                   for n in ("mid", "small")), out
+    assert two == one and [r[1] for r in one] == ["passed"] * 3
+
+
 def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
     """A quick tier in a 480 GB pool slot would run circuit_check's suite on a worker per CPU (784 GB) if only `check`
     passed `--mem-gb`."""

@@ -181,7 +181,7 @@ MEASURED: dict[str, str] = {
                       "over the block's steps",
     "COMMITTED_BYTES": "the block run: the bytes those commit calls hashed",
     "BLOCK_ROOT": "the block root of the block run's drawn-unit bundle (`verity/drawn-unit-bundle`)",
-    "REGISTRATION_ROOT": "the seeded weights' registration root (`e2e_h200/served_weights.py`)",
+    "REGISTRATION_ROOT": "the seeded weights' registration root",
     "CHALLENGER_RUN": "the block run: the challenger's coin record for the block's draw",
     "ZK_SESSIONS": "the prove run: its C-Flock --zk sessions behind the firewall (`sessions/index.jsonl`)",
     "PROVE_RUN": "the prove run's id",
