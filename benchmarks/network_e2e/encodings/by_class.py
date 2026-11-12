@@ -48,14 +48,17 @@ refused, and a trace that has a table was served with the draft off, which its f
 ``--beside LABEL=DIR`` a second serve's trace is read the same way and set beside each trace that has a table
 (`beside`): each class the trace did not exercise, with the other serve's counts of its events; each event of the
 classes it did exercise that happened in the other serve only; then what the two serves share and where they
-differ. So a class "not exercised" in one serve is read beside the serve that exercised it.
+differ. So a class "not exercised" in one serve is read beside the serve that exercised it. The second serve is read
+under its own registered stop ids (``--beside-stops``, where they are not ``--stops``): another model's are others,
+and under the first serve's its record is refused, which leaves it no table. A refused serve's line says why.
 
 Per trace it also reports the engine's own record of the hits it admitted from (the trace's `cache_hit`) and the round
 trip (`decode(encode(a)) == a`, the streams too). Where the decoder refuses the string or decodes it to another advice,
 the report says which, and gives the first step at which the replay the decoder runs differs from the engine's
 schedule, with its window.
 
-    python by_class.py LABEL=DIR ... --stops IDS [--T 600 --ingress client] [--beside LABEL=DIR ...] --out REPORT.json
+    python by_class.py LABEL=DIR ... --stops IDS [--T 600 --ingress client]
+        [--beside LABEL=DIR ... [--beside-stops IDS]] --out REPORT.json
 """
 
 from __future__ import annotations
@@ -441,8 +444,8 @@ def beside(row: dict[str, Any], other: dict[str, Any]) -> dict[str, Any]:
 def _beside(b: dict[str, Any]) -> list[str]:
     """`beside`, as Markdown lines."""
     label = f"`{b['trace']}`"
-    out = [f"Beside {label}" + (", which is refused, so that only its aborts and its directory's facts are read"
-                                if b["refused"] is not None else "") + ":", ""]
+    out = [f"Beside {label}" + (f", which is refused ({b['refused']}), so that only its aborts and its directory's "
+                                f"facts are read" if b["refused"] is not None else "") + ":", ""]
     for name, events in b["not_exercised"].items():
         seen = ", ".join(f"{HEADS[e]} {n:,}" for e, n in events.items() if n)
         unread = any(n is None for n in events.values())
@@ -558,15 +561,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--beside", action="append", default=[], metavar="LABEL=DIR",
                     help="another serve's trace, read the same way and set beside each trace that has a table: what "
                          "that serve exercised and this one did not, and where the two serves differ")
+    ap.add_argument("--beside-stops", help="the stop ids registered for the --beside serves, as --stops; without it "
+                                           "they are --stops', which refuses a serve of a model with other stop ids")
     ap.add_argument("--out", type=Path, required=True, help="the report's JSON")
     a = ap.parse_args(argv)
     stops = tuple(int(s) for s in a.stops.split(","))
+    theirs = stops if a.beside_stops is None else tuple(int(s) for s in a.beside_stops.split(","))
     rows = [report(*t.split("=", 1), stops, a.T, a.ingress) for t in a.traces]
-    others = [report(*t.split("=", 1), stops, a.T, a.ingress) for t in a.beside]
+    others = [report(*t.split("=", 1), theirs, a.T, a.ingress) for t in a.beside]
     for r in rows:
         if "error" not in r and others:
             r["beside"] = [beside(r, o) for o in others]
-    doc = {"T": a.T, "stops": stops, "ingress": a.ingress, "rows": rows, "beside": others}
+    doc = {"T": a.T, "stops": stops, "beside_stops": theirs, "ingress": a.ingress, "rows": rows, "beside": others}
     a.out.write_text(json.dumps(doc, indent=1) + "\n")
     print(render_all(rows), end="")
     return 0 if all("error" not in r and r["round_trip"] for r in rows) else 1

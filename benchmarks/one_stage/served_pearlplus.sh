@@ -8,7 +8,7 @@
 #      from this tree, with the SASS gates build.sh enforces; the cubin line also names the harness's .FTZ and FP32 MUFU
 #      gate's verdict (harness_gate.json), which build.sh records and doesn't enforce, its pins being sm_120a's;
 #   2. under `gpu-lease 1` (PEARLPLUS_LEASE_MIN, default 30), `served_passes.py serve` serves PEARLPLUS_SPEC's Pearl-C arm
-#      (default benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml: pouw:pearl-c-h100-v1-h3 over Llama 3.2 1B's
+#      (default benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml: pouw:pearl-c-h100-v1-h3 over Llama 3.2 1B's
 #      BF16 checkpoint) a warm-up, then PEARLPLUS_REQUESTS requests (default 32) of PEARLPLUS_PROMPT_TOKENS seeded random
 #      tokens (default 1,024) and PEARLPLUS_OUTPUT_TOKENS outputs (default 1) at PEARLPLUS_T tokens a step (default 8,192:
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/, its epoch's salt coin a
@@ -102,7 +102,7 @@ mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" &
 cd "$(dirname "$0")/../.." || exit 1
 TREE=$PWD TPY=$PWD/.venv/bin/python
 [ -x "$TPY" ] || TPY=${PY:-python3}
-Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
+Q=$SD/private/pearlplus SPEC=${PEARLPLUS_SPEC:-benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
 FAST=${PEARLPLUS_FAST-1}
 # every file the piece writes is its owner's alone, the passes' files a step rewrites too: a manifest holds the salt key
 umask 077
