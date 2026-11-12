@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
+from verity_vllm.records.boundary_tables import (
+    ASSIGN,
+    ROOTS,
+    TableAssignment,
+    TableRoots,
+)
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 
 
