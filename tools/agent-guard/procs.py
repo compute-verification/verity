@@ -91,7 +91,8 @@ def processes(root: str = "/proc"):
                 stat = f.read().decode("utf-8", "replace")
             with open(os.path.join(root, entry, "cmdline"), "rb") as f:
                 raw = f.read()
-        except OSError:
+        except OSError as e:                             # most often: it ended between the listing and the read
+            print(f"procs.py: {entry} not listed: {e.strerror}", file=sys.stderr)
             continue
         name, _, rest = stat[stat.index("(") + 1:].rpartition(")")
         started = int(rest.split()[19]) / ticks

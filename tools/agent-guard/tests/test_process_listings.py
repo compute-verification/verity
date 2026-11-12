@@ -230,18 +230,20 @@ def test_procs_reads_stat_and_cmdline_and_never_an_environment(procs, tmp_path, 
     """A process tree stood in for /proc: each process's environ holds a dummy secret, which nothing prints."""
     ticks = os.sysconf("SC_CLK_TCK")
     (tmp_path / "uptime").write_text("1000.00 4000.00\n")
-    for pid, name, argv, started in ((7, "daemon (x)", [b"/usr/bin/daemon", b"--key", b"dummy"], 400), (9, "sleep", [], 990)):
+    for pid, name, argv, started in ((7, "daemon (x)", [b"/usr/bin/daemon", b"--key", b"dummy"], 400), (9, "kidle", [], 990)):
         d = tmp_path / str(pid)
         d.mkdir()
         (d / "stat").write_text(f"{pid} ({name}) S " + " ".join(["1"] * 18) + f" {started * ticks} 0 0\n")
         (d / "cmdline").write_bytes(b"\0".join(argv) + (b"\0" if argv else b""))
         (d / "environ").write_bytes(b"DUMMY" b"_SECRET=not-to-be-copied\0PATH=/usr/bin\0")
     (tmp_path / "self").mkdir()
+    (tmp_path / "11").mkdir()                            # a process that ended between the listing and the read
     listed = sorted(procs.processes(str(tmp_path)), key=lambda p: p.pid)
     assert [(p.pid, p.elapsed, p.name, p.argv) for p in listed] == [
-        (7, 600, "daemon (x)", ["/usr/bin/daemon", "--key", "dummy"]), (9, 10, "sleep", [])]
+        (7, 600, "daemon (x)", ["/usr/bin/daemon", "--key", "dummy"]), (9, 10, "kidle", [])]
     assert procs.main([], source=lambda: procs.processes(str(tmp_path))) == 0
-    out = capsys.readouterr().out
-    assert "/usr/bin/daemon --key [cut]" in out and "[sleep]" in out
+    out, err = capsys.readouterr()
+    assert "11 not listed" in err
+    assert "/usr/bin/daemon --key [cut]" in out and "[kidle]" in out
     assert "not-to-be-copied" not in out and "PATH" not in out and "DUMMY" not in out
     assert "environ" not in (Path(procs.__file__).read_text().split('"""', 2)[2]), "the code never names a process's environ"
