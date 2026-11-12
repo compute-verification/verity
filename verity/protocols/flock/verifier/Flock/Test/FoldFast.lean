@@ -11,9 +11,9 @@ for `Stmt.project` (their `@[csimp]` equations), so a call of one of these funct
 body is restated here under another name, which no equation rewrites, with `rfl` that the restatement is the function;
 the twin's result is compared with the restatement's on inputs that reach each of its cases. The walk: a row twice in a
 column, an empty row, a zero coefficient, more and fewer coefficients than rows. The tensor: `eq(ρ)` below the 1024
-entries its tables start at, at them, short of one block of 4096, one block, two and four, and no `lw`. The projection:
-a base of many blocks, of one, of none, and one longer than its blocks. No case reads past an array's end, which would
-print a panic for every such read.
+entries its tables start at, at them, twice to sixteen times them, and no `lw`. The projection: a base of many blocks,
+of one, of none, and one longer than its blocks. No case reads past an array's end, which would print a panic for every
+such read.
 -/
 
 @[expose] public section

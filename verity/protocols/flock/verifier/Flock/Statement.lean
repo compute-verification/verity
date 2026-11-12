@@ -270,44 +270,35 @@ private theorem getElem!_map_of_lt {α β} [Inhabited α] [Inhabited β] (f : α
     (h : i < xs.size) : (xs.map f)[i]! = f xs[i]! := by
   rw [getElem!_pos (xs.map f) i (by simpa using h), getElem!_pos xs i h, Array.getElem_map]
 
-/-- `out[s + n·u] = mulBy tab eIn[u]` for `u, …, u + fuel − 1`: one `lw[s]`, its table in hand. -/
-def tensCol (tab eIn : Array F128) (s n : Nat) : Nat → Nat → Array F128 → Array F128
+/-- `out[s + n·u] = mulBy tabs[s] x` for `s, …, s + fuel − 1`: one entry `x` of `eq(ρ)` times every `lw[s]`, each from
+its table. -/
+def tensRow (tabs : Array (Array F128)) (x : F128) (n u : Nat) : Nat → Nat → Array F128 → Array F128
   | 0, _, out => out
-  | fuel + 1, u, out => tensCol tab eIn s n fuel (u + 1) (out.set! (s + n * u) (F128.mulBy tab eIn[u]!))
+  | fuel + 1, s, out => tensRow tabs x n u fuel (s + 1) (out.set! (s + n * u) (F128.mulBy tabs[s]! x))
 
-/-- `tensCol` for `s, …, s + fuel − 1` on the `len` entries of `eq(ρ)` from `u`. -/
-def tensBlk (tabs : Array (Array F128)) (eIn : Array F128) (n u len : Nat) : Nat → Nat → Array F128 → Array F128
+/-- `tensRow` for the entries `u, …, u + fuel − 1` of `eq(ρ)`. -/
+def tensRows (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) : Nat → Nat → Array F128 → Array F128
   | 0, _, out => out
-  | fuel + 1, s, out => tensBlk tabs eIn n u len fuel (s + 1) (tensCol tabs[s]! eIn s n len u out)
+  | fuel + 1, u, out => tensRows tabs eIn n fuel (u + 1) (tensRow tabs eIn[u]! n u n 0 out)
 
-/-- `fuel` blocks of 4096 entries of `eq(ρ)` from `u`, the last one cut at `eq(ρ)`'s end. -/
-def tensBlks (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) : Nat → Nat → Array F128 → Array F128
-  | 0, _, out => out
-  | fuel + 1, u, out => tensBlks tabs eIn n fuel (u + 4096) (tensBlk tabs eIn n u (min 4096 (eIn.size - u)) n 0 out)
-
-/-- `tensor` once `eq(ρ)` has 1024 entries, from each `lw[s]`'s table (`F128.mulBy_mulTableL`), a table at a time over
-4096 entries of `eq(ρ)` at a time: a table stays in the cache while it is read, where the array's order reads all the
-tables for every entry of `eq(ρ)`, and a block's cells lie within the block for the rows that read them next. -/
+/-- `tensor` once `eq(ρ)` has 1024 entries, from each `lw[s]`'s table (`F128.mulBy_mulTableL`), in the array's order by
+two loops: an entry of `eq(ρ)` is read once for its `lw.size` products, and no element costs a closure call or a
+division. -/
 def tensorFast (lw : Array F128) (rho : Array F128) : Array F128 :=
   let eIn := eqTable rho
   if eIn.size < 1024 then Array.ofFn (n := lw.size * eIn.size) fun k => lw[k.val % lw.size]! * eIn[k.val / lw.size]!
-  else
-    tensBlks (lw.map F128.mulTableL) eIn lw.size (eIn.size / 4096 + 1) 0 (Array.replicate (lw.size * eIn.size) 0)
+  else tensRows (lw.map F128.mulTableL) eIn lw.size eIn.size 0 (Array.replicate (lw.size * eIn.size) 0)
 
-theorem tensCol_size (tab eIn : Array F128) (s n : Nat) : ∀ (fuel u : Nat) (out : Array F128),
-    (tensCol tab eIn s n fuel u out).size = out.size
+theorem tensRow_size (tabs : Array (Array F128)) (x : F128) (n u : Nat) : ∀ (fuel s : Nat) (out : Array F128),
+    (tensRow tabs x n u fuel s out).size = out.size
   | 0, _, _ => rfl
-  | fuel + 1, u, out => by rw [tensCol, tensCol_size tab eIn s n fuel, Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
+  | fuel + 1, s, out => by
+    rw [tensRow, tensRow_size tabs x n u fuel, Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
 
-theorem tensBlk_size (tabs : Array (Array F128)) (eIn : Array F128) (n u len : Nat) : ∀ (fuel s : Nat) (out : Array F128),
-    (tensBlk tabs eIn n u len fuel s out).size = out.size
+theorem tensRows_size (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) : ∀ (fuel u : Nat) (out : Array F128),
+    (tensRows tabs eIn n fuel u out).size = out.size
   | 0, _, _ => rfl
-  | fuel + 1, s, out => by rw [tensBlk, tensBlk_size tabs eIn n u len fuel, tensCol_size]
-
-theorem tensBlks_size (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) : ∀ (fuel u : Nat) (out : Array F128),
-    (tensBlks tabs eIn n fuel u out).size = out.size
-  | 0, _, _ => rfl
-  | fuel + 1, u, out => by rw [tensBlks, tensBlks_size tabs eIn n fuel, tensBlk_size]
+  | fuel + 1, u, out => by rw [tensRows, tensRows_size tabs eIn n fuel, tensRow_size]
 
 /-- Position `s + n·u` is the one whose remainder by `n` is `s` and whose quotient is `u`. -/
 theorem tensPos_iff (s n u k : Nat) (hs : s < n) : s + n * u = k ↔ k % n = s ∧ k / n = u := by
@@ -319,64 +310,42 @@ theorem tensPos_iff (s n u k : Nat) (hs : s < n) : s + n * u = k ↔ k % n = s �
   · intro ⟨h1, h2⟩
     rw [← h1, ← h2, Nat.mod_add_div]
 
-/-- `tensCol` writes the positions of remainder `s` whose quotient it covers, and leaves the others. -/
-theorem tensCol_get (tab eIn : Array F128) (s n : Nat) (hs : s < n) : ∀ (fuel u : Nat) (out : Array F128) (k : Nat),
-    (tensCol tab eIn s n fuel u out)[k]? =
-      if k % n = s ∧ u ≤ k / n ∧ k / n < u + fuel ∧ k < out.size then some (F128.mulBy tab eIn[k / n]!) else out[k]?
-  | 0, u, out, k => by rw [tensCol, if_neg (by omega)]
-  | fuel + 1, u, out, k => by
-    rw [tensCol, tensCol_get tab eIn s n hs fuel (u + 1), Array.set!_eq_setIfInBounds, Array.size_setIfInBounds,
-      Array.getElem?_setIfInBounds]
-    by_cases h : k % n = s ∧ u + 1 ≤ k / n ∧ k / n < u + 1 + fuel ∧ k < out.size
+/-- `tensRow` writes the positions of quotient `u` whose remainder it covers, and leaves the others. -/
+theorem tensRow_get (tabs : Array (Array F128)) (x : F128) (n u : Nat) :
+    ∀ (fuel s : Nat) (out : Array F128) (k : Nat), s + fuel ≤ n →
+      (tensRow tabs x n u fuel s out)[k]? =
+        if k / n = u ∧ s ≤ k % n ∧ k % n < s + fuel ∧ k < out.size then some (F128.mulBy tabs[k % n]! x) else out[k]?
+  | 0, s, out, k, _ => by rw [tensRow, if_neg (by omega)]
+  | fuel + 1, s, out, k, hs => by
+    rw [tensRow, tensRow_get tabs x n u fuel (s + 1) _ k (by omega), Array.set!_eq_setIfInBounds,
+      Array.size_setIfInBounds, Array.getElem?_setIfInBounds]
+    by_cases h : k / n = u ∧ s + 1 ≤ k % n ∧ k % n < s + 1 + fuel ∧ k < out.size
     · rw [if_pos h, if_pos (by omega)]
     · rw [if_neg h]
       by_cases hk : s + n * u = k
-      · have hq := (tensPos_iff s n u k hs).1 hk
+      · have hq := (tensPos_iff s n u k (by omega)).1 hk
         rw [if_pos hk]
         by_cases hlt : k < out.size
-        · rw [if_pos (by omega), if_pos ⟨hq.1, by omega, by omega, hlt⟩, hq.2]
+        · rw [if_pos (by omega), if_pos ⟨hq.2, by omega, by omega, hlt⟩, hq.1]
         · rw [if_neg (by omega), if_neg (by omega), Array.getElem?_eq_none (by omega)]
       · rw [if_neg hk, if_neg]
         intro ⟨h1, h2, h3, h4⟩
-        exact hk ((tensPos_iff s n u k hs).2 ⟨h1, by omega⟩)
+        exact hk ((tensPos_iff s n u k (by omega)).2 ⟨by omega, h1⟩)
 
-/-- `tensBlk` writes the positions whose remainder and quotient it covers, and leaves the others. -/
-theorem tensBlk_get (tabs : Array (Array F128)) (eIn : Array F128) (n u len : Nat) :
-    ∀ (fuel s : Nat) (out : Array F128) (k : Nat), s + fuel ≤ n →
-      (tensBlk tabs eIn n u len fuel s out)[k]? =
-        if s ≤ k % n ∧ k % n < s + fuel ∧ u ≤ k / n ∧ k / n < u + len ∧ k < out.size then
-          some (F128.mulBy tabs[k % n]! eIn[k / n]!)
-        else out[k]?
-  | 0, s, out, k, _ => by rw [tensBlk, if_neg (by omega)]
-  | fuel + 1, s, out, k, hs => by
-    rw [tensBlk, tensBlk_get tabs eIn n u len fuel (s + 1) _ k (by omega), tensCol_size,
-      tensCol_get tabs[s]! eIn s n (by omega)]
-    by_cases h : k % n = s
-    · rw [if_neg (by omega)]
-      by_cases h2 : u ≤ k / n ∧ k / n < u + len ∧ k < out.size
-      · rw [if_pos ⟨h, h2⟩, if_pos (by omega), h]
-      · rw [if_neg (by omega), if_neg (by omega)]
-    · by_cases h2 : s + 1 ≤ k % n ∧ k % n < s + 1 + fuel ∧ u ≤ k / n ∧ k / n < u + len ∧ k < out.size
-      · rw [if_pos h2, if_pos (by omega)]
-      · rw [if_neg h2, if_neg (by omega), if_neg (by omega)]
-
-/-- `tensBlks` writes the positions whose quotient its blocks cover, below `eq(ρ)`'s size, and leaves the others. -/
-theorem tensBlks_get (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) (hn : 0 < n) :
+/-- `tensRows` writes the positions whose quotient it covers, and leaves the others. -/
+theorem tensRows_get (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) (hn : 0 < n) :
     ∀ (fuel u : Nat) (out : Array F128) (k : Nat),
-      (tensBlks tabs eIn n fuel u out)[k]? =
-        if u ≤ k / n ∧ k / n < u + 4096 * fuel ∧ k / n < eIn.size ∧ k < out.size then
-          some (F128.mulBy tabs[k % n]! eIn[k / n]!)
-        else out[k]?
-  | 0, u, out, k => by rw [tensBlks, if_neg (by omega)]
+      (tensRows tabs eIn n fuel u out)[k]? =
+        if u ≤ k / n ∧ k / n < u + fuel ∧ k < out.size then some (F128.mulBy tabs[k % n]! eIn[k / n]!) else out[k]?
+  | 0, u, out, k => by rw [tensRows, if_neg (by omega)]
   | fuel + 1, u, out, k => by
     have hm := Nat.mod_lt k hn
-    rw [tensBlks, tensBlks_get tabs eIn n hn fuel (u + 4096), tensBlk_size,
-      tensBlk_get tabs eIn n u _ n 0 out k (by omega)]
-    by_cases h : u + 4096 ≤ k / n ∧ k / n < u + 4096 + 4096 * fuel ∧ k / n < eIn.size ∧ k < out.size
+    rw [tensRows, tensRows_get tabs eIn n hn fuel (u + 1), tensRow_size, tensRow_get tabs eIn[u]! n u n 0 out k (by omega)]
+    by_cases h : u + 1 ≤ k / n ∧ k / n < u + 1 + fuel ∧ k < out.size
     · rw [if_pos h, if_pos (by omega)]
     · rw [if_neg h]
-      by_cases h2 : 0 ≤ k % n ∧ k % n < 0 + n ∧ u ≤ k / n ∧ k / n < u + min 4096 (eIn.size - u) ∧ k < out.size
-      · rw [if_pos h2, if_pos (by omega)]
+      by_cases h2 : k / n = u ∧ 0 ≤ k % n ∧ k % n < 0 + n ∧ k < out.size
+      · rw [if_pos h2, if_pos (by omega), h2.1]
       · rw [if_neg h2, if_neg (by omega)]
 
 @[csimp] theorem tensor_eq_fast : @tensor = @tensorFast := by
@@ -385,14 +354,14 @@ theorem tensBlks_get (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) (h
   split
   · rfl
   · apply Array.ext
-    · rw [Array.size_ofFn, tensBlks_size, Array.size_replicate]
+    · rw [Array.size_ofFn, tensRows_size, Array.size_replicate]
     · intro k h1 h2
       rw [Array.size_ofFn] at h1
       have hn : 0 < lw.size := Nat.pos_of_ne_zero fun h => by simp [h] at h1
       have hq : k / lw.size < (eqTable rho).size := Nat.div_lt_of_lt_mul h1
-      have h := tensBlks_get (lw.map F128.mulTableL) (eqTable rho) lw.size hn ((eqTable rho).size / 4096 + 1) 0
+      have h := tensRows_get (lw.map F128.mulTableL) (eqTable rho) lw.size hn (eqTable rho).size 0
         (Array.replicate (lw.size * (eqTable rho).size) 0) k
-      rw [if_pos ⟨Nat.zero_le _, by omega, hq, by rw [Array.size_replicate]; exact h1⟩,
+      rw [if_pos ⟨Nat.zero_le _, by omega, by rw [Array.size_replicate]; exact h1⟩,
         getElem!_map_of_lt _ _ _ (Nat.mod_lt _ hn), F128.mulBy_mulTableL, Array.getElem?_eq_getElem h2] at h
       rw [Option.some.inj h, Array.getElem_ofFn]
 
