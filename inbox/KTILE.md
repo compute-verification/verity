@@ -58,3 +58,59 @@ synced. If GitHub's API refuses for its rate limit, wait ten minutes and try onc
 
 **Return by Fri 13 Nov 01:00Z** with the two pull requests' numbers and heads, each run's id and
 verdict, the line-for-line check of the cherry-picks, and what is not shown.
+
+## Thu 12 Nov 21:57Z: both pull requests are read; #9506 is MARKED. Next: HASH-127's other two items, a verdict each (`attn_bf16`; `s8_linear`'s row-tables build)
+
+Read by me: your return and both worker comments; **#9506's own diff over #9258's head whole
+(two files, +44, -14: `ctas == -1` launches no reading grid; the gate's `consumer_tiles`;
+`GpuBackend` refuses a negative `leaf_ctas`)**; your two runs on cpu-3 (both exit 0 at tree
+`bc1fd81bb85c`; the SASS gate's last lines; "2 suites: 2 passed, 0 failed"); #9483's diff whole.
+The patch-id check and going to cpu-3 when cpu-1 was full were right.
+- **#9506: marked ready at `bc1fd81bb85c` at 21:55:33Z, stacked on #9258** (the queue lands a
+  stack's base first). The preflight collected four suites; you ran two. I checked that the
+  other two (`tools/verity/graph`, `poub/device/live_verifier`) name none of the changed
+  symbols; the candidate's check runs them. **If #9258's head moves I resume you to cut it
+  again.**
+- **#9483: not marked yet.** I rang memory-accounting on HASH-127 (21:58Z): its word by Fri
+  18:00Z, else I mark. HASH-127 now has its goal label.
+
+**Your next piece (HASH-127, the other two items; due Fri 20 Nov; no card, no GPU node):
+a verdict each, with its evidence: KEPT with what loads it, or DELETED in a pull request of
+its own.**
+
+**A. `benchmarks/torch_gpu/attn_bf16/`** (11 files on `main` `5f0c008aa040`).
+**B. The row-tables build in `benchmarks/torch_gpu/s8_linear/build.sh`** (the `row_table/` step:
+the header's lines on it, the `if [ -x "$PY" ]` block, what `run.sh` seeds from it, and what the
+step alone makes `ship_stage` and `ship_source` take of `adapters/vllm/verity_vllm`). It was
+built for `s8_linear/commit.py`, which #9260 deleted.
+
+For each, on `main`:
+1. **Every loader in the tree**, each with its file and line: imports by name; loads by path
+   (`sys.path`, `runpy`, `importlib`, a file opened or a cubin loaded by name); shell steps
+   (`run.sh`, `build.sh`, `ship.sh`); tests and their `[tool.verity.tests] inputs`; sidecars;
+   the lists that name it (`BENCHMARKS_IMPORTERS`, `tools/verity/check/public_boundary.toml`,
+   the READMEs' Interface sections). `benchmarks/pouw/gemm_rate` is said to time `s8_linear`
+   and `attn_bf16` (KSLICE's `20261110T1530Z-report-kslice-leftovers.md`, line 105): say exactly
+   which files, functions and kernels it reaches, and which files of A no loader reaches.
+   For B: does anything `run.sh` still runs (`bench.py`, `fuse.py`, `tune.py`, `lt.py`,
+   `run.py`) load the commitment kernels (`row_tables_device`) or read the seeded
+   `~/.cache/verity/row_table`?
+2. **The store's runs of it since its last change** (the method and table shape of KSLICE's
+   note, section "last change, last run, on its current text?").
+3. **The verdict**, one of:
+   - **KEPT**: what loads it, by name. Nothing changes in the tree, unless a README's Interface
+     section says otherwise than you found (then that line, in a pull request).
+   - **DELETED**, whole or the part no loader reaches: one pull request per item, on `main`,
+     unmarked, `Lane kernels`, `Refs HASH-127`. It also rewrites every line that names what goes
+     (READMEs, docstrings, the lists above; a list only shrinks). The suites the change touches,
+     on a CPU node. **For B**, `build.sh` run before and after on a CPU node with CUDA 13 (cpu-1
+     or cpu-3): `s8_wgmma.cubin` the same bytes, the SASS gate passing, and the manifests
+     differing by the `row_table` entries alone.
+   - **If the only loader is another lane's code: delete nothing; name the lane and the line**,
+     and I ask it.
+4. One worker comment on HASH-127 with both verdicts (at most 150 words; the tables in your
+   note), and tell me what to ring.
+
+Nothing of this is timed, and nothing runs on node A or `vy-nebius-2`.
+
+Return by Fri 13 Nov 09:00Z with the two verdicts posted and any pull request opened.
