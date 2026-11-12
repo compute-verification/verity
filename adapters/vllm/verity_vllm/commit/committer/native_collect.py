@@ -790,14 +790,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             finally:
                 if getattr(self._nc, "win_dead", False):
                     self._nc.progress()                    # dead-watchdog liveness: the worker finished (or failed by name) a step
-        if self.rows:
-            raise RuntimeError(f"{step_rows.NAME}: step {job.step} was not staged through the window ring (enable_windows before the run)")
-        job.metas = self._metas_for(job)
-        if self.fault == "release_before_keep":
-            return self._commit_step_gpu_release_before_keep(job)
-        if self.native_worker and job.arena is not None and not job.overflow:
-            return self._commit_step_native(job)
-        return super()._commit_step(job)
+        raise RuntimeError(f"{step_rows.NAME}: step {job.step} was not staged through the window ring (enable_windows before the run)")
 
     # ------------------------------------------------------------------ windowed absorb / release
     def enable_windows(self, rec: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -1364,66 +1357,6 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._layouts[job.step] = metas
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(metas), layout_dig, job.t_step_end, t2, job.backlog,
                                               hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
-
-    def _commit_step_native(self, job: _StepJob) -> None:
-        """Candidate B worker step: `StepHasher.commit` (C++, GIL released) does wait-event, zero pad, chunk leaves, tree levels, retained
-        copy, root D2H and the done-synchronisation -- the same sequence as `_commit_step_gpu`; Python only binds the root."""
-        from verity_vllm.commit import scheme
-        from verity_vllm.acquire.committer_api import StepCommitment
-
-        side = self._side_stream()
-        t0 = time.perf_counter()
-        keep_mode = {"device": 0, "host": 1, "none": 2, "sample": 2}[self.retain]   # retention policy (see native_host.RETAIN_MODES)
-        keep_dst = None
-        levels_dst = torch.empty(0, dtype=torch.uint8)
-        if self.retain != "device" and self.retain_pinned:
-            # P0: pinned pool buffer for the step's tree levels (leaves n0 = padded/256 digests of 32 B, then ceil(n/2) per level)
-            n0 = -(-int(job.cursor) // GPU_CHUNK_BYTES)
-            tot, n = 0, n0
-            while True:
-                tot += n
-                if n <= 1:
-                    break
-                n = (n + 1) // 2
-            levels_dst = self.pool.take(tot * 32)
-        if keep_mode == 1:
-            # P0: host retention lands in PINNED memory (pool blocks, recycled per run) so the D2H runs at PCIe rate; pageable D2H measured
-            # ~1 GB/s and made every decode step wait on the side stream (Llama 1024/128 B=1: hashing 7.1 s of an 8.6 s run)
-            padded0 = -(-int(job.cursor) // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
-            keep_dst = self.pool.take(padded0) if self.retain_pinned else None
-        levels, keep, mr, _padded, leaf_ms, tree_ms = self._hasher.commit(job.arena, job.cursor, job.step, self.GPU_TREE_SRC, GPU_CHUNK_BYTES,
-                                                                          side.cuda_stream, job.event.cuda_event, keep_mode,
-                                                                          keep_dst if keep_dst is not None else torch.empty(0, dtype=torch.uint8),
-                                                                          self.retain != "device", levels_dst)     # levels -> pinned host inside the hasher
-        if keep_mode == 2:
-            keep = None
-        if self.retain != "device" and levels and levels[0].is_cuda:
-            levels = [lv.cpu() for lv in levels]                   # (fallback) authentication state to host; the device keeps only arena blocks
-        self._footprint_absorbed(job, int(_padded), levels, keep)
-        self.arena.release(job.arena)                              # after the done-event synchronisation inside commit()
-        self._gpu_t["leaf_ms"] += leaf_ms
-        self._gpu_t["tree_ms"] += tree_ms
-        t1 = time.perf_counter()
-        metas = job.metas
-        nbytes = metas.nbytes
-        n = int(levels[0].shape[0])
-        layout_dig = self.layout_digest(metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
-        t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
-        self.spans.add("root_finalisation", t2 - t1, step=job.step)
-        self._gpu_levels[job.step] = levels
-        self._gpu_blocks[job.step] = (keep, job.cursor)
-        self._layouts[job.step] = metas
-        job.arena = None
-        self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(metas), layout_dig, job.t_step_end, t2, job.backlog,
-                                              hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
-
-    def _commit_step_gpu_release_before_keep(self, job: _StepJob) -> None:
-        """DELIBERATE ordering bug (negative test only): the arena block is handed back for reuse before the retained copy is taken; the
-        per-step GPU tree it was run on is gone with vllm-v1: under rows-sha512 the fault is the window ring's (VERITY_FAULT above), and
-        `_commit_step` refuses a step that was not staged through it before reaching here."""
-        raise RuntimeError(f"{step_rows.NAME}: release_before_keep is the window ring's fault: step {job.step} was not staged through it")
 
     # ------------------------------------------------------------------ reporting
 

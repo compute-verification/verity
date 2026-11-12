@@ -260,7 +260,6 @@
     {"file": "verity_vllm/check/replay/linkage.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 10},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "I001", "symbol": "NativeCollectCommitter._commit_step_native", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "T201", "symbol": "NativeCollectCommitter.finalize", "detail": "`print` found"},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "SIM115", "symbol": "NativeHiddenM1Source._tel_line", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "SIM105", "symbol": "NativeHostCommitter._pin_thread", "detail": "Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`"},
