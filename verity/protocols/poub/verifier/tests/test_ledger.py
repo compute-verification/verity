@@ -256,14 +256,19 @@ def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1
         mine += [f"{at}.error"] if "error" in x and not names(x["error"]) else []
         return mine + [p for k, v in x.items() for p in bare(v, f"{at}.{k}")]
 
+    def unnamed(x: object) -> object:
+        """`x` with the term taken out of every object under it."""
+        return {k: unnamed(v) for k, v in x.items() if k != "named"} if isinstance(x, dict) else x
+
     r, _ = k1
     out = ledger.declared(r, node()).to_json()
     lines = [x for x in out["memory"].values() if "delta" in x]
     assert len(lines) == len(ledger.FORMS) and all(x["named"] == ledger.NAMED_TERMS for x in lines)
-    assert all(g["error"]["draw"]["named"] == ledger.NAMED_TERMS for g in out["gamma"].values())
+    assert len(out["gamma"]) == 2 and all(names(g["error"]) for g in out["gamma"].values())
     assert bare(out) == []
     stripped = json.loads(json.dumps(out))
-    del stripped["memory"][ledger.SNAPSHOT]["named"], stripped["gamma"]["spec"]["error"]["draw"]["named"]
+    del stripped["memory"][ledger.SNAPSHOT]["named"]
+    stripped["gamma"]["spec"]["error"] = unnamed(stripped["gamma"]["spec"]["error"])
     assert bare(stripped) == ["declared.gamma.spec.error", f"declared.memory.{ledger.SNAPSHOT}"]
 
 

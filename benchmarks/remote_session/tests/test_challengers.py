@@ -917,14 +917,13 @@ def test_no_error_the_auditors_line_renders_comes_without_the_prf_term_it_leaves
     of the document that has a session (a session's, a T's, the line of record's) names the term beside its total,
     as the ledger's own records do (`ledger.NAMED_TERMS`). A T that credits no session prints no error."""
     assert al.NAMED_TERMS is al.ledger.NAMED_TERMS
-    d = {"profile": 2.0 ** -40, "slack": 96 * 2.0 ** -67, "hiding": al.ledger.hiding_over(96), "sketch": 0.0,
-         "rejection": 48 * 96 * 2.0 ** -64}
+    d = {"profile": 2.0 ** -40, "slack": 96 * 2.0 ** -67, "hiding": al.ledger.hiding_over(96), "binding": 0.0,
+         "sketch": 0.0, "rejection": 48 * 96 * 2.0 ** -64}
     total = 0.0
     for x in d.values():
         total += x
-    window = {"lengths": [4096], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": 48}}}
     memory = {f: {"delta": total, "named": al.ledger.NAMED_TERMS} for f in al.ledger.FORMS}
-    e = al.session_error({"k": 0, "samples": 48, "record": {"public": {}, "profile": {"windows": [window] * 96}},
+    e = al.session_error({"k": 0, "samples": 48,
                           "ledger": {"delta": d, "inputs": {"passes": 96}, "declared": {"memory": memory}}})
     held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
     rows = [{"k": 0, "T": "T=1s", "shares_auditor_clock": held, "error": e, "credit": {"ok": True, "zero": []}},
