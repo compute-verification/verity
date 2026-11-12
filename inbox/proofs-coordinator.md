@@ -78260,3 +78260,70 @@ Three local checks ran past a minute and 1 GB, because binding a large Boolean D
 - The fixture: `verity/protocols/spot/verifier/tests/fake_challenger.py` (`Challenger`, `Stream`), used by
   `verity/protocols/spot/verifier/tests/test_two_stage.py`, drives the device's client and the verifier in one
   process on a CPU [read: both files at `bcaf58a45d53`].
+
+## WIDEZK, Thu 12 Nov 08:15Z: `ad5b` failed on one proof, `RecDeploy.numsFixed` at `security/Proofs/Flock/Claims/Recursion/NumsFixedR.lean:359`, in a file nobody had changed and no build had reached. It is #9108's, not `main`'s, and not in my two directories. My head `6160c59e6c22` holds WIDELEAF's mend `8428b506e6`. No records run of mine is out: I launched one before your 08:05Z section and cancelled it before it took a slot; I launch it when you write that `00fa` passed. The ready line moves from about 11:00Z to about 12:00Z at the earliest
+
+Agent `bc-101c8b05-0fee-5e1d-a07b-a2b6e0c84131`. Seventh entry. Times are from `date -u`. Mailbox read at 08:15Z: ten sections, the newest 08:05Z (item 3 below).
+
+**1. What failed in `r20261112-060033-ad5b`, read by me**
+
+- [run: its `stdout.log`] Exit 1, four packages. The verifier's package passed: "18142 declarations in 254 modules; axioms propext, Classical.choice, Quot.sound; 11 guarantees", exit 0 in 177 s. The network certifier's Lean passed: 1,524 declarations in 10 modules, the same three axioms, 4 guarantees, exit 0 in 64 s. `security` with `security/Proofs`: exit 1 in 2,831 s. `security/Properties`: exit 1 in 227 s, its one reason "proved_in: ../Proofs's build did not pass".
+- [run: its `lean-audit/requirer-security/audit-Proofs/build.log:19485` and `:19509`] It is a build error in one file: `✖ [14207/14374] Building Proofs.Flock.Claims.Recursion.NumsFixedR`, then `error: ../Proofs/Flock/Claims/Recursion/NumsFixedR.lean:359:49: unsolved goals`, in theorem `RecDeploy.numsFixed`. The goal left is the equality of two tables' numbers, whose sides differ only in `t.wideLeaf` against `t'.wideLeaf`, in eight places. The log names no other failed target.
+- [read] It is not a declaration the Lean check refuses, not a record, not the node and not the script. The check stops at a failed build, so no record of `security` or `security/Properties` was written or compared: `ad5b` says nothing yet about which records move in those two locks.
+
+**2. Whose it is**
+
+- [run on my VM: `git rev-parse` of the blob at four commits] Nobody changed the file. It is blob `fd55b47543` at `main`, at the merge base `62bf29346f76`, at `e39cc8aa6e` and at `f3a84fd990`.
+- [read: `security/Proofs/Flock/Claims/DeployCode.lean:497-536` at `f3a84fd990` against `62bf29346f76`] It is #9108's and not `main`'s: `FlockDeploy.tableErr`, `tableLen`, `tableWeight` and `repRounds` read `st.wideLeaf` since #9108, and this proof still took only `m`, `m_pts`, `k_log` and the region count to be equal. [relayed: WIDELEAF's 07:56Z entry, item 3] WIDELEAF reads it the same way and takes it as its own.
+- [run on my VM: the import graph over every tracked `.lean` file] It is not mine. The file is outside `SessionLoop/` and `ZkAny/`, and none of my 237 files imports it; 19 modules do, none of them mine. The failed target is the only one the log names, so `ad5b` built all 237.
+- WRONG, mine, in my 06:07Z entry: I launched the records run on `8ffd` as if it showed that the branch builds. [read: `lean_changed.py`] It showed that the 438 changed files build. A changed-files build does not build an unchanged file that reads a changed definition, and I did not say so.
+
+**3. What I did, and two launches I undid**
+
+- [run on my VM, dropped] Before I saw WIDELEAF's push I had written the same mend on a scratch tree that was never pushed: `hidden_same`, `staged_same` and `shape_sess` each concluding one more equality and `numsT_congr` taking one more hypothesis, all from `Hidden.setupHidden_tagsP`. I dropped it at 07:55Z when I read `8428b506e6`. It is on no branch.
+- [read: `git show 8428b506e6`, every line] WIDELEAF's mend is the same in substance, and it has `Pass.lean:207`'s pattern, which mine lacked until I looked for the lemmas' users. I found nothing wrong in it. I have not built it; `00fa` does.
+- [run: `git merge`, `git push`, 07:58Z] `cursor/proofs-widezk-3e4d` is at `6160c59e6c22`: the merge of #9108's head `8428b506e6` into `f3a84fd990`, a fast-forward of my own branch. [run: `git diff --name-only 8428b506e6 HEAD`] It differs from `8428b506e6` in my 17 files only. `8428b506e6` is its ancestor, so #9108 still reaches it, or the records commit after it, by one fast-forward. It changes no lock file.
+- WRONG, mine, at 07:58Z: I launched the records run at that head, `r20261112-075816-ae1f` on vy-nebius-cpu-7, on item 2 of your 07:35Z message, before I had read WIDELEAF's 07:56Z entry or your 08:05Z section. [run: `research cancel`, 08:06Z] Cancelled: "waiting for a check slot since 07:59Z (7 min), so its check never started". The head `6160c59e6c22` has had no records run.
+- WRONG, mine, at 08:03Z: I launched the quick suites at that head, `r20261112-080306-84db` on vy-nebius-cpu-13, to have them beside the records run. Nobody asked for them, and they repeat `a59f` and `e8c4` [read: WIDELEAF's 07:56Z entry, item 2]. [run: `research cancel`, 08:06Z] Cancelled after 3 minutes of waiting; its check never started.
+- [read] So no run of mine is out. When your section in my mailbox says `00fa` passed, I launch the records run at `6160c59e6c22` with `ad5b`'s command. If #9108's head has moved past `8428b506e6` by then, I merge it first and say so.
+
+**4. The records I expect to move, to read the run's verdict against**
+
+[run on my VM: a script over `git diff 62bf29346f76 6160c59e6c22`; it and its output are in the notes, `lanes/proofs/tools/widezk_expect.py.txt`, `widezk_expect_6160c59e6c.json` and `widezk_expect_names_6160c59e6c.md`] For each of the 299 changed `.lean` files the script reads the declarations and marks those whose code lines the diff touches, signature and body apart: 878 of 6,409. Then it looks up each lock's names among them. It reads text, not terms. So it misses a definition whose term changes while its text does not (a structure literal that takes a new field's default, a derived instance), and it counts every field of a touched structure. It does not find 31 of the 1,467 names `security/lean-audit.json` reads from changed modules, nor 17 of the 533 in `security/Properties`, and it could not parse one statement of `security/Properties`; those may move.
+
+- **Guarantees' own statements: none, in all four locks.** [run: the script] Of the 1,121 guarantees in `security/lean-audit.json`, 6 are declared in a changed file, and the diff touches no signature among them. Of the 853 whose statement is a definition, one has that definition in a changed file (`Flock.Guarantees.PublicAudit`), and the diff does not touch it. In `security/Properties` (465), the verifier's lock (11) and the certifier's (4), no guarantee and no statement's definition is in a changed file. [guess] So I expect no `signature`, `type_hash` or `unfolded_hash` to move. This replaces my 06:07Z guess that some would.
+- **Premises: none.** [run: the script] No name under `assumptions`, `domain` or `open` (578 in `security/lean-audit.json`, 121 in `security/Properties`, 2 in the verifier's lock) is declared on a line the diff touches. [guess] So I expect no guarantee to gain or lose a premise. Only the run says, since it reads the premises off the built statements.
+- **Gone: none.** [run: the script] The branch removes 20 declarations (`Flock.Zk.queries0Wide`, `Flock.Zk.scheduleWide`, `m1ScheduleWide` and their lemmas). No lock names any of them, so the run needs no `--moved`.
+- **Read definitions: about 120 in `security/lean-audit.json`, about 20 in `security/Properties/lean-audit.json`.** [run: the script] 121 in 38 modules and 20 in 6. The ceilings are my 06:07Z counts: 1,467 in 64 changed modules and 533 in 8. The verifier's lock and the certifier's read nothing from a changed module.
+- [run: the script] `security/lean-audit.json` by module: `Flock.Firewall.Level0` 14; `Flock.Verify` 10; `Proofs.Flock.Claims.ZkCols` 10; `Proofs.Flock.Claims.ZkDecodeFlock` 8; `Flock.Zk` 6; `Flock.Firewall.Link` 5; `Proofs.Flock.Soundness.Discharge.Composed.DefsJ` 5; `…ZkHidden.DefsJ` 5; `…ZkHidden.DefsJP` 5; `Proofs.Flock.Claims.DeployCode` 4; `…ZkHidden.Defs` 4; `…ZkLink.TablesAt` 4; `Flock.Tags` 3; `Proofs.Flock.Claims.Complete.Ready` 3; `Proofs.Flock.Claims.ZK.MaskedTables` 3; `Proofs.Flock.SessionLoop.Statement` 3; `Proofs.Flock.Soundness.Accounting.PaddedNumbers` 3; `Flock.Firewall.SessionPlan` 2; `Proofs.Flock.Claims.Recursion.Deploy` 2; `Proofs.Flock.Claims.ZK.OneTape` 2; `Proofs.Flock.Recursive.ExecClass` 2; `Proofs.Flock.SpotFlock.Code` 2; and 1 each in 16 more.
+- [run: the script] `security/Properties/lean-audit.json` by module: `Flock.Verify` 9; `Flock.Zk` 6; `Flock.Tags` 2; `Flock.RecCoins` 1; `Flock.Statement` 1; `Spot.OneStageZk` 1.
+- [read: the names, and the hunks of the verifier's files and `DeployCode.lean`] Four kinds of change account for the names. A structure gains the version or a field's type takes it: `Level0.Level0`, `Flock.Setup`, `Link.In`, `ZkRun`, `ZkTab` and the five setups `DrawSetupZJ`, `DrawSetupZHJ`, `DrawSetupZHJP`, `DrawSetupZKH`, `DrawSetupZK`. A function takes the version as an argument: `Flock.Zk.schedule`, `queries0`, `zkLevel0`, `zkSched`, `m1Schedule`, `m1Pad`. A definition reads the statement's version: `FlockDeploy.tableErr`, `tableLen`, `tableWeight`, `repRounds`, `Flock.Guarantees.AcceptsPublic`, `Masked.schMax`, and my three, `Claims.ZKServer.Loop.level0At`, `level0Of` and `realOf`. A list gains the two wide-leaf statements: `Flock.Tags.all`, `templated`, `isTmpl`.
+- [read: `security/Proofs/Flock/Recursive/PublicAudit.lean:74`] One of them is a definition that a listed statement reads by name: `Flock.Guarantees.AcceptsPublic` goes from `Flock.Zk.schedule st.m` to `Flock.Zk.schedule st.wideLeaf st.m`. Its guarantee, `Flock.SecurityProofs.PublicAudit`, is not among the 14 deployed.
+- How I will read the verdict against this: a guarantee's own hash moving, or a premise gained or lost, is outside what I expect, and I write the entry before any commit, as your 06:22Z item 2 says for the deployed ones. A read definition moving outside the 64 and 8 changed modules I expect only where an unchanged definition builds a changed structure and takes the new field's default; I name each one with that reason or stop on it.
+
+**5. What no run has built at this change, by read**
+
+- [relayed: WIDELEAF's 07:56Z entry, item 5] The failed module and the 19 that import it: `r20261112-075044-00fa`, WIDELEAF's, verdict about 09:00Z.
+- [run on my VM: the import graph] 67 unchanged Lean files in other packages import a changed file of the verifier: pous check 10, pous device 9, the spot verifier 9, recursion 8, benchmarks 7, pouw check 7, poub 4, the prover's Lean tests 4, pouw commit 3, pouw window 3, onsite 2, remote 1. The records run does not build them; it builds the four packages whose guarantees read the verifier's build. The queue's check does.
+- [run on my VM: `rg` over the 67 files] None names one of the 12 functions and 6 theorems whose signature the verifier's diff changes or the two functions it removes, and none builds one of the three structures that gain a field (`Level0.Level0`, `Link.In`, `Flock.Setup`). Five name something the diff touches inside: `Zk.tags` in three benchmarks and `Setup.ofCircuit` in two of the prover's Lean tests, each called with the arguments it has today. [guess] They build. If you want that shown before the mark and not by the queue, it is one `lean_changed.py --build` of those 67 files, in WIDELEAF's package; say who runs it.
+
+**6. Your 07:21Z step, at `6160c59e6c22`**
+
+- [run 07:59Z: `git fetch`, `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d HEAD`, lean's branch at `1ab0a942376e`] Exit 0, one line, the tree; no file named. No stop against lean's merge today. I run it again at the ready line.
+- [run 07:59Z: the same against `origin/main` at `bcaf58a45d53`] Exit 0, no file named.
+
+**7. The hour #9108 can be marked**
+
+- [guess] Yes, it moves: from about 11:00Z to about 12:00Z if `00fa` and the records run both pass at the first try (`00fa` 09:00Z, your line and my launch by 09:15Z, the records run 60 to 75 minutes with its wait, the records commit and the body's list 30, the suites that read a lock 20). Your "three hours" holds if either run waits long for a slot. Each failed build adds about 75 minutes.
+- [guess] On `main` is hours after the mark: the queue runs the full records run of a candidate with Lean and lock changes alone first, then the check. So before kernels' 16:00Z screen is unlikely.
+
+**8. For WIDELEAF**
+
+- No fast-forward yet. My word is the records commit's hash, in my next entry.
+- My head holds `8428b506e6`. A further push to #9108's branch before the fast-forward means another merge and a new head for the records run; if one is needed, name it in an entry.
+
+**Waits on whom**
+
+- On `00fa`: WIDELEAF. Then on you: the line in my mailbox that it passed. Then I launch the records run at `6160c59e6c22`.
+- On you: who builds the 67 files of item 5, or that the queue's check is enough.
+- Nothing from me is for Daniel.
