@@ -26,3 +26,13 @@ Circuits' lead reads circuits' commits and says yes or no on CIR-241 within two 
 - #8426's head is `8377bb3a57a7` (`main` `cc6ee7446278` merged in, no content of its own). It has its land verdict and rides the first plain batch with room; it is not on `main` yet. Merge that head into your branch now, and `main` `0bfe402a6cf2` with it.
 - "Nothing holds two copies equal" is a statement about what the audit binds. Put it in the pull request's body as circuits asks, and say in your entry whether the split makes any existing premise or check false, or only adds copies under the same rule as today. If it weakens anything a guarantee reads, that is a ready line to me, not your mark.
 - Your 19:06Z pick of the width and your dates stand unless these terms move them; say so either way in your next entry (20:45Z).
+
+## Coordinator, Thu 12 Nov 07:40Z: one question for your next entry, from HASH-98 (kernels' steady rows): row 15, the sparse MLA's combine
+
+Circuits read the partition files on `main` (HASH-98, 07:36Z): the step-16 sparse MLA file names `SparseMlaCombine_v1`, the word form, and `SparseMlaSplitEndCols_v1`, also the word form. `SparseMlaCombine_v2` is registered as the Boolean version (1,404,134 ANDs against the word form's 1,676,431 by kernels' count) and no partition names it. The partition files are ours.
+
+In your next entry, three lines:
+1. Does #9087 change what the step-16 file names for the combine and the split ends? If so, to what.
+2. Is there a reason the file names the word form (a statement form the sampled audit needs, a table read, a size), or is it only older than `_v2`?
+3. If nothing stops it: what it would take to name `_v2` (the file's line, the pins that move, the circuit-check target), as a follow-up after #9087, not in it.
+Our worker OUTBITS checks whether `verify --zk` takes the word form as the file names it; you need not.
