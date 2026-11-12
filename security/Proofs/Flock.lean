@@ -102,6 +102,7 @@ public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WiredKS
+public import Proofs.Flock.SpotFlock.WiredRegX
 public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
 public import Proofs.Flock.SpotFlock.Placement
