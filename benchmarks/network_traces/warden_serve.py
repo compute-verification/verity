@@ -585,7 +585,8 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
     the load's heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its
     released rows, keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and
     at the end sends the issuer's refusals and its own usage. In a schedule with a head offset it sends each
-    execution phase's line of connection rows on `lines` and writes none (`connection_rows_run.Keeper`)."""
+    execution phase's line of connection rows on `lines` and writes none (`connection_rows_run.Keeper`), and
+    None once it sends no more."""
     try:
         own = cs.signer(key)
         issuer = Issuer(own, session)
@@ -620,6 +621,9 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
     except BaseException:
         results.send(("error", traceback.format_exc()))
         raise
+    finally:
+        if lines is not None:
+            lines.send(None)
 
 
 class PublisherProcess:
@@ -713,20 +717,17 @@ class PublisherProcess:
 
     def heads(self, back, ended=None) -> None:
         """In a schedule with a head offset: from now `back(execution phase, line)` takes each line of connection
-        rows the process sends back, on a thread of this object's that only waits on them, until the process ends,
-        when it calls `ended()` if given. `serve` has the network certifier's loop hand each line to
-        `Warden.head_back`."""
+        rows the process sends back, on a thread of this object's that only waits on them, until the process says
+        it sends no more or is gone, when the thread calls `ended()` if given. `serve` has the network certifier's
+        loop hand each line to `Warden.head_back`. A process that is gone without that word raises on the thread,
+        as it does at `close`."""
         if self.lines is None or self._reader is not None:
             raise ValueError("the publisher process sends lines back in a schedule with a head offset, to one taker")
 
         def read() -> None:
             try:
-                while True:
-                    try:
-                        window, line = self.lines.recv()
-                    except (EOFError, OSError):
-                        return
-                    back(window, line)
+                while (item := self.lines.recv()) is not None:
+                    back(*item)
             finally:
                 if ended is not None:
                     ended()

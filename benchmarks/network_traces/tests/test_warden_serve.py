@@ -656,10 +656,9 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             loop = asyncio.get_running_loop()
 
             def on_loop(call, *args) -> None:
-                try:
+                # the process's last word comes at `close`, when the run is over and its loop closed
+                if not loop.is_closed():
                     loop.call_soon_threadsafe(call, *args)
-                except RuntimeError:  # the loop is closed: the run is over
-                    pass
 
             # the process's end wakes a wait for a line that then never comes, and `close` raises its failure
             publisher.heads(lambda window, line: on_loop(taken, window, line),
