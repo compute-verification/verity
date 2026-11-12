@@ -128,6 +128,36 @@ def test_each_link_holds_only_its_own_bytes_and_a_last_part_closes_its_link():
     assert slow_got == slow_sent
 
 
+def test_a_last_part_ends_its_links_stream_though_the_handing_process_keeps_its_socket():
+    """Two links whose sockets the handing process keeps open. One's part is its last: once the bucket is written
+    its peer has the part and then the stream's end, and what the peer sends after still reaches the handing
+    process. The other's part is not: its peer has the part and no end."""
+
+    async def run():
+        pacer = await Pacer.start()
+        (going, going_peer), (staying, staying_peer) = _pair(), _pair()
+        pacer.add(1, going.fileno())
+        pacer.add(2, staying.fileno())
+        reports = pacer.reports()
+        pacer.hand(0, 0.0, [(1, b"the last", True), (2, b"more to come", False)])
+        got = [await anext(reports), await anext(reports)]
+        going_peer.setblocking(False)
+        staying_peer.setblocking(False)
+        read = [going_peer.recv(64), going_peer.recv(64), staying_peer.recv(64)]
+        try:
+            read.append(staying_peer.recv(64))
+        except BlockingIOError:
+            read.append(None)
+        going_peer.sendall(b"after")
+        read.append(going.recv(64))
+        await pacer.close()
+        return got, read
+
+    got, read = asyncio.run(run())
+    assert [(r.t, r.end is None, r.written) for r in got] == [(0, True, True), (0, False, True)]
+    assert read == [b"the last", b"", b"more to come", None, b"after"]
+
+
 def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
     """Each link is passed just before the bucket that first writes to it, as the warden passes a client's connection
     when it admits it. Waiting for a link's socket, the pacer may take a message whose arrival its last `poll` also
