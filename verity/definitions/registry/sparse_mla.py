@@ -389,35 +389,48 @@ def chain_cols(DV: int, cols: int | None) -> int:
     return cols
 
 
-def block_units(S, cols: int | None, nvis: int, first: bool, n: int) -> list[tuple[object, int]]:
-    """``n`` key blocks of ``nvis`` keys (``first``: each its chain's first visited) of a row of statics ``S`` as a chain's
-    units, each Definition bound and how many of it: the blocks whole (`SparseMlaHeadBlock_v1`), or with ``cols`` each one's
-    `SparseMlaHeadScores_v1` and its DV / cols `SparseMlaHeadValues_v1{G = cols}`, one a column block."""
+def block_units(S, cols: int | None, nvis: int, first: bool, blocks: int, heads: int) -> list[tuple[object, int]]:
+    """``blocks`` key blocks of ``nvis`` keys (``first``: each its chain's first visited) of a row of statics ``S`` and
+    ``heads`` heads as a chain's units, each Definition bound and how many of it: each head's blocks whole
+    (`SparseMlaHeadBlock_v1`), or with ``cols`` = G each head's block its `SparseMlaHeadScoresCols_v1{G}` and its DV / G
+    `SparseMlaHeadValues_v1{G}`, one a column block, and each block's key rows their (DV + DR) / G column blocks' writers
+    (`SparseMlaHeadKeysWire_v1{W = G}`), one a column block for all the heads, whose outputs those units read."""
     blk = {k: S[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
+    n = blocks * heads
     if cols is None:
         return [(bind(SparseMlaHeadBlock, NVIS=nvis, FIRST=first, **blk), n)]
     G = chain_cols(int(S["DV"]), cols)
-    return [(bind(SparseMlaHeadScores, NVIS=nvis, FIRST=first, **blk), n),
-            (bind(SparseMlaHeadValues, NVIS=nvis, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=G), n * (int(S["DV"]) // G))]
+    return [(bind(SparseMlaHeadScoresCols, NVIS=nvis, FIRST=first, G=G, **blk), n),
+            (bind(SparseMlaHeadValues, NVIS=nvis, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=G), n * (int(S["DV"]) // G)),
+            (bind(SparseMlaHeadKeysWire, NVIS=nvis, W=G), blocks * key_blocks(int(S["DR"]), int(S["DV"]), G))]
+
+
+def merged(units: list[tuple[object, int]]) -> list[tuple[object, int]]:
+    """``units`` with each Definition's counts summed, in the order of its first: a key block writer of BN keys a chain's
+    first visited block and its later ones both hold."""
+    out: dict[str, list] = {}
+    for u, n in units:
+        out.setdefault(u.id, [u, 0])[1] += n
+    return [(u, n) for u, n in out.values()]
 
 
 def head_chain(row, cols: int | None = None) -> list[tuple[object, int]]:
     """The units a `SparseMla_v1` binding ``row`` is cut into, each Definition bound and how many of it: per head, its first
     visited block (`SparseMlaHeadBlock_v1`, FIRST, NVIS its keys), each later block (NVIS = BN) and its end
-    (`SparseMlaHeadEnd_v1`).  With ``cols``, each key block is its scores unit and its values units of ``cols`` columns
-    (`block_units`), and the head ends on each column block (`SparseMlaHeadEnd_v1{DV = cols}` on the last scores unit's lanes
-    and that column block's last values unit's O).  What `serving_templates` stages a row as; the chain of whole blocks is
-    what circuit-check holds to the block in its place."""
+    (`SparseMlaHeadEnd_v1`).  With ``cols``, each key block is its scores unit and its values units of ``cols`` columns, and
+    its key rows' writers, once for all the heads (`block_units`), and the head ends on each column block
+    (`SparseMlaHeadEnd_v1{DV = cols}` on the last scores unit's lanes and that column block's last values unit's O).  What
+    `serving_templates` stages a row as; the chain of whole blocks is what circuit-check holds to the block in its place."""
     if getattr(row, "defn", None) is not SparseMla:
         raise ValueError(f"head_chain cuts a SparseMla_v1 binding, not {row!r}")
     S = row.bindings
     (lo, hi), *rest = visits(int(S["T"]), int(S["BN"]))
     NH, DV = int(S["NH"]), int(S["DV"])
     G = chain_cols(DV, cols)
-    out = block_units(S, cols, hi - lo, True, NH)
+    out = block_units(S, cols, hi - lo, True, 1, NH)
     if rest:
-        out += block_units(S, cols, int(S["BN"]), False, NH * len(rest))
-    return out + [(bind(SparseMlaHeadEnd, DV=G, INV=S["INV"]), NH * (DV // G))]
+        out += block_units(S, cols, int(S["BN"]), False, len(rest), NH)
+    return merged(out) + [(bind(SparseMlaHeadEnd, DV=G, INV=S["INV"]), NH * (DV // G))]
 
 
 def _mla_type(S, bf16=BF16):

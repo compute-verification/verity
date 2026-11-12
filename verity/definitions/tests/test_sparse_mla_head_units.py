@@ -135,9 +135,10 @@ def _row_operands(T: int, DR: int, DV: int, seed: int) -> tuple[list, list, np.n
 
 def _through_the_chain(st: dict, T: int, NS: int, G: int, qn: list, qr: list, kv: np.ndarray) -> tuple[list, Counter]:
     """One head of T keys in NS splits through the units `split_chain` names at ``cols`` = G, each read wired as the chain says
-    (a later scores unit to the one before's max and lanes, a values unit to its block's scores unit and to the same column
-    block's values unit before it, a column end to its split's last scores unit and its column block's last values unit, a
-    combine to the splits' column ends): the head's words, and the units it ran by descriptor id."""
+    (each column block of a block's key rows to its writer, a later scores unit to the one before's max and lanes, a values
+    unit to its block's scores unit, its column block's writer and the same column block's values unit before it, a column
+    end to its split's last scores unit and its column block's last values unit, a combine to the splits' column ends): the
+    head's words, and the units it ran by descriptor id."""
     DV, BN, inv = st["DV"], st["BN"], GLM["INV"]
     ran: Counter = Counter()
 
@@ -151,12 +152,14 @@ def _through_the_chain(st: dict, T: int, NS: int, G: int, qn: list, qr: list, kv
         o: list = [None] * (DV // G)
         for b in range(b1 - 1, b0 - 1, -1):
             lo, hi, first = b * BN, min(T, (b + 1) * BN), b == b1 - 1
-            out = run(bind(M.SparseMlaHeadScores, NVIS=hi - lo, FIRST=first, **st), qn, qr, kv[lo:hi].ravel().tolist(), *state)
+            writer = bind(M.SparseMlaHeadKeysWire, NVIS=hi - lo, W=G)
+            keys = [list(run(writer, kv[lo:hi, c * G:(c + 1) * G].ravel().tolist())) for c in range(M.key_blocks(st["DR"], DV, G))]
+            out = run(bind(M.SparseMlaHeadScoresCols, NVIS=hi - lo, FIRST=first, G=G, **st), qn, qr, *keys, *state)
             state, pb, rescale = [out[0], list(out[1:5])], list(out[5:5 + hi - lo]), out[5 + hi - lo:]
             unit = bind(M.SparseMlaHeadValues, NVIS=hi - lo, FIRST=first, BN=BN, DOT=st["DOT"], G=G)
             for c in range(DV // G):
-                own = kv[lo:hi, c * G:(c + 1) * G].ravel().tolist()
-                o[c] = list(run(unit, pb, own, *(() if first else (rescale[0], o[c]))))
+                assert keys[c] == kv[lo:hi, c * G:(c + 1) * G].ravel().tolist()
+                o[c] = list(run(unit, pb, keys[c], *(() if first else (rescale[0], o[c]))))
         ends.append((state, o))
     if NS == 1:
         (state, o), = ends
@@ -175,7 +178,8 @@ def _through_the_chain(st: dict, T: int, NS: int, G: int, qn: list, qr: list, kv
 def test_a_row_through_its_chain_of_scores_and_values_units_is_the_row(T: int, NS: int, G: int) -> None:
     """`split_chain` at ``cols``: the units it names, run as the chain wires them, are `SparseMlaHeadSplit_v1` word for word
     (NS = 1: `SparseMlaHead_v1`), on Gaussian rows with specials planted in the keys, and they are every unit it names and
-    no other, each as many times as it says; `head_chain` at ``cols`` names an unsplit row's the same."""
+    no other, each as many times as it says; `head_chain` at ``cols`` names an unsplit row's the same, its key rows' writers
+    once for all its heads."""
     qn, qr, kv = _row_operands(T, SMALL["DR"], SMALL["DV"], 7 * T + 100 * NS + G)
     row = bind(W.SparseMlaHeadSplit, T=T, NS=NS, INV=GLM["INV"], **SMALL)
     got, ran = _through_the_chain(SMALL, T, NS, G, qn, qr, kv)
@@ -183,7 +187,7 @@ def test_a_row_through_its_chain_of_scores_and_values_units_is_the_row(T: int, N
     assert dict(ran) == {u.id: n for u, n in W.split_chain(row, cols=G)}
     if NS == 1:
         heads = M.head_chain(bind(M.SparseMla, T=T, NH=3, INV=GLM["INV"], **SMALL), cols=G)
-        assert {u.id: n for u, n in heads} == {u: 3 * n for u, n in ran.items()}
+        assert {u.id: n for u, n in heads} == {u: n if "KeysWire" in u else 3 * n for u, n in ran.items()}
 
 
 @pytest.mark.parametrize("T,NS", [(272, 5), (130, 1)])
@@ -199,14 +203,19 @@ def test_a_served_head_through_its_chain_in_columns_of_64_is_the_head(T: int, NS
 
 
 def test_a_chain_of_whole_blocks_is_the_chain_without_columns() -> None:
-    """``cols`` None is the chain of whole key blocks, unit for unit, and a width that does not divide DV is refused."""
+    """``cols`` None is the chain of whole key blocks, unit for unit, and a width that does not divide DV is refused, and
+    one that does not divide DR, since a key row is whole column blocks."""
     row = bind(W.SparseMlaSplit, T=70, NS=3, NH=2, INV=GLM["INV"], **SMALL)
     assert [(u.id, n) for u, n in W.split_chain(row)] == [(u.id, n) for u, n in W.split_chain(row, cols=None)]
-    assert not any("Scores" in u.id or "Values" in u.id for u, _n in W.split_chain(row))
+    assert not any("Scores" in u.id or "Values" in u.id or "Keys" in u.id for u, _n in W.split_chain(row))
     assert not any("HeadBlock" in u.id or "EndCols" in u.id for u, _n in W.split_chain(row, cols=8))
+    wide = {**SMALL, "DV": 32}
     for chain, r in ((W.split_chain, row), (M.head_chain, bind(M.SparseMla, T=70, NH=2, INV=GLM["INV"], **SMALL))):
         with pytest.raises(ValueError, match="not DV=16 columns in whole blocks"):
             chain(r, cols=12)
+    for r in (bind(W.SparseMlaSplit, T=70, NS=3, NH=2, INV=GLM["INV"], **wide), bind(M.SparseMla, T=70, NH=2, INV=GLM["INV"], **wide)):
+        with pytest.raises(ValueError, match="not whole column blocks of G=32"):
+            {W.SparseMlaSplit: W.split_chain}.get(r.defn, M.head_chain)(r, cols=32)
 
 
 @pytest.mark.parametrize("T,NS", [(37, 1), (70, 3), (33, 2)])

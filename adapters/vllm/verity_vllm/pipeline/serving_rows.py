@@ -691,7 +691,8 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                       list[dict[str, Any]], dict[str, Any], dict[str, str], dict[str, bytes], dict[str, bytes], list[list[list[Any]]],
                       IF.Registered | None]:
     """What `after_commit` commits of ``window``'s members (``rows`` its templates', `population`'s): their words (`read_all`)
-    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, the per-expert cut's
+    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, each port a chain unit
+    holds in its writer's tree given as its writer's (`chain_rows.held_rows`), the per-expert cut's
     ``tables`` (`expert_rows.commit_tables`) and, in a window of history tables (``on``: its partition file's
     ``"histories": true``), the committer's ``histories`` (`commit.history_tables.Histories`), which it appends the
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
@@ -726,6 +727,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values)
+    data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)
