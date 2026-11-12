@@ -109,6 +109,13 @@ shared = [
     # the honest and nontrivial lemmas of the expansion's two size bounds (`ExpandSize`, `ExpandAndSize`), which no public
     # proof imports: a public guarantee ships with its witnesses, and the lock the export writes keeps their entries
     "security/Proofs/Core/ExpandWitnesses.lean",
+    # the proofs of the formalism's statements and of the hash area's read bindings, which no public proof imports: a
+    # public statement ships with the theorem that proves it, and with the witnesses that it says something
+    "security/Proofs/Core/Formalism.lean",
+    "security/Proofs/Core/Formalism/Witnesses.lean",
+    "security/Proofs/Hash/EmbeddingRead.lean",
+    "security/Proofs/Hash/HistoryTable.lean",
+    "security/Proofs/Hash/HistoryWitness.lean",
 ]
 # the Lean check a reader runs on the tree's Lake packages (`check.py --all`): the checker, the Lean it runs, its setup
 # and sandbox, and the two fixture packages its controls build with the violations each must fail on. The tools beside it

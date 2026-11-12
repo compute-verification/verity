@@ -251,6 +251,39 @@ def test_the_export_drops_a_dependency_no_public_file_uses_with_its_source(tmp_p
     assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["python dependency store -> store/pyproject.toml"]
 
 
+def test_the_export_refuses_a_dependency_counted_cut_that_its_rewrite_kept(tmp_path_factory, monkeypatch) -> None:
+    """The boundary counts a dependency no public file uses closed only because the export drops it from the
+    pyproject; an export whose rewrite kept it fails rather than ship the edge."""
+    root = tmp_path_factory.mktemp("tree")
+    tree, boundary, j = _depends(root)
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *DEPENDS], cwd=root, check=True)
+    monkeypatch.setattr(PE, "rewrite_pyproject", lambda text, *rest: (text, []))
+    with pytest.raises(ValueError, match="rewrite kept them: .*python dependency store"):
+        PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
+
+
+def test_the_export_writes_a_controls_file_that_only_loses_a_policys_lane_fields(tmp_path_factory) -> None:
+    """A controls file in which no control goes and a control's `policy` names an owner is still written anew: the
+    export drops nothing it would report, and the file it ships carries no owner."""
+    root = tmp_path_factory.mktemp("tree")
+    controls = {"listed": {"policy": {"guarantees": {"P.t": {"owner": "@lane"}}}, "fails": "open: P.S is"},
+                "plain": {"write": {"A.lean": "x"}, "fails": "sorry: "}}
+    files = {f: json.dumps(controls, indent=1) + "\n" for f in PE.CONTROLS[:1]}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *files], cwd=root, check=True)
+    tree, boundary = PB.Tree(root, files=files), PB.Boundary.load(tomllib.loads('[public]\na = ["tools"]\n'))
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, PB.judge(tree, boundary), dest, {})
+    (f,) = files
+    assert f not in got["rewrites"]
+    assert json.loads((dest / f).read_text(encoding="utf-8")) == {
+        "listed": {"policy": {"guarantees": {"P.t": {}}}, "fails": "open: P.S is"}, "plain": controls["plain"]}
+
+
 def test_an_optional_edge_is_not_open_and_each_is_one_edge_with_its_reason(tmp_path: Path) -> None:
     """An edge the boundary lists under `[[optional]]` is one its source runs without, so it is not open; the judgment
     names those the tree has. Without the entry the edge is open."""
@@ -499,6 +532,122 @@ def test_a_root_file_the_export_lacks_is_the_imports_of_the_modules_below_it() -
         "p/src/Agg.lean", "p/src/Mixed/In.lean"}, "without the lock, no root is the lock's"
 
 
+def test_a_root_whose_modules_are_each_a_root_is_dropped_and_not_written() -> None:
+    """A root with no copied file whose copied modules are each named as a root too would import nothing the build
+    lacks, and its file would stand under the name of a module the export leaves out: the export writes none, and the
+    lakefile and the lock lose the root. A module below it that the lock doesn't name becomes a root of the lock, so the
+    Lean check still seals it. A root with one module that is no root is written as before."""
+    lakefile = ('name = "p"\ndefaultTargets = ["Lib"]\n[[lean_lib]]\nname = "Lib"\n'
+                'roots = ["Lib.Real", "Lib.Real.A", "Lib.Real.B", "Lib.Agg"]\n')
+    lock = {"roots": ["Lib.Real", "Lib.Real.A", "Lib.Agg"]}
+    files = {
+        "p/lakefile.toml": lakefile, "p/lean-audit.json": json.dumps(lock),
+        "p/Lib/Real/A.lean": "module\n", "p/Lib/Real/B.lean": "module\n", "p/Lib/Agg/X.lean": "module\n",
+    }
+    tree, copied = _Texts(files), set(files)
+    assert PE.spare_roots(tree, copied) == {"p": {"Lib.Real": ["Lib.Real.A", "Lib.Real.B"]}}
+    got = PE.generated_roots(tree, copied)
+    assert set(got) == {"p/Lib/Agg.lean"}
+    new, dropped = PE.rewrite_lakefile(lakefile, "p", copied | set(got), ["Lib.Real"])
+    assert tomllib.loads(new)["lean_lib"][0]["roots"] == ["Lib.Real.A", "Lib.Real.B", "Lib.Agg"]
+    assert dropped == [("root", "Lib.Real")]
+    targets = PE.lean_targets(new, "p", tomllib.loads(lakefile), copied | set(got))
+    assert targets["default"] == ["Lib"] and targets["missing_roots"] == []
+
+    class Has:
+        def has(self, here, kind, name):
+            return True
+
+    text = PE.LEAN_CHECK.text(lock)
+    new, dropped = PE.rewrite_lock(text, "p", Has(), spare={"Lib.Real": ["Lib.Real.A", "Lib.Real.B"]})
+    assert json.loads(new)["roots"] == ["Lib.Real.A", "Lib.Agg", "Lib.Real.B"] and dropped == [("roots", "Lib.Real")]
+    assert PE.rewrite_lock(text, "p", Has(), spare={"Lib.Other": ["Lib.Other.A"]}) == (text, [])
+    files["p/Lib/Real/C.lean"] = "module\n"
+    assert PE.spare_roots(_Texts(files), set(files)) == {}
+    assert set(PE.generated_roots(_Texts(files), set(files))) == {"p/Lib/Agg.lean", "p/Lib/Real.lean"}
+
+
+@pytest.mark.parametrize(("text", "alone"), [
+    ("", True),
+    ("module\n\npublic import A.B\nimport C\n", True),
+    ("/- why -/\nmodule\n\npublic import A.B\n\n@[expose] public section\n", True),
+    ("import A\n\n/-! The modules under `A`. /- nested -/ -/\n-- a line\npublic section\n/- last -/\n", True),
+    ("import A\n\n@[expose] public section\n\nnamespace A\n", False),
+    ("import A\n\n@[expose] public section\n\n@[expose] public section\n", False),
+    ("import A\n\nsection Named\n", False),
+    ("import A\n\n/-- a doc -/\ndef x := 1\n", False),
+    ("import A\n\nabbrev TAG : String := \"tag/v1\"\n", False),
+    ("import A\n\n/-! left open\n", False),
+    ("import\n", False),
+])
+def test_a_file_of_imports_alone_declares_nothing(text: str, alone: bool) -> None:
+    """A file is imports alone when it is its header, comments and module docs, and at most one line opening an unnamed
+    section with nothing in it. Anything else may declare something, and a file that doesn't read counts as that."""
+    assert PE.imports_alone(text) is alone
+
+
+def _unsealed(read, files, here: str) -> list[str]:
+    """The modules of the package at ``here``, among ``files`` (texts by ``read``), that the Lean check would not seal:
+    under a root of its lock, not under its `exempt`, and reached from no root by the imports of ``files``."""
+    lock = json.loads(read(f"{here}/lean-audit.json"))
+    src = PE._norm(here, PE.tomllib.loads(read(f"{here}/lakefile.toml")).get("srcDir", "."))
+    prefix = f"{src}/" if src else ""
+    at = {f[len(prefix):].removesuffix(".lean").replace("/", "."): f for f in files
+          if f.endswith(".lean") and f.startswith(prefix)}
+
+    def under(names, m: str) -> bool:
+        return any(m == n or m.startswith(f"{n}.") for n in names)
+
+    reached, todo = set(), [r for r in lock["roots"] if r in at]
+    while todo:
+        if (m := todo.pop()) not in reached:
+            reached.add(m)
+            todo += [i for i in PE.PB.HEADERS.imports(read(at[m])) or [] if i in at]
+    return sorted(m for m in at if under(lock["roots"], m) and not under(lock.get("exempt", {}), m) and m not in reached)
+
+
+def test_no_generated_file_stands_under_the_name_of_a_file_that_declares_something() -> None:
+    """The export writes a root's file under a tracked file's name only when that file is imports alone: a file of
+    imports must not stand in for a module with content. A root of the lock alone whose tracked file declares something
+    is dropped, its modules still built by the root above, so the check seals every copied module as before, and a
+    library's refuses the export, naming the file. The module a lock names as its assumptions' is no root, so it is not
+    written: the root above imports the modules under it."""
+    lakefile = 'name = "p"\n[[lean_lib]]\nname = "Lib"\n'
+    files = {
+        "p/lakefile.toml": lakefile,
+        "p/lean-audit.json": json.dumps({"roots": ["Lib", "Lib.Table"], "assumptions_module": "Lib.Assumptions"}),
+        "p/Lib.lean": "module\n\npublic import Lib.Defs\npublic import Lib.Private\n\n@[expose] public section\n",
+        "p/Lib/Defs.lean": "module\n",
+        "p/Lib/Private.lean": "module\n",
+        "p/Lib/Table.lean": "module\n\npublic import Lib.Table.Part\n\nabbrev TAG : String := \"tag/v1\"\n",
+        "p/Lib/Table/Part.lean": "module\n",
+        "p/Lib/Assumptions.lean": "module\n\npublic import Lib.Assumptions.Hash\n\ndef Cut : Prop := True\n",
+        "p/Lib/Assumptions/Hash.lean": "module\n",
+    }
+    tree = _Texts(files)
+    copied = set(files) - {"p/Lib.lean", "p/Lib/Private.lean", "p/Lib/Table.lean", "p/Lib/Assumptions.lean"}
+    assert PE.generated_roots(tree, copied) == {
+        "p/Lib.lean": ("module\n\npublic import Lib.Assumptions.Hash\npublic import Lib.Defs\n"
+                       "public import Lib.Table.Part\n\n/-! The modules under `Lib` that this tree holds. -/\n")}
+    assert PE.spare_roots(tree, copied) == {"p": {"Lib.Table": ["Lib.Table.Part"]}}
+
+    class Has:
+        def has(self, here, kind, name):
+            return True
+
+    new, dropped = PE.rewrite_lock(PE.LEAN_CHECK.text(json.loads(files["p/lean-audit.json"])), "p", Has(),
+                                   spare={"Lib.Table": ["Lib.Table.Part"]})
+    assert json.loads(new)["roots"] == ["Lib"] and dropped == [("roots", "Lib.Table")]
+    assert json.loads(new)["assumptions_module"] == "Lib.Assumptions"
+    wrote = {f: files[f] for f in copied} | PE.generated_roots(tree, copied) | {"p/lean-audit.json": new}
+    assert _unsealed(wrote.get, set(wrote), "p") == []
+    assert _unsealed((wrote | {"p/Lib.lean": "module\n\npublic import Lib.Defs\n"}).get, set(wrote), "p") == [
+        "Lib.Assumptions.Hash", "Lib.Table.Part"], "a root above that didn't import them would leave them unsealed"
+    files["p/Lib.lean"] += "\ndef x := 1\n"
+    with pytest.raises(ValueError, match=r"public_export: p/Lib\.lean: .* more than imports and comments"):
+        PE.generated_roots(_Texts(files), copied)
+
+
 def test_a_module_only_files_the_export_leaves_out_import_is_a_root_of_the_lock_it_writes() -> None:
     """The Lean check seals the modules under a lock's roots and builds only what the roots import, so a copied module
     that only files the export leaves out import would have no build: the export lists it as a root. A module the lock
@@ -723,7 +872,7 @@ def test_the_export_refuses_an_edge_counted_cut_that_its_rewrite_kept(judged, tm
     """The boundary counts a lake `require` or an extra's entry closed only because the export drops it; an export that kept
     one fails rather than ship the edge."""
     root, tree, j = judged
-    monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied: (text, []))
+    monkeypatch.setattr(PE, "rewrite_lakefile", lambda text, here, copied, spare=(): (text, []))
     with pytest.raises(ValueError, match="rewrite kept them: .*lake require priv"):
         PE.export(tree, PE.PB.Boundary.load(root / "boundary.toml"), j, tmp_path_factory.mktemp("export"), {})
 
@@ -882,7 +1031,7 @@ def test_the_export_refuses_a_lock_it_wrote_that_names_what_no_copied_file_has(t
     """The export reads back each lock it wrote: one that still names a declaration or a module no copied file has, or
     carries an owner, fails by name rather than ship."""
     tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
-    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None: (text, []))
+    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None, spare=None: (text, []))
     with pytest.raises(ValueError) as e:
         PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
     said = str(e.value)
@@ -934,6 +1083,91 @@ def test_the_export_drops_a_runner_whose_generator_it_does_not_copy(tmp_path_fac
     assert json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))["runs"] == {
         "Lib.Hidden.Open": lock["runs"]["Lib.Hidden.Open"]}
     assert got["locks"]["lean/lean-audit.json"]["generator_withheld"] == []
+
+
+def _exported(tmp_path_factory):
+    """`_lock()`'s tree exported: (its root, the export, the exported lock's path there)."""
+    root, dest = tmp_path_factory.mktemp("tree"), tmp_path_factory.mktemp("export")
+    PE.export(*_lean(root, _lock()), dest, {})
+    return root, dest, "lean/lean-audit.json"
+
+
+def _update(change, failures: list[tuple[str, str | None]] = (), entries: bool = True):
+    """An exported check's update, as `records` runs one: it writes ``change`` of the lock and reports ``failures``, each
+    a code and the entry it is about."""
+    def run(dest: Path, packages: list[str], out: Path, log: Path) -> dict:
+        assert packages == ["lean"]
+        at = dest / "lean" / "lean-audit.json"
+        lock = json.loads(at.read_text(encoding="utf-8"))
+        change(lock)
+        at.write_text(PE.LEAN_CHECK.text(lock), encoding="utf-8")
+        out.mkdir(parents=True)
+        (out / "audit.json").write_text(json.dumps({"packages": [{
+            "package": str(dest / "lean"), "failures": [f"{code}: {entry}" for code, entry in failures],
+            "failure_codes": [code for code, _ in failures]} | (
+                {"failure_entries": [entry for _, entry in failures]} if entries else {})]}), encoding="utf-8")
+        return {"exit": 1 if failures else 0, "seconds": 0.0, "log": log.name}
+    return run
+
+
+def test_the_exports_own_check_writes_its_records_and_states_nothing_otherwise(tmp_path_factory) -> None:
+    """The exported tree's check writes the records only a build of that tree knows (what a module declares that a
+    guarantee reads), and the lock keeps each guarantee and premise as its source states it. A statement the update
+    finds no guarantee for is listed as unstated, an entry it reports stale goes, and the export is still one commit,
+    holding the locks as written."""
+    root, dest, f = _exported(tmp_path_factory)
+
+    def reads(lock: dict) -> None:
+        lock["reads"]["Lib.Shown"]["definitions"] = {"Lib.Shape": "04"}
+        lock["reads_exempt"] = {"Lib.Inner": "read as it stands", "Lib.Shown": "read as it stands"}
+
+    got = PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f], _update(reads, [
+        ("shape.unstated", "Lib.Guarantees.S"), ("reads.exempt-stale", "Lib.Inner")]))
+    wrote = json.loads((dest / f).read_text(encoding="utf-8"))
+    assert wrote["reads"]["Lib.Shown"]["definitions"] == {"Lib.Shape": "04"}
+    assert wrote["shape"]["frozen"] == {"Lib.Guarantees.S": "unstated: no theorem in this tree proves it"}
+    assert wrote["reads_exempt"] == {"Lib.Shown": "read as it stands"}
+    assert got["unstated"] == {f: ["Lib.Guarantees.S"]} and got["stale"] == {f: {"reads.exempt-stale": ["Lib.Inner"]}}
+    log = subprocess.run(["git", "log", "--format=%H"], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
+    assert log == [got["commit"]]
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=dest, capture_output=True, text=True).stdout == ""
+
+
+def test_the_export_refuses_a_lock_its_check_wrote_that_restates_a_guarantee(tmp_path_factory) -> None:
+    """An update records whatever the build shows, so a guarantee whose statement reads differently on the exported
+    tree would ship restated. One planted difference refuses the export, naming the lock, the guarantee and the field."""
+    root, dest, f = _exported(tmp_path_factory)
+
+    def restate(lock: dict) -> None:
+        lock["guarantees"]["Lib.Rooted"]["type_hash"] = "ff"
+
+    with pytest.raises(ValueError, match=r"1 place\(s\) where a lock the exported tree's check wrote states a guarantee or "
+                                         r"a premise otherwise .*: lean/lean-audit.json: guarantees\[Lib.Rooted\]: its "
+                                         r"record differs in type_hash"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f], _update(restate))
+
+
+def test_the_export_refuses_what_its_records_do_not_settle(tmp_path_factory) -> None:
+    """A failure the update leaves that is neither an unstated statement nor a stale entry is one the exported tree's
+    Lean check would report, so it refuses the export, by lock, code and entry. So does a report the export can't
+    read: none at all, or one without each failure's entry."""
+    root, dest, f = _exported(tmp_path_factory)
+
+    def same(lock: dict) -> None:
+        pass
+
+    with pytest.raises(ValueError, match=r"1 failure\(s\) of the exported tree's Lean check that its records don't "
+                                         r"settle: lean/lean-audit.json: witnesses.missing \(Lib.Rooted\)"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
+                   _update(same, [("shape.unstated", "Lib.Guarantees.S"), ("witnesses.missing", "Lib.Rooted")]))
+    with pytest.raises(ValueError, match="settle: lean/lean-audit.json: build"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f], _update(same, [("build", None)]))
+    with pytest.raises(ValueError, match="without the code and the entry of each"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
+                   _update(same, [("shape.unstated", "Lib.Guarantees.S")], entries=False))
+    with pytest.raises(RuntimeError, match="wrote no .*audit.json"):
+        PE.records(root, dest, tmp_path_factory.mktemp("logs"), [f],
+                   lambda dest, packages, out, log: {"exit": 2, "seconds": 0.0, "log": log.name})
 
 
 def test_a_lakefile_needs_its_packages_lock(tmp_path: Path) -> None:
@@ -1162,12 +1396,24 @@ def test_third_party_pins_are_read_without_fetching(tmp_path: Path) -> None:
 @pytest.mark.slow
 def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> None:
     """This tree's export, in a process of its own: each manifest it rewrites reads as the old one less the entries it
-    drops, or the export fails. A manifest laid out in a way the rewrite doesn't know fails here, not on the export's day."""
+    drops, or the export fails. A manifest laid out in a way the rewrite doesn't know fails here, not on the export's day.
+    Each root file it writes under a tracked file's name replaces a file of imports alone. Where it drops a root of a
+    lock (the identity package's `Identity.Domains`, whose file is the other protocols' table and stays behind), the
+    check still seals every module it copies there: each is reached from a root the written lock keeps, the modules
+    `unreached` lists among them."""
     r = subprocess.run([sys.executable, str(EXPORT), str(tmp_path / "export"), "--report", str(tmp_path / "report.json")],
                        cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert report["rewrites"] and report["lean_targets"]
+    standing = [f for f in report["generated_roots"] if (ROOT / f).is_file()]
+    assert standing, "this tree's export writes root files under tracked files' names; the next line holds each to the rule"
+    assert [f for f in standing if not PE.imports_alone((ROOT / f).read_text(encoding="utf-8"))] == []
+    dest = tmp_path / "export"
+    copied = set(subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True, check=True).stdout.split())
+    assert "Identity.Domains" in report["spare_roots"]["verity/commitments/identity"]
+    for here in report["spare_roots"]:
+        assert _unsealed(lambda f: (dest / f).read_text(encoding="utf-8"), copied, here) == [], here
 
 
 def test_the_build_shares_one_set_of_dependencies_where_pins_agree(tmp_path: Path, monkeypatch) -> None:

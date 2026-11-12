@@ -246,6 +246,41 @@ def test_a_runner_goes_with_a_file_of_its_generator_the_copied_files_lack():
     assert PL.missing(kept, has) == ["runs[Mod.Run].generate: tests/vectors.py"]
 
 
+def test_a_premise_goes_when_only_dropped_guarantees_took_it():
+    """The Lean check fails a premise no listed guarantee takes. A premise the copied files declare, which only a
+    guarantee they lack took, would be one: it goes, from each section that lists it, and is reported as untaken. One a
+    kept guarantee takes stays, and so does one no guarantee of the lock took: that is the lock's own failure."""
+    source = lock()
+    for section, name in (("assumptions", "Lib.A2"), ("domain", "Lib.D2"), ("open", "Lib.O2")):
+        HELD[PL.DECLARATION].add(name)
+        source[section][name] = {"owner": "@lane", "digest": "11"}
+        source["guarantees"]["Lib.Gone.G"]["premises"][section].append(name)
+    source["guarantees"]["Lib.Gone.H"]["assumptions"] = ["Lib.A2"]
+    source["witnesses_assumed"] = {"Lib.A": "a hash", "Lib.A2": "a hash"}
+    HELD[PL.DECLARATION].add("Lib.Idle")
+    source["open"]["Lib.Idle"] = {"owner": "@lane", "digest": "12"}
+    try:
+        out, dropped = PL.public(source, has)
+    finally:
+        HELD[PL.DECLARATION] -= {"Lib.A2", "Lib.D2", "Lib.O2", "Lib.Idle"}
+    assert (set(out["assumptions"]), set(out["domain"]), set(out["open"])) == ({"Lib.A"}, {"Lib.D"}, {"Lib.O", "Lib.Idle"})
+    assert out["witnesses_assumed"] == {"Lib.A": "a hash"}
+    assert {k: v for k, v in dropped.items() if k.startswith(PL.UNTAKEN)} == {
+        "untaken.assumptions": ["Lib.A2"], "untaken.domain": ["Lib.D2"], "untaken.open": ["Lib.O2"],
+        "untaken.witnesses_assumed": ["Lib.A2"]}
+    assert PL.taken(source) - PL.taken(out) >= {"Lib.A2", "Lib.D2", "Lib.O2"} and "Lib.A" in PL.taken(out)
+
+
+def test_a_lock_that_drops_no_guarantee_keeps_every_premise():
+    source = lock()
+    for g in [g for g in source["guarantees"] if "Gone" in g]:
+        del source["guarantees"][g]
+    source["open"]["Lib.O"]["digest"] = "13"
+    source["guarantees"]["Lib.G"]["premises"]["open"] = []
+    out, dropped = PL.public(source, has)
+    assert "Lib.O" in out["open"] and not [k for k in dropped if k.startswith(PL.UNTAKEN)]
+
+
 def test_an_entry_goes_with_a_witness_the_copied_files_lack():
     for path, where in (("witnesses.*.honest", ("witnesses", "Lib.G", "honest")),
                         ("witnesses.*.nontrivial", ("witnesses", "Lib.G", "nontrivial")),
@@ -399,3 +434,67 @@ def test_a_lock_reworded_at_source_has_nothing_to_refuse() -> None:
     assert [(kind, text) for *_, kind, text in PL.leftovers(lock, find)] == [("pr", "#1234"), ("declaration", "Lib.Gone.G")]
     lock["layers"]["Mod"]["why"] = "trusted text, as the guarantee over it reads it"
     assert PL.leftovers(lock, find) == []
+
+
+def test_a_lock_the_check_wrote_anew_states_each_guarantee_as_its_source_does() -> None:
+    """After the Lean check writes the exported lock's records on the exported tree, each guarantee and premise it lists
+    is one the source lock lists, with the same record but for the lane's fields. One planted difference is named with
+    the field that differs; an entry the source lacks is named too; the records of other sections may differ."""
+    source = {"guarantees": {"Lib.G": {"owner": "@lane", "signature": ["Lib.G : S"], "type_hash": "1" * 64,
+                                       "premises": {"open": ["Lib.O"], "reads": []}},
+                             "Lib.Gone.G": {"owner": "@lane", "type_hash": "2" * 64}},
+              "open": {"Lib.O": {"owner": "@lane", "issue": "X-1", "digest": "3" * 64}},
+              "reads": {"Mod.Defs": {"definitions": {"Lib.f": "4" * 64}}}}
+    wrote = {"guarantees": {"Lib.G": {"signature": ["Lib.G : S"], "type_hash": "1" * 64,
+                                      "premises": {"open": ["Lib.O"], "reads": []}}},
+             "open": {"Lib.O": {"digest": "3" * 64}},
+             "reads": {"Mod.Defs": {"definitions": {}}}}
+    assert PL.restated(source, wrote) == []
+    planted = copy.deepcopy(wrote)
+    planted["guarantees"]["Lib.G"]["type_hash"] = "5" * 64
+    assert PL.restated(source, planted) == ["guarantees[Lib.G]: its record differs in type_hash"]
+    planted = copy.deepcopy(wrote)
+    planted["guarantees"]["Lib.G"]["premises"]["open"] = []
+    planted["open"]["Lib.O"]["digest"] = "6" * 64
+    planted["guarantees"]["Lib.New"] = {"type_hash": "7" * 64}
+    assert PL.restated(source, planted) == [
+        "guarantees[Lib.G]: its record differs in premises",
+        "guarantees[Lib.New]: the lock it was exported from doesn't list it",
+        "open[Lib.O]: its record differs in digest"]
+
+
+def test_a_public_statement_whose_theorem_stays_behind_is_listed_as_unstated() -> None:
+    """The entry says what the public tree shows and no more, the Lean check reads its category as `unstated`, and a
+    name `shape.frozen` already holds is no statement the export may list."""
+    lock = {"shape": {"frozen": {"Lib.G": "frozen (hash): why"}, "events": ["Lib.Event"]}}
+    got = PL.unstated(lock, ["Lib.S.Two", "Lib.S.One", "Lib.S.One"])
+    assert got == {"shape": {"frozen": {"Lib.G": "frozen (hash): why", "Lib.S.One": PL.UNSTATED, "Lib.S.Two": PL.UNSTATED},
+                             "events": ["Lib.Event"]}}
+    assert lock == {"shape": {"frozen": {"Lib.G": "frozen (hash): why"}, "events": ["Lib.Event"]}}
+    assert PL.unstated(lock, []) is lock
+    assert PL.unstated({}, ["Lib.S.One"]) == {"shape": {"frozen": {"Lib.S.One": PL.UNSTATED}}}
+    assert _check().category(PL.UNSTATED) == "unstated"
+    assert PL.UNSTATED == "unstated: no theorem in this tree proves it"
+    with pytest.raises(ValueError, match="Lib.G: `shape.frozen` already holds an entry"):
+        PL.unstated(lock, ["Lib.G"])
+
+
+def test_an_entry_the_exported_trees_build_shows_stale_leaves_the_lock():
+    """Which premise a witness takes, which prefix a guarantee reads outside the spec, which exception the trees rule
+    needs and which conjecture a guarantee reads are the build's to say, so the entries the exported check reports stale
+    go then, each from where its code says it is; the others stay, and so does the lock it was given."""
+    lock = {"witnesses_assumed": {"P.H": "a witness takes it", "P.K": "another does"},
+            "reads_exempt": {"Q": "read as it stands"},
+            "trees": {"proofs": ["P.Proofs"], "except": {"P.Proofs.A": "excepted", "P.Proofs.B": "excepted"}},
+            "shape": {"frozen": {"P.g": "frozen: as it is"}, "conjectures": {"P.C": {"status": "open"}}}}
+    was = copy.deepcopy(lock)
+    got = PL.unlisted(lock, [("witnesses.assumed-stale", "P.H"), ("reads.exempt-stale", "Q"),
+                             ("trees.stale-except", "P.Proofs.B"), ("shape.conjecture-unnamed", "P.C")])
+    assert got == {"witnesses_assumed": {"P.K": "another does"}, "reads_exempt": {},
+                   "trees": {"proofs": ["P.Proofs"], "except": {"P.Proofs.A": "excepted"}},
+                   "shape": {"frozen": {"P.g": "frozen: as it is"}, "conjectures": {}}}
+    assert lock == was and PL.unlisted(lock, []) == lock
+    with pytest.raises(ValueError, match=r"trees.except holds no entry 'P.Proofs.C'"):
+        PL.unlisted(lock, [("trees.stale-except", "P.Proofs.C")])
+    with pytest.raises(KeyError):
+        PL.unlisted(lock, [("witnesses.missing", "P.g")])

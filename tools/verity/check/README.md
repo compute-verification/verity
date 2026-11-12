@@ -221,14 +221,21 @@ isn't public, which no public file of its own distribution uses (the export drop
 commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
 (`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. A
 Lean library's root file it doesn't copy, an aggregate importing what isn't public, it writes as the imports of the modules
-below it that it does copy, so the library builds whole, and a module only files it leaves out import it lists as a
-root of the package's lock, so the Lean check builds it. The Lean check itself is public (`check.py` and what a run of
+below it that it does copy, so the library builds whole, and only where the tracked file is imports and comments alone:
+no file it writes stands under the name of a module that declares something (a lock's root that does it drops, a
+library's refuses the export). A
+root whose modules are each a root of their own it drops from the lakefile and the lock too, and a module only files
+it leaves out import it lists as a root of the package's lock, so the Lean check builds it. A lock's premise that only
+guarantees it leaves out took goes with them. The Lean check itself is public (`check.py` and what a run of
 it loads, with its controls' fixtures), and a lock the export ships is one it reads as unowned
 (`tools/verity/lean/README.md`). It
 never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
 the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
-(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
-`uv sync` and the licenses of what they fetched. It publishes nothing.
+(`[[residue]]`); with `--records` (a node's work: `research run`), the exported tree's own Lean check writes its locks'
+records from a build of that tree, the export refuses a lock that then states a guarantee or a premise otherwise than the
+lock it comes from, it lists as unstated a public statement whose theorem it leaves out, drops an entry that build shows
+stale, and refuses on any other failure that check leaves; with `--build` (a node's work too), each Lake package's `lake build`, the workspace's `uv sync` and the licenses of what they fetched. It publishes
+nothing.
 
 ## Settings
 

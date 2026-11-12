@@ -10,6 +10,8 @@ the lock it ships states only what the copied files hold:
   goes with a witness the copied files lack: it would say of the public tree what no file there shows;
 * a runner's entry goes with a file of the command that writes its data (`GENERATORS`) the copied files lack: the public
   tree can't make that data, so the run isn't one it can repeat;
+* a premise's entry goes when the guarantees that took it are all gone (`PREMISES`, `TAKES`): the Lean check fails a
+  premise no listed guarantee takes, and the lock's own records say which those are;
 * a kept entry's record may cite other names (`CITES`: the premises a guarantee takes, a deployed guarantee's gap). Those
   are never dropped: a public statement doesn't rest on what the export leaves out, so a cited name the copied files
   lack refuses the lock (`missing`);
@@ -20,6 +22,11 @@ the lock it ships states only what the copied files hold:
   module's whole, and the sections that name nothing of the repository's Lean (`OPAQUE`). A reason is never reworded
   here: what a kept entry's text still holds that the public tree shouldn't is found (`leftovers`), and the export
   refuses the lock by the entry that holds it (`refusal`) until the lock it comes from is reworded.
+
+A `reads` group's records are of what its module declares in the whole tree, so the exported tree's own check writes them
+anew from its build. That lock is held to the one it comes from (`restated`): each guarantee and premise it lists has the
+source's record. A statement the copied spec holds whose theorem isn't copied is listed by one reason (`unstated`), and an
+entry that build shows to be of nothing in the exported tree goes (`STALE`, `unlisted`).
 
 What the copied files have is the caller's to say, one name at a time: ``has(kind, name)``, for the kinds below. A section
 no rule covers refuses the lock (`unruled`), so a section added to the lock's schema gets its rule here before a lock
@@ -93,6 +100,14 @@ CITES = (
     ("shape.properties.*.rests_on", DECLARATION),
     ("verifier.entries", DECLARATION), ("verifier.stop", DECLARATION), ("verifier.hash", NAMESPACE),
 )
+#: the sections that list premises: an entry of one goes when no kept guarantee takes it and a dropped one did
+PREMISES = ("assumptions", "domain", "open", "witnesses_assumed")
+#: where a guarantee's record lists the premises it takes, as they stand
+TAKES = ("assumptions", "premises.assumptions", "premises.domain", "premises.open")
+#: the rule, in what `public` reports it dropped, of a premise only dropped guarantees took: `UNTAKEN.<section>`
+UNTAKEN = "untaken"
+#: the reason of the entry the export lists a public statement under when its theorem stays behind (`unstated`)
+UNSTATED = "unstated: no theorem in this tree proves it"
 #: the sections that name nothing of the repository's Lean: the schema's version, the allowed axioms, and what the
 #: dependencies hold (their digests, their modules that may name a bypass, the statements watched in them, their
 #: constants the verifier may reach)
@@ -281,10 +296,84 @@ def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
         [f"{where}: a lane field" for where in lane_fields(lock)]
 
 
+def restated(source: dict, public: dict) -> list[str]:
+    """What ``public`` states otherwise than ``source``, the lock it was exported from, once the Lean check has written
+    ``public``'s records anew on the exported tree (`check.py --update`, which settles every difference by recording
+    it): `NAME: why` for each guarantee and each premise (`PREMISES`' sections that hold records) ``public`` lists
+    that ``source`` doesn't, or whose record differs from ``source``'s in anything but `LANE_FIELDS`, naming the fields.
+    A guarantee's record is its statement's digest and what it takes, so a public lock with none of these states each
+    guarantee as the lock it came from does."""
+    def record(value):
+        return {k: v for k, v in value.items() if k not in LANE_FIELDS} if isinstance(value, dict) else value
+
+    out = []
+    for section in ("guarantees", *PREMISES):
+        theirs, ours = source.get(section), public.get(section)
+        for name, mine in sorted(ours.items()) if isinstance(ours, dict) else ():
+            if not isinstance(theirs, dict) or name not in theirs:
+                out.append(f"{section}[{name}]: the lock it was exported from doesn't list it")
+            elif (a := record(theirs[name])) != (b := record(mine)):
+                both = isinstance(a, dict) and isinstance(b, dict)
+                fields = sorted(k for k in {*a, *b} if a.get(k) != b.get(k)) if both else []
+                out.append(f"{section}[{name}]: its record differs" + (f" in {', '.join(fields)}" if fields else ""))
+    return out
+
+
+#: the failures of the Lean check that say a kept entry is of nothing in the exported tree, each with where its entry is
+#: listed. Only a build of that tree shows them (which premise a witness takes, which prefix a guarantee reads outside
+#: the spec, which exception the trees rule still needs, which conjecture a guarantee reads), so no rule of `ENTRIES`
+#: drops these entries
+STALE = {
+    "witnesses.assumed-stale": ("witnesses_assumed",),
+    "reads.exempt-stale": ("reads_exempt",),
+    "trees.stale-except": ("trees", "except"),
+    "shape.conjecture-unnamed": ("shape", "conjectures"),
+}
+
+
+def unlisted(lock: dict, stale: Iterable[tuple[str, str]]) -> dict:
+    """``lock`` less each entry of ``stale``: (code, name), a failure of `STALE` the exported tree's check reports of
+    the entry ``name``. ValueError on an entry the lock doesn't hold where the code says it is."""
+    out = dict(lock)
+    for code, name in stale:
+        *outer, last = STALE[code]
+        at = out
+        for key in outer:
+            at[key] = dict(at.get(key) or {})
+            at = at[key]
+        if not isinstance(held := at.get(last), dict) or name not in held:
+            raise ValueError(f"public_lock: {'.'.join(STALE[code])} holds no entry {name!r}, which a `{code}` failure names")
+        at[last] = {k: v for k, v in held.items() if k != name}
+    return out
+
+
+def unstated(lock: dict, names: Iterable[str]) -> dict:
+    """``lock`` with each of ``names``, a statement of the public spec that no guarantee of the public tree states (the
+    Lean check's `shape.unstated`: its theorem is in a file the export leaves out), listed as one (`shape.frozen`, the
+    category `unstated`, the reason `UNSTATED`). The reason says only what the public tree shows: the public check
+    claims what it replays, so it never says the statement is proved elsewhere."""
+    if not (names := sorted(set(names))):
+        return lock
+    shape = dict(lock.get("shape") or {})
+    frozen = dict(shape.get("frozen") or {})
+    if held := [n for n in names if n in frozen]:
+        raise ValueError(f"public_lock: {', '.join(held)}: `shape.frozen` already holds an entry, so it is no unstated "
+                         f"statement the export may list")
+    return {**lock, "shape": {**shape, "frozen": {**frozen, **{n: UNSTATED for n in names}}}}
+
+
+def taken(lock: dict) -> set[str]:
+    """The premises the guarantees ``lock`` lists take as they stand, by their records (`TAKES`)."""
+    records = lock.get("guarantees")
+    return {n for record in (records.values() if isinstance(records, dict) else ())
+            for path in TAKES for holder, key, _ in _places(record, path.split(".")) for n in _names(holder[key])}
+
+
 def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str, list[str]]]:
     """``lock`` as the export ships it, and {the path of the rule: the names of the entries it dropped}. Each entry named
     after what the copied files lack (``has(kind, name)`` false) is gone (`ENTRIES`), and so is each that lists a
-    witness they lack (`WITNESSES`) or a generator's file they lack (`GENERATORS`); no entry carries `LANE_FIELDS`, and
+    witness they lack (`WITNESSES`) or a generator's file they lack (`GENERATORS`), and each premise that only dropped
+    guarantees took (`PREMISES`, reported under `UNTAKEN`); no entry carries `LANE_FIELDS`, and
     `LANE_SECTIONS` are gone. `ValueError` when a
     section has no rule (`unruled`), or when a kept entry still cites a name the copied files lack (`CITES`)."""
     if bad := unruled(lock):
@@ -311,6 +400,13 @@ def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str,
                 if any(not has(kind, n) for h, k, _ in _places(record, listed.split(".")) for n in _names(h[k])):
                     del holder[key][entry]
                     dropped.setdefault(path, []).append(entry)
+    if untaken := taken(lock) - taken(out):
+        for section in PREMISES:
+            value = out.get(section)
+            if gone := [n for n in _names(value) if n in untaken]:
+                out[section] = ({n: v for n, v in value.items() if n not in untaken} if isinstance(value, dict)
+                                else [n for n in value if n not in untaken])
+                dropped[f"{UNTAKEN}.{section}"] = gone
     for section in OWNED:
         for record in out[section].values() if isinstance(out.get(section), dict) else ():
             if isinstance(record, dict):

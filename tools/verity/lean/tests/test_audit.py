@@ -5516,6 +5516,19 @@ def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
     assert named & set(codes("P.AssumptionsX"))
 
 
+def test_assumptions_module_names_a_module_the_build_has_at_or_under_it():
+    """`assumptions_module` is a prefix wherever the check reads it, so the build needn't hold the named module itself:
+    a tree that holds only modules under it (`P.Home.Hash`) passes. A name with no module at or under it fails, and a
+    module that only shares the name's start (`P.HomeX`) is not under it."""
+    def codes(*modules):
+        f = facts(modules=[*facts()["modules"], *modules])
+        return [x.code for x in A.judge({**POLICY, "assumptions_module": "P.Home"}, f, FILES, update=True)[0]]
+    assert "assumptions.module" not in codes("P.Home")
+    assert "assumptions.module" not in codes("P.Home.Hash")
+    assert "assumptions.module" in codes()
+    assert "assumptions.module" in codes("P.HomeX", "P.HomeX.Hash")
+
+
 def test_assumptions_module_may_list_several_homes():
     """`assumptions_module` may list modules (`security/Properties` lists `Properties.Assumptions` beside the spec's, for an
     assumption stated over the code, which the spec can't import): one declared in any of them is a named assumption, one
@@ -5545,8 +5558,8 @@ def test_assumptions_module_may_list_several_homes():
         one[1] | {"assumptions_module": ["P.Assumptions"]}
     missing = A.judge({**POLICY, "assumptions_module": ["P.Assumptions", "P.Nowhere"]}, facts(), FILES, update=True)[0]
     assert [x for x in missing if x.code == "assumptions.module"] == [
-        "assumptions: `assumptions_module` names 'P.Nowhere', which neither the build nor the packages it requires has a "
-        "module of; name the modules the named assumptions are declared in"]
+        "assumptions: `assumptions_module` names 'P.Nowhere', and neither the build nor the packages it requires has a "
+        "module at or under it; name the modules the named assumptions are declared in or under"]
     for bad in ([], {"P.Assumptions": 1}, ["P.Assumptions", 2]):
         assert "assumptions.module-form" in [x.code for x in A.judge({**POLICY, "assumptions_module": bad}, facts(),
                                                                        FILES, update=True)[0]]

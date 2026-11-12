@@ -1527,10 +1527,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                              "assumptions are declared in, or a list of such modules"))
     built = set(facts["modules"]) | set(facts.get("graph") or {}) | set(facts.get("source_modules") or ())
     for home in assumption_homes(policy):
-        if home not in built:
-            fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, which "
-                                 f"neither the build nor the packages it requires has a module of; name the modules the "
-                                 f"named assumptions are declared in"))
+        if not any(under([home], m) for m in built):
+            fails.append(Failure("assumptions.module", None, f"assumptions: `assumptions_module` names {home!r}, and "
+                                 f"neither the build nor the packages it requires has a module at or under it; name the "
+                                 f"modules the named assumptions are declared in or under"))
     cited = stated_by(policy, facts)
     kept, premised, unfolds, recorded, compared, homes = {}, {}, {}, set(), set(), {}
     listed = listed_premises(policy) | dict.fromkeys(cited)
