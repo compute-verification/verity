@@ -13,6 +13,7 @@ from typing import Any
 from verity_bench import (
     breakdown,
     jobs,
+    lean_verify,
     overhead,
     overhead_records,
     prove_records,
@@ -31,7 +32,7 @@ from verity_bench.vllm.table import render
 
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("spec", help="a spec under benchmarks/specs, or its path")
+    parser.add_argument("spec", help="a spec under benchmarks/harness/specs, or its path")
     parser.add_argument("--local-only", action="store_true",
                         help="find passing runs in this machine's catalog alone, not the store's remote")
 
@@ -233,8 +234,12 @@ def _overhead_parser(commands: Any) -> None:
     run.add_argument("--record", metavar="RUN", help="label RUN a run of record, once it stands as a whole")
     run.set_defaults(run=_overhead_run, command_parser=run)
 
-    table = sub.add_parser("table", help="γ per scheme, point and card from labelled runs of record alone")
-    table.add_argument("--json", action="store_true", help="the rows as JSON (each with of_record and why)")
+    table = sub.add_parser("table", help="γ per scheme, point and card from labelled runs of record alone",
+                           description="γ per scheme, point and card from labelled runs of record alone. "
+                                       f"{overhead.covers()} A row whose run's arm committed no y is noted "
+                                       f"\"{overhead.WITHOUT_Y}\".")
+    table.add_argument("--json", action="store_true",
+                       help="the rows as JSON (each with of_record and why, commits_y and note)")
     table.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     table.set_defaults(run=_overhead_table, command_parser=table)
 
@@ -274,6 +279,11 @@ def _prove_parser(commands: Any) -> None:
                             "planner reads them (benchmarks/spot_figures/breakeven: `--steady FILE`)")
     prove.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     prove.set_defaults(run=_prove, command_parser=prove)
+
+    timed = commands.add_parser("lean-verify", help="the Lean verifier's seconds on one kept proof and the proof's bytes, "
+                                                    "as the record `prove` reads")
+    lean_verify.add_arguments(timed)
+    timed.set_defaults(run=lean_verify.run, command_parser=timed)
 
 
 def _parser() -> argparse.ArgumentParser:

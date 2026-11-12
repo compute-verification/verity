@@ -29,7 +29,7 @@ each file under its path relative to its package (a module's is its name), never
 - `tools/verity/lean/` (the auditor and this file) and `tools/verity/check/common.py`, the helpers it imports, at their paths in the
   repository: not `check.py`, which only launches it, so an edit to `check.py` alone keeps every package's verdict. Nor
   `tools/verity/lean/tests/` (the controls, which the `tools/verity/lean` suite runs), its `*.md`, or the files `NOT_READ` lists
-  (the merge driver, the lean-changed step, the daily publish, ...), which the audit never reads: the scratch tree leaves them
+  (the merge driver, the Lean fast path, the daily publish, ...), which the audit never reads: the scratch tree leaves them
   out too, so a read of one would fail there.
 A `git mv` of a package with its content unchanged is therefore no miss, and its kept pass answers at the new path. What the
 scratch tree can't guard is a package reading beyond its directory by a relative path, which would find other files once it
@@ -253,10 +253,14 @@ FLAGS = ["--build", "--closure"]
 NOT_READ = {
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
-    "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
+    "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
+    "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
+    "public_lock.py": "a lock as the public export ships it, which `tools/verity/check/public_export.py` loads",
     "run_daily.py": "the build cache's daily publish",
+    "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",
+    "trusted_size.py": "the size of a package's trusted text, a command of its own on a records run's facts document",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",

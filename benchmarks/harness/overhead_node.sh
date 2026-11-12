@@ -32,8 +32,6 @@ POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-/works
   bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB
 cp "$(dirname "$POUW_HARNESS_LIB")/build.json" "$O/harness-build.json"
-nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv \
-  -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1 || true
 sub=$1
 shift
 extra=()

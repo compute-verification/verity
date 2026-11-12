@@ -1,6 +1,6 @@
 """`tools/verity/lean/moved.py` on toy trees: where a package path of an earlier layout is after the recorded moves, which
-`setup.sh` asks before it enters a package (the Cloud Agent environment's install command names a path only Daniel can
-change), and a build directory left at a package's former path carried to where the package is. No network, no elan.
+`setup.sh` asks before it enters a package (the Cloud Agent environment's install command names a path the repository
+can't change), and a build directory left at a package's former path carried to where the package is. No network, no elan.
 
 The old names here are the point, so no layout map rewrites this file ([rewrite] exclude)."""
 from __future__ import annotations

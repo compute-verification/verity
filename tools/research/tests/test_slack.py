@@ -330,8 +330,7 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
     assert rc == 0 and (infra["holder"], infra["branch_suffixes"]) == ("bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", ["558b", "9e59"])
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
-    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
-    assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
+    assert "subscribe_linear" not in out and "no Linear subscription on INF" in out           # nearly all are its own writes
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
@@ -2187,6 +2186,17 @@ def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on
     assert "ntn-dummy-not-a-secret" not in out + err
 
 
+def test_page_uploads_a_one_line_display_equation_with_each_dollar_dollar_on_its_own_line(route, notion, fake, registry, tmp_path,
+                                                                                          capsys):
+    """Notion shows `$$ x $$` on one line as its literal text (INF-640); inline math and a block already split stay as written."""
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD.replace("$$\n\\gamma \\le 0.01\n$$", "Inline $`\\delta`$ stays.\n  $$ \\gamma \\le 0.01 $$"))
+    rc, out, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    made = notion.requests[0][2]
+    assert rc == 0 and "Inline $`\\delta`$ stays.\n  $$\n  \\gamma \\le 0.01\n  $$\n## The design" in made["markdown"]
+    assert slack.display_math(PAGE_MD) == PAGE_MD
+
+
 def test_the_reply_callout_sits_above_the_problem_once():
     ours = slack.with_reply(PAGE_MD)
     assert ours.index("**Your reply.**") < ours.index("## The problem") and ours.index("**Question.**") < ours.index("**Your reply.**")
@@ -2760,8 +2770,10 @@ def test_a_succession_opens_the_registry_change_from_main_and_says_how_to_mark_i
 
     git(origin, "update-ref", "refs/heads/main", f"refs/heads/{head}")                    # the change landed
     assert REGISTRY_HANDOVER(ns, "circuits", route) is None and "already names" in capsys.readouterr().out
-    loose = tmp_path / "loose.json"
+    loose = tmp_path / "loose" / "registry.json"
+    loose.parent.mkdir()
     loose.write_text(reg.read_text())
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))                          # never an enclosing checkout
     assert REGISTRY_HANDOVER(argparse.Namespace(dry_run=False, registry=str(loose)), "circuits", route) is None
     assert "open the registry change by hand" in capsys.readouterr().err
 
@@ -4229,6 +4241,31 @@ def test_a_doorbell_quoting_a_cards_decided_mark_does_not_stop_the_decision_ring
     rc, _, err = run(capsys, "ask-daniel", "status", "42")
     assert rc == 0 and "route @top: rang with the decision" in err
     assert [m["text"].startswith("from ask-daniel, card `42` decided") for m in bells(fake, top)] == [False, True]
+
+
+def test_an_announcement_that_asks_for_comments_on_an_issue_is_answered_there_by_each_name_that_commented(
+        fake, registry, routes_dirs, capsys, monkeypatch):
+    """An announcement to several names that names one Linear issue, with no record line, was judged by its Slack thread, so
+    each lead that answered on the issue, as asked, still read as unanswered and was rung.  Each name that commented on the
+    issue has answered; the rest are still owed, and an issue Linear can't read leaves the announcement unchecked."""
+    from research import linear
+    text = "@proofs @comms @infra one comment each on TOP-9 (<https://linear.app/x/issue/TOP-9>) by Wed"
+    post = fake.add(COORD, text=text, username="top", bot_id=BOT, ts=f"{T0:.6f}")
+    by = lambda h: {"botActor": {"userDisplayName": h}, "user": None, "body": "here"}  # noqa: E731
+    issues = {"TOP-9": {"comments": {"nodes": [by("proofs"), by("comms"), by("top")]}}}
+    monkeypatch.setattr(linear, "_http", FakeLinearIssues(issues))
+    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
+    now = f"{T0 + 86400:.0f}"
+    (un,) = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])["unanswered"]
+    assert un["ts"] == post["ts"] and un["to"] == ["infra"]
+    assert (un["record"], un["ref"], un["state"]) == ("linear", "TOP-9", "2 of its 3 names commented there")
+    issues["TOP-9"]["comments"]["nodes"].append(by("infra"))
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    assert not rep["unanswered"] and [x["ts"] for x in rep["answered"]] == [post["ts"]]
+    monkeypatch.delenv("LINEAR_API_KEY")
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    (unread,) = rep["unchecked"]
+    assert not rep["unanswered"] and unread["ts"] == post["ts"] and unread["state"].startswith("unreadable (")
 
 
 def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writes_as_a_person(monkeypatch):

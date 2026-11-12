@@ -18,7 +18,8 @@ A protocol's check (`Core.Protocol`) publishes its amounts under its own keys an
 value beside a protocol, never a field of it: for each amount the protocol publishes (`Account.Amount`) it states
 
 * the part of the registered hardware the amount is about (`Part`: the devices' compute, the memory of some tiers, the
-  read rate of some tiers' memory, a link), whose capacity is a function of the Site (`Part.capacity`), so a row's
+  read rate of some tiers' memory, a link's egress), whose capacity is a function of the Site (`Part.capacity`), so a
+  row's
   capacity is read from the registration and never copied from an answer;
 * the form the amount is published in: its key, its unit, which side of the capacity it bounds (`Side`: the verified
   amount from below, or the free amount from above), a moment or the keys of its span (`Time`), the key of its
@@ -27,12 +28,13 @@ value beside a protocol, never a field of it: for each amount the protocol publi
   answer holds when nothing is certified (`Uncertified`);
 * the terms the error names beside it and does not price (`unpriced`);
 
-and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`).
+and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`), and the
+answers its own rest on (`Account.rests`): those its check read as given and did not verify.
 
 `rows` reads a site, the head of its registration, the protocols' answers and their accounts into the accounting rows.
-An answer counts only when it accepts and names that head. Each amount certified of a registered resource gets a row,
-at each reading of the registration its capacity can be read at: the capacity, the certified amount with its error,
-and the other, which follows.
+An answer counts only when it accepts, names that head, and rests only on accepted answers `rows` is given. Each amount
+certified of a registered resource gets a row, at each reading of the registration its capacity can be read at: the
+capacity, the certified amount with its error, and the other, which follows.
 
 * A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
   their spans (`Steps`), in one series of steps, and the spans share no step: a verified amount is the largest total
@@ -102,7 +104,7 @@ inductive Part where
   | compute
   | memory (tiers : List Tier)
   | read (tiers : List Tier)
-  | link
+  | egress
   deriving DecidableEq, Repr
 
 namespace Part
@@ -121,18 +123,18 @@ def name : Part → String
   | .compute => "compute"
   | .memory ts => "memory/" ++ "+".intercalate (ts.map fun t => t.name)
   | .read ts => "read/" ++ "+".intercalate (ts.map fun t => t.name)
-  | .link => "link"
+  | .egress => "egress"
 
 /-- Every part a site can hold, tier by tier. -/
 def all : List Part :=
-  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .link]
+  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .egress]
 
-/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link. -/
+/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link's egress. -/
 def same : Part → Part → Bool
   | .compute, .compute => true
   | .memory _, .memory _ => true
   | .read _, .read _ => true
-  | .link, .link => true
+  | .egress, .egress => true
   | _, _ => false
 
 /-- The tiers a part names, where it names tiers. -/
@@ -152,14 +154,14 @@ def leaves (p : Part) (S : Site) : List String :=
   | .compute => S.units
   | .memory ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
   | .read ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
-  | .link => (S.boundary none).map (·.id)
+  | .egress => (S.boundary none).map (·.id)
 
 /-- The part's leaves at `place`: all of them when an answer names no place, a link by its id, and otherwise the leaves
 at or under the location. -/
 def leavesAt (p : Part) (S : Site) (place : Option String) : List String :=
   match place, p with
   | none, _ => p.leaves S
-  | some i, .link => (p.leaves S).filter (· == i)
+  | some i, .egress => (p.leaves S).filter (· == i)
   | some i, _ => (p.leaves S).filter fun x => (S.loc? x).any (S.within i (S.locs.length + 1))
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
@@ -188,7 +190,7 @@ def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registr
     let disk : Bool := xs.any fun x => (S.loc? x).any fun (y : Site.Loc) => y.bw.isSome && decide (y.tier = some .disk)
     (((S.readRate digest xs).bind fun n => S.over n ticks).map fun n =>
       (if disk then READ_WITH_DRAM else "registered", n)).toList
-  | .link =>
+  | .egress =>
     let stated : Option (List Nat) :=
       (xs.filterMap fun i => S.links.find? fun (k : Site.Link) => k.id == i).mapM fun (k : Site.Link) => k.β
     ((stated.bind fun bs => S.over bs.sum ticks).map fun n => ("registered", n)).toList
@@ -729,7 +731,7 @@ def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) 
         unaudited S digest A period.ticks cs ++ unregistered S digest
     if S.mediated then all
     else all.map fun r =>
-      if r.part = .link then { r with status := .unmediated, capacity := none, verified := none, free := none } else r
+      if r.part = .egress then { r with status := .unmediated, capacity := none, verified := none, free := none } else r
 
 /-- A row as JSON, under the shared column names: `metric`, `verified`, `capacity`, `free` and `error`, with the part,
 its unit, the place, the premises, the reading, the session, the count of answers, the standing and the terms not
@@ -806,7 +808,7 @@ private def wiped : Account :=
 
 private def sent : Account :=
   { protocol := "toy/sent", head := some (.published "registration_head")
-    amounts := [{ metric := "sent", part := .link, place := some (.profile "link"), key := .published "K",
+    amounts := [{ metric := "sent", part := .egress, place := some (.profile "link"), key := .published "K",
                   unit := bits, side := .free,
                   time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .refused }] }
@@ -1029,7 +1031,7 @@ private def cached : Site :=
   [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
    ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
 #guard ((table [sent] [check 3000 400 "1/1000"]).take 1).map (fun r => (r.toJson.compress)) ==
-  ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"link\"," ++
+  ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"egress\"," ++
    "\"place\":\"up0\",\"premises\":[],\"reading\":\"registered\",\"session\":null,\"sessions\":1," ++
    "\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":37000}"]
@@ -1054,10 +1056,9 @@ private def resting : Account :=
   { sent with protocol := "toy/resting", rests := some ⟨.published "rests", ["toy/ranged"]⟩ }
 
 private def rested (audits : List Answer) : Answer :=
-  accept "toy/resting" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"),
-    ("span_ns", Lean.toJson (400 : Nat)), ("start_ns", Lean.toJson (0 : Nat)),
-    ("rests", Json.arr (audits.filterMap fun b => (nameOf b).map Json.str).toArray)]
-    [("link", .str "up0")]
+  accept "toy/resting" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
+    ("start_ns", Lean.toJson (0 : Nat)),
+    ("rests", Json.arr (audits.filterMap fun b => (nameOf b).map Json.str).toArray)] [("link", .str "up0")]
 
 -- an answer that rests on an audit counts beside it; it counts for nothing without it, beside another audit, beside
 -- the audit refused, or where it lists no names; one that rests on none counts
@@ -1157,7 +1158,7 @@ private def standin : Site :=
   ⟨[sheet], locs, links ++ [{ id := "eth0", ends := ("node0", Site.outside), β := some 400000000000, latency := 0,
                               unmediated := some "no certifier splits it" }]⟩
 private def egress (S : Site) : List Row × List Row :=
-  (rows S digest auditor period [sent] [check 3000 400 "1/1000"]).partition fun r => r.part = .link
+  (rows S digest auditor period [sent] [check 3000 400 "1/1000"]).partition fun r => r.part = .egress
 #guard (egress standin).1.map (fun r => (r.place, r.status, r.capacity, r.verified, r.free)) ==
   [("up0", .unmediated, none, none, none), ("eth0", .unmediated, none, none, none)]
 #guard (egress site).1.map (fun r => (r.place, r.status)) == [("up0", .certified)]
@@ -1165,7 +1166,7 @@ private def egress (S : Site) : List Row × List Row :=
 private def unrated : Site :=
   ⟨[sheet], locs, links ++ [{ id := "eth0", ends := ("node0", Site.outside), β := none, latency := 0,
                               unmediated := some "no certifier splits it" }]⟩
-#guard registered .link unrated == [] ∧ (registered .link standin).length == 1
+#guard registered .egress unrated == [] ∧ (registered .egress standin).length == 1
 #guard (egress unrated).1.map (fun r => (r.place, r.status, r.capacity, r.verified, r.free)) ==
   [("up0", .unmediated, none, none, none), ("eth0", .unmediated, none, none, none)]
 #guard (egress unrated).2.map (fun r => (r.place, r.status, r.free)) ==
@@ -1193,7 +1194,7 @@ private def weekRows (S : Site) (premised : List Premised) : List Row :=
    (["ClockRateWithin(vm0, 5e-4)"], some 60480000000000000, some 59419535120000000, some 1060464880000000)]
 #guard ((weekRows bare onPremise).drop 1).map (fun r => r.toJson.compress) ==
   ["{\"capacity\":60480000000000000,\"error\":\"1/1000\",\"free\":1060464880000000,\"metric\":\"sent\"," ++
-   "\"part\":\"link\",\"place\":\"up0\",\"premises\":[\"ClockRateWithin(vm0, 5e-4)\"]," ++
+   "\"part\":\"egress\",\"place\":\"up0\",\"premises\":[\"ClockRateWithin(vm0, 5e-4)\"]," ++
    "\"reading\":\"registered\",\"session\":null,\"sessions\":1,\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":59419535120000000}"]
 #guard stepsWithin week ⟨1, 1000⟩ tick (some (fig 1 2000)) == 604800000 - 302400
