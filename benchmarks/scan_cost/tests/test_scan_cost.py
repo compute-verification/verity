@@ -349,6 +349,18 @@ def test_a_baseline_has_both_numbers(tmp_path, monkeypatch, capsys):
     assert R.lock(both)["run"] == RUN and R.baseline()["run"] == RUN
 
 
+def test_the_pinned_baseline_is_the_scan_as_it_stands_at_the_benchmarks_identity():
+    """`baseline.json` names a run at what `run.sh` runs with no setting: `w63k4`, every block proved, 21 cores, the
+    Lean verifier on one, a group of 1. A rehearsal's document, or a grouped run's, is not the baseline."""
+    base = R.baseline()
+    assert set(base) == {"schema", "run", "commit", "identity", "group"} and base["group"] == 1
+    assert {k: base["identity"][k] for k in ("class", "sample", "cores", "verifier_cores")} == {
+        "class": "w63k4", "sample": "every unit", "cores": 21, "verifier_cores": 1}
+    assert set(base["identity"]) == set(R.IDENTITY) and R.pinned(base["identity"]["class"], base["group"])
+    run_sh = (HERE.parent / "run.sh").read_text(encoding="utf-8")
+    assert 'N=${SC_CORES:-21}' in run_sh and 'SC_CLASS="${SC_CLASS:-w63k4}"' in run_sh
+
+
 def test_a_document_is_a_file_a_directory_or_a_run(tmp_path, capsys):
     doc = doc_of(tmp_path, "a")
     (tmp_path / "a" / R.DOC).write_text(json.dumps(doc), encoding="utf-8")
