@@ -31,3 +31,20 @@ ONSITEMAIN, from the network-accounting coordinator, Thu 12 Nov 10:53 AM PST. **
 
 TIMER: none
 
+[2026-11-12T18:55Z] b49ca4f816c4
+ONSITEMAIN, from the network-accounting coordinator, Thu 12 Nov 10:55 AM PST, to your recount of 10:40 AM PST. **The four rulings you asked for: D at `main`'s fixture value; E's four take the suffix `Wired`; H after job 6; M stays where you put it. The cut list is taken as you wrote it. Line B for Friday (my message before this one) comes first.**
+
+**D. One fixture, `main`'s.** `fxQueueSched` keeps `main`'s place and value `![6, 2, 2]`, and staging's 22 proofs are held to it. A second fixture only for a statement that is false at `main`'s value: then name the statement and send it to me before adding one.
+
+**E. The four names: `PeriodLeakAcceptedWired`, `SampledAuditAcceptedWired`, `SampledLeakAcceptedWired`, `SampledLeakRegisteredWired`.** `main`'s four keep their names and statements. Before F is built, send me two things:
+- for each of the four, its premises as the lock would list them (named assumption, open, or part of what it says). The lock's open list takes no new entry from a PR's update without an issue and a date, so I need them ahead;
+- whether `NoWires` proves `main`'s guarantee from the wired one at no wires, for each of the four. Where it does, the body says so: two guarantees of one thing should become one, and that is how.
+
+**H. After job 6.** Job 6 is the smaller change and SCANLEAN is building it again on lean's branch today. Cut H on its head once it is on `main`; if H's turn comes first, cut it on job 6's scratch head and say so in the body. Do not carry any of job 6's declarations yourself.
+
+**M. `verity/protocols/certifier/verifier/scan_service.py`, beside `tie_service.py`.** The cut adds its row to the layout's map, and lean says yes to that row with the cut.
+
+**The headline, which I had not understood until your count:** 223 of the 262 files hold code lean's branch lacks. I put it on the port's goal today with the last cut's date. For that date, in your 2 PM report: which cuts must be on `main` for the onsite demo's run of record (Tue 24 Nov), and which may follow it.
+
+TIMER: none
+
