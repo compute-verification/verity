@@ -35,9 +35,10 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``compiled-again``: ``compiled`` in a second server lifetime, which changes nothing: what two starts of one engine
   differ by, the noise floor of a cost (`cost_report`);
 - ``no-prefix-cache``: ``--no-enable-prefix-caching``;
-- ``published``: ``compiled`` started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags
-  and context limit, and vLLM's own cap on the requests it runs at once in place of `BASE_ARGS`'s. What stock vLLM
-  serves under the settings its authors publish, where ``compiled`` is stock under the settings the other arms share;
+- ``published``: ``compiled`` started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags,
+  its speculative decoding among them, the context limit the job names or else the recipe's, and vLLM's own cap on
+  the requests it runs at once in place of `BASE_ARGS`'s. What stock vLLM serves under the settings its authors
+  publish, where ``compiled`` is stock under the settings the other arms share;
 - ``eager``: ``--enforce-eager``, the tax if commits or replay force eager;
 - ``bi-compiled``: ``compiled`` with ``VLLM_BATCH_INVARIANT=1``, vLLM's batch-invariant kernels;
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
@@ -188,8 +189,8 @@ class Arm:
     #: template, the model's (`Model.check`), and its window, the run's; `PRIVATE` as in ``env``
     rows: dict = field(default_factory=dict)
     #: whether the server starts as vLLM's recipe for the model starts it: the model's published flags added
-    #: (`Model.published`), at the recipe's context limit (`published_context`), and the flags of `BASE_ARGS` no recipe
-    #: sets left to vLLM's own defaults (`UNPUBLISHED`)
+    #: (`Model.published`), at the job's context limit or else the recipe's (`published_context`), and the flags of
+    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`)
     published: bool = False
 
 
@@ -212,8 +213,9 @@ ARMS = {
     "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
     "no-prefix-cache": Arm("compiled", "prefix caching off", ("--no-enable-prefix-caching",)),
-    "published": Arm("compiled", "stock vLLM as its recipe for the model starts it: the recipe's flags and context limit, "
-                     "and vLLM's own cap on the requests it runs at once in place of this file's", published=True),
+    "published": Arm("compiled", "stock vLLM as its recipe for the model starts it: the recipe's flags, the job's "
+                     "context limit or else the recipe's, and vLLM's own cap on the requests it runs at once in place "
+                     "of this file's", published=True),
     "eager": Arm("compiled", "stock vLLM, eager", ("--enforce-eager",)),
     "bi-compiled": Arm("compiled", "+ vLLM's batch-invariant kernels", env=BATCH_INVARIANT),
     "bi-eager": Arm("eager", "eager with vLLM's batch-invariant kernels: the committing path's execution (TargetProfile's "
@@ -308,10 +310,11 @@ class Model:
     #: the check template its boundary commitment's replay block is made of, a serving template's descriptor id
     check: str | None = None
     #: what the command of vLLM's recipe for the model (recipes.vllm.ai) adds to ``args``, for the cards this file
-    #: serves the model on, and that command's context limit: the ``published`` arm's server (`Arm.published`). What
-    #: of the recipe the integration's pin can't run is not in it, and the README says what that is
+    #: serves the model on, and the context limit that command is served at where the job names none: the
+    #: ``published`` arm's server (`Arm.published`). What of the recipe the integration's pin can't run is not in it,
+    #: and the README says what that is
     published: tuple[str, ...] = ()
-    published_context: int | None = None
+    published_context: int | str | None = None
 
     def __post_init__(self) -> None:
         unknown = [c for p in self.target_parts for c in p.changes if c not in CHANGES]
@@ -332,6 +335,8 @@ BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", 
 #: the flags of `BASE_ARGS` no recipe of vLLM's sets, which the ``published`` arm leaves to vLLM's own defaults: the
 #: batch cap, so that its server runs as many requests at once as vLLM itself allows on the hardware
 UNPUBLISHED = ("--max-num-seqs",)
+#: vLLM's word for the longest context limit the cards' KV cache holds, which the engine resolves when it starts
+AUTO = "auto"
 #: what makes vLLM write a request's or a response's text to the server's log, which a run publishes: the flags no arm
 #: or model may carry, and the variable a server's environment never keeps
 LOGS_TEXT_ARGS = ("--enable-log-requests", "--enable-log-outputs")
@@ -356,11 +361,16 @@ MODELS = {
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on")),
                    metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
-                   # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm: its command for one node of eight H200s,
-                   # the FP8 checkpoint, tensor parallel, without speculative decoding, which the recipe has opt-in
-                   published=("--kv-cache-dtype", "fp8", "--tool-call-parser", "glm47", "--enable-auto-tool-choice",
-                              "--reasoning-parser", "glm47"),
-                   published_context=262144),
+                   # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
+                   # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
+                   # own draft layer. The tokenizer mode is the recipe's for a build without its Rust front end. The
+                   # command names no context limit and the model's own does not fit these cards' KV cache, so the
+                   # limit is the longest that does (`AUTO`); the recipe's command builder caps these cards at
+                   # 262,144, which a job that wants it names
+                   published=("--tokenizer-mode", "auto", "--kv-cache-dtype", "fp8", "--speculative-config.method", "mtp",
+                              "--speculative-config.num_speculative_tokens", "5", "--tool-call-parser", "glm47",
+                              "--reasoning-parser", "glm47", "--enable-auto-tool-choice"),
+                   published_context=AUTO),
 }
 
 
@@ -444,7 +454,12 @@ def _private(x: object, private: Path | None) -> object:
     return [_private(v, private) for v in x] if isinstance(x, (list, tuple)) else x
 
 
-def base_args(max_model_len: int | None = None, without: Sequence[str] = ()) -> tuple[str, ...]:
+def context_arg(text: str) -> int | str:
+    """``--max-model-len``: a number of tokens, or `AUTO`."""
+    return AUTO if text == AUTO else int(text)
+
+
+def base_args(max_model_len: int | str | None = None, without: Sequence[str] = ()) -> tuple[str, ...]:
     """`BASE_ARGS`, with the context limit ``max_model_len`` where one is given (a plan with longer prompts), less the
     flags ``without``, each with its value."""
     args = list(BASE_ARGS)
@@ -456,23 +471,21 @@ def base_args(max_model_len: int | None = None, without: Sequence[str] = ()) -> 
     return tuple(args)
 
 
-def published_context(arm: str, model_id: str | None, given: int | None) -> int:
+def published_context(arm: str, model_id: str | None, given: int | str | None) -> int | str:
     """The context limit of an arm that starts the server as vLLM's recipe for the model does (`Arm.published`): the
-    recipe's (`Model.published_context`). Refused for a model whose recipe this file doesn't hold, and under a
-    ``--max-model-len`` that isn't the recipe's, since the arm's server would then be neither."""
+    job's (``--max-model-len``, the same for every arm of the job, so that its arms differ by their flags alone), and
+    where the job names none the recipe's (`Model.published_context`) in place of `BASE_ARGS`'s. Refused for a model
+    whose recipe this file doesn't hold."""
     model = MODELS.get(model_id or "")
     if model is None or not model.published or model.published_context is None:
         held = ", ".join(n for n, m in MODELS.items() if m.published)
         raise SystemExit(f"arm {arm} starts the server as vLLM's recipe for the model does, and this file holds no recipe "
                          f"for {model_id or 'no model'} (Model.published; it holds {held}'s)")
-    if given is not None and given != model.published_context:
-        raise SystemExit(f"arm {arm}: the recipe's context limit is {model.published_context}, not --max-model-len "
-                         f"{given}: MAX_MODEL_LEN={model.published_context}, for every arm of the job, or none")
-    return model.published_context
+    return model.published_context if given is None else given
 
 
 def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
-                max_model_len: int | None = None) -> list[str]:
+                max_model_len: int | str | None = None) -> list[str]:
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     return [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args,
@@ -1048,9 +1061,13 @@ def parse_pass_prompts(text: str | None, loads: dict[str, tuple[int, ...]]) -> d
     return out
 
 
-def context_of(loads: dict[str, tuple[int, ...]], given: int | None) -> int | None:
+def context_of(loads: dict[str, tuple[int, ...]], given: int | str | None) -> int | str | None:
     """The engines' context limit for vLLM's client's ``loads``: ``given`` (``--max-model-len``), refused where a
-    load's requests don't fit it; where none is given, `BASE_ARGS`'s (None), or the largest a load needs past it."""
+    load's requests don't fit it; where none is given, `BASE_ARGS`'s (None), or the largest a load needs past it.
+    `AUTO` is the engine's to resolve when it starts, so no load is checked against it: a request past the limit it
+    resolves to is one the server refuses, and the pass counts it as failed."""
+    if given == AUTO:
+        return AUTO
     name = max(loads, key=lambda n: LOADS[n].context)
     need = LOADS[name].context
     if given is not None and given < need:
@@ -2592,7 +2609,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
-    r.add_argument("--max-model-len", type=int, help="the engines' context limit (default: BASE_ARGS's)")
+    r.add_argument("--max-model-len", type=context_arg, help="the engines' context limit, a number of tokens or auto "
+                   "(default: BASE_ARGS's)")
     r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")
     r.add_argument("--edges-every-s", type=float, metavar="S", help="an edge each S seconds of each load's serving instead")
     r.add_argument("--save-kv", metavar="K,...", help="the edges whose KV bytes and state a restore arm keeps "
@@ -2624,7 +2642,7 @@ def main(argv: list[str] | None = None) -> int:
     ps.add_argument("--arms", default="", help="the arms that will serve them, each checked against --model-id")
     ps.add_argument("--model-id", choices=sorted(MODELS))
     ps.add_argument("--boundary-rows", type=json.loads, metavar="JSON")
-    ps.add_argument("--max-model-len", type=int)
+    ps.add_argument("--max-model-len", type=context_arg)
     ds = sub.add_parser("dataset", help="a load's pinned dataset file on this node, its SHA-512 checked: its path")
     ds.add_argument("load", choices=sorted(n for n, x in LOADS.items() if x.file))
     ds.add_argument("--fetch", action="store_true", help="download it where the node's cache doesn't hold it")

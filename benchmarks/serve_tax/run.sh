@@ -46,7 +46,8 @@
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
 # as it is (the replay ladder's production plan: each request's own sampling, stopping at its end of text), copied to
-# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
+# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
+# cards' KV cache holds). FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the

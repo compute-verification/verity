@@ -441,21 +441,33 @@ def test_max_model_len_replaces_the_base_context_limit():
 
 
 def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
-    """The arm's line is stock's at the recipe's context limit with the recipe's flags added and the runner's cap on
-    the requests at once dropped, and nothing else; a model with no recipe here and a context limit that isn't the
-    recipe's are refused, since the server would then not be the recipe's."""
+    """The arm's line is stock's with the recipe's flags added and the runner's cap on the requests at once dropped,
+    and nothing else, at the job's context limit, and at the recipe's, not the runner's, where the job names none; a
+    model with no recipe here is refused."""
     glm = S.MODELS["glm53"]
     context = S.published_context("published", "glm53", None)
-    assert context == glm.published_context == S.published_context("published", "glm53", 262144) == 262144
+    assert context == glm.published_context == S.AUTO == "auto"
+    assert [S.published_context("published", "glm53", n) for n in (131072, 262144, "auto")] == [131072, 262144, "auto"]
     stock = S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context)
     argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
     cap = stock.index("--max-num-seqs")
     at = stock.index("--max-model-len")
     assert argv == [*stock[:at], *glm.published, *stock[at:cap], *stock[cap + 2:]]
-    assert argv[argv.index("--kv-cache-dtype") + 1] == "fp8" and argv[argv.index("--max-model-len") + 1] == "262144"
+    assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "auto"
+    # the recipe's command for the cards, flag for flag, with the front end's fallback for a build without it
+    for flag, value in (("--served-model-name", "glm-5.3"), ("--tensor-parallel-size", "8"), ("--tokenizer-mode", "auto"),
+                        ("--kv-cache-dtype", "fp8"), ("--speculative-config.method", "mtp"),
+                        ("--speculative-config.num_speculative_tokens", "5"), ("--tool-call-parser", "glm47"),
+                        ("--reasoning-parser", "glm47")):
+        assert argv.count(flag) == 1 and argv[argv.index(flag) + 1] == value, flag
+    assert "--enable-auto-tool-choice" in argv and "--max-num-seqs" not in argv
     assert S.base_args(without=S.UNPUBLISHED) == ("--max-model-len", "4096", "--seed", "0", "--disable-uvicorn-access-log")
-    with pytest.raises(SystemExit, match="MAX_MODEL_LEN=262144, for every arm of the job"):
-        S.published_context("published", "glm53", 131072)
+    # auto is the engine's to resolve: no load is checked against it, and a number still is
+    assert S.context_of({"long": (1,)}, "auto") == "auto" and S.context_arg("auto") == "auto" and S.context_arg("4096") == 4096
+    with pytest.raises(ValueError):
+        S.context_arg("automatic")
+    with pytest.raises(SystemExit, match="need a context of 16384"):
+        S.context_of({"long": (1,)}, 4096)
     for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
         with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
             S.published_context("published", model_id, None)
@@ -1006,13 +1018,16 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
                       (["passes", "--loads", "chat", "--arms", "two-stage", "--model-id", "moonlight"], "check template"),
                       (["passes", "--loads", "long", "--max-model-len", "4096"], "need a context of 16384"),
                       (["passes", "--loads", "chat", "--arms", "published", "--model-id", "moonlight"], "no recipe for"),
-                      (["passes", "--loads", "chat", "--arms", "compiled published", "--model-id", "glm53",
-                        "--max-model-len", "131072"], "MAX_MODEL_LEN=262144"),
+                      (["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
+                        "--max-model-len", "4096"], "need a context of 16384"),
                       (["dataset", "long"], None)):                # a load that reads no file is no choice of `dataset`
         with pytest.raises(SystemExit, match=why):
             S.main(argv)
-    assert S.main(["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
-                   "--max-model-len", "262144"]) == 0
+    # the published arm is served at the job's context limit, a number or vLLM's auto, like the arms beside it
+    for limit in ("131072", "262144", "auto"):
+        assert S.main(["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
+                       "--max-model-len", limit]) == 0
+    assert S.main(["passes", "--loads", "long", "--arms", "published", "--model-id", "glm53"]) == 0
     # a model with no check template of its own takes the job's object
     assert S.main(["passes", "--loads", "long", "--arms", "two-stage", "--model-id", "moonlight", "--boundary-rows",
                    '{"check": "t"}']) == 0
