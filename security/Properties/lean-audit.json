@@ -23683,7 +23683,7 @@
    }
   },
   "Spot.ChallengerTrees": {
-   "digest": "0a260660f3be4b3de4e6d354e63f97f0fe1ab8e323a39a051478479c3f7f2348",
+   "digest": "0572ae618a811897d220535b01bea12a785bdc9b3279cf612e7e4303c47fd671",
    "definitions": {
     "Spot.Challenger.CLOSING_ROUND": "d5b52ed5bbc911171fcde44965fc16d98f0e7745a9c511556b7187fea8a147f4",
     "Spot.Challenger.EXTRA_OPENING": "cd951e71f0cc22850ce69d91662de65f1c56936351b021115fff7c346dec9c71",
@@ -23700,7 +23700,7 @@
     "Spot.Challenger.LoggedTree.unclosed": "eb73982809e8ddc839e7f8fcde543b085621db1142149e29fd6a902ac2cd9311",
     "Spot.Challenger.MAX_BLOCK": "f8af3c3895ba3d97f3d8d7ef7171e821bcf1583e78f2630e6a9520f28bec5bc2",
     "Spot.Challenger.MAX_ROUNDS_LOG": "132b7629b57a9021e35161236ef1d792ab512333973fdefc9f4eb6be949c5745",
-    "Spot.Challenger.MEMBERS_ORDER": "8e64ae527911dd47999be7b23e927add285116112000cc7aeeaad6a7417ad396",
+    "Spot.Challenger.MEMBERS_ORDER": "b06255091edb1e0bcc5e01278d1a36877c2bae51b8b99017472478db16b7c0c8",
     "Spot.Challenger.NO_CLOSING": "2591a2cfcd87c1e0d79fec9d163cfb665afef00d3cda12326866f7336119474a",
     "Spot.Challenger.NO_TREE": "7255d7516ed5c96e7001f77f31376513ea66b2b0aca4027946f7cf86b71cb7ef",
     "Spot.Challenger.SAMPLE_LINK_FIRST": "a24e542c80ecc13e2656298c6d51e7d5ec9f397cf2ce3455c37f4216fe324dd8",
@@ -23720,12 +23720,12 @@
     "Spot.Challenger.isTreeSpec": "107fd3490f5bf5164b915022ad0e64c5d834d8d8822258ec366adc7e560006c8",
     "Spot.Challenger.linkAfter": "74a75218c14ae6825b9abf4ae9922519a42130e441e97c1cce07656821e891b6",
     "Spot.Challenger.linkLine": "90058f6303632702407698258bd46ed7d60d61f724b5d15547b9f1d822e2a0d3",
+    "Spot.Challenger.memberLine": "c2def3da6eac90603afb9e36af07e8a1619aa8a18acd15fa97cf007f18a0079c",
     "Spot.Challenger.memberTreeReason": "913d804f3b9d8fab35888303b0d73ff1860014d942196653b05b2eb1d32f935c",
     "Spot.Challenger.membersOrder": "aab66d6cfbbf8d1e05cc13978050c4ce41cb211a53e0910b6efa61a77d043d9b",
-    "Spot.Challenger.membersOrderFrom": "b00cfa90e874e4263f85fe63620f74826728449b131c4fe9c20d255812626e87",
+    "Spot.Challenger.membersOrderFrom": "bf878dfd6f99a0d70025b728973ad5857205c966c4db056e556eddd9eea82043",
     "Spot.Challenger.membersTreeReason": "9691620a9f6f8eb143c56965a70d82952fb1de574ce39111c0e507c870ded339",
     "Spot.Challenger.openLine": "10d5506b59e78a1e55ebda6a29084121f5d8774e4b029274549ee5494e8a64e3",
-    "Spot.Challenger.openOf": "1b93fda303c6ce570c0f56e510ff3103de5770f27f835ea12e42a1586a70b345",
     "Spot.Challenger.recordCoins?": "45d893b6fd89398751bef88830c3ad2766cd90e98a919c0ad530f6c583294443",
     "Spot.Challenger.recordRounds": "3fdab6d45c651f7fa6b136bf0d13d9ad22e90a7ab0c4888d87c643082d86ef50",
     "Spot.Challenger.rootOf": "843b620dad8764df8cae699f487278b1fa1ffcf1c45069c4d5dc15e67bdfc167",
