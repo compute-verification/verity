@@ -555,8 +555,6 @@
     {"file": "tests/protocols/test_rt4_h1_challenger.py", "kind": "ISC004", "symbol": "test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_credits_only_if_complete", "detail": "Unparenthesized implicit string concatenation in collection", "count": 4},
     {"file": "tests/protocols/test_rt4_h1_challenger.py", "kind": "ISC004", "symbol": "test_infras_v2_head_and_sessions_bind_under_the_gates_key", "detail": "Unparenthesized implicit string concatenation in collection", "count": 4},
     {"file": "tests/protocols/test_rt4_h1_challenger.py", "kind": "ISC004", "symbol": "test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules", "detail": "Unparenthesized implicit string concatenation in collection"},
-    {"file": "tests/query/test_boolean_manifest.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/query/test_boolean_manifest.py", "kind": "I001", "symbol": "test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "E741", "symbol": "check_used_against_liveness", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "E741", "symbol": "test_partial_member_reads_of_nested_parameters", "detail": "Ambiguous variable name: `l`", "count": 2},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "E741", "symbol": "test_two_dimensional_strided_member_reads", "detail": "Ambiguous variable name: `l`"},
@@ -771,7 +769,6 @@
     {"file": "verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ln_patterns.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ln_patterns.py", "kind": "SIM300", "symbol": "RotaryEmbeddingPartial.match", "detail": "Yoda condition detected"},
-    {"file": "verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py", "kind": "E741", "symbol": "MoEMarlinSharedExperts._routed", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py", "kind": "SIM300", "symbol": "MoEMarlinSharedExperts._routed", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "B023", "symbol": "MoEFusedExperts.match", "detail": "Function definition does not bind loop variable `keep`"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "E741", "symbol": "MoEFusedExperts.match", "detail": "Ambiguous variable name: `I`"},
@@ -1265,9 +1262,6 @@
     {"file": "verity_vllm/program/predict/batch.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/batch.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Mapping`"},
     {"file": "verity_vllm/program/predict/block_counts.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/program/predict/build.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"},
-    {"file": "verity_vllm/program/predict/build.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/program/predict/build.py", "kind": "I001", "symbol": "_Specs.moe", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/cli.py", "kind": "T201", "symbol": "node_main", "detail": "`print` found"},
     {"file": "verity_vllm/program/predict/common.py", "kind": "I001", "symbol": "_Launch.keys", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/common.py", "kind": "I001", "symbol": "with_checks", "detail": "Import block is un-sorted or un-formatted"},
@@ -1358,6 +1352,7 @@
     {"file": "verity_vllm/settings.py", "kind": "SIM905", "symbol": "<module>", "detail": "Consider using a list literal instead of `str.split`", "count": 2},
     {"file": "verity_vllm/target_family.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"}
+    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
+    {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"}
   ]
 }
