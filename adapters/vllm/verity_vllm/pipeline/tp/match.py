@@ -38,10 +38,13 @@ from verity_vllm import settings
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.errors import Refused
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
 
 __all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 
 def _first_step(tok: dict, request_id: str) -> int:
@@ -148,7 +151,7 @@ def _check_main(args) -> int:
     res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
     res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
     _write(run, res)
-    print(json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
+    logger.info("%s", json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
     return 0 if res["pass"] else 1
 
 

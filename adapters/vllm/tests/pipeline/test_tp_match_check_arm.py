@@ -1,8 +1,8 @@
 """`verity_vllm.pipeline.tp.match`'s check arm where its other tests do not go: the tokens part against a control arm, a recorder
 file that is missing, a rank Build of another rank or world, with a link that names the wrong number of peers or with no links
 at all, a capture that names no first forward for a request, a step whose collectives are not the Build's signature, stored
-tensors that the recorder's rows do not count or key, and a command line that does not give two rank Builds in one spelling.
-Then the Match record a TP Commit reads from the run (`match_record`)."""
+tensors that the recorder's rows do not count or key, a command line that does not give two rank Builds in one spelling, and
+what the check says in its log.  Then the Match record a TP Commit reads from the run (`match_record`)."""
 from __future__ import annotations
 
 import hashlib
@@ -82,6 +82,21 @@ def test_a_control_arm_that_generated_other_tokens_fails_the_check_alone(tmp_pat
     rc, doc = _check(_capture(tmp_path / "run", control=[7, 9]))
     assert doc["tokens"]["pass"] is False and doc["structure"]["pass"] is True and doc["provenance"]["pass"] is True
     assert rc == 1 and doc["pass"] is False
+
+
+@pytest.mark.parametrize("control, verdict", [(GENERATED, True), ([7, 9], False), (None, True)], ids=["equal tokens", "other tokens", "no control"])
+def test_the_check_says_its_verdict_and_its_three_parts_in_the_log_and_writes_nothing_to_stdout(tmp_path, caplog, capsys, control, verdict):
+    rc, doc = _check(_capture(tmp_path / "run", control=control))
+    said = json.dumps({k: doc[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1)
+    assert caplog.messages == [said] and len(said) < 6000 and doc["pass"] is verdict and rc == (0 if verdict else 1)
+    assert capsys.readouterr().out == ""
+
+
+def test_what_the_check_says_in_the_log_ends_at_6000_characters(tmp_path, caplog, monkeypatch):
+    monkeypatch.setattr(M, "_tokens", lambda control, tok: {"pass": True, "note": "n" * 7000})
+    rc, doc = _check(_capture(tmp_path / "run"))
+    (said,) = caplog.messages
+    assert said == json.dumps({k: doc[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1)[:6000] and len(said) == 6000
 
 
 def test_without_a_control_arm_the_tokens_part_is_not_judged(tmp_path):
