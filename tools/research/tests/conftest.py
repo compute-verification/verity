@@ -66,6 +66,10 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
     # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
     monkeypatch.setattr("research.auto._reach", _unreachable)
+    # ... nor is a pod's address or RunPod's call log kept in the developer's state directory (pods/runpod.py), nor a TCP
+    # connection tried to an address a test made up: a kept address takes a connection only where a test says so
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("state")))
+    monkeypatch.setattr("research.pods.runpod.answers", lambda host, port, timeout=0.0: False)
 
 
 def _unreachable(name: str) -> list[str]:

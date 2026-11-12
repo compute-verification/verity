@@ -3,8 +3,19 @@
 GraphQL calls the budgets guard and `research notes` make. Nebius runs every node (`pods/nebius/`).
 
 Reads the API key from ``~/.runpod/config.toml`` and never prints it.  Talks to
-the REST API (``https://rest.runpod.io/v1``); the GraphQL endpoint is used only
-for the account balance.
+the REST API (``https://rest.runpod.io/v1``).  RunPod counts the account's REST
+calls and its GraphQL calls apart, each by the minute, the hour and the UTC day,
+and answers 429 past a count.  So the two reads, one pod (``get``) and every pod
+(``pods``), ask GraphQL when REST gives no answer, and hand back REST's shape
+with the fields ``_as_rest`` lists; the balance is GraphQL's alone.
+
+Every call that reaches RunPod is one line of ``api-calls.log`` under
+``$XDG_STATE_HOME/research/runpod/`` (default ``~/.local/state``): the time, the
+API, the call, the status, the counts RunPod says are left, and who called.
+The address ``research`` last read for a pod is kept there too
+(``address-<pod id>.json``), so a call that names the pod asks RunPod again only
+when that address is over ``ADDRESS_TTL_S`` old (``$RESEARCH_POD_ADDRESS_TTL_S``;
+0 asks every time) or no longer takes a connection (``remote.pod_target``).
 
 Where the laptop files are absent (a cloud VM with only the Cursor secrets) the
 environment stands in, and a file that exists always wins:
@@ -32,14 +43,17 @@ import binascii
 import hashlib
 import json
 import os
+import re
+import socket
 import subprocess
+import sys
 import threading
 import time
 import tomllib
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 REST = "https://rest.runpod.io/v1"
 CONFIG = Path.home() / ".runpod" / "config.toml"
@@ -47,6 +61,16 @@ SSH_KEY = Path.home() / ".runpod" / "ssh" / "runpodctl-ssh-key"
 KNOWN_HOSTS = Path.home() / ".runpod" / "ssh" / "veritor-campaign-known_hosts"
 GRAPHQL = "https://api.runpod.io/graphql"
 DEFAULT_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
+CALL_LOG = "api-calls.log"
+CALL_LOG_MAX = 4 << 20              # bytes; past it the log becomes `api-calls.log.1` (one older file is kept) and a new one starts
+ADDRESS_TTL_S = 3600.0              # how long a pod's kept address is used before RunPod is asked again
+ADDRESS_TTL_ENV = "RESEARCH_POD_ADDRESS_TTL_S"
+ADDRESS_KEYS = ("host", "port", "user", "pod_name", "cost_per_hr", "rate_observed_utc", "gpu")    # a runpod machine's target
+ANSWERS_TIMEOUT_S = 5.0
+#: what the GraphQL reads ask of a pod: the fields `_as_rest` turns into REST's
+POD_FIELDS = ("id name desiredStatus costPerHr createdAt machineId machine { gpuTypeId } "
+              "runtime { ports { ip isIpPublic privatePort publicPort type } }")
+clock = time.time
 
 
 class PodError(RuntimeError):
@@ -153,11 +177,14 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
     try:
         with urllib.request.urlopen(request, timeout=120) as response:
             raw = response.read()
+            _note_call("rest", method, path, getattr(response, "status", None), getattr(response, "headers", None))
     except urllib.error.HTTPError as error:
+        _note_call("rest", method, path, error.code, error.headers)
         detail = error.read()[:500].decode(errors="replace")
         what = "not found (terminated, or never existed)" if error.code == 404 else detail
         raise PodError(f"{method} {path} -> HTTP {error.code}: {what}", code=error.code, pod_id=pod_id) from None
     except (urllib.error.URLError, TimeoutError, OSError) as error:
+        _note_call("rest", method, path, None, None)
         raise PodError(f"{method} {path}: {type(error).__name__}: {getattr(error, 'reason', None) or error}", pod_id=pod_id) from None
     return json.loads(raw) if raw else None
 
@@ -172,8 +199,178 @@ def _graphql(query: str) -> Any:
             "User-Agent": "veritor-campaign/0.1",
         },
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return json.load(response)
+    what = ".".join(re.findall(r"[A-Za-z_]\w*", query)[:2]) or "?"       # `myself.pods`, `myself.clientBalance`, `pod.input`
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            raw = response.read()
+            _note_call("graphql", "POST", what, getattr(response, "status", None), getattr(response, "headers", None))
+    except urllib.error.HTTPError as error:
+        _note_call("graphql", "POST", what, error.code, error.headers)
+        raise
+    except (urllib.error.URLError, TimeoutError, OSError):
+        _note_call("graphql", "POST", what, None, None)
+        raise
+    return json.loads(raw)
+
+
+def _caller() -> str:
+    """Who made a call, by the first words of the command line: `research,pods,ssh`, `research,run`."""
+    argv = list(sys.argv) or ["?"]
+    head = Path(argv[0])
+    words = [head.parent.name if head.name == "__main__.py" else head.name]
+    for arg in argv[1:3]:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,23}", arg):
+            break
+        words.append(arg)
+    return ",".join(words) or "?"
+
+
+def _note_call(api: str, method: str, what: str, status: int | None, headers: Any) -> None:
+    """One line of the call log (module docstring) for a call sent to RunPod: `status` is its HTTP status, `none` when no answer
+    came, and the counts left are read from the answer's headers.  Best effort: nothing here, a full disk included, may fail the
+    call it records, which the budgets guard makes every poll."""
+    try:
+        get = headers.get if headers is not None else (lambda _name: None)
+        left = dict(re.findall(r'"(minute|hour|day)";r=(\d+)', str(get("ratelimit") or "")))    # REST: `"day";r=5129;t=78111, ...`
+        for window in ("minute", "hour", "day"):                                                  # GraphQL: one header a window
+            if window not in left and re.fullmatch(r"\d+", str(get(f"x-ratelimit-remaining-{window}") or "")):
+                left[window] = str(get(f"x-ratelimit-remaining-{window}"))
+        agent = os.environ.get("RESEARCH_AGENT") or os.environ.get("CURSOR_CONVERSATION_ID") or ""
+        line = " ".join([time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock())), api, method, what,
+                         str(status) if status is not None else "none",
+                         *(f"{window}={left[window]}" for window in ("day", "hour", "minute") if window in left),
+                         f"by={_caller()}", f"pid={os.getpid()}",
+                         *([f"agent={agent}"] if re.fullmatch(r"[A-Za-z0-9_.:@/-]{1,80}", agent) else [])])
+        path = _env_dir() / CALL_LOG
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            if path.stat().st_size > CALL_LOG_MAX:
+                os.replace(path, path.with_name(f"{CALL_LOG}.1"))
+        except FileNotFoundError:
+            pass
+        with path.open("a") as log:
+            log.write(line + "\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _graphql_data(query: str, pod_id: str | None = None) -> dict[str, Any]:
+    """`data` of a GraphQL query; any failure (no answer, an HTTP error, `errors` in the answer) is a `PodError`."""
+    try:
+        doc = _graphql(query)
+    except urllib.error.HTTPError as error:
+        detail = error.read()[:300].decode(errors="replace")
+        raise PodError(f"GraphQL -> HTTP {error.code}: {detail}", code=error.code, pod_id=pod_id) from None
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
+        raise PodError(f"GraphQL: {type(error).__name__}: {getattr(error, 'reason', None) or error}", pod_id=pod_id) from None
+    if not isinstance(doc, dict) or doc.get("errors") or not isinstance(doc.get("data"), dict):
+        errors = doc.get("errors") if isinstance(doc, dict) else doc
+        raise PodError(f"GraphQL: {json.dumps(errors)[:300]}", pod_id=pod_id)
+    return doc["data"]
+
+
+def _as_rest(pod: dict[str, Any]) -> dict[str, Any]:
+    """A GraphQL pod (`POD_FIELDS`) as REST gives one, with the fields `research` reads: id, name, desiredStatus, costPerHr,
+    createdAt, machineId, machine.gpuTypeId, and publicIp and portMappings from its public TCP ports."""
+    ports = [p for p in ((pod.get("runtime") or {}).get("ports") or []) if p.get("isIpPublic") and p.get("type") == "tcp"]
+    ssh = [p for p in ports if p.get("privatePort") == 22] or ports
+    return {**{k: pod.get(k) for k in ("id", "name", "desiredStatus", "costPerHr", "createdAt", "machineId")},
+            "machine": pod.get("machine") or {}, "publicIp": (ssh[0].get("ip") if ssh else None) or "",
+            "portMappings": {str(p["privatePort"]): p["publicPort"] for p in ports if p.get("privatePort") and p.get("publicPort")}}
+
+
+def _graphql_pod(pod_id: str) -> dict[str, Any]:
+    if not re.fullmatch(r"[A-Za-z0-9]{1,64}", pod_id or ""):
+        raise PodError(f"GraphQL: {pod_id!r} is not a pod id", pod_id=pod_id)
+    pod = _graphql_data(f'{{ pod(input: {{podId: "{pod_id}"}}) {{ {POD_FIELDS} }} }}', pod_id).get("pod")
+    if not pod:
+        raise PodError(f"GraphQL pod {pod_id}: not found (terminated, or never existed)", code=404, pod_id=pod_id)
+    return _as_rest(pod)
+
+
+def _graphql_pods() -> list[dict[str, Any]]:
+    listing = (_graphql_data(f"{{ myself {{ pods {{ {POD_FIELDS} }} }} }}").get("myself") or {}).get("pods")
+    if not isinstance(listing, list):
+        raise PodError("GraphQL: the answer lists no pods")
+    return [_as_rest(p) for p in listing]
+
+
+def _read(rest: Callable[[], Any], graphql: Callable[[], Any]) -> Any:
+    """REST's answer, or GraphQL's when REST gives none: its rate limit (HTTP 429), a server error, or no answer at all.  Any
+    other status is REST's answer (404: the pod is gone) and is raised as it came.  With no key here REST was asked of the control
+    pod's gate, which has no verb for GraphQL, so its failure stands."""
+    try:
+        return rest()
+    except PodError as refused:
+        if refused.code is not None and refused.code != 429 and refused.code < 500:
+            raise
+        try:
+            _config()
+        except PodError:
+            raise refused from None
+        try:
+            return graphql()
+        except PodError as error:
+            if error.code == 404:
+                raise
+            raise PodError(f"{refused}; {error}", code=refused.code, pod_id=refused.pod_id) from None
+
+
+def pods() -> list[dict[str, Any]]:
+    """Every pod of the account."""
+    return _read(lambda: _request("GET", "/pods") or [], _graphql_pods)
+
+
+def _address_file(pod_id: str) -> Path | None:
+    return _env_dir() / f"address-{pod_id}.json" if re.fullmatch(r"[A-Za-z0-9]{1,64}", pod_id or "") else None
+
+
+def kept_address(pod_id: str) -> tuple[dict[str, Any], float] | None:
+    """(the target `remote.pod_target` last read for the pod, its age in seconds), or None; a file that is not such a target
+    (`ADDRESS_KEYS`) reads as none."""
+    try:
+        doc = json.loads(_address_file(pod_id).read_text())
+        target, read_at = doc["target"], float(doc["read_at"])
+        if set(target) == set(ADDRESS_KEYS) and isinstance(target["host"], str) and target["host"] and type(target["port"]) is int:
+            return target, max(0.0, clock() - read_at)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def keep_address(pod_id: str, target: dict[str, Any]) -> None:
+    """Keep `target` for the pod's next lookup.  Best effort: an address that could not be kept is read from RunPod again."""
+    try:
+        path = _address_file(pod_id)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{threading.get_ident()}")
+        tmp.write_text(json.dumps({"target": target, "read_at": clock()}))
+        os.replace(tmp, path)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def forget_address(pod_id: str) -> None:
+    try:
+        _address_file(pod_id).unlink()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def address_ttl_s() -> float:
+    try:
+        return max(0.0, float(os.environ[ADDRESS_TTL_ENV]))
+    except (KeyError, ValueError):
+        return ADDRESS_TTL_S
+
+
+def answers(host: str, port: int, timeout: float = ANSWERS_TIMEOUT_S) -> bool:
+    """Whether `host:port` takes a TCP connection: a pod that restarted has left its old address."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 def create(args: argparse.Namespace) -> None:
@@ -244,7 +441,7 @@ def create_args(c: argparse.ArgumentParser) -> None:
 
 
 def list_pods() -> None:
-    for pod in _request("GET", "/pods") or []:
+    for pod in pods():
         print(
             f"{pod.get('id')}  {pod.get('name')}  {pod.get('desiredStatus')}  "
             f"{(pod.get('machine') or {}).get('gpuTypeId')}  ${pod.get('costPerHr')}/h  "
@@ -253,8 +450,7 @@ def list_pods() -> None:
 
 
 def get(pod_id: str) -> dict[str, Any]:
-    pod = _request("GET", f"/pods/{pod_id}")
-    return pod
+    return _read(lambda: _request("GET", f"/pods/{pod_id}"), lambda: _graphql_pod(pod_id))
 
 
 def ssh_target(pod: dict[str, Any]) -> tuple[str, int] | None:
