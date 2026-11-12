@@ -81252,3 +81252,70 @@ Adds to my 09:26Z entry; nothing in it changes.
 **What I wait on.** `r20261112-091524-0110` (about 10:30Z), `r20261112-091830-e69e` (about 10:00Z), `r20261112-091943-438b` (about 11:20Z) and `r20261112-092227-e399` (minutes after the Lean slot frees), all guesses. When they have ended rc 0 I write the ready line: head, runs, stops beyond `main`'s (none), and the close as one file's re-cut owed. I have not marked.
 
 Evidence: `/opt/cursor/artifacts/return-merge-both-sides-stand.log`, `return-merge-lean-try-6a36.log`, `return-merge-against-lean-branch.log`. Checkpoint note `20261112T0927Z-report-stops`.
+
+## MEMBERS, Thu 12 Nov 09:32Z: the one-leaf list by kind; PRF-585 and PRF-586 sized (two pull requests); PRF-584 held on its branch; `UnboundChecked` pushed
+
+Clock read 09:32Z. Your 09:16Z section is read, and NET-352's 08:57Z, 08:58Z and 09:15Z comments by me [read]. Nothing of PRF-585 or PRF-586 is built. The one-leaf question is my next entry, ahead of 12:30Z.
+
+**0. State**
+- **PRF-584's refusal is held.** `cursor/proofs-oneleaf-d62d` at `ec3eb73eb4ac`, pushed, not opened, nothing marked, kept as it is [run: push]. It compiles with its negative guards and its theorems on the three axioms: `r20261112-084044-1c08` and `r20261112-084951-f3d6`, both exit 0 [run].
+- **The merge-tree step against lean's remote merge** (`origin/cursor/lean-remote-merge-landing-fc8d` at `a88eee998fa2`): nothing of the clause's stops. Six conflicts, all in files the branch does not touch, and the same six when `main` alone (`1a3eadc9c5b4`) is merged with it [run]. `FlockVerify.lean` merges clean, and the overlong cap for `verity/protocols/flock/verifier` holds at 725 of lean's 725, with no room [run].
+- **The lock records run of the clause (`r20261112-085107-6506`) I cancelled at 09:20Z** by its run id, since the change is held [run].
+- **Your item 2 of 08:27Z: my `Prop` for question 2 compiles and is pushed to my own branch**, `cursor/proofs-ia-statement-42e4` at `f9f1d7b2f7f6`: `Window/UnboundChecked.lean`, 66 lines, `Member.FilesChecked`, `Member.checked`, `Window.checked_of_mem`, `Window.checked`, on the three axioms, in `r20261112-080630-34da` (lean exit 0) [run]. Nothing pushed to soundness's branch. It is at the old paths (`Security/Proofs/…`); soundness's tip `e67c8c956fed` holds my three earlier files and not this one [read].
+
+**1. The list: every statement on `main` (`1a3eadc9c5b4`) with a port of one leaf, by kind**
+
+Why a port has one leaf [read]: at a flat public file every port has one leaf an instance (`Flock/HmRow.lean` 1974 to 1976, the count is `n`); at a shared-row file an output port's table is one row an instance (`Flock/HmRow.lean` 1946 and 2169, `Flock/With/Setup.lean` 1017) and an input port's table is its distinct rows (`verity_flock/circuit.py` 1180 to 1199).
+
+- **Kind A: a statement or member of one instance. Every output port, and at a flat file every port.**
+  - The scan's `first` and `last` [relayed: network-accounting; read by me: `NetworkCheck/Period.lean` 773, `xf.n == 1`]. Owner network-accounting.
+  - The unread round's one ingress unit: `benchmarks/network_traces/scan_zk.py` 246 to 247 [read]. Owner network-accounting.
+  - The two members of our two-member audit test, a template of one proof block each: `benchmarks/one_stage/tests/test_audit_two_members.py`, both tests refused with the clause's reason at `lean-verify/m0` and `lean-verify/m1` [run: `r20261112-084112-4309`]. Ours.
+  - Any served template with one unit in a window. I have no data: the work trees on the nodes held no public file I could read [guess]. Owner vllm.
+- **Kind B: a shared-row input table of one row, which every instance reads. At any number of instances.**
+  - The universal circuit's description ports, by design: `inner_registered.py` 113 to 120 [read]. The one in-tree public file with such a table is `verity/protocols/flock/prover/tests/fixtures/rec-coins/16-16-8-n64/u/stage/pub-64.bin`: 64 instances, ports `p1`, `p2`, `p3` a table of one row each [run: a scan of the 38 public files in the tree; no other has one, and none has one instance]. Ours; the recursion's runs read it (benchmarks).
+  - Any class statement's port that every instance reads at one value: `class_statement.py` 155 [read]. Ours.
+- **Kind C: the Lean `#guard`** `tabled`, `Flock/Test/PortRoots.lean` 109 to 117 [read]. Ours.
+
+What the suites show with the clause in [run: `r20261112-084112-4309`, `suites.py --changed 1a3eadc9c5b4`, slow tests in]: 48 of 60 suites done at 09:29Z: 46 passed, one cached, one failed, and the two tests above are the only refusals. Read it with two limits:
+- **No suite proves and verifies a scan round.** `verity-network-traces` passed 542 with the clause; the scan's `flock-verify verify --zk` is in `scan_zk.py prove` (line 1348), a run and not a test [read]. So the scan's refusals are by read only.
+- **12 suites were not done at 09:29Z**, among them `verity-flock`, where the universal circuit's fixture is verified, and `verity-vllm`. The run has until 12:41Z. I add what they show to the 12:30Z entry.
+
+So network-accounting's point holds and is wider than one-instance statements: kind B is refused at 64 instances. I cannot give a count of statements: kinds A and B are forms, and any served window can hold either.
+
+**2. PRF-585: the check reads every member's files, drawn or not** [read; nothing built]
+- **What changes.** After `rootsOf` and before `runMembers`, `membersRun` (`Spot/OneStageZk.lean` 1232) runs, for every member of the parameters, the files half of what a session runs today: `m.statement (m.slice c.record roots) bs`, then the `StepAt`'s `scope`, `ksFiles` (`PortRoots.checkOf`), the files part of `KsScope.checkOf`, and `population`. `checkMembersAt`'s own lines (1249 to 1258) do not change.
+- **Size.** `Spot/OneStageZk.lean`: about 20 lines of code (`StepAt.filesHeld`, `membersFiles`, one line in `membersRun`), 10 of docstrings, 30 to 40 of the property, 15 to 25 of `#guard`s. `Flock/KsScope.lean`: about 25 lines, a `filesOf` and its lemma to `checkOf`, because `drawWhy count none` refuses a member with no draw at more than one table (106 to 115). Two files, 100 to 120 lines.
+- **Whose files.** Both ours (`verity/`). The step from the property to `MemberV5.Checked` and `OpensReady` is in `security/Proofs`: soundness's worker WINDOW, on my `Member.FilesChecked`.
+- **What it needs that is not on `main`.** Nothing. The per-member form accepts nothing yet, so the property is stated on `membersRun … = .ok r`.
+- **The property, as I would write it:**
+  ```lean
+  structure Member.FilesHeld (m : Member) (slice : Json) (bs : Core.Blobs) : Prop where
+    statement : ∃ a : StepAt, m.statement slice bs = .ok a ∧ a.scope = .ok () ∧ a.ksFiles = .ok () ∧
+      Flock.KsScope.filesOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables)
+        (Flock.Witness.zkTags a.I) a.I.publicFile a.I.count = .ok () ∧ a.population = .ok ()
+
+  theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+      {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
+      ∃ roots, rootsOf ms c.record = .ok roots ∧ ∀ m ∈ ms, m.FilesHeld (m.slice c.record roots) bs
+  ```
+- **Its work is not the descriptor alone, and soundness should hear that.** A member costs one parse of its circuit's descriptor (the template of a templated statement; no gate is walked and no template unrolled) and one hash for each row of its public file, a row a unit and port, to recompute the ports' roots (`HmOut.checkPublic`, `Flock/HmRow.lean` 1974 to 1979). Summed over the members that is what `verify --zk` does today on one window's public file. It adds no form `tests/test_verifier_cost.py` refuses [read: its scan's forms], but it is work per unit's row for members no session reads today.
+- **Not established:** which check gives `OpensReady.rows`, since `rowsOk` admits a port of v1 rows [read]. `OpensReady.leaves` is soundness's now.
+- **What gates its pull request.** Nothing of another lane's. It should conflict with my Held branch (`cursor/proofs-v2-members-held-9810`) only in `membersRun` [guess: not merged].
+
+**3. Is 1(b) the same change? No. 1(b) and PRF-586 are one change, PRF-585 another: two pull requests** [read; nothing built]
+- **1(b)** is the fold over the parameters that `classHeld` already makes (1055: every member's `registered`, no blob). The mend returns its map and hands the record check that `{value: root}` in place of the sessions' dictionary. That generalises the last argument of `OneStage.recordChecks` (`Spot/OneStage.lean` 450, and `check` 511, `checkAt` 552) and touches a few lines of `security/Proofs/Properties/Spot.lean` (lean's file) and the lock records of the one statement's check.
+- **PRF-586** is in the same fold and the same record check:
+  - `rootStep` (963) gives a root that is no member's to the registration in place of refusing it; `row-table` is still refused. `rootsOf`'s type gains the registration's own roots.
+  - In the parameters' fold, each member's registered port whose `value` is an own root's port must equal the registration's in root and domain: about 25 lines.
+  - The record check leaves out reads of own ports at their own roots, as `Record.lessOwnReads` does (368): the same generalisation of `recordChecks` as 1(b).
+  - Size: 100 to 140 lines in `Spot/OneStageZk.lean` with 30 of `#guard`s and 20 of docstrings, about 10 in `Spot/OneStage.lean`, 5 to 10 in `security/Proofs/Properties/Spot.lean`. Ours but for that last file, which is lean's.
+- **What gates PRF-586:** its statement in PRF-371's guarantee, before or with it (soundness's condition). It conflicts with my Held branch in `classHeld`, which Held hands the record [read: Held's diff].
+- **What PRF-586 moves that network-accounting must follow** [derived from the read]:
+  - An own root's port must not read as `<member>/<port>` for any member's name, and is not `row-table`.
+  - Each member's `registered` file names the own port as its `value`, with the registration's `root` and `domain`, and `leaves`, `words`, `word_bits` as today.
+  - No new key in the record and no new field of the evidence, if `lessOwnReads` is unconditional in the per-member form. R3 holds the `roots` entries to the verifier's `ports` as today.
+- **The statement PRF-371's guarantee needs for an own root, in one sentence:** where an accepted member's session reads a port its registered file names at a root of the registration that is no member's, the row it opens is the leaf at that rank of the one tree the registration's record names at that port, root and domain, so the read is bound to the record and two members' reads of one rank agree.
+- **Who holds PRF-371's text today** [read]: nothing on `main` states it; `security/Proofs/Properties/Verity/Sampled/MemberForm.lean` holds properties of the checks only. The text is on soundness's `cursor/soundness-multileg-8fb2` at `e67c8c956fed`: `Sampled/Window.lean` (`spotSound_of_window`, `WindowDeployed.claim`), `Window/Assembled.lean` 89 (`windowSpotSound_assembled`), and my `JointAuditV5.UnboundWrong` (`Window/Unbound.lean` 221) with `Window.unboundWrong` (`Window/UnboundLaid.lean`). In (i-a)'s terms `MemberV5.OpensUnder` reads `m.roots`, so a member's root for an own port must be the registration's own.
+
+**Still running:** `r20261112-084112-4309` (the suites on the held branch), until 12:41Z at the latest.
