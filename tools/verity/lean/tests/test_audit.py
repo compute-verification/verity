@@ -3214,6 +3214,170 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_an_open_premise_and
         == ["open.form"]
 
 
+#: an `open` entry as a person writes it for a `Prop` a statement holds without taking it
+ON_READ = {"owner": "@lean", "issue": "LEAN-1", "due": "2026-11-30", "why": "P.t holds it as a conjunct of its event"}
+TWO = {**POLICY, "guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}
+
+
+def holding(module: str = "P.Net.Assumptions", h: str = "5") -> dict:
+    """Facts of a package whose `P.t` takes `P.Hyp` and reads `P.Held`, a `Prop` of ``module`` that no statement takes
+    (a conjunct of `P.t`'s event), beside `P.u`, which reads nothing."""
+    held = {"name": "P.Held", "module": module, "kind": "def", "hash": h * 32}
+    return facts(pins={"P.t": fact(reads=fact()["reads"] + [held]), "P.u": fact(signature="P.u : True", hyps=[], reads=[])})
+
+
+def taking(now: dict, *names: str, module: str = "P.Net.Assumptions") -> dict:
+    """``now`` (`holding`'s facts) with each guarantee of ``names`` (`P.u` alone, by default) also taking `P.Held`, a `Prop`
+    of ``module``, as a premise."""
+    pins = {n: p | {"premises": [*(p.get("premises") or []), {"binder": "s", "head": "P.Held", "module": module}]}
+            if n in (names or ("P.u",)) else p for n, p in now["pins"].items()}
+    return {**now, "pins": pins, "graph": {"P.Defs": {"imports": ["Init"], "olean": "/r/P/.lake/build/lib/lean/P/Defs.olean"}}}
+
+
+def test_an_open_entry_that_gives_a_why_lists_a_prop_a_statement_reads_and_none_takes():
+    """A `Prop` a statement only reads is listed in none, and an update lists none.  An `open` entry a person writes for it
+    with a one-line `why` stays: its digest is its `reads` record's, a changed `Prop` fails under its name, a lock run
+    leaves the entry as it is, and each guarantee that reads the `Prop` (wherever it is declared), and no other, lists it
+    under `premises.open` in place of `premises.reads`."""
+    none = {"assumptions": [], "domain": [], "open": [], "reads": []}
+    for module in ("P.Net.Assumptions", "P.Defs"):
+        now = holding(module)
+        fails, plain = A.judge(TWO, now, FILES, update=True)
+        assert fails == [] and "open" not in plain, "an update writes no such entry"
+        assert plain["guarantees"]["P.t"]["premises"] == none | {
+            "assumptions": ["P.Hyp"], "reads": ["P.Held"] if module == "P.Net.Assumptions" else []}
+        written = plain | {"open": {"P.Held": ON_READ}}
+        fails = A.judge(written, now, FILES)[0]
+        assert [(x.code, x.entry) for x in fails] == [("open.unrecorded", "P.Held"), ("guarantees.premises-changed", "P.t")]
+        pol = A.regenerated(written, now, FILES, fails)
+        digest = pol["reads"][module]["definitions"]["P.Held"]
+        assert pol["open"] == {"P.Held": {"owner": "@lean", "digest": digest} | {k: ON_READ[k] for k in ("issue", "due", "why")}}
+        assert list(pol["open"]["P.Held"]) == ["owner", "digest", "issue", "due", "why"]
+        assert pol["guarantees"]["P.t"]["premises"] == none | {"assumptions": ["P.Hyp"], "open": ["P.Held"]}
+        assert pol["guarantees"]["P.u"]["premises"] == none
+        assert A.judge(pol, now, FILES) == ([], pol)
+        assert A.judge(pol, now, FILES, update=True) == ([], pol) and A.repaired(pol, now, FILES, [], TICKET) == pol, \
+            "a lock run leaves it in place"
+        fails = A.judge(pol, holding(module, "6"), FILES)[0]
+        assert "open.digest" in {x.code for x in fails} and all(map(A.RECORD_DIFFERENCE.match, fails))
+        new = A.regenerated(pol, holding(module, "6"), FILES, fails)
+        assert new["open"]["P.Held"] == pol["open"]["P.Held"] | {"digest": new["reads"][module]["definitions"]["P.Held"]}
+        assert new["open"]["P.Held"]["digest"] != digest
+
+
+def test_an_open_entry_that_rests_on_a_read_gives_its_issue_its_due_date_its_owner_and_one_line_of_why():
+    """Such an entry is a person's: it owes the issue that discharges it and its due date, both, an owner, and a `why` of
+    one line, whether or not a statement takes its `Prop`, and each failure takes a person.  On an unowned lock it is its
+    digest and its `why`, and the run that owns the lock holds it to the ticket."""
+    now = holding()
+    pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
+    entry = pol["open"]["P.Held"]
+    for facts_ in (now, taking(now)):
+        for bad in ({k: v for k, v in entry.items() if k != "issue"}, {k: v for k, v in entry.items() if k != "due"},
+                    entry | {"issue": "lean-1"}, entry | {"due": "soon"}, entry | {"why": ""}, entry | {"why": "two\nlines"},
+                    entry | {"why": True}):
+            fails = A.judge(pol | {"open": {"P.Held": bad}}, facts_, FILES)[0]
+            assert [(x.code, x.entry) for x in fails if x.code.startswith("open.")] == [("open.form", "P.Held")], bad
+            form = next(x for x in fails if x.code == "open.form")
+            assert form == ("open: P.Held's entry, which gives a `why`, gives the `issue` that discharges it as a Linear "
+                            "key (TEAM-N), its `due` as a date (YYYY-MM-DD) and its `why` as one line naming a statement "
+                            "that holds it without taking it")
+            assert A.regenerated(pol | {"open": {"P.Held": bad}}, facts_, FILES, fails) is None and not A.BOOKKEEPING.match(form)
+    ownerless = pol | {"open": {"P.Held": {k: v for k, v in entry.items() if k != "owner"}}}
+    assert [x.code for x in A.judge(ownerless, now, FILES)[0]] == ["open.no-owner"]
+    free = laneless(pol)
+    assert A.unowned_lock(free) and free["open"]["P.Held"] == {"digest": entry["digest"], "why": entry["why"]}
+    assert A.judge(free, now, FILES) == ([], free) and A.judge(free, now, FILES, update=True) == ([], free)
+    assert [x.code for x in A.judge(free, now, FILES, update=True, owner="@proofs")[0]] == ["open.form"]
+
+
+def test_a_why_on_an_entry_whose_prop_no_guarantee_reads_without_taking_it_fails_until_a_person_removes_it():
+    """The first wrong case: an `open` entry says the guarantees that read its `Prop` without taking it rest on it, and
+    there is none, since each guarantee that reads the `Prop` takes it.  The `why` excepts nothing: it fails, naming the
+    fix, and neither an update nor a lock run settles it or touches the `why`."""
+    now = sounded()
+    lock = opened(now)
+    reads_it = {"name": "P.Sound", "module": "P.Defs", "kind": "def", "hash": "5" * 32, "sha256": sha("5" * 32)}
+    both = {**now, "pins": {"P.t": now["pins"]["P.t"] | {"reads": now["pins"]["P.t"]["reads"] + [reads_it]}}}
+    for facts_, lock in ((now, lock), (both, opened(both))):
+        assert A.judge(lock, facts_, FILES)[0] == []
+        wrong = {**lock, "open": {"P.Sound": lock["open"]["P.Sound"] | {"why": ON_READ["why"]}}}
+        fails = A.judge(wrong, facts_, FILES)[0]
+        assert [(x.code, x.entry) for x in fails] == [("open.why-stale", "P.Sound")]
+        assert fails[0] == ("open: P.Sound's entry gives a `why`, which says that the guarantees reading P.Sound without "
+                            "taking it rest on it, and none does: it is a premise of P.t; remove the `why`")
+        assert not A.RECORD_DIFFERENCE.match(fails[0]) and not A.BOOKKEEPING.match(fails[0])
+        assert A.regenerated(wrong, facts_, FILES, fails) is None
+        again, written = A.judge(wrong, facts_, FILES, update=True)
+        assert [x.code for x in again] == ["open.why-stale"] and written["open"] == wrong["open"]
+        assert A.repaired(wrong, facts_, FILES, fails, TICKET)["open"] == wrong["open"]
+
+
+def test_once_a_statement_takes_a_prop_whose_entry_rests_on_a_read_its_readers_still_list_it_as_open():
+    """A `Prop` an `open` entry holds on a read, which a statement then takes as a premise.  The `why` stays, and so does
+    the record of each guarantee that only reads the `Prop`: it still lists it under `premises.open`, as the one that
+    takes it now does, so the one record that changes is the taker's.  Once the last guarantee that only read it takes it
+    too, the `why` fails until a person removes it, and the entry stays `open` without it."""
+    none = {"assumptions": [], "domain": [], "open": [], "reads": []}
+    for module in ("P.Net.Assumptions", "P.Defs"):
+        now = holding(module)
+        pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
+        then = taking(now, module=module)
+        fails = A.judge(pol, then, FILES)[0]
+        assert [(x.code, x.entry) for x in fails] == [("guarantees.premises-changed", "P.u")]
+        new = A.regenerated(pol, then, FILES, fails)
+        assert new["open"] == pol["open"] and new["guarantees"]["P.t"] == pol["guarantees"]["P.t"]
+        assert new["guarantees"]["P.t"]["premises"] == none | {"assumptions": ["P.Hyp"], "open": ["P.Held"]}
+        assert new["guarantees"]["P.u"]["premises"] == none | {"open": ["P.Held"]}
+        assert A.judge(new, then, FILES) == ([], new) and A.judge(new, then, FILES, update=True) == ([], new)
+        assert A.repaired(new, then, FILES, [], TICKET) == new
+        last = taking(then, "P.t", module=module)
+        fails = A.judge(new, last, FILES)[0]
+        assert fails == ["open: P.Held's entry gives a `why`, which says that the guarantees reading P.Held without taking "
+                         "it rest on it, and none does: it is a premise of P.t, P.u; remove the `why`"]
+        assert fails[0].code == "open.why-stale" and A.regenerated(new, last, FILES, fails) is None
+        fixed = new | {"open": {"P.Held": {k: v for k, v in new["open"]["P.Held"].items() if k != "why"}}}
+        assert A.judge(fixed, last, FILES) == ([], fixed), "the `why` removed"
+
+
+def test_an_entry_without_a_why_for_a_prop_no_statement_takes_fails_and_an_update_drops_it():
+    """The second wrong case: a `Prop` a statement only reads, listed with no `why`.  It fails as before, a record
+    difference an update settles by dropping the entry, and its message names both fixes, under `domain` and
+    `assumptions` too."""
+    now = holding()
+    pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
+    entry = {k: v for k, v in pol["open"]["P.Held"].items() if k != "why"}
+    fails = A.judge(pol | {"open": {"P.Held": entry}}, now, FILES)[0]
+    assert [(x.code, x.entry) for x in fails] == [("open.read-only", "P.Held"), ("guarantees.premises-changed", "P.t")]
+    fix = ("P.Held is read by a statement, but none takes it as a premise: its `reads` record holds it; remove the entry, "
+           "or, if a statement holds it without taking it (a conjunct of its event) and nothing proves it yet, ")
+    assert fails[0] == f"open: {fix}give its entry a one-line `why` naming that statement"
+    new = A.regenerated(pol | {"open": {"P.Held": entry}}, now, FILES, fails)
+    assert new["open"] == {} and new["guarantees"]["P.t"]["premises"]["reads"] == ["P.Held"]
+    assert A.judge(new, now, FILES)[0] == []
+    scope = {k: entry[k] for k in ("owner", "digest")} | {"why": "the runs the bound is over"}
+    for section, listed in (("domain", scope), ("assumptions", {k: entry[k] for k in ("owner", "digest")})):
+        elsewhere = {k: v for k, v in new.items() if k != "open"} | {section: new.get(section, {}) | {"P.Held": listed}}
+        fails = A.judge(elsewhere, now, FILES)[0]
+        assert fails == [f"{section}: {fix}list it under `open` with the issue that discharges it, its due date and a "
+                         f"one-line `why` naming that statement"]
+
+
+def test_a_deployed_guarantee_that_reads_an_open_premise_resting_on_a_read_has_it_in_its_gap():
+    """What a guarantee's record lists under `premises.open` is in its trust gap, so a deployed guarantee that holds such
+    a `Prop` fails until a person lists it in its `trust_gap` entry, as for a premise it takes."""
+    now = holding()
+    pol = A.judge(TWO | {"open": {"P.Held": ON_READ}}, now, FILES, update=True)[1]
+    lock = {**pol, "trust": {"base": HYP}, "deployed": ["P.t"]}
+    fails = A.judge(lock, now, FILES)[0]
+    assert [(x.code, x.entry) for x in fails] == [("trust.gap-new", "P.t")] and "rests on P.Held, outside" in fails[0]
+    assert A.judge({**lock, "trust_gap": {"P.t": ["P.Held"]}}, now, FILES)[0] == []
+    then = taking(now)
+    taken = A.judge({**lock, "trust_gap": {"P.t": ["P.Held"]}}, then, FILES, update=True)[1]
+    assert A.judge(taken, then, FILES)[0] == [] and taken["trust_gap"] == {"P.t": ["P.Held"]}
+    assert [(x.code, x.entry) for x in A.judge({**taken, "trust_gap": {}}, then, FILES)[0]] == [("trust.gap-new", "P.t")]
+
+
 def test_an_open_premise_a_merge_also_kept_under_assumptions_is_a_record_difference_the_update_drops():
     """A lock merged by a base whose `merge.py` keeps an `assumptions` entry one side changed beside the `open` entry
     the other side moved it to lists the premise twice. Declared outside `assumptions_module`, it is no named

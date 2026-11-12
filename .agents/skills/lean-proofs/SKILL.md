@@ -138,9 +138,10 @@ Their history is in the decisions log.
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
-  `assumptions_module`; any other premise is `domain` or `open` (the README's lock sections). A named `Prop` counted only as an
-  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
-  restricts there, and no witness is asked to conclude it.
+  `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
+  entry's `why` (the README's lock sections). A named `Prop` counted only as an antecedent inside a premise an honest
+  witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
+  asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is

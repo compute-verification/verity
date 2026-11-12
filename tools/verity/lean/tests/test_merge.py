@@ -152,6 +152,11 @@ def test_what_only_a_person_writes_is_theirs_where_both_sides_changed_it_beside_
     merged, why = M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-1", "2026-12-31"))
     assert why == [] and merged["open"]["P.Sound"] == {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-2",
                                                        "due": "2026-12-31"}, "one side's issue, the other's due date"
+    def held(rec, **field):
+        return rec | {"open": {"P.Held": opened(rec, "LEAN-1")["open"]["P.Sound"] | {"why": "P.t holds it"} | field}}
+    merged, why = M.merge(held(base), held(ours, digest="b" * 64), held(theirs, due="2026-12-31"))
+    assert why == [] and merged["open"] == held(base, digest="b" * 64, due="2026-12-31")["open"], \
+        "the `why` of an open premise that rests on a read stays where both sides hold its entry"
     def scoped(rec, why, cites=None):
         return rec | {"domain": {"P.Scope": {"owner": "@lean", "digest": "a" * 64, "why": why}
                                  | ({"cites": cites} if cites else {})}}

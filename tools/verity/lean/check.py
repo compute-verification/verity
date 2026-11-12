@@ -122,8 +122,9 @@ ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumption
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 #: an open premise's `issue` (the Linear issue that discharges it) and `due`
 OPEN_ISSUE, OPEN_DUE = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+"), re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-#: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes, and the
-#: definitions of an assumptions module it reads without taking them
+#: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes and
+#: those resting on a read that it reads (`on_read`), and the other definitions of an assumptions module it reads without
+#: taking them
 PREMISE_KINDS = ("assumptions", "domain", "open", "reads")
 #: a premise of each kind, as a review's line says it
 PREMISE_NAMES = {"assumptions": "a named assumption", "domain": "a domain hypothesis", "open": "open",
@@ -1442,7 +1443,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
     it.  Each guarantee keeps its `owner`; ``owner`` (`--update --owner`) is that of one without, and an update writes no
     record for a guarantee that has none.  ``ticket`` (with ``update``: `repaired`, `--bookkeeping warn`) files each open
-    premise the lock doesn't list, and gives an owner to each entry without one (`assumption_records`)."""
+    premise the lock doesn't list, and gives an owner to each entry without one (`assumption_records`).  A guarantee's
+    `premises.open` lists the open premises it takes and each one resting on a read (`on_read`) that its statement reads,
+    whoever else takes it; such an entry's `why` fails when no guarantee reads its `Prop` without taking it."""
     fails = []
     if free := unowned_lock(policy) and not owner:
         ticket = None
@@ -1654,12 +1657,19 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for a, gs in taken.items():
         for g in gs:
             rests.setdefault(g, set()).add(a)
+    on_reads = {a for a, e in opens.items() if on_read(e)}
+    for a in sorted(on_reads):
+        if not {g for es in reads.values() if a in es for g in es[a]["guarantees"]} - taken.get(a, set()):
+            fails.append(Failure("open.why-stale", a, f"open: {a}'s entry gives a `why`, which says that the guarantees "
+                                 f"reading {a} without taking it rest on it, and none does: it is a premise of "
+                                 f"{', '.join(sorted(taken.get(a, ())))}; remove the `why`"))
     for name in sorted(recorded):
         r = kept[name]
         takes = rests.get(name, set()) | set(r["assumptions"])
+        reads = read_props(facts["pins"][name], policy, on_reads) - takes
         kind = {a: kinds.get(a) or ("assumptions" if a in records else "domain" if a in domains else "open") for a in takes}
         now = {k: sorted(a for a in takes if kind[a] == k) for k in ("assumptions", "domain", "open")}
-        now["reads"] = sorted(read_props(facts["pins"][name], policy) - takes)
+        now |= {"open": sorted({*now["open"], *(reads & on_reads)}), "reads": sorted(reads - on_reads)}
         kept[name] = {k: v for k, v in r.items() if k not in ("type_hash", "unfolded_hash")} | {
             "premises": now, "type_hash": r["type_hash"]} | ({"unfolded_hash": r["unfolded_hash"]} if "unfolded_hash" in r else {})
         if name in compared and (was := policy["guarantees"][name].get("premises")) != now:
@@ -2101,14 +2111,23 @@ def assumption_homes(policy: dict) -> list[str]:
     return [home] if isinstance(home, str) else [h for h in home if isinstance(h, str)] if isinstance(home, list) else []
 
 
-def read_props(pin: dict, policy: dict) -> set[str]:
+def read_props(pin: dict, policy: dict, on_reads=()) -> set[str]:
     """The `Prop`s of an `assumptions_module` module, of an `Assumptions` module or of one under `shape.premises` that a
-    statement reads (``pin``'s `reads`): what its `premises.reads` record holds, less what it takes. Each is recorded with
+    statement reads (``pin``'s `reads`), and those of ``on_reads`` (the open premises that rest on a read, `on_read`)
+    wherever they are declared: what its `premises.reads` record holds, less what it takes and those. Each is recorded with
     its digest there, so a statement may take one inside a definition, and a conjecture may be one a guarantee refutes."""
     declared_in, held = assumption_homes(policy), (policy.get("shape") or {}).get("premises")
     held = [m for m in held if isinstance(m, str)] if isinstance(held, list) else []
-    return {e["name"] for e in pin.get("reads") or [] if e.get("name") and (
-        (m := e.get("module") or "") in declared_in or "Assumptions" in m.split(".") or under(held, m))}
+    return {e["name"] for e in pin.get("reads") or [] if e.get("name") and (e["name"] in on_reads or (
+        (m := e.get("module") or "") in declared_in or "Assumptions" in m.split(".") or under(held, m)))}
+
+
+def on_read(rec) -> bool:
+    """Whether the `open` entry ``rec`` says it rests on a read: it gives a `why`, one line a person writes naming a
+    statement that holds its `Prop` without taking it as a hypothesis (a conjunct of its event).  The guarantees that read
+    the `Prop` without taking it then rest on it, whether or not another statement takes it.  An update keeps the field
+    and writes none (`assumption_records`)."""
+    return isinstance(rec, dict) and "why" in rec
 
 
 def stated_by(policy: dict, facts: dict) -> dict[str, str]:
@@ -2815,7 +2834,11 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     under `open_seed` ({module prefix or owner: {issue, due[, owner]}}, which the update consumes), so the list only
     shrinks; with ``ticket`` (`--bookkeeping warn`, `bookkeeping_ticket`) an update lists every such premise under it, and
     an entry without an owner takes its guarantees' (the first, of several) or ``ticket``'s.  A `Prop` that a statement
-    reads but none takes is held by its `reads` record and listed in none.  Each
+    reads but none takes is held by its `reads` record and listed in none, unless its `open` entry rests on a read
+    (`on_read`): that entry stays, with its issue and its due date, its digest the `reads` record's, and each guarantee
+    that reads the `Prop` lists it under `premises.open` (`judge`); an update keeps its `why` and adds none.  The `why` may
+    stay once a statement takes the `Prop`, since the guarantees that only read it still rest on it: the entry owes its
+    issue, its due date and its `why` either way, and fails when no guarantee reads the `Prop` without taking it.  Each
     entry has an `owner` and a `digest`, so a changed premise
     shows as its own record, and an entry no guarantee takes or reads fails.  The digest is the one its `reads` record
     holds, where the definitions it reads have records of their own; for a premise no `reads` record holds, whatever
@@ -2965,15 +2988,20 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                 fails.append(Failure(f"{section}.unread", a, f"{section}: {a} is listed, but no guarantee reads it; remove "
                                      f"the entry"))
             continue
-        kind = "assumptions" if real(a) else None if a not in premised else "domain" if a in domained or (
-            a in cited and not uncovered(a)) else "open"
+        held = section == "open" and on_read(rec)
+        kind = "assumptions" if real(a) else ("open" if held else None) if a not in premised else "domain" if (
+            a in domained or (a in cited and not uncovered(a))) else "open"
         if kind == "domain" and section == "domain" and update and uncovered(a) and issue_of(a, who):
             kind = "open"
         m = m or module(a)
         if kind != section and not update:
             if kind is None:
                 fails.append(Failure(f"{section}.read-only", a, f"{section}: {a} is read by a statement, but none takes it "
-                                     f"as a premise: its `reads` record holds it; remove the entry"))
+                                     f"as a premise: its `reads` record holds it; remove the entry, or, if a statement "
+                                     f"holds it without taking it (a conjunct of its event) and nothing proves it yet, "
+                                     + ("give its entry" if section == "open" else "list it under `open` with the issue "
+                                        "that discharges it, its due date and")
+                                     + " a one-line `why` naming that statement"))
             elif section == "assumptions":
                 fails.append(Failure("assumptions.outside-module", a, f"assumptions: {a} is declared "
                                      f"{'in ' + m + ', not in' if m else 'outside'} {home or 'an `assumptions_module`'}, "
@@ -2997,14 +3025,20 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         if kind == "open":
             ticket = {k: rec[k] for k in ("issue", "due") if k in (rec or {})} if section == "open" else \
                 {k: v for k, v in (issue_of(a, who) or {}).items() if k in ("issue", "due")}
-            if not ticket and not (free and section == "open"):
+            if held:
+                if not (isinstance(rec["why"], str) and rec["why"].strip() and "\n" not in rec["why"] and (free or (
+                        OPEN_ISSUE.fullmatch(str(ticket.get("issue"))) and OPEN_DUE.fullmatch(str(ticket.get("due")))))):
+                    fails.append(Failure("open.form", a, f"open: {a}'s entry, which gives a `why`, gives the `issue` that "
+                                         f"discharges it as a Linear key (TEAM-N), its `due` as a date (YYYY-MM-DD) and "
+                                         f"its `why` as one line naming a statement that holds it without taking it"))
+            elif not ticket and not (free and section == "open"):
                 fails.append(unlisted(a, premised[a], entry))
                 continue
-            if ticket and not (("issue" not in ticket or OPEN_ISSUE.fullmatch(str(ticket["issue"])))
-                               and OPEN_DUE.fullmatch(str(ticket.get("due")))):
+            elif ticket and not (("issue" not in ticket or OPEN_ISSUE.fullmatch(str(ticket["issue"])))
+                                 and OPEN_DUE.fullmatch(str(ticket.get("due")))):
                 fails.append(Failure("open.form", a, f"open: {a}'s entry gives its `due` as a date (YYYY-MM-DD) and its "
                                      f"`issue`, when it has one, as a Linear key (TEAM-N)"))
-            entry |= ticket
+            entry |= ticket | ({"why": rec["why"]} if held else {})
         if not who and not free:
             fails.append(Failure(f"{kind}.no-owner", a, f"{kind}: {a} has no owner: write \"owner\": \"@lane\" in its "
                                  f"entry, or run `check.py --update --owner @lane`"))
@@ -3225,7 +3259,7 @@ def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict |
     return [r["line"] for r in bookkeeping_repairs(fails, lock, ticket, was)]
 
 
-#: the premises of a guarantee's record its trust gap counts: the named assumptions and the open premises it takes. A domain
+#: the premises of a guarantee's record its trust gap counts: the named assumptions and the open premises it lists. A domain
 #: hypothesis is part of what the guarantee says, and one that is another listed guarantee's statement (its entry's
 #: `cites`) brings in that guarantee's premises
 GAP_KINDS = ("assumptions", "open")
@@ -3643,8 +3677,8 @@ def unowned_lock(policy: dict) -> bool:
     """Whether ``policy`` is an unowned lock: it lists a guarantee or a premise and holds none of a lane's bookkeeping
     (`LANE_FIELDS`, `LANE_SECTIONS`), as the lock of a tree with no lanes does.  It is read from the lock's content, so a
     lock with one such field is owned and held to every rule.  On an unowned lock no entry owes an owner, an `open` entry
-    is its digest alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an issue or a date into it.  A
-    run given `--owner` reads the lock as owned, and owns it (`judge`)."""
+    is its digest (and its `why`, `on_read`) alone, and neither `--update` nor `--bookkeeping warn` writes an owner, an
+    issue or a date into it.  A run given `--owner` reads the lock as owned, and owns it (`judge`)."""
     entries = [r for s in LANE_ENTRIES if isinstance(sec := policy.get(s), dict) for r in sec.values()]
     return bool(entries) and not any(k in policy for k in LANE_SECTIONS) and not any(
         f in r for r in entries if isinstance(r, dict) for f in LANE_FIELDS)
