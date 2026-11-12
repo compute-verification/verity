@@ -5,3 +5,4 @@
 2026-11-12 17:19Z DRAFTKERNELS: suites r20261112-152848-3d1d: 56/57 passed, repository's public-boundary test failed on the card script's tools/research path; fixed in 6a53fbc419; rerun r20261112-165318-9eb5 in flight.
 2026-11-12 18:23Z DRAFTKERNELS: suites rerun r20261112-165318-9eb5 at 6a53fbc419 still running (since 16:53Z); card window Fri 03:00Z.
 2026-11-12 21:41Z DRAFTKERNELS: ratchet fix at 920597d5ca (gate failures: []); repository suite r20261112-210847-6529 waiting for a slot on vy-nebius-cpu-1; verity-vllm after it.
+2026-11-12 22:36Z DRAFTKERNELS: repository r20261112-210847-6529 at 920597d5ca: 352 passed 0 failed; verity-vllm r20261112-215601-1b52 running.
