@@ -72268,3 +72268,72 @@ Tags: [run] a `git`, `gh` or `research queue status` command of this hour; [read
 
 For the table:
 - The per-member form: four pull requests on `main` (the form behind its refusal, its parser, its lemmas, its Python writer). Past them nothing is started: (i-a), `WindowReads` and `WindowAt`, the lift with its 15 proofs, the closing round outside Lean. The window's theorem is soundness's, assembled on a branch with four premises left, three of them waiting on us.
+
+## STOPDRIVER, Thu 12 Nov 05:47Z: #9081 is at `ad9af609f4ee`: the second read's four changes are in, `main` is merged with no conflict, the four Lean tries pass; three runs are out at that head and the ready line waits on them
+
+**Mailbox** [run] read at `040ed119dc`: the 05:13Z and 05:31Z sections; nothing after. The second read's 05:06Z entry read whole.
+
+### The head, and the commits by change
+
+[run] `ad9af609f4ee` on `cursor/proofs-stopdriver-034c`, pushed. Open, not marked; I do not mark. Its diff against `main` is its own 7 files, +1,450 and −3 lines (+1,634 before). Six commits on `0b6bdb0352e1`:
+
+| Commit | Change |
+|---|---|
+| `3a638e13ca` | (b)1 and (b)2. The premise's sentence is yours, word for word (`stop_audit.py:104-106`), and `order_entry` puts it on the `cross-stream-order` entry (`:349`). The test holds the text and that both entries carry it (`test_stop_audit.py:131-134`). |
+| `0a6068cfad` | (b)3. Docstrings only: `Spot/RecordAcross.lean:16-18` (the module's) and `:139-141` (`auditVerdict`'s), `Spot/Pieces.lean:57-60`. No definition changes. |
+| `52da1532b8` | The word. The test says "twelve written cases", none drawn, and asserts the count: two of case 1, six of case 2, three of case 3, one of case 4 (`test_stop_audit.py:267`). |
+| `99ff4197a4` | (c). `across_all` out whole, in one commit. |
+| `b6cf449b52` | The merge of `main` at `d6075b75d289`. |
+| `ad9af609f4` | One assertion, for soundness's condition (below). |
+
+- [read] **(a) is unchanged:** case 4 has no verdict.
+- [run] **(c), what left:** `reachedFrom`, `reached`, `acrossAllCase`, `AcrossAll`, `acrossAll`, the module docstring's paragraph and their 18 guards (35 stay); the piece, its docstring line, its entry in `table` and its name in `verifier`; `stop_audit.across_all`; the chain test with `_python` and `_reaches`. 222 lines. The executable serves 14 pieces (`Spot/Pieces.lean:900-901`). `AcrossFound` and `acrossFound` stay: `across` is defined through them, and the second read's list did not name them.
+- [run] **It reverts whole.** In a scratch worktree, `git revert --no-commit 99ff4197a4` applied with no conflict and gave exactly the tree of the commit before it. It is the last of the four changes so that its revert has the final text around it.
+- [run] **The word "difftest" was never in the test or the driver** (`git grep -i difftest 0b6bdb0352e1` on the three Python files finds nothing). It was in the body and in two commit subjects, which stay in history. The body no longer uses it for the twelve cases.
+
+### The merge
+
+- [run] **No conflict.** `main` at `d6075b75d289` merged into `99ff4197a4bf` as `b6cf449b5239`.
+- [run] **#9028 landed with its head unmoved** (`eabb2d72de2e`, merged 05:22Z), so `stop_order` needed no reread. The merge changed nothing in `two_stage.py`, `boundary_rows.py`, `boundary_stop.py`, `service.py` or `one_stage/` (`git diff 99ff4197a4bf ad9af609f4ee` on them is empty).
+- [run] **What it did change under this pull request:** three constants in the Spot verifier's Lean package (`MAX_COINS`, `MAX_PATH`, `MAX_TREE_LINES`, in `Challenger.lean`, `ChallengerCoins.lean`, `ChallengerSession.lean`), and Flock's Lean verifier (five files, among them `FlockVerify.lean`), which checks the rehearsal's sessions. So I rerun the tries, the records run, the suites and the rehearsal.
+
+### Which two premise sentences were soundness's
+
+- [relayed: my launch brief's standing wording] The test's docstring meant the `boundary-audit` sentence as it was ("its verdict carried from that stream's audit record by the audit driver, not checked by the Lean verifier") and the `stop-rule` sentence ("stop rule: the driver's parameter, not held to the pinned checkpoint"). The third, `request-row`'s, was mine.
+- [read] So the sentence replaced is one of the two. Of the three now, only `stop-rule`'s is soundness's own words; `boundary-audit`'s is yours, which soundness has called right [relayed: mailbox 05:31Z]. The docstring no longer says whose any sentence is; the test holds the two texts word for word.
+
+### Soundness's question: does any served path reach `across` with a record the developer hands
+
+**No served path reaches `across` at all. Nothing would refuse one that did. My recommendation is a named follow-up, not a change here.**
+
+- [read, at `ad9af609f4ee`] **The callers.** In Lean, `Record.across` is called by the piece alone (`Spot/Pieces.lean:600`), which the verifier's executable serves to whoever sends the request (`Spot/VerifierMain.lean:42-43`). In Python the piece has one caller, `stop_audit.py:330`. No file outside the driver's own four names `stop_audit`: only `stop_audit_small.sh` and the tests run it.
+- [read] **Where the record comes from.** A file on the driver's command line, `--boundary-outcome` (`stop_audit.py:482, 498`). It is passed in two places, both in the rehearsal, with files the rehearsal writes itself (`stop_audit_small.sh:79-80`). No boundary stream writes an outcome today.
+- [read] **Where it would be refused: nowhere.** The piece checks the record's format and `registration_digest` and reads two fields (`Spot/RecordAcross.lean:122-126, 142-152`); the driver checks the outer record's format, registration and symbol. Neither can tell the auditor's record from one the developer wrote. A served path that handed the developer's record would get case 1.
+- [read] **What holds today.** Case 1 from a handed record is on no entry of record: both entries that read it are `of_record: false` (`stop_audit.py:348, 385`), and the only entry of record is Lean's on the session (`:419`). And it holds no length: `request-row` and `stop-rule` are written without a verdict on every path (`:425-426`), so the record is never complete and `length_held` is false (`:462`). `ad9af609f4` asserts both on the case 1 audit (`test_stop_audit.py:178-180`).
+- [guess] **Why not a change here.** A refusal that means something compares the handed record with the verifier's own verdict on the boundary stream, and that verdict is the composite's, which is soundness's own closing. Anything built before it is a path check on a flag, which holds nothing, or a refusal of every handed record, which removes the only way cases 1 and 4 run.
+- [guess] **The follow-up, and what triggers it.** Whichever comes first: a served path calls `across` or `stop_audit.py`; or `request-row` and `stop-rule` get checks, because the stop record could then be complete on a handed boundary audit record and `length_held` would say true. At that point the driver takes the record from the verifier's own verdicts by registration digest and refuses any other, and `--boundary-outcome` goes. The body names it under "What is left".
+
+### The runs
+
+All through `research run --on auto`. Exit 0:
+
+- [run] `r20261112-053651-c62d` and `r20261112-053652-d0ca`: `verity lean try --siblings` of `Spot/RecordAcross.lean` and `Spot/Pieces.lean` at the merge commit `b6cf449b5239`. The head differs from it by one test file, so these are the head's Lean files. Each: lean exit 0, no name clash, no theorems in the file.
+- [run] `r20261112-052213-0765` and `r20261112-052213-e2ca`: the same two tries before the merge, at `99ff4197a4bf`.
+
+Out, at `ad9af609f4ee`, launched 05:39Z to 05:43Z:
+
+| Run | What | State at 05:46Z | ETA |
+|---|---|---|---|
+| `r20261112-054309-8553` | the Lean records run of `verity/protocols/spot/verifier/lean` | running, `vy-nebius-cpu-10` | [guess] 06:30Z to 07:10Z; the last took 85 min, 51 of them waiting for a slot |
+| `r20261112-053926-7bbe` | `suites.py --changed origin/main --quick` | running, `vy-nebius-cpu-9` | [guess] 06:30Z; fewer suites than last time, now that #9028 is in `main` |
+| `r20261112-054001-82ad` | the rehearsal, five audits | waiting for a slot, `vy-nebius-cpu-14` | [guess] 06:50Z; the last took 54 min |
+
+- [run] Also out, at `99ff4197a4bf`: `r20261112-052213-e9cb`, the `stop_audit or two_stage_driver` selection. The suites run covers the same tests at the head.
+- [read] I launched the rehearsal though you did not list it: the merge changed the Lean verifier its sessions are checked by.
+- [read] **No lock record should move** and I expect none: no guarantee reads the file, and none moved at `0b6bdb0352e1`. I say first if one does.
+
+### What the ready line waits on
+
+- [read] The three runs. When they end I read them, rewrite the body's Runs section, and write the ready line at `ad9af609f4ee`. Resume me then, or at 07:10Z.
+- [run] The body and the title are rewritten for this head: 14 pieces, twelve written cases, the premise on two entries, the six commits, and under "What is left" the three you named (recomputing `accepted` and `complete`, a drawn port, one read of the session) with `across_all`, soundness's closing and the follow-up above. The title no longer says it stacks on #9028.
+- [read] Not established: the tests that call the Lean verifier have not run on any of this turn's commits until `7bbe` or `e9cb` ends. Locally only the pure-Python test ran (1 passed) and `ruff`.
