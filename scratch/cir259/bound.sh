@@ -9,6 +9,7 @@
 # $OUT/TAG; the job never sets FLOCK_WORK and never runs prove_time.sh, so it writes nothing under a
 # served-units-time-* directory.
 # A type whose Lean check may peak over the job's memory (6 x circuit.txt + 4 GB) is staged and recorded, its checks not run.
+# The stager is stopped once its resident memory passes CB_STAGE_GB (default the job's memory); stage.rss holds its samples.
 # env: CB_MEM_GB (the job's --mem-gb), CB_PROVE_GB / CB_SERVE_GB (the session's two `ulimit -v`, default 85% and 50% of
 # it), CB_CACHE (builds; default $HOME/.cache/verity-a11)
 set -uo pipefail
@@ -32,9 +33,25 @@ log "scratch $W; cache ${HZ_CACHE:-scratch}; FLOCK_WORK ${FLOCK_WORK:-unset}; se
 export PATH=$(dirname "$LEAN"):$PATH
 
 stage() {   # stage TAG UNIT N: $W/TAG/B, its record under $OUT/TAG/B
-  local d=$W/$1/B o=$OUT/$1/B rc
+  local d=$W/$1/B o=$OUT/$1/B rc pid kid rss top=0 gb=${CB_STAGE_GB:-$MEM_GB}
   mkdir -p "$d" "$o"
-  /usr/bin/time -v -o "$o/stage.time" "$PYM" "$SU/stage.py" "$2" "$3" "$d" --bind > "$o/stage.log" 2> "$o/stage.err"
+  /usr/bin/time -v -o "$o/stage.time" "$PYM" "$SU/stage.py" "$2" "$3" "$d" --bind > "$o/stage.log" 2> "$o/stage.err" &
+  pid=$!
+  # the stager's resident memory every 20 s (stage.rss: time, KB resident over the stager and its children, KB staged so
+  # far); past the job's own memory it is stopped, so the job stays inside what it asked for
+  while kill -0 $pid 2>/dev/null; do
+    sleep 20
+    kid=$(pgrep -P $pid | head -1); [ -n "$kid" ] || continue
+    rss=$(ps -o rss= -p "$kid" --ppid "$kid" 2>/dev/null | awk '{s += $1} END {print s + 0}')
+    echo "$(date -u +%T) $rss $(du -sk "$d" 2>/dev/null | cut -f1)" >> "$o/stage.rss"
+    [ "$rss" -gt "$top" ] && top=$rss
+    if [ "$rss" -gt $(( gb * 1048576 )) ]; then
+      echo "stopped: the stager's resident memory, $(( rss / 1048576 )) GB, passed this job's $gb GB" >> "$o/stage.err"
+      kill "$kid"
+      break
+    fi
+  done
+  wait $pid
   rc=$?
   for f in stage.json pin.txt partition.json; do [ -f "$d/$f" ] && cp "$d/$f" "$o/"; done
   [ -f "$d/program.json" ] && { stat -c %s "$d/program.json" > "$o/program.bytes"; sha512sum "$d/program.json" | cut -d' ' -f1 > "$o/program.file.sha512"
