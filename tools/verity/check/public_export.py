@@ -9,10 +9,12 @@ DEST gets the files `public_boundary.py` judges public (`public_boundary.toml`),
 manifest's entry that names what the export doesn't copy is dropped: a lakefile's roots, executables, input files and path
 `require`s (with their `lake-manifest.json` entries), and each pyproject's members, sources, conflicts, extras, dependency
 groups, test paths and console scripts. A `[project] dependencies` entry stays, and so does the source of a distribution one
-still needs. A list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the
+still needs; one goes only when it names a distribution the export doesn't copy and no copied file of its own uses
+(`public_boundary.unused`). A list's entry naming a path the export doesn't copy is dropped too (`PATH_LISTS`: the lint allowlists, and the
 dead-code census's roots and keep-list), so a file made private takes its entries with it. Each rewrite must read, as TOML
-or JSON, as the old file less exactly those entries. A path `require`, an extra's entry, a dependency group's and a console
-script are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite kept one;
+or JSON, as the old file less exactly those entries. A path `require`, an extra's entry, a dependency group's, a console
+script and an unused dependency are the edges the check counts closed by the export (`Judgment.cut`), and the export fails
+if its rewrite kept one;
 every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the export doesn't
 copy.
 
@@ -24,7 +26,8 @@ package's lock (`unreached`).
 
 A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays
 only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
-owner, an issue or a due date. An entry that lists witnesses goes with a witness the export doesn't copy, and a runner's
+owner, an issue or a due date, so the Lean check reads it as an unowned lock; the `policy` of each of the check's controls
+loses them too (`rewrite_controls`). An entry that lists witnesses goes with a witness the export doesn't copy, and a runner's
 entry with a file of the command that writes its data. The export fails, naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
 names what no copied file has.
 
@@ -385,11 +388,12 @@ def _at(doc: dict, dotted: str) -> dict:
 
 
 def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], workspace: set[str],
-                      required: set[str] = frozenset(), module: Callable[[str], list[str]] = lambda name: []
-                      ) -> tuple[str, list[tuple[str, str]]]:
+                      required: set[str] = frozenset(), module: Callable[[str], list[str]] = lambda name: [],
+                      unused: set[str] = frozenset()) -> tuple[str, list[tuple[str, str]]]:
     """A pyproject at ``here`` without what names a member, distribution, test path or console script's module the export
     doesn't copy: ``dists`` are the copied workspace distributions, ``workspace`` all of them, and ``module`` gives the files a
-    dotted module loads (`public_boundary.Tree`'s). A `[project] dependencies` entry stays, an edge the build fails on, and
+    dotted module loads (`public_boundary.Tree`'s). A `[project] dependencies` entry stays, an edge the build fails on,
+    unless it is one of ``unused`` (the entries no copied file of the distribution uses: `public_boundary.unused`), and
     so does the source of any distribution ``required`` names (one a kept dependency anywhere still needs): without its
     source, uv would look for it on the package index."""
     doc = tomllib.loads(text)
@@ -418,6 +422,10 @@ def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], w
             if keep != t["members"]:
                 dropped += [("member", m) for m in t["members"] if m not in keep]
                 body, _at(expect, b.name)["members"] = _set_array(body, "members", keep), keep
+        if b.name == "project" and isinstance(t.get("dependencies"), list) and unused & set(t["dependencies"]):
+            dropped += [("dependency", r) for r in t["dependencies"] if r in unused]
+            keep = [r for r in t["dependencies"] if r not in unused]
+            body, _at(expect, b.name)["dependencies"] = _set_array(body, "dependencies", keep), keep
         if b.name == "tool.uv.sources":
             gone = [k for k in t if foreign(k) and PB._norm_dist(k) not in required]
             dropped += [("source", k) for k in gone]
@@ -630,6 +638,19 @@ def rewrite_lock(text: str, here: str, held: Held,
     return new, [(path, name) for path, names in dropped.items() for name in names]
 
 
+#: the files of the Lean check's controls (`public_lock.CONTROLS`), from the root
+CONTROLS = tuple(f"tools/verity/lean/{f}" for f in PUBLIC_LOCK.CONTROLS)
+
+
+def rewrite_controls(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """The Lean check's controls (a file of `CONTROLS`) for the unowned lock their fixture ships with
+    (`public_lock.public_controls`): no control's `policy` carries an owner, an issue or a due date, and a control of an
+    owner's rule is gone."""
+    old = json.loads(text)
+    new, gone = PUBLIC_LOCK.public_controls(old)
+    return (text if new == old else json.dumps(new, indent=1, ensure_ascii=False) + "\n"), [("control", name) for name in gone]
+
+
 def lane_text(text: str) -> list[tuple[str, str]]:
     """(kind, text) of each leftover (`scrub`'s kinds) in ``text``."""
     return [(kind, what) for _, found in LANE_TEXT.found_in([(1, text)]) for kind, _, what in [found.partition(": ")]] + \
@@ -728,9 +749,10 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
     built = copied | set(roots)
     _, dists, _, _ = tree.python
     exported = {d for d, p in dists.items() if p in copied}
+    unused = {(e.source, e.what) for e in judgment.cut if e.kind == "python dependency"}
     required = {n for f in copied if f.rpartition("/")[2] == "pyproject.toml"
                 for r in tomllib.loads((dest / f).read_text(encoding="utf-8")).get("project", {}).get("dependencies", [])
-                if (n := PB._norm_dist(PB._requirement_name(r))) in dists and n not in exported}
+                if (n := PB._norm_dist(PB._requirement_name(r))) in dists and n not in exported and (f, r) not in unused}
     rewrites: dict[str, list[tuple[str, str]]] = {}
     targets: dict[str, dict] = {}
     locks: dict[str, dict] = {}
@@ -739,17 +761,18 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
     for f in sorted(copied):
         name, here = f.rpartition("/")[2], os.path.dirname(f)
         listed = path_list(f) is not None
-        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml", LOCK) and not listed:
+        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml", LOCK) and not listed and f not in CONTROLS:
             continue
         old = (dest / f).read_text(encoding="utf-8")
         new, dropped = (rewrite_path_list(old, f, tracked, copied) if listed
+                        else rewrite_controls(old) if f in CONTROLS
                         else rewrite_lakefile(old, here, built) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
                         else rewrite_lock(old, here, held, lambda lock, here=here: unreached(
                             lambda f: roots[f] if f in roots else tree.text(f), built, here, lock, tracked)) if name == LOCK
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required,
-                                               lambda m, f=f: tree._module(m, f)))
-        if dropped or (name == LOCK and new != old):
+                                               lambda m, f=f: tree._module(m, f), {r for g, r in unused if g == f}))
+        if dropped or (name == LOCK or f in CONTROLS) and new != old:
             (dest / f).write_text(new, encoding="utf-8")
         if dropped:
             rewrites[f] = dropped
@@ -771,6 +794,8 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
             return ("require", e.what) in rewrites.get(e.source, [])
         if e.kind == "python script":
             return ("script", e.what.partition(" = ")[0]) in rewrites.get(e.source, [])
+        if e.kind == "python dependency":
+            return ("dependency", e.what) in rewrites.get(e.source, [])
         return any(k.startswith(("dependency-groups.", "optional-dependencies.")) and v == e.what
                    for k, v in rewrites.get(e.source, []))
 

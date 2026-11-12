@@ -193,6 +193,106 @@ def test_what_the_exports_rewrite_drops_is_cut_not_open(judged) -> None:
         (e.source, e.kind, e.target) for e in j.edges}
 
 
+#: a public distribution that depends on two that stay private: one for its private files alone, one a public file uses
+DEPENDS = {
+    "tools/t/pyproject.toml": ('[project]\nname = "tool"\ndependencies = [\n    "store",\n    "keys>=1",\n]\n'
+                            '[tool.uv.sources]\nstore = { workspace = true }\nkeys = { workspace = true }\n'),
+    "tools/t/check.py": "import keyspkg\n",
+    "tools/t/setup.sh": '#!/bin/bash\nif [ -f tools/t/run.py ]; then python3 tools/t/run.py; fi\n',
+    "tools/t/run.py": "import storepkg\n",
+    "store/pyproject.toml": '[project]\nname = "store"\n[tool.hatch.build.targets.wheel]\npackages = ["storepkg"]\n',
+    "store/storepkg/__init__.py": "",
+    "keys/pyproject.toml": '[project]\nname = "keys"\n[tool.hatch.build.targets.wheel]\npackages = ["keyspkg"]\n',
+    "keys/keyspkg/__init__.py": "",
+}
+DEPENDS_BOUNDARY = """
+[public]
+a = ["tools/t/{check.py,setup.sh}"]
+[private]
+team = ["store", "keys"]
+[[needed]]
+why = "structure"
+paths = ["**/pyproject.toml"]
+[[optional]]
+edge = "tools/t/setup.sh -> tools/t/run.py"
+why = "the script runs it only where it is"
+"""
+
+
+def _depends(root: Path, boundary: str = DEPENDS_BOUNDARY):
+    for f, text in DEPENDS.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text, encoding="utf-8")
+    tree, boundary = PB.Tree(root, files=DEPENDS), PB.Boundary.load(tomllib.loads(boundary))
+    return tree, boundary, PB.judge(tree, boundary)
+
+
+def test_a_dependency_no_public_file_uses_is_cut_and_one_a_public_file_uses_stays_open(tmp_path: Path) -> None:
+    """A pyproject's dependency on a distribution that isn't public is closed by the export while no public file of its
+    own distribution reaches a file of that one: the private files it is declared for stay behind. One a public file
+    uses stays open, beside that file's own edge."""
+    _, _, j = _depends(tmp_path)
+    assert [(e.source, e.kind, e.what) for e in j.cut] == [("tools/t/pyproject.toml", "python dependency", "store")]
+    assert {(e.source, e.kind, e.target) for e in j.edges} == {
+        ("tools/t/pyproject.toml", "python dependency", "keys/pyproject.toml"),
+        ("tools/t/check.py", "python import", "keys/keyspkg/__init__.py")}
+
+
+def test_the_export_drops_a_dependency_no_public_file_uses_with_its_source(tmp_path_factory) -> None:
+    root = tmp_path_factory.mktemp("tree")
+    tree, boundary, j = _depends(root)
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *DEPENDS], cwd=root, check=True)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    assert got["rewrites"] == {"tools/t/pyproject.toml": ["dependency store", "source store"]}
+    assert tomllib.loads((dest / "tools/t/pyproject.toml").read_text(encoding="utf-8")) == {
+        "project": {"name": "tool", "dependencies": ["keys>=1"]}, "tool": {"uv": {"sources": {"keys": {"workspace": True}}}}}
+    assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["python dependency store -> store/pyproject.toml"]
+
+
+def test_an_optional_edge_is_not_open_and_each_is_one_edge_with_its_reason(tmp_path: Path) -> None:
+    """An edge the boundary lists under `[[optional]]` is one its source runs without, so it is not open; the judgment
+    names those the tree has. Without the entry the edge is open."""
+    _, _, j = _depends(tmp_path)
+    assert [str(e) for e in j.optional] == ["tools/t/setup.sh:2: path tools/t/run.py -> tools/t/run.py"]
+    assert "tools/t/setup.sh -> tools/t/run.py" not in {e.key for e in j.edges}
+    _, _, bare = _depends(tmp_path, DEPENDS_BOUNDARY.partition("[[optional]]")[0])
+    assert "tools/t/setup.sh -> tools/t/run.py" in {e.key for e in bare.edges} and bare.optional == []
+    for entry in ({"edge": "tools/t/setup.sh -> tools/t/run.py"}, {"edge": "tools/t/setup.sh", "why": "w"},
+                  {"edge": "a -> b", "why": " "}, {"edge": "a -> b", "why": "w", "until": "x"}):
+        with pytest.raises(ValueError, match="optional"):
+            PB.Boundary.load({"optional": [entry]})
+
+
+def test_every_optional_edge_of_the_boundary_is_one_this_tree_has() -> None:
+    """A listed optional edge the tree no longer has is a line to delete: the list states what is true now."""
+    boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
+    stale = [key for key in boundary.optional
+             if key not in {e.key for e in tree.edges(key.partition(" -> ")[0])}]
+    assert not stale, f"`[[optional]]` edges no file has; delete them from public_boundary.toml: {stale}"
+
+
+def test_the_lean_checks_controls_ship_for_an_unowned_lock() -> None:
+    """A control's `policy` is laid over its fixture's lock, which the export ships with no owner: the export strips each
+    `policy` of them too, drops a control that needs an owned lock, and leaves a file with neither as it stands."""
+    controls = {"plain": {"write": {"A.lean": "x"}, "fails": "sorry: "},
+                "listed": {"policy": {"guarantees": {"P.t": {"owner": "@lane"}}, "open_seed": {}}, "fails": "open: P.S is"},
+                "ticket": {"policy": {"open": {"P.S": {"due": "soon"}}}, "fails": "open: P.S's entry", "owned": True}}
+    text = json.dumps(controls, indent=1) + "\n"
+    new, dropped = PE.rewrite_controls(text)
+    assert dropped == [("control", "ticket")]
+    assert json.loads(new) == {"plain": controls["plain"], "listed": {"policy": {"guarantees": {"P.t": {}}}, "fails": "open: P.S is"}}
+    plain = json.dumps({"plain": controls["plain"]}) + "\n"
+    assert PE.rewrite_controls(plain) == (plain, [])
+    spelled = {"spelled": {"fails": 'open: list it, writing "P.S": {"owner": "@lane", "digest": '}}
+    with pytest.raises(ValueError, match="the controls spelled spells an owner"):
+        PE.rewrite_controls(json.dumps(spelled))
+    assert {f"tools/verity/lean/tests/fixtures/{f}" for f in PE.LEAN_CHECK.CONTROLS.values()} == set(PE.CONTROLS)
+    for f in PE.CONTROLS:
+        assert (ROOT / f).is_file(), f
+
+
 def test_needed_files_follow_their_entry(judged) -> None:
     """A `needed` file is public only when a public file of a group its entry names needs it, by a kind its entry names,
     and then pulls in the rest of its entry; a `private` glob wins over a public one."""

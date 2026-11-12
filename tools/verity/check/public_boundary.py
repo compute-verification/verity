@@ -35,7 +35,12 @@ not refused: one list serves every checkout the landing queue holds, and an edge
 Lists of files a manifest builds (a lakefile's `roots`, the workspace's `members`) are not edges: the export keeps the
 public entries. A path `require`, an extra's entry, a dependency group's and a console script (`EXPORT_CUTS`) are edges
 the export's manifest rewrite drops: closed by the export, not open, so the list holds none of them, while
-`public_export.py --build` still builds what it copies without them.
+`public_export.py --build` still builds what it copies without them. So is a pyproject's dependency on a distribution
+that isn't public while no public file of its own distribution reaches a file of that one (`unused`): the pyproject
+declares it for its private files, and a public file that did use it would be an open edge of its own.
+
+An edge the boundary lists under `[[optional]]`, with its reason, is not open either: a use its source makes only where
+the target is there (a script that tests for a file and goes on without it), so the export ships nothing broken.
 """
 from __future__ import annotations
 
@@ -144,13 +149,21 @@ class Boundary(NamedTuple):
     residue: tuple[Residue, ...] = ()
     #: the fetched fixtures the export ships as tracked files (`public_export.fixtures`)
     fixtures: re.Pattern[str] = re.compile("(?!)")
+    #: {`SOURCE -> TARGET`: why}: the edges a public file runs without (`[[optional]]`)
+    optional: dict[str, str] = {}
 
     @classmethod
     def load(cls, doc: dict | Path = BOUNDARY) -> Boundary:
         if isinstance(doc, Path):
             doc = tomllib.loads(doc.read_text(encoding="utf-8"))
-        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue", "fixtures"}):
+        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue", "fixtures", "optional"}):
             raise ValueError(f"the boundary has keys it doesn't read: {other}")
+        optional = {}
+        for e in doc.get("optional", []):
+            if sorted(e) != ["edge", "why"] or not re.fullmatch(r"\S+ -> \S+", str(e["edge"])) or not str(e["why"]).strip():
+                raise ValueError(f"optional {e.get('edge')!r} has keys {sorted(e)}; each has exactly edge, `SOURCE -> "
+                                 "TARGET`, and why, how its source runs without its target")
+            optional[e["edge"]] = e["why"]
         residue = []
         for e in doc.get("residue", []):
             if sorted(e) != ["paths", "pattern", "until", "what"]:
@@ -171,7 +184,8 @@ class Boundary(NamedTuple):
             needed.append(Needed(e.get("why", ""), globs(e["paths"]), None if src == "*" else frozenset(src),
                                  None if via == "*" else frozenset(via)))
         return cls(groups, dict(doc.get("public", {})), globs(p for ps in doc.get("private", {}).values() for p in ps),
-                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue), globs(doc.get("fixtures", [])))
+                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue), globs(doc.get("fixtures", [])),
+                   optional)
 
     def group(self, path: str) -> str | None:
         return next((g for g, r in self.groups.items() if r.fullmatch(path)), None)
@@ -575,8 +589,21 @@ class Judgment(NamedTuple):
     public: dict[str, str]
     #: the open edges
     edges: list[Edge]
-    #: the edges of a kind the export's rewrite drops (`EXPORT_CUTS`)
+    #: the edges the export's rewrite drops: those of a kind in `EXPORT_CUTS`, and the dependencies no public file uses
+    #: (`unused`)
     cut: list[Edge] = []
+    #: the boundary's `[[optional]]` edges this tree has
+    optional: list[Edge] = []
+
+
+def unused(tree: Tree, edges: list[Edge]) -> list[Edge]:
+    """Those of the open ``edges`` that are a pyproject's dependency on a distribution no public file of its own reaches:
+    none of ``edges`` runs from a file whose nearest pyproject is the source to one whose nearest pyproject is the target."""
+    def home(path: str) -> str | None:
+        return tree._pyproject(path if path in tree.files else f"{path}/.")
+
+    used = {(home(e.source), home(e.target)) for e in edges if e.kind not in ("python dependency", "package")}
+    return [e for e in edges if e.kind == "python dependency" and (e.source, e.target) not in used]
 
 
 def judge(tree: Tree, boundary: Boundary) -> Judgment:
@@ -627,7 +654,9 @@ def judge(tree: Tree, boundary: Boundary) -> Judgment:
     open_ = {(e.source, e.target) for e in edges}
     edges = [e for e in edges if not (e.kind == "python import" and e.what.startswith("from ")
                                       and (e.source, next(iter(tree._module(e.what.split()[1], e.source)), "")) in open_)]
-    return Judgment(why, [e for e in edges if e.kind not in EXPORT_CUTS], [e for e in edges if e.kind in EXPORT_CUTS])
+    cut = [e for e in edges if e.kind in EXPORT_CUTS] + unused(tree, edges)
+    return Judgment(why, [e for e in edges if e not in cut and e.key not in boundary.optional], cut,
+                    [e for e in edges if e not in cut and e.key in boundary.optional])
 
 
 def drags(tree: Tree, boundary: Boundary, judgment: Judgment, target: str) -> tuple[set[str], set[str]]:

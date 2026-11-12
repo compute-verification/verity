@@ -14,7 +14,8 @@ the lock it ships states only what the copied files hold:
   are never dropped: a public statement doesn't rest on what the export leaves out, so a cited name the copied files
   lack refuses the lock (`missing`);
 * no entry carries its `owner`, `issue` or `due` (`LANE_FIELDS`), and the sections that hold only those go
-  (`LANE_SECTIONS`);
+  (`LANE_SECTIONS`), so the lock is one the Lean check reads as unowned (`check.py`'s `unowned_lock`), and the `policy`
+  of each of the check's controls loses them too (`public_controls`);
 * everything else stays as it stands: a kept entry's record (its hashes, its reasons), a `reads` group, which is its
   module's whole, and the sections that name nothing of the repository's Lean (`OPAQUE`). A reason is never reworded
   here: what a kept entry's text still holds that the public tree shouldn't is found (`leftovers`), and the export
@@ -102,6 +103,11 @@ LANE_FIELDS = ("owner", "issue", "due")
 OWNED = ("guarantees", "assumptions", "domain", "open")
 #: the sections that hold only `LANE_FIELDS`' defaults
 LANE_SECTIONS = ("default_owner", "open_default_issue", "open_seed")
+#: the files of the Lean check's controls, from the check's own directory (`check.py`'s `CONTROLS`): each holds
+#: {control: {..., "policy": the sections of its fixture's lock the control lays over them}}
+CONTROLS = ("tests/fixtures/violations.json", "tests/fixtures/module-violations.json")
+#: a control's key saying it needs an owned lock: its point is an owner's or a ticket's rule, so the export leaves it out
+NEEDS_OWNED = "owned"
 #: how many names a refusal shows
 SHOWN = 20
 #: a dotted name, as a reason spells a declaration or a module
@@ -236,6 +242,35 @@ def refusal(left: list[tuple[str, str, str, str, str]]) -> str:
             "the attribution or the name and keep the sentence, saying what is true now. An entry that can't be stated "
             "without what it names is made public with it or private with it (`public_boundary.toml`); one that a "
             "change on its way removes is listed there under `[[residue]]`, with that change as its `until`")
+
+
+def public_controls(controls: dict) -> tuple[dict, list[str]]:
+    """``controls`` (a file of `CONTROLS`) as the export ships it, and the controls it leaves out. The fixture's lock ships
+    unowned (`public`), and a control's `policy` is laid over it, so each `policy` loses its `LANE_FIELDS` and
+    `LANE_SECTIONS` too: the lock a control builds is unowned as the clean one is. A control marked `NEEDS_OWNED` is one
+    of an owner's or a ticket's rule, which an unowned lock isn't held to, and is left out. `ValueError` on a kept
+    control whose expected failure still spells a lane field."""
+    out, gone = {}, sorted(name for name, c in controls.items() if c.get(NEEDS_OWNED))
+    for name, control in controls.items():
+        if name in gone:
+            continue
+        out[name] = control = copy.deepcopy(control)
+        if isinstance(policy := control.get("policy"), dict):
+            for section in LANE_SECTIONS:
+                policy.pop(section, None)
+            for section in OWNED:
+                for record in policy[section].values() if isinstance(policy.get(section), dict) else ():
+                    if isinstance(record, dict):
+                        for field in LANE_FIELDS:
+                            record.pop(field, None)
+    spelled = re.compile(r'"(?:%s)": ' % "|".join(LANE_FIELDS))
+    if left := sorted(name for name, c in out.items() for text in (c.get("fails", ""), *c.get("not", []))
+                      if spelled.search(text)):
+        raise ValueError(f"public_lock: the expected failure of the controls {', '.join(left)} spells an owner, an issue or "
+                         f"a due date, which the lock the export ships doesn't hold: end the expected text before it, or, "
+                         f"if the control's point is an owner's or a ticket's rule, mark it `\"{NEEDS_OWNED}\": true`, "
+                         f"and the export leaves it out")
+    return out, gone
 
 
 def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:

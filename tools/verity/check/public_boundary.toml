@@ -5,7 +5,8 @@
 # A file is public when a `public` glob covers it, when a `needed` glob covers it and a public file needs it (directly or
 # through other such files), or when a `when_closed` glob covers it and everything it needs is public. A `private` glob
 # wins over all three, and every other file stays private. A public file that needs a file that isn't public is an edge,
-# which `public_boundary.py` reports: what a file needs is its docstring's.
+# which `public_boundary.py` reports: what a file needs is its docstring's. An `[[optional]]` entry names an edge its
+# source runs without, which is not one.
 #
 # A glob is a path from the root, `*` within one segment, `**` across any number, `{a,b}` either; it covers the path it
 # names and everything under it.
@@ -108,6 +109,15 @@ shared = [
     # the honest and nontrivial lemmas of the expansion's two size bounds (`ExpandSize`, `ExpandAndSize`), which no public
     # proof imports: a public guarantee ships with its witnesses, and the lock the export writes keeps their entries
     "security/Proofs/Core/ExpandWitnesses.lean",
+]
+# the Lean check a reader runs on the tree's Lake packages (`check.py --all`): the checker, the Lean it runs, its setup
+# and sandbox, and the two fixture packages its controls build with the violations each must fail on. The tools beside it
+# stay private: the lock run's, the store's and the queue's, and its tests
+lean_check = [
+    "tools/verity/lean/{check,headers,module_keys,olean_graph,upstream,cache}.py",
+    "tools/verity/lean/{Facts,Replay,Graph,Unread,Upstream}.lean",
+    "tools/verity/lean/{sandbox,setup}.sh",
+    "tools/verity/lean/tests/fixtures/{control,modules,violations.json,module-violations.json}",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "security/lean-audit.json", "security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
@@ -361,6 +371,24 @@ from = ["certifier"]
 why = "the ZK server's record as its Lean code runs it, stated and proved, which the recursive session's stop count is proved from"
 paths = ["security/{Properties,Proofs/Properties}/Firewall.lean"]
 from = ["flock"]
+
+[[needed]]
+why = "the task graph's key rule and its digests, which key each module the Lean check's artifact cache restores"
+paths = ["tools/verity/graph/verity_graph/contract.py"]
+
+# An edge a public file runs without: its source uses the target only where it is there, so the export ships nothing
+# broken. Each entry is one edge, `SOURCE -> TARGET`, with how the source runs without the target.
+[[optional]]
+edge = "tools/verity/lean/setup.sh -> tools/verity/lean/lean_audit.py"
+why = "the pinned dependency bundle's restore: the script runs it only where the file is, and lake fetches the dependencies elsewhere"
+
+[[optional]]
+edge = "tools/verity/lean/setup.sh -> tools/verity/lean/moved.py"
+why = "a package path of an earlier layout, and a build directory a layout move left behind: the script asks only when its argument holds no package, and goes on with a line where the file isn't"
+
+[[optional]]
+edge = "tools/verity/lean/cache.py -> tools/verity/lean/moved.py"
+why = "the paths a package had before a layout move, under which the cache looks for an older build: none where the file isn't"
 
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
