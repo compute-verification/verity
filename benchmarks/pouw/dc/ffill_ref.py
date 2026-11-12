@@ -40,7 +40,6 @@ from verity.definitions.ops.fp32 import F32_NAN_PTX, F32FmaV2
 
 M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
-SIGN = 0x80000000
 
 BIAS = 0x4B400000                 # 1.5·2^23's word: f = BIAS + w read as binary32
 REGS = (0, 43, 86)                # the accumulator registers of IGMMA.64x256x32's 128 a thread the filler reads

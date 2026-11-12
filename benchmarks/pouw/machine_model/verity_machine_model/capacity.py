@@ -8,7 +8,7 @@ certifies is the GPU's capacity: the useful work that any program could still ha
 
 with μ_k the useful work one warp instruction of class k does, in tensor slots (an MMA's 4096 int8 MACs = 1; IDP4A's
 128 = 1/32; HFMA2's 64 = 1/64; FFMA's 32 = 1/128), operands free. ε_cap = hidden(n) / hidden(0) is the share of the
-empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_cap is the certified share. A cell (`Cell`,
+empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_cap is the verified share. A cell (`Cell`,
 one node over one block's span) is a set of groups (a share of the cell's SMSP-time and that share's certified load). A
 receipt says neither where nor when in its cell its work ran, and hidden is concave in n, so the prover's best placement spreads the certified
 work evenly: σ is read on the pooled load Σ w_g n_g, never as Σ w_g hidden(n_g), which is smaller and would credit a

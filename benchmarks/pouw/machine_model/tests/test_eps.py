@@ -224,7 +224,7 @@ def test_luck_and_the_total():
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
-def test_adapt_is_a_proof_units_term():
+def test_adapt_is_a_proof_blocks_term():
     """ε_adapt (Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035
@@ -682,7 +682,10 @@ def _worst_core_under_margin(data, pi, d, m):
     for r in near:
         small = min(pi.c[k][r] for k in pi.c if r in pi.c[k])
         hit = [k for k in pi.c if r in pi.c[k] and abs(pi.c[k][r] - small) < 1e-9]
-        scaled = lambda f: replace(pi, c={k: ({**v, r: v[r] * f} if k in hit else v) for k, v in cc.items()})
+
+        def scaled(f):
+            return replace(pi, c={k: ({**v, r: v[r] * f} if k in hit else v) for k, v in cc.items()})
+
         f = (1 - m) if core(scaled(1 - m)) >= core(scaled(1 + m)) else (1 + m)
         for k in hit:
             cc[k][r] *= f
@@ -864,7 +867,10 @@ def test_a_filler_mix():
     two IMADs row I."""
     assert E.lane_fill(1.0, {"IMAD": 1.0}).mix == {"IMAD": 1.0} and E.lane_fill(1.0).mix == {"ALU": 1.0, "IMAD": 1.0}
     d = E.design("dither-c-peel")
-    bind = lambda x, mix: E.setup(d.with_fill(x, mix), RPI, operands="floor", credit="floor").baseline.binding
+
+    def bind(x, mix):
+        return E.setup(d.with_fill(x, mix), RPI, operands="floor", credit="floor").baseline.binding
+
     assert bind(1.0, {"ALU": 1.0}) == ("A",) and bind(1.0, {"IMAD": 1.0}) == ("JI3s_0",)
     assert bind(2.0, {"IMAD": 1.0}) == ("I",) and bind(2.0, {"IMAD": 2.0, "ALU": 1.0}) == ("JI3s_0",)
 

@@ -1,6 +1,6 @@
 """machine-model cover [--card sm_NN] [--holes|--check]
-                                          the coverage table (data/cover/): each opcode of NVIDIA's family tables and
-                                          the SASS corpus on the H200 and the RTX PRO 6000, its envelope op (Accel.Op,
+                                          the opcode table (data/cover/): each opcode of NVIDIA's family tables and
+                                          the SASS corpus on the H200 and the RTX PRO 6000, its ACCEL op (Accel.Op,
                                           or a proposed one) and pipe, units, rate against ρ, mark, argument
                                           and source; the counts by mark (opcodes, corpus forms, corpus instructions),
                                           with the proposed entries and on Accel.Op alone, the rows resting on proposed
