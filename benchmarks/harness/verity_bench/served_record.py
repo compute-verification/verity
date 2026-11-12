@@ -10,10 +10,14 @@ so nothing stands in for a time or a count of GPUs no run wrote.
   ``second``, under its ``--out``):
 
   - ``prove``, one entry a session: ``audit.timing``, by member, holds each session's seconds two ways (`SECONDS`).
-    ``session_s`` is wall clock from the session's launch to its return, the time its prover held its GPUs; it is the
-    default. ``timing.prove_total_s`` is the prover's own timer summed over the session's tables, each from the start
-    of that table's proving to its proof: it leaves out the witness, the commitment's round trips and the wait for the
-    challenger's coins. The GPUs a session held are its ``gpus``, which no run writes yet.
+    ``session_s`` is the audit's own clock on the session: on the audit's proof server, from the statement's
+    submission to both of its records, which counts the session's wait behind the others of its prover; where a
+    session is a process pair of its own, around that pair's run. It leaves out no time the session's prover ran, and
+    is the default. ``timing.prove_total_s`` is the prover's own timer summed over the session's tables, each from
+    the start of that table's proving to its proof: it leaves out the witness, the commitment's round trips and the
+    wait for the challenger's coins. The GPUs a session held are its ``gpus``, which no run writes yet. The audit's
+    proof server proves on the CPU unless it is given devices, and the command takes an entry only on a whole count
+    of GPUs, 1 or more: a session proved on the CPU has no entry in this record's form.
   - ``staging``: ``audit.staging``'s ``before_draw_s`` and ``drawn_s``, with its ``gpus``. The one-stage audit times
     both in its own summary, and the two-stage summary keeps neither.
   - ``replay`` and ``interior``: ``replay`` and ``interior_commit``, each ``{"seconds", "gpus"}``. The two-stage audit
@@ -36,7 +40,8 @@ from typing import Any
 
 #: the record's fields, as `exfiltration.served_share` reads them
 FIELDS = ("run", "prove", "staging", "replay", "interior", "serving", "stock")
-#: a session's seconds in ``audit.timing``: the time its prover held its GPUs, or the prover's own timer over its tables
+#: a session's seconds in ``audit.timing``: the audit's clock on the whole session, or the prover's own timer over its
+#: tables
 SECONDS = ("session_s", "prove_total_s")
 SUMMARY = "summary.json"
 
@@ -139,7 +144,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--serving", type=Path, metavar="META", help="the served load's `meta.json` (`verity bench serve_tax`)")
     ap.add_argument("--stock", type=Path, metavar="META", help="stock vLLM's `meta.json` on the same load")
     ap.add_argument("--seconds", choices=SECONDS, default=SECONDS[0],
-                    help="a session's seconds: the time its prover held its GPUs (the default) or the prover's own timer")
+                    help="a session's seconds: the audit's clock on the whole session (the default) or the prover's own "
+                         "timer over its tables")
     ap.add_argument("--serving-cost", type=float, metavar="C",
                     help="without --stock: the serving cost of the served arm over stock, a fraction")
     ap.add_argument("--serving-cost-source", metavar="S", help="the run and load the serving cost is of")

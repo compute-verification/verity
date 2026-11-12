@@ -94,11 +94,13 @@ read from that record, and no stock serve of this command's own is needed.
 The reader is `python -m verity_bench.served_record --second DIR [--serving META] [--stock META]`
 (`benchmarks/harness/verity_bench/served_record.py`). It prints that object from the second stage's `summary.json`
 and the two loads' `meta.json`, with `None` for each field those files lack, and names each one with the file it read
-and what that file holds instead. A second stage's summary holds each session's seconds (`audit.timing`: `session_s`,
-the wall clock from the session's launch to its return, by default; `--seconds prove_total_s` reads the prover's own
-timer over the session's tables instead) and not the GPUs a session held. It holds no time for the staging, the
-replay or the interior commitment, so the reader names `prove.gpus`, `staging`, `replay` and `interior`, and the
-command claims no share from such a record.
+and what that file holds instead. A second stage's summary holds each session's seconds (`audit.timing`) and not the
+GPUs a session held. By default the reader takes `session_s`, the audit's own clock on the session: on the audit's
+proof server it runs from the statement's submission to both of its records, so it counts a session's wait behind the
+others of its prover. `--seconds prove_total_s` reads the prover's own timer over the session's tables instead, which
+leaves out the witness, the commitment's round trips and the wait for the challenger's coins. The summary holds no
+time for the staging, the replay or the interior commitment, so the reader names `prove.gpus`, `staging`, `replay`
+and `interior`, and the command claims no share from such a record.
 
 ## The errors
 
