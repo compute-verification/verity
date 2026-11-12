@@ -1653,3 +1653,90 @@ and is withdrawn, the backend is now read and not derived, and the reading is no
    would test your fourth cause."
 
 The kept drafts' row and the message for Daniel of my 13:31Z revision stand unchanged.
+
+## Last update to entry 3, Thu 12 Nov 15:38Z: the 14:50Z sampled row is not reported; the kept counts read from the try's own trace (your 3 bits a row is 0.66 to 0.68 bits an output token over its four passes, 0.87 at a chat load's acceptance); the message for Daniel, final
+
+**1. The sampled row** [relayed: VLLM-377, read through the Linear tool at 14:57Z, 15:26Z and 15:38Z; VLLM-392 has no
+comment]. Nothing is posted on the 14:50Z sampled serve and replay under drafts. So I cannot say whether a sampled
+replay differs, and I point at no cause. If it does differ, the candidates I would read first, in order [guess]: the
+accept test's uniform, drawn from the request's seed and the row's position (P
+`rejection_sampler_utils.py:569`), so a request with no seed or a position the replay gives differently; then the
+four rows of my 13:48Z revision, which the try's replay never exercised.
+
+The one comment since is vllm-newpin's of 15:00Z on moving the pin [relayed]. Three of its facts touch this entry.
+Its recommendation is that Friday stays at the pin, the build I read. At vLLM's release the FP8 cache's write follows
+another rule (its scale rounded up to a power of two) and the sampled select draws by another generator, so section 5's
+reading and the accept test are the pin's and want a second read there. And at the pin a hit with drafts on finds 64
+tokens of a 130-token prompt where the release finds 128, which agrees with row 11's cell that a hit gives up its last
+block.
+
+**2. The kept counts, read from the try's own step trace** [run: a count over
+`out/prod-record/server/step_trace.369984.jsonl.gz` of `r20261112-074230-88d0`; a row's count is its emitted count
+less one].
+
+| Pass (the same plan of 32 requests, 23,363 output tokens each) | Decode rows that carried drafts and emitted | Kept 0, 1, 2, 3, 4, 5 | Entropy, bits a row | 3 bits a row: bits a pass; a request; an output token |
+|---|---|---|---|---|
+| 1, the replayed one | 5,143 | 665, 553, 442, 257, 150, 3,076 | 1.840 | 15,429; 482.2; 0.660 |
+| 2 | 5,286 | 751, 652, 450, 259, 154, 3,020 | 1.898 | 15,858; 495.6; 0.679 |
+| 3 | 5,280 | 777, 606, 466, 245, 152, 3,034 | 1.887 | 15,840; 495.0; 0.678 |
+| 4 | 5,170 | 704, 558, 434, 236, 163, 3,075 | 1.845 | 15,510; 484.7; 0.664 |
+
+- **Pass 1 is as vllm gave it** [run], so section 4's measured figures are now read by me and not only relayed.
+- **The same plan kept other counts in other passes** [run]: the four passes have the same prompt lengths, output
+  lengths and hits (25 a pass, the longest 102,336 tokens), and their rows differ by up to 2.8%. Whether the passes'
+  prompts and token ids are the same text I did not read; a pass's first requests miss the cache, so no pass reuses
+  the one before. If they are the same text, a request's kept counts are not fixed by its prompt and its length.
+- **Every decode row carried five drafts** [run: 21,356 rows of 6 tokens in the lifetime], so 3 bits is the width of
+  every row here and no row is free.
+- **On the two shapes at pass 2's rate** [derived]: 301 bits a request on AX's median and 193.8 on the 128k plan, where
+  pass 1's rate gave 293 and 188.5.
+- **At a chat load's acceptance** [derived from a relayed figure: vllm-newpin, 15:00Z, stock vLLM at the pin, 1,024
+  chat prompts, "draft tokens accepted 49.3%"; I take it as kept over carried and did not read how it was sampled]:
+  3.47 output tokens a row, so 0.87 bits an output token at 3 bits a row, 384 bits a request on AX's median and 246.8
+  on the 128k plan. The rate an output token moves with the load's acceptance: 0.5 if every draft is kept, 3 if none.
+
+**3. Message for Daniel, final** (298 words; replaces the earlier ones).
+
+**What Friday serves.** vLLM's published line: FP8 KV cache, five draft tokens, prefix cache on, context
+262,144. At those flags a whole pass replayed token for token, 23,363 of 23,363: greedy requests, cache hits up to
+102,336 tokens. Sampled requests ran today; no result yet.
+
+**Cheapest replay.** Re-run only the sampled request's own computed tokens, in its served steps, every other request
+replaced by zeros of its shape; read the cached prefix and its earlier positions from KV pages serving committed.
+Its cost does not grow with repeated tokens. At Wednesday's settings a 120,704-token cache hit, read from
+serving's pages, replayed bit for bit; at the published line's flags it has not run.
+
+**At serving.** A hash of each KV page and a host copy until the coins: modeled under 0.2% of serving, not measured.
+
+**Advice.** Under the certified tick, rehearsed on one card, cache hits, admission and resumes cost 0 bits; length
+and ending cost 5.6 bits a request. Friday's certified zero is at draft off, because the advice has no field for the
+drafts each decode row kept; VLLM-392 (vllm, due Monday) adds the field and charges it, and the accept rule
+computed in each request's replay block makes the count derived, not charged. Charged, it is at most 3 bits a decode
+row: 0.66 bits an output token at the try's acceptance, 0.87 at a chat load's; vllm's code measured 0.30 on one
+greedy pass. It grows with output tokens, not requests.
+
+**Missing.**
+
+1. The guarantee for a replay block that reads committed values: one statement covers cache hits and long contexts,
+   at about 1.5 times today's bound.
+2. Circuit: the draft layer, its accept rule, the FP8 cache's row.
+3. Replay: nothing forces a stand-in's kept count, so it cannot yet run with drafts.
+
+**The message's figures, by tag.** [relayed]: the flags, 23,363 of 23,363, 102,336, 120,704, the 0 bits and 5.6 bits a
+request (11,186 over 2,000), draft off, VLLM-392 and its date, 0.30 (6,997 bits over 23,363 output tokens), 49.3%.
+[run]: the try's rows a pass. [derived]: under 0.2% (entry 2: the page hash modeled at 0.036% to 0.045% of a card),
+3 bits a row, 0.66 and 0.87 bits an output token, 1.5 times (CACHE's model, entry 2).
+
+**4. Not established, final** (section 9 stands but for these).
+
+- **Item 1, a sampled request under drafts on GLM-5.3**: still not reported at 15:38Z [relayed].
+- **Item 7, a registered code's length**: a code exists in #9279, open; its length is shown on two greedy passes only
+  [relayed].
+- **Item 8, the count's uniqueness**: the serve ran the standard rule with greedy drafts [run: the trace's header], so
+  the rule I read is the one served; still no Lean and no run.
+- **Item 12, the FP8 reading**: the backend is read from the try's log; the two values arose in 4 rows of the
+  lifetime and in none of the replayed pass, so **no run shows that they replay** [run].
+- **New: the reading at vLLM's release** [relayed: vllm-newpin]: the cache's write and the sampled select differ
+  there; I read the pin only.
+- **New: acceptance on the load Friday serves** [derived]: 70.7% on the try's greedy agentic pass and 49.3% on stock
+  chat prompts give 0.66 and 0.87 bits an output token at fixed width. Friday's own figure is neither.

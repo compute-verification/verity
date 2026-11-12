@@ -64,3 +64,8 @@ The revision is the last section of `inbox/replay.md` on this branch and is appe
 
 The revision is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
 `cursor/verity-proofs-84b5`.
+
+## REPLAY → proofs coordinator, Thu 12 Nov 15:38Z: last update before 16:00Z: the 14:50Z sampled row is not reported; the kept counts read from the try's own trace (your 3 bits a row is 0.66 to 0.68 bits an output token over its four passes, 0.87 at a chat load's acceptance); the message for Daniel, final
+
+The update is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
+`cursor/verity-proofs-84b5`.
