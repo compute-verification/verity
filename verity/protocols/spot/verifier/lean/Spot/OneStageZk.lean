@@ -35,10 +35,12 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
-* **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
+* **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublicBy`): its scheme,
   roots and their domains and its instance count the record's, and its `units.indices` the population's units in
   order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the sample relabels an instance as
-  another unit; else the check refuses, before any session is verified;
+  another unit; else the check refuses, before any session is verified. The public file names its ports bare; a window
+  of one member registers them `<member>/<port>`, and the header is held to that member's roots with its name taken
+  off (`publicPorts`); a registration of several members' roots refuses (`NOT_ONE_MEMBER`);
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
@@ -340,14 +342,79 @@ def indicesHeld (rec h : Json) : Bool :=
   | some n, .arr is => is.size == n && (List.range n).all fun i => (is[i]? >>= nat?) == some i
   | _, _ => false
 
+/-- The port a registration names a window's row tables' root at (`verity.commitments.windows.rows.TABLE_PORT`). -/
+def TABLE_PORT : String := "row-table"
+
+/-- The refusal of a registration that names a row tables' root (`rootsOf`, `publicPorts`). -/
+def ROW_TABLES : String :=
+  "roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member " ++
+    "form is refused on a window with row tables until its guarantee covers a root every member reads"
+
+/-- Every way a root's port reads as `<name>/<port name>`: the name and the port name at each `/` of the characters
+given, the first `/` first, after the characters `pre` holds reversed. A member's name holds `/`s, so each `/` of a
+port is a place a name can end. -/
+def splitsFrom : List Char → List Char → List (String × String)
+  | _, [] => []
+  | pre, c :: cs =>
+    if c = '/' then (String.ofList pre.reverse, String.ofList cs) :: splitsFrom (c :: pre) cs
+    else splitsFrom (c :: pre) cs
+
+/-- Every way the port `port` reads as `<name>/<port name>` (`splitsFrom`). -/
+def splitsOf (port : String) : List (String × String) := splitsFrom [] port.toList
+
+/-- One root `r` of the registration given to its member, among the members `acc` holds a name of (`rootsOf`): the
+member whose name, then `/`, the root's port begins with, the root pushed on that member's with the name and the `/`
+taken off its port. A refusal where the root is a row tables' (`ROW_TABLES`), no member's, or two members'. -/
+def rootStep (acc : Std.HashMap String (Array Json)) (r : Json) : V (Std.HashMap String (Array Json)) := do
+  let .str port := getD r "port" | throw "roots: a root of the registration names no port"
+  if port == TABLE_PORT then throw ROW_TABLES
+  match (splitsOf port).filter fun x => acc.contains x.1 with
+  | [(name, bare)] =>
+    pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
+      ("port", .str bare), ("root", getD r "root")])))
+  | [] => throw s!"roots: the registration's root {port} is no member's: a member's roots are named <member>/<port>"
+  | _ =>
+    throw (s!"roots: the registration's root {port} is two members': a member's roots are named " ++
+      "<member>/<port>, and a root is one member's")
+
+/-- The one name `n` every port of `ports` reads as `<n>/<port name>` with a port name that holds no `/` (the last of
+its `splitsOf`); none where a port reads as no name or two ports as two names. A member's own port names hold no `/`,
+so two members' roots, of one template or two, read as two names. -/
+def commonMember (ports : List String) : Option String :=
+  match ports.map fun p => (splitsOf p).getLast?.map (·.1) with
+  | some n :: ns => if ns.all (· == some n) then some n else none
+  | _ => none
+
+/-- The refusal of a registration whose roots are neither bare nor one member's (`publicPorts`). -/
+def NOT_ONE_MEMBER : String :=
+  "public file: the registration's roots are not one member's: the one statement's public file is held to a " ++
+    "registration whose ports are bare, or are all one window member's, <member>/<port>"
+
+/-- **The registration's roots by port, as the one statement's public file names them** (`publicHeld`): the record
+`rec`'s own (`Record.byPort`) where no root's port reads as `<name>/<port name>`; else, where every root's port is one
+member's (`commonMember`), that member's roots with its name and the `/` after it taken off
+(`rootStep`, which refuses a row tables' root and a root that is no member's), as the per-member form reads a
+member's (`Member.slice`). A registration of two members or more has no name every root's port reads as, and refuses
+(`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coin. -/
+def publicPorts (rec : Json) : V (Array (String × Json)) := do
+  let rs := match getD rec "roots" with | .arr rs => rs | _ => #[]
+  let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
+  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec
+  let some n := commonMember ports | throw NOT_ONE_MEMBER
+  let acc ← rs.foldlM rootStep (({} : Std.HashMap String (Array Json)).insert n #[])
+  return Record.byPort (Json.mkObj [("roots", .arr (acc.getD n #[]))])
+
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
-`instances` against the record's scheme, roots, domains and population, a refusal naming the codes that fail; then its
-`units.indices` the population's units in order (`indicesHeld`). -/
+`instances` against the record's scheme, roots by port as the public file names them (`publicPorts`), their domains
+and population, a refusal naming the codes that fail; then its `units.indices` the population's units in order
+(`indicesHeld`). -/
 def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
   let h ← FilePart.header pubB
+  let reg ← publicPorts rec
   let fv := getD h "frame_v3"
-  let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
+  let c := Record.matchesPublicBy reg rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids")
+    (getD h "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
   if !indicesHeld rec h then throw INDICES_WHY
 
@@ -360,10 +427,14 @@ theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHel
   | error e => simp [hh, bind, Except.bind] at h
   | ok hd =>
     refine ⟨hd, rfl, ?_⟩
-    cases hi : indicesHeld rec hd
-    · simp only [hh, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
-      split at h <;> simp_all
-    · rfl
+    cases hr : publicPorts rec with
+    | error e => simp [hh, hr, bind, Except.bind] at h
+    | ok reg =>
+      cases hi : indicesHeld rec hd
+      · simp only [hh, hr, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe,
+          MonadExceptOf.throw] at h
+        split at h <;> simp_all
+      · rfl
 
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
 them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
@@ -937,41 +1008,6 @@ def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (
   | none => throw MEMBER_STRATA
   | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
 
-/-- The port a registration names a window's row tables' root at (`verity.commitments.windows.rows.TABLE_PORT`). -/
-def TABLE_PORT : String := "row-table"
-
-/-- The refusal of a registration that names a row tables' root (`rootsOf`). -/
-def ROW_TABLES : String :=
-  "roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member " ++
-    "form is refused on a window with row tables until its guarantee covers a root every member reads"
-
-/-- Every way a root's port reads as `<name>/<port name>`: the name and the port name at each `/` of the characters
-given, the first `/` first, after the characters `pre` holds reversed. A member's name holds `/`s, so each `/` of a
-port is a place a name can end. -/
-def splitsFrom : List Char → List Char → List (String × String)
-  | _, [] => []
-  | pre, c :: cs =>
-    if c = '/' then (String.ofList pre.reverse, String.ofList cs) :: splitsFrom (c :: pre) cs
-    else splitsFrom (c :: pre) cs
-
-/-- Every way the port `port` reads as `<name>/<port name>` (`splitsFrom`). -/
-def splitsOf (port : String) : List (String × String) := splitsFrom [] port.toList
-
-/-- One root `r` of the registration given to its member, among the members `acc` holds a name of (`rootsOf`): the
-member whose name, then `/`, the root's port begins with, the root pushed on that member's with the name and the `/`
-taken off its port. A refusal where the root is a row tables' (`ROW_TABLES`), no member's, or two members'. -/
-def rootStep (acc : Std.HashMap String (Array Json)) (r : Json) : V (Std.HashMap String (Array Json)) := do
-  let .str port := getD r "port" | throw "roots: a root of the registration names no port"
-  if port == TABLE_PORT then throw ROW_TABLES
-  match (splitsOf port).filter fun x => acc.contains x.1 with
-  | [(name, bare)] =>
-    pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
-      ("port", .str bare), ("root", getD r "root")])))
-  | [] => throw s!"roots: the registration's root {port} is no member's: a member's roots are named <member>/<port>"
-  | _ =>
-    throw (s!"roots: the registration's root {port} is two members': a member's roots are named " ++
-      "<member>/<port>, and a root is one member's")
-
 /-- **The registration's roots, each its member's**: the roots of the record `rec` by the name of the member each is
 of, in the record's order, each as the record holds it with the member's name and the `/` after it taken off its
 port (`rootStep`). A root is the member's whose name, then `/`, its port begins with, the whole name: the record's
@@ -1434,6 +1470,33 @@ private def refusal : V Unit → String
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"de\"},\"roots\":{\"x\":\"aa\",\"y\":\"bb\"}},\"instances\":3,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots, domains, population"
 #guard (refusal (publicHeld heldRecord "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+
+/-- A registration of population 2 whose roots are at `ports`, roots `aa`, `ab`, … and domains `da`, `db`, … in order. -/
+private def portsRecord (ports : List String) : Json :=
+  Json.mkObj [("population", Lean.toJson (2 : Nat)), ("scheme", .str "s"), ("roots", .arr (ports.toArray.mapIdx
+    fun i p => Json.mkObj [("domain", .str s!"d{i}"), ("port", .str p), ("root", .str s!"r{i}")]))]
+
+/-- A public file of population 2 naming its roots at `ports`, as `portsRecord`'s in order. -/
+private def portsPublic (ports : List String) : ByteArray :=
+  let named (pre : String) := Json.mkObj (ports.mapIdx fun i p => (p, .str s!"{pre}{i}"))
+  let header := Json.mkObj [("frame_v3", Json.mkObj [("domain_ids", named "d"), ("roots", named "r")]),
+    ("instances", Lean.toJson (2 : Nat)), ("scheme", .str "s"),
+    ("units", Json.mkObj [("indices", Lean.toJson #[(0 : Nat), 1])])]
+  (header.compress ++ "\nrest").toUTF8
+
+#guard commonMember ["T{K=1}/c0/x", "T{K=1}/c0/y"] == some "T{K=1}/c0"
+#guard commonMember ["T/c0/x", "T/c1/x"] == none
+#guard commonMember ["A/c0/x", "B/c0/x"] == none
+#guard commonMember ["x", "T/c0/y"] == none
+#guard commonMember [] == none
+#guard refusal (publicHeld (portsRecord ["x", "y"]) (portsPublic ["x", "y"])) == ""
+#guard refusal (publicHeld (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y"]) (portsPublic ["x", "y"])) == ""
+#guard refusal (publicHeld (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y"]) (portsPublic ["y", "x"])) ==
+  "public file: not the registration's: roots, domains"
+#guard refusal (publicHeld (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y"])
+  (portsPublic ["T{K=1}/c0/x", "T{K=1}/c0/y"])) == "public file: not the registration's: roots, domains"
+#guard [["T/c0/x", "T/c1/x"], ["A/c0/x", "B/c0/x"], ["x", "T/c0/y"], ["T/c0/x", "row-table/s0/t"]].all fun ps =>
+  refusal (publicHeld (portsRecord ps) (portsPublic ["x", "y"])) == NOT_ONE_MEMBER
 
 /-- A circuit file whose META looks up the MUFU tables `names`. -/
 private def lookingUp (names : List String) : ByteArray :=

@@ -1247,8 +1247,9 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables its circuit looks up (`proofs.circuit_lookups`,
     which v2 holds them to), which onsite reads after the evidence (`compose.onsite_check`). v2 holds the public file's
-    header to the registration (`registration.matches_public`, and its ``units.indices`` the population's units in
-    order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``).
+    header to the registration (`registration.matches_public` at `registration.public_ports`, and its ``units.indices``
+    the population's units in order): a window's registration names its ports ``<member>/<port>``, which v2 reads bare
+    where they are all one member's, and refuses where they are several members' (`registration.NOT_ONE_MEMBER`).
 
     When ``public`` was taken is the caller's to say, and nothing here checks it. `audit`'s is the digest it took when
     it staged the file: before the sample it takes itself, and after one its caller handed it. `v2_case.py`'s is that

@@ -5,10 +5,8 @@ K = 128) under ``stratified:1``, under FLOCK_CHALLENGER=1 and a local key at the
 (``--deployed-key``), so the session takes its coin tree through the audit's relay with no closing round
 (`a5.closes_trees`) and the case names the challenger and carries its coins.
 
-The check is expected to accept. One refusal is known and stays until v2's Lean takes a window's registration in the
-one-statement form: `OneStageZk.publicHeld` holds the public file, whose ports are bare, to the whole registration,
-whose ports a window names ``<member>/<port>`` (`PUBLIC_PORTS`). That refusal alone is an expected failure; any other
-outcome fails.
+The check accepts: the public file names its ports bare, the window's registration names them ``<member>/<port>``,
+and v2 holds the one to the other at that one member's roots (`OneStageZk.publicPorts`).
 
 Slow, and past a minute in `check`: one audit as `test_audit_two_members`' window-session test runs it, of one session,
 about four minutes on a node with the deployed key. It alone runs the one-statement form of the compiled check on a
@@ -31,9 +29,6 @@ import test_audit_two_members as T
 from test_audit_two_members import binaries  # noqa: F401 -- the fixture, under the name the test takes
 import member_trees as MT  # beside a5, on the path `test_audit_two_members` put there
 
-#: v2's refusal of a window's case in the one-statement form (module docstring)
-PUBLIC_PORTS = "proofs: public file: not the registration's: roots, domains"
-
 pytestmark = pytest.mark.slow
 
 
@@ -51,8 +46,8 @@ def _window(d: Path) -> Path:
 
 def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compiled_check(tmp_path, binaries):
     """The audit accepts with the member's ``challenger`` verdict; the release log holds the sample, then the session's
-    one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, or refuses
-    for `PUBLIC_PORTS` alone."""
+    one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, crediting the
+    drawn unit as proved."""
     rc, row, out, said = T._audit(tmp_path, _window(tmp_path / "window"), binaries, "--deployed-key",
                                   more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -77,7 +72,5 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     p = subprocess.run([str(PF.v2_executable()), "check", *(str(d / n) for n in files), *case["blobs"]],
                        capture_output=True, text=True)
     answer = json.loads(p.stdout.strip().splitlines()[-1])
-    if (p.returncode, answer["verdict"], answer.get("reason")) == (1, "reject", PUBLIC_PORTS):
-        pytest.xfail(f"v2 refuses a window's registration in the one-statement form: {PUBLIC_PORTS}")
     assert (p.returncode, answer["verdict"]) == (0, "accept"), (answer, p.stderr[-2000:])
     assert answer["public"]["drawn"] == [0] and answer["public"]["proved"] == [0], answer

@@ -391,10 +391,10 @@ theorem fail_codes (c : _root_.Spot.Check) (code : String) (w : Json) :
   · simp
 
 /-- **`matches_public` holds the instances to the record's population.** -/
-theorem matchesPublic_population {rec s r d pop : Json}
-    (h : (_root_.Spot.Record.matchesPublic rec s r d pop).codes.isEmpty = true) :
+theorem matchesPublic_population {reg : Array (String × Json)} {rec s r d pop : Json}
+    (h : (_root_.Spot.Record.matchesPublicBy reg rec s r d pop).codes.isEmpty = true) :
     _root_.Spot.jeq pop (_root_.Spot.getD rec "population") = true := by
-  unfold _root_.Spot.Record.matchesPublic at h
+  unfold _root_.Spot.Record.matchesPublicBy at h
   simp only [Id.run] at h
   cases hp : _root_.Spot.jeq pop (_root_.Spot.getD rec "population")
   · simp only [hp, Bool.not_false, ↓reduceIte] at h
@@ -415,6 +415,8 @@ theorem publicHeld_population {rec : Json} {pubB : ByteArray} {hd : Json}
   rw [hh] at he
   cases he
   dsimp only at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
+  try dsimp only at h
   split at h
   · cases h
   · rename_i hc

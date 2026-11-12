@@ -55,6 +55,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
+* `public_ports`: the record's roots by port as v2's one statement's public file names them (`OneStageZk.publicPorts`);
 * `session_registered`: the registered roots the verifiers report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
@@ -560,6 +561,15 @@ def matchesPublic (j : Json) : V Json := do
     throw "scheme is not a string, roots or domains not an object of strings, or population not an integer"
   return (Record.matchesPublic rec_ (getD j "scheme") (getD j "roots") (getD j "domains") (getD j "population")).toJson
 
+/-- `{"record"}` to `registration.public_ports`'s `{port: root}` (`OneStageZk.publicPorts`): a record whose roots are a
+list of objects with a string port; refused as `publicPorts` refuses. -/
+def publicPorts (j : Json) : V Json := do
+  let rec_ := getD j "record"
+  let .arr roots := getD rec_ "roots" | throw "the record's roots are not a list"
+  if !roots.all fun r => getD r "port" matches .str _ then
+    throw "a registered root is not an object with a string port"
+  return Json.mkObj (← OneStageZk.publicPorts rec_).toList
+
 /-- `{"verdicts", "registration"?}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`, with a
 registration `Record.ownRegistered`); refused where `inputOf` refuses the verdicts, and a registration whose roots are not
 a list of objects with a string port or whose registered values, if any, are not a list of objects with a string value. -/
@@ -905,7 +915,7 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("record", record), ("across", across),
+   ("public_ports", publicPorts), ("session_registered", sessionRegistered), ("record", record), ("across", across),
    ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
    ("fits", fits),
