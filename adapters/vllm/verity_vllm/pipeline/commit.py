@@ -145,7 +145,7 @@ def c2_programs_forecast(programs_root: str | None, program_dir: str | None, fac
         files = [p] if os.path.exists(p) else []
     rows = 0
     jb = 0
-    per_file = []
+    per_file: list[dict[str, Any]] = []
     needle = b'{"i": '
     t0 = time.perf_counter()
     for f in files:
@@ -446,6 +446,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
     (out / f"tensor_digests_pair{pair}.json").write_text(json.dumps(cur) + "\n")
     if prev:
         p0, pk = prev["pair"], prev["digests"]
+        fam: _C[str]
         diff_steps, fam, perm_steps = [], _C(), 0
         for step, d in cur.items():
             e = pk.get(step) or {}
@@ -597,6 +598,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode(), **CC.identities(rc))
     bound = [(i, e, leaf) for i, e, leaf in picks if e is not None]
     unbound = [B.identity_dict(i) for i, e, _ in picks if e is None]
+    ops: list[Any]
     ops, ok = [], []
     po_skipped: str | None = None
     po_deferred: list[tuple[int, int]] = []
