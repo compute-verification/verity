@@ -292,6 +292,8 @@ class ServedCommit:
             rep = {"ok": False, "error": repr(e)[:300], "traceback": traceback.format_exc()[-1200:], "tally": {}, "steps": {}, "failures": []}
         n, exact = sum(t[1] for t in rep["tally"].values()), sum(t[0] for t in rep["tally"].values())
         ok = bool(rep.get("ok")) and not rep.get("error") and not self.src.errors
+        horizon: dict[str, list[int]]
+        prompt_linked: dict[str, bool]
         pairs, unlinked, horizon, prompt_linked = 0, [], {}, {}
         for p in sorted(self.build["steps_plan"], key=lambda p: int(p["step"])):
             s = int(p["step"])
