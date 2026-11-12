@@ -94,7 +94,8 @@ read from that record, and no stock serve of this command's own is needed.
 ## The security level
 
 Beside the GB the command prints the binding bound the row of record holds: the probability that an accepted run
-opens a value off the committed trace, by the two-stage first-hit finder's bound. The planner computes it for each
+opens a value off the committed trace, by the bound Lean states of a two-stage sample counted by classes of gates
+(`CompiledTwo.eventTwoX_le_cls_at_budget`'s right-hand side). The planner computes it for each
 row's own design (`benchmarks/spot_figures/binding.py`, `over_phases`) and writes it in the row's
 `verification_phase`; the command computes none of it. Each figure is named by what it is over, one verification
 phase or the world's year of them, and is given counted in calls of SHA-512, as the Lean counts, and in

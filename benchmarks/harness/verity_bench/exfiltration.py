@@ -190,7 +190,10 @@ SECURITY = "security level"
 #: where the Lean instances a binding bound names are declared
 LEAN_NUMBERS = "Claims.Flock.Numbers"
 #: a Lean instance's numerals, as a binding bound names them (`lean.past`), in the bound's own symbols
-NUMERALS = {"T": "calls a run", "e": "e_s", "Ns": "N_s", "Ks": "K_s", "Km": "K_m", "c": "c"}
+NUMERALS = {"T": "calls a run", "e": "reruns a session (e_s)", "Ns": "sessions (N_s)", "Ks": "classes of gates (K_s)",
+            "Km": "classes of gates, session by session (K_m)", "c": "calls of the run's own opening checks (c)"}
+#: the Lean statement whose right-hand side a binding bound counted in calls is
+LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
 
@@ -912,8 +915,8 @@ def _lean(lean: Mapping) -> str:
     the phase is past."""
 
     if lean["theorem"]:
-        return (f"`{LEAN_NUMBERS}.{lean['theorem']}` holds its conflict and first-hit part to at most 2^-{lean['bits']}, "
-                "beside the sessions' κ_s and the rewinding term")
+        return (f"`{LEAN_NUMBERS}.{lean['theorem']}` holds the part of it that is linear in the prover's calls to at "
+                f"most 2^-{lean['bits']}, beside each session's knowledge error and the rewinding part")
     past = "; ".join(f"{NUMERALS.get(name, name)} at most {v['instance']:,} there and {v['design']:,} here"
                      for name, v in lean["past"].items())
     return (f"{NOT_PROVED}: the nearest instance, `{LEAN_NUMBERS}.{lean['nearest']}`, at most 2^-{lean['bits']}, has "
@@ -932,8 +935,8 @@ def _security(bound: Mapping | None) -> list[str]:
     scope = bound["scope"].replace(" ", "-")
     return [
         f"- **the {SECURITY}** (modeled): the probability that an accepted run opens a value off the committed trace, by "
-        f"the two-stage first-hit finder's bound by classes of gates, every run at {design['calls_a_run']} calls of "
-        f"SHA-512, at the row's own design at the pinned budget nearest, β = {_part(bound['beta'])} ({bound['run']}). "
+        f"the bound Lean states of a two-stage sample counted by classes of gates (`{LEAN_BOUND}`), every run at "
+        f"{design['calls_a_run']} calls of SHA-512, at the row's own design at the pinned budget nearest, β = {_part(bound['beta'])} ({bound['run']}). "
         f"**Over one verification phase: at most {calls['phase']['bound']}** counted in calls, as the Lean counts, and "
         f"{compressions['phase']['bound']} in compressions. **Over a {scope} of phases**, {_n(design['phases'])} of "
         f"them: **at most {calls['phases']['bound']}** in calls and {compressions['phases']['bound']} in compressions. "
@@ -943,7 +946,7 @@ def _security(bound: Mapping | None) -> list[str]:
         f"table{'s' * (bound['tables'] != 1)}.",
         f"- the {SECURITY} assumes: "
         + "; ".join(i["input"] if i["value"] is None else f"{_n(i['value'])} {i['input']}" for i in bound["assumed"])
-        + ". It counts the sessions' κ_s and the run's own opening checks as 0.",
+        + ". It counts each session's knowledge error and the run's own opening checks as 0.",
         f"- what Lean proves of the {SECURITY}: over one verification phase counted in calls, {_lean(calls['lean'])}. "
         f"Counted in compressions, {_lean(compressions['lean'])}. Over a {scope} of phases, {NOT_PROVED}: no theorem "
         "sums a monitoring period's verification phases."]

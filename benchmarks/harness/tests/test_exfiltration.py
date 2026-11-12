@@ -1248,7 +1248,8 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
     lines = [line for line in E.render(doc).splitlines() if E.SECURITY in line and line.startswith("- ")]
     assert len(lines) == 3 and lines[0].startswith(
         "- **the security level** (modeled): the probability that an accepted run opens a value off the committed "
-        "trace, by the two-stage first-hit finder's bound by classes of gates, every run at 2^80.00 calls of SHA-512, at "
+        "trace, by the bound Lean states of a two-stage sample counted by classes of gates "
+        "(`CompiledTwo.eventTwoX_le_cls_at_budget`), every run at 2^80.00 calls of SHA-512, at "
         f"the row's own design at the pinned budget nearest, β = 5.500% ({PLANNED}). **Over one verification phase: at "
         "most 2^-101.08** counted in calls, as the Lean counts, and 2^-92.08 in compressions. **Over a world-year of "
         "phases**, 197,078,976 of them: **at most 2^-73.53** in calls and 2^-64.52 in compressions. A verification "
@@ -1256,14 +1257,15 @@ def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(t
         "207,715,585 of their proof blocks in 406,360 sessions, the largest of 4 tables.")
     assert lines[1] == (
         "- the security level assumes: 4,130 classes of gates a sampled proof block; 8,388,608 symbols of a table's "
-        "level-0 codewords; one commitment, one sample; every committed window is presented. It counts the sessions' "
-        "κ_s and the run's own opening checks as 0.")
+        "level-0 codewords; one commitment, one sample; every committed window is presented. It counts each session's "
+        "knowledge error and the run's own opening checks as 0.")
     assert lines[2] == (
         "- what Lean proves of the security level: over one verification phase counted in calls, not proved at these "
-        "sizes: the nearest instance, `Claims.Flock.Numbers.εclsAt_le_table1`, at most 2^-100, has e_s at most "
-        "2,592,237,061 there and 10,368,948,031 here. Counted in compressions, "
-        "`Claims.Flock.Numbers.εclsAt_le_table1_513` holds its conflict and first-hit part to at most 2^-100, beside the "
-        "sessions' κ_s and the rewinding term. Over a world-year of phases, not proved at these sizes: no theorem sums "
+        "sizes: the nearest instance, `Claims.Flock.Numbers.εclsAt_le_table1`, at most 2^-100, has reruns a session "
+        "(e_s) at most 2,592,237,061 there and 10,368,948,031 here. Counted in compressions, "
+        "`Claims.Flock.Numbers.εclsAt_le_table1_513` holds the part of it that is linear in the prover's calls to at "
+        "most 2^-100, beside each session's knowledge error and the rewinding part. Over a world-year of phases, not "
+        "proved at these sizes: no theorem sums "
         "a monitoring period's verification phases.")
     # no figure of it is called bits: each is a probability over what its clause names
     assert not any(" bits" in line for line in lines)
