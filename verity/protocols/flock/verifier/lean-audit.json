@@ -361,8 +361,7 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until its spec is extracted",
-  "Base": "the bytes, hashes and parsing below C-Flock (`core_base`): its lock declares no spec layer, so its definitions are recorded here as read rather than as a spec, excepted with C-Flock until its spec is extracted"
+  "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {
