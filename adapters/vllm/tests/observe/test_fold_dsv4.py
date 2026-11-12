@@ -204,14 +204,14 @@ def test_a_compressor_mm_is_the_builds_f32_output_cublas_gemm_over_its_weight(T,
     assert isinstance(CublasMmF32Out().match(_mm(T, N, 950), _ctx(T)), Unsupported), "a weight with no root is refused"
 
 
-def _qkv_norm(T, q_offset=0, block=2048):
+def _qkv_norm(T, q_offset=0, block=2048, **over):
     args = {"q_ptr": ViewDesc(960, q_offset, (T, 1536), (2048, 1), "bfloat16", CUDA), "q_out_ptr": view(961, (T, 1536)),
             "q_weight_ptr": view(962, (1536,)), "q_in_stride": 2048, "q_out_stride": 1536,
             "kv_ptr": ViewDesc(960, q_offset + 1536, (T, 512), (2048, 1), "bfloat16", CUDA), "kv_out_ptr": view(963, (T, 512)),
             "kv_weight_ptr": view(964, (512,)), "kv_in_stride": 2048, "kv_out_stride": 512, "eps": 1e-6}
     consts = {"Q_SIZE": 1536, "KV_SIZE": 512, "BLOCK_SIZE": block, "launch_pdl": True}
-    ev = TritonLaunch(1, None, 0, "forward", QKV_RMS_PINS["kernel"], QKV_RMS_PINS["src_sha256"], {**args, **consts}, consts, [T, 2], 8, 3, 7,
-                      "model.layers.0.attn")
+    ev = TritonLaunch(1, None, 0, "forward", QKV_RMS_PINS["kernel"], QKV_RMS_PINS["src_sha256"], {**args, **consts, **over}, consts, [T, 2], 8, 3,
+                      7, "model.layers.0.attn")
     return build_trees([ev])[0][0]
 
 
@@ -233,6 +233,14 @@ def test_a_fused_q_kv_rmsnorm_off_the_wrappers_launch_or_ptx_specialization_or_w
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1, block=4096), _ctx(1, QKV_ROOTS)), Unsupported)
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1, q_offset=4), _ctx(1, QKV_ROOTS)), Unsupported), "a pointer 8 bytes off 16"
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1), _ctx(1)), Unsupported)
+
+
+@pytest.mark.parametrize("over,sizes", [({"Q_SIZE": None}, [None, 512]), ({"KV_SIZE": 0}, [1536, 0]), ({"Q_SIZE": "1536"}, ["1536", 512]),
+                                        ({"eps": None}, [1536, 512])], ids=["no-q-size", "kv-size-0", "q-size-a-string", "no-eps"])
+def test_a_fused_q_kv_rmsnorm_without_two_positive_sizes_and_a_float_eps_is_refused_with_the_sizes_it_read(over, sizes):
+    r = QKvRmsNorm().match(_qkv_norm(1, **over), _ctx(1, QKV_ROOTS))
+    assert isinstance(r, Unsupported) and r.reason == "Q_SIZE, KV_SIZE and eps are not static positive sizes and a float"
+    assert r.detail["sizes"] == sizes and r.detail["eps"] == repr(over.get("eps", 1e-6))
 
 
 BLOCK_BYTES, POS, CACHE_STRIDE = 64 * (576 + 8), 970, 1435968
