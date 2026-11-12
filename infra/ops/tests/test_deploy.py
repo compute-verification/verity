@@ -392,7 +392,7 @@ def test_a_null_device_that_is_not_the_character_device_1_3_with_mode_666_is_dri
     rep = deploy.drift(n, "origin/main", local, world["repo"])
     assert rep["null_device"] is None and deploy.clean(rep), "this machine's own null device, as the probe reads it"
     null = tmp_path / "null"
-    null.write_text("what a copy onto the device leaves when the device is gone\n")
+    null.write_text("a regular file where the device was\n")
     null.chmod(0o644)
     monkeypatch.setattr(deploy, "NULL", str(null))
     rep = deploy.drift(n, "origin/main", local, world["repo"])
