@@ -817,7 +817,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     gc.collect()
     try:
         with open("/proc/self/status") as f:
-            _st = {l.split(":")[0]: int(l.split()[1]) for l in f if l.startswith(("VmRSS:", "VmHWM:"))}
+            _st = {status_line.split(":")[0]: int(status_line.split()[1]) for status_line in f if status_line.startswith(("VmRSS:", "VmHWM:"))}
         res["host_rss_gb_after"] = round(_st["VmRSS"] / 1e6, 2)
         # the process's kernel high-water mark AFTER the replay -- the in-process peak the bounded HOST BOUND must
         # cover (the replay phase is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)

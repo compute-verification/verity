@@ -18,7 +18,7 @@ from verity_vllm.config import option
 
 def _rows(p: Path) -> list[dict]:
     f = p / "runs.jsonl"
-    return [json.loads(l) for l in f.read_text().splitlines() if l.strip()] if f.exists() else []
+    return [json.loads(line) for line in f.read_text().splitlines() if line.strip()] if f.exists() else []
 
 
 def _json(p: Path, name: str) -> dict:
