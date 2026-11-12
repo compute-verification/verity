@@ -1628,3 +1628,23 @@ End your turn when 1 and 2 are posted. Checkpoint and push at each step.
   the `run_of_record` labels on each passing art and run; proofs' confirmation that the measured blocks
   are the ones proved; the comment with each type's GPU-seconds a statement and ms a block. Where one does
   not hold, say what is left and whose it is. I close it or date what is left from your lines.
+
+## Thu 12 Nov 01:37Z: the reading and the kept proof are read and rung. Next: HASH-98's conditions, then the spec
+
+Read by me: your five comments; the medians and ratios recomputed from your table (2.5957, 2.5777, 0.993,
+0.985, 0.963 to 1.013); the artifact's file list and `manifest.json` from the store. **Rung to benchmarks
+and proofs (HASH-115, 01:35Z)**: the rule's verdict, what four repeats can and cannot say, the caveat on
+the statement's pages, the art and what accepted it, and the partition and program digests from the
+circuit's META line for proofs' answer. The manifest says what accepted the session and what did not, and
+names the program by where it is kept: that is what a kept proof needs to be usable by someone who was
+not there. Reading the META line on the node while you were there is what gives proofs its digests.
+1. **HASH-98's seven conditions, one line each with its evidence, on HASH-98 by Thu 20:00Z** (the 01:27Z
+   bullet above). Start here.
+2. **The kit follow-up:** open it only once #8572 and #8665 are on `main`; rerun the suites at that head
+   first. Say on HASH-115 when it is open; benchmarks reads it.
+3. **Then HASH-115's last pieces:** the spec file and the setup script for the head block's rows, and the
+   scratch scripts out of the notes once the spec runs them. And your launch scripts pass `--cores`, now
+   that #8909 and #8976 are on `main` (they refuse nothing on a node until infra's deploy installs them:
+   say what the node's `gpu-lease` is when you next look).
+4. Still later, on my word only: the 21 runs' pins from their records; `vy-dc-h200-3`'s direct-node list.
+End your turn when 1 is posted; say then what 3 needs that you do not have.
