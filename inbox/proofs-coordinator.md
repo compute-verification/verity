@@ -107004,3 +107004,70 @@ In plain words: the problem I reported at a linked output does not exist. In an 
 - Run `r20261112-224930-d4a5` (cpu-8) still holds `Instance.lean` [run].
 
 Not established: everything above that is marked [derived]; that the file elaborates.
+
+## PROVED, Thu 12 Nov 22:53Z: A6 scoped: the fully proved accept needs nothing of the stream that Lean does not already decide, because the offline check reads no stream state and holds "no retries" by the challenger's signed log; what stays in Python is the stream's memory between operations, its budget over many audits, its records and its choice of which earlier records a check reads, and that is a row for a statement over a monitoring period, not for this goal
+
+**In plain words, for Daniel.** The stream is the challenger's program: it takes registrations, samples, takes proofs and gives outcomes, and it stops after a set number of failures. Lean already decides each single step of it, and Python and Lean are compared step by step. Python still keeps the stream's memory from one step to the next, builds two of its records, and picks which earlier records a check reads. I asked what a fully proved accept needs of that. The answer is nothing new. The accept of record is a separate Lean check, run after the audit on the audit's files and the challenger's signed log. It never reads the stream's memory. It holds "no retries" itself: a second sample, or a proof session that was run and dropped, leaves a line in the signed log, and the check refuses a log with such a line. The failure budget is a rule over many audits. On the proved path its job is done by the check of a whole monitoring period, which is already on the list. So A6 leaves this goal's path and becomes a row of its own for the period.
+
+Clock: `date -u` read 22:53Z before the push. Mailbox read at `3f86b1b936`. No file of the tree changed; I ran no Lean; no run of mine is out. Paths under `verity/protocols/spot/verifier/` are written `spot/…`, and its Lean `Spot/…`.
+
+### 1. What Lean decides of the stream today [read]
+
+- **Each operation.** `Spot.Stream.run p s op` decides one operation on the stream's state and gives the state after it (`Spot/Stream.lean:516`): the budget and the count of open registrations (`ready`, `:279-283`), the registration deadline (`register`, `:320-337`), and the once-only orders: sampled once (`select`, `:339-348`), delivered once, one final outcome. `Spot.Fleet.run` decides the halt across streams.
+- **Held to Python** by the difftest's `stream` and `fleet` pieces (`Spot/Pieces.lean:907`), and live: every operation of a running stream is decided by the chosen verifier beside Python's `_step`, and a disagreement stops the stream (`Stream._decide`, `spot/service.py:1746-1765`).
+- **The checks around it**, each its own Lean function and piece: the public-items rule, the registration check, the sample, the verdicts' hold, the audit record, and one registration's whole run (`Spot.Run.run`).
+- **Proved**: five properties of the halt, over any state and any list of operations (`security/Properties/Spot/Halt.lean`, proofs in `security/Proofs/Properties/Spot/Halt.lean:40`, `:75`, `:165`, `:340`, `:439`). The fold over a list of operations exists there as a definition (`runs`, `Halt.lean:47-52`).
+
+### 2. What Python decides and Lean does not [read]
+
+| # | what | where in Python | what is missing in Lean |
+|---|---|---|---|
+| P1 | The stream's memory between operations. Lean decides an operation on a slice of the state that Python cuts, and Python merges the result back. | `Stream._slice`, `_merge` (`spot/service.py:1767-1793`) | no Lean function cuts or merges; no theorem says deciding on the slice equals deciding on the whole state |
+| P2 | "No retries" and the budget as facts about a whole stream. Each step refuses a second sample, delivery or outcome, and a registration past the budget, but nothing states it over a run of steps. | the docstring's "No retries" and "The failure budget" | two properties over `runs` from the empty state, beside the halt's five |
+| P3 | Which earlier records a registration's check reads: the last, those of the same window, each registered value's first. The claim that the verdict equals the whole log's is a test. | `Stream._earlier` (`:2035-2053`); `tests/test_service_history.py` | the selection, and a lemma that the registration check gives one verdict on both |
+| P4 | Two records: the stream's digest and an outcome's record. | `:1642`, `:2490-2502` | no builder; Lean holds only their format tags (`verity/commitments/identity/Identity/Domains.lean:72-73`) |
+| P5 | The operations themselves are recorded nowhere. The stream keeps its registrations, its outcome records and the epoch's readings, not the list of operations. | `Stream._log`, `records`, `epoch_log` | nothing an offline check could replay |
+| P6 | The clock's readings (the salt's release, a receipt, a delivery). | the challenger's clock | by design: the challenger's own |
+| P7 | Refusals at construction: a sequential rule, a window statement, a timed session, no proof deadline. | `:1574-1577` | none; they are forms the stream does not run |
+
+### 3. What the goal's six clauses need of it
+
+| clause | what it needs | where that is decided for the offline accept | row |
+|---|---|---|---|
+| 1: the accept is the compiled check's, no Python deciding | that the accept of record is the offline check's verdict. Its three inputs are the parameters, the registration and the evidence; none holds stream state [read: `Spot/OneStage.lean:4-60`]. | `OneStageZk.checkBlobs` | A1 |
+| 4: one sample a registration | the ledger refuses a second opening of a root or session (my 22:34Z entry, rows 3 and 10) | `ChallengerSession.verifyLedger` | A19 to A21 |
+| 4: one registration an execution phase | the check of a monitoring period | `Spot/Period.lean`, on branches, not on `main` | A22 to A24 |
+| 6: no retried proof session; every session recorded | the check refuses unless the evidence names exactly one session and every coin tree the challenger's log shows is that session's (`oneSession`, `Spot/OneStageZk.lean:714`; `sessionsTreeReason`, `Spot/ChallengerTrees.lean:261-272`). A session that was run and dropped leaves a tree in the signed log. The theorem's own walk reads both (`sessions_size`, `security/Proofs/Properties/Verity/Sampled/LinkTrees.lean:69`; `sessionsTreeReason_one`, `Sampled/Link.lean:157`). | in the check and in the theorem | none: done at the one-statement form |
+| 6: every verdict counts | the check computes each session's verdict itself from the files (`Spot/OneStageZk.lean:1-30`) | in the check | none |
+| the deadlines, the budget, the halt, the two records, P3 | not needed for one audit's accept. The bound holds for a prover of any speed, given the order the ledger fixes. | — | the new row below |
+
+**So A6 as I wrote it at 21:40Z is not on this goal's path** [derived]. "No retries" within one audit is already decided in Lean and read by the theorem. Across audits it is clause 4's second half.
+
+**Three limits on that.**
+
+- It holds at the one-statement form. At the several-member form "one session a member, never retried" is the closing round (A32).
+- At the two-round form it does not hold today. The two-round run and its driver hold no coin tree to a session: I found no tree check in `Spot/Run.lean`, `Spot/SecondStage.lean` or `benchmarks/one_stage/two_stage.py` [run: `rg` on my VM], and you relayed at 22:25Z that the sessions' coins are tied to the challenger only by the third form of B11. There the stream's `outcome` is also what joins the two rounds, so P1 is part of B11.
+- It rests on A40: the ledger and the key being this audit's.
+
+### 4. The new row, for a statement over a monitoring period (not this goal)
+
+"The stream's rules hold over a whole stream, in Lean": five pieces, each with a proposed signature and file. Sizes are [guess], in lines.
+
+1. **The slice.** `Spot.Stream.slice (s : State) (op : Json) : State` and `merge (s after : State) : V State` in `Spot/Stream.lean`; a difftest piece `stream_slice`; a property `SliceIsWhole : run p (slice s op) op = .ok (d, a) → ∃ s', merge s a = .ok s' ∧ run p s op = .ok (d, s')` in `security/Properties/Spot/Stream.lean` (new). About 60 lines of code, 200 to 350 of proof.
+2. **Once each.** `OnceEach : ∀ p ops ds s', runs p State.empty ops = .ok (ds, s') → ` each registration has at most one accepted `select`, one accepted delivery and one final outcome among `ds`. It needs `State.empty`, which the file does not name today. 200 to 300 of proof.
+3. **The budget.** `BudgetHolds : ∀ p ops ds s', runs p State.empty ops = .ok (ds, s') → s'.failures + s'.opened.size ≤ p.budget`. This is the docstring's sentence "it never ends with more than `budget` failures"; a session over several rounds counts once a round, so the exact form needs care. 150 to 250.
+4. **The history.** `Spot.Registration.earlier (record : Json) (log : Array Json) (supplied outputs : Json) : Array Json` in a new `Spot/Earlier.lean`; a piece `earlier`; `EarlierIsWhole`: the registration check gives the same codes on `earlier record log …` as on `log`. 80 lines of code, 250 to 400 of proof: R6 and R7 each read the log in their own way.
+5. **The two records.** `Spot.Service.streamDigest` and `Spot.Service.outcomeRecord` in `Spot/Service.lean`, with pieces `stream_digest` and `outcome_record`. About 100 lines of code and no proof: nothing reads them in a guarantee.
+
+And one design question before any of it: P5. An offline check cannot replay a stream whose operations no one records. Either the challenger's device model is read to include the stream's rules, which is a statement about the auditor's own device, or the operations go into the signed ledger and a Lean fold reads them. Until that is chosen, pieces 2 and 3 are facts about a function and say nothing of a real stream.
+
+### Not established
+
+- That `Spot.Run.run`'s path needs nothing of P1 at the one-stage form when it, and not `checkBlobs`, is taken as the check of record. I read the offline check's inputs, not every caller.
+- The sizes: guesses from the files' shapes. I wrote no Lean.
+- Whether the budget should count toward a monitoring period's bound at all once the period check holds every committed root to one accepting audit. That is a question about what the period's guarantee says, and is soundness's.
+
+### To post
+
+- A6 leaves this goal's list; it becomes one row under the monitoring-period statement, owner to name, with the five pieces above.
+- For B11's holder: P1 (the stream's memory) and the missing tree check are part of the two-round join.
