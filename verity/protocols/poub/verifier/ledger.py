@@ -82,7 +82,7 @@ class Tier:
         if type(self.devices) is not int or self.devices < 1:
             raise ValueError("devices is a positive integer")
         for name in ("spec_bytes_per_s", "read_bytes_per_s"):
-            if not 0 < _rate(getattr(self, name), name):
+            if not _rate(getattr(self, name), name) > 0:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
