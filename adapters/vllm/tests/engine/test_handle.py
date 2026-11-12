@@ -1,6 +1,7 @@
 """`verity_vllm.engine.handle`: the scheduler, the executor and the model runner of a `verity_vllm.LLM`, a `vllm.LLM` or
 its `LLMEngine`, through vLLM's object graph (stand-ins of it here), a refusal naming the engine core when they live
-in another process, and the output lag the engine's architecture implies."""
+in another process, the core and the executor as a recorder reads them (None where there is none), and the output lag
+the engine's architecture implies."""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -48,6 +49,32 @@ def test_each_kind_of_engine_reaches_the_executor_whose_collective_rpc_it_can_ca
     for kind, llm in _engines(NS(model_executor=found)).items():
         assert handle.executor(llm) is found, kind
     assert handle.executor(NS(llm_engine=NS(engine_core=NS(model_executor=found)))) is found
+
+
+def test_each_kind_of_engine_gives_the_core_it_holds_and_its_executor_to_a_reader_that_records_them():
+    found = NS()                                    # no `collective_rpc`: `executor` refuses it, a recorder still names it
+    inner = NS(model_executor=found)
+    for kind, llm in _engines(inner).items():
+        core = handle.core_or_none(llm)
+        assert core is not inner and core.engine_core is inner, kind
+        assert handle.executor_or_none(llm) is found, kind
+    flat = NS(llm_engine=NS(engine_core=inner))     # a core without the inner wrapper
+    assert handle.core_or_none(flat) is inner and handle.executor_or_none(flat) is found
+
+
+def test_a_multiprocess_engine_core_is_given_as_the_client_and_has_no_executor():
+    client = MultiprocClient()
+    llm = NS(llm_engine=NS(engine_core=client))
+    assert handle.core_or_none(llm) is client
+    assert handle.executor_or_none(llm) is None
+
+
+@pytest.mark.parametrize("engine", [NS(), NS(engine_core=None), NS(model_executor=object())])
+def test_an_engine_without_a_core_has_neither_for_the_recorder(engine):
+    """vLLM V0's engine holds its own executor and no core: the recorder's executor is the core's, so None."""
+    for llm in (engine, NS(llm_engine=engine), NS(vllm=NS(llm_engine=engine))):
+        assert handle.core_or_none(llm) is None
+        assert handle.executor_or_none(llm) is None
 
 
 @pytest.mark.parametrize("found", [None, NS(), NS(collective_rpc="not a call")])
