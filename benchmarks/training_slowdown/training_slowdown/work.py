@@ -137,9 +137,9 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     makes them token-specific (repeated rows aren't distinct words), attention's products (two token-indexed dims
     among m, k and n) and the optimizer's (Newton-Schulz's B·X, whose operands come from one X), which the red-team
     of (H) leaves out. Each operand's β is its passed width, capped at its
-    Definition's operand width (`HE_BITS`), where the row's rate pays it (`is_paid`); else its rate ρ_a
-    below the width implies the bottleneck rank r = √(ρ_a k)/(2w) (a K-long product made whole at 4K²w²/k an entry),
-    so β = `beta_eff`(w, r, k) = w·ρ_a/(w + ρ_a). On a step with an adapter (`r_step`, the least contraction K of a
+    Definition's operand width (`HE_BITS`), where the row's rate pays it (`is_paid`); else its rate ν
+    below the width implies the bottleneck rank r = √(ν k)/(2w) (a K-long product made whole at 4K²w²/k an entry),
+    so β = `beta_eff`(w, r, k) = w·ν/(w + ν). On a step with an adapter (`r_step`, the least contraction K of a
     forward product of two affected operands, one token-free, that widens it 4K-fold or more on a step where a
     frozen weight multiplies an operand the update reaches (a LoRA's frozen layers, not a distilling teacher's, which
     read only tokens), or that builds a weight with both sides 4K or more: a LoRA's B·(Ax), a DoRA's B·A),
