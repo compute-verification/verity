@@ -4480,9 +4480,9 @@ PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-
 #: ratchet gate (`PREFLIGHT_RATCHET`), last, gets what is left
 PREFLIGHT_CHECKS_S = 120.0
 #: what the preflight's read of the marked heads (`Preflight._collisions`) may take: a budget of its own, which ends before
-#: `PREFLIGHT_CHECKS_S` starts, so the read never costs a lint its time.  The open PRs' marks are one pull and the marked heads
-#: one fetch, a few seconds together; a head shares a changed path with a few of the marked heads, and each of those takes
-#: two merges of a fraction of a second (about a second each for an old head)
+#: `PREFLIGHT_CHECKS_S` starts, so the read never costs a lint its time.  The read is one pull of the open PRs' marks, one
+#: fetch of the marked heads not here and two merges for each marked head that shares a changed path with the head, a few
+#: seconds in all: the budget is what a slow store, remote or disk may take of a mark before the read gives up and says so
 PREFLIGHT_COLLIDE_S = 30.0
 #: how many of a collision's files, and of the PRs the read didn't get to, its warning names before "and N more"
 PREFLIGHT_COLLIDE_NAMED = 5
@@ -6873,7 +6873,9 @@ def main(argv: list[str]) -> int:
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
                          "one no node can build refuses the mark, one not "
-                         "built in time is a skipped check); the records gate (which warns of a changed Lean lock with no records "
+                         "built in time is a skipped check), and its warnings with it (the vLLM ratchet gate's, and the marked PRs "
+                         f"the head doesn't merge with, read in {PREFLIGHT_COLLIDE_S:g} s of their own before those checks); "
+                         "the records gate (which warns of a changed Lean lock with no records "
                          "run or Lean check, of any commit, that passed its package on the head's Lean inputs, by their key "
                          "`tools/verity/lean/lean_changed.py --inputs-key`) still runs")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync: admit only ready marks written at "
