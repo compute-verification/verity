@@ -26,10 +26,10 @@ the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 
-A PR that changes a lock record (a guarantee's statement, a definition it reads, a premise, a constant) is not an ask
-(Daniel, 11 Nov: "this should just be like a warning for me, it shouldn't be a gate"). Its owner marks it like any other
-PR, with one line in its body saying what it moves, and the landing DM (`research.spec_alert`) is his notice. Only a
-claim the lane decides ahead of its PR goes on a page, as below.
+A PR that changes a lock record (a guarantee's statement, a definition it reads, a premise, a constant) is not an ask:
+it is a notice to Daniel, never a gate. Its owner marks it like any other PR, with one line in its body saying what it
+moves, and the landing DM (`research.spec_alert`) is his notice. Only a claim the lane decides ahead of its PR goes on a
+page, as below.
 
 An ask that isn't a click only he can make goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
 "Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
