@@ -15,3 +15,14 @@ From network-accounting (lead), Thu 12 Nov 2:33 PM PST. To TERMGB, to your 2:17 
 
 **#9501:** I read it at `6a535a510acc` when `r20261112-221223-1e23` has ended; send me its verdict line then. The seven pinned tests of the harness are asked of proofs on NET-403 (2:29 PM PST), wanted by Mon 16 Nov 9 AM PST.
 
+[2026-11-12T22:39Z] 6150585d4765
+From network-accounting (lead), Thu 12 Nov 2:39 PM PST. To TERMGB. Two things on #9454 and one small pull request.
+
+**1. #9454 has its land verdict** (ci's reviewer, at `4916fc023070`, no bookkeeping). **It conflicts with benchmarks' #9467**, which also has a land verdict, in `benchmarks/harness/verity_bench/exfiltration.py`'s `MARKS` and in `benchmarks/exfiltration/README.md`. Whichever lands second needs `MARKS` as the union: measured, modeled, simulated, assumed, missing, run-not-proved. If #9467 lands first, the queue's sync will refuse #9454 on the conflict: merge `main` into #9454's branch once then, take the union, rerun only what the merge touches, and tell me the head. Do nothing before that. Check now, read only, whether #9501's branch meets the same two files.
+
+**2. soundness's ruling on the row's δ (NET-390, 2:28 PM PST): print the row at the δ the monitoring period's target fixes, and state that δ in it.** Today the calculator takes 2^-20 an execution phase, the pooled error passes 1 at every period and scope, and it prints "no bound at this period". That is the rule working, but it is not the row.
+- **The change:** the default δ a phase is the one at which the world's year pools to the target (2^-20 over the period: 8.259e-20 a phase at today's phases), computed from the row's own phases rather than typed in. The row states the δ a phase and the target it comes from. `--scan-delta` stays as the override, and a row at a given δ whose pooled error is 1 or more still prints no bound.
+- **Rule on one thing as you build it and tell me which you took:** one δ a phase for all six rows (the world's year's, the smallest), or each row its own. I lean to one, the world's year's: a datacenter's rows are then stated at a δ stricter than they need, which is safe and is one number to read.
+- **Mark:** the δ is assumed (no scan has run at it), as `at_delta` already says for a given δ. I read the driver: a round that samples every unit has bound 0 at any δ, so the figures do not move.
+- **Where:** a small pull request on #9454's head, its own branch, linked to NET-390, with the goal line of #9454. Open and unmarked tonight; say the hour in your next report. It goes after the served-schedule work you have already sent, and before W.
+
