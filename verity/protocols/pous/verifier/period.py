@@ -36,8 +36,8 @@ of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its o
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
-when the challenger host isn't the node and the session was signed under the key `challenger_session.AUDITOR_KEYS`
-pins for it; the leg says which (`challenger_session.placement`). The setup's salt is still sampled on the node.
+when the session was signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host, whatever the
+host names say; the leg says which (`challenger_session.placement`). The setup's salt is still sampled on the node.
 """
 
 from __future__ import annotations

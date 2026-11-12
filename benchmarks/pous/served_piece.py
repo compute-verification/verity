@@ -56,7 +56,7 @@ same sessions, which no second session replaces. With neither, one process does 
    ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size. The placement's `trusted-host` holds
-   only for a session signed under the key `challenger_session.AUDITOR_KEYS` pins for the challenger's host: a run's
+   only for a session signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host: a run's
    own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound.
 
 6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, before either is answered and
@@ -141,8 +141,10 @@ CHALLENGER_ADDRESS = "10.96.0.36:47610"
 CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
                       "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "research@10.96.0.36",
                       "challenger_party")
-#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`), the tree's pin for it
-TRUSTED_SHA512 = CS.AUDITOR_KEYS[CHALLENGER_HOST]
+#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`), one of the keys
+#: `memory_challenger.AUDITOR_KEYS` pins for `CHALLENGER_HOST`
+TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                  "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
 #: the bandwidth party on the auditor's host: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
 BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 "
             "research@10.96.0.36 bw_party")
@@ -599,7 +601,7 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
                                                      "on, after its serve ended"},
             "outside": summary["outside"], "window": window}
     _done(out, summary, answer, answer_s=answer_s, case_bytes=case_bytes, key_sha512=key_sha,
-          key_pinned=bool(trusted), key_pin="tree" if trusted_sha512 == CS.AUDITOR_KEYS.get(host) else "run",
+          key_pinned=bool(trusted), key_pin="tree" if trusted_sha512 in mc.AUDITOR_KEYS.get(host, ()) else "run",
           private=str(private), public=inner["public"], bandwidth=bandwidth,
           decided_by=decided, **lean)
     # last, and only once each Lean asked for has answered its case: until then the same sessions can be answered again

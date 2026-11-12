@@ -269,7 +269,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-host"] == (   # the test signer's key is no auditor's pinned key
                 "rehearsal: key not the auditor's pinned key, no bound; "
-                f"the names say the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
+                f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
             doc = json.loads((out / "pous.json").read_text())
             assert doc["placement"]["kind"] == "own-host"
             assert doc["s_bits"] == 0 and doc["rounds_answered"] == period.K + CS.WARMUPS and doc["setup"]["fresh"] == (n == 0)

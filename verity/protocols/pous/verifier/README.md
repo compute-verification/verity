@@ -87,8 +87,9 @@ answer after reading its receipt time (`block_digest`, its `sha512/row/v2` diges
 to the setup's root of `C*`. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has
 used. `verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
 `lms.DEPLOYED` (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
-A leg's record says `trusted-host` holds only for a session signed under the key `challenger_session.AUDITOR_KEYS`
-pins for the challenger's host (`challenger_session.placement`, with `kind` for what the host names say): the names
+A leg's record says `trusted-host` holds only for a session signed under a key `memory_challenger.AUDITOR_KEYS`
+pins for the challenger's host (`memory_challenger.trusted_host`, read by `challenger_session.placement`, with `kind`
+for what the host names say): the names
 are the run's own, and a session under any other key, a pin the run passes itself among them, is a rehearsal's, with
 no bound.
 `verity.protocols.pous.prover.verdict_circuit`'s `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof

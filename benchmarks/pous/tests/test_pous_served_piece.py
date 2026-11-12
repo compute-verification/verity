@@ -316,9 +316,10 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(
     where = answer["profile"]["placement"]
     assert where["kind"] == "own-host" and where[CS.PREMISE] == (
         "rehearsal: key not the auditor's pinned key, no bound; "
-        f"the names say the memory challenger ran on {host}, not the prover's {NODE}")
+        f"the memory challenger ran on {host}, not the prover's {NODE}")
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] != CS.AUDITOR_KEYS["vy-auditor-2"]
+    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["key_sha512"] not in mc.AUDITOR_KEYS["vy-auditor-2"]
+    assert SP.TRUSTED_SHA512 in mc.AUDITOR_KEYS[SP.CHALLENGER_HOST]
     assert SP.line(answer).endswith(f"; {CS.PREMISE} {where[CS.PREMISE]}")
 
 
