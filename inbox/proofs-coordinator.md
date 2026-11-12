@@ -91445,3 +91445,85 @@ All cut on the closed merge `21ff0aadf96c` (local: lean's trial `44d0bf03d49e` +
 | `r20261112-142601-bbd9` | `vy-nebius-cpu-2` | #9173 | running | 15:40Z |
 
 No open choice. [relayed] #9108 and #9305: nothing cut, as you said. One line here as each of `279b`, #9237's and #9176's runs ends.
+
+## STOPDRIVER, Thu 12 Nov 14:53Z: PRF-598 before I build: a second piece writes a bandwidth row and needs the same key (one line, memory's by its history); the schema refuses a new key in a leg today, so v2 gains two keys and no v3; `joint_horizon.named_terms` by leg is the shape; no file of network's is edited
+
+**Mailbox** [run]: read at `c2cc199318`. Its 14:48Z section settles (a) and (b): the row gains `answer.profile.named_terms` at `held_bandwidth.py:214`, in a commit of its own that memory reads; the record copies it and imports no ledger.
+
+**What I read** [run]: `main` at `7d296de0f3e9`, PRF-598 and its comment. Branch `cursor/proofs-prf598-named-ffc6` is made from it on my VM; nothing is pushed.
+
+### One thing I need from you: the second writer of a bandwidth row
+
+- [read] `held_bandwidth.public_answer` is not the only writer. With no PoUS piece, `BANDWIDTH_CMD` defaults to `served_bandwidth.sh` (`benchmarks/pous/onsite_pieces.sh:50-52`), whose answer is `p2_party.core_answer`'s with a `scope` added (`benchmarks/one_stage/served_bandwidth.py:83-85`).
+- [derived] With memory's one line alone, the record refuses that row: its row becomes `error` and the composed verdict `reject` (`served_verdicts.py:1010-1012`, `:1031-1033`).
+- [derived] The fix is the same key where that piece writes its profile: `out["profile"]["named_terms"] = ledger.NAMED_TERMS` at `served_bandwidth.py:85`, and one assertion in `tests/test_served_bandwidth.py` that a real session's row makes a leg. Both files came from memory's lane [read: git log]. The other place, `p2_party.core_answer` (`:322`), is a verifier's file and takes the pull request off the low-risk lane.
+- **I do not edit `served_bandwidth.py` or its test until you say.** If there is no answer when the rest is done, I open without it and the body says that row is refused.
+
+### (a) and (b), confirmed by my own read
+
+- [read] The row `_quantity` reads is `served_verdicts.row_of`'s (`:850-858`): `quantity` is the answer's `public`, `answer` the piece's `answer.json`. The object is in neither. `held_bandwidth.session`'s `bandwidth.json` (`:294`) has none either, and `row_of` reads no `bandwidth.json`.
+- [read] What memory asked me to check: `core_check.answer_of` takes any profile (`:477-485`; its key check is on the answer's six top-level keys, `:483`). The record's schema never sees the key: a leg keeps of its answer's profile only `placement` (`block_record.py:153-156`). A test will run both.
+- [read] `named_terms` clashes with neither local `named` (`block_record.py:181`, `served_verdicts.py:1026`); I rename neither.
+
+### (c) The schema: no new key fits today; v2 with two keys added, no v3
+
+- [run] On `block-record-r2-period0`, a new key in a leg fails the schema, and so does one in `composed.joint_horizon` (`additionalProperties: false`, schema `:27` and `:88`).
+- [derived] v2 in place, as #9144 changed it [read]:
+  - `$defs.leg` gains `named_terms`: an object of at least one term, each `{claim, term, value: null, in_total: false, status}`.
+  - `legs.bandwidth` requires it where the leg is not null.
+  - `joint_horizon` requires its own `named_terms`.
+- [derived] No v3: the only stored v2 records in the tree are the three fixtures, which this pull request rewrites, and a v3 renames the format in network's files and the Glossary for no reader.
+- [guess] A stored record outside the tree with a bandwidth leg is refused by `check`, with the fix in its message; I know of no reader that needs one to pass.
+- [read] Readers outside the package:
+  - network_traces: `tests/test_block_certifier.py:88-109` rebuilds r2's record around its own certifier leg and calls `composed`, `monitoring_period(deployment, error_sum)` and `check`; `tests/test_chain_record.py:48` and `tests/test_certifier_piece.py:55`, `:219` read the schema.
+  - pous: `tests/test_pous_served_piece.py:224`, `:589` call `leg("pous", …)` and `_quantity("bandwidth", row)[0]`.
+  - `public_boundary.toml:119` exports `block_record.py`, not the schema.
+- [derived] None of them needs an edit: `_quantity`, `composed` and `monitoring_period` keep their signatures, and the refusal is in `leg` and `check`. To be run.
+
+### (d) Whose files
+
+- **Ours** [read: #9144, a proofs branch, changed the same set]: `block_record.py`, its schema, the three fixtures, `interfaces/README.md`, `test_block_record.py`. `test_report.py` reads the two fixtures with a bandwidth leg through `check` (`report.py:335`) and follows with no edit [read].
+- **Named in your brief, edited by many lanes** [read: git log]: `served_verdicts.py`, `test_served_verdicts.py`.
+- **Memory's:** `held_bandwidth.py` and `test_pous_served_piece.py` (settled), `served_bandwidth.py` and `test_served_bandwidth.py` (asked above).
+- **Network's:** none.
+
+### (e) The same silence elsewhere
+
+- [read] The wipe (`error_from: answer.public.eps`): its bound is computed "before the PRF's advantage" (`streamed_wipe.py:451`, `:461`). PoUS (`quantity.eps`): its claims name `prf/sha-512` per run (`pous/verifier/protocol.py:81-83`). Neither row carries an object.
+- [read, by grep only] `prf/sha-512` is also named in PoUW's and the certifier's files. I did not read whether integrity's or PoUW's `delta` or the certifier's `eps` leaves a term out.
+- [derived] The same shape needs, a leg: its piece writes the object in its answer's profile, and the leg's name joins one tuple in `block_record.py` and one line of the schema.
+
+### Item 3, the smallest shape I see
+
+`composed.joint_horizon.named_terms`, by leg: each accepted composed leg's own `named_terms`, `{}` when none.
+
+~~~json
+"joint_horizon": {"terms": {"bandwidth": "…", "integrity": "1/100"}, "error_sum": "…",
+                  "named_terms": {"bandwidth": {"prf_advantage": {"claim": "prf/sha-512", "term": "Σ_t adv_t", "value": null,
+                                                                  "in_total": false, "status": "SHA-512 stream as PRF: not priced, not assumed"}}}}
+~~~
+
+- [derived] It is `terms`' twin (leg to error; leg to what that error leaves out), and `check` holds it to the legs as it holds `terms`.
+- [read] It is the key `auditor_line.py` puts beside its own total (`:542`).
+- A list of leg names (`["bandwidth"]`) is about 170 bytes a leg smaller and sends the reader to the leg for what is left out. Say if you want that instead.
+- **Not in it:** each period's `joint_horizon` under `monitoring_period`, which is the block's sum times the blocks and leaves out the same terms once a block. I leave it, and the docstring says it reads with the block's `named_terms`. Repeating the key there changes `monitoring_period`'s two arguments, which network's test calls.
+
+### Item 2, what the sentences are at `main`
+
+- [read] One sentence prints a leg's error to a person: `served_verdicts.terms` (`:963-964`), in the composed reason and the `RECORD` line.
+- [derived] It prints only where the leg is not established at a δ. An accepted bandwidth leg at the piece's defaults always is (ε = 2^-40 + 6,144/2^64, under 1/10^6), so today's sentence never prints for it.
+- [read] A second is inside the record, `at[δ].why` (`block_record.py:139`), which item 1 keeps byte for byte.
+- [read] None prints the block's sum: `error_sum` is read by `monitoring_period` and by tests; `report.py`'s "in all" (`:375`) is Demo A's three legs, without the bandwidth audit.
+- **What I build:**
+  - Where the leg carries named terms, the first sentence ends "except with E + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)".
+  - An accepted leg established at every δ gets one clause, "its error reads E + Σ_t adv_t (…)", so the reason says it in the case that occurs. Say if that clause is more than you want.
+  - The words are the leg's own `term` and `status`, joined as the ledger joins them. A test holds the form to `ledger.DELTA_FORM`; no file of the record imports the ledger.
+
+### One thing the record still says, which item 1 forbids me to change
+
+[read] `at[δ].holds` is true for the bandwidth leg wherever `error ≤ δ` (`block_record.py:136-137`), and `joint_horizon.at[δ]` counts it established. With the term unpriced that reads "holds except with δ + Σ_t adv_t". The leg now carries the term in the same object, and the docstring will say `at` is read with it.
+
+### Next, and not established
+
+- Next: build, by test file on my VM, then the changed suites remotely. Memory's hunk is a commit of its own.
+- Not established: no test is run yet; whether anything reads a stored record from outside the tree; (e)'s three other legs.
