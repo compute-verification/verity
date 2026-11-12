@@ -74,9 +74,11 @@ gives a gathered value:
   batch's rows by a weight, read rows that may repeat, which carry a gather's rows: two rows of a batch of values may
   be equal as two tokens may.
 
-The rule holds on a batch in which no row starts with a run of one token, and, where no positional table reaches the
-rows, no row's prefix repeats a shorter one: such a batch makes two positions' values equal at every layer, under any
-rule that reads only the circuit and the trace's reading alike. It doesn't reach a softmax's backward, so the input
+The rule rests on one premise, the one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
+each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
+two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
+of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
+positions whose prefixes hold the same tokens in the same proportions. It doesn't reach a softmax's backward, so the input
 gradients of the first attention's queries and keys, which `Layout`'s rules charge, stay gathered.
 
 Two limits follow. A Program with no scan has no carried word, so no θ′ and no bound. And a value the rule can't show

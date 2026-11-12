@@ -3,17 +3,19 @@ attention steps, evaluated word by word (`serve3_reference.materialize`), no two
 pair of values beyond the share a sequence's start leaves (`Work.keep`), where the batch repeats tokens within its rows.
 
 Each step is `test_program_reading.loop`'s scan of three iterations of a training step under AdamW at random weights,
-and the third iteration's products are the ones compared. The batch repeats a token within each row and starts no row
-with a run of one token, nor with a prefix that repeats a shorter one: such a batch makes two positions' values equal
-at every layer, which no reading of the circuit can tell (`work`'s limits). The steps:
+and the third iteration's products are the ones compared. The batch repeats a token within each row and meets
+`work`'s premise: past each row's first position, no two positions of the batch hold equal words. At a batch that
+breaks it in each of its three ways (`BROKEN`, a row of one token among them), the readings do charge MACs that read
+one pair twice (`test_a_batch_that_breaks_the_premise_repeats_pairs_the_readings_charge`). The steps:
 
 - `sdpa`: an embedding, two layers of one-head causal attention (`scaled_dot_product_attention`) and a head.
 - `after_mask`: the same with the mask an explicit constant added to the scores, and a product of the masked scores by
-  a weight right after the add, which no reading may charge: the add alone leaves two positions of one token one row
-  shifted, so that product reads one pair at both.
+  a weight right after the add, which no reading may charge: the add leaves two positions of one token equal
+  wherever the mask's words are 0, so that product reads one pair at both.
 - `rope`: `sdpa` with rotary tables, inputs the Program doesn't state.
 - `relu`: `sdpa` with a ReLU MLP (`clamp_min`) after the second layer, whose down-projection no reading may charge:
-  two of its inputs' negative words give one 0, so an op with a specific argument does not give a specific value by that alone.
+  two of its inputs' negative words give one 0, so an op with a specific argument does not give a specific value by
+  that alone.
 - `lf`: the lf model's step at its smallest size.
 
 A dense step on a batch of values (`test_a_value_batchs_rows_may_repeat`) is charged nothing from the circuit alone:
@@ -45,6 +47,11 @@ K0 = 65536.0
 #: two rows of T + 1 tokens, each repeating a token, the loss reading the first T
 BATCH = torch.tensor([[1, 2, 1, 3, 5], [4, 1, 4, 6, 7]])
 ROPE = WK.Layout("batch", *BATCH.shape, ("buf_cos", "buf_sin"))
+#: batches that break the premise, each by its first row but the last: the other row is one the held batch could have
+BROKEN = {"a run of one token first": [[1, 1, 2, 4, 5], [6, 7, 0, 5, 1]],
+          "one token": [[3, 3, 3, 3, 3], [6, 7, 0, 5, 1]],
+          "prefixes in proportion": [[1, 2, 1, 2, 5], [6, 7, 0, 5, 1]],
+          "two rows sharing two tokens first": [[1, 2, 3, 4, 5], [1, 2, 6, 7, 0]]}
 THIRD = "Iteration_v1#2"
 
 
@@ -226,3 +233,25 @@ def test_a_value_batchs_rows_may_repeat():
     assert all(reason for reason, _ps in by.values())
     down = first_after(step, by, r"(F32Mul|SiluRef)_v\d+", f"LinearRef_v1{{K={2 * D},N={D},")
     assert by[down][0] == "gathered" and repeats(by[down][1])
+
+
+def repeating(case: str, batch: torch.Tensor, layout) -> set:
+    """The products the reading under ``layout`` charges on ``case``'s step at ``batch`` whose MACs repeat a pair."""
+    _step, prog, tab = evaluated(CASES[case], batch)
+    return {k for k, (reason, ps) in pairs(prog, tab, layout).items() if not reason and repeats(ps)}
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("case,broken,stated", [
+    ("lf", "a run of one token first", "rope"), ("lf", "one token", "rope"),
+    ("lf", "two rows sharing two tokens first", "rope"), ("lf", "a run of one token first", "nothing"),
+    ("lf", "two rows sharing two tokens first", "nothing"), ("sdpa", "prefixes in proportion", "nothing")])
+def test_a_batch_that_breaks_the_premise_repeats_pairs_the_readings_charge(case, broken, stated):
+    """The premise is a limit, held as a fact: at a batch that breaks it, the reading charges products whose MACs read
+    one pair twice past the ones that repeat at the held batch (the first position's, which `keep` leaves out). With a
+    positional table the prefixes in proportion are no break: the rope reading charges no new repeat there."""
+    lay = ROPE if stated == "rope" else None
+    held = repeating(case, BATCH, lay)
+    assert repeating(case, torch.tensor(BROKEN[broken]), lay) - held
+    if case == "lf":
+        assert not repeating(case, torch.tensor(BROKEN["prefixes in proportion"]), lay) - held
