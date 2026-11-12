@@ -211,8 +211,9 @@ PRIVATE = "{private}"
 TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
 TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
 #: the boundary commitment's object (`verity_vllm.pipeline.boundary_windows.BoundaryWindows.of`): a replay block of
-#: one check a served id with the check template's body in place, a window closed when it drains
-ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
+#: one check a served id with the check template's body in place, the ids served committed as what it returns
+#: (`boundary_rows.Layout.ids`), a window closed when it drains
+ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True, "ids": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
@@ -375,7 +376,7 @@ MODELS = {
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on")),
-                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
+                   metric="vllm/serving-cost-glm53", check="GreedySelect_v1{V=154880,N=7744}",
                    # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
