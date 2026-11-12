@@ -24,20 +24,17 @@ def _load(path: Path, name: str):
 
 
 def _derive():
-    """e2e_slice's derive.py, with the `ref`, `mref` and `sref` it imports by name bound to floored_gemm's and
-    masked_gemm's (another suite module may have imported a different `ref`)."""
-    saved = {k: sys.modules.get(k) for k in ("ref", "mref", "sref")}
+    """floored_gemm's derive.py, with the `ref` it imports by name bound to the one beside it (another suite module may
+    have imported a different `ref`)."""
+    saved = sys.modules.get("ref")
     try:
         sys.modules["ref"] = _load(POUW / "floored_gemm" / "ref.py", "floored_gemm_ref")
-        sys.modules["mref"] = _load(POUW / "masked_gemm" / "mref.py", "masked_gemm_mref")
-        sys.modules["sref"] = _load(POUW / "masked_gemm" / "sref.py", "masked_gemm_sref")
-        return _load(POUW / "e2e_slice" / "derive.py", "e2e_slice_derive")
+        return _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
     finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+        if saved is None:
+            sys.modules.pop("ref", None)
+        else:
+            sys.modules["ref"] = saved
 
 
 def _thread_args(V, W, b, c, U, z, ks, ctid):
