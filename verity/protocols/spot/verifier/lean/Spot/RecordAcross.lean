@@ -13,6 +13,10 @@ computed whatever the others say:
 * `audit`: the earlier stream's audit record (`Record.record`'s) is the earlier registration's and accepted, with
   `complete`, whether that record says every one of its entries ran (`auditVerdict`); no verdict when none is handed.
 
+The audit record is the caller's, and it is held to nothing: `across` checks its format and its `registration_digest`,
+reads its `accepted` and `complete` as it gives them and none of its entries, and does not hold it to the record the
+earlier stream's verifier wrote. So `audit`, and with it case 1, says no more than the record handed says.
+
 `case` names the outcome: 1 when all three hold and the earlier stream's audit record is complete; 2 when the earlier
 stream's log holds no such record or the order is not the log's; 3 when those hold and the earlier stream's audit record
 is missing or did not accept; 4 when those hold and that audit record accepted and is not complete: it accepted with
@@ -140,7 +144,9 @@ private def saysTrue : Json → Bool
 
 /-- The verdict on `audit`, the audit record handed for the registration `previous` (its digest, hex): none when none
 is handed (null); refused, with no word on `complete`, when it is no audit record of that registration (`auditOther`);
-else `accepted` and `complete` as the record's own fields say, each true only where the field is `true`. -/
+else `accepted` and `complete` as the record's own fields say, each true only where the field is `true`. `audit` is
+the caller's record and is held to nothing: no entry of it is read, and nothing holds it to the record the earlier
+stream's verifier wrote, so the verdict says no more than the record handed says. -/
 def auditVerdict (audit : Json) (previous : String) : AuditVerdict :=
   match audit with
   | .null => { accepted := none, complete := none }

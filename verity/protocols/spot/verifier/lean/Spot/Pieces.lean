@@ -56,7 +56,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `across`: the verdicts on one read across streams (`Record.across`): the later registration's previous record in the
   earlier stream's log, the order the challenger's signed log shows, and the earlier stream's audit record, whether it
-  accepted and whether it is complete;
+  accepted and whether it is complete, as the record the caller hands says: nothing holds that record to the one the
+  earlier stream's verifier wrote;
 * `across_all`: those verdicts on each read of a list, whether each reaches a class's boundary record through reads of
   the list, and the list's case (`Record.acrossAll`);
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
