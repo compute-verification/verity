@@ -193,3 +193,65 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov 1:37 PM PST, to your 1:
 
 **Not established:** the exfiltration command against the store's remote (the read did not end in 150 seconds on the VM; the compute audit's 4,887 GB is from this machine's catalog, record `r20261112-124742-a3fe`); which of the design's parts have a run on Friday.
 
+[2026-11-12T21:40Z] 42796252b9f5
+SCANCOUNT to the network-accounting coordinator, Thu 12 Nov 1:45 PM PST. **NET-285 since step 1: the read-back is proved, the view cut has both witnesses, and my files elaborate at lean's mark. NET-401's sizing is below, and its main line reaches NET-285: at the deployed sampled verifier a statement's gates are not its descriptor flattened, so `StmtFlattens` is not a fact of that parser, and `ScanCountBounded`, which asks `Flattens` of each window's statement, speaks of no deployed statement until that is settled.**
+
+Marks: [ran] a run I read, [read] source or a lock I read, [argued] my reasoning from what I read.
+
+## NET-285
+
+Scratch branch `cursor/network-accounting-scan-statements-9e41`, head `07cbbc5bb249`, pushed, no pull request. No lock changed, no `open` entry added.
+
+- **`RowsReadPadded` is proved.** `NetTiming.rowsReadPadded : RowsReadPadded`, in `security/Proofs/NetworkCertifier/RecordRowsRead.lean` (my file), commit `45fac3e427`. Run r20261112-203935-6bf1 at that tree: done, rc 0; lean exit 0 in 117 s; the axiom probe says none of its 10 theorems goes beyond propext, Classical.choice and Quot.sound; no clash [ran]. It takes no hypothesis. It is in no lock, so no check has replayed it through the kernel.
+- **`ScanViewCut` compiles at the head and builds on the two files I extended.** `ViewCut.lean`: r20261112-195003-6300 at tree `1c8fa449dcd7`, done, rc 0, axiom probe clean on 6 theorems [ran]. The scan proofs' root file (`security/Proofs/Properties/NetworkScan.lean`, which reads `Accept` and `Fits`): r20261112-200725-65de at the same tree, done, rc 0, clean on 11 theorems [ran]. `scanViewCut` takes `Flattens`, so I do not call it proved.
+- **Its two witnesses.** Honest: `Properties.NetworkScan.scan_honest`, the one `scanFits` has [read]. Nontrivial: `Properties.NetworkScan.scanViewCut_nontrivial`, in the new `security/Proofs/Properties/NetworkScan/ViewCutWitness.lean`, commit `17b13e3505`: a Program of one input gate, returned, with no template; its presence gate at step 0 is that input, it has no view gate, and two runs that differ there give two rows. Run r20261112-210850-7796 at that tree: done, rc 0; lean exit 0 in 498 s; clean on 17 theorems; no clash [ran].
+- **The nontrivial witness is the model's: no `Flattens` among its binders.** Refuting the conclusion needs an input gate, and `Flattens` then asks `Flock.Program.isInputId` of that gate's key. The kernel does not evaluate it at a string (four forms tried, run r20261112-203040-66b4, failed, rc 1; the string functions it stops on, run r20261112-205104-d136, failed, rc 1, as that probe was built to; both in a local branch, never pushed) and its helper is private to `Circuits.Program` [ran]. The file proves `Flattens` at the instance from that one fact (`oneInput_flattens`) and a `#guard` evaluates the fact. A witness that carries `Flattens` needs one lemma inside `Circuits.Program`, which is not my file.
+- **lean's branch, taken once at its mark `bafae2eaec2e`, by merge (`07cbbc5bb2`).** Each of my files elaborates there with a clean axiom probe; four of the five tries exit 1 on the sibling check, which stops on two modules that are not mine [ran]:
+
+| file | run, at tree `07cbbc5bb249` | status | lean | sibling check |
+|---|---|---|---|---|
+| `security/Properties/NetworkScan/Bound.lean` | r20261112-211232-f83a | done, rc 0 | exit 0 | no clash |
+| `security/Proofs/NetworkCertifier/RecordRowsRead.lean` | r20261112-211232-0238 | failed, rc 1 | exit 0, 10 theorems clean | stops |
+| `security/Proofs/Properties/NetworkScan/ViewCut.lean` | r20261112-211233-f9bb | failed, rc 1 | exit 0, 6 clean | stops |
+| `security/Proofs/Properties/NetworkScan/ViewCutWitness.lean` | r20261112-211232-c5f7 | failed, rc 1 | exit 0, 17 clean | stops |
+| `security/Proofs/Properties/NetworkScan.lean` | r20261112-211232-89d3 | failed, rc 1 | exit 0, 11 clean | stops |
+
+  The stop, the same in all four: `Proofs.Pous.FreeBlocks.Zero` and `Proofs.Pous.Sanity` both declare `Pous.seqAccepts.eq_1`. The try names two readings, a clash in the sources or one of the two built against an older build of a module it imports; I did not establish which. `Chain.lean` had no try of its own there: `Bound.lean` imports it, and that try built it [ran].
+- **The NET-285 comment of this morning** went as `network-accounting/SCANCOUNT`: `--as network-accounting` is refused to a worker.
+- **Held, as you said:** `ScanCountsEntries`, `ScanChainPinned`, `ScanCountBounded`.
+
+## NET-401's sizing (nothing built)
+
+At lean's mark the Properties lock lists the three as `open`, owner network-accounting, LEAN-186, due 30 Nov. `scanFits` takes `Flattens`; `scanScopeAcc` takes `StmtFlattens` and `ScopeMatches`. Neither guarantee is under `deployed` or `trust_gap`, and no other guarantee in the three locks takes any of them [read]. On my scratch branch `ScanChainPinned`, `ScanCountsEntries`, `ScanViewCut` and `ScanCountBounded` take `Flattens` and neither of the other two [read].
+
+**`Flattens P C`**
+- What it says: the circuit `C` is the Program `P` in its canonical layout, gate for gate: as many gates as `P`'s root states, an input gate exactly where the primitive is an input, reading exactly the gates its operands name, returning what the root's return resolves to [read].
+- Proved or part of the statement: part of what `ScanFits` says. It names the circuits the fit speaks of, as `NciCheck.Properties.Record.Served` does in the same lock under `domain`. The honest witness already concludes it, at the empty Program [read]. So it is a `domain` entry with a one-line why, with nothing to prove; the lock move is lean's and yours to rule.
+- With the view cut: `scanViewCut` takes it the same way, and `viewSet` is numbered in `P`'s gates.
+
+**`ScopeMatches D`**
+- What it says: the compiled sampled verifier's scope check takes exactly the statements in its sampling scope [read].
+- Proved or part of the statement: it can leave. The proof uses one direction, once, to turn `D.scopeCheck x = true` into `D.Scope x` [read, `scanScopeAcc_of_scanFits`]. Stated at a statement in `D`'s sampling scope instead, `ScanScopeAcc` takes neither the scope check nor this premise, and its conclusion is the layout's half alone. Whoever applies it has the sampling scope from soundness: the compiler's contract gives it at an accepted run (`refuses`) [read]. I did not find `Claims.ScopeMatches D.Scope D.scopeCheck` concluded anywhere for a compiled record; the only uses are ours [read, by search].
+- With the view cut: no effect.
+
+**`StmtFlattens D`**
+- What it says: every statement `D` parses has a descriptor Flock decodes, and the statement's gates are that Program flattened [read].
+- Can it be proved of the deployed code: not as stated [argued from what I read; I compiled no counterexample]. The deployed two-stage parser builds a statement as `{ desc := h.desc, prog := bitsProgs h.ms, … }` (`SpotFlock.parse`): the descriptor is the auditor's copy, and the gates are Bits' layout of the members' circuit files [read]. Bits' layout is the constant, the zero, a unit's source gates, then each row lowered to three gates, two XORs and their AND (`Spot.Bits.keyProg`, `lower`) [read]. `Flattens` asks for the descriptor's canonical layout, one gate a primitive instance in the order of the call hierarchy. These are two layouts of one circuit, and nothing in `Held` ties `h.desc` to `h.ms` [read].
+- So it is not part of what the guarantee says either: it is the premise that the network check and the sampled verifier read the same gates, and they do not. The network check reads the descriptor (`scanOf`, `scanLayout`, by `Flock.Program.resolve`); the sampled verifier proves statements about the circuit file.
+- Two ways it leaves, both invasive:
+  1. **A proved bridge**: for an accepted scan, where each boundary gate of the descriptor sits in Bits' layout, and the fit's three halves there. The positions exist as code (`Spot.Bits.inBit`, `outBit`). I found no lemma that relates `Flock.Program.resolve` to them; the nearest work is NCI's record properties (`NciCheck.Properties.Record.*`), which are about a record the scan check does not read [read, by search; not exhaustive]. Causality changes shape: in Bits' layout a unit reads its own gates and source gates, never another unit's computed gate, so "no egress gate depends on a later ingress gate" is a statement about Δ's source keys, not about operands [read for the layout; argued for the consequence].
+  2. **The scan check reads the circuit file's layout**: `NetworkCheck.Period.scanOf` and `scanLayout` take positions from what the sampled verifier lays out. That changes the compiled check, its Python and difftest, and `scanFits` is proved again over Bits' layout (`Accept`, `Fits`, `Causal`, `Walk`: about 2,100 lines today). AGENTS.md's rule that Lean holds one description of the circuit, the parsed circuit file the verifier checks, points here.
+- With the view cut and the count: `ScanViewCut`, `ScanChainPinned`, `ScanCountsEntries` take `Flattens` of an arbitrary `C` and stand as statements about the descriptor. `ScanCountBounded` asks `Flattens P (sw i).prog` of each window's statement, which is `StmtFlattens` at those statements: under the reading above it holds of no statement the deployed parser builds. Under way 1 my proofs stand and the bridge carries them; under way 2 they are proved again with `scanFits`.
+
+**Can Mon 30 Nov be held, and by whom**
+- `Flattens` to `domain` and `ScopeMatches` out of `ScanScopeAcc`: yes, by me, as one change to two statements and their lock entries, once you rule them. Neither needs a new proof.
+- `StmtFlattens`: not as a proof of the present statement, by anyone. It needs a decision first, which of the two ways, and that decision is about what the scan's guarantee says and crosses soundness's parser and Bits' bridge. I can write the ask's facts for you. I do not commit either way to 30 Nov without that decision and without reading Δ's source keys for the scan's templates.
+
+## Not checked
+
+- No counterexample to `StmtFlattens` at the deployed code is compiled; the claim rests on reading `SpotFlock/Code.lean`, `Properties/Spot/Members.lean` and `Spot/Bits.lean`.
+- I read the two-stage code's parser. I did not read a one-stage code's; `Properties.Spot.Bits` says a statement's program is Bits' layout, which I take to cover it.
+- How Δ's source keys carry the scan's state from one bucket's unit to the next: not read.
+- Which reading of the sibling stop holds at lean's mark.
+- The Site v2 mend is a separate report, by 6 PM PST: its one run (r20261112-213404-d43a) is running.
+
