@@ -2172,21 +2172,25 @@ prompt ids and a size of ids released, each a power of two.
     held row j, so a proof block is one a held row. A table of no row has no port.
 - **The request words** (`WardenParams.request_words`, none by default, with content rows under form 2 and a
   response cap only). A schedule with them has a fourth table a class, `words.i`, which the head lists after
-  `end.i`. Its row r is three u32 words of the release whose request is row r of `request.i`: its `max_tokens`, its
-  `ignore_eos` and the count of its prompt's ids, 12 bytes. Its count is the class's, held with the other three's,
-  a class of no release has it with no row, and its port is `connection_rows.port`'s by its name.
+  `end.i`. Its row r is two u32 words of the release whose request is row r of `request.i`: its `max_tokens` and
+  the count of its prompt's ids, 8 bytes. Its count is the class's, held with the other three's, a class of no
+  release has it with no row, and its port is `connection_rows.port`'s by its name.
   - **The parse rule** is public and stated once (`content_rows.request_words`, under "A request's words" there).
     The words are the network certifier's own reading of the request's bytes as it cut them, cell by cell, as it
     reads each cell before it releases it (`io_request.read`). Nothing a server or a prover says enters them.
   - **It applies no default.** With lengths rows the device holds every request cell to the canonical id request's
     form and fails the connection as `malformed` at the first that doesn't read. So a released request has
     `max_tokens` at its place, the number its response is held to under the cap, and no key but the canonical
-    ones: `ignore_eos` is 0 for every release. A request without `max_tokens` at its place, or with an `ignore_eos`
-    key, is never released and has no row.
+    ones. A request without `max_tokens` at its place, or with an `ignore_eos` key, is never released and has no
+    row. The row holds no `ignore_eos`: no released request has the key, so a proof block that reads the table
+    takes it as the constant 0, a registered value of its Definition.
+  - **The count of prompt ids is at most the class's P.** A canonical id request's length grows with its prompt's
+    count alone, and a release is filed only in a class that holds its request's bytes.
   - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
-    naming the release, and no head is signed over it. So is one with a `max_tokens` past the response cap or with
-    more ids released than its `max_tokens`: under every signed head a words row's `max_tokens` is at most the cap
-    and at least its response row's count.
+    naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
+    more ids released than its `max_tokens`. These are the builder's own checks of what the device already holds:
+    under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
+    count.
   - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
     schedule's.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`

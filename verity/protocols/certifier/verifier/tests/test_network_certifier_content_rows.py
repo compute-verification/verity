@@ -3,7 +3,7 @@ whole 16-bit words, a decoder gives back what its encoder was given, and bytes t
 refused by the field that says so. A request row's room is the canonical id request's length at its class's prompt
 ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class.
 A request's words are read from its bytes cell by cell, as the device reads a cell before it releases it, and a
-words row is those three as u32 words."""
+words row is those two as u32 words."""
 
 from __future__ import annotations
 
@@ -162,12 +162,12 @@ def test_an_end_row_is_how_the_connection_ended_and_its_cells():
 
 
 @pytest.mark.parametrize("B", (387, 512, 4096))
-def test_a_requests_words_are_its_max_tokens_zero_and_its_prompts_count_read_cell_by_cell(B):
+def test_a_requests_words_are_its_max_tokens_and_its_prompts_count_read_cell_by_cell(B):
     """The rule reads a canonical id request in the network certifier's cells whatever its other fields: its
-    `max_tokens` at its place in the first cell, 0 for `ignore_eos`, which the form has no key for, and the count
-    of its prompt's ids over its cells, from a prompt of one id to one of many cells. Bytes that are not such a
-    request are refused, naming the first cell that doesn't read as the device reads it: a request cut short or
-    with a byte after its end, one with another byte in its head or between two ids, and no byte at all."""
+    `max_tokens` at its place in the first cell and the count of its prompt's ids over its cells, from a prompt of
+    one id to one of many cells. The form has no key for `ignore_eos`, so the rule reads none. Bytes that are not
+    such a request are refused, naming the first cell that doesn't read as the device reads it: a request cut short
+    or with a byte after its end, one with another byte in its head or between two ids, and no byte at all."""
     rng = random.Random(B)
     room = B - HEADER.size
     for prompt in (1, 2, 3, 40, 100, 2048):
@@ -175,8 +175,8 @@ def test_a_requests_words_are_its_max_tokens_zero_and_its_prompts_count_read_cel
             request = id_request(model="m" * rng.randrange(1, 60), user="u" * rng.randrange(1, 60),
                                  prompt=[rng.randrange(1 << 32) for _ in range(prompt)], max_tokens=max_tokens,
                                  seed=rng.randrange(1 << 32), temperature=0.5, top_p=0.25, frame_bytes=B, offset=0)
-            assert CT.request_words(request, B) == (max_tokens, 0, prompt)
-            assert CT.request_words(bytearray(request), B) == (max_tokens, 0, prompt)
+            assert CT.request_words(request, B) == (max_tokens, prompt) and b"ignore_eos" not in request
+            assert CT.request_words(bytearray(request), B) == (max_tokens, prompt)
     assert len(request) > 5 * room
     last = (len(request) - 1) // room
     for bad, cell in ((request[:-1], last), (request + b" ", last if len(request) % room else last + 1),
@@ -190,24 +190,23 @@ def test_a_requests_words_are_its_max_tokens_zero_and_its_prompts_count_read_cel
             CT.request_words(bad, B)
 
 
-def test_a_words_row_is_three_u32_words():
-    """The words row is the request's `max_tokens`, its `ignore_eos` and the count of its prompt's ids, a
-    little-endian u32 each: six 16-bit words, a field's low word first. A `max_tokens` or a count that is no u32, a
-    prompt of no id, an `ignore_eos` that is neither 0 nor 1 and a row of another size are each refused."""
-    assert CT.WORDS_BYTES == 12 and CT.WORDS_ROW.format == "<III"
-    row = CT.words_row(0x0001_0002, 0, 0x0003_0004)
-    assert row == b"\x02\0\x01\0" + bytes(4) + b"\x04\0\x03\0" and len(WR.words(row)) == 6
-    assert CT.words_row(8, 0, 3) == struct.pack("<III", 8, 0, 3) and CT.words_of(CT.words_row(8, 1, 3)) == (8, 1, 3)
-    for words in ((0, 0, 1), (0xFFFF_FFFF, 0, 0xFFFF_FFFF), (7, 1, 4096)):
+def test_a_words_row_is_two_u32_words():
+    """The words row is the request's `max_tokens` and the count of its prompt's ids, a little-endian u32 each:
+    four 16-bit words, a field's low word first, `max_tokens` before the count. A `max_tokens` or a count that is
+    no u32, a prompt of no id and a row of another size, a row of three u32 among them, are each refused."""
+    assert CT.WORDS_BYTES == 8 and CT.WORDS_ROW.format == "<II"
+    row = CT.words_row(0x0001_0002, 0x0003_0004)
+    assert row == b"\x02\0\x01\0" + b"\x04\0\x03\0" and len(WR.words(row)) == 4
+    assert CT.words_row(8, 3) == struct.pack("<II", 8, 3) and CT.words_of(struct.pack("<II", 3, 8)) == (3, 8)
+    for words in ((0, 1), (0xFFFF_FFFF, 0xFFFF_FFFF), (7, 4096)):
         assert CT.words_of(CT.words_row(*words)) == words
-    for bad in ((-1, 0, 1), (1 << 32, 0, 1), (8, 2, 1), (8, -1, 1), (8, 0, 0), (8, 0, 1 << 32), (8.0, 0, 1),
-                (True, 0, 1), (8, False, 1), (8, 0, None)):
-        with pytest.raises(ValueError, match="a words row is a u32 max_tokens, an ignore_eos of 0 or 1 and a u32 of "
-                                             "at least 1 prompt id"):
+    for bad in ((-1, 1), (1 << 32, 1), (8, 0), (8, -1), (8, 1 << 32), (8.0, 1), (True, 1), (8, True), (8, None)):
+        with pytest.raises(ValueError, match="a words row is a u32 max_tokens and a u32 of at least 1 prompt id"):
             CT.words_row(*bad)
-    for bad, why in ((row[:-1], "a words row is 12 bytes, not 11"), (row + b"\0", "a words row is 12 bytes, not 13"),
-                     (struct.pack("<III", 8, 2, 3), "ignore_eos is 2, not 0 or 1"),
-                     (struct.pack("<III", 8, 0x100, 3), "ignore_eos is 256, not 0 or 1"),
-                     (struct.pack("<III", 8, 0, 0), "prompt has no id"), (bytes(12), "prompt has no id")):
+    with pytest.raises(TypeError):
+        CT.words_row(8, 0, 3)
+    for bad, why in ((row[:-1], "a words row is 8 bytes, not 7"), (row + b"\0", "a words row is 8 bytes, not 9"),
+                     (struct.pack("<III", 8, 0, 3), "a words row is 8 bytes, not 12"),
+                     (struct.pack("<II", 8, 0), "prompt has no id"), (bytes(8), "prompt has no id")):
         with pytest.raises(ValueError, match=why):
             CT.words_of(bad)

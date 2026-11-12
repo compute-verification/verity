@@ -6,9 +6,9 @@ of that form (`warden`'s "The lengths rows") and `--content P,O[,ROWS] ...` its 
 (`content_rows`' "The classes"): a class's size of prompt ids, its size of ids released and, under form 1 and only
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
 it and no other. `--request-words`, with `--lengths 2`, `--content` and the schedule's `--max-tokens-cap`, gives it
-request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`,
-`ignore_eos` and count of prompt ids as the network certifier reads them. `warden_serve`'s `serve` and `rehearse`
-take the three, and `rehearse` passes them to its `serve`. Without them the schedule, its digest and everything the
+request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`
+and count of prompt ids as the network certifier reads them. `warden_serve`'s `serve` and `rehearse` take the three
+flags, and `rehearse` passes them to its `serve`. Without them the schedule, its digest and everything the
 run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
@@ -123,8 +123,8 @@ def flags(q: argparse.ArgumentParser) -> None:
                         "(default: none)")
     q.add_argument("--request-words", action="store_true",
                    help="with --lengths 2, --content and --max-tokens-cap: the request words (content_rows' \"A "
-                        "request's words\"), a fourth table a class of each released request's max_tokens, "
-                        "ignore_eos and count of prompt ids as the network certifier reads them (default: none)")
+                        "request's words\"), a fourth table a class of each released request's max_tokens "
+                        "and count of prompt ids as the network certifier reads them (default: none)")
 
 
 def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:

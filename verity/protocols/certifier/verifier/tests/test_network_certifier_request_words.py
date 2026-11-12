@@ -1,9 +1,9 @@
 """The network certifier's request words (`WardenParams.request_words`, `content_rows`' "The words row" and "A
 request's words", `connection_rows`), driven tick by tick on `test_network_certifier_warden`'s harness. A schedule
-with them has a fourth table a class, `words.i`: row r is the `max_tokens`, the `ignore_eos` and the count of prompt
-ids of the r-th release filed in the class, as the network certifier reads them from the request's bytes, whatever
-its server answers. A request without `max_tokens` at its place, or with an `ignore_eos` key, is never released, so
-it has no row. The head lists the table after the class's other three at the class's count, with the zero root
+with them has a fourth table a class, `words.i`: row r is the `max_tokens` and the count of prompt ids of the r-th
+release filed in the class, as the network certifier reads them from the request's bytes, whatever its server
+answers, the count at most the class's P. A request without `max_tokens` at its place, or with an `ignore_eos` key,
+is never released, so it has no row. The head lists the table after the class's other three at the class's count, with the zero root
 where the class has no release, the verifier's read holds a registration to that, and the table's port is by its
 name. A schedule without them has the digest, the tables and the heads it had."""
 
@@ -28,9 +28,9 @@ from verity.protocols.certifier.verifier.tests.test_network_certifier_lengths im
 from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import reasons, records, run
 from verity.protocols.certifier.verifier.warden import Released, WardenParams, cells
 
-#: the content tables tests' form-2 schedule under a response cap, and the same with request words
-CAPPED = dataclasses.replace(HELD, max_tokens_cap=8)
-WORDED = dataclasses.replace(CAPPED, request_words=True)
+#: the content tables tests' form-2 schedule with `max_tokens_cap` set, and the same with request words
+BOUNDED = dataclasses.replace(HELD, max_tokens_cap=8)
+WORDED = dataclasses.replace(BOUNDED, request_words=True)
 R = WORDED.phase_releases
 #: each class's four tables, in the head's order
 NAMES = tuple(CT.names_of(WORDED, i) for i in range(len(WORDED.content)))
@@ -42,7 +42,7 @@ HELD_REGISTERED = ("57251fa45c593f1c7bfdd05bee62a08a9caef4d78dc969c29609baf7e7ae
                    "c09710f4ccfc6b5ba00bfd0caef9f801ffb6f4208058e31ed472ae945ca50b10")
 
 #: each released request's `max_tokens` and its prompt's count of ids, by its place in the release order: a prompt
-#: of one cell, of two and of three, a `max_tokens` of 0 and one at the cap
+#: of one cell, of two and of three, a `max_tokens` of 0 and one at the schedule's most
 ASKED = ((8, 3), (1, 40), (8, 100), (0, 3), (5, 16), (7, 2))
 #: what the server sends on each, and on each in a second run of the same requests
 SENT = ((11, 22, 33), (9,), tuple(range(8)), (), (5,), (1, 2))
@@ -104,15 +104,15 @@ def registrations(params: WardenParams, handed, directory) -> str:
 # --- the parameter -------------------------------------------------------------------------------------------------
 
 
-def test_request_words_are_a_parameter_of_a_capped_form_2_schedule_with_content_rows():
+def test_request_words_are_a_parameter_of_a_form_2_schedule_with_content_rows_and_a_response_bound():
     """A schedule has request words only where its parameters say so: true, or unset, in a schedule with content
     rows under the lengths rows' form 2 and a response cap, and any other is refused where it is built, naming what
     the schedule needs. They enter the digest of a schedule that has them, and read back from the parameters as a
     deployment writes them. Such a schedule lists a fourth table a class, `words.i`, after the class's other three:
-    at most R rows of 12 bytes, with its class's layout."""
+    at most R rows of 8 bytes, with its class's layout."""
     assert WardenParams().request_words is None and HELD.request_words is None and WORDED.request_words is True
-    assert len({HELD.digest, CAPPED.digest, WORDED.digest}) == 3
-    assert dataclasses.replace(WORDED, request_words=None) == CAPPED
+    assert len({HELD.digest, BOUNDED.digest, WORDED.digest}) == 3
+    assert dataclasses.replace(WORDED, request_words=None) == BOUNDED
     assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(WORDED)))) == WORDED
     for bad in (False, 1, 0, "true", (True,)):
         with pytest.raises(ValueError, match="request_words is true, for a schedule with request words, or unset"):
@@ -122,18 +122,18 @@ def test_request_words_are_a_parameter_of_a_capped_form_2_schedule_with_content_
                   dataclasses.replace(LEN, lengths=2, max_tokens_cap=8), WardenParams()):
         with pytest.raises(ValueError, match=needs):
             dataclasses.replace(other, request_words=True)
-    assert [t for t in CR.tables_of(WORDED) if not t[0].startswith("words.")] == list(CR.tables_of(CAPPED))
+    assert [t for t in CR.tables_of(WORDED) if not t[0].startswith("words.")] == list(CR.tables_of(BOUNDED))
     assert [name for name, _, _ in CR.tables_of(WORDED)] == ["lengths", "fails", *(n for four in NAMES for n in four)]
     assert NAMES[0] == ("request.0", "response.0", "end.0", "words.0") and CT.names_of(HELD, 0) == CT.names(0)
     for i in range(len(WORDED.content)):
         assert CT.words_name(i) == f"words.{i}" == NAMES[i][3]
-        assert [t for t in CR.tables_of(WORDED) if t[0] == f"words.{i}"] == [(f"words.{i}", R, 12)]
-        assert CT.layout(WORDED, f"words.{i}") == CT.layout(WORDED, f"end.{i}") == CT.layout(CAPPED, f"end.{i}")
+        assert [t for t in CR.tables_of(WORDED) if t[0] == f"words.{i}"] == [(f"words.{i}", R, 8)]
+        assert CT.layout(WORDED, f"words.{i}") == CT.layout(WORDED, f"end.{i}") == CT.layout(BOUNDED, f"end.{i}")
     with pytest.raises(ValueError, match="no content table 'words.0'"):
-        CT.layout(CAPPED, "words.0")
+        CT.layout(BOUNDED, "words.0")
     # the head counts its tables in a u16: four a class after the lengths and fails tables
     most = CT.most_classes(WORDED)
-    assert 2 + 4 * most <= 0xFFFF < 2 + 4 * (most + 1) and CT.most_classes(CAPPED) == CT.MOST_CLASSES > most
+    assert 2 + 4 * most <= 0xFFFF < 2 + 4 * (most + 1) and CT.most_classes(BOUNDED) == CT.MOST_CLASSES > most
     with pytest.raises(ValueError, match=f"content is 1 to {most} classes"):
         dataclasses.replace(WORDED, content=((4, 4),) * (most + 1))
 
@@ -142,11 +142,11 @@ def test_a_schedule_without_request_words_has_the_digest_the_tables_and_the_head
     """The request words are hashed only by a schedule that has them, so a form-2 schedule without them has the
     parameters digest it had, lists three tables a class, and its run's registrations are the ones it left, byte
     for byte. Its tables take any released request, as they did: nothing reads its words."""
-    assert HELD.digest.hex() == HELD_DIGEST and all(len(CT.names_of(p, 0)) == 3 for p in (HELD, CAPPED, CON))
+    assert HELD.digest.hex() == HELD_DIGEST and all(len(CT.names_of(p, 0)) == 3 for p in (HELD, BOUNDED, CON))
     _, arrivals, answers = mixed()
     device, _, _ = run(answers, arrivals, params=HELD, windows=3, client=leaving(GONE))
     assert registrations(HELD, device.lengths, tmp_path) == HELD_REGISTERED
-    for params in (HELD, CAPPED):
+    for params in (HELD, BOUNDED):
         laid = CR.tables(params, one_release())
         assert list(laid) == [name for name, _, _ in CR.tables_of(params)] and not any("words" in n for n in laid)
         assert CT.request_of(laid["request.0"][0], B, 4) == b"hello"
@@ -156,9 +156,9 @@ def test_a_schedule_without_request_words_has_the_digest_the_tables_and_the_head
 
 
 def test_a_releases_words_are_its_requests_whatever_its_server_answers(ran):
-    """Each release's row of its class's words table is its request's `max_tokens`, 0 for `ignore_eos` and its
-    prompt's count of ids, as the test built the request: at the release's row of its class, the row of its request
-    in the request table. The same requests answered otherwise, with other ids, fewer or none, file as they did and
+    """Each release's row of its class's words table is its request's `max_tokens` and its prompt's count of ids,
+    two u32 words, as the test built the request: at the release's row of its class, the row of its request in the
+    request table, the count at most the class's P. The same requests answered otherwise, with other ids, fewer or none, file as they did and
     have the same words tables, byte for byte, where their response tables differ. The schedule's other tables are
     the ones the same hand lays without request words, and the device cuts, records and hands what it does without
     them."""
@@ -169,14 +169,14 @@ def test_a_releases_words_are_its_requests_whatever_its_server_answers(ran):
     tables = {phase: CR.tables(WORDED, strides) for phase, strides in handed.items()}
     for phase, strides in handed.items():
         assert [len(tables[phase][f"words.{i}"]) for i in range(len(NAMES))] == list(COUNTS[phase])
-        base = CR.tables(CAPPED, strides)
+        base = CR.tables(BOUNDED, strides)
         assert {name: rows for name, rows in tables[phase].items() if name in base} == base
         for release in (r for stride in strides for r in stride):
             i, r = FILED[release.order]
             max_tokens, prompt = ASKED[release.order]
             row = tables[phase][f"words.{i}"][r]
-            assert row == max_tokens.to_bytes(4, "little") + bytes(4) + prompt.to_bytes(4, "little")
-            assert CT.words_of(row) == (max_tokens, 0, prompt) == CT.request_words(release.request, B)
+            assert row == max_tokens.to_bytes(4, "little") + prompt.to_bytes(4, "little")
+            assert CT.words_of(row) == (max_tokens, prompt) == CT.request_words(release.request, B)
             assert CT.request_of(tables[phase][f"request.{i}"][r], B, WORDED.content[i][0]) == release.request
             assert prompt <= WORDED.content[i][0] and max_tokens <= WORDED.max_tokens_cap
     _, arrivals, answers = traffic(OTHER)
@@ -187,7 +187,7 @@ def test_a_releases_words_are_its_requests_whatever_its_server_answers(ran):
             assert again[phase][four[3]] == tables[phase][four[3]] and again[phase][four[0]] == tables[phase][four[0]]
             assert (again[phase][four[1]] == tables[phase][four[1]]) == (not COUNTS[phase][i])
     _, arrivals, answers = traffic()
-    plain, _, _ = run(answers, arrivals, params=CAPPED, windows=3)
+    plain, _, _ = run(answers, arrivals, params=BOUNDED, windows=3)
     assert plain.lengths == device.lengths and plain.log == device.log
     assert [[r.grid for r in link] for link in records(plain)] == [[r.grid for r in link] for link in records(device)]
 
@@ -195,9 +195,10 @@ def test_a_releases_words_are_its_requests_whatever_its_server_answers(ran):
 def test_a_request_without_max_tokens_at_its_place_or_with_an_ignore_eos_key_is_never_released(ran):
     """The two clients whose requests the rule doesn't read: the network certifier cuts no cell of either, releases
     neither and fails each as its client's, so neither has a place in the release order, a lengths slot or a row of
-    any table. Under the response cap the request without `max_tokens` fails at its first cell's read of it (cap),
-    and the one with an `ignore_eos` key as no canonical id request (malformed). Every request of the lengths
-    tests' that is no id request is refused by the rule by name, as the device never releases it."""
+    any table. Under `max_tokens_cap` the request without `max_tokens` fails at its first cell's read of it, and
+    the one with an `ignore_eos` key as no canonical id request (malformed). So every row is of a request without
+    the key. Every request of the lengths tests' that is no id request is refused by the rule by name, as the
+    device never releases it."""
     _, device, handed = ran
     log = {e["ordinal"]: e for e in device.log}
     assert [(o, why) for _, o, why in reasons(device)] == [(6, "malformed"), (8, "cap")]
@@ -207,13 +208,14 @@ def test_a_request_without_max_tokens_at_its_place_or_with_an_ignore_eos_key_is_
     assert sorted(e["release"] for e in device.log if e["release"] is not None) == list(range(len(ASKED)))
     rows = [row for strides in handed.values() for name, table in CR.tables(WORDED, strides).items()
             if name.startswith("words.") for row in table]
-    assert len(rows) == len(ASKED) and all(CT.words_of(row)[1] == 0 for row in rows)
+    assert len(rows) == len(ASKED) and all(len(row) == 8 and b"ignore_eos" not in r.request for row, r in
+                                           zip(rows, released(handed)))
     for name, (bad, _) in no_id_requests().items():
         with pytest.raises(ValueError, match="is not that cell of a canonical id request"):
             CT.request_words(bad, B)
         with pytest.raises(ValueError, match="release 0, filed in class 2, has a request without words: cell"):
             CT.tables(WORDED, [Released(0, len(bad), 0, False, bad, b"")], [2])
-        assert len(CT.tables(CAPPED, [Released(0, len(bad), 0, False, bad, b"")], [2])["request.2"]) == 1, name
+        assert len(CT.tables(BOUNDED, [Released(0, len(bad), 0, False, bad, b"")], [2])["request.2"]) == 1, name
 
 
 # --- the head ------------------------------------------------------------------------------------------------------
@@ -221,9 +223,9 @@ def test_a_request_without_max_tokens_at_its_place_or_with_an_ignore_eos_key_is_
 
 def test_the_head_lists_each_classes_words_table_at_the_classes_count(signed):
     """The head of a schedule with request words lists, after each class's request, response and end tables, its
-    words table: at the class's count of releases, one count for the four, in rows of 12 bytes under the domain the
+    words table: at the class's count of releases, one count for the four, in rows of 8 bytes under the domain the
     schedule gives the table at that count. A class of no release has the table of no row, with the zero root. The
-    registration says the same of it, in six 16-bit words a row and its class's layout, and reads back."""
+    registration says the same of it, in four 16-bit words a row and its class's layout, and reads back."""
     _, by_phase = signed
     assert sorted(by_phase) == [0, 1, 2]
     for phase, (opened, doc, head, domains) in by_phase.items():
@@ -232,11 +234,11 @@ def test_the_head_lists_each_classes_words_table_at_the_classes_count(signed):
         for i, count in enumerate(COUNTS[phase]):
             assert [head.table(name).rows for name in NAMES[i]] == [count] * 4
             e, t = head.table(f"words.{i}"), said[f"words.{i}"]
-            assert e.row_bytes == CT.WORDS_BYTES == 12 and len(opened.table(e.name).rows) == count
-            assert e.domain == CR.domain(WORDED, signers.SESSION, LINK, phase, e.name, count, 12).domain_id
+            assert e.row_bytes == CT.WORDS_BYTES == 8 and len(opened.table(e.name).rows) == count
+            assert e.domain == CR.domain(WORDED, signers.SESSION, LINK, phase, e.name, count, 8).domain_id
             assert e.domain == domains[e.name].domain_id
             assert (e.root == CR.NO_ROWS_ROOT) == (count == 0)
-            assert (t["value"], t["rows"], t["words"]) == (f"{LINK}/words.{i}/{phase}", count, 6)
+            assert (t["value"], t["rows"], t["words"]) == (f"{LINK}/words.{i}/{phase}", count, 4)
             assert t["layout"] == said[f"end.{i}"]["layout"] and t["layout"]["class"] == i
             assert (t["domain"], t["root"]) == (e.domain.hex(), e.root.hex())
     # two execution phases that file the same count in a class have other roots there: each row has a salt of its own
@@ -247,8 +249,8 @@ def test_the_head_lists_each_classes_words_table_at_the_classes_count(signed):
 def test_a_words_tables_port_is_its_held_rows_by_its_name_and_a_table_of_no_row_has_none(signed):
     """The port of a class's words table is `connection_rows.port` by the table's name: a population of the head's
     count, proof block j reading row j under the table's root and domain. Every held row opens the signed root
-    through it at its place; a row with another `max_tokens`, another count of prompt ids or a set `ignore_eos`
-    doesn't, nor do two rows in each other's places. A table of no row has no port, and its opening no path."""
+    through it at its place; a row with another `max_tokens` or another count of prompt ids doesn't, nor do two
+    rows in each other's places. A table of no row has no port, and its opening no path."""
     _, by_phase = signed
     for phase, (opened, _, head, domains) in by_phase.items():
         for i, count in enumerate(COUNTS[phase]):
@@ -264,8 +266,8 @@ def test_a_words_tables_port_is_its_held_rows_by_its_name_and_a_table_of_no_row_
             assert (port["value"], port["leaves"], port["reads"]) == (f"{LINK}/{name}/{phase}", count, list(range(count)))
             assert (port["root"], port["domain"]) == (entry.root.hex(), domains[name].domain_id.hex())
             assert _refusal(opened, head, domains, name, table.rows) is None
-            max_tokens, eos, prompt = CT.words_of(table.rows[0])
-            for other in ((max_tokens ^ 1, eos, prompt), (max_tokens, eos, prompt + 1), (max_tokens, 1, prompt)):
+            max_tokens, prompt = CT.words_of(table.rows[0])
+            for other in ((max_tokens ^ 1, prompt), (max_tokens, prompt + 1)):
                 assert "does not open the registered root" in _refusal(
                     opened, head, domains, name, [CT.words_row(*other), *table.rows[1:]])
             if count > 1:
@@ -316,52 +318,63 @@ def test_the_verifiers_read_holds_a_words_table_to_its_classes_count_and_its_sch
         with pytest.raises(ValueError, match="words.1 table has no row and the root"):
             check(changed)
     # the same hand under the schedule without request words, signed by the same key: each read refuses the other's
-    _, bare, _, _ = read(issuer, 0, ran[2][0], CAPPED)
+    _, bare, _, _ = read(issuer, 0, ran[2][0], BOUNDED)
     assert [t["name"] for t in bare["tables"]] == [t["name"] for t in doc["tables"] if "words" not in t["name"]]
-    for other, params in ((bare, WORDED), (doc, CAPPED)):
+    for other, params in ((bare, WORDED), (doc, BOUNDED)):
         with pytest.raises(ValueError, match="the registration's parameters is '[0-9a-f]{128}', and the schedule's"):
             check(other, params)
     with pytest.raises(ValueError, match="the registration lists the schedule's 18 tables"):
         check(bare | {"parameters": WORDED.digest.hex()})
     with pytest.raises(ValueError, match="the registration lists the schedule's 14 tables"):
-        check(doc | {"parameters": CAPPED.digest.hex()}, CAPPED)
+        check(doc | {"parameters": BOUNDED.digest.hex()}, BOUNDED)
 
 
 def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_committed_at_its_classes_count(ran):
     """The tables of a schedule with request words are laid only from releases whose requests the rule reads: a
     hand with a request that is no canonical id request is refused, naming the release and its class, and none of
     it is laid, where the same hand under the schedule without request words is laid as it was. So is a hand with
-    a request whose `max_tokens` is past the response cap, or with more ids than its request's `max_tokens`, which
-    the device never releases; at the cap and at its `max_tokens` it is laid. The commitment takes a class's words
-    table only at the class's count, in rows of 12 bytes."""
+    a request whose `max_tokens` is past the schedule's `max_tokens_cap`, or with more ids than its request's
+    `max_tokens`, which the device never releases; at each of the two it is laid. A request of more prompt ids than
+    a class's P is longer than the class holds, so it is no row of the class: filed there it is refused by its
+    bytes, and at P ids it is laid with a count of P. The commitment takes a class's words table only at the
+    class's count, in rows of 8 bytes."""
     _, _, handed = ran
     with pytest.raises(ValueError, match="release 0, filed in class 0, has a request without words: cell 0 of the "
                                          "request's 1 is not that cell of a canonical id request"):
         CR.tables(WORDED, one_release())
-    assert [len(rows) for rows in CR.tables(CAPPED, one_release()).values()][2:5] == [1, 1, 1]
+    assert [len(rows) for rows in CR.tables(BOUNDED, one_release()).values()][2:5] == [1, 1, 1]
 
     def hand(max_tokens: int, ids: int) -> tuple:
         request = id_req(0, 3, max_tokens=max_tokens)
         return ((Released(0, len(request), ids, False, request, bytes(4 * ids)),), *((),) * (len(handed[0]) - 1))
 
-    cap = WORDED.max_tokens_cap
-    for max_tokens, ids in ((cap + 1, 2), (2, 3), (0, 1)):
+    most = WORDED.max_tokens_cap
+    for max_tokens, ids in ((most + 1, 2), (2, 3), (0, 1)):
         with pytest.raises(ValueError, match=f"release 0, filed in class 0, has a max_tokens of {max_tokens} and {ids} "
-                                             f"ids under a response cap of {cap}: the network certifier releases no"):
+                                             f"ids where the schedule's max_tokens_cap is {most}: the network "):
             CR.tables(WORDED, hand(max_tokens, ids))
-        assert len(CR.tables(CAPPED, hand(max_tokens, ids))["request.0"]) == 1
-    for max_tokens, ids in ((cap, 4), (2, 2), (0, 0)):
-        assert [CT.words_of(row) for row in CR.tables(WORDED, hand(max_tokens, ids))["words.0"]] == [(max_tokens, 0, 3)]
+        assert len(CR.tables(BOUNDED, hand(max_tokens, ids))["request.0"]) == 1
+    for max_tokens, ids in ((most, 4), (2, 2), (0, 0)):
+        assert [CT.words_of(row) for row in CR.tables(WORDED, hand(max_tokens, ids))["words.0"]] == [(max_tokens, 3)]
+    for i, (P, _) in enumerate(WORDED.content):
+        at, past = id_req(0, P), id_req(0, P + 1)
+        assert len(at) == CT.request_room(B, P) < len(past) and CT.request_words(past, B) == (8, P + 1)
+        assert CT.words_of(CT.tables(WORDED, [Released(0, len(at), 0, False, at, b"")], [i])[f"words.{i}"][0]) == (8, P)
+        with pytest.raises(ValueError, match=f"release 0, of {len(past)} bytes and 0 ids, is filed in class {i}, which "
+                                             f"holds {len(at)} bytes"):
+            CT.tables(WORDED, [Released(0, len(past), 0, False, past, b"")], [i])
+        assert CT.file(WORDED, Released(0, len(past), 0, False, past, b"")) not in \
+            [j for j, (Q, _) in enumerate(WORDED.content) if Q <= P]
     full = CR.tables(WORDED, handed[0])
     CR.Rows.commit(LINK, 0, full, WORDED, signers.SESSION)
     for changed, why in (({"words.0": full["words.0"][:-1]}, "words.0 table has 1 rows, and the end.0 table 2"),
-                         ({"words.1": [bytes(12)]}, "words.1 table has 1 rows, and the end.1 table 0"),
-                         ({"words.0": [bytes(11)] * 2}, f"words.0 table is at most {R} rows of 12 bytes"),
-                         ({"words.0": [full["words.0"][0]] * (R + 1)}, f"words.0 table is at most {R} rows of 12")):
+                         ({"words.1": [bytes(8)]}, "words.1 table has 1 rows, and the end.1 table 0"),
+                         ({"words.0": [bytes(7)] * 2}, f"words.0 table is at most {R} rows of 8 bytes"),
+                         ({"words.0": [full["words.0"][0]] * (R + 1)}, f"words.0 table is at most {R} rows of 8")):
         with pytest.raises(ValueError, match=why):
             CR.Rows.commit(LINK, 0, full | changed, WORDED, signers.SESSION)
     without = {name: rows for name, rows in full.items() if not name.startswith("words.")}
     with pytest.raises(ValueError, match="the schedule's tables are .*'end.0', 'words.0', 'request.1'"):
         CR.Rows.commit(LINK, 0, without, WORDED, signers.SESSION)
     with pytest.raises(ValueError, match="the schedule's tables are .*'end.0', 'request.1'"):
-        CR.Rows.commit(LINK, 0, full, CAPPED, signers.SESSION)
+        CR.Rows.commit(LINK, 0, full, BOUNDED, signers.SESSION)
