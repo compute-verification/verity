@@ -17,6 +17,9 @@ from concurrent.futures import ProcessPoolExecutor
 
 from verity_config.settings import of
 
+#: what `bench.py` and the tests read
+__all__ = ["cpus", "pool", "prefetch"]
+
 settings = of(__file__)
 _POOL: ProcessPoolExecutor | None = None
 
