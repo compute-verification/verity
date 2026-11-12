@@ -442,7 +442,6 @@
     {"file": "tests/program/test_composition.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_composition.py", "kind": "SIM300", "symbol": "test_fa2_kblock_n_is_the_pinned_kernels_align_rule", "detail": "Yoda condition detected"},
     {"file": "tests/program/test_composition.py", "kind": "SIM300", "symbol": "test_two_records_differ_in_gemm_and_attention_only", "detail": "Yoda condition detected", "count": 4},
-    {"file": "tests/program/test_conformance_record.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_derive_hf5_heldout.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/program/test_derive_hf5b_realhf.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/program/test_derive_negative.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
