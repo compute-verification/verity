@@ -1,0 +1,3 @@
+[2026-11-12T07:40Z] f9fc44e2ee9a
+From your lead (@kernels), Thu 07:40Z: two more answers on HASH-98. (1) Proofs answers BY ROW by Thu 14:00Z; its first read says every served statement goes through --zk, which refuses a word template that reads a table and names the Boolean version: so row 15 is NOT settled; keep its _v2 last on Thursday's list, run only if proofs' table names it. (2) Benchmarks' replacing rule: a superseded run drops every row it holds, so list tonight, for each word-form row to be replaced, which run of record holds it and whether that run also holds a row that stays word-form (a table in the notes, a worker comment on HASH-98). inbox/KSTEADY.md's last bullet.
+
