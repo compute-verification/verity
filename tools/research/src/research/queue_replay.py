@@ -664,6 +664,13 @@ def trace(doc: dict) -> Trace:
                  max(mixes, default=start), sorted(clean), frozenset(rep.get("wide") or ()), Suites(rep, launch, plain), measured)
 
 
+def gated(tr: Trace, f: Fault) -> bool:
+    """Whether a run of the suites each blamed change reruns would have shown the failure ``f`` before the mark: the suite
+    that failed first is known and reads files of every change blamed.  (Not known from the record: whether it fails without
+    the other members of its candidate.)"""
+    return bool(f.suites) and all(set(f.suites) <= tr.suites.touched(tr.changes[k].files) for k in f.changes)
+
+
 # ---- the rules --------------------------------------------------------------------------------------------------------------
 
 
@@ -678,12 +685,16 @@ class Rule:
     lean: int = 0
     beside: bool = False           # plain batches are built beside a Lean batch's pending records run
     keep: bool = False             # a failed check removes only the change at fault, and what is rebuilt keeps its passes
+    keep_all: bool = False         # under `keep`, so does what is rebuilt when a failure names nobody or several, or when
+                                   # others take a member from the queue; else those candidates are dropped as today
     side: int = 0                  # so many batches checked beside each other, each on `main`, and no chain
     alone: bool = False            # each candidate above the lowest is also checked alone on `main`
     first: str = ""                # the changes that land on their mark and verdict and are checked after: plain | prose | tests
     period: float = 0.0            # a candidate is built every so many seconds whatever is below it, and no depth
     plain_first: bool = False      # with nothing in check, the plain batch is built before a Lean batch
     after: int = 2                 # under `first`, so many checks of `main` at once
+    gate: bool = False             # a change is marked only once the suites it reruns pass on it merged onto `main`: a real
+                                   # failure in a suite that reads the files of each change blamed for it never reaches the queue
     overlap: bool = False          # a Lean batch's check starts with its records run and stands when the run ends
     back: bool = False             # under `first`, a failure naming several changes reverts each, back to the queue's check;
                                    # else the change at fault stays on `main` as long as it really stayed in the queue
@@ -749,6 +760,12 @@ class Replay:
         self.passes = {k: sorted(x for x in tr.passes if x[1] == k) or sorted(tr.passes) for k in (False, True)}
         self.fails = sorted(tr.fails)
         self.next = {ch.after: ch for ch in tr.changes.values() if ch.after is not None}
+        for f in tr.faults.values() if rule.gate else ():
+            if gated(tr, f):
+                for key in f.changes:
+                    # the head at fault is never marked; its fix is, when it really was
+                    self.out[key] = (tr.start, "gate")
+                    self.arrive[key] = tr.changes[key].left or f.at
 
     # -- the world at a tick
 
@@ -923,10 +940,20 @@ class Replay:
             for fault in (x for x in f.faults if isinstance(x, int)):
                 if not any((e.number, e.head) in self.tr.faults[fault].changes for e in ejected):
                     self.removal.setdefault(fault, self.t + (self.tr.faults[fault].delay or 0.0))
-            if self.rule.keep and ejected:
-                saved = self._recheck(f, {(e.number, e.head) for e in ejected})
+            if self.rule.keep and (ejected or self.rule.keep_all):
+                # with nobody named, every member of the failed candidate goes back to the queue, and those above it go on
+                saved = self._recheck(f, {(e.number, e.head) for e in ejected} or {ch.key for ch in f.changes}, "red")
             elif self.rule.alone:
                 saved = self._switch(f)
+        elif self.rule.keep_all:
+            # a candidate dropped for a member others took from the queue goes on without it, as do those above it
+            for a in acts:
+                if isinstance(a, vq.Drop) and a.sha in self.cands and (cause := qt.drop_cause(a.why)) in ("hold", "withdrawn mark"):
+                    c = self.cands[a.sha]
+                    pulled = {ch.key for ch in c.changes if ready.get(ch.pr) is not ch}
+                    if pulled:
+                        saved = self._recheck(c, pulled, cause)
+                    break
         for a in acts:
             if isinstance(a, vq.Eject):
                 self._gone((a.number, a.head), "fault")
@@ -986,17 +1013,22 @@ class Replay:
                     if self._busy() + SHARDS <= PLACES:
                         c.twin = (self.t, self.t + self._draw(self.passes[any(ch.audit for ch in c.changes)], self.t), self.main)
 
-    def _recheck(self, f: _Cand, culprits: set[tuple[int, str]]) -> set[str]:
-        """The failed candidate without the changes at fault, and each candidate above it on the new one, built at once: a
-        task whose inputs the removed change doesn't touch keeps its pass, so each check ends when its own would have, or
-        after a rerun of the suites that read the removed files, whichever is later."""
+    def _recheck(self, f: _Cand, culprits: set[tuple[int, str]], cause: str) -> set[str]:
+        """The candidate ``f`` without ``culprits`` (the changes at fault, or those taken from the queue), and each candidate
+        above it on the new one, built at once: a task whose inputs the removed changes don't touch keeps its pass, so each
+        check ends when its own would have, or after a rerun of the suites that read the removed files, whichever is later.
+        The round of each removed change is lost to ``cause``."""
         gone = frozenset().union(*(ch.files for ch in f.changes if ch.key in culprits))
         rerun = self.tr.suites.wall(self.tr.suites.touched(gone)) if gone else self.tr.suites.launch_s
         base, saved = f.base, set()
+        if cause == "red":
+            f.flake = None
         for old in [f, *self._above(f.sha)]:
             keep = [ch for ch in old.changes if ch.key not in culprits]
             saved.add(old.sha)
             self._leave(old, None)
+            if len(keep) < len(old.changes):
+                self.lost[cause] = self.lost.get(cause, 0) + len(old.changes) - len(keep)
             if not keep:
                 continue
             new = self._new(keep, base)
@@ -1317,32 +1349,37 @@ RULES = (
     Rule("1b. The loop with a Lean batch's records run first and nothing built meanwhile, left alone: batch 32, depth 6, "
          "pins as they were", pin_all=False),
     Rule("2. Plain batches build beside a Lean batch's records run; a failed check removes only the change at fault and what "
-         "is rebuilt keeps its passes", "none: the same checks, scheduled differently", beside=True, keep=True),
+         "is rebuilt keeps its passes", "none: the same checks, scheduled differently", beside=True, keep=True, keep_all=True),
     Rule("2a. Only: plain batches build beside a Lean batch's records run", "none", beside=True),
     Rule("2b. Row 1b, and only: a failed check removes only the change at fault and what is rebuilt keeps its passes", "none",
-         keep=True, pin_all=False),
+         keep=True, keep_all=True, pin_all=False),
+    Rule("2c. Row 2, but passes are kept only when the loop names one change at fault", "none", beside=True, keep=True),
     Rule("3. Batches side by side on `main`, 6 in check at once, each union rechecked on the suites both sides read",
          "a union that fails is dropped and its batch built again on `main`", side=6, beside=True),
     Rule("3b. The same, 4 in check at once", "the same", side=4, beside=True),
     Rule("4. Row 2, and each candidate above the lowest is also checked alone on `main` while places are idle",
-         "none: a check alone that is not needed is cancelled", beside=True, keep=True, alone=True),
+         "none: a check alone that is not needed is cancelled", beside=True, keep=True, keep_all=True, alone=True),
     Rule("4b. Row 2a, and the same checks alone", "the same", beside=True, alone=True),
     Rule("5. Row 2, and a plain change lands on its mark and verdict and is checked after",
-         "the loop reverts the change a later check fails on", beside=True, keep=True, first="plain"),
+         "the loop reverts the change a later check fails on", beside=True, keep=True, keep_all=True, first="plain"),
     Rule("5b. Row 5, but a failed check of `main` that names several changes reverts each of them at once, and they are checked "
-         "before they land again", "the same, and the reverts of changes not at fault", beside=True, keep=True, first="plain",
+         "before they land again", "the same, and the reverts of changes not at fault", beside=True, keep=True, keep_all=True, first="plain",
          back=True),
-    Rule("5c. Row 5 with four checks of `main` at once", "the same", beside=True, keep=True, first="plain", after=4),
+    Rule("5c. Row 5 with four checks of `main` at once", "the same", beside=True, keep=True, keep_all=True, first="plain", after=4),
+    Rule("5d. Row 5, and a change is marked only once the suites it reruns pass on it merged onto `main`", "the same",
+         beside=True, keep=True, keep_all=True, first="plain", gate=True),
     Rule("6a. Row 2, and a change of prose only (every file Markdown) lands on its mark and verdict", "a revert",
-         beside=True, keep=True, first="prose"),
+         beside=True, keep=True, keep_all=True, first="prose"),
     Rule("6b. Row 2, and a change of tests only (every file under a tests directory) lands on its mark and verdict", "a revert",
-         beside=True, keep=True, first="tests"),
+         beside=True, keep=True, keep_all=True, first="tests"),
     Rule("6c. Row 2, and a candidate every 10 minutes whatever is below it, no depth",
-         "none: more candidates are dropped on a red", beside=True, keep=True, period=600.0),
-    Rule("6d. Row 2 with batch 16", "none", beside=True, keep=True, batch=16),
-    Rule("6e. Row 2 with batch 64, depth 3", "none", beside=True, keep=True, batch=64, depth=3),
+         "none: more candidates are dropped on a red", beside=True, keep=True, keep_all=True, period=600.0),
+    Rule("6d. Row 2 with batch 16", "none", beside=True, keep=True, keep_all=True, batch=16),
+    Rule("6e. Row 2 with batch 64, depth 3", "none", beside=True, keep=True, keep_all=True, batch=64, depth=3),
     Rule("6f. Row 2, and a Lean batch's check starts with its records run, not after it", "the check is run again when the "
-         "records commit changes more than the records (not priced: here it never does)", beside=True, keep=True, overlap=True),
+         "records commit changes more than the records (not priced: here it never does)", beside=True, keep=True, keep_all=True, overlap=True),
+    Rule("6g. Row 2, and a change is marked only once the suites it reruns pass on it merged onto `main`",
+         "none: the run before the mark is the cost", beside=True, keep=True, keep_all=True, gate=True),
     Rule("7. Row 1b, and with nothing in check the plain batch is built before a Lean batch", "none", plain_first=True,
          pin_all=False),
 )

@@ -204,3 +204,19 @@ def test_the_table_has_a_row_for_what_happened_and_one_for_each_rule(tr, capsys)
     assert qr.main(["--doc", str(FIXTURE), "--seeds", "1", "--rules", "1.,5."]) == 0
     out = capsys.readouterr().out
     assert out.count("\n| ") == 4 and "reverts" in out
+
+
+def test_when_every_rebuild_keeps_its_passes_no_candidate_is_dropped_for_its_base(tr):
+    kept, named = (qr.Replay(tr, rule(n)).run() for n in ("2.", "2c."))
+    assert "dropped base" not in kept.lost and named.lost["dropped base"] > 0
+    assert kept.lost["hold"] < named.lost["hold"]
+    assert kept.counts["rechecked"] > 0
+
+
+def test_a_failure_a_changes_own_suites_would_show_never_reaches_the_queue_under_the_gate(tr):
+    caught = [f for f in tr.faults.values() if qr.gated(tr, f)]
+    assert (len(caught), len(tr.faults)) == (3, 4)
+    run = qr.Replay(tr, rule("6g.")).run()
+    assert not {ch.key for c in run.built for ch in c.changes} & {key for f in caught for key in f.changes}
+    assert run.counts["reds"] < qr.Replay(tr, rule("2.")).run().counts["reds"]
+    assert len(qr.Replay(tr, rule("5d.")).run().red) < len(qr.Replay(tr, rule("5.")).run().red)
