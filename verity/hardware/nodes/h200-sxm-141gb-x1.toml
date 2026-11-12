@@ -1,7 +1,9 @@
 # An H200 node: one h200-sxm-141gb card in a VM of a two-socket Xeon Platinum 8468 server. This file holds what the
 # node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs it
 # carries, and the host's own memory, one table a leaf. Each number is { value, unit, mark, source }, as in a card.
-# A GPU's memory is its card's store.dram, whole, and every rate, clock and peak is a card's: none is here.
+# A GPU's memory is its card's store.dram, whole, and every rate, clock and peak of a card is its card's: none is
+# here. No run has read the interfaces that carry traffic off a node of this kind, so the file has no interface table
+# and the node's entry registers no link.
 
 node = "h200-sxm-141gb-x1"
 name = "An H200 node: one card in a VM of a two-socket Xeon Platinum 8468 server"
