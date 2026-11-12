@@ -168,6 +168,31 @@ def test_proving_time_is_priced_by_the_rows_plan_not_by_the_rows_own_shares():
     assert E.at_share("world year", "r1", other, 0.10)["priced"] is None
 
 
+def test_a_family_priced_several_ways_is_split_by_its_ways_and_only_an_own_row_is_measured():
+    """A family whose split gives its share by way (`ways`: a table's own row, the Lean verifier at the driver's
+    modeled price, a family's row) has its plan's share split in their proportion, not printed under one joined way;
+    the Inputs mark a block type's own steady-state row measured, and a family's row and the Lean verifier modeled."""
+
+    split = {"families": {"A_v1": {"priced": ["modeled", "steady"], "share": 0.9, "ways": {"steady": 0.6, "modeled": 0.3}},
+                          "B_v1": {"priced": ["family"], "share": 0.1, "ways": {"family": 0.1}}}}
+    own = [r | {"split": split | {"q": r["q"], "replay_sample": r["replay_sample"]}} for r in TOY]
+    plan = {"scope": "world year", "beta": 0.04, "q": 0.5, "replay_sample": 3.0, "bound_bits": 25.0,
+            "cells": [{"block": "A_v1{K=1}", "share": 0.75}, {"block": "B_v1", "share": 0.25}]}
+    for at in (E.at_share("world year", "r1", own, 0.10, ("r2", plan)), E.at_share("world year", "r1", own, 0.10)):
+        ways = at["priced"]["ways"]
+        assert set(ways) == {"steady", "modeled", "family"}
+        assert sum(w["share"] for w in ways.values()) == pytest.approx(1.0, abs=1e-12)
+    ways = E.at_share("world year", "r1", own, 0.10, ("r2", plan))["priced"]["ways"]
+    assert {k: (round(w["share"], 12), w["families"]) for k, w in ways.items()} == {
+        "steady": (0.5, {"A_v1": pytest.approx(0.5)}), "modeled": (0.25, {"A_v1": pytest.approx(0.25)}),
+        "family": (0.25, {"B_v1": 0.25})}
+    point = E.at_share("world year", "r1", own, 0.10, ("r2", plan))
+    marks = {i["input"]: i["mark"] for i in E._inputs({"world year": point}, ["r1"], {"inputs": {}},
+                                                       {"at_zero_in": [], "GB": None}, 0.10, 0.003, E.ROW)}
+    assert {k: v for k, v in marks.items() if k.startswith("proving priced")} == {
+        "proving priced steady": "measured", "proving priced modeled": "modeled", "proving priced family": "modeled"}
+
+
 # ---- the store side ----------------------------------------------------------------------------------------------------------
 
 
@@ -301,6 +326,7 @@ def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
     assert year["requests"] == pytest.approx(doc["periods"][-1]["requests"], rel=1e-12)
     assert year["requests"] == pytest.approx(term().plan()["world_requests"].value, rel=1e-12)
     assert "The row is priced over 1.778e+16 requests, the count the network certifier's part is over." in E.render(doc)
+    assert "\n- this is the headline figure: λ times the bound where the row's total is 10% of compute" in E.render(doc)
 
     s = Store(tmp_path / "other")
     s.label(s.ran(ROWS, [as_row(r) for r in rows() if (r["row"], r["h8"]) == (CUT_ROW, "h8")]))

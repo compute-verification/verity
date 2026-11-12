@@ -26,7 +26,10 @@ verity bench exfiltration --help          every parameter and its default
   modeled lever at its measured value, at the step that prices the verifier as measured, and reads it at the β
   where its total is the share: the total is a line in β fitted over the pinned budgets, and ln(bound) is linear in ln β
   between the two that bracket it. The row plans for the weights / λ, and its part is λ times its bound. `--row` and
-  `--step` take another case of the plan.
+  `--step` take another case of the plan. This is the headline figure. The planner's driver reads the same rows two
+  other ways, and the print says how each differs: `headline plan` gives the bound at the plan's own pinned budget,
+  whose total is that row's rather than the share, at λ = 1; `headline rows` gives λ times the bound at 10%, the
+  total read between the two pinned budgets that bracket it alone.
   - **Row `(i) honest`** prices its proving at the planner's assumed prices. Beside the figure it is read over the
     world's year at the same share and printed only under the label "at the planner's assumed prices", never as the
     figure; the document holds it as `at_assumed_prices`. Read with `--row "(i) honest"`, the figure itself carries
@@ -99,7 +102,10 @@ year alone), a case's rows over a scope from the first file that holds them: whe
 that case and scope, the run is left out. Each file is one JSON object a line, a row of the plan at one scope (`world year`, `datacenter week`, ...) and one
 pinned budget, with its `world`, `row`, `step`, `scope`, `b10` (the budget), `total` and its parts, `bound_bits`,
 `weights_bits`, `target_bits`, `delta_seen`, `S`, `gpu_seconds`, `q` and `replay_sample`, and its `split`: each block
-family's share of proving and how it is priced (`split.families`, `share` and `priced`). A run holds one variant of a
+family's share of proving and how it is priced (`split.families`, `share`, `priced` and, where the family is priced
+several ways, its share by way, `ways`, which the command splits it by). A way is measured only where it is the
+planner's measured price or a block type's own steady-state row (`steady`); a family's row and the Lean verifier's
+seconds, which no row times, are modeled. A run holds one variant of a
 row: where the planner's driver wrote several (`h8`), the command refuses to mix them, and `--variant` reads the one
 it names.
 
@@ -119,7 +125,8 @@ A `split` that doesn't say whose plan it is, is not one: it is written before th
 and its shares are not read. With no plan in either place the command says so and marks no proving measured.
 
 What prices a row's proving is read from the row's own plan too: the share each source prices (a block type's own
-steady-state row, its Definition's family row, the planner's price), as `split.sources` records it, else by
+steady-state row, its Definition's family row, the planner's price, the Lean verifier's seconds apart from the row
+they sit on), as `split.sources` records it, else by
 `split.basis` (`steady` an own row, `family` a family row, the copy stratum its own, every other key the planner's
 price), and the share at the planner's assumed default (`split.basis`'s `reprice.DEFAULT`). The command prints it
 beside the figure and beside row `(i) honest`, and "not recorded" for each where the row's plan records neither or a

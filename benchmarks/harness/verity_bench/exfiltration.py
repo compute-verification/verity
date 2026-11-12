@@ -14,9 +14,12 @@ store, with no GPU and no node.
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
-  `requests` field is the planner's default scope's count, another request's, and is not read.
+  `requests` field is the planner's default scope's count, another request's, and is not read. That part is the
+  headline figure; the planner's driver prints the same rows' bound at the plan's own budget (`headline plan`) and,
+  times λ, at the share between the two pinned budgets that bracket it (`headline rows`), and the print says so.
 * **How that part's proving is priced** is read from the row's plan: each block family's share of the plan's proving
-  time, each family priced as the rows say (`split.families`, `priced`). A row's `split` is its own plan where it says
+  time, each family priced as the rows say (`split.families`: its share by way, `ways`, else its ways, `priced`); a
+  way is marked measured only where it is one of `MEASURED_WAYS`. A row's `split` is its own plan where it says
   the `q` and the sampled replays it is the plan of and they are the row's; the command then reads the row at the
   pinned budget nearest the one it reads the bound at. A `split` that doesn't is not the row's plan (it is written
   before the row's levers multiply its blocks) and its shares are not read. A run of record may instead hold the plan
@@ -24,7 +27,8 @@ store, with no GPU and no node.
   held to the rows it is read with: the same requests, and the rows' bound at its budget. With neither the command
   says so and marks no proving measured.
 * **What prices that part's proving** is read from the row's own plan too (`_sources`): the share each source prices
-  (`SOURCES`: a block type's own steady-state row, its Definition's family row, the planner's price), as the row's
+  (`SOURCES`: a block type's own steady-state row, its Definition's family row, the planner's price, and any other
+  the row names, such as the Lean verifier's seconds that no row times), as the row's
   `split.sources` records it, else by its `split.basis`, and the share at the planner's assumed default
   (`DEFAULT_BASIS`). A row whose plan records neither is printed as "not recorded".
 * **Row `ASSUMED_ROW`** prices its proving at the planner's assumed prices. Beside another row it is read at the
@@ -111,6 +115,10 @@ VARIANT = "h8"
 CASE_KEYS = ("world", "row", "step", "scope", VARIANT)
 #: how a block family is priced where the rows don't say
 UNSTATED = "in no stated way"
+#: the ways of the rows' `split.priced` whose proving time is measured: the planner's measured price, and a block
+#: type's own steady-state row in `verity bench prove`'s table (`steady`); a family's row times another type and is
+#: modeled, as is every other way
+MEASURED_WAYS = ("measured", "steady")
 #: what prices a plan's proving, by the planner's driver's names (`split.sources`): a block type's own steady-state
 #: row, its Definition's at the same static K, and the planner's price
 SOURCES = ("own row", "family row", "planner's price")
@@ -297,14 +305,20 @@ def _requests(x: Mapping) -> float | None:
 def _priced(shares: Mapping[str, float], said: Mapping) -> dict[str, dict]:
     """A plan's proving time by how its block families are priced: each way's share of it and its families with
     theirs, largest first. ``shares`` are the plan's, by family; how a family is priced is the rows' account
-    (``said``, their `split.families`, `priced`), and `UNSTATED` for a family they don't name."""
+    (``said``, their `split.families`): its share by way (`ways`), split in their proportion, else its ways
+    (`priced`) joined, and `UNSTATED` for a family they don't name."""
 
     out: dict[str, dict] = {}
     for family, its in sorted(shares.items(), key=lambda kv: -kv[1]):
-        ways = (said.get(family) or {}).get("priced")
-        way = out.setdefault(" and ".join(sorted(ways, reverse=True)) if ways else UNSTATED, {"share": 0.0, "families": {}})
-        way["share"] += its
-        way["families"][family] = its
+        f = said.get(family) or {}
+        by = {k: v for k, v in (f.get("ways") or {}).items() if v > 0}
+        total = sum(by.values())
+        ways = ({k: v / total for k, v in sorted(by.items(), key=lambda kv: -kv[1])} if total > 0 else
+                {" and ".join(sorted(f["priced"], reverse=True)) if f.get("priced") else UNSTATED: 1.0})
+        for name, w in ways.items():
+            way = out.setdefault(name, {"share": 0.0, "families": {}})
+            way["share"] += its * w
+            way["families"][family] = its * w
     return out
 
 
@@ -479,7 +493,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             "bound, a premise no run measures"),
         one(audit, "output_bits", head["output_bits"], "bit/request", "assumed",
             f"{where} `S`: the most bits a request's output holds, which no check certifies"),
-        *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way == "measured" else "modeled",
+        *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way in MEASURED_WAYS else "modeled",
               f"`{RECORD}` ({head['priced']['run']}) {_plan(head['priced'])}, "
               f"block {'families' if len(p['families']) > 1 else 'family'} {', '.join(list(p['families'])[:2])}"
               f"{f' and {len(p["families"]) - 2} smaller' if len(p['families']) > 2 else ''}; how each is priced is the "
@@ -683,6 +697,16 @@ def _plan(priced: Mapping) -> str:
     return f"`{PLAN_FILE}`: the row's plan at β = {_part(priced['beta'])}"
 
 
+def _readers(share: float) -> str:
+    """Which of the three readers of the planner's rows is the headline figure, and why the other two differ."""
+
+    return (f"this is the headline figure: λ times the bound where the row's total is {_pct(share)} of compute, on a "
+            "least-squares line of the total through every pinned budget. The planner's driver reads the same rows two "
+            "other ways: `headline plan` prints the bound at one pinned budget, the plan's, whose total is that row's and "
+            f"not set to {_pct(share)}, at λ = 1; `headline rows` prints λ times the bound at {_pct(share)}, with the total read "
+            "between the two pinned budgets that bracket it alone.")
+
+
 def _how(priced: Mapping | None) -> str:
     """How a scope's proving time is priced, by its plan: each way's share and the largest families; or that no plan
     says."""
@@ -804,6 +828,7 @@ def render(doc: Mapping[str, Any]) -> str:
         f"β = {_part(head['beta'])}{outside}: its bound, "
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
         f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
+        f"- {_readers(share)}",
         f"- {_how(head['priced'])}.",
         f"- what prices the row's proving time, as its rows record it{plan}: {_by_source(sources)}.",
         *assumed,

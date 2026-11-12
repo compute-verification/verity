@@ -295,6 +295,45 @@ def test_a_row_s_split_gives_each_basis_s_share():
     assert H.plan_split(plan(), CALLS, STRATA)["basis"] == {H.NO_BASIS: 1.0}
 
 
+def test_a_table_row_s_block_is_tagged_by_its_source_and_its_verifier_seconds_apart():
+    """A block a table row prices is tagged as the row's source names it (`steady`, `family`), not by the planner's
+    word; its Lean verifier's seconds, its share of the cell's statements and of its blocks, are their own share under
+    `verifier_priced` and the Lean verifier's source; a block the planner prices keeps the planner's word, `computed`
+    included, for the rest. The split's shares still sum to the plan's."""
+    p = plan()
+    p["cells"][0] |= {"fixed_s": 2.0, "sessions": 0.5}
+    p["cells"].append({"block": QUANT, "share": 0.5, "prove_s": 2.0, "taken": 1.0, "fixed_s": 1.0, "sessions": 1.0})
+    p["cells"].append({"block": "Gemm_v2{M=1}", "share": 0.25, "prove_s": 1.0, "taken": 1.0, "fixed_s": 1.0,
+                       "sessions": 1.0})
+    calls = [(True, [CALLS[0][1][0] | {"table": "steady", "verifier_priced": "modeled", "verifier_fixed": 0.5,
+                                       "verifier_block": 0.0},
+                     LINE[0] | {"priced": "computed", "verifier_priced": "modeled", "verifier_fixed": 0.25,
+                                "verifier_block": 0.1},
+                     LINE[0] | {"block": "Gemm_v2{M=1}", "table": "family", "verifier_priced": "measured",
+                                "verifier_fixed": 0.0, "verifier_block": 0.0}])]
+    got = H.plan_split(p, calls, [{"block": PAGES, "priced": "modeled", "basis": H.COPY_BASIS}])
+    combine, quant = 0.75 * 0.5 / 3.0, 0.5 * (0.25 + 0.1) / 2.0
+    assert got["priced"] == pytest.approx({"steady": 0.75 - combine, "modeled": combine + quant + 0.25,
+                                           "computed": 0.5 - quant, "family": 0.25})
+    assert got["sources"] == pytest.approx({"own row": 0.75 - combine, H.VERIFIER_SOURCE: combine + quant,
+                                            H.PLANNER: 0.5 - quant, "family row": 0.25, H.COPY_BASIS: 0.25})
+    assert got["families"]["SparseMlaCombine_v1"]["priced"] == ["modeled", "steady"]
+    assert got["families"]["SparseMlaCombine_v1"]["ways"] == pytest.approx({"steady": 0.75 - combine, "modeled": combine})
+    assert got["families"]["Gemm_v2"]["ways"] == {"family": 0.25}
+    assert isclose(sum(got["priced"].values()), 1.75) and isclose(sum(got["sources"].values()), 1.75)
+    assert got["basis"] == {"steady": 0.75, H.NO_BASIS: 0.5, "family": 0.25, H.COPY_BASIS: 0.25}
+
+
+def test_each_reader_says_what_its_gb_is():
+    """`plan` says its GB is the bound at its own pinned budget, with the share of compute its total is there and
+    lambda; `rows` and `read` say their column is lambda times the bound where the total is 10%."""
+    r = row(plan()) | {"bound_bits": 8e12, "total": 0.10105001369288587}
+    assert H.show_what(r) == ("1,000.0 GB: the bound at the pinned budget beta = 40% of compute, where the row's total "
+                              "is 10.11% (not read at 10%), at lambda = 1; x1.05 is lambda times it")
+    assert H.show({}).splitlines()[-1].startswith("GB@10% x1.05: lambda = 1.05 times the bound where the scope's total "
+                                                  "is 10% of its compute")
+
+
 def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_price():
     """At `verity bench prove`'s table, a block whose row is a steady-state one, its own or its family's, costs the
     row's seconds a block: its price without the verifier (the row's scale in it) times one factor, the verifier's
@@ -313,6 +352,11 @@ def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_p
     assert isclose(got[1]["seconds_per_block"] + (got[1]["fixed_seconds"] - 2.0 * H.V_OTHER[0]) / 4, 3.0)
     assert (got[1]["priced"], got[1]["table"], got[1]["basis"]) == ("measured", "family", "family: art:combine")
     assert [x["table"] for x in calls[-1][1]] == [None, "family", None]
+    # the verifier's seconds are the row's apart: all of its seconds a statement over the table's row, none a block
+    assert [x["verifier_priced"] for x in calls[-1][1]] == ["modeled"] * 3
+    assert isclose(got[1]["verifier_fixed"] * got[1]["fixed_seconds"], 2.0 * H.V_OTHER[0]) and got[1]["verifier_block"] == 0
+    assert isclose(plain[2]["verifier_block"] * plain[2]["seconds_per_block"], 2.0 * H.V_OTHER[1] / core)
+    assert isclose(plain[2]["verifier_fixed"] * plain[2]["fixed_seconds"], 2.0 * 2.0 * H.V_OTHER[0])
     with pytest.raises(ValueError) as refused:
         H.pricing(planner_price, {}, core, [], table=table | {"Gone_v1{N=1}": table[COMBINE]})(line)
     assert str(refused.value) == ("1 rows of the table price no block of this line: `Gone_v1{N=1}`. It is another "
@@ -334,8 +378,9 @@ PLAN_BETA = 0.05544106123672309
 def test_row_ii_at_the_control_s_table_is_the_plan_s():
     """Row (ii) at the control's table and the plan's budget (about 3 s): its bound is the plan's to 1e-12, its 193
     blocks are the plan's in order, every planner input within 1e-9 of the plan's, and its plan's proving is the
-    table's own rows', its family rows' and the planner's price's in their shares. Catches a change to the pricing
-    rule, the planner or the card that moves the figure, which the stand-in pricing above can't."""
+    table's own rows', its family rows', the Lean verifier's and the planner's price's in their shares, each tagged as
+    its source prices it, with `computed` only on the planner's price. Catches a change to the pricing rule, the
+    planner or the card that moves the figure or its split, which the stand-in pricing above can't."""
     for name, digest in CONTROL_SHA256.items():
         assert hashlib.sha256((CONTROL / name).read_bytes()).hexdigest() == digest, f"fixtures/control/{name}"
     want = json.loads((CONTROL / "plan_inputs.json").read_text())
@@ -346,6 +391,7 @@ def test_row_ii_at_the_control_s_table_is_the_plan_s():
     p = H.plan(spec, row, reads, {}, P)
     got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
     assert isclose(got["bound_bits"] / 8e9, 2635.9320571029266, rel_tol=1e-12)
+    assert isclose(got["total"], 0.10086052035955254, rel_tol=1e-12)
     assert len(p["cells"]) + len(p["left_out"]) == 193
     assert [x["block"] for x in reads["strata"]] == [x["block"] for x in want["strata"]]
     cells = [astuple(c) for c in reads["design"]["cells"]]
@@ -354,9 +400,14 @@ def test_row_ii_at_the_control_s_table_is_the_plan_s():
            for f, u, v in zip(want["cell_fields"], a, b) if not isclose(u, v, rel_tol=1e-9)]
     assert off == []
     assert got["prices"] == {"read": None, "cores": None, "rows": 192, "above_cores": {}}
-    sources = got["split"]["sources"]
-    assert list(sources) == ["own row", "family row", H.PLANNER, H.COPY_BASIS]
-    assert [round(v, 6) for v in sources.values()] == [0.995394, 0.004465, 0.00014, 1e-06]
+    sources, priced = got["split"]["sources"], got["split"]["priced"]
+    assert list(sources) == ["own row", H.VERIFIER_SOURCE, "family row", H.PLANNER, H.COPY_BASIS]
+    assert [round(v, 6) for v in sources.values()] == [0.787037, 0.209103, 0.003741, 0.000117, 1e-06]
+    assert {k: round(v, 6) for k, v in priced.items()} == {"steady": 0.787037, "modeled": 0.206741, "measured": 0.00245,
+                                                           "family": 0.003741, "computed": 3.1e-05}
+    assert isclose(sum(priced.values()), 1.0, rel_tol=1e-12) and isclose(sum(sources.values()), 1.0, rel_tol=1e-12)
+    assert (priced["steady"], priced["family"]) == (sources["own row"], sources["family row"])
+    assert priced["computed"] < sources[H.PLANNER]
 
 
 @pytest.mark.slow
@@ -388,7 +439,10 @@ def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
     assert (priced["priced"], priced["basis"], priced["statement_blocks"]) == ("steady", "steady: art:head", 128)
     assert isclose(priced["seconds_per_block"], 0.128 / 128 + H.V_OTHER[1] / P.reprice.CORE_PER_GPU, rel_tol=1e-12)
     cell = next(c for c in p["cells"] if c["block"] == part)
-    assert isclose(got["split"]["priced"]["steady"], cell["share"], rel_tol=1e-12)
+    statements = cell["sessions"] * cell["fixed_s"]
+    lean = (statements * priced["verifier_fixed"] + (cell["prove_s"] - statements) * priced["verifier_block"]) / cell["prove_s"]
+    assert priced["verifier_priced"] == "modeled" and 0 < lean < 1
+    assert isclose(got["split"]["priced"]["steady"], cell["share"] * (1 - lean), rel_tol=1e-12)
     assert isclose(got["split"]["basis"]["steady"], cell["share"], rel_tol=1e-12)
     assert isclose(sum(got["split"]["basis"].values()), 1.0, rel_tol=1e-9) and H.NO_BASIS not in got["split"]["basis"]
     assert got["bound_bits"] < base["bound_bits"]
