@@ -439,7 +439,7 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     kept = json.loads((tmp_path / "out" / "of_record.json").read_text())
     assert kept["schema"] == of_record.SCHEMA and kept["rows"][0]["differences"] == []
     own = json.loads((tmp_path / "out" / "a" / "run.json").read_text())
-    assert own["trace"]["tokens"] == 4 * CTX and own["steps"][1] == second
+    assert own["invalid"] == [] and own["trace"]["tokens"] == 4 * CTX and own["steps"][1]["tokens"] == 2 * CTX
 
     records, held = held_to(tmp_path / "unsaid", "a", rec)
     assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 1
