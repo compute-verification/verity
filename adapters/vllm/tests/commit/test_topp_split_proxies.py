@@ -3,13 +3,11 @@
 sit on the module's kernel globals, record (kernel, grid, S) per launch and launch the original unchanged."""
 from __future__ import annotations
 
-import sys
-import types
-
 import pytest
 
 pytest.importorskip("torch")
 
+from tests import fake_vllm
 from verity_vllm.commit.committer import topp_splits as NC
 
 
@@ -29,10 +27,10 @@ class _FakeKernel:
 
 @pytest.fixture
 def fake_vllm_module(monkeypatch):
-    mod = types.ModuleType(NC.TOPP_SPLIT_MODULE)
+    """vLLM's top-p module in the stand-in (`tests.fake_vllm`), with a fake kernel under each split kernel's name."""
+    mod = fake_vllm.install(monkeypatch)[NC.TOPP_SPLIT_MODULE]
     for nm in NC.TOPP_SPLIT_KERNELS:
         setattr(mod, nm, _FakeKernel(nm))
-    monkeypatch.setitem(sys.modules, NC.TOPP_SPLIT_MODULE, mod)
     return mod
 
 
@@ -66,7 +64,7 @@ def test_launch_proxy_records_the_kernels_constexpr_s_and_launches_the_original(
 
 def test_install_without_the_split_pipeline_binds_nothing(monkeypatch):
     """An older vLLM without `_apply_topp_split`: no proxies, so no launch S is read."""
-    monkeypatch.setitem(sys.modules, NC.TOPP_SPLIT_MODULE, types.ModuleType(NC.TOPP_SPLIT_MODULE))
+    fake_vllm.install(monkeypatch)                                         # the top-p module, with no kernel on it
     assert NC.install_split_kernel_proxies([]) == {}
 
 
