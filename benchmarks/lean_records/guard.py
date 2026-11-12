@@ -3,26 +3,28 @@
 its requirers) on one kept records tree of a node, a warm-up and then rounds of three arms, each on a one-line lemma of
 its own added to a `security/Proofs` module, so that no arm reuses another's build:
 
-  A  the base tools (``--base``: `check.py`, `lean_changed.py` and `lean_audit.py` as base-check.py, ...) at the job's reservation
+  A  the base tools (``--base``: `check.py`, `lean_changed.py` and `lean_audit.py` as base-check.py, ...) at the job's
+     reservation
   B  this tree's tools at the job's reservation
   C  this tree's tools at ``--low-gb`` (RESEARCH_RUN_MEM_GB = CHECK_RUN_MEM_GB)
 
 It holds one slot of the node's `build` Lean pool for the whole job and runs every arm on that slot's tree, with
 LEAN_SLOTS pointed at a file that doesn't exist so that no arm takes a second slot. Each arm reads, every second, what its
 process tree holds (RssAnon + RssShmem), the `lean` processes in it, and the user and system CPU of the tools' own Python
-processes (their children aside); and at its end the tree's CPU (`wait4`) and its log (`read_log`).
+processes (their children aside); and at its end the tree's CPU (`wait4`) and its log (`read_log`). A process that exits
+while the sampler reads it counts in the arm's ``gone``.
 
 An arm is clean where the first `security/Proofs` build compiled modules: one whose lemma an earlier run on the node built
 restores every module from the node's artifact cache, which its `sampled:` line shows (`read_log`). The verdict
 (`summarize`) is over clean arms alone and judges B against A on the build step's seconds and the tools' own CPU, each
 within 1.1 of A's median, and each kind's peak against its reservation. An arm's whole seconds are reported and judge
-nothing: the audit's spot-check recompiles a random draw of the modules its build restored (`check.py`'s `SAMPLE_RNG`),
-whose seconds differ several-fold from one draw to the next, and they move with the node's load.
+nothing: the audit's spot-check recompiles a random sample of the modules its build restored (`check.py`'s `SAMPLE_RNG`),
+whose seconds differ several-fold from one sample to the next, and they move with the node's load.
 
-    python3 guard.py [--rounds N] [--first-lemma K] [--low-gb GB] [--base DIR]
+    python3 guard.py --out DIR --base DIR [--rounds N] [--first-lemma K] [--low-gb GB]
 
 Lemma k is arm k's, from ``--first-lemma``: a job after another on the same node starts past the lemmas the first built.
-Writes $OUT/guard.json, and per arm a timestamped log and its memory series. The README has the run.
+Writes ``--out``/guard.json, and per arm a timestamped log and its memory series. The README has the run.
 """
 from __future__ import annotations
 
@@ -51,7 +53,7 @@ EVERY_S = 1.0
 KEEP_BYTES = 256 * 1024
 #: B within this share of A's median, on each judged reading
 WITHIN = 1.1
-#: the readings the verdict judges, which the node's load and the spot-check's draw move least
+#: the readings the verdict judges, which the node's load and the spot-check's sample move least
 JUDGED = ("build_s", "tool_cpu_s")
 
 AUDIT_LINE = re.compile(r"AUDIT (\S+): ")
@@ -91,13 +93,15 @@ def read_log(text: str, pkg: str = PKG) -> dict:
             "spot_s": round(sum(a.get("spot_s", 0.0) for a in audits), 1), "audits": len(audits)}
 
 
-def tree_pids(root: int) -> list[int]:
+def tree_pids(root: int, gone: set[int]) -> list[int]:
+    """``root`` and its descendants; a process that exits while its `stat` is read goes into ``gone``."""
     kids: dict[int, list[int]] = {}
     for p in Path("/proc").iterdir():
         if p.name.isdigit():
             try:
                 ppid = int((p / "stat").read_text().rsplit(")", 1)[1].split()[1])
             except (OSError, ValueError, IndexError):
+                gone.add(int(p.name))
                 continue
             kids.setdefault(ppid, []).append(int(p.name))
     out, todo = [], [root]
@@ -108,48 +112,53 @@ def tree_pids(root: int) -> list[int]:
     return out
 
 
-def held(pid: int) -> tuple[int, str]:
+def held(pid: int, gone: set[int]) -> tuple[int, str]:
     try:
         lines = Path(f"/proc/{pid}/status").read_text().splitlines()
     except OSError:
+        gone.add(pid)
         return 0, ""
     kb = sum(int(ln.split()[1]) for ln in lines if ln.startswith(("RssAnon:", "RssShmem:")))
     return kb * 1024, next((ln.split()[1] for ln in lines if ln.startswith("Name:")), "")
 
 
-def ticks(pid: int) -> int | None:
+def ticks(pid: int, gone: set[int]) -> int | None:
     """The process's own user and system CPU so far, in clock ticks (`/proc/PID/stat`'s utime and stime)."""
     try:
         f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
         return int(f[11]) + int(f[12])
     except (OSError, ValueError, IndexError):
+        gone.add(pid)
         return None
 
 
-def tool(pid: int, name: str, seen: dict[int, bool]) -> bool:
+def tool(pid: int, name: str, seen: dict[int, bool], gone: set[int]) -> bool:
     """Whether ``pid`` is a Python process of the tools (its command line names `tools/verity/lean/`)."""
     if pid not in seen:
         try:
             seen[pid] = name.startswith("python") and b"tools/verity/lean/" in Path(f"/proc/{pid}/cmdline").read_bytes()
         except OSError:
+            gone.add(pid)
             seen[pid] = False
     return seen[pid]
 
 
 def sample(pid: int, t0: float, series: Path, done: threading.Event, most: dict) -> None:
     """Every `EVERY_S` until ``done``: the process tree under ``pid``, its total, its largest process and its `lean` count,
-    into ``series``, the most of each into ``most``, and the last CPU ticks of each of the tools' processes (``own``)."""
+    into ``series``, the most of each into ``most``, the last CPU ticks of each of the tools' processes (``own``), and
+    each process that exited while it was read (``gone``)."""
     seen: dict[int, bool] = {}
+    gone = most["gone"]
     with series.open("w") as s:
         s.write("t_s\tgib\tlean\tlargest_gib\n")
         while not done.is_set():
             total, lean, largest = 0, 0, 0
-            for q in tree_pids(pid):
-                b, name = held(q)
+            for q in tree_pids(pid, gone):
+                b, name = held(q, gone)
                 total += b
                 lean += name == "lean"
                 largest = max(largest, b)
-                if tool(q, name, seen) and (t := ticks(q)) is not None:
+                if tool(q, name, seen, gone) and (t := ticks(q, gone)) is not None:
                     most["own"][q] = max(most["own"].get(q, 0), t)
             t = time.monotonic() - t0
             s.write(f"{t:.0f}\t{total / 2**30:.2f}\t{lean}\t{largest / 2**30:.2f}\n")
@@ -176,7 +185,7 @@ def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original
     p = subprocess.Popen([sys.executable, str(LEAN / "lean_changed.py"), "--records", PKG, "--tree", str(tree), "--out",
                           str(out), "--rebuild"], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          stdin=subprocess.DEVNULL, text=True, errors="replace")
-    done, most = threading.Event(), {"bytes": 0, "lean": 0, "at": 0.0, "lean_at": 0, "largest": 0, "own": {}}
+    done, most = threading.Event(), {"bytes": 0, "lean": 0, "at": 0.0, "lean_at": 0, "largest": 0, "own": {}, "gone": set()}
     th = threading.Thread(target=sample, args=(p.pid, t0, series, done, most), daemon=True)
     th.start()
     with log.open("w") as lg:
@@ -192,7 +201,8 @@ def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original
     for r in sorted(out.rglob("report.json")):
         try:
             d = json.loads(r.read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            reps.append({"at": str(r.relative_to(out)), "unread": f"{type(e).__name__}: {e}"})
             continue
         reps.append({"at": str(r.relative_to(out)), **{x: d.get(x) for x in
                      ("package", "status", "build_threads", "seconds", "peak_gib", "warnings")}})
@@ -206,7 +216,8 @@ def arm(n: int, kind: str, k: int, tree: Path, tools: dict[str, bytes], original
            "tool_cpu_s": round(sum(most["own"].values()) / os.sysconf("SC_CLK_TCK"), 1),
            "tree_cpu_s": round(usage.ru_utime + usage.ru_stime, 1),
            "peak_gib": round(most["bytes"] / 2**30, 2), "peak_at_s": round(most["at"]), "lean_at_peak": most["lean_at"],
-           "max_lean": most["lean"], "largest_gib": round(most["largest"] / 2**30, 2), "reserved": reserved, "reports": reps}
+           "max_lean": most["lean"], "largest_gib": round(most["largest"] / 2**30, 2), "gone": len(most["gone"]),
+           "reserved": reserved, "reports": reps}
     say(f"arm {n} ({kind}) rc {rc}: {rec['seconds']} s ({rec['spot_s']} of them spot-checks), build {rec['build_s']} s, "
         f"clean {rec['clean']} ({rec['compiled']} compiled), the tools' own CPU {rec['tool_cpu_s']} s, the tree's "
         f"{rec['tree_cpu_s']} s; peak {rec['peak_gib']} GiB with {rec['lean_at_peak']} lean, at most {rec['max_lean']} "
@@ -253,12 +264,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--rounds", type=int, default=3, help="rounds of the three arms after the warm-up")
     ap.add_argument("--first-lemma", type=int, default=0, help="the first arm's lemma, past those the node has built")
     ap.add_argument("--low-gb", type=int, default=86, help="arm C's reservation, in GB")
-    ap.add_argument("--base", type=Path, help="the directory holding arm A's base-check.py, base-lean_changed.py and "
-                    "base-lean_audit.py (default: the run's inputs)")
+    ap.add_argument("--base", type=Path, required=True, help="the directory holding arm A's base-check.py, "
+                    "base-lean_changed.py and base-lean_audit.py (in a run, its inputs)")
+    ap.add_argument("--out", type=Path, required=True, help="where guard.json and each arm's log and series go (in a run, "
+                    "$OUT)")
     a = ap.parse_args(argv)
-    run = Path(os.environ["RESEARCH_RUN_DIR"])
-    out_dir = Path(os.environ.get("OUT") or run / "out")
-    base = a.base or run / "inputs"
+    out_dir, base = a.out, a.base
     out_dir.mkdir(parents=True, exist_ok=True)
     common = load("guard_common", ROOT / "tools/verity/check/common.py")
     ls = load("guard_lean_slot", ROOT / "tools/verity/check/lean_slot.py")
