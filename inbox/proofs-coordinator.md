@@ -103752,3 +103752,71 @@ In plain words: I wrote down, in Lean, a small two-stage registration shaped lik
 
 Not established: that the file elaborates (no run has finished); `AddressesConnected` at any instance; any accepted run; a concrete `Ref`. `filesOk_held` and `ms_held` are `rfl` proofs from #8363 that I have not compiled on this base.
 >>>>>>> c478c424d1 (HONEST2: the token-select registration written, four design premises proved at it, compile queued)
+
+## ADDRROW, Thu 12 Nov 21:52Z: round 2's checks decide the row fact at every port but one that reads a registered value, whose rows `second-values` pins to the auditor's reference reads, so the one missing piece is that those reference rows repeat from cell to cell; statement written, try `r20261112-214933-a527` waiting for a slot
+
+**In plain words.** You asked whether today's round-2 checks already make each sampled unit sit at the right instance of its session and read the right row. Mostly they do, and the docstring that says otherwise (`SlotsAt.lean:36-52`, "bounds a registered read's row only to its unit's range of rows") is behind the code: the checks now require an exact row, not a range. The exception is a session port that reads a value a registration registers, such as a weight. There round 2 holds the read only to the value's root, domain and leaf count, and `second-values` holds its rows to the auditor's reference reads, the same rows in every run. Nothing makes those reference rows repeat from one replay block's cell to the next. So a slot fixed before the run doesn't read them, unless the reference rows have that shape. I state that shape as one premise about the auditor's copies (`RefRows`), and below I write out the check that would replace it. The statements are written in a new file on my branch, and their first compile is queued. Nothing is compiled yet.
+
+**Answer to (1), with lines** (on the base at `056097eb27`, merged into my branch).
+- [read] The proved verifier already runs round 2's codes. `stmtOk` (`SpotFlock/Code.lean:562`) runs `readsOk` (`:522`), which runs `codesOk` (`:510`), which runs `Spot.SecondStage.stmtCodes` (`SecondStage.lean:1064`). `second-population`, `second-sample`, `second-read` and `second-values` are therefore all conjuncts of `V h`.
+- **The instance.**
+  - [read] `second-population` (`populationOk`, `SecondStage.lean:871-875`) fixes the session's population at `q·n` instances labelled `lo, lo+1, …`.
+  - [read] `second-sample` (`ownDraw`, `:893`) fixes the session's draw to the second stage's slots in the part.
+  - [read] Flock's `HmRow.drawn` (`Flock/HmRow.lean:1382-1402`) sets the session up at the draw: `n = proved.size`, and instance `n` is labelled `popIdx[proved[n]]` (`:1389-1390`), that is `lo + proved[n]`.
+  - [read] `badInstance` (`Flock/Registered.lean:262-264`), which `rows_open` (`RowsOpen.lean:120`) reads, ties the header's position for instance `n` to `reg.readAt` at that label.
+  - [derived] With no proof block always checked (`Held.noAlways`, `NoAlways.lean`), a checked unit is a drawn one, so `CheckedRun.Counted` holds.
+- **The row, by the read's kind** (`readOk`, `SecondStage.lean:963-987`).
+  - A port a link names: `placedOk … (wiredRow …)` (`:968`), or `(linkedRow …)` for the boundary (`:973`).
+  - A port a wire names: `placedOk … (wiredRow …)` (`:978`).
+  - The template's own port of the interior record: `rowsOk … fun u => some (u - lo)` (`:982`).
+  - [read] Each of these requires an exact row: `placedOk` has `pos == r` (`:929-939`), and `rowsOk` has `pos == b*(leaves/units)` (`:915-925`).
+- **The gap: a port reading a registered value** (`:983-986`).
+  - [read] `readOk` makes only `sameAt e x` there (root, domain, leaves; `:908`). `runPlacesRows` (`:1036`) is false at such a port, so `blankReads` (`:1044`) keeps its `reads` and `reads_from`, and `valuesOk` (`:1058`) makes them the reference reads' (`refRegisteredOf h`, `Code.lean:488`).
+  - [read] The docstring at `:1028-1035` says this itself: "A workload whose rows there depend on the sampled block (a positional table) would need a rule of its own."
+  - [read] The replay sample's size `q` is only bounded (`RegTwo.sample_size_le`, `SpotFlock/Drawn.lean:28`: at most `K`), and the part's first slot `lo` depends on it (`partAt`). So repeating inside one run is not enough. The row must be one fixed before the run, for each place in a cell.
+- [read] **The read's kind is the auditor's.** `recordsOk` (`Code.lean:552`, new on the base) makes the interior record's ports and registered values exactly `h.interiorNames`. So that the kind reads the run's record leaves the entry fact nothing to do: it is mine to discharge (`KindFact`).
+
+**The statement** [run: git]: `security/Proofs/Flock/SpotFlock/AddressFacts/Row.lean`, 304 lines, on `cursor/proofs-addrrow-d318` at `e47dc89d2d`. It defines, as `Prop`s with no `sorry`:
+- `ReadFact` (round 2's row is the read's, by kind);
+- `PositionFact` (the header's position is `reg.readAt (σ n)` at any slot map `σ` that labels the instances: the parameter you asked for, `drawSlot` today, the drawn-only form's map next);
+- `InstanceFact`, `ParsedFact`, `KindFact`, `LeafFact`, `FallbackFact` (`RefRows` gives a run's rows);
+- `RowFact`, in the shape `CheckedRun.ReadsRegistered` asks, under `∀ v, h.reg.always v = false` and `RefRows h R`.
+
+[run] Its try is `r20261112-214933-a527` on `vy-nebius-cpu-12`, waiting for a slot since 21:49Z. Before it I cancelled `r20261112-214547-ad20`, a try of the commit before, which never got a slot.
+
+**NEEDS** (each is taken as a hypothesis until it lands).
+- **FRAME, the check that replaces `RefRows`.** It goes in `Spot/SecondStage.lean`, `second_stage.py` and the difftest, and it only refuses more.
+  - In `readOk`'s registered arm (`:984-985`), change `| some x => sameAt e x` to `| some x => sameAt e x && cellRowsOk own q p e`, with:
+    ```
+    def readSlot (e : Json) (u : Nat) : Option Nat :=
+      let first : Option Nat := match getD e "reads_from" with | .null => some 0 | x => nat? x
+      match getD e "reads", first with
+      | .arr rs, some f => if f ≤ u then (rs[u - f]?).bind nat? else none
+      | _, _ => none
+    /-- Every slot of part `p` reads, at a registered value, the row the template's reference reads give the slot at
+    its place in the reference's first cell: rows fixed for each place in a cell, in every replay sample. -/
+    def cellRowsOk (own : Own) (q : Nat) (p : Part) (e : Json) : Bool :=
+      match (refReadsOf own p.template).map (getD · "ports"), refLo own p.template with
+      | some ports, some lo₀ => (List.range (q * p.n)).all fun i =>
+          readSlot e (p.lo + i) == readSlot (getD ports …port…) (lo₀ + i % p.n)
+      | _, _ => false
+    ```
+    Here `refLo own t` is the first unit index of `t`'s reference header (`Own.refs`, `units.indices[0]`). The port's name must be passed in: `readOk` has it.
+  - Python: the same in `read_ok`'s registered arm, `all(read_slot(e, p.lo + i) == read_slot(ref_e, lo0 + i % p.n) for i in range(q * p.n))`.
+  - Difftest: a part of 2 cells of `n = 2` and a registered port reading `[5, 6, 5, 6]` passes; `[5, 6, 7, 8]` fails at `second-read`.
+  - With it, `RefRows h (fun t port j => readSlot ref (lo₀ + j))` follows from an accepted run, and the hypothesis goes.
+  - [guess] Every workload served today registers values that every cell reads alike (weights), and would pass. A positional table would be refused.
+  - It alters no guarantee's statement beyond `V` refusing more.
+- **Whoever owns `security/Proofs/Flock.lean`:** a line importing `Proofs.Flock.SpotFlock.AddressFacts.Row`, once it compiles.
+- **FRAME's `SpotFlock/AddressFacts.lean`** is not on the base at `056097eb27` [run: git ls-tree]. I reconcile my names with its five `Prop`s when it lands.
+
+**Next.**
+- If the try fails, I fix it; if it passes, I prove `ReadFact` first, since it rests only on `SecondStage`.
+- By 03:00Z: the first lemma compiled, and my size estimate.
+- Then, in order: `PositionFact` (from `rows_open`), `InstanceFact`, `KindFact`, `ParsedFact` (the riskiest: a JSON bridge between `FlockDeploy.jsonOf` and `Registered.ofJson`), `LeafFact`, `FallbackFact`, and `RowFact`.
+
+**To post.** Nothing.
+
+Clock: `date -u` read 21:52Z before I posted this. Mailbox read at 21:52Z; no file for me on `cursor/proofs-inbox`.
+
+**Not established.** That the statement elaborates. That `KindFact` holds as stated: `Record.byPort` keeps only string ports and `namesAt` refuses a non-string, which I read as agreeing, unproved. That `cellRowsOk` is the smallest check, or that today's workloads pass it. That the instance's place in its cell, `unitOf draw n % n_t`, is the unit's `cellPos`: that needs `filesOk` (`Code.lean:289`), unproved here. Any hour above.
