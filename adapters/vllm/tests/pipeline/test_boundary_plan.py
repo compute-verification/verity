@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from tests.acquire.call_boundary_programs import LP, PF, build_dir, dense_program
+from tests.pipeline.test_row import _built, _row
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.pipeline import boundary_plan as BP
@@ -20,7 +21,6 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_plan as CP
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline.timeline import Timeline
-from tests.pipeline.test_row import _built, _row
 
 
 def _commit_args(tmp_path: Path, **kw) -> types.SimpleNamespace:

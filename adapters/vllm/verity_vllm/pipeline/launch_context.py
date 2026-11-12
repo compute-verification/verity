@@ -35,6 +35,9 @@ from verity_vllm.config import option, workload_arg
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
+__all__ = ["Options", "bad_chunks", "batch_dispatch", "batch_dispatch_of", "main", "missing_batch", "rows_at",
+           "shape_contexts"]
+
 
 def rows_at(req: dict[str, Any], e: int) -> int:
     a, L, c = int(req["arrive_step"]), int(req["prompt_len"]), int(req["max_tokens"])
@@ -80,7 +83,10 @@ def batch_dispatch(workload: dict[str, Any]) -> bool:
 
 def batch_dispatch_of(path: str | None) -> bool:
     """`batch_dispatch` of the workload file at `path` (False without one)."""
-    return bool(path) and batch_dispatch(json.load(open(path)))
+    if not path:
+        return False
+    with open(path) as f:
+        return batch_dispatch(json.load(f))
 
 
 def missing_batch(launch: dict | None, LP: int, T: int) -> dict | None:
@@ -98,7 +104,7 @@ def bad_chunks(launch: dict | None, wrapper: str, LP: int, T: int, C: int) -> di
     """The Build's refusal of prefill chunks (`launch["chunks"]`) that aren't a request's prompt rows in turn, one a step of its
     batch before its T decodes, else None."""
     chunks = (launch or {}).get("chunks")
-    if not chunks:
+    if not launch or not chunks:
         return None
     steps = len(launch["batch_by_step"])
     if wrapper == "request" and not C and sum(chunks) == LP and steps == len(chunks) + T:
@@ -159,7 +165,8 @@ class Options:
 
 
 def main(a: Options) -> int:
-    w = json.load(open(a.workload))
+    with open(a.workload) as f:
+        w = json.load(f)
     if a.LP is not None and a.T is not None:
         print(spec_for(w, a.LP, a.T, a.C))
         return 0

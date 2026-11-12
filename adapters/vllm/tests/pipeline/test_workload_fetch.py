@@ -9,7 +9,8 @@ import json
 import subprocess
 from pathlib import Path
 
-from research.store import fetchset, fixtures as F
+from research.store import fetchset
+from research.store import fixtures as F
 from research.store.cli import main as data_main
 from research.store.local import LocalStore, manifest_key, object_key
 from research.store.remote import FsRemote
