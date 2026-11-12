@@ -36,6 +36,7 @@ BOOKKEEPING = {
                                       "test_known_reasons_name_their_owner", "test_canonical_entries",
                                       "test_mirrors_name_their_port"),
     "tests/test_module_strings.py": ("test_the_exemptions_are_current",),
+    "tests/test_suite_reasons.py": ("test_no_list_holds_reasons_in_two_places",),
     "tests/test_cli_conventions.py": ("test_no_new_synonym_flags", "test_known_list_has_no_stale_entries"),
     "tests/test_provider_names.py": ("test_no_provider_name_in_a_security_statement",),
     "tests/test_refusal_remediations.py": ("test_every_command_a_refusal_names_is_remediated_or_known",
