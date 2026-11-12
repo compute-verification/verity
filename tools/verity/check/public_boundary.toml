@@ -99,6 +99,10 @@ shared = [
     "demos/vllm/serve_load.py",
     "security/Properties/Spot/{Draw,Bits}.lean",
     "security/Proofs/Properties/Accounting/Remote/Sort.lean",
+    # the proofs of the exact ±1 sketch's six statements (`Accounting.Guarantees.Sketch`), which no public proof imports:
+    # a public statement ships with the theorem that proves it. The module that proves the six, and the tensor cores'
+    # exactness it reads; the sign rows' lemmas it reads beside that are the accounting PoUW needs
+    "security/Proofs/Accounting/{Sketch,Tag/SketchExact}.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
     "security/Properties/Spot/Second.lean",
