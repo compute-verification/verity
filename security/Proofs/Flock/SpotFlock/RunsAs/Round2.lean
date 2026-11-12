@@ -32,8 +32,9 @@ open Lean (Json)
 
 /-- `jeq` holds a value to itself wherever it holds a value to it: the value has a canonical text. -/
 theorem jeq_self_of {a b : Json} (h : Spot.jeq a b = true) : Spot.jeq b b = true := by
-  unfold Spot.jeq at h ⊢
-  cases Flock.canon a <;> cases Flock.canon b <;> simp_all
+  revert h
+  unfold Spot.jeq
+  cases Flock.canon a <;> cases Flock.canon b <;> simp
 
 /-- What a statement names of itself (`Stmt.checked`) sets its session up as one table. -/
 theorem checked_tables {s : Spot.SecondStage.Stmt} {c : Spot.SecondStage.Checked} (h : s.checked = some c) :
