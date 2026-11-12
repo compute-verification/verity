@@ -7,9 +7,8 @@ from typing import Any, Callable
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """At D = 32, BM = 16 and BN = 32: a row's sums with four threads a row, and at D = 64 with eight; a row against a key block
-    of which it sees 5 keys, and all; a key through its first query block and a later one; a tile on the diagonal that carries
-    accumulators in, and a key block's first tile, one query block below; a key after the loop; and a row's dQ from five parts
-    in two buffers."""
+    of which it sees 5 keys, and all; a key block's cleared accumulators; a key through a query block; a tile on the diagonal,
+    and one a query block below it; a key after the loop; and a row's dQ from five parts in two buffers."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import fa2_train_bwd as W
 
@@ -19,10 +18,10 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("Fa2TrainBwdPre_v1:2", lambda: bind(W.Fa2TrainBwdPre, D=64)),
         ("Fa2TrainBwdRow_v1:1", lambda: bind(W.Fa2TrainBwdRow, D=32, BN=32, NVIS=5)),
         ("Fa2TrainBwdRow_v1:2", lambda: bind(W.Fa2TrainBwdRow, D=32, BN=32, NVIS=32)),
-        ("Fa2TrainBwdKey_v1:1", lambda: bind(W.Fa2TrainBwdKey, D=32, BM=16, FIRST=True)),
-        ("Fa2TrainBwdKey_v1:2", lambda: bind(W.Fa2TrainBwdKey, D=32, BM=16, FIRST=False)),
-        ("Fa2TrainBwdTile_v1:1", lambda: bind(W.Fa2TrainBwdTile, OFF=0, FIRST=False, **blocks)),
-        ("Fa2TrainBwdTile_v1:2", lambda: bind(W.Fa2TrainBwdTile, OFF=16, FIRST=True, **blocks)),
+        ("Fa2TrainBwdClear_v1", lambda: bind(W.Fa2TrainBwdClear, D=32, BN=32)),
+        ("Fa2TrainBwdKey_v1", lambda: bind(W.Fa2TrainBwdKey, D=32, BM=16)),
+        ("Fa2TrainBwdTile_v1:1", lambda: bind(W.Fa2TrainBwdTile, OFF=0, **blocks)),
+        ("Fa2TrainBwdTile_v1:2", lambda: bind(W.Fa2TrainBwdTile, OFF=16, **blocks)),
         ("Fa2TrainBwdDkDv_v1", lambda: bind(W.Fa2TrainBwdDkDv, D=32)),
         ("Fa2TrainBwdDq_v1", lambda: bind(W.Fa2TrainBwdDq, D=32, NP=5, NS=2)),
     ]
