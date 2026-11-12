@@ -70012,3 +70012,30 @@ The five sub-questions:
 **What is counted today.** Windows (one open a root and a session), coin trees (`UNUSED_TREE`), the seed salt (exactly one coin). On the auditor host a salt family's coin opens only after the window's Commit root (`verity/composite/device/live_challenger/serve.py:154-158`); a sample's family opens after anything. Digests in the sample's family are not counted anywhere. [read]
 
 **Still to do for 06:30Z.** C (the composites and the lock), D (the game), E (two-stage), G (the refusals), H (the size), and the point-by-point comparison with the note.
+
+## OLDFOUR, Thu 12 Nov 04:13Z: #8414's, #8406's and #8363's verdicts are final by read; #8139's three runs are still in line on vy-nebius-cpu-2, none started
+
+**The lines for CI-489**
+
+- **#8139: land at `952d8070471c`, once its runs pass.** The ready line follows them. [run: the merge and push, in my 04:04Z entry]
+- **#8406: redo on #8940's head.** Its check (`recordsOk` in `SpotFlock.stmtOk`) is not on `main`, and it collides with #8940 and with WIRED's branch at `stmtOk` in `security/Proofs/Flock/SpotFlock/Code.lean`. [run: `git merge-tree`, in my 04:04Z entry]
+- **#8414: drop.** `main` has a stricter form of everything it still differs in. [read: in my 04:04Z entry]
+- **#8363: drop the pull request; the instance is redone against WIRED's statements when they are on `main`.** Nothing of it is on `main`. [read and run: below]
+
+**#8363, the rest of the read**
+
+- **None of its declarations is on `main`.** Its eight files declare 178 names. None is declared under `security/Proofs/Flock/SpotFlock/` on `main`. [run: each name looked up with `git grep -w` on `origin/main`; `held` and `reg` match as ordinary words there, not as these declarations]
+- **It does not build on `main` as it stands, before any restatement.** `Instance.lean` imports `Proofs.Flock.SpotFlock.DrawnAt`, which `main` does not have (`main` has `Drawn.lean`), and its paths are `Security/`, from before the layout move. [run: `git ls-tree origin/main`]
+- **Against #8940 its `Held` literal breaks.** `held₀` gives thirteen fields. #8940 adds `more : ℕ` with no default. [read: `Instance.lean` lines 106 to 119 at `a81a1b11ea1d`; `Code.lean`'s `Held` at `58a598e615b1`]
+- **Against WIRED its one premise proved is the wrong one.** It proves `Built h` at the instance. WIRED's `SpotKSTwo` reads `wiredOk h = true`, `BuiltWired` and `AddressesWired`. [read: in my 04:04Z entry]
+- **What would carry over as it is: `InstanceBoundary.lean`**, 363 lines. It decides a concrete boundary registration (`bnd0`) on the verifier's own functions and names no `Held`, `stmtOk` or premise. Its kernel decisions would be elaborated again, since `main`'s Spot code has moved under it. The other seven files read `held` or `stmtOk`. [read: the file's docstring; run: a count of each name in each file]
+- This read took about fifteen minutes of the hour. [run: `date -u` at its start and end]
+
+**#8139's runs at 04:12Z** [run: `research status --refresh`, each run's `slot.json`]
+
+- All three wait for one of vy-nebius-cpu-2's four check slots, which are all busy.
+  - `r20261112-035756-a864`, the try of `AcceptHonest.lean`: next in line.
+  - `r20261112-035801-afee`, the quick suites: one check ahead.
+  - `r20261112-035726-4bcb`, the records: two checks ahead.
+- I end my turn here, as the brief says. When you resume me: the try's last line first, then the records' printout and the suites' count. If the try fails at `r8`, I fix the proof and launch the try and the records again.
+- About 05:30Z for all three. [guess: none has a slot yet; the records run is last in line and `security`'s audit alone took 1,583 s at this branch's last head]
