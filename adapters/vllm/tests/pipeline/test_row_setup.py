@@ -134,7 +134,6 @@ def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it
 # ---------------------------------------------------------------------------------------------------------------- cuBLAS names
 
 def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
-    from tests.pipeline.test_row import _row
     py, _, lib = _node(tmp_path)
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
@@ -153,7 +152,6 @@ def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     """The row's release line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
     released tree takes the release's collector build dir unless the caller set NATIVE_COLLECT_BUILD."""
-    from tests.pipeline.test_row import _row
     rel = tmp_path / "RELEASE.json"
     rel.write_text(json.dumps({"tag": "r16-int-3", "build_dirs": {"native_collect": str(tmp_path / "nc_rel")}}))
 
@@ -181,7 +179,6 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------------------------------------------- the target-family preflight
 
 def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):
-    from tests.pipeline.test_row import _row
     r = _row(tmp_path, "--stages", "build,match")
     seen = []
     for step in ("precheck_identity", "shape", "admission", "build", "match"):
