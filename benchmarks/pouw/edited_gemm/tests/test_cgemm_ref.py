@@ -227,6 +227,6 @@ def test_main_is_exit_1_when_any_gate_fails(right, tmp_path, monkeypatch, capsys
     assert [json.loads(line)["ok"] for line in capsys.readouterr().out.splitlines()] == [True, True]
     d = shutil.copytree(right["cohalf"], tmp_path / "gate")
     flip(d / ("PB" + SFX), 5, np.int8)
-    monkeypatch.setattr(sys, "argv", ["cgemm_ref.py", str(right["h1"]), str(d)])
+    monkeypatch.setattr(sys, "argv", ["cgemm_ref.py", str(d), str(right["h1"])])    # a right gate after it clears nothing
     assert C.main() == 1
-    assert [json.loads(line)["ok"] for line in capsys.readouterr().out.splitlines()] == [True, False]
+    assert [json.loads(line)["ok"] for line in capsys.readouterr().out.splitlines()] == [False, True]
