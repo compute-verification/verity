@@ -64,18 +64,19 @@ siblings (`WORD`) does all a build does short of compiling: it hashes each modul
 source's text and its imports' builds among them, compares that hash with the trace's (a time only under `--old`),
 puts in place the outputs it holds under that hash, in an archive or in its cache, and says on the line of the job
 that makes each module's `.olean`, captioned with the module's name, whether it then holds it: `Replayed`, `Reused` or
-`Unpacked` (`held`). A module Lake took counts on that word alone. It is unchecked where Lake would compile it, where
-its line has another verb (one that imports a module Lake would compile only ran), and wherever Lake's word isn't
-taken: Lake isn't asked, its exit is neither 0 nor 3, it printed a line `held` doesn't know, or, in a try's sandbox, it
-wanted to write where the sandbox refuses (`lean_changed.refused_write`). Lake's hash covers the builds of a module's
-imports, so Lake would compile one it took against an older build of an import, where one it built counts. On a node a
-second fact covers that case (`plan`'s ``index``, `in_index`): the node's index of compiled modules (`module_keys`)
-records, under each compile's package, module and Lake's hash of its inputs, the SHA-512 of the source it compiled, so
-a module Lake took counts where the entries under its trace's `depHash` record its source as it is. Neither fact is read
-where Lake's word isn't taken, and a checkout, which has no index, has Lake's word alone. The pass writes in the tree what Lake puts in place, and a `.trace.nobuild` beside the trace of each
-module it would compile, which nothing reads. Any other trace (one cut short, another schema's) says nothing, so its
-module is unchecked, never taken as built. A module of a fetched dependency (`.lake/packages`) is taken as built: its
-sources change only with the manifest, and its products with them.
+`Unpacked` (`held`). A module Lake took counts on that word. Where Lake would compile it, or its line has another verb
+(one that imports a module Lake would compile only ran), it is unchecked but for a second fact, on a node: Lake's hash
+covers the builds of a module's imports, so Lake would compile one it took against an older build of an import, where
+one it built counts. The node's index of compiled modules (`module_keys`) records, under each compile's package, module
+and Lake's hash of its inputs, the SHA-512 of the source it compiled, so a module Lake took counts too where the
+entries under its trace's `depHash` record its source as it is and no other (`plan`'s ``index``, `in_index`). A
+checkout has no index, and so Lake's word alone. Wherever Lake's word isn't taken, neither fact is read and every
+module Lake took is unchecked: Lake isn't asked, its exit is neither 0 nor 3, it printed a line `held` doesn't know, or,
+in a try's sandbox, it wanted to write where the sandbox refuses (`lean_changed.refused_write`). The pass writes in the
+tree what Lake puts in place, and a `.trace.nobuild` beside the trace of each module it would compile, which nothing
+reads. Any other trace (one cut short, another schema's) says nothing, so its module is unchecked, never taken as
+built. A module of a fetched dependency (`.lake/packages`) is taken as built: its sources change only with the
+manifest, and its products with them.
 
 It is opt-in because of what it costs: on security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node

@@ -287,10 +287,10 @@ Lean's job in `check` and the tools around the audit:
   before any product is read and again after a rebuild. A word it can't take (an exit other than 0 or 3, a line it
   doesn't read, a write the try's sandbox refused) leaves every build Lake took unchecked; no time decides. On a node,
   a build Lake took and would compile (an import rebuilt since) counts where the node's artifact index records the
-  SHA-512 of its source as it is under its trace's hash, read and never written; a checkout has Lake's word alone. It leaves
-  out uncounted, FILE's own module aside, what no root loads beside the rest: the other executables' roots, and every
-  module under an `exempt` prefix of the package's lock (the name or below it, as the audit matches it), so two
-  scripts that each declare `main` don't clash. It never fails on the lock: with none, or one that can't be read
+  SHA-512 of its source as it is under its trace's hash, read and never written; a checkout has Lake's word alone.
+  It leaves out uncounted, FILE's own module aside, what no root loads beside the rest: the other executables' roots,
+  and every module under an `exempt` prefix of the package's lock (the name or below it, as the audit matches it), so
+  two scripts that each declare `main` don't clash. It never fails on the lock: with none, or one that can't be read
   (which it says on stderr), it leaves out the executables' roots alone.
   A sibling is checked as it is built. One built against an older build of an import is rebuilt when a refusal names
   it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
