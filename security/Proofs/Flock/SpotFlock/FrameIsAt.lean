@@ -54,9 +54,9 @@ def readKey (own : Spot.SecondStage.Own) (t port v : String) : SlotKey :=
 variable (h : Held)
 
 /-- **The roots round 2 reads template `t`'s registered read of value `v` at port `port` under**, in the run at
-statement `x`, round-1 message `m₁` and the coins of rounds 0 and 1, at replay block `ρ`: the replay block's where it
-reads the value off the interior record (`readsInterior`), else the statement's. -/
-def readRoots (x m₁ : Msg) (c₀ c₁ : FlockDeploy.Coin) (ρ t : ℕ) (port v : String) : List Msg :=
+statement `x`, round-1 message `m₁`, round 0's coin and the second stage's, at replay block `ρ`: the replay block's
+where it reads the value off the interior record (`readsInterior`), else the statement's. -/
+def readRoots (x m₁ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (ρ t : ℕ) (port v : String) : List Msg :=
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁ with
   | some st, some rec, some draw =>
     if readsInterior (ownOf h st rec draw c₀) (h.names.getD t "") port v then irootsOf m₁ ρ else st.roots
@@ -64,7 +64,7 @@ def readRoots (x m₁ : Msg) (c₀ c₁ : FlockDeploy.Coin) (ρ t : ℕ) (port v
 
 /-- **The entry round 2 reads template `t`'s registered read of value `v` at port `port` off**, in the same run
 (`readKey`). -/
-def readKeyAt (x m₁ : Msg) (c₀ c₁ : FlockDeploy.Coin) (t : ℕ) (port v : String) : SlotKey :=
+def readKeyAt (x m₁ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (t : ℕ) (port v : String) : SlotKey :=
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁ with
   | some st, some rec, some draw => readKey (ownOf h st rec draw c₀) (h.names.getD t "") port v
   | _, _, _ => .reg v
@@ -77,8 +77,8 @@ the code's opening at the gate as `FrameIs` states them, its value and data `c`'
 reads its value under, the gate's slot and the header's path, or, at a one-table session's port read from no registered
 read, the replay block's roots, the gate's slot and the published tree's path. -/
 def SlotsAtGate (slot : ℕ → Option Slot) (c : Code) (L : Layout) (x : Msg) (s : AuditStatement) (m₀ m₁ m₂ : Msg)
-    (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) (wF : Claims.Flock.Wit) (u ρ : ℕ) (ins : FlockDeploy.Ins)
-    (sts : Array _root_.Flock.Stmt) (g : ℕ) : Prop :=
+    (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) (wF : Claims.Flock.Wit) (u ρ : ℕ)
+    (ins : FlockDeploy.Ins) (sts : Array _root_.Flock.Stmt) (g : ℕ) : Prop :=
   ∃ β j y n q, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
     y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
     let o := Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt c) s u
@@ -108,9 +108,9 @@ def SlotsAtGate (slot : ℕ → Option Slot) (c : Code) (L : Layout) (x : Msg) (
 /-- **`SlotsAtGate` at every gate each checked unit of an accepted run needs**, at `FrameIs`'s statements and
 setup. -/
 def SlotsAt (slot : ℕ → Option Slot) (c : Code) (L : Layout) : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
@@ -122,9 +122,9 @@ off has the read's root, leaf count and domain id; under the replay block's root
 record at a port of a one-table session that no registered read is named like has the root and domain id of that
 port's published tree over any population the session's public file loads; each port at most `c`'s own depth. -/
 def EntriesAt (c : Code) : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →
