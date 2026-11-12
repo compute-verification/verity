@@ -37,6 +37,33 @@ in seconds. `flat` computes them gate by gate from the definitions; the tests ho
 covering every node form, the Boolean GEMM, and b1's layer at tiny shapes. `measure.Ambiguous` refuses the one case the
 summaries can't count exactly (one value bound to two activation leaves above the op); `flat` measures it.
 
+## The min-cut bound's work
+
+`work.read(program, k)` reads off a word Program what `min_cut.bound` takes of a circuit at a policy's k: |C| in
+Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
+each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
+multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
+`training_slowdown.work.he_of_rows`' β), each premise a Program doesn't state taken on the side of the smaller bound.
+The products are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`),
+and the lookups another (`work.LOOKUPS`, the gathers). The update θ′ is a scan's carried words that a fresh input
+reaches; every input is free like θ (the carry is iterated to a fixed point, so a loop's iterations cost what its
+distinct contexts do). A product is charged where both operands depend on θ′ in every word, each is specific or a weight
+(`work.may_repeat`: an operand that reads the current inputs and is not specific may repeat its rows, however the
+Program writes them), the two are no one array and not two activations; `Work.left_out` holds the rest by why. Nothing is stated
+beside the circuit. A gather's rows by the batch stay a gather's rows until one rule makes them specific: a softmax over
+a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
+The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position, no two positions of the batch hold
+equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
+the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
+linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
+by a shared weight would then read one pair of values twice. Two more premises hold the reading below the work, each
+held as a fact by a test: every carried word is a parameter's or the optimizer's, so rows carried into the next
+iteration are charged as weights, and θ′ is by data flow, so an update that changes nothing still makes θ′.
+`work.bound(work, c)` is the most blocks over its
+sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
+has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
+training loop's reading beside its trace's, never above it.
+
 ## Interface
 
 ```python
@@ -60,3 +87,19 @@ circuit.
 measures each and sets a_out, a_in and |𝒥| per position beside verity/protocols/inference_only/rho's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.
+
+## What it reads, what it writes and what loads it
+
+The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
+the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
+`verity/protocols/inference_only/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
+loads the inference-only policy's calibrations (`verity/protocols/inference_only/nci/calibrations.json`). The suite
+names what it reads of both among its `inputs`.
+
+The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`; without
+either it writes no file.
+
+The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
+`verity/protocols/inference_only/rho/data/circuits.toml` as data, each number with its source.
+
+The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.

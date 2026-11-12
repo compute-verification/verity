@@ -4,8 +4,9 @@
 
 The network certifier's Boolean Definitions that its verifier doesn't read: advice's validity check, the block-pool
 cache step and the compile slices built on it, the whole window's charge, the served rows' statics and tie, the
-ingress-ids tie, and the scan's ingress and egress. The Definitions the verifier's service, tie service and served
-rows read are in `verity/protocols/certifier/verifier`, with the ones they build on.
+ingress-ids tie, the scan's ingress and egress, the lengths rows' proof block and the response tie's. The
+Definitions the verifier's service, tie service and served rows read are in `verity/protocols/certifier/verifier`,
+with the ones they build on.
 
 - **Python**: `verity.protocols.certifier.prover`. Its importers, each with the modules it imports:
   - `adapters/vllm`: `ingress_scan`, `window_charge`;

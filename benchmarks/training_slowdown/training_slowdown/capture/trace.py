@@ -33,18 +33,21 @@ size changes. `token_dims` names each batch tensor's token dimensions in axis or
 integer tensor, every one but the last of a floating one); axis i of every tensor is varied together. The captures must
 agree node for node, so a step whose graph changes with the batch size is refused.
 
-Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax, in its
-operands' dtype (`_math_attention`): the dtype a step under autocast runs its fused attention kernel in.
+Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax.
 
 `CaptureRefused` names what stops a capture, with the user's source line where there is one: a tensor value read into
 Python (``aten._local_scalar_dense``: an ``if`` on a tensor, ``.item()``), an output shape set by values
 (``aten.nonzero``), an op with no fake kernel (a custom kernel), a control-flow higher-order op (``torch.cond``), a fused
-op whose products this package doesn't count, or a graph that changes with the batch size.
+op whose products this package doesn't count, a graph that changes with the batch size, or a deep copy of a tensor
+the trace runs on (``copy.deepcopy`` of the model, of a parameter or of an optimizer): a fake has no data to copy, and
+a process that copies one anyway corrupts its heap and dies later. A step that needs the weights as they were
+copies the state dict, ``{k: v.detach().clone() for k, v in model.state_dict().items()}``.
 """
 from __future__ import annotations
 
 import contextlib
 import copy
+import inspect
 import linecache
 import os
 import re
@@ -54,8 +57,8 @@ from typing import Any, Callable, Iterable, Sequence
 
 import torch
 import torch.utils._pytree as pytree
-from torch._subclasses.fake_tensor import (DataDependentOutputException, DynamicOutputShapeException, FakeTensorMode,
-                                           UnsupportedOperatorException)
+from torch._subclasses.fake_tensor import (DataDependentOutputException, DynamicOutputShapeException, FakeTensor,
+                                           FakeTensorMode, UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
 __all__ = ["BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
@@ -65,13 +68,17 @@ STEP = "te_capture::step::"
 _TORCH_DIR = os.path.dirname(torch.__file__)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CONTROL_FLOW = {"cond", "while_loop", "map", "map_impl", "scan", "associative_scan", "flat_apply", "invoke_subgraph"}
+#: why a step that deep-copies a tensor the trace runs on is refused, with what to write instead
+DEEP_COPY = ("the step deep-copies a tensor of the model's (copy.deepcopy of the model, of a parameter or of an "
+             "optimizer), and the trace runs on tensors without data: copy the state dict instead, "
+             "{k: v.detach().clone() for k, v in model.state_dict().items()}")
 
 
 class CaptureRefused(Exception):
     """The step is not one fixed graph this package can count. `reason` is one of ``dynamic_control_flow``,
     ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``unpriced_dtype`` (a counted op in a dtype no
-    Definition prices, `gates.Unpriced`), ``batch_dependent`` or ``trace``; `op` the ATen op or construct; `where` the
-    user's source line, if found."""
+    Definition prices, `gates.Unpriced`), ``batch_dependent``, ``deep_copy`` or ``trace``; `op` the ATen op or
+    construct; `where` the user's source line, if found."""
 
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where
@@ -142,26 +149,51 @@ def _resized(leaves: list, dims: list[tuple[int, ...]], axis: int, size: int) ->
 
 def _fake_copy(model: torch.nn.Module, optimizers: Sequence[torch.optim.Optimizer], mode: FakeTensorMode, device):
     """The model with every parameter and buffer a fake of its shape, dtype and requires_grad (tied ones stay tied), and a
-    fresh optimizer of each one's class over the copied parameters with the same param-group settings."""
+    fresh optimizer of each one's class over the copied parameters with the same param-group settings and the defaults
+    its constructor takes (a loaded optimizer's `defaults` also hold torch's ``differentiable``). A tensor an
+    optimizer holds that the model doesn't own (a latent kept beside the model) is copied as a fake too, before the
+    model is, so an attribute of the model that names it names the same fake as the optimizer does; it is returned by
+    the name of its place, ``optimizers.I.params.J``. Also returned: the model's and the optimizers' own tensors by
+    id, which no traced step may read (`_refuse_originals`)."""
     memo: dict[int, Any] = {}
+    originals: dict[int, str] = {}
+    held: dict[int, str] = {}
     with mode:
-        for p in model.parameters():
+        for n, p in model.named_parameters():
+            originals[id(p)] = n
             if id(p) not in memo:
                 memo[id(p)] = torch.nn.Parameter(torch.empty(p.shape, dtype=p.dtype, device=device or _dev(p)),
                                                  requires_grad=p.requires_grad)
-        for b in model.buffers():
+        for n, b in model.named_buffers():
+            originals[id(b)] = n
             if id(b) not in memo:
                 memo[id(b)] = torch.empty(b.shape, dtype=b.dtype, device=device or _dev(b))
+        for i, opt in enumerate(optimizers):
+            for j, p in enumerate(p for g in opt.param_groups for p in g["params"]):
+                if id(p) not in memo:
+                    originals[id(p)] = f"optimizers.{i}.params.{j}"
+                    fake = torch.empty(p.shape, dtype=p.dtype, device=device or _dev(p))
+                    memo[id(p)] = (torch.nn.Parameter(fake, requires_grad=p.requires_grad)
+                                   if isinstance(p, torch.nn.Parameter) else fake.requires_grad_(p.requires_grad))
+                    held[id(memo[id(p)])] = originals[id(p)]
     fake_model = copy.deepcopy(model, memo)
     fake_opts = []
     for opt in optimizers:
         groups = [{**{k: v for k, v in g.items() if k != "params"}, "params": [memo[id(p)] for p in g["params"]]}
                   for g in opt.param_groups]
         try:
-            fake_opts.append(type(opt)(groups, **dict(opt.defaults)))
+            fake_opts.append(type(opt)(groups, **_taken(type(opt), opt.defaults)))
         except TypeError:
             fake_opts.append(type(opt)(groups))
-    return fake_model, fake_opts
+    return fake_model, fake_opts, held, originals
+
+
+def _taken(cls: type, defaults: dict) -> dict:
+    params = inspect.signature(cls).parameters.values()
+    if any(p.kind is p.VAR_KEYWORD for p in params):
+        return dict(defaults)
+    names = {p.name for p in params}
+    return {k: v for k, v in defaults.items() if k in names}
 
 
 def _dev(t: torch.Tensor):
@@ -173,7 +205,7 @@ def _user_frame(tb) -> str | None:
     best = None
     for fs in traceback.extract_tb(tb):
         f = os.path.abspath(fs.filename)
-        if f.startswith(_TORCH_DIR) or os.path.dirname(f) == _HERE or "contextlib" in f:
+        if f.startswith(_TORCH_DIR) or os.path.dirname(f) == _HERE or "contextlib" in f or f == copy.__file__:
             continue
         best = fs
     if best is None:
@@ -186,6 +218,8 @@ def _refusal(e: BaseException) -> CaptureRefused:
     if isinstance(e, CaptureRefused):
         return e
     where = _user_frame(e.__traceback__)
+    if isinstance(e, _DeepCopy):
+        return CaptureRefused("deep_copy", None, DEEP_COPY, where)
     f = getattr(e, "func", None)
     op = str(f) if f is not None else None
     text = str(e).strip()
@@ -241,6 +275,19 @@ def _refuse_graph(gm: torch.fx.GraphModule) -> None:
                                                           f"this package can count")
 
 
+def _refuse_originals(gm: torch.fx.GraphModule, originals: dict[int, str]) -> None:
+    """A step is traced on a copy of the model and of the optimizers it is handed. One that reads the run's own
+    tensor instead reached it around them (a module's global, a closure): what it wrote there the copy never saw,
+    so the graph is not the step's."""
+    for n in gm.graph.nodes:
+        if n.op == "get_attr" and (name := originals.get(id(getattr(gm, n.target, None)))) is not None:
+            raise CaptureRefused("trace", None,
+                                 f"the step reads the run's own {name} and not the copy it is traced on: it reached "
+                                 f"the tensor around its arguments (a global, a closure). Reach it from the model or "
+                                 f"the optimizers `step` is handed: hold it on the model as a parameter (as routes/"
+                                 f"lora.py holds its adapters), or read it from its optimizer's param_groups")
+
+
 @contextlib.contextmanager
 def _marked_backward():
     """Every `torch.autograd.backward` / `torch.autograd.grad` the step calls runs inside a ``te_capture::backward``
@@ -262,21 +309,27 @@ def _marked_backward():
         torch.autograd.backward, torch.autograd.grad = ab, ag
 
 
-@contextlib.contextmanager
-def _math_attention():
-    """Scaled-dot-product attention on its math backend, in its operands' dtype. The math backend casts half-width
-    operands (bfloat16, float16) to float32 unless torch's switch for it is on, where a fused kernel runs them as
-    they are, so the capture turns the switch on and puts it back as it was. The switch is named under
-    `torch.backends.cuda` and acts on every device: it is read by the math backend's own code, a CPU's too."""
-    from torch.nn.attention import SDPBackend, sdpa_kernel
+class _DeepCopy(Exception):
+    """A deep copy of a fake tensor, met while a capture records (`_no_deep_copy`)."""
 
-    was = torch.backends.cuda.fp16_bf16_reduction_math_sdp_allowed()
-    torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+
+@contextlib.contextmanager
+def _no_deep_copy():
+    """While the capture records, a deep copy of a fake tensor raises (`_refusal` makes it the refusal, `DEEP_COPY`):
+    torch's own copies the data of a tensor that has none. In force for the recording alone, and undone on every way
+    out of it, so a deep copy outside a trace is torch's as before."""
+    deepcopy = torch.Tensor.__deepcopy__
+
+    def refuse(self, memo):
+        if isinstance(self, FakeTensor):
+            raise _DeepCopy
+        return deepcopy(self, memo)
+
+    torch.Tensor.__deepcopy__ = refuse
     try:
-        with sdpa_kernel([SDPBackend.MATH]):
-            yield
+        yield
     finally:
-        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(was)
+        torch.Tensor.__deepcopy__ = deepcopy
 
 
 def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module,
@@ -286,7 +339,7 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
     program recorded from its start that measures that step (module docstring): its nodes carry their step, and each
     step's integer batch tensors are its token inputs."""
     mode = FakeTensorMode(allow_non_fake_inputs=True)
-    fake_model, fake_opts = _fake_copy(model, optimizers, mode, device)
+    fake_model, fake_opts, held, originals = _fake_copy(model, optimizers, mode, device)
     with mode:
         fakes = [[torch.empty(x.shape, dtype=x.dtype, device=device or _dev(x)) if isinstance(x, torch.Tensor) else x
                   for x in leaves] for _ in steps]
@@ -299,12 +352,14 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
             with (contextlib.nullcontext() if measured is None else torch.autograd.profiler.record_function(f"{STEP}{i}")):
                 step(fake_model, pytree.tree_unflatten(flat, spec), fake_opts)
 
+    from torch.nn.attention import SDPBackend, sdpa_kernel
     try:
-        with _marked_backward(), _math_attention():
+        with _marked_backward(), _no_deep_copy(), sdpa_kernel([SDPBackend.MATH]):
             gm = make_fx(run, tracing_mode="fake", _allow_non_fake_inputs=True)(*[f[i] for f in fakes for i in tensor_at])
     except Exception as e:
         raise _refusal(e) from e
     _refuse_graph(gm)
+    _refuse_originals(gm, originals)
     if measured is not None:
         _mark_steps(gm, len(tensor_at))
     names: dict[int, tuple[str, str, list[str]]] = {}
@@ -312,6 +367,8 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
         names.setdefault(id(p), ("parameter", n, []))[2].append(n)
     for n, b in fake_model.named_buffers(remove_duplicate=False):
         names.setdefault(id(b), ("buffer", n, []))[2].append(n)
+    for i, n in held.items():
+        names[i] = ("parameter", n, [n])
     attrs = {}
     for node in gm.graph.nodes:
         if node.op == "get_attr" and node.target not in attrs:

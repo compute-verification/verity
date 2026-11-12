@@ -11,9 +11,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from training_slowdown import config, run, starts
-from training_slowdown.capture.trace import _math_attention
 from training_slowdown.data import Data, Stream, bytes_to_unicode
 from training_slowdown.model import LM
 from training_slowdown.starts import Start
@@ -28,9 +28,9 @@ TOKEN_BYTES = np.array([0] + [1] * 256 + [len(m) for m in MERGES], dtype=np.int6
 PARTS = (2100, 1100, 3100)
 SETS = {"search": 6 * 1024 + 300, "final": 2 * 1024 + 50}
 #: How far apart two scores of one model on the same windows may be, relative. Under bf16 autocast on a CPU a forward
-#: pass is not bit-reproducible: now and then a few logits come out one bf16 step away. In a sweep of 2,000 passes at
-#: four threads (40 processes of 50) two scores were at most 4.7e-5 apart; the nearest scores the evaluator's tests tell
-#: apart, θ's and a perturbed state's on a slice of the search pool, are 2.2e-3 apart.
+#: pass is not bit-reproducible: now and then a few logits come out one bf16 step away. The tolerance is above that
+#: spread and below the nearest scores the evaluator's tests tell apart, θ's and a perturbed state's on a slice of the
+#: search pool: `test_a_search_score_is_the_states_bpb_on_the_slice_paired_with_thetas` fails if it grows past them.
 SCORE_REL = 3e-4
 
 
@@ -58,8 +58,9 @@ def tiny_data(root: Path) -> Data:
     man = {"tokenizer": "tiny", "vocab": VOCAB, "selection": {"file": "selection.json", "sha256": sha256(selection)},
            "parts": []}
     for i, n in enumerate(PARTS):
-        (train / "parts" / f"{i:03d}.bin").write_bytes(tokens(rng, n).tobytes())
-        man["parts"].append({"index": i, "tokens": n})
+        part = tokens(rng, n).tobytes()
+        (train / "parts" / f"{i:03d}.bin").write_bytes(part)
+        man["parts"].append({"index": i, "tokens": n, "sha256": sha256(part)})
     raw = json.dumps(man).encode()
     (train / "manifest.json").write_bytes(raw)
     sets, pins = {}, {}
@@ -89,15 +90,17 @@ def write_safetensors(path: Path, state: dict[str, torch.Tensor]) -> None:
     path.write_bytes(len(h).to_bytes(8, "little") + h + b"".join(blobs))
 
 
-def tiny_start(root: Path, name: str = "tiny") -> tuple[Start, dict[str, torch.Tensor]]:
-    """An installed start under `root` and its registry entry."""
+def tiny_start(root: Path, name: str = "tiny", read: list[dict] | None = None) -> tuple[Start, dict[str, torch.Tensor]]:
+    """An installed start under `root` and its registry entry. Its start.json names `read` as the parts of the stream
+    its own training read (None: it says nothing of what it read)."""
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(SHAPE).state_dict().items()}
     d = root / name
     d.mkdir(parents=True)
     write_safetensors(d / "theta.safetensors", theta)
     digest = "d" * 64
-    rec = {"name": name, "digest": digest, "provenance": {"c0": {"macs": 12_345}, "search_pool": {"bpb": 7.5}}}
+    rec = {"name": name, "digest": digest, "provenance": {"c0": {"macs": 12_345}, "search_pool": {"bpb": 7.5}} | (
+        {} if read is None else {"data": {"parts": read}})}
     (d / "start.json").write_text(json.dumps(rec))
     s = Start(name, "tiny", "art:" + "0" * 64, f"starts/{name}", sha256((d / "theta.safetensors").read_bytes()),
               sha256((d / "start.json").read_bytes()), digest, SHAPE, 12_345.0, 7.5)
@@ -112,10 +115,13 @@ def _toml(v) -> str:
     return json.dumps(str(v) if isinstance(v, Path) else v)
 
 
-def tiny_registry(root: Path) -> Path:
-    """`root/starts.toml`, naming the tiny data and start built under `root`."""
+def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None) -> Path:
+    """`root/starts.toml`, naming the tiny data and start built under `root`. `read` is what the start names as read
+    by its own training: parts of the tiny stream by index, each as the stream's manifest lists it, or the entries
+    as given."""
     data = tiny_data(root / "data")
-    s, _ = tiny_start(root / "starts")
+    parts = data.manifest()["parts"]
+    s, _ = tiny_start(root / "starts", read=read and [parts[q] if isinstance(q, int) else q for q in read])
     d = {"tokenizer": data.tokenizer, "vocab": data.vocab, "eot": data.eot, "train": data.train,
          "manifest_sha256": data.manifest_sha256, "tokenizer_sha256": data.tokenizer_sha256,
          "selection_sha256": data.selection_sha256}
@@ -139,10 +145,10 @@ def write_config(path: Path, **over) -> Path:
     return path
 
 
-def run_job(root: Path, *more: str, split: str = "search", **over):
+def run_job(root: Path, *more: str, split: str = "search", read: tuple[int, ...] | None = None, **over):
     """One job of the tiny start's config (`over` its keys) under `root`, through the job's own entry: its record, its
-    config, the registry and its output directory."""
-    reg = tiny_registry(root / "reg")
+    config, the registry and its output directory. `read` is `tiny_registry`'s."""
+    reg = tiny_registry(root / "reg", read)
     path = write_config(root / "a.toml", **over)
     cfg = config.load(path, starts.registry(reg))
     out = root / "out"
@@ -166,9 +172,8 @@ JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
 
 def job_counted(root: Path, steps: int, math: bool = False, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
-    attention kernel torch picks as a job runs (a fused one) or under the math kernel as a trace is taken under it,
-    in its operands' dtype (`capture.trace._math_attention`): the counter's record, and what the job's trace is
-    taken from (its config, route, model and optimizers)."""
+    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
+    the job's trace is taken from (its config, route, model and optimizers)."""
     reg = tiny_registry(root / "reg")
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
@@ -176,7 +181,7 @@ def job_counted(root: Path, steps: int, math: bool = False, **over):
                      clock=lambda: 0.0)
     route = config.route(cfg.route)
     torch.manual_seed(0)
-    with _math_attention() if math else nullcontext(), te.counter:
+    with sdpa_kernel([SDPBackend.MATH]) if math else nullcontext(), te.counter:
         model, optimizers = route.build(cfg.start.shape, cfg.dials)
         stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
         run.train(te, cfg, route, stream, model, optimizers)

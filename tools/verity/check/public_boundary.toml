@@ -31,10 +31,12 @@ spot = [
     "verity/protocols/spot/{candidates.py,costfit.py,device,optimize.py,plancheck.py}",
     "verity/protocols/spot/verifier/lean",
 ]
-# C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
+# C-Flock: its prover, its Lean verifier and ZK server with the base packages it requires, and its security analysis
 flock = [
     "verity/protocols/flock",
     "verity/protocols/flock/verifier",
+    "verity/circuits/{base,lean}",
+    "verity/commitments/lean",
     "security/Proofs/Properties/Flock{,.lean}",
     "security/*/Flock{,.lean}",
     "security/Definitions/Assumptions/Flock.lean",
@@ -47,7 +49,6 @@ ml = [
     "verity/commitments/{__init__.py,advice.py,coin_tree.py,crypto,domains.py,frame_v3,gates,history.py,hm96}",
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
-    "verity/protocols/poub/verifier/commitments/gates",
     "verity/{circuits,definitions}",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
@@ -77,7 +78,7 @@ firewall = [
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
 # certifier's package still holds
-vllm = ["adapters/vllm", "archive/integrations/vllm/tools/train_step_census.py", "verity/protocols/certifier/verifier/advice.py"]
+vllm = ["adapters/vllm", "verity/protocols/certifier/verifier/advice.py"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
@@ -178,6 +179,13 @@ protocols = [
     "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
+    # PoUB's plan unit and memory-map unit, with their test
+    "verity/definitions/circuits/requirement_units*",
+    "verity/circuits/tests/test_requirement_units.py",
+    # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
+    "verity/circuits/population.circuit-check.py",
+    # the recorded population programs, some keyed by PoUB's plan and memory-map units, and the test that rebuilds each
+    "verity/circuits/tests/{population_recorded.json,test_population_recorded.py}",
 ]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
@@ -238,8 +246,6 @@ records = [
 # `vllm-poc/bundles`, a host's archive), so the public tree could only skip them: each `*_of_record.py` beside the public test it
 # shares helpers with, or the whole file where none of it runs without them
 pod_records = [
-    "adapters/vllm/tests/acquire/test_compiled_manifest.py",
-    "adapters/vllm/tests/pipeline/test_compiled_merge_identity.py",
     "adapters/vllm/tests/check/test_stoch_draw_ledger_of_record.py",
     "adapters/vllm/tests/engine/test_gen_{dense2,ov_moe,ov_sampling}_of_record.py",
     "adapters/vllm/tests/pipeline/test_{admission_telemetry,coverage_workloads,run_config_dry_run}_of_record.py",
@@ -249,7 +255,6 @@ pod_records = [
 team = [
     "infra",
     "tools/{research,agent-guard}",
-    "archive/AGENTS.md",
     "benchmarks/census",
     ".agents",
     ".cursor",
@@ -336,6 +341,11 @@ why = "the identity hash's properties' proofs, which the network certifier's che
 paths = ["security/Proofs/Properties/Hash"]
 from = ["certifier"]
 
+[[needed]]
+why = "the ZK server's record as its Lean code runs it, stated and proved, which the recursive session's stop count is proved from"
+paths = ["security/{Properties,Proofs/Properties}/Firewall.lean"]
+from = ["flock"]
+
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
 # matches.
@@ -351,7 +361,6 @@ paths = [
     "security/*/Pouw",
     "security/Proofs/Properties/Pouw",
     "adapters/vllm",
-    "archive/integrations/vllm/tools/train_step_census.py",
     "benchmarks/one_stage",
 ]
 until = "PRF-285: the v3 ledger names a period's prover `prover`"

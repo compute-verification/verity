@@ -39,13 +39,21 @@ while its plan is made launches nothing (`abandon`).  Its record says so (``gate
 preflights and a lean-agreement that ran, less policy.toml's `off_gate` and drive.toml's `warn_steps`), a step a shard holds
 passed only once every shard holding it passed (`shard_passed`).  A failed step's tests are what its failure names
 (`failing`), so `vqueue.decide` takes as inherited only a failure whose every failing test the run beside the base fails
-too; what a failure doesn't name is one test no other key has (`unnamed`), so it is never inherited.  It fails as soon as a
+too; what a failure doesn't name is one test no other key has (`unnamed`), so it is never inherited.  Each holds what else
+its records say (`failing`): the repository paths and `art:` ids they name (`Failed.named`, a frame from the check's tree,
+`landing.tree_root`, and none outside it), which name its culprit; every path it can have read (`Failed.reads`: a suite's
+declared inputs narrowed by what its run traced, a failed Lean build's modules and their imports, a step's declared reads;
+None when nothing bounds them); and what failed (`Failed.kind`).  It fails as soon as a
 shard has failed a step it judges, or a suite of one, while the others run (`_early`: a shard's failures so far, which its
 check writes as each one fails), a failure read then as it would be at the end; a candidate on another candidate whose check
-runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A step
-it leaves out
-still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside the base's
-check failed too (`Loop._off_gate`)."""
+runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A
+candidate built on another in flight, no member of it changing a Lean input (`lean_inputs`), audits nothing itself where its
+base's check is judged on lean-audit (`audits`) or took its verdict on it from the check of a candidate below that is: `start`
+with ``audit_from``, the candidate whose check ran it, leaves lean-audit out of its run (``lean_audit_from``), and `audited`
+gives it the verdict on the step that the run beside `main` keeps once that candidate has landed (`answers`), pending until
+then whatever that check says, so it lands after that candidate, drops with it, and stays pending while it is rerun.  A step
+it leaves out still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside
+the base's check failed too (`Loop._off_gate`)."""
 from __future__ import annotations
 
 import ast
@@ -57,16 +65,21 @@ import os
 import re
 import shutil
 import signal
+import sys
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
+from typing import NamedTuple
 
-from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, LAUNCH_LOST_S, LEAN_AUDIT_RE, PLAN_WAIT_S, PREFLIGHT,
-                      SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log, implicated, killed, not_run,
-                      shard_machines, shard_passed, shard_steps, step_paths, step_records, suite_paths, suite_rows)
+from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
+                      PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
+                      _suite_log, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps, step_named,
+                      step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
 from .queue import _SUMMARY_RE, CHECK_STEPS, _git
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
-from .vqueue import FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
+from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
+from .vqueue_records import FAULT_RE
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
@@ -101,9 +114,50 @@ AUTO_SHARDS = re.compile(r"auto:([1-9]\d*)")
 #: lean-audit's own failures of no package, in its log
 AUDIT_FAIL_RE = re.compile(r"^lean-audit: FAIL: .*$", re.M)
 #: what the audit prints under a package's `AUDIT .../PKG: FAIL` that is no failure: counts and timings of its run
-AUDIT_SAYS = ("closure:", "staged:", "trust gap:", "heartbeats:")
+AUDIT_SAYS = ("closure:", "staged:", "sampled:", "trust gap:", "heartbeats:")
+#: what the audit prints of a failed package when its build failed, and of a package that reads the facts (`proved_in`) of
+#: one whose build failed
+AUDIT_BUILT_RE = re.compile(r"build: |lean: proved_in: \S+'s build did not pass ")
+#: an audit's line saying the build outputs it read changed under it (another build wrote them), and a test's skip that the
+#: evidence store was unreachable (`verity_suite_guard.STORE_UNREACHABLE`), which a recorded check fails: a shared state's
+#: failure, not the tree's
+STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.M)
+#: what a log prints when its machine failed it, beyond `vqueue_records.FAULT_RE`: `tele run` refusing a run its machine's cgroups
+#: would leave without a memory cap (`telemetry.cgroup.uncapped`)
+MACHINE_SAYS = re.compile(r"refused to start the workload: this machine caps each login session")
+#: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
+SUITE_RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard")
+#: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
+#: and each file it reads as it is compiled (`include_str`, relative to it)
+IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
+INCLUDE_RE = re.compile(r'include_str\s+"([^"]+)"')
 #: the audit's scratch tree, which each run names anew
 SCRATCH_RE = re.compile(r"\S*?/lean-audit-scratch-[^/\s]+/")
+#: the Lean inputs of every tree, as `vqueue.meets` reads them (`lean_inputs` adds a tree's Lean packages): every Lean source
+#: and Lake file, any lock, the Lean check's code and check's own, the task graph's contract (`lean_audit.CONTRACT`, in every
+#: audit's key), and the Lean tree whole, its READMEs too (`security/`, and `Security/`, its name before, which a member
+#: branched then still changes)
+LEAN_INPUTS = ("**/*.lean", "**/lakefile.lean", "**/lakefile.toml", "**/lake-manifest.json", "**/lean-toolchain",
+               "**/lean-audit.json", "tools/verity/lean", "tools/verity/check", "tools/verity/graph/verity_graph/contract.py",
+               "security", "Security")
+#: the files whose directory `lean_inputs` takes whole as a Lean package's: a Lake package's lakefile, an audited one's lock
+LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
+
+
+def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
+    """The Lean inputs of the tree whose tracked files are ``files``, as `vqueue.meets` reads them: a candidate one of whose
+    members changes any of them runs lean-audit itself rather than take its base's verdict on it (`start`'s ``audit_from``).
+    `LEAN_INPUTS`, and every directory holding one of `LEAN_PACKAGE_FILES`, whole (the root's as ``**``), wherever the tree
+    puts its packages.  So every file `lean_audit.inputs` declares there is one: a package's own files (one a module reads with
+    `include_str`, as pouw's `check/models.json`, its scripts, the vectors its tests read, PoUS's `TRUSTED.sha256`), its path
+    dependencies' and its provers', which are Lake packages too, and the auditor's (`lean_audit.tool_files`), which
+    `LEAN_INPUTS` names (`tests/test_gate_paths.py` holds the two together on the tree).  A package's file that no audit
+    declares counts too: a candidate changing only it audits where it could have taken its base's verdict, which costs the
+    audit and nothing else.  It leaves out what the unread ratchet reads outside Lean after the audits
+    (`lean_audit.unread_ratchet`: code and pyproject.toml naming an analysis declaration or module, the docs a lock names),
+    which no audit's key holds: a change touching only those takes its base's verdict on lean-audit."""
+    dirs = {f.rpartition("/")[0] or "**" for f in files if f.rpartition("/")[2] in LEAN_PACKAGE_FILES}
+    return (*LEAN_INPUTS, *sorted(dirs))
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:
@@ -136,16 +190,38 @@ def deselection(driver: Landing, listed: Path | None) -> Path | None:
     return sent
 
 
-def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None) -> dict | None:
+def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
+    """``steps`` but those candidate ``sha``'s own `tools/verity/check/ci.toml` declares no job of (`merge.declared`), one line
+    logged naming them: check.py refuses a `--deferred` naming a job its tree doesn't declare, so sending one would fail the
+    candidate's own check.  Every one of ``steps``, logged, when that ci.toml can't be read."""
+    from .merge import declared
+
+    if (jobs := declared(driver.repo, sha)) is None:
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its --deferred "
+                     f"keeps every step ({','.join(steps)})")
+        return steps
+    names = {t["name"] for t in jobs}
+    if gone := [s for s in steps if s not in names]:
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job "
+                     f"{', '.join(gone)}, which check.py refuses: left out of its --deferred")
+    return [s for s in steps if s in names]
+
+
+def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
+          audit_from: str | None = None) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
     With ``shards``, the check that gates instead: `--deferred` every step of `AFTER_LANDING` (each check runs the
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
     `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
+    With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
+    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  Each sends only the steps the
+    candidate's own ci.toml declares as jobs (`declared_steps`).
     The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
-    launched (``at``), the ``steps`` it runs and those it skips (``skip``), and ``gate`` (`CHECK`) with ``shards``.  None,
+    launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
+    ``lean_audit_from`` with ``audit_from``.  None,
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
     dry run, or its queue's shadow).  Every launch leaves out the tests the loop's list ``deselect`` names (`deselection`), each
     shard's alike; the nightly uncached check, which reads no list, runs them."""
@@ -153,17 +229,21 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
         raise ValueError("the run beside a candidate's check needs the queue's machines: build the Landing with drive.toml's `on` "
                          "(`research.queue.flags_at(repo, main).on`)")
     n, auto = shard_count(shards)
+    if audit_from and not n:
+        raise ValueError(f"audit_from {audit_from[:12]}: only the check that gates (``shards``) runs lean-audit, so only it "
+                         "can take another check's verdict on it")
     kw, skip, flags = driver.beside_args(sha, base)
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
         flags += f" --deselect {left} ({len(left.read_text().splitlines())} tests)"
-    every = AFTER_LANDING if n else SLIM_STEPS
+    every = declared_steps(driver, sha, [s for s in (AFTER_LANDING if n else SLIM_STEPS) if not (audit_from and s == LEAN_STEP)])
     skip = [s for s in skip if s in every]
     steps = [s for s in every if s not in skip]
     sent = ",".join(every if n else steps)
     what = (f"train.sh {sha[:12]} {driver.on} --deferred {sent}{flags}"
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
-            + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check"))
+            + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
+            + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
@@ -181,7 +261,7 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
         return None
     driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or ('planning' if auto else 'launching')}")
     return {**rec, "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
-            **({"gate": CHECK} if n else {})}
+            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {})}
 
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None) -> tuple[dict | None, str]:
@@ -267,8 +347,9 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     ``base`` covers counting as passed, so no candidate's allowance covers its own failure; fail with each of them it failed
     (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths that failure names its culprit by,
     `step_paths`, its content key at ``base``, `key`, and the step's one test, `step_test`; the check that gates: the tests
-    and paths its failure names, `failing`), and infra when it failed none but passed fewer (one skipped, or absent from its
-    steps.jsonl).  Each verdict but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
+    and paths its failure names; each with what else its records say, `failing`: what it can have read and its class), and
+    infra when it failed none but passed fewer (one skipped, or absent from its steps.jsonl).  Each verdict but pending is
+    kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
     if rec is None:
         return _down(None, "registered no run")
     if "verdict" in rec:
@@ -329,31 +410,35 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
                                    for _, rc, *_ in states.values())
                        or any(implicated(d) is None and killed(d, why) for d in dirs)):
         return _keep(rec, _down(rec, "was lost" if lost else f"was killed ({why})"))
-    paths: dict[str, set[str]] = {}
-    tests: dict[str, set[str]] = {}
+    got: dict[str, list[Read]] = {}
     keys: dict[str, str] = {}
     for d in dirs:
         for st in step_records(d):
             if (s := st.get("step")) in missed and st.get("status") == "failed" and not not_run(st):
                 if s not in keys:
                     keys[s] = key(driver.repo, tip, s) or f"{tip}:{s}"
-                at, named = failing(driver, allow, d, st, unnamed(keys[s])) if check else (step_paths(d, st), {step_test(s)})
-                paths.setdefault(s, set()).update(at or ())
-                tests.setdefault(s, set()).update(named)
+                read = failing(driver, allow, d, st, unnamed(keys[s]), tip)
+                if not check:
+                    read = read._replace(tests=frozenset({step_test(s)}), named=frozenset(step_paths(d, st) or ()))
+                got.setdefault(s, []).append(read)
     passed = [s for s in judged if s not in missed]
-    if paths:
-        return _keep(rec, Verdict(FAIL, tuple(Failed(f"step {s}", keys[s], _inputs(paths[s]),
-                                                     key(driver.repo, base, s) if base else None, frozenset(tests[s]))
-                                              for s in missed if s in paths), ended=True), passed)
+    if got:
+        return _keep(rec, Verdict(FAIL, tuple(_failure(s, keys[s], key(driver.repo, base, s) if base else None, got[s])
+                                              for s in missed if s in got), ended=True), passed)
     return _keep(rec, _down(rec, f"ended ({why}) without passing {', '.join(missed)}: each skipped, or absent from its "
                                  "steps.jsonl"), passed)
 
 
-def _gate(driver: Landing, rec: dict) -> list[str]:
-    """The steps the check that gates (``rec``) is judged on: every step `main` waits for at its base (`Landing._gating`), the
-    preflights and a lean-agreement it ran, but policy.toml's `off_gate` there and drive.toml's `warn_steps`."""
+def _gated(driver: Landing, rec: dict) -> set[str]:
+    """The steps the check that gates (``rec``) answers for, run or not: every step `main` waits for at its base
+    (`Landing._gating`), the preflights and lean-agreement, but policy.toml's `off_gate` there and drive.toml's `warn_steps`."""
     at = rec.get("base") or rec["tip"]
-    gate = {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
+    return {*SLIM_JUDGED, *driver._gating(at)} - {*driver._policy(at).off_gate, *driver.warn_steps}
+
+
+def _gate(driver: Landing, rec: dict) -> list[str]:
+    """The steps the check that gates (``rec``) is judged on: those it answers for (`_gated`) that it ran, and the preflights."""
+    gate = _gated(driver, rec)
     return [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
 
 
@@ -374,8 +459,7 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     allow, dirs = base or tip, driver.evidence(driver.repo, said)
     allowed = driver._allowed_steps(allow, dirs)
     keys: dict[str, str] = {}
-    paths: dict[str, set[str]] = {}
-    tests: dict[str, set[str]] = {}
+    got: dict[str, list[Read]] = {}
     at: list[float] = []
     for d in dirs:
         if implicated(d) is None and killed(d):
@@ -396,13 +480,11 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
                 continue
             if s not in keys:
                 keys[s] = key(driver.repo, tip, s) or f"{tip}:{s}"
-            got, named = failing(driver, allow, d, st, unnamed(keys[s]))
-            paths.setdefault(s, set()).update(got or ())
-            tests.setdefault(s, set()).update(named)
-    if not tests:
+            got.setdefault(s, []).append(failing(driver, allow, d, st, unnamed(keys[s]), tip))
+    if not got:
         return Verdict(PENDING)
-    v = Verdict(FAIL, tuple(Failed(f"step {s}", keys[s], _inputs(paths[s]), key(driver.repo, base, s) if base else None,
-                                   frozenset(tests[s])) for s in _gate(driver, rec) if s in tests))
+    v = Verdict(FAIL, tuple(_failure(s, keys[s], key(driver.repo, base, s) if base else None, got[s])
+                            for s in _gate(driver, rec) if s in got))
     first = [t for t in (*at, (rec.get("early") or {}).get("at")) if t is not None]
     rec["early"] = {**_doc(v), "at": min(first, default=driver.now())}
     return v
@@ -442,49 +524,336 @@ def failures(driver: Landing, rec: dict | None, step: str) -> dict[str, str] | N
     return out
 
 
-def failing(driver: Landing, at: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:
-    """What failed step ``st`` of the check that gates names in its run dir ``d``: the paths its culprit
-    is named by, and its failing tests.  A step that runs suites (`SUITE_STEPS`): of each suite of its that failed
-    (`suite_rows`) uncovered by ``at``'s allowances (its base's), `suite_paths` and `SUITE::TEST` of each test it failed,
-    and ``rest`` under the suite's name when it names none or failed for more than its tests (its row's `beyond_tests` isn't
-    false).  Any other: `step_paths`, the test id of each `FAILED` and `ERROR` line of its log's short summary (all of it
-    before ` - `, a parametrized id's spaces included), and of lean-audit each line under a failed package's
-    `AUDIT .../PKG: FAIL` (`audit_failures`).  ``rest`` (`unnamed`) alone when it names no test."""
+class Read(NamedTuple):
+    """What a failure's records say (`failing`): its failing tests, the repository paths and `art:` ids they name
+    (`Failed.named`), every path it can have read (`Failed.reads`, None when nothing bounds them) and what failed
+    (`Failed.kind`)."""
+    tests: frozenset[str]
+    named: frozenset[str]
+    reads: frozenset[str] | None
+    kind: str | None
+
+
+def failing(driver: Landing, at: str, d: Path, st: dict, rest: str, tip: str | None = None) -> Read:
+    """What failed step ``st`` of the check that gates says in its run dir ``d``, the check of ``tip``'s tree.  A step that
+    runs suites (`SUITE_STEPS`): `read_suite` of each suite of its that failed (`suite_rows`) uncovered by ``at``'s allowances
+    (its base's), with its log, its guard's report and the reads its children traced (`suites/SLUG.json` and `.reads` beside
+    its log) and what it declares at ``tip`` (`suite_reads`); ``rest`` (`unnamed`) alone, its reads unbounded, when no
+    suite's record says it failed.  Any other: `read_step`, a Lean build's failure reading the failing modules' imports at
+    ``tip`` (`lean_reads`) and any other step what declares its reads there (`reads`).  Its parts together (`joined`)."""
     step = st.get("step")
     if step not in SUITE_STEPS:
         log = _step_log(d, st)
-        tests = {m[1] for m in _SUMMARY_RE.finditer(log)} | (audit_failures(log, rest) if step == "lean-audit" else set())
-        return step_paths(d, st) or set(), tests or {rest}
-    paths: set[str] = set()
-    tests = set()
+        got = reads(driver.repo, tip, step) if tip else None
+        if step == "lean-audit" and tip and audit_built(log):
+            got = lean_reads(driver.repo, tip, lean_errors(log)) or got
+        return read_step(step, st, log, rest, tree_root(d), got if isinstance(got, frozenset) else None)
+    parts = []
     for name, row in suite_rows(d).items():
         if row["status"] != "failed" or row["step"] != step or driver._allowed(at, f"suite {name}", d, row).covered:
             continue
-        paths |= suite_paths(d, row) or set()
-        tests |= {f"{name}::{t}" for t in row.get("failed_tests") or ()}
-        if not row.get("failed_tests") or row.get("beyond_tests") is not False:
-            tests.add(f"{name}::{rest}")
-    return paths, tests or {rest}
+        declared, dirs = suite_reads(driver.repo, tip, row.get("suite") or ".") if tip else (None, frozenset())
+        slug = d / "suites" / Path(row.get("log") or f"{name}.log").stem
+        parts.append(read_suite(name, row, _suite_log(d, row), rest, declared, dirs, tree_root(d), _json(slug.with_suffix(".json")),
+                                _text(slug.with_suffix(".reads"))))
+    return joined(parts, rest)
 
 
-def audit_failures(log: str, rest: str) -> set[str]:
-    """The failures lean-audit's ``log`` names: `PKG::LINE` of each line the audit prints under a failed package's
-    `AUDIT .../PKG: FAIL` (`LEAN_AUDIT_RE`) but its run's counts and timings (`AUDIT_SAYS`, with the lines under each), the
-    scratch tree's name left out, ``rest`` under the name of a package it prints none under; and each `lean-audit: FAIL:`
-    line."""
-    out: dict[str, set[str]] = {}
-    pkg, says = None, False
+def read_suite(name: str, row: dict, log: str, rest: str, declared: frozenset[str] | None, dirs: frozenset[str] = frozenset(),
+               root: str | None = None, report: dict | None = None, trace: str = "") -> Read:
+    """What failed suite ``name``'s record ``row`` (a row of a check's suite report) and its log ``log`` say, the check's tree at
+    ``root`` (`landing.tree_root`): `SUITE::TEST` of each test it failed, and ``rest`` under the suite's name when it names none
+    or failed for more than its tests (its row's `beyond_tests` isn't false); the paths they name (`landing.suite_named`);
+    ``declared``, the paths it declares (`suite_reads`, with ``dirs`` the directories among them), narrowed by what its run
+    traced (`traced_reads`: its guard's ``report`` and its children's ``trace``); and `suite_kind`."""
+    tests = {f"{name}::{t}" for t in row.get("failed_tests") or ()}
+    if not tests or row.get("beyond_tests") is not False:
+        tests.add(f"{name}::{rest}")
+    base = "" if (row.get("suite") or ".") == "." else row["suite"]
+    modules = {os.path.normpath(os.path.join(base, t.split("::")[0])) for t in row.get("failed_tests") or ()}
+    return Read(frozenset(tests), frozenset(suite_named(row, log, root) or ()),
+                traced_reads(declared, dirs, base, modules, report, trace), suite_kind(row, log))
+
+
+def read_step(step: str, st: dict, log: str, rest: str, root: str | None = None, reads: frozenset[str] | None = None) -> Read:
+    """What failed step ``st`` (a line of a check's steps.jsonl), not a suite step, and its log ``log`` say: the test id of each
+    `FAILED` and `ERROR` line of its log's short summary (all of it before ` - `, a parametrized id's spaces included), and of
+    lean-audit what each failed package's lines name (`audit_failures`), ``rest`` (`unnamed`) alone when it names none; the
+    paths it names (`landing.step_named`); ``reads``, what it read; and `step_kind`."""
+    tests = {m[1] for m in _SUMMARY_RE.finditer(log)} | (audit_failures(log, rest) if step == "lean-audit" else set())
+    return Read(frozenset(tests or {rest}), frozenset(step_named(step, log, root) or ()), reads, step_kind(st, log))
+
+
+def joined(parts: Iterable[Read], rest: str) -> Read:
+    """One failure of ``parts`` (a step's, of several suites or shards): their tests, names and reads together (unbounded when
+    one's are), and the first class of `KINDS` one has, its own work before the rest; of none, ``rest`` (`unnamed`) alone,
+    its reads unbounded."""
+    if not (parts := list(parts)):
+        return Read(frozenset({rest}), frozenset(), None, None)
+    kinds = {p.kind for p in parts}
+    return Read(frozenset().union(*(p.tests for p in parts)), frozenset().union(*(p.named for p in parts)),
+                None if any(p.reads is None for p in parts) else frozenset().union(*(p.reads for p in parts)),
+                next((k for k in KINDS if k in kinds), None))
+
+
+def suite_kind(row: dict, log: str) -> str:
+    """What a failed suite's record and log say failed (`KINDS`): a timeout (its row's `timed_out`); a flake, each test it
+    failed having passed under the same key (`nondeterministic`); the store or build state it shares (`STORE_SAYS`); its
+    machine (`vqueue_records.FAULT_RE`: a full disk, no memory; `MACHINE_SAYS`), in what its run printed, not in a test's code its
+    report quotes (`_printed`); else its own work."""
+    failed = set(row.get("failed_tests") or ())
+    if row.get("timed_out"):
+        return "timeout"
+    if failed and failed <= set(row.get("nondeterministic") or ()):
+        return "flaky"
+    if STORE_SAYS.search(log):
+        return "store-state"
+    printed = _printed(log)
+    return "infra" if FAULT_RE.search(printed) or MACHINE_SAYS.search(printed) else "own"
+
+
+def _printed(log: str) -> str:
+    """A pytest log's lines but the source a traceback quotes (indented, its failing line marked `>`): what its run printed,
+    its error lines (`E`) among them."""
+    return "\n".join(line for line in log.splitlines() if not line.startswith((" ", "\t", ">")))
+
+
+def step_kind(st: dict, log: str) -> str:
+    """What a failed step's record and log say failed (`KINDS`): the store or build state it shares (`STORE_SAYS`: an audit
+    whose build outputs another build changed); a kill (a signal or 128+N, or the Lean check's own process killed,
+    `landing.KILLED_SAYS`); its machine (`vqueue_records.FAULT_RE`, `MACHINE_SAYS`); else its own work."""
+    rc = st.get("rc")
+    if STORE_SAYS.search(log):
+        return "store-state"
+    if isinstance(rc, int) and (rc < 0 or rc in KILLED_RC) or KILLED_SAYS in log:
+        return "killed"
+    return "infra" if FAULT_RE.search(log) or MACHINE_SAYS.search(log) else "own"
+
+
+def traced_reads(declared: frozenset[str] | None, dirs: frozenset[str], base: str, modules: set[str], report: dict | None,
+                 trace: str) -> frozenset[str] | None:
+    """``declared`` narrowed as `suites.py` keys a test module's pass where its run traced what it read ("Traced", `traced_key`):
+    the declared paths but the directories ``dirs``, each file the suite's processes and their children opened and each
+    directory they listed (the guard's ``report``'s `traced`, and the `F` and `L` lines of the children's ``trace``, the
+    suite's `.reads`), what its test modules read of each other (`reads`, `R`), its configuration, its test modules and
+    conftests, `SUITE_RUNNER` and `ENV`.  ``declared`` itself when the run traced nothing, ``modules`` (the failing tests'
+    files, repository paths as the guard keys them) is empty, or one of them, a session fixture or a conftest started a
+    program no tracer sees into (its report's `untraced`, a trace's `X` and `E` lines): `suites.py` keys those on the
+    suite's inputs whole.  Either holds each path its processes or their children read outside the declared ones (`outside`,
+    `O`), which fail it.  A `.reads` line is its kind, the test module and the path."""
+    if declared is None:
+        return None
+    report = report or {}
+    outside = set(report.get("outside") or ())
+    blind = set(report.get("untraced") or ())
+    read = {line.partition("\t")[2] for line in report.get("traced") or () if line[:2] in ("F\t", "L\t")}
+    read |= {p for ps in (report.get("reads") or {}).values() for p in ps}
+    for line in trace.splitlines():
+        kind, module, path = (line.split("\t") + ["", "", ""])[:3]
+        if kind in ("X", "E"):
+            blind.add(module)
+        elif kind == "O" and path:
+            outside.add(path)
+        elif kind in ("F", "L", "R") and path:
+            read.add(path)
+    if not modules or not isinstance(report.get("traced"), list) or "*" in blind or modules & blind:
+        return frozenset(declared | outside)
+    own = f"{base}/" if base else ""
+    return frozenset({*(declared - dirs), *read, *outside, f"{own}pyproject.toml", f"{own}**/test_*.py",
+                      f"{own}**/conftest.py", *SUITE_RUNNER, *ENV})
+
+
+@functools.lru_cache(maxsize=64)
+def suite_reads(repo: Path, commit: str, suite: str) -> tuple[frozenset[str] | None, frozenset[str]]:
+    """(every path suite ``suite`` (its directory) may read at ``commit``, the directories among them), as `suites.py`'s
+    `inputs_of` allows its guard: its directory and its declared inputs; unless it declares `inputs_only`, what each workspace
+    package it depends on ships (`_ships`), its dependencies, extras and dependency groups and theirs but their groups
+    (`suites.closure`); the workspace's pyproject.toml, `SUITE_RUNNER` and `ENV`.  (None, none) for the repository's own
+    suite, whose directory is the tree."""
+    suite = suite.strip("/") or "."
+    if suite == ".":
+        return None, frozenset()
+    data = suite_pyproject(repo, commit, suite)
+    tests = data.get("tool", {}).get("verity", {}).get("tests", {})
+    out = {suite, *map(str, tests.get("inputs") or ()), "pyproject.toml", *SUITE_RUNNER, *ENV}
+    if tests.get("inputs_only") is not True:
+        pkgs, seen = _members(repo, commit), set()
+        todo = [n for n in _requires(data) if n in pkgs]
+        while todo:
+            if (n := todo.pop()) in seen:
+                continue
+            seen.add(n)
+            todo += [r for r in _requires(suite_pyproject(repo, commit, pkgs[n]), groups=False) if r in pkgs]
+        out |= {p for n in seen if pkgs[n] != suite for p in _ships(repo, commit, pkgs[n])}
+    r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
+    files = [p for p, _ in _files(repo, r.stdout.strip())] if not r.returncode else []
+    return frozenset(out), frozenset(p for p in out if "*" not in p and "?" not in p and _is_dir(files, p))
+
+
+def _is_dir(files: list[str], path: str) -> bool:
+    """Whether ``path`` is a directory of the tree whose files (in git's order) are ``files``."""
+    import bisect
+
+    i = bisect.bisect_left(files, path.rstrip("/") + "/")
+    return i < len(files) and files[i].startswith(path.rstrip("/") + "/")
+
+
+def _norm(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _requires(data: dict, groups: bool = True) -> list[str]:
+    """The distributions a workspace member's pyproject.toml ``data`` names, normalized: its dependencies and extras, and with
+    ``groups`` its dependency groups (`suites._requires`)."""
+    project = data.get("project", {})
+    reqs = [*project.get("dependencies", []), *(r for extra in project.get("optional-dependencies", {}).values() for r in extra)]
+    reqs += [r for g in data.get("dependency-groups", {}).values() if groups for r in g if isinstance(r, str)]
+    return [_norm(m[0]) for r in reqs if (m := re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", r))]
+
+
+def _members(repo: Path, commit: str) -> dict[str, str]:
+    """{distribution: directory} of the workspace packages at ``commit`` (`suites.members`), the root's own under "."."""
+    root = suite_pyproject(repo, commit, ".")
+    out = {_norm(n): "." for n in [root.get("project", {}).get("name")] if isinstance(n, str)}
+    for path in root.get("tool", {}).get("uv", {}).get("workspace", {}).get("members", []):
+        if isinstance(n := suite_pyproject(repo, commit, path).get("project", {}).get("name"), str):
+            out[_norm(n)] = path
+    return out
+
+
+def _ships(repo: Path, commit: str, path: str) -> list[str]:
+    """What a workspace package's dependents read of it (`suites.shipped`): its `exports`, else its directory, or for the
+    root, which holds the whole tree, the packages its wheel ships."""
+    data = suite_pyproject(repo, commit, path)
+    if (exports := data.get("tool", {}).get("verity", {}).get("tests", {}).get("exports")) is not None:
+        return [str(e) for e in exports]
+    if path != ".":
+        return [path]
+    return [str(p) for p in data.get("tool", {}).get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {})
+            .get("packages", ["**"])]
+
+
+def audit_built(log: str) -> bool:
+    """Whether lean-audit's ``log`` says only that builds failed: each failed package's lines (`_package_lines`) are its
+    build's, or say a package it reads the facts of failed to build (`AUDIT_BUILT_RE`), and the audit failed nothing of its
+    own (`AUDIT_FAIL_RE`)."""
+    lines = _package_lines(log)
+    return (bool(lines) and all(built or AUDIT_BUILT_RE.match(t) for ts in lines.values() for t, built in ts)
+            and not AUDIT_FAIL_RE.search(log))
+
+
+def lean_reads(repo: Path, commit: str, files: Iterable[str]) -> frozenset[str] | None:
+    """What a Lean build of the modules ``files`` (repository paths) reads at ``commit``: each and, transitively, each module
+    it imports that the tree holds (the `.lean` files whose path ends in the module's name, every one when several do) and
+    each file one reads as it compiles (`INCLUDE_RE`), the Lake files and toolchain beside each package holding one, the Lean
+    check's code and `ENV`; an import the tree holds no file for is a dependency's, which those Lake files pin.  None when
+    ``files`` is empty or one isn't in the tree."""
+    r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False) if commit else None
+    if r is None or r.returncode or not (files := set(files)):
+        return None
+    tree = r.stdout.strip()
+    listing = [p for p, _ in _files(repo, tree)]
+    lean = {p for p in listing if p.endswith(".lean")}
+    if not files <= lean:
+        return None
+    by_name: dict[str, list[str]] = {}
+    for p in lean:
+        parts = p[:-len(".lean")].split("/")
+        for i in range(len(parts)):
+            by_name.setdefault(".".join(parts[i:]), []).append(p)
+    seen: set[str] = set()
+    included: set[str] = set()
+    todo = sorted(files)
+    while todo:
+        seen.update(todo)
+        found: set[str] = set()
+        for path, text in zip(todo, _blobs(repo, tree, todo)):
+            found.update(q for line in IMPORT_RE.findall(text) for name in line.split("--")[0].split()
+                         for q in by_name.get(name.replace("«", "").replace("»", ""), ()))
+            included.update(os.path.normpath(os.path.join(os.path.dirname(path), f)) for f in INCLUDE_RE.findall(text))
+        todo = sorted(found - seen)
+    lake = {p.rpartition("/")[0]: p for p in listing if p.rpartition("/")[2] in LEAN_PACKAGE_FILES}
+    homes = {d for d in lake if any(f.startswith(d + "/") or d == "" for f in seen)}
+    return frozenset({*seen, *included, *(f"{d}/{n}" if d else n for d in homes
+                                          for n in (*LEAN_PACKAGE_FILES, "lake-manifest.json", "lean-toolchain")),
+                      "tools/verity/lean", *ENV})
+
+
+def _blobs(repo: Path, tree: str, paths: list[str]) -> list[str]:
+    """The text of each of ``paths`` in ``tree`` (one `git cat-file --batch`); a path it doesn't hold is left out."""
+    import subprocess
+
+    from .gates import git_env
+
+    p = subprocess.run(["git", "cat-file", "--batch"], cwd=repo, input="".join(f"{tree}:{q}\n" for q in paths).encode(),
+                       capture_output=True, env=git_env(GIT_TERMINAL_PROMPT="0"))
+    out, data, i = [], p.stdout, 0
+    while (nl := data.find(b"\n", i)) >= 0:
+        head = data[i:nl].split()
+        if len(head) != 3 or not head[2].isdigit():
+            i = nl + 1
+            continue
+        n = int(head[2])
+        out.append(data[nl + 1:nl + 1 + n].decode(errors="replace"))
+        i = nl + 2 + n
+    return out
+
+
+def _package_lines(log: str) -> dict[str, list[tuple[str, bool]]]:
+    """{package: (each line the audit prints under its `AUDIT .../PKG: FAIL`, whether its build printed it)} of lean-audit's
+    ``log``, but its run's counts and timings (`AUDIT_SAYS`, with the lines under each), the scratch tree's name left out.
+    Of what its build printed (`build: exit N` and lake's output under it) only what names a failure is kept: an `error:`
+    line, and a module of lake's list of the targets that failed; lake's progress lines, which hold timings, and its warnings
+    never name the same failure twice alike."""
+    out: dict[str, list[tuple[str, bool]]] = {}
+    pkg, says, build, listing = None, False, False, False
     for line in log.splitlines():
         if line.startswith("AUDIT"):
             pkg = m[1] if (m := LEAN_AUDIT_RE.match(line)) else None
             if pkg:
-                out.setdefault(pkg, set())
+                out.setdefault(pkg, [])
         elif pkg and line.startswith(" ") and (text := line.strip()):
             if re.match(r"  \S", line):
-                says = text.startswith(AUDIT_SAYS)
-            if not says:
-                out[pkg].add(SCRATCH_RE.sub("", text))
-    return {f"{p}::{t}" for p, ts in out.items() for t in ts or {rest}} | set(AUDIT_FAIL_RE.findall(log))
+                says, build, listing = text.startswith(AUDIT_SAYS), text.startswith("build:"), False
+                if says:
+                    continue
+            elif says:
+                continue
+            elif build:
+                if "Some required targets logged failures:" in text:
+                    listing = True
+                    continue
+                listing = listing and text.startswith("-")
+                if not (text.startswith("error:") or listing and re.fullmatch(r"- [A-Za-z][\w.]*", text)):
+                    continue
+            out[pkg].append((SCRATCH_RE.sub("", text), build))
+    return out
+
+
+def audit_failures(log: str, rest: str) -> set[str]:
+    """The failures lean-audit's ``log`` names: `PKG::LINE` of each line of a failed package's (`_package_lines`: of its
+    build, each failed module and each error), ``rest`` under the name of a package it prints none under; and each
+    `lean-audit: FAIL:` line."""
+    return ({f"{p}::{t}" for p, ts in _package_lines(log).items() for t in [t for t, _ in ts] or [rest]}
+            | set(AUDIT_FAIL_RE.findall(log)))
+
+
+def _json(path: Path) -> dict | None:
+    """The JSON object at ``path`` (a failed suite's guard report), None when there is none to read: missing, empty, cut
+    short or not an object, as `suites.read_report` reads the report a pytest that died in its session finish left.  A
+    raise here would fail every tick that judges the run, since a refetch brings the same bytes."""
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        if path.exists():
+            print(f"research queue vqueue: {path}: no report ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def _text(path: Path) -> str:
+    """The text at ``path`` (a failed suite's children's reads), empty when the run dir has none."""
+    return path.read_text(errors="replace") if path.exists() else ""
 
 
 def combine(graph: Verdict, slim: Verdict) -> Verdict:
@@ -543,6 +912,23 @@ def key(repo: Path, commit: str, step: str) -> str | None:
         return h.hexdigest()
     for path, entry in _files(repo, tree):
         if meets((path,), want):
+            h.update(f"{entry}\t{path}\0".encode(errors="surrogateescape"))
+    return h.hexdigest()
+
+
+def lean_key(repo: Path, commit: str) -> str | None:
+    """SHA-512 over `KEY_TAG` and each Lean input of ``commit``'s tree (`lean_inputs`) as git holds it (mode, object and path),
+    in path order.  Two commits with one Lean key have the same Lean inputs, which are all a lock run's regenerated records
+    depend on, so records regenerated on one are the other's too (`vqueue_records.commit`'s ``onto``).  None when git can't
+    read ``commit``."""
+    r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
+    if r.returncode:
+        return None
+    files = _files(repo, r.stdout.strip())
+    inputs = frozenset(lean_inputs(path for path, _ in files))
+    h = hashlib.sha512(f"{KEY_TAG}\0lean inputs\0".encode())
+    for path, entry in files:
+        if meets((path,), inputs):
             h.update(f"{entry}\t{path}\0".encode(errors="surrogateescape"))
     return h.hexdigest()
 
@@ -622,14 +1008,11 @@ def _data(node: ast.AST, names: dict[str, str]) -> str | tuple | None:
     return None
 
 
-def _inputs(paths: set[str]) -> frozenset[str]:
-    """``paths`` as `vqueue.meets` reads them, meeting the files they name: an absolute one (a traceback's
-    frame) as each of its tails that has a directory, since a bare `conftest.py` would meet every conftest."""
-    out: set[str] = set()
-    for p in paths:
-        parts = p.split("/")
-        out.update(("/".join(parts[i:]) for i in range(1, len(parts) - 1)) if p.startswith("/") else (p,))
-    return frozenset(out)
+def _failure(step: str, k: str, base_key: str | None, parts: list[Read]) -> Failed:
+    """Failed step ``step``'s `Failed`, keyed ``k`` at the candidate and ``base_key`` at its base, from what its shards'
+    records say of it (`joined`): its culprit named by the paths they name (`Failed.inputs`, which `vqueue.decide` reads)."""
+    r = joined(parts, unnamed(k))
+    return Failed(f"step {step}", k, r.named, base_key, r.tests, reads=r.reads, named=r.named, kind=r.kind)
 
 
 def _down(rec: dict | None, why: str) -> Verdict:
@@ -649,13 +1032,18 @@ def _doc(v: Verdict) -> dict:
     return {"state": v.state, **{k: [{"task": f.task, "key": f.key, "inputs": sorted(f.inputs),
                                       **({"base_key": f.base_key} if f.base_key is not None else {}),
                                       **({"tests": sorted(f.tests)} if f.tests else {}),
-                                      **({"launch": True} if f.launch else {})} for f in fs]
+                                      **({"launch": True} if f.launch else {}),
+                                      **({"reads": sorted(f.reads)} if f.reads is not None else {}),
+                                      **({"named": sorted(f.named)} if f.named else {}),
+                                      **({"kind": f.kind} if f.kind else {})} for f in fs]
                                  for k, fs in (("failed", v.failed), ("infra", v.infra)) if fs}}
 
 
 def _kept(got: dict) -> Verdict:
     return Verdict(got["state"], *(tuple(Failed(f["task"], f["key"], frozenset(f["inputs"]), f.get("base_key"),
-                                                frozenset(f.get("tests") or ()), launch=bool(f.get("launch")))
+                                                frozenset(f.get("tests") or ()), launch=bool(f.get("launch")),
+                                                reads=frozenset(f["reads"]) if "reads" in f else None,
+                                                named=frozenset(f.get("named") or ()), kind=f.get("kind"))
                                          for f in got.get(k) or ()) for k in ("failed", "infra")), ended=got["state"] == FAIL)
 
 
@@ -688,3 +1076,49 @@ def based(v: Verdict, base: dict | None, so_far: bool = False) -> Verdict:
         return replace(f, base_tests=None if early and tests is not None and not f.tests <= tests else tests)
 
     return replace(v, failed=tuple(of(f) for f in v.failed))
+
+
+def audits(driver: Landing, rec: dict | None) -> bool:
+    """Whether ``rec`` records the check that gates judged on lean-audit (`_gate`), whose verdict on it a check built on its
+    candidate, or on one that took it from this one's, may take in place of running it (`start`'s ``audit_from``)."""
+    return rec is not None and rec.get("gate") == CHECK and LEAN_STEP in _gate(driver, rec)
+
+
+def _audit(rec: dict | None) -> tuple[Failed, ...] | None:
+    """The verdict on lean-audit that ``rec`` keeps: its failures of the step, none where it passed it, None where it keeps
+    none (no verdict kept, or one that holds neither)."""
+    got = (rec or {}).get("verdict")
+    if not isinstance(got, dict):
+        return None
+    failed = tuple(f for f in _kept(got).failed if f.task == f"step {LEAN_STEP}")
+    return failed if failed or LEAN_STEP in (got.get("passed") or ()) else None
+
+
+def answers(rec: dict | None) -> bool:
+    """Whether ``rec`` keeps a verdict on lean-audit: its check ran the step, or took that verdict once the candidate whose
+    check ran it had landed (`audited`)."""
+    return _audit(rec) is not None
+
+
+def audited(driver: Landing, v: Verdict, rec: dict | None, source: dict | None) -> Verdict:
+    """``v``, `judge`'s verdict of the check ``rec`` records, with lean-audit's where that check took it from the check of a
+    candidate below that ran it (``lean_audit_from``) and lean-audit gates it (`_gated`): the verdict on the step that
+    ``source`` keeps, the record of the run beside `main` once that candidate has landed (its own, or one that took it from it
+    too), None while it is in flight, whatever its check says then: a failure there may yet be rerun away, and if it isn't,
+    that candidate's drop drops this one with it (`vqueue.decide`'s "its base failed").  Passed there (its kept verdict's
+    ``passed``), ``v``.  Failed there, ``v`` failed with that failure, ended once ``v``'s own check has, which `based` reads
+    as the base's.  Unknown there, or no ``source`` (`answers`), ``v`` never passes: a pass is pending, a fail not ended,
+    which `vqueue.decide` holds while every failure is inherited.  Once known, and ``v`` a pass or fail kept, it is kept in
+    ``rec`` as if the check had run the step (``verdict``), so the record answers for it where it is the run beside `main`
+    (`based`) and is read from there by the checks that took it too: a pass in ``passed``, and a failure only where the run
+    beside `main` fails lean-audit, which is `main` red on it, the candidate that ran it having landed on that failure as
+    inherited, so a later candidate's failure of the step reads as inherited there."""
+    if not rec or not rec.get("lean_audit_from") or LEAN_STEP not in _gated(driver, rec) or answers(rec):
+        return v
+    if (failed := _audit(source)) is None:
+        return Verdict(PENDING) if v.state == PASS else replace(v, ended=False) if v.state == FAIL else v
+    out = v if not failed else Verdict(FAIL, (*v.failed, *failed), v.infra,
+                                       ended=v.state in (PASS, INFRA) or v.state == FAIL and v.ended)
+    if isinstance(kept := rec.get("verdict"), dict) and v.state in (PASS, FAIL):
+        _keep(rec, out, [*(kept.get("passed") or ()), *(() if failed else (LEAN_STEP,))])
+    return out

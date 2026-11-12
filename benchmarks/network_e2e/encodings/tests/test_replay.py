@@ -2,12 +2,16 @@
 
 The fixtures are step traces of vLLM d9105ea80's `Scheduler` and `AsyncScheduler` on a fake executor (`vllm_trace.py
 tests/fixtures --requests 14 --seed 3`, the cases named by the file): preemption under KV pressure in both engine loops,
-prefix caching, and a light load whose requests join part-full batches and an idle engine."""
+prefix caching, and a light load whose requests join part-full batches and an idle engine. Those of `tests/fixtures_draft`
+are the same scheduler's with a draft of 1, 3 and 5 tokens (`vllm_trace.sh --draft`: the cases with a draft, at their own
+size and seed 0)."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
+import math
 import os
 import random
 import sys
@@ -30,11 +34,13 @@ def _load(name: str):
 
 R = _load("replay")
 CASES = sorted(p.stem for p in FIXTURES.glob("*.jsonl"))
+DRAFT = Path(__file__).parent / "fixtures_draft"
+DRAFT_CASES = sorted(p.stem for p in DRAFT.glob("*.jsonl"))
 
 
-def trace(name: str):
-    tok = FIXTURES / f"{name}.tokens.json"
-    return R.read_step_trace(FIXTURES / f"{name}.jsonl", tokens=json.loads(tok.read_text()) if tok.exists() else None)
+def trace(name: str, d: Path = FIXTURES):
+    tok = d / f"{name}.tokens.json"
+    return R.read_step_trace(d / f"{name}.jsonl", tokens=json.loads(tok.read_text()) if tok.exists() else None)
 
 
 def test_fixtures_cover_the_served_paths():
@@ -252,19 +258,44 @@ def test_arrivals_into_a_quiet_engine_cost_nothing():
 
 
 def test_admission_steps_round_trip_through_decide():
-    rng = random.Random(7)
-    for asy in (False, True):
-        e = R.Engine(max_num_seqs=3, max_num_batched_tokens=48, max_model_len=256, num_gpu_blocks=12, async_scheduling=asy)
-        reqs = []
-        for _ in range(25):
-            out = rng.randint(1, 30)
-            reqs.append(R.RequestIO(prompt_len=rng.randint(4, 90), max_tokens=out + rng.randint(0, 2), output_len=out,
-                                    eos=rng.random() < 0.7))
-        reqs = [R.RequestIO(r.prompt_len, r.max_tokens, r.output_len if r.eos else r.max_tokens, r.eos) for r in reqs]
-        a = R.replay(e, reqs, decide=lambda i, k, _: rng.random() < 0.4)
-        b = R.replay(e, reqs, admit=a.admitted)
-        assert R.compare(a.steps, b.steps).ordered == len(a.steps)
-        assert any(s.preempted for s in a.steps)
+    """`replay(admit=r.admitted, passed=r.passed)` reproduces its decide run `r`, step for step, over 100 seeds of four
+    small engines (24 requests, 4-token blocks), sync and async, prefix caching off and on. Under async scheduling the
+    engine core can call `schedule` again, scheduling nothing, at the same step count while a step is in flight, and
+    `admitted` alone can't say whether a request arrived before that call or after it: some of these async runs
+    schedule differently without `passed`, which the test also requires."""
+    engines = [(False, 16, 32, 4), (True, 16, 32, 4), (False, 24, 48, 4), (False, 16, 32, 2)]
+    split = preempted = 0
+    for seed in range(100):
+        for asy in (False, True):
+            for caching, blocks, budget, seqs in engines:
+                rng = random.Random(seed)
+                e = R.Engine(max_num_seqs=seqs, max_num_batched_tokens=budget, max_model_len=64, num_gpu_blocks=blocks,
+                             block_size=4, enable_prefix_caching=caching, async_scheduling=asy)
+                reqs = []
+                for _ in range(24):
+                    p, out, eos = rng.randint(2, 20), rng.randint(1, 12), rng.random() < 0.7
+                    toks = tuple(rng.randint(0, 3) for _ in range(p + out)) if caching else None
+                    reqs.append(R.RequestIO(prompt_len=p, max_tokens=out + (rng.randint(0, 2) if eos else 0),
+                                            output_len=out, eos=eos, tokens=toks))
+                a = R.replay(e, reqs, decide=lambda i, k, _: rng.random() < 0.4)
+                b = R.replay(e, reqs, admit=a.admitted, passed=a.passed)
+                assert b.steps == a.steps, (seed, asy, caching, blocks, budget, seqs)
+                assert (b.admitted, b.passed, b.finish) == (a.admitted, a.passed, a.finish)
+                preempted += any(s.preempted for s in a.steps)
+                if asy and any(a.passed):
+                    split += R.replay(e, reqs, admit=a.admitted).steps != a.steps
+    assert split and preempted
+
+
+def test_passed_is_checked():
+    e = R.Engine(max_num_seqs=2, max_num_batched_tokens=32, max_model_len=64, num_gpu_blocks=16, block_size=4)
+    reqs = [R.RequestIO(prompt_len=8, max_tokens=2, output_len=2, eos=False) for _ in range(2)]
+    with pytest.raises(ValueError, match="only with admit"):
+        R.replay(e, reqs, decide=lambda i, k, _: True, passed=[0, 0])
+    with pytest.raises(ValueError, match="one int ≥ 0"):
+        R.replay(e, reqs, admit=[0, 0], passed=[0])
+    with pytest.raises(ValueError, match="nondecreasing"):
+        R.replay(e, reqs, admit=[0, 0], passed=[1, 0])
 
 
 def test_coder_round_trips_within_two_bits_of_ideal():
@@ -300,3 +331,203 @@ def test_refuses_what_it_does_not_model():
     recs.append({"kind": "finish", "request": arrive["request"], "reason": "abort", "outside": True})
     with pytest.raises(ValueError, match="abort"):
         R.load_step_trace(recs)
+
+
+# --- with a draft ------------------------------------------------------------------------------------------------------
+
+
+def test_draft_fixtures_cover_the_draft_paths():
+    """The draft fixtures are vLLM's scheduler under `mtp`'s settings, and at every K they hold the rows the draft rules
+    decide: every kept count, a row whose drafts the context limit cut and one whose drafts the budget cut, a new or
+    resumed request's padded row in both loops, preemption and a prefix hit in both loops; and among them requests
+    that arrived after an empty schedule."""
+    traces = {n: trace(n, DRAFT) for n in DRAFT_CASES}
+    got = {n: _load("vllm_trace").exercised(t) for n, t in traces.items()}
+
+    def some(what, **where):
+        return any(what(n) for n, t in traces.items() if all(getattr(t.engine, k) == v for k, v in where.items()))
+
+    for n, t in traces.items():
+        K, cfg = t.engine.num_speculative_tokens, t.header["config"]
+        assert type(t.engine) is R.DraftEngine and cfg["speculative"]["method"] == "mtp"
+        assert (cfg["num_lookahead_tokens"], cfg["num_prefill_lookahead"], cfg["use_eagle_block_drop"],
+                cfg["draft_slots"]) == (K, 1, True, 0)
+        assert all(got[n]["kept"].values()), n
+        assert not t.engine.enable_prefix_caching or any(s.cache_hit for s in t.steps), n
+    for K in (1, 3, 5):
+        assert some(lambda n: got[n]["cut_budget"], num_speculative_tokens=K)
+        for asy in (False, True):
+            at = dict(num_speculative_tokens=K, async_scheduling=asy)
+            assert some(lambda n: got[n]["padded"], **at), at
+            for cache in (False, True):
+                assert some(lambda n: got[n]["cut_context"], **at, enable_prefix_caching=cache), (at, cache)
+                assert some(lambda n: any(s.preempted for s in traces[n].steps), **at, enable_prefix_caching=cache), (at, cache)
+    assert some(lambda n: got[n]["after_empty"])
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+def test_replay_matches_vllm_with_a_draft_step_for_step(name):
+    """Every step's rows in the scheduler's order, the drafts each row carried, and what it preempted and hit, from the
+    engine, the requests with the drafts each emitting row kept, and when each request was added."""
+    t = trace(name, DRAFT)
+    rp = R.replay(t.engine, t.requests, admit=t.before_step, passed=t.passed)
+    assert len(rp.steps) == len(t.steps)
+    for k, (a, b) in enumerate(zip(rp.steps, t.steps)):
+        # the trace records a new request's hit; a resumed request's shows in its row's start
+        assert (a.rows, a.drafts, sorted(a.preempted), {i: h for i, h in a.cache_hit.items() if i in a.new}, sorted(a.new),
+                sorted(a.resumed)) == (b.rows, b.drafts, sorted(b.preempted), b.cache_hit, sorted(b.new), sorted(b.resumed)), k
+    assert rp.finish == ["stop" if r.eos else "length" for r in t.requests]
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+def test_kept_outputs_with_a_draft_are_the_traces_emissions(name):
+    t = trace(name, DRAFT)
+    assert [len(k) for k in t.kept_steps()] == [r.output_len for r in t.requests]
+    assert [len(r.kept) + sum(r.kept) for r in t.requests] == [r.output_len for r in t.requests]
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+@pytest.mark.parametrize("contexts", R.CONTEXTS)
+def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
+    """Where the arrivals are not certified, the residual advice is still each request's admission alone: with the
+    drafts each row kept beside the certified I/O, it decodes back to the trace's steps."""
+    t = trace(name, DRAFT)
+    code = R.encode(t, contexts=contexts)
+    back = R.decode(t.certified(code.bucket_s), code)
+    assert [(s.rows, s.drafts) for s in back.steps] == [(s.rows, s.drafts) for s in t.steps]
+    assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+def test_kept_count_is_charged_at_its_entropy_or_derived(name):
+    """The kept count's class, both ways: charged, each row that verified drafts and emitted sends its count at the
+    counts' measured entropy, which is at most log2(K + 1) a row; derived, nothing is sent."""
+    t = trace(name, DRAFT)
+    K = t.engine.num_speculative_tokens
+    # the trace's own record: a row's `drafts`, and `emitted` less the row's own token
+    kept = [em[i] - 1 for st, em in zip(t.steps, t.emitted) for i, d in st.drafts.items() if d and em.get(i)]
+    b = R.kept_bits(t)
+    assert (b["K"], b["rows"], b["counts"]) == (K, len(kept), [kept.count(k) for k in range(K + 1)])
+    assert b["derived"] == 0 and b["max"] == math.log2(K + 1)
+    assert b["entropy"] == pytest.approx(-sum(c / len(kept) * math.log2(c / len(kept)) for c in b["counts"] if c))
+    assert 0 < b["entropy"] <= b["max"] and b["charged"] == pytest.approx(b["rows"] * b["entropy"])
+    d = R.draft_table(t, contexts=R.CONTEXTS)
+    assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
+    assert d["arrivals"] == {c: sum(len(x) for x in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
+
+
+def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
+    t = trace(DRAFT_CASES[0], DRAFT)
+    with pytest.raises(ValueError, match="no draft"):
+        R.kept_bits(trace(CASES[0]))
+    with pytest.raises(ValueError, match="emitted"):
+        R.kept_bits(dataclasses.replace(t, emitted=None))
+    other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])
+    with pytest.raises(ValueError, match="the replay diverges from the trace at step 0"):
+        R.kept_bits(other)
+
+
+def _second_serve(recs: list[dict], after: int, empty: int) -> list[dict]:
+    """`recs`' serve once more by the same engine, from step `after` on and `empty` empty schedules after its last step:
+    its requests renamed, its steps and arrivals moved."""
+    f = "{}-again".format
+    out = []
+    for r in recs[1:]:
+        if r["kind"] == "arrive":
+            out.append(r | {"request": f(r["request"]), "before_step": r["before_step"] + after,
+                            "after_empty": (r.get("after_empty") or 0) + (0 if r["before_step"] else empty)})
+        else:
+            assert r["kind"] == "step"
+            out.append(r | {"step": r["step"] + after, "rows": [[f(i), a, n] for i, a, n in r["rows"]]}
+                       | {k: [f(i) for i in r[k]] for k in ("new", "resumed", "preempted")}
+                       | {k: {f(i): v for i, v in r[k].items()} for k in ("cache_hit", "emitted", "drafts", "finished")})
+    return out
+
+
+@pytest.mark.parametrize("name", ["async-draft3-prefix-cache", "sync-draft5", "async-draft1-light"])
+def test_a_span_of_a_longer_serve_is_a_trace_of_its_own(name):
+    """One load of a serve that ran others before it, begun with the engine drained and its prefix cache reset: its
+    records alone, from step 0, load as the serve of those requests and the replay reproduces them. The empty schedules
+    the engine made at the end of the load before are not the span's."""
+    recs = R.records(DRAFT / f"{name}.jsonl")
+    tok = DRAFT / f"{name}.tokens.json"
+    toks = {f"{i}-again": v for i, v in json.loads(tok.read_text()).items()} if tok.exists() else None
+    both = recs + _second_serve(recs, sum(r["kind"] == "step" for r in recs), 2)
+    whole, t = trace(name, DRAFT), R.load_step_trace(R.span(both, lambda i: i.endswith("-again")), tokens=toks)
+    assert t.ids == [f"{i}-again" for i in whole.ids]
+    assert (t.requests, t.before_step, t.passed, t.emitted) == (whole.requests, whole.before_step, whole.passed, whole.emitted)
+    assert [(s.rows, s.drafts, s.cache_hit) for s in t.steps] == [(s.rows, s.drafts, s.cache_hit) for s in whole.steps]
+    assert R.kept_bits(t) == R.kept_bits(whole)
+    first = R.load_step_trace(R.span(both, lambda i: not i.endswith("-again")))
+    assert (first.ids, first.passed, [s.rows for s in first.steps]) == (whole.ids, whole.passed, [s.rows for s in whole.steps])
+
+
+def test_a_span_that_is_not_a_serve_of_its_own_is_refused():
+    recs = R.records(DRAFT / "sync-draft5.jsonl")
+    ids = [r["request"] for r in recs if r["kind"] == "arrive"]
+    with pytest.raises(ValueError, match="none of the trace's arrivals"):
+        R.span(recs, lambda i: False)
+    with pytest.raises(ValueError, match="holds requests outside the span"):
+        R.span(recs, lambda i: i in ids[:20])
+    with pytest.raises(ValueError, match="steps are not"):
+        R.span([r for r in recs if (r["kind"], r.get("step")) != ("step", 3)], lambda i: True)
+
+
+def test_a_draft_needs_what_each_row_kept():
+    """The kept counts are an input the replay checks: without them, with a count over K, with counts that are not the
+    request's outputs, and with a count over the drafts the row it schedules there carries, it refuses by name."""
+    t = trace(DRAFT_CASES[0], DRAFT)
+    K = t.engine.num_speculative_tokens
+    how = dict(admit=t.before_step, passed=t.passed)
+    first = t.first_scheduled()
+    # a request with more than one emitting row whose first row carries no draft, so kept none
+    i = next(i for i, r in enumerate(t.requests) if len(r.kept) > 1 and i not in t.steps[first[i]].drafts
+             and t.emitted[first[i]].get(i))
+    io = t.requests[i]
+    assert io.kept[0] == 0
+
+    def with_kept(kept):
+        return [*t.requests[:i], R.RequestIO(io.prompt_len, io.max_tokens, io.output_len, io.eos, io.tokens, kept),
+                *t.requests[i + 1:]]
+
+    for bad in (None, (K + 1, *io.kept[1:]), io.kept[:-1], (*io.kept, 0)):
+        with pytest.raises(ValueError, match=f"request {i}: the engine drafts {K} tokens a row"):
+            R.replay(t.engine, with_kept(bad), **how)
+    moved = (1, *io.kept[1:-1], *((io.kept[-1] - 1,) if io.kept[-1] else ()))     # one output from its last row to its first
+    with pytest.raises(ValueError, match=f"request {i}: emitting row 0 kept 1 drafts, but the row the replay schedules"):
+        R.replay(t.engine, with_kept(moved), **how)
+
+
+def test_refuses_the_drafts_it_does_not_model():
+    cfg = dict(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=64)
+    mtp = {"method": "mtp", "num_speculative_tokens": 3}
+    own = {"num_lookahead_tokens": 3, "num_prefill_lookahead": 1, "use_eagle_block_drop": True, "draft_slots": 0}
+    for config in (cfg | {"speculative": mtp}, cfg | {"speculative": mtp | {"disable_eagle_block_drop": False}} | own):
+        e = R.Engine.from_header(config)
+        assert (type(e), e.num_speculative_tokens) == (R.DraftEngine, 3)
+    plain = R.Engine.from_header(cfg)
+    assert (type(plain), plain.num_speculative_tokens) == (R.Engine, 0)
+    for spec, name in ((mtp | {"method": "ngram"}, "ngram"), (mtp | {"method": "draft_model"}, "draft_model"),
+                       (mtp | {"parallel_drafting": True}, "parallel_drafting"),
+                       (mtp | {"num_speculative_tokens_per_batch_size": [[1, 3]]}, "num_speculative_tokens_per_batch_size"),
+                       (mtp | {"disable_padded_drafter_batch": True}, "disable_padded_drafter_batch"),
+                       (mtp | {"disable_eagle_block_drop": True}, "disable_eagle_block_drop"),
+                       (mtp | {"num_speculative_tokens": 0}, "num_speculative_tokens")):
+        with pytest.raises(ValueError, match=name):
+            R.Engine.from_header(cfg | {"speculative": spec})
+    for name, value in (("num_lookahead_tokens", 0), ("num_prefill_lookahead", 2), ("use_eagle_block_drop", False),
+                        ("draft_slots", 2)):
+        with pytest.raises(ValueError, match=name):
+            R.Engine.from_header(cfg | {"speculative": mtp} | own | {name: value})
+    with pytest.raises(ValueError, match="long_prefill_token_threshold"):
+        R.DraftEngine(**cfg, num_speculative_tokens=3, long_prefill_token_threshold=3)
+
+
+def test_an_engine_without_a_draft_is_the_engine_class_it_was():
+    """The certifier's engine class is `Engine`'s fields: a draft's settings are `DraftEngine`'s, so they join none of
+    them."""
+    e = R.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=64)
+    assert sorted(dataclasses.asdict(e)) == sorted([
+        "async_scheduling", "block_size", "enable_chunked_prefill", "enable_prefix_caching", "long_prefill_token_threshold",
+        "max_model_len", "max_num_batched_tokens", "max_num_seqs", "num_gpu_blocks", "policy", "scheduler_reserve_full_isl",
+        "watermark"])

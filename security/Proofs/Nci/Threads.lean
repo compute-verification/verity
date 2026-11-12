@@ -14,7 +14,7 @@ thread gives at most `c · p` multiplications for the `p` weights used, and ther
 With `p b_w + A_L + A_H ≤ R` (incompressibility) and AM–GM, `p · A_H ≤ (R − A_L)² / (4 b_w)`, and the total is linear in
 `A_L`. The counting (`threaded_count_of`) takes any nonnegative count of each thread's values that meets the threading
 inequality and any `p` that caps each thread's multiplications at `c · p`, so it holds with `p` the parameter slots used
-(`card_threadMults_le_slots`, `threaded_reads_slots`) and with each thread counted by its work (`Proofs.Nci.Fmt`).
+(`card_threadMults_le_slots`, `threaded_reads_slots`).
 
 Theorem 2 follows Appendix B, through a partial containment (`ThreadedThrottledOnSlots`): pull a compliant division of
 the containing declaration back to the gates `S` of `c` it computes (`piece`); each piece is small, reads no more than its

@@ -2,7 +2,8 @@
 ``m0/compose.log`` (``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as
 `composite.py` reads it, or, when a blob has no file, only ``missing.json``, which `composite.py` leaves out. `case`
 runs on a small kept window, so it is held to a5's `case_v2` as that is: its public digest is the one the audit staged
-where the window keeps it, else the kept file's own, which it says."""
+where the window keeps it, else the kept file's own, which it says, with whether the audit staged the file before the
+sample. A kept public file the audit did not stage leaves only ``missing.json`` too."""
 
 from __future__ import annotations
 
@@ -42,7 +43,7 @@ def test_a_case_with_its_blobs_is_written_private(tmp_path):
     assert stat.S_IMODE(out.stat().st_mode) == 0o700
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in out.iterdir()} == dict.fromkeys(V.CASE_FILES[:4], 0o600)
     assert (out / "commitment.bin").read_bytes() == b"registration"
-    assert json.loads((out / "case.json").read_text())["blobs"] == [str(blob)]
+    assert json.loads((out / "case.json").read_text()) == {**_v2(tmp_path, [blob]), "files": "kept"}
 
 
 def test_a_blob_with_no_file_leaves_only_missing(tmp_path):
@@ -97,17 +98,49 @@ def test_a_window_keeping_no_staged_digest_gets_the_kept_public_files_own_which_
     assert V.case(w, tmp_path / "scratch") == (v2, how, n)
 
 
-def test_the_case_names_the_public_digest_the_audit_staged_and_refuses_a_kept_file_with_another(tmp_path, RP, capsys):
-    w, out = _window(tmp_path), tmp_path / "v2"
-    kept = w / "case-v2.json"
-    kept.write_text(json.dumps({"params": {"proofs": {"circuit": "cc" * 64, "public": PUBLIC, "registered": None}}}))
-    v2, how, _ = V.case(w, tmp_path / "scratch")
+STAGED = {"params": {"proofs": {"circuit": "cc" * 64, "public": PUBLIC, "registered": None}}}
+
+
+def test_the_case_names_the_public_digest_the_audit_staged_and_says_whether_before_the_sample(tmp_path, RP, capsys):
+    """The window's ``summary.json`` says whether the audit's caller handed it the sample (``handed``), which a5 stages
+    the public file after. A window keeping no summary cannot tell. The written ``case.json`` carries the label under
+    ``files``, beside the case and no part of it."""
+    w, out, scratch = _window(tmp_path), tmp_path / "v2", tmp_path / "scratch"
+    (w / "case-v2.json").write_text(json.dumps(STAGED))
+    label = "circuit file kept; public digest case-v2.json's, taken when the audit staged the file"
+    v2, how, _ = V.case(w, scratch)
     assert v2["params"]["proofs"]["public"] == PUBLIC
-    assert how == "circuit file kept; public digest case-v2.json's, taken when the audit staged the file, before the sample"
-    assert V.main(["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch")]) == 0
+    assert how == label + "; cannot tell whether before the sample: the window keeps no summary.json"
+    (w / "summary.json").write_text(json.dumps({"handed": {"sessions": ["s0"]}}))
+    assert V.case(w, scratch) == (v2, label + ", after the sample its caller handed it", 1)
+    (w / "summary.json").write_text(json.dumps({"audit": {"accepted": True}}))
+    how = label + ", before the sample"
+    assert V.case(w, scratch) == (v2, how, 1)
+    assert V.main(["--window", str(w), "--out", str(out), "--scratch", str(scratch)]) == 0
     assert json.loads((out / "params.json").read_text())["proofs"]["public"] == PUBLIC
     assert json.loads(capsys.readouterr().out.removeprefix("V2CASE "))["files"] == how
+    assert json.loads((out / "case.json").read_text()) == {**v2, "files": how}
+    (out / "answer.json").write_text(json.dumps({"protocol": V.ID, "verdict": "accept"}))
+    piece = C.piece(out)
+    assert "files" not in piece and (piece["params"], piece["blobs"]) == (v2["params"], v2["blobs"])
+
+
+def test_a_kept_public_file_the_audit_did_not_stage_is_refused_and_leaves_only_missing(tmp_path, RP, capsys):
+    """The refusal ends as the script's others do: a case already in ``--out`` is cleared, ``missing.json`` and the
+    ``V2CASE`` line carry the refusal, which names both files, and the exit is 2, so `composite.py` leaves the protocol
+    out."""
+    w, out = _window(tmp_path), tmp_path / "v2"
+    kept, argv = w / "case-v2.json", ["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch")]
+    kept.write_text(json.dumps(STAGED))
+    assert V.main(argv) == 0 and (out / "case.json").is_file()
+    capsys.readouterr()
     (w / "m0" / "pub-4.bin").write_bytes(b"public, changed since the audit staged it")
-    with pytest.raises(ValueError, match="not the public file the audit staged before the sample") as x:
+    with pytest.raises(V.Refused, match="not the public file the audit staged") as x:
         V.case(w, tmp_path / "scratch")
-    assert str(w / "m0" / "pub-4.bin") in str(x.value) and str(kept) in str(x.value) and PUBLIC[:16] in str(x.value)
+    why = str(x.value)
+    assert str(w / "m0" / "pub-4.bin") in why and str(kept) in why and PUBLIC[:16] in why
+    assert V.main(argv) == 2
+    assert json.loads(capsys.readouterr().out.removeprefix("V2CASE ")) == {"refused": why}
+    assert [f.name for f in out.iterdir()] == ["missing.json"]
+    assert json.loads((out / "missing.json").read_text()) == {"protocol": V.ID, "why": why}
+    assert C.case_dirs([out]) == []

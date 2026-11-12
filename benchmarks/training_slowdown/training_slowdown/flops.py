@@ -10,7 +10,8 @@ optimizer alike. It counts, in multiply-accumulates (MACs):
   (`cdist`, `pdist`) at one MAC per coordinate pair, and `embedding_bag` at one per index and column;
 - a fused attention kernel as the ops the math kernel computes attention by, which are the ones a step's trace holds
   (`Counter._attention`): the forward's two scalings and two products, and in the backward the products and scalings
-  of the gradients the step asks for. A job's record is the same under either kernel;
+  of the gradients the step asks for. A job's record is the same under either kernel, but for the dtype its rows
+  name for those ops: the fused kernel's operands', where the math kernel casts half-width operands to float32;
 - elementwise multiplications (`mul`, `div`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and
   `_foreach_` forms), one MAC per output element, so a matmul written as a broadcast product or quotient is counted
   too, and a fused optimizer step at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`);
@@ -42,6 +43,12 @@ per tensor through every op within a step:
   dtypes, and is then checked as a registered one; any other is a weight θ doesn't hold, so it differs. A tensor made
   inside the step by a factory op (`randn`, `zeros`, ...) is a fast value with no roots. The counter holds every tensor
   it has named a θ weight, so no other tensor takes its memory.
+- a *constant*: a buffer of the registered model that θ doesn't hold (a position table, in the state dict or not),
+  which `register` holds under its own name at the value it has then. It is checked and counted as a θ weight is: a
+  product with it is θ's while it has that value, a buffer a step writes is a weight with roots from that write on
+  (an updated weight, by its name), and a write the dispatcher doesn't see is caught like one into a weight
+  (`unseen_writes`). It is not θ: no unseen tensor is taken for one, since a buffer's value (zeros) is not one only
+  the model's buffer has.
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
 (the weight, or an initial accumulator) has roots: the counter's updated multiplications, which were U before training_slowdown
@@ -435,6 +442,11 @@ def guard_exits() -> None:
         setattr(torch.Tensor, name, exit_)
 
 
+def structure_id(struct: dict) -> str:
+    """The name a record's `structures` holds a step's structure (its updated nodes and its log) under."""
+    return hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def leaked(step: dict) -> bool:
     """Whether a step's record shows token data read out of torch at one value or more per token."""
     return step.get("exited", 0) >= max(step["tokens"], 2)
@@ -442,14 +454,17 @@ def leaked(step: dict) -> bool:
 
 class Counter(TorchDispatchMode):
     """See the module docstring. `register(model)` names θ's weights; `begin_step`/`end_step` bound a step; work outside
-    any step is counted in step -1 (setup)."""
+    any step is counted in step -1 (setup). A counter that continues a job counts its own steps from `first` on, and
+    digests under the job's `key`."""
 
     def __init__(self, theta: dict[str, torch.Tensor] | None = None, *, digests: bool = True,
-                 clock=time.perf_counter, cpu_clock=time.process_time):
+                 clock=time.perf_counter, cpu_clock=time.process_time, first: int = 0, key: bytes | None = None):
         super().__init__()
         self.theta_cpu = theta or {}
+        self.constants: set[str] = set()
         self.digests = digests
-        self.wdigest = KeyedDigest(os.urandom(16)) if digests else None
+        self.wdigest = KeyedDigest(key or os.urandom(16)) if digests else None
+        self.first = first
         self.clock, self.cpu_clock = clock, cpu_clock
         self.theta_ptr: dict[int, str] = {}
         self.held: dict[int, torch.Tensor] = {}
@@ -476,9 +491,17 @@ class Counter(TorchDispatchMode):
 
     # -- registration and steps
 
-    def register(self, named: dict[str, torch.Tensor]) -> None:
+    @property
+    def done(self) -> int:
+        """The index of the next step to end: the steps a job ran before this counter began (`first`, a job that
+        continues from a kept state) and this counter's own."""
+        return self.first + len(self.steps)
+
+    def register(self, named: dict[str, torch.Tensor], buffers: dict[str, torch.Tensor] | None = None) -> None:
         """Name θ's weights by the live tensors that hold them (a model's `state_dict(keep_vars=True)`), each of which must
-        equal θ's value (cast to its dtype) bit for bit."""
+        equal θ's value (cast to its dtype) bit for bit. `buffers` are the model's (`named_buffers()`): each that θ
+        doesn't hold is a constant from here on (the module docstring), held under its name at the value it has
+        now."""
         with torch.utils._python_dispatch._disable_current_modes():
             for name, t in named.items():
                 if name not in self.theta_cpu:
@@ -487,8 +510,16 @@ class Counter(TorchDispatchMode):
                     raise ValueError(f"registered weight {name!r} is not θ's value")
                 self._hold(t, name)
             missing = sorted(set(self.theta_cpu) - set(self.weights))
-        if missing:
-            raise ValueError(f"θ weights not registered: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+            if missing:
+                raise ValueError(f"θ weights not registered: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+            for name, t in (buffers or {}).items():
+                # a buffer in memory the counter already holds is checked as what holds it
+                if name in self.theta_cpu or not t.numel() or _ptr(t) in self.theta_ptr:
+                    continue
+                # a new dict: the one the counter was given is the harness's θ
+                self.theta_cpu = self.theta_cpu | {name: t.detach().cpu().clone()}
+                self.constants.add(name)
+                self._hold(t, name)
 
     def _hold(self, t: torch.Tensor, name: str) -> None:
         ptr = _ptr(t)
@@ -512,12 +543,13 @@ class Counter(TorchDispatchMode):
         return t.dtype == th.dtype or torch.equal(t.to(th.dtype), self._ref(name, th.dtype, t.device))
 
     def _adopt(self, t: torch.Tensor, ptr: int) -> str | None:
-        """θ's weight an unseen persistent tensor holds, if any (the module docstring)."""
+        """θ's weight an unseen persistent tensor holds, if any (the module docstring). Never a constant: a tensor
+        that equals a buffer of the model (an optimizer's zero state, an average's first value) is not that buffer."""
         n = t.numel()
         if (not self.theta_cpu or not t.is_contiguous() or t.storage_offset()
                 or t.untyped_storage().nbytes() != n * t.element_size()):
             return None
-        names = [k for k, v in self.theta_cpu.items() if tuple(v.shape) == tuple(t.shape)]
+        names = [k for k, v in self.theta_cpu.items() if k not in self.constants and tuple(v.shape) == tuple(t.shape)]
         if not names:
             return None
         at = sorted({0, n // 3, 2 * n // 3, n - 1})
@@ -544,7 +576,7 @@ class Counter(TorchDispatchMode):
         """Start the next step; work since the last step ended is the new step's."""
         self._close(self.cur)
         if self.cur is self.setup:
-            self.cur = Step(len(self.steps))
+            self.cur = Step(self.done)
         self._reset_tags()
         self._open(self.cur)
 
@@ -560,7 +592,7 @@ class Counter(TorchDispatchMode):
                         self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
         self._resolve(self.cur)
         self.steps.append(self.cur)
-        self.cur = Step(len(self.steps))
+        self.cur = Step(self.done)
         self._reset_tags()
         self._open(self.cur)
 
@@ -826,8 +858,10 @@ class Counter(TorchDispatchMode):
     def _attention(self, func, args, kwargs, tags: dict[int, Tag], bwd: bool) -> Tag:
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'
         provenance: they are the ops a step's trace holds (`capture` traces under the math kernel), so a job's record
-        is one record under either kernel. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the product of q's
-        batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
+        is one record under either kernel in its ops, their shapes and their MACs. Each row names the dtype of the
+        kernel's operands, the one a fused kernel computes in; the math kernel casts half-width operands to float32
+        first, and its rows, and a trace's nodes, name that. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the
+        product of q's batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
 
         - forward: the scalings of q and of kᵀ (`mul`, each by the root of the scale); the scores (`bmm`, [n, L, E] by
           [n, E, S]); a mask added to them, where that combines token data with an updated weight (`add`, as any
@@ -954,12 +988,12 @@ class Counter(TorchDispatchMode):
         op by its operands' shapes and the dtype it computed in, its result's (`dtype_of`), which its gates are priced
         in (`gates.of_log`)."""
         structures, steps = {}, []
-        tail = self.cur if self.cur is not self.setup else Step(len(self.steps))
+        tail = self.cur if self.cur is not self.setup else Step(self.done)
         for s in [self.setup, *self.steps, tail]:
             self._resolve(s)
             struct = {"updated": sorted(s.updated, key=lambda u: (u[1], u[0])),
                       "log": sorted([*k[:4], *v, k[4]] for k, v in s.log.items())}
-            sid = hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
+            sid = structure_id(struct)
             structures[sid] = struct
             steps.append({"step": s.index, "tokens": s.tokens, "macs": s.macs, "matmul_macs": s.matmul_macs,
                           "elementwise_macs": s.elementwise_macs, "approx_macs": s.approx_macs, "by": s.by,
@@ -1017,13 +1051,13 @@ def flags(totals: dict, peak_macs_per_s: float = 0.0) -> list[str]:
 
 def forward_macs_per_token(model: torch.nn.Module, ctx: int, vocab: int, device=None) -> float:
     """The model's MACs per token for one forward pass over a `ctx`-token sequence, counted by `Counter` with its weights
-    as θ (so a lookup of its own table computes nothing): the start model's figure, from which the inference block's c is
-    set."""
+    as θ (so a lookup of its own table computes nothing) and its other buffers as constants, as a job counts them: the
+    start model's figure, from which the inference block's c is set."""
     device = device or next(model.parameters()).device
     idx = torch.zeros(1, ctx, dtype=torch.long, device=device) % max(vocab, 1)
     state = model.state_dict(keep_vars=True)
     c = Counter({k: v.detach().cpu() for k, v in state.items()}, digests=False)
-    c.register(state)
+    c.register(state, dict(model.named_buffers()))
     with torch.no_grad(), c:
         model(idx)
     return c.setup.macs / ctx

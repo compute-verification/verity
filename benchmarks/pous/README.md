@@ -10,13 +10,12 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, the explorer's data, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
+| `uv run tools/verity/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
 | `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
 | `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
 | `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's host. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
-| `bash benchmarks/pous/served_case.sh PIECES` | PoUS's and the wipe's cases for the composite, built after a served run from what it kept (`served_case.py`). `PIECES` is the run's public pieces directory, and each piece's `case.json` and `answer.json` go to its private directory. |
-| `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` runs `served_case.sh` and writes each case's protocol and verdict to the run's `verdicts.txt`. |
+| `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
 Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
 `p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
@@ -181,13 +180,17 @@ decided and the host it ran on under `decided_by`. `tests/test_pous_served_piece
 served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
 beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
-run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and
-each kept output is held to the others before anything is written. `served_case.sh PIECES` runs it on a served run's
-pieces, PoUS's under a lease of a card. `tests/test_pous_served_case.py` runs both on a CPU.
+run, and the composite takes each as written: `onsite_pieces.sh`'s `onsite_cases` names the two cases, each beside its
+Lean's answer, takes no card and makes neither, says `NOT_WRITTEN` for a piece that left no case or no such answer, and
+has the composite leave out (`LEFT_OUT`, its `ONSITE_SKIP`) any other case of the two protocols under the serve dir's
+private directory, such as one whose piece was killed before it published its summary
+(`tests/test_pous_onsite_cases.py`). Run by hand after a run, from the kept outputs alone, it encodes PoUS's `C*` again
+from the served snapshot at the kept salt and holds each kept output to the others before anything is written.
+`tests/test_pous_served_case.py` runs both on a CPU.
 
 `big_case.py SIZE OUT` writes a synthetic run case of about SIZE bytes, streamed: an honest period at width 64 under a
 test signer, so `pous-run-protocol --test serve` answers it. It times the Lean at a served case's size: a 5.0 GiB case is
-accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_case.sh`'s `MEM_GB` default
+accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_piece.sh`'s `MEM_GB` default
 allows for.
 
 `wipe_resume/` runs the red team's resume attack on both wipes, on CPU. `pi2_state_attack.py` rebuilds

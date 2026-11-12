@@ -22,8 +22,9 @@ Every path git sees changed must be one of:
   `"from a import m\n"` whose quotes the move keeps); in a `*.py` file, also the module of an `import M` /
   `from M import` line (a relative one, `.m`, read from the file's own place), or a `Path(__file__).parents[N]` anchor
   (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
-  moved; in a shell script, likewise a path from its own directory (`$(dirname "$0")/../..`, or after
-  `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`);
+  moved (one with no path, in a file that left the directory it names, joins its way back in parentheses:
+  `(Path(__file__).parents[2] / "old/dir")`); in a shell script, likewise a path from its own directory
+  (`$(dirname "$0")/../..`, or after `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`);
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
@@ -551,11 +552,31 @@ def module_file(tree: Tree, text: str, alias: str) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def anchors_out(text: str, anchors: list[re.Match], joined: list[bool]) -> str:
+    """`text` with each anchor a NUL, and with it the parentheses around one that `joined` marks."""
+    out, at = [], 0
+    for m, j in zip(anchors, joined):
+        s, e = m.span()
+        if j and text[s - 1:s] == "(" and text[e:e + 1] == ")":
+            s, e = s - 1, e + 1
+        out += [text[at:s], "\0"]
+        at = e
+    return "".join(out) + text[at:]
+
+
 def anchor_rewrite(old: str, new: str, at_old, at_new, pmap: dict[str, str]) -> bool:
     """Whether `new` is `old` with each anchor recounted so that, from where it now is (`at_new(module alias or None)`),
-    it names the path the old one named, moved by `pmap`."""
+    it names the path the old one named, moved by `pmap`. An anchor with no path that gains one may gain parentheses
+    with it, as `tools/move/layout.py` writes the anchor of a file that left the directory it names
+    (`Path(__file__).resolve().parent` to `(Path(__file__).resolve().parents[2] / "old/dir")`); the parentheses the
+    line already had around it, as a call's own (`str(Path(__file__).resolve().parents[2] / "old/dir")`), are not ones
+    it gained."""
     a, b = list(ANCHOR.finditer(old)), list(ANCHOR.finditer(new))
-    if not a or len(a) != len(b) or ANCHOR.sub("\0", old) != ANCHOR.sub("\0", new):
+    if not a or len(a) != len(b):
+        return False
+    joined = [x.group("rest") is None and y.group("rest") is not None for x, y in zip(a, b)]
+    plain = ANCHOR.sub("\0", old)
+    if plain not in (ANCHOR.sub("\0", new), anchors_out(new, b, joined)):
         return False
     for x, y in zip(a, b):
         dx, dy = anchored(x, at_old(x.group("mod"))), anchored(y, at_new(y.group("mod")))

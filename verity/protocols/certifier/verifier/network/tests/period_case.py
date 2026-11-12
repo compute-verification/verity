@@ -12,7 +12,8 @@ the schedule (`warden.WardenParams`) and the verifier's read of each row registr
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
-and `eps`, the union of those deltas as an exact ratio string.
+and `eps`, the union of those deltas as an exact ratio string, and in the rows form the schedule's response cap
+(`max_tokens_cap`) when it has one.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). In the clock form: the link-windows of one link from the session's window
@@ -20,25 +21,26 @@ parameters, commitments, evidence and cases). In the clock form: the link-window
 sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small sampled schedule
-(`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
-none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
-that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
-pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
-state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
-stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
-at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
-the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
-what `NetTiming.Layout.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the compute
-audits (in the rows form at least one, whose registrations' `roots` hold the
-scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
-8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
-sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
+(`warden_rows.Cells.commit` and `registration`, signed by the same key; `capped`: a schedule with a response cap, and
+`cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
+(`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
+connection), and the scan's registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and
+domain of the entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
+smallest circuit-check row, a pinned Definition, with one member a slot) in its own audit's registration and Program
+(`_prog_tied`, `_wired`), and its state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`),
+answered by one-stage with a stratified or subset sample at the period's δ; the scan's Program is its generator form,
+stand-ins of its three templates at small widths in the Boolean profile's types, as the scan's Definitions have them
+(`scan_descriptor`), and a Program in the checker form is a bad scan (`bad_scans`), as is each negative of a check of
+the rows the scan's ties equate, of what `NetTiming.Layout.Fits` asks or of the input nodes its arguments read
+(`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold
+the scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit
+from 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or
+stratified sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a
+scan's `prog` is tied to (`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's
+state is not its wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the
+scan's transitions, at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the
+form aimed at a verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)`
+one of each with its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -60,6 +62,7 @@ from verity_difftest import protocol as P
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
+from verity.protocols.certifier.verifier.active import HEADER, ID_DIGITS, MAX_TOKENS_AT
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
 from verity.protocols.pouw.verifier import core_check as CC
@@ -88,6 +91,7 @@ PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "prog
 ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
                     "session", "windows"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
+CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
@@ -225,9 +229,10 @@ def _sync_set(j) -> SyncSet:
 
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
-    u32s, in the id egress form."""
-    _exactly(j, SCHEDULE_KEYS, "schedule")
-    values = {k: _nat(j[k], "schedule") for k in SCHEDULE_KEYS}
+    u32s, in the id egress form, and its response cap when it has one (`WardenParams.max_tokens_cap`)."""
+    keys = CAPPED_SCHEDULE_KEYS if isinstance(j, dict) and sorted(j) == CAPPED_SCHEDULE_KEYS else SCHEDULE_KEYS
+    _exactly(j, keys, "schedule")
+    values = {k: _nat(j[k], "schedule") for k in keys}
     try:
         s = WardenParams(**values)
     except ValueError as e:
@@ -459,8 +464,9 @@ def _topological(j: dict) -> bool:
 
 
 def slot_entry_digest(j: dict, key: str) -> str:
-    """`slotEntryDigest`: the SHA-512, in hex, of the canonical JSON object that maps each Definition `key` reaches
-    (itself, its nodes' callees, theirs, …) to its `codec.definition_digest`: the template's whole body."""
+    """`NciCheck.DefinitionDigest.closureDigest`: the SHA-512, in hex, of the canonical JSON object that maps each
+    Definition `key` reaches (itself, its nodes' callees, theirs, …) to its `codec.definition_digest`: the template's
+    whole body."""
     defs, callees, seen, todo = j["definitions"], j["callees"], {}, [key]
     while todo:
         k = todo.pop()
@@ -991,6 +997,8 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int]] | None 
         units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter) for f, tied in scans]
         schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "scans": units}
+        if p.schedule.max_tokens_cap is not None:
+            out["max_tokens_cap"] = p.schedule.max_tokens_cap
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0))
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
@@ -1079,7 +1087,7 @@ EXPECT = {
     "rows-cert-key": REJECT, "rows-past-slots": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
-    "rows-schedule": REJECT,
+    "rows-schedule": REJECT, "rows-capped": ACCEPT, "rows-cap-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
@@ -1139,17 +1147,28 @@ SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
 def schedule_json(s: WardenParams) -> dict:
-    return {k: getattr(s, k) for k in SCHEDULE_KEYS}
+    cap = {} if s.max_tokens_cap is None else {"max_tokens_cap": s.max_tokens_cap}
+    return {k: getattr(s, k) for k in SCHEDULE_KEYS} | cap
 
 
-def _small_schedule(r: random.Random, small: bool) -> WardenParams:
+#: The least cell of a schedule with a response cap: its payload holds an id request's `max_tokens`.
+CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
+
+
+def _small_schedule(r: random.Random, small: bool, capped: bool = False) -> WardenParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
-    `small`), and a timestep `every` that divides T."""
+    `small`), and a timestep `every` that divides T; `capped`: with a response cap, B just past the least cell that
+    holds an id request's `max_tokens` (`CAPPED_CELL`)."""
     T = r.randint(1, 2 if small else 3)
-    return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
-                        delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
-                        ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
-                        every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
+    s = WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
+                     delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
+                     ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
+                     every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
+    if not capped:
+        return s
+    egress = r.randint(2, 16)
+    return dataclasses.replace(s, cell_bytes=r.choice([CAPPED_CELL, CAPPED_CELL + 1, CAPPED_CELL + 5]),
+                               egress_cells=egress, max_tokens_cap=r.randint(1, egress - 1))
 
 
 BIT, BYTE, U16 = Value(1), Value(8), Value(16)
@@ -1433,7 +1452,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
-        sched = bound = _small_schedule(r, small)
+        sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"))
         # an egress bucket's state is its ingress bucket's view read as u16 words, so the view is 16 bits a word
         widths = (r.randint(1, 3), r.randint(1, 4), OUT_BITS * (words := r.randint(1, 2)), words)
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes,
@@ -1494,6 +1513,15 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                               [x | {"domain": y["domain"]} for x, y in zip(regs, there)]])
         elif aimed and m == "schedule":
             other = dataclasses.replace(sched, **{f: getattr(sched, f) + 1 for f in [r.choice(SAME_SHAPE)]})
+            if r.random() < 0.5:
+                bound = other
+            else:
+                under = registrations(w, other)
+                regs = r.choice([under, [under[0], regs[1]], [regs[0], under[1]]])
+        elif aimed and m == "cap-schedule":
+            cap = sched.max_tokens_cap
+            other = dataclasses.replace(sched, max_tokens_cap=r.choice(
+                [None, *(c for c in (cap - 1, cap + 1) if 0 < c < sched.egress_cells)]))
             if r.random() < 0.5:
                 bound = other
             else:
@@ -1785,7 +1813,16 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
                   p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
                   p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
-                  *bad_scans(p)]
+                  *_bad_caps(s, p), *bad_scans(p)]
+
+
+def _bad_caps(s: dict, p: dict) -> list[dict]:
+    """Parameters whose response cap `scheduleOf` refuses, each one change to `p`'s schedule `s`: a cap that is no
+    positive u32 below `egress_cells`, and a cap on a cell that doesn't hold an id request's `max_tokens`."""
+    wide = s | {"cell_bytes": max(s["cell_bytes"], CAPPED_CELL), "egress_cells": max(s["egress_cells"], 2)}
+    return [p | {"schedule": wide | {"max_tokens_cap": cap}}
+            for cap in (0, -1, True, "1", wide["egress_cells"], wide["egress_cells"] + 1, U32)] + [
+        p | {"schedule": wide | {"cell_bytes": CAPPED_CELL - 1, "max_tokens_cap": 1}}]
 
 
 def bad_audits(p: dict) -> list[dict]:

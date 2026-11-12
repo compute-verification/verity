@@ -44,19 +44,7 @@ import time
 from typing import Any, Callable
 
 from verity_vllm.engine.engine_driver import external_id
-
-
-def scheduler_of(llm: Any) -> Any | None:
-    """The in-process vLLM V1 scheduler of an offline `LLM` (`llm_engine.engine_core[.engine_core].scheduler`) when it exposes a
-    `requests` dict, else None (multiprocess engine core, V0, a stub).  Pure attribute reads; nothing is patched."""
-    try:
-        eng = llm.llm_engine
-        core = getattr(eng, "engine_core", None)
-        inner = getattr(core, "engine_core", None) or core
-        sched = getattr(inner, "scheduler", None)
-        return sched if isinstance(getattr(sched, "requests", None), dict) else None
-    except AttributeError:
-        return None
+from verity_vllm.engine.handle import scheduler_or_none
 
 
 def structural_output_lag(eng: Any) -> int | None:
@@ -185,7 +173,7 @@ def run_requests_arrivals(llm: Any, requests: list[Any], params_for: Callable[[A
     where vLLM synchronizes inside the step, as it does to return sampled tokens.
     """
     eng = llm.llm_engine
-    sched = scheduler if scheduler is not None else scheduler_of(llm)
+    sched = scheduler if scheduler is not None else scheduler_or_none(llm)
     reqs = list(requests)
     pending = sorted(range(len(reqs)), key=lambda i: (int(getattr(reqs[i], "arrive_step", 0) or 0), i))
     t0 = clock()

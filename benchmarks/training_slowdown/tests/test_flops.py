@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from conftest import D, PER_TOKEN, VOCAB, loss_of
+from conftest import D, PER_TOKEN, VOCAB, Tiny, loss_of
 from training_slowdown import flops, gates, opnames
 from training_slowdown.annotate import annotate
 from training_slowdown.flops import (CAST_RESULTS, Counter, dtype_of, flags, forward_macs_per_token, gather_selects,
@@ -439,6 +439,99 @@ def test_writes_through_data_are_seen(tiny):
     assert rec["unseen_writes"] == []
 
 
+def tabled():
+    """`Tiny` with two buffers its θ doesn't hold: a table outside the state dict and a zero matrix in it."""
+    torch.manual_seed(0)
+    m = Tiny()
+    theta = {k: v.detach().clone() for k, v in m.state_dict().items()}
+    m.register_buffer("table", torch.linspace(0.5, 1.5, D), persistent=False)
+    m.register_buffer("mean", torch.zeros(D, D))
+    return m, theta
+
+
+def scaled(m, t=None):
+    """A forward whose embedded tokens are scaled by the table: D MACs a token, then the head's."""
+    return F.linear(F.embedding(IDX, m.emb) * m.table, m.emb)
+
+
+def counted(m, theta, body, n=2, buffers=True):
+    c = Counter(theta)
+    c.register(m.state_dict(keep_vars=True), dict(m.named_buffers()) if buffers else None)
+    with c:
+        for t in range(n):
+            c.begin_step()
+            body(m, t)
+            c.end_step()
+    c.finish()
+    return c, c.record()
+
+
+def test_a_models_buffers_that_theta_lacks_are_constants_and_a_product_with_one_is_thetas():
+    """The model's buffers θ doesn't hold, in the state dict or not, are held under their names beside θ, which stays
+    the caller's: a product of token data with a table is θ's, in every step, and the table is no weight the program
+    made. A counter given no buffers takes the table for one, and calls the same product updated from the first
+    step on; the step's MACs are the same either way."""
+    m, theta = tabled()
+    c, rec = counted(m, theta, scaled)
+    assert c.constants == {"table", "mean"} and set(c.theta_cpu) == set(theta) | c.constants
+    assert set(theta) == {"emb", "w1.weight", "w2.weight"} and c.weights["table"] is m.table
+    for s in rec["steps"]:
+        assert s["by"] == {"fwd/theta": (D + VOCAB * D) * TOKENS} and s["weights"] == {}
+    assert rec["new_weights"] == [] and rec["unseen_writes"] == []
+
+    m, theta = tabled()
+    c, without = counted(m, theta, scaled, buffers=False)
+    assert c.constants == set() and without["new_weights"] == ["new/0"]
+    for s in without["steps"]:
+        assert s["by"] == {"fwd/theta": VOCAB * D * TOKENS, "fwd/updated": D * TOKENS} and list(s["weights"]) == ["new/0"]
+    assert without["totals"]["macs"] == rec["totals"]["macs"]
+
+
+def test_a_buffer_a_step_writes_is_an_updated_weight_from_that_write_on():
+    """A constant is checked as a θ weight is: once a step writes the table through torch, a product with it is an
+    updated weight's, listed under the buffer's own name, in that step and after."""
+    def body(m, t):
+        if t == 1:
+            m.table.mul_(2.0)
+        scaled(m)
+
+    c, rec = counted(*tabled(), body, n=3)
+    first, *later = rec["steps"]
+    assert first["by"] == {"fwd/theta": (D + VOCAB * D) * TOKENS} and first["weights"] == {}
+    for s in later:
+        assert s["by"]["fwd/updated"] == D * TOKENS and s["by"]["fwd/theta"] == VOCAB * D * TOKENS
+        assert list(s["weights"]) == ["table"] and s["shapes"] == {"table": ["float32", [D]]}
+    assert rec["new_weights"] == [] and rec["unseen_writes"] == []
+
+
+def test_a_write_into_a_buffer_that_the_dispatcher_does_not_see_is_an_unseen_write():
+    """As for a weight of θ: a buffer the step read at its registered value and that has another at the step's end,
+    with no op having written it, was written where the counter can't see (here through numpy)."""
+    def body(m, t):
+        scaled(m)
+        if t == 1:
+            m.table.numpy()[0] += 1.0
+
+    _, rec = counted(*tabled(), body, n=2)
+    assert rec["unseen_writes"] == [(1, "table")]
+
+
+def test_no_tensor_the_counter_has_not_seen_is_taken_for_a_buffer():
+    """A tensor made before the step that equals a buffer of the model, an optimizer's zero state beside a zero
+    average, is not that buffer: it is a weight the program made, and the buffer's name stays the buffer's. A tensor
+    that holds a weight of θ is still that weight."""
+    m, theta = tabled()
+    zeros, twin = torch.zeros(D, D), theta["w1.weight"].clone()
+
+    def body(m, t):
+        x = F.embedding(IDX, m.emb).reshape(-1, D)
+        _ = x @ zeros, x @ twin
+
+    c, rec = counted(m, theta, body, n=1)
+    assert rec["new_weights"] == ["new/0"] and c.new_tensors["new/0"] is zeros and c.weights["mean"] is m.mean
+    assert rec["steps"][0]["by"] == {"fwd/updated": D * D * TOKENS, "fwd/theta": D * D * TOKENS}
+
+
 def test_paused_work_is_not_counted(tiny):
     m, theta = tiny
     c = Counter(theta)
@@ -458,7 +551,7 @@ HEADS, L, S, E = 2, 5, 6, 4
 ASKED = [(q, k, v) for q in (False, True) for k in (False, True) for v in (False, True)]
 
 
-def counted(body, math: bool, monkeypatch) -> tuple[dict, int]:
+def counted_attention(body, math: bool, monkeypatch) -> tuple[dict, int]:
     """One step's record of `body(c, w)`, with `w` an updated weight of θ, under the math attention kernel or the one
     torch picks, and how many fused kernels the counter saw."""
     seen = []
@@ -504,8 +597,8 @@ def test_a_fused_attention_is_counted_as_the_math_kernels_ops_for_the_gradients_
         if any(asked):
             out.sum().backward()
 
-    fused, kernels = counted(body, False, monkeypatch)
-    assert kernels == 1 + any(asked) and (fused, 0) == counted(body, True, monkeypatch)
+    fused, kernels = counted_attention(body, False, monkeypatch)
+    assert kernels == 1 + any(asked) and (fused, 0) == counted_attention(body, True, monkeypatch)
     gq, gk, gv = asked
     bwd = {tuple(row[2:4]): row[5] for row in fused["log"] if row[0] == "bwd"}
     scalings = {("mul", f"[[3, {HEADS}, {L}, {E}]]"): n * L * E, ("mul", f"[[3, {HEADS}, {E}, {S}]]"): n * E * S}
@@ -546,8 +639,8 @@ def test_a_fused_attentions_record_is_the_math_kernels_whatever_its_operands_are
     """The same record under either kernel where the operands' provenance differs (token data, an updated weight, both),
     with a mask, a scale, three dims and grouped queries: each op inside the kernel is classified by its own operands,
     as the math kernel's ops are."""
-    fused, kernels = counted(VARIANTS[variant], False, monkeypatch)
-    assert kernels == 1 and (fused, 0) == counted(VARIANTS[variant], True, monkeypatch)
+    fused, kernels = counted_attention(VARIANTS[variant], False, monkeypatch)
+    assert kernels == 1 and (fused, 0) == counted_attention(VARIANTS[variant], True, monkeypatch)
     kinds = {row[1] for row in fused["log"]}
     assert ("updated" in kinds) == (variant not in ("no token",)), kinds
     if variant == "an updated mask":

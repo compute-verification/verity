@@ -70,7 +70,7 @@ def job(losses: list, seed: int = 0, split: str = "final", **kw) -> dict:
 
 
 def trace(**over) -> dict:
-    """A job's trace of the 45M dense step (`run.trace_step`) by the stored records' capture, the keys the grade
+    """A job's trace of the 45M dense step (`traced.trace_step`) by the stored records' capture, the keys the grade
     reads and no other: the stated rows unpriced, each operand's dtype its passed width's (attention's float32, as
     that capture traced it), at each k of the dial; `over` its fields."""
     def raw(b: dict) -> dict:
@@ -422,6 +422,11 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
     del lacking["record"]["trace"]["at"], lacking["record"]["trace"]["carried_scalars"]
     assert why(lacking, **here) == (f"refused: the search record's trace has no at, carried_scalars, which ρ reads; "
                                     f"{again}")
+    # a trace that was not taken is no refusal: nothing was found against the step, and the reason is the job's
+    for failed in ("the route's process was ended by SIGSEGV after it wrote the job's record",
+                   "RuntimeError: no trace today"):
+        assert why(traced([OVER, UNDER]), trace={"failed": failed}, **here) == (
+            f"unmeasured: the search record's trace was not taken ({failed}), and ρ reads a traced step; {again}")
     for search in (job([OVER, UNDER], split="search"), traced([OVER, UNDER], capture="0.1"),
                    traced([OVER, UNDER]) | {"record": traced([OVER, UNDER])["record"] | {"trace": refused}}):
         assert why(search).endswith(f"; {orphan}") and "python" not in why(search)
@@ -645,12 +650,13 @@ def ran(tmp_path_factory):
 
 def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     """The record a job writes, with the trace its job took of its own step, grades as it is: its rows priced by the
-    capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds), of the
-    traced step's own shape. Its trace says more than the grade reads, and a refused one has no ρ."""
+    capture, over the steps after the run's first update (step 0 reads θ and the tables the model builds, which the
+    job holds as θ's, so it lists no weight), of the traced step's own shape. Its trace says more than the grade
+    reads, and a refused one has no ρ."""
     assert set(G.TRACE) < set(ran["trace"]) and ran["trace"]["capture"] == products.CAPTURE
     assert ran["tf32"] == {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"}
     assert gates.tf32_on(ran) is False
-    assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"]
+    assert [s["step"] for s in G.changed_steps(ran, None)] == [1, 2] and ran["steps"][0]["weights"] == {}
     f = G.traced(ran, G.rows_of(ran)[-1])["formalism"]
     assert f["trace"]["products"]["rows"] == [products.priced(r, products.CAPTURE) for r in ran["trace"]["rows"]]
     assert f["products"]["he"]["steps"] == 2 and "stand_in" not in f["products"] and f["trace"]["affected_share"] > 0

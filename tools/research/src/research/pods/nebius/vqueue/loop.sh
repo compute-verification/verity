@@ -65,9 +65,11 @@ mode() {
   esac
 }
 
+now() { date +%s; }
+
 # The App's token, written within the last 50 min.
 fresh() {
-  [ -s "$TOKEN" ] && [ $(( $(date +%s) - $(stat -c %Y "$TOKEN") )) -lt 3000 ]
+  [ -s "$TOKEN" ] && [ $(( $(now) - $(stat -c %Y "$TOKEN") )) -lt 3000 ]
 }
 
 # One tick in the mode's directory; FLAGs follow.
@@ -102,9 +104,21 @@ tick() {
   )
 }
 
-# What a launch leaves behind (train.sh's tree and log, check.py's Lean deps), 40 min after its last change.
+# What a launch leaves behind (train.sh's tree and its log, check.py's Lean deps), 40 min after its last change, and never
+# while a process works in it or under it (a log: in its tree). train.sh starts check.py in the tree, on the venv under it,
+# where it can stay for as long as its run, and the tree's own time stays at the launch. The processes seen are this user's,
+# which every launch of the loop's is.
 sweep() {
-  find "$TRAIN_TREES" "$TMPDIR" -maxdepth 1 \( -name 'train-*' -o -name 'check-lean-deps-*' \) -mmin +40 -exec rm -rf {} + 2>/dev/null
+  local before busy p changed at
+  before=$(( $(now) - 2400 ))
+  busy=$'\n'$(readlink /proc/[0-9]*/cwd 2>/dev/null)$'\n'
+  for p in "$TRAIN_TREES"/train-* "$TMPDIR"/train-* "$TMPDIR"/check-lean-deps-*; do
+    changed=$(stat -c %Y "$p") || continue
+    [ "$changed" -lt "$before" ] || continue
+    at=$(readlink -f "${p%.log}") || continue
+    case $busy in *$'\n'"$at"$'\n'*|*$'\n'"$at"/*) continue ;; esac
+    rm -rf "$p"
+  done 2>/dev/null
   git -C "$CLONE" worktree prune 2>/dev/null
 }
 

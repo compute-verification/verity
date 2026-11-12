@@ -54,6 +54,8 @@ public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
+public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused
@@ -69,6 +71,8 @@ public import Proofs.Flock.SpotFlock.FrameAt
 public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
+public import Proofs.Flock.SpotFlock.FirstHitClassCaps
+public import Proofs.Flock.SpotFlock.OffClassAt
 public import Proofs.Flock.SpotFlock.OpensClass
 public import Proofs.Flock.SpotFlock.OpensWhole
 public import Proofs.Flock.SpotFlock.RevealAt
@@ -87,6 +91,7 @@ public import Proofs.Flock.SpotFlock.ScopeDesc
 public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsOpen
+public import Proofs.Flock.SpotFlock.NoAlways
 public import Proofs.Flock.SpotFlock.Drawn
 public import Proofs.Flock.SpotFlock.Counts
 public import Proofs.Flock.SpotFlock.ClassCounts

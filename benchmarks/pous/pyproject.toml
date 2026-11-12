@@ -1,13 +1,14 @@
 # PoUS's benchmarks and their tests. Not a package: the drivers run on a GPU pod (torch/Triton), their CPU reference
 # invariants run here as a suite (`uv run tools/verity/check/suites.py benchmarks/pous`), so `check` keeps them pinned.
 [tool.pytest.ini_options]
-testpaths = ["tests", "fast_decode/tests"]
+testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_pous_harness.py",
+    "tests/test_pous_onsite_cases.py",
     "tests/test_pous_p2_bandwidth.py",
     "tests/test_pous_p2v1.py",
     "tests/test_pous_served_case.py",
@@ -23,6 +24,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/pous/prover",
           "verity/hardware/record.py", "verity/protocols/reporting.py",
           "verity/protocols/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/lms", "verity/difftest", "verity/protocols/pous/device",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",

@@ -66,7 +66,7 @@ it fails at once, as the client's other problems do. Every other request's respo
 egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives
 holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTiming.Guarantees.ResponseCapped`). The
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
-neither and keeps its digest.
+neither and keeps its digest. The period check reads the cap with the schedule and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`WardenParams.lengths`, none by default; 1 is their form): a schedule may have its network
 certifier keep, of each request it releases, its place in the release order, its request's bytes, its response's
@@ -127,8 +127,9 @@ emptied, or is lost, its connection closing, failed or ended first; the line nam
 its way (its connection opening, its bytes buffered) holds its line and the later ones until it arrives or its
 connection ends. The run's end sends the lines still held, then the terminating chunk. The network certifier never
 reads that connection and no tick waits on it: the lines sent before it opens are kept for it, and once more than
-`WRITE_BACKLOG` of them are unwritten it is closed. Each line's t and n are functions of the ingress record, its lost
-releases the server connections' state, and no cell or record changes.
+`WRITE_BACKLOG` of them are unwritten it is closed. It is the one connection to the server the network certifier opens
+with no admission: every other is opened by `connect` when the client's connection is admitted. Each line's t and n
+are functions of the ingress record, its lost releases the server connections' state, and no cell or record changes.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
@@ -300,7 +301,8 @@ class WardenParams:
 #: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
 OPTIONAL_FIELDS = ("max_tokens_cap", "lengths")
 #: `WardenParams`' integer fields, every one but `egress` and the optional ones: the schedule the period check reads
-#: (`scheduleOf`), whose egress form is the id form and which has no response cap and no lengths rows
+#: (`scheduleOf`) beside its `max_tokens_cap` when it has one, whose egress form is the id form and which has no lengths
+#: rows
 INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
 
 

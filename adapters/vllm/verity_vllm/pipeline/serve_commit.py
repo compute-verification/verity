@@ -41,6 +41,8 @@ also commits the step rows the window ran
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width, with the statics and the slice) goes into the window's ``windows.jsonl`` line, beside
 its run root, written at the close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
+With ``no_slice`` (`NO_TICK_SLICE`, under ``--admit tick``) the record names no slice: its ``slice`` is null and its
+``no_slice`` says why. The rows are committed all the same, under the same statics.
 """
 from __future__ import annotations
 
@@ -67,8 +69,12 @@ from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, free
 
 #: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
-#: only the rows v1 and v4 share, ``srv`` (the served rows); the rest of v4's are the prover's.
+#: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
+#: Why a window the certified tick admitted (``--admit tick``) names no slice: its served rows record's ``no_slice``, and
+#: ``serve.json``'s ``served_rows_no_slice``.
+NO_TICK_SLICE = (f"no compile slice replays the certified tick's admission: {SERVED_SLICE} replays vLLM's own admission "
+                 "from the decisions the advice sends, and under the tick the advice sends none")
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
 
@@ -182,7 +188,7 @@ def ingress_of(brought: Mapping[str, Any], params: Any, rule: str) -> dict[str, 
 
 def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> dict[str, int]:
     """`SERVED_SLICE`'s statics for the served engine's scheduler configuration (`engine.step_trace.scheduler_config`) and
-    the slice's size class (every name of `SERVED_CLASS`): CompileSlice_v1's (`compile_slice.statics`), refused where v4
+    the slice's size class (every name of `SERVED_CLASS`): CompileSlice_v1's (`compile_slice.statics`), refused where v7
     refuses them (`charge_chain.check_length_slots`: an output length wider than a length slot), so a server refuses at
     start what its windows' proofs would."""
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
@@ -257,14 +263,15 @@ class CommitWindows:
     is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
     with ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live
     ``BlockPool``) and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`).
-    ``coins`` (`engine.served_seed.SeedCoins`, which the engine loop draws from as it admits) names the seed coin each
+    ``coins`` (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each
     window opens under in its line (``seed_coin``)."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
                  clock: Callable[[], float] = time.perf_counter, wall: Callable[[], float] = time.time,
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
-                 served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
+                 served: Mapping[str, int] | None = None, no_slice: str | None = None, sealer: Any = None,
+                 window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
                  request_cap: int = 0, arm: Any = None, release: Any = None, pool: Callable[[], Any] | None = None,
                  pool_block: int | None = None, coins: SeedCoins | None = None) -> None:
@@ -284,6 +291,7 @@ class CommitWindows:
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
         self.served = dict(served) if served is not None else None   # the compile slice's statics: commit every window's rows
+        self.no_slice = no_slice                         # why those rows' records name no slice; None: they name `SERVED_SLICE`
         self.arrivals: dict[str, int] = {}               # every admitted engine id -> its arrival id, in admission order
         self.sealer, self.window_bytes, self.disk, self.on_floor, self.mirror = sealer, window_bytes, disk, on_floor, mirror
         self.floor_hit: dict[str, Any] | None = None     # the first window the disk floor left unsealed
@@ -605,8 +613,8 @@ class CommitWindows:
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
-        statics it was packed under and the slice they are `SERVED_SLICE`'s; the rows and salts written to
-        ``served_rows/w<k>.json``. A failure is the window's."""
+        statics it was packed under and the slice they are `SERVED_SLICE`'s (or, with ``no_slice``, a null ``slice`` and
+        why in ``no_slice``); the rows and salts written to ``served_rows/w<k>.json``. A failure is the window's."""
         try:
             by_step = served_rows(com)
             ids = {rid: self.arrivals[e] for rows in by_step.values() for rid, *_ in rows
@@ -620,7 +628,8 @@ class CommitWindows:
             "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
             "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
             "salts": [s.hex() for s in served.registration.salts]}))
-        return {**served.record(), "statics": self.served, "slice": SERVED_SLICE}
+        named = {"slice": SERVED_SLICE} if self.no_slice is None else {"slice": None, "no_slice": self.no_slice}
+        return {**served.record(), "statics": self.served, **named}
 
     def _seal_job(self, rec: dict[str, Any], rc: Any, c: _Closed) -> Any:
         """What the window's seal reads that the next window changes (its requests, rows and tokens from the ledgers at its

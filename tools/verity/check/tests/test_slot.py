@@ -447,6 +447,32 @@ def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, m
     assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
+def test_a_slots_file_that_lists_none_is_not_started_naming_the_pools_beside_it(tmp_path, monkeypatch, capsys):
+    """A machine with pools and no check slots (its slots file is there and lists none) runs nothing and says so with
+    NOT_STARTED, which a caller reads as a check that never ran, not as one that failed; the message names the pools a run
+    may take there."""
+    (tmp_path / "slots").write_text("# this machine has pools and no check slots\n\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "execvp", lambda f, argv: pytest.fail(f"ran {argv}"))
+
+    def not_started() -> str:
+        assert SLOT.main(["--", "true"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED == 75
+        return capsys.readouterr().err
+
+    err = not_started()
+    assert f"{tmp_path / 'slots'} lists no check slots, so nothing ran" in err
+    assert err.rstrip().endswith(f"exit {SLOT.NOT_STARTED}") and "): none; " in err
+    for name, text in (("research", "r0 0-1\n"), ("proofs", "p0 2-3\n"), ("trains", "t 4 only=trains\n"),
+                       ("research.bak-old", "b 5\n")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "slots").write_text(text)
+    err = not_started()
+    assert "`research run --on MACHINE --pool NAME --as LANE`): proofs, research; " in err
+    assert "trains" not in err and ".bak-" not in err
+    assert "`research queue ready N --on auto` places a quick tier itself" in err
+    assert not list(tmp_path.glob("check-*"))   # no lock taken and no line joined
+
+
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
     """A check that waits in the line until its run's timeout is reported failed: --wait-max ends the
     wait first, with an exit that says nothing ran."""
@@ -629,7 +655,7 @@ def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, caps
     line = tmp_path / SLOT.LINE
     line.mkdir()
     waiter = line / f"{SLOT.PRIORITY}{int((NOW.timestamp() - 300) * 1e9):020d}-4242"
-    waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "by": "lander"}))
+    waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "by": "lander", "mem_gb": 64}))
     wfd = _hold(waiter)
     assert SLOT.main(["--status", "--json"], now=lambda: NOW) == 0
     doc = json.loads(capsys.readouterr().out)
@@ -640,7 +666,7 @@ def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, caps
     assert d["holder"] is None and d["blocked"].startswith("window 2026-10-01T09:20Z (30 min)") and d["lead"] == 30
     assert d["upcoming"] == [{"start": "2026-10-01T09:20Z", "minutes": 30, "starts_in_min": 20, "note": "Pearl-C4 row"}]
     assert doc["waiters"] == [{"since": "2026-10-01T08:55Z", "minutes": 5, "priority": True, "pid": 4242, "run": "r-waiting",
-                               "by": "lander"}]
+                               "by": "lander", "mem_gb": 64}], "its ask too: what it reserves when it starts, which a placement counts"
     os.close(held)
     os.close(wfd)
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "absent")
@@ -1185,6 +1211,36 @@ def test_a_run_that_asks_for_more_than_its_slots_mem_waits_for_and_reserves_that
     assert "holds a 451 GB research.mem reservation" in SLOT.reserve(raised, NOW)
 
 
+def test_a_budget_is_what_cmd_plans_on_and_the_slot_reserves_what_the_run_asks(tmp_path, monkeypatch):
+    """A run of many suites reserves less than the memory its test processes are counted on (research.suite_size). With
+    `--budget-gb` CMD reads the larger of the slot's mem= and the budget as SLOT_MEM_ENV, in GiB as mem= is, and the slot waits
+    for and reserves what the run asks, as it does without the option; without it CMD reads the slot's mem=."""
+    (tmp_path / "slots").write_text("a 0 mem=15\nb 1 mem=15\nc 2 mem=15\nd 3\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env.get(SLOT.SLOT_MEM_ENV))))
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "36")
+    for name, opts, plans in (("a", ["--budget-gb", "72"], "68"), ("b", [], "34"), ("c", ["--budget-gb", "8"], "34")):
+        with pytest.raises(Exec, match=f"^{plans}$"):
+            SLOT.main([*opts, "--", "suites.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail(f"slot {name} is free"))
+        assert json.loads((tmp_path / "ramlock" / f"check-{name}.json").read_text())["gb"] == 36.5, "the ask, whatever the budget"
+    assert SLOT.blocked(SLOT.asking(SLOT.parse("a 0 mem=15"))[0], NOW) is None
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 40)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda priority=False: 0)
+    assert SLOT.blocked(SLOT.asking(SLOT.parse("a 0 mem=15"))[0], NOW) is None, "a 68 GiB budget waits for the 34 GiB it reserves"
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    (tmp_path / "slots").write_text("d 3\n")
+    with pytest.raises(Exec, match="^68$"):
+        SLOT.main(["--budget-gb", "72", "--", "suites.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot d is free"))
+    assert not (tmp_path / "ramlock" / "check-d.json").exists(), "a slot without mem= and a run with no ask reserve nothing"
+    assert SLOT.options(["--by", "x", "--budget-gb", "128"])[6] == 120 and SLOT.options(["--by", "x"])[6] is None
+    for bad in ("0", "-4", "x", "nan", "inf"):
+        with pytest.raises(SystemExit, match="--budget-gb .* is not a number of GB more than 0"):
+            SLOT.options(["--budget-gb", bad])
+
+
 def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp_path, monkeypatch):
     """When a check ends, waiting pool shares and a train's twins race for the freed memory, and a twin admitted beside a
     lowering share would read far more free than there is unless that share's reservation is counted."""
@@ -1260,3 +1316,95 @@ def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_ch
     assert doc["priority"] is True and doc["gb"] == 322.1
     assert SLOT.reserve(SLOT.parse("a 0 mem=560")[0], NOW) and json.loads((SLOT.RAMLOCK / "check-a.json").read_text())["gb"] == 601.3
     assert "priority" not in json.loads((SLOT.RAMLOCK / "check-a.json").read_text())
+
+
+def test_a_slot_with_book_waits_for_and_reserves_that_and_stays_its_mem_for_everything_else(tmp_path, monkeypatch, capsys):
+    """A train check plans on its slot's 300 GB and holds a fraction of it for most of its run, while the ledger held all 300
+    against the machine and a second train, or a lane's run, waited behind memory nobody used. With `mem=300 book=150` the
+    slot waits for and reserves 150: a check that needs a 300 GB slot (MIN_MEM_ENV) still takes it and still gets 300 as
+    SLOT_MEM_ENV, another train's gate counts this one at what it reserved, a run that asks more than book reserves its ask,
+    and `--status` shows both figures. A line without book= is as it was."""
+    (tmp_path / "slots").write_text("c 0 only=trains mem=300 book=150\nt 1 only=trains mem=300 book=150\nx 2 only=trains mem=300\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    c, t, x = SLOT.parse((tmp_path / "slots").read_text())
+    assert (c["mem"], c["book"], SLOT.booked(c)) == (300, 150, 150) and "book" not in x and SLOT.booked(x) == 300
+    proc = tmp_path / "proc"                                    # the first train, once it runs: this process, holding 20 GiB
+    (proc / str(os.getpid())).mkdir(parents=True)
+    (proc / str(os.getpid()) / "stat").write_text(f"{os.getpid()} (python) S 1 0 0\n")
+    (proc / str(os.getpid()) / "status").write_text(f"Name:\tpython\nVmRSS:\t{20 << 20} kB\n")
+    real = SLOT.reserved_gb
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda priority=False: real(proc, priority))
+    free = [400]
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: free[0])
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"], mem=env[SLOT.SLOT_MEM_ENV])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, "300")
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+    assert ran == {"slot": "c", "mem": "300"}, "a 300 GB minimum takes the slot, and CMD plans on its mem="
+    doc = json.loads((SLOT.RAMLOCK / "check-c.json").read_text())
+    assert doc["gb"] == 161.1 and doc["priority"] is True, "150 GiB in research.mem's GB, where mem= alone reserves 322.1"
+    assert "holds a 161.1 GB research.mem reservation" in capsys.readouterr().err
+    held = int(161.1e9 - (20 << 30)) >> 30                      # what that train reserved and hasn't reached
+    assert SLOT.reserved_gb(priority=True) == held == 130
+    assert SLOT.blocked(t, NOW, priority=True) is None, "400 free less 130: a second train's 150 fits"
+    assert SLOT.blocked(x, NOW, priority=True) == ("270 GB of memory free (130 GB more is reserved by live train checks that "
+                                                   "haven't reached it), under the 300 GB a check here may peak at")
+    free[0] = 270
+    assert SLOT.blocked(t, NOW, priority=True) == ("140 GB of memory free (130 GB more is reserved by live train checks that "
+                                                   "haven't reached it), under the 150 GB a check here reserves")
+    free[0] = 400
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "200")                 # 187 GiB: over book, under mem=
+    (asked,) = SLOT.asking([t])
+    assert (asked["mem"], SLOT.booked(asked)) == (300, 187)
+    assert "holds a 200.8 GB research.mem reservation" in SLOT.reserve(asked, NOW)
+    free[0] = 187 + held - 1
+    assert "under the 187 GB a check here reserves" in SLOT.blocked(asked, NOW, priority=True)
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "100")
+    assert SLOT.booked(SLOT.asking([t])[0]) == 150, "a smaller ask keeps the slot's book="
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    free[0] = 400
+    lines = SLOT.status([c, t, x], tmp_path, NOW)
+    assert lines[1].startswith("t  cores 1  trains only  mem 300 GB (reserves 150)  free")
+    assert lines[2].startswith("x  cores 2  trains only  mem 300 GB  free")
+    docs = SLOT.slot_docs([c, t, x], tmp_path, NOW)
+    assert [(d["mem"], d.get("book")) for d in docs] == [(300, 150), (300, 150), (300, None)] and "book" not in docs[2]
+
+
+def test_a_book_that_isnt_a_share_of_its_mem_stops_its_own_slot_and_nothing_else(tmp_path, monkeypatch, capsys):
+    """book= is how much of its mem= a slot reserves, so one over mem=, on a line without mem=, or that isn't a whole number
+    from 1 is a mistyped line. Its slot starts no check and says why with the fix, in the wait and in `--status`; the
+    machine's other slots, its waiters and `--status` go on, where a parse that raised would stop every one at its next read."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    for line, mem in (("c 0 mem=300 book=350", "300"), ("c 0 book=150", "it has none"), ("c 0 mem=300 book=0", "300"),
+                      ("c 0 mem=300 book=half", "300"), ("c 0 mem=300 book=1.5", "300")):
+        (slot,) = SLOT.parse(line)
+        book = line.rsplit("=", 1)[1]
+        assert "book" not in slot and SLOT.blocked(slot, NOW) == (
+            f"its line has book={book}, which isn't a whole number of GB from 1 to its mem= ({mem}), so no check starts in it: "
+            f"book= is how much of mem= the slot reserves, so lower it, raise mem= or take book= off slot c in {tmp_path / 'slots'}")
+    assert SLOT.parse("c 0 mem=300 book=300")[0]["book"] == 300, "all of its mem= is a share of it"
+    (tmp_path / "slots").write_text("c 0 mem=300 book=350\n")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: 1000)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda proc=None, priority=False: 0)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env["CHECK_SLOT"])))
+    t = [NOW]
+
+    def sleep(s):
+        t[0] += timedelta(seconds=s)
+        (tmp_path / "slots").write_text("c 0 mem=300 book=350\nd 1 mem=300 book=150\n")
+
+    with pytest.raises(Exec, match="d"):                        # it waits out the bad line and takes the slot added beside it
+        SLOT.main(["--", "check.py"], now=lambda: t[0], sleep=sleep)
+    err = capsys.readouterr().err
+    assert "every check slot is taken (c: its line has book=350, which isn't a whole number of GB from 1 to its mem= (300)" in err
+    assert json.loads((SLOT.RAMLOCK / "check-d.json").read_text())["gb"] == 161.1 and not (SLOT.RAMLOCK / "check-c.json").exists()
+    (first,) = [ln for ln in SLOT.status(SLOT.parse("c 0 mem=300 book=350"), tmp_path, NOW) if ln.startswith("c ")]
+    assert first.startswith("c  cores 0  mem 300 GB  free; blocked: its line has book=350")

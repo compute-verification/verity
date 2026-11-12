@@ -10,6 +10,7 @@ import json
 import operator
 import subprocess
 import tomllib
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from . import contract, families
@@ -24,6 +25,8 @@ TASK_FIELDS = ("id", "kind", "about", "env", "argv", "vars", "inputs", "reads", 
 CORE_FIELDS = ("priority", "key")
 FAMILY_FIELDS = {"files": list, "kinds": list, "env": str, "about": str, "resources": dict, "timeout_s": int}
 RESOURCES = ("cores", "mem_gb", "disk_gb")
+#: what `[slot]` bounds: the largest slot an executor leases a task, which no task's resources may pass
+SLOT = ("cores", "mem_gb")
 #: what `verity graph run` writes in a task's work directory beside its outputs and reads
 LOG = "task.log"
 #: a field name no table, task or result may have: who is paged is drive's policy, from paths
@@ -76,14 +79,19 @@ def _forbid(where: str, doc: object) -> None:
 
 
 def spec(root: Path) -> dict:
-    """`tasks.toml`, checked: {"env": {name: {"spec": [glob]}}, "family": {name: table}}."""
+    """`tasks.toml`, checked: {"slot": {cores, mem_gb}, "env": {name: {"spec": [glob]}}, "family": {name: table}}."""
     try:
         doc = tomllib.loads((root / SPEC).read_text())
     except (OSError, tomllib.TOMLDecodeError) as e:
         raise GraphError(f"{SPEC}: {e}") from e
     _forbid(SPEC, doc)
-    if extra := set(doc) - {"env", "family"}:
-        raise GraphError(f"{SPEC}: tables {', '.join(sorted(extra))}: it holds [env.*] and [family.*] only")
+    if extra := set(doc) - {"slot", "env", "family"}:
+        raise GraphError(f"{SPEC}: tables {', '.join(sorted(extra))}: it holds [slot], [env.*] and [family.*] only")
+    slot = doc.get("slot")
+    if not isinstance(slot, dict) or set(slot) != set(SLOT) or not all(
+            isinstance(v, int | float) and not isinstance(v, bool) and v > 0 for v in slot.values()):
+        raise GraphError(f"{SPEC}: [slot] holds {' and '.join(SLOT)}, each a positive number: the largest slot an executor "
+                         "leases a task")
     envs, fams = doc.get("env", {}), doc.get("family", {})
     for name, e in envs.items():
         if set(e) != {"spec"} or not isinstance(e["spec"], list) or not all(isinstance(p, str) for p in e["spec"]):
@@ -96,13 +104,17 @@ def spec(root: Path) -> dict:
             raise GraphError(f"{SPEC}: [family.{name}] fields {', '.join(sorted(extra))}: it has {', '.join(FAMILY_FIELDS)}")
         if not t["kinds"] or t["env"] not in envs:
             raise GraphError(f"{SPEC}: [family.{name}] needs a kind and an env of [env.*]")
-        _resources(f"[family.{name}]", t["resources"])
-    return {"env": envs, "family": fams}
+        _resources(f"[family.{name}]", t["resources"], slot)
+    return {"slot": slot, "env": envs, "family": fams}
 
 
-def _resources(where: str, r: dict) -> None:
+def _resources(where: str, r: dict, slot: dict) -> None:
     if set(r) != set(RESOURCES) or not all(isinstance(v, int | float) and not isinstance(v, bool) and v > 0 for v in r.values()):
         raise GraphError(f"{where}: resources are {', '.join(RESOURCES)}, each a positive number")
+    if over := [f"{k} {r[k]} (its largest {slot[k]})" for k in SLOT if r[k] > slot[k]]:
+        raise GraphError(f"{where}: asks {', '.join(over)}, more than {SPEC}'s [slot], the largest slot an executor leases a "
+                         "task: no slot would take it, so it and every task reading it would wait queued. Ask about what "
+                         "its passing runs reach, or raise [slot] once the executor's slots are that large")
 
 
 def covered(root: Path, family: str, files: list[str]) -> list[str]:
@@ -122,8 +134,9 @@ def _path(where: str, p: object) -> str:
     return p
 
 
-def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -> dict:
-    """``t``, a task family ``family``'s lister gave, with what it left out taken from its table, checked."""
+def complete(t: object, family: str, table: dict, envs: dict, files: set[str], slot: dict) -> dict:
+    """``t``, a task family ``family``'s lister gave, with what it left out taken from its table, checked, its resources within
+    ``slot`` (`[slot]`)."""
     if not isinstance(t, dict):
         raise GraphError(f"family {family} listed {t!r}, not a task")
     _forbid(f"family {family}'s task {t.get('id')!r}", {k: v for k, v in t.items() if k not in SHAPED})
@@ -167,7 +180,7 @@ def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -
     for o in outputs:
         _path(f"{tid}'s output {o['name']}", o["path"])
     resources = {**table["resources"], **t.get("resources", {})}
-    _resources(tid, resources)
+    _resources(tid, resources, slot)
     timeout = t.get("timeout_s", table["timeout_s"])
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise GraphError(f"{tid}: timeout_s is a positive integer")
@@ -298,7 +311,7 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
         listed.add(name)
         if name not in listers:
             continue
-        new = [complete(t, name, fams[name], s["env"], have) for t in listers[name](root, files)]
+        new = [complete(t, name, fams[name], s["env"], have, s["slot"]) for t in listers[name](root, files)]
         for c in new:
             if c["id"] in tasks:
                 raise GraphError(f"{c['id']} is listed twice")
@@ -331,7 +344,7 @@ def task_graph(root: Path, task_id: str, listers: dict | None = None) -> dict:
             listed[name] = {t.get("id"): t for t in (listers[name](root, files) if name in listers else []) if isinstance(t, dict)}
         if tid not in listed[name]:
             raise GraphError(f"no task {tid} on this tree: `verity graph` lists them")
-        tasks[tid] = complete(listed[name][tid], name, fams[name], s["env"], have)
+        tasks[tid] = complete(listed[name][tid], name, fams[name], s["env"], have, s["slot"])
         todo += [r["task"] for r in tasks[tid]["reads"]]
     return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), None)
 
@@ -353,14 +366,17 @@ def part(doc: dict, task_id: str, by: dict | None = None) -> dict:
 
 
 def given(root: Path, path: Path, task_id: str) -> dict:
-    """The graph/v2 at ``path`` (`verity graph run --graph`): the listing an executor made once, or its `part` for ``task_id``,
-    so that no lister runs.  Taken when it holds the task, the outputs the task reads and its env, and each file the task's key
-    reads (its inputs and its env's spec) has the digest it names here, so that no result is keyed from another tree's bytes."""
+    """The graph/v2 at ``path`` (`verity graph run --graph`): the listing an executor made once, packed or not (`unpack`), or
+    its `part` for ``task_id``, so that no lister runs.  Taken when it holds the task, the outputs the task reads and its env,
+    and each file the task's key reads (its inputs and its env's spec) has the digest it names here, so that no result is
+    keyed from another tree's bytes."""
     try:
         doc = json.loads(Path(path).read_bytes())
     except (OSError, ValueError) as e:
         raise GraphError(f"--graph {path}: {e}") from e
     try:
+        if doc["schema"] == contract.SCHEMA_PACKED:
+            doc = unpack(doc)
         if doc["schema"] != contract.SCHEMA_GRAPH:
             raise ValueError(f"schema {doc['schema']!r}")
         by = {t["id"]: t for t in doc["tasks"]}
@@ -384,6 +400,66 @@ def given(root: Path, path: Path, task_id: str) -> dict:
     if env != contract.env_digest(spec, named):
         raise GraphError(f"--graph {path}: env {task['env']}'s digest isn't the one its spec files give")
     return doc
+
+
+def _runs(indices: Iterable[int]) -> list[int]:
+    """Increasing ``indices`` as runs of consecutive ones, two integers a run: how far past the previous run's end it starts
+    (the first, past 0), and its length."""
+    out: list[int] = []
+    end = 0
+    for i in indices:
+        if out and i == end:
+            out[-1] += 1
+        else:
+            out += [i - end, 1]
+        end = i + 1
+    return out
+
+
+def _indices(runs: object) -> Iterator[int]:
+    """The indices `_runs` gave as ``runs``; ValueError on what it never gives."""
+    if not isinstance(runs, list) or len(runs) % 2 or not all(type(x) is int for x in runs):
+        raise ValueError(f"runs {str(runs)[:40]} aren't pairs of integers")
+    end = 0
+    for gap, n in zip(runs[::2], runs[1::2]):
+        if gap < 0 or n < 1:
+            raise ValueError(f"a run starts {gap} past the last and is {n} long")
+        yield from range(end + gap, end + gap + n)
+        end += gap + n
+
+
+def pack(doc: dict) -> dict:
+    """The listing ``doc`` packed (`contract.SCHEMA_PACKED`), which `unpack` makes ``doc`` again: each task's `inputs` as runs
+    of indices into `files`' paths in order (`_runs`), and its `reads` as {output name: runs of indices into `tasks`}.  A
+    suite's test files share most of their thousands of inputs, and a Lean module reads two outputs of each of the hundreds
+    of modules its compile loads: graph/v2 spells out each path and task id, where here an input or a read is a few bytes,
+    most of them in runs of neighbours."""
+    at = {p: i for i, p in enumerate(sorted(doc["files"]))}
+    of = {t["id"]: i for i, t in enumerate(doc["tasks"])}
+    tasks = []
+    for t in doc["tasks"]:
+        if t["inputs"] != sorted(set(t["inputs"])) or list(map(_read, t["reads"])) != sorted(set(map(_read, t["reads"]))):
+            raise GraphError(f"{t['id']}: its inputs and its reads aren't graph/v2's, sorted and each once")
+        reads: dict[str, list[int]] = {}
+        for r in t["reads"]:
+            reads.setdefault(r["output"], []).append(of[r["task"]])
+        tasks.append({**t, "inputs": _runs(at[p] for p in t["inputs"]),
+                      "reads": {o: _runs(ix) for o, ix in sorted(reads.items())}})
+    return {**doc, "schema": contract.SCHEMA_PACKED, "tasks": tasks}
+
+
+def unpack(doc: dict) -> dict:
+    """The listing `pack` packed as ``doc``, graph/v2 again; GraphError when ``doc`` is no packed listing."""
+    try:
+        if doc["schema"] != contract.SCHEMA_PACKED:
+            raise ValueError(f"schema {doc['schema']!r}")
+        paths, ids = sorted(doc["files"]), [t["id"] for t in doc["tasks"]]
+        tasks = [{**t, "inputs": [paths[i] for i in _indices(t["inputs"])],
+                  "reads": sorted(({"task": ids[i], "output": o} for o, runs in t["reads"].items() for i in _indices(runs)),
+                                  key=_read)} for t in doc["tasks"]]
+    except (KeyError, TypeError, AttributeError, IndexError, ValueError) as e:
+        raise GraphError(f"no packed listing ({type(e).__name__}: {e})") from e
+    return {**doc, "schema": contract.SCHEMA_GRAPH, "tasks": tasks}
 
 
 def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | None) -> dict:

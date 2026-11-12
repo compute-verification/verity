@@ -17,12 +17,6 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   data and no decoding, kept as a check.
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
-* ``chain``: the partial-sum rule, ``Nci.SecurityProofs.IncompressibleContainedTraining``
-  (``security/Definitions/Nci/Guarantees/Training.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
-  factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumption is training's incompressibility
-  (``TrainingIncompressible``) of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
-  each weight once per layer of it, so it is one forward path: ``kappa_chain`` (a row's optional ``chain``) is that
-  path's share of the work, below ``kappa``. Rows without a ``chain`` get none.
 """
 
 from __future__ import annotations
@@ -54,7 +48,6 @@ INPUTS = {
 }
 
 THREAD_THEOREM = "Nci.SecurityProofs.ThreadedTraining"
-CHAIN_THEOREM = "Nci.SecurityProofs.IncompressibleContainedTraining"
 
 
 def rates(i: dict, K: float, b_tok: float) -> tuple[float, float, float, float]:
@@ -78,27 +71,6 @@ def thread_lower(i: dict, K: float, Gamma: float, b_tok: float) -> float:
     b_w, b_a, d, e = rates(i, K, b_tok)
     lam = max(e, i["c"] * K / (4 * d * b_w))
     return max(1.0, i["kappa"] * b_a / (2 * alpha * lam))
-
-
-def read_factor(K: float, b_w: float, b_a: float, d: float, steps: int = 4000) -> float:
-    """The chain draft's ``f(K) = max_{0<mu<1} min{(1+sqrt mu)^2 b_w b_a d / K, sqrt2 (1+sqrt mu) sqrt(1-mu) b_a sqrt(b_w/K)}``
-    (``Nci.readFactor``), maximized on a grid of ``steps`` points."""
-    best = 0.0
-    for k in range(1, steps):
-        mu = k / steps
-        a = (1 + math.sqrt(mu)) ** 2 * b_w * b_a * d / K
-        b = math.sqrt(2) * (1 + math.sqrt(mu)) * math.sqrt(1 - mu) * b_a * math.sqrt(b_w / K)
-        best = max(best, min(a, b))
-    return best
-
-
-def chain_lower(i: dict, chain: dict, K: float, Gamma: float, b_tok: float, d_model: float) -> float:
-    """The partial-sum rule at ``rates``'s weight rate, the activation rate capped by a token and by a boundary crossing
-    spread over the residual's ``d_model`` entries, since every activation the chain charges is computed from one."""
-    alpha = K / Gamma
-    b_w = rates(i, K, b_tok)[0]
-    b_a = min(i["b_a"], b_tok, i["w_cut"] / d_model)
-    return max(1.0, chain["kappa"] * read_factor(K, b_w, b_a, chain["d"]) / (2 * alpha))
 
 
 def shard(i: dict, K: float, Gamma: float) -> float:
@@ -158,11 +130,8 @@ def bracket(row: dict, calibration: dict, parameters: list[dict]) -> dict:
     K, Gamma = calibration["K"], calibration["Gamma"]
     b_tok = calibration["b_tok"]
     upper, basis = construction_upper(i, K, Gamma, b_tok, row.get("state_splits", True))
-    d_model = next(m["d_model"] for m in catalog.load("models") if m["id"] == row["model"])
-    chain = chain_lower(i, row["chain"], K, Gamma, b_tok, d_model) if "chain" in row else None
     return {"row": row["id"], "calibration": calibration["id"], "lower": thread_lower(i, K, Gamma, b_tok),
-            "lower_basis": THREAD_THEOREM, "upper": upper, "upper_basis": basis,
-            "chain": chain, "chain_basis": CHAIN_THEOREM, "inputs": i}
+            "lower_basis": THREAD_THEOREM, "upper": upper, "upper_basis": basis, "inputs": i}
 
 
 def sweep(row: dict, calibration: dict, parameters: list[dict], b_ws: list[float], b_as: list[float]) -> list[dict]:
@@ -176,7 +145,7 @@ def sweep(row: dict, calibration: dict, parameters: list[dict], b_ws: list[float
             inputs = base | {"b_w": b_w, "b_a": b_a, "U_bits": base["U_bits"] * w,
                              "U_token_bits": base["U_token_bits"] * w, "w_cut": base["w_cut"] * a}
             b = bracket(row | {"inputs": inputs}, calibration, parameters)
-            out.append({"b_w": b_w, "b_a": b_a, "thread": b["lower"], "chain": b["chain"], "upper": b["upper"]})
+            out.append({"b_w": b_w, "b_a": b_a, "thread": b["lower"], "upper": b["upper"]})
     return out
 
 
@@ -189,17 +158,22 @@ RECIPES = [("bf16", 16, 16, None), ("fp8", 8.25, 8.25, "train.compute_multiplier
            ("w2a2", 2, 2, "train.compute_multiplier/w2a2"), ("w1a1", 1, 1, "train.compute_multiplier/w1a1")]
 
 
+def retrained(row: dict, parameters: list[dict]) -> bool:
+    """Whether a training recipe's rates are the row's: it updates every weight of its model and keeps the update as
+    weights, not as a description that doesn't split."""
+    whole = next(m["n_total"] for m in catalog.load("models") if m["id"] == row["model"])
+    return row.get("state_splits", True) and catalog.resolve(row["inputs"]["n_updated"], parameters) == whole
+
+
 def efficiency(row: dict, calibration: dict, parameters: list[dict]) -> list[dict]:
-    """Pretraining efficiency under the policy, ``m / rho``, for each recipe: ``ceiling`` with the proven chain bound
-    (a ceiling when the recipe's chain is incompressible at its own rates) and ``attack`` with the construction's cost.
+    """Pretraining efficiency under the policy, ``m / rho``, for each recipe: ``attack``, with the construction's cost.
     The best recipe is the attacker's choice."""
     ests = catalog.estimates(parameters)
     out = []
     for name, b_w, b_a, est in RECIPES:
         m = {"low": 1.0, "central": 1.0, "high": 1.0} if est is None else {k: ests[est][k] for k in catalog.PICKS}
         cell = sweep(row, calibration, parameters, [b_w], [b_a])[0]
-        out.append({"recipe": name, "b_w": b_w, "b_a": b_a, "m": m, "chain": cell["chain"], "upper": cell["upper"],
-                    "ceiling": m["central"] / cell["chain"] if cell["chain"] else None,
+        out.append({"recipe": name, "b_w": b_w, "b_a": b_a, "m": m, "upper": cell["upper"],
                     "attack": m["central"] / cell["upper"]})
     return out
 
@@ -222,16 +196,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.efficiency:
         for c in cals:
             for r in rows:
-                if r["model"] != c["model"] or "chain" not in r:
+                if r["model"] != c["model"] or not retrained(r, parameters):
                     continue
                 print(f"{r['id']} under {c['id']}: efficiency m / rho")
-                print(f"{'recipe':16} {'b_w':>5} {'b_a':>5} {'m (low-high)':>18} {'chain':>9} {'upper':>9} "
-                      f"{'ceiling':>9} {'attack':>9}")
+                print(f"{'recipe':16} {'b_w':>5} {'b_a':>5} {'m (low-high)':>18} {'upper':>9} {'attack':>9}")
                 for x in efficiency(r, c, parameters):
                     m = x["m"]
                     print(f"{x['recipe']:16} {x['b_w']:5.3g} {x['b_a']:5.3g} "
-                          f"{m['central']:6.2f} ({m['low']:.2f}-{m['high']:.2f}) {x['chain']:9.2g} {x['upper']:9.2g} "
-                          f"{x['ceiling']:9.2g} {x['attack']:9.2g}")
+                          f"{m['central']:6.2f} ({m['low']:.2f}-{m['high']:.2f}) {x['upper']:9.2g} {x['attack']:9.2g}")
         return 0
     if args.sweep:
         b_ws, b_as = [16, 8, 4, 2.5, 1.58, 1, 0.5], [16, 8, 4, 2, 1, 0.5]
@@ -239,18 +211,16 @@ def main(argv: list[str] | None = None) -> int:
             for r in rows:
                 if r["model"] != c["model"]:
                     continue
-                print(f"{r['id']} under {c['id']}: thread / chain (proven) / construction")
-                print(f"{'b_w \\ b_a':>10}" + "".join(f"{a:>25}" for a in b_as))
+                print(f"{r['id']} under {c['id']}: thread (proven) / construction")
+                print(f"{'b_w \\ b_a':>10}" + "".join(f"{a:>17}" for a in b_as))
                 cells = sweep(r, c, parameters, b_ws, b_as)
                 for b_w in b_ws:
                     print(f"{b_w:>10}" + "".join(
-                        f"{x['thread']:>9.2g}/{x['chain'] if x['chain'] is not None else float('nan'):<7.2g}/"
-                        f"{x['upper']:<7.2g}" for x in cells if x["b_w"] == b_w))
+                        f"{x['thread']:>9.2g}/{x['upper']:<7.2g}" for x in cells if x["b_w"] == b_w))
         return 0
-    print(f"{'row':44} {'calibration':22} {'thread':>9} {'chain':>9} {'upper':>9} {'basis':>14}")
+    print(f"{'row':44} {'calibration':22} {'thread':>9} {'upper':>9} {'basis':>14}")
     for b in brackets(rows, cals, parameters):
-        chain = f"{b['chain']:9.3g}" if b["chain"] is not None else f"{'-':>9}"
-        print(f"{b['row']:44} {b['calibration']:22} {b['lower']:9.3g} {chain} {b['upper']:9.3g} {b['upper_basis']:>14}")
+        print(f"{b['row']:44} {b['calibration']:22} {b['lower']:9.3g} {b['upper']:9.3g} {b['upper_basis']:>14}")
     return 0
 
 

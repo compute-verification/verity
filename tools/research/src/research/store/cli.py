@@ -83,6 +83,8 @@
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
+  research data mint-credential --job push|fetch [--ttl 6h] [--env]
+                                                   a cluster job's key: custody's actions (push: no delete or copy; fetch: read only)
   (lookup / pull / attempt are provided by cli_prov when present)
 
 Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`) and accepts abbreviated artifact ids
@@ -96,6 +98,7 @@ import argparse
 import fnmatch
 import json
 import os
+import shlex
 import sqlite3
 import sys
 import time
@@ -1156,10 +1159,14 @@ def cmd_push(argv: list[str]) -> int:
 def cmd_mint_credential(argv: list[str]) -> int:
     """A short-lived, bucket-scoped R2 credential for a pod (`credentials.py`): signed locally with the parent key from the environment
     (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
-    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file."""
+    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file.  `--job` mints
+    what a cluster job holds (`custody.job_env`): the key `research run` stages for a run's custody, or its `--store-read` key."""
     from . import credentials as C  # noqa: PLC0415
+    from . import custody as CU
 
     ap = _ap("mint-credential")
+    ap.add_argument("--job", default=None, choices=sorted(CU.JOB_ACCESS),
+                    help="a cluster job's key, with custody's actions: push = write without delete or copy, fetch = read only (takes --ttl and --env alone)")
     ap.add_argument("--ttl", default="1h", help="lifetime: <n>[s|m|h|d], max 7d (default 1h)")
     ap.add_argument("--permission", default="object-read-write", choices=C.SCOPES, help="scope preset (default object-read-write)")
     ap.add_argument("--prefix", action="append", default=[], metavar="P", help="restrict to keys under this prefix (repeatable)")
@@ -1172,6 +1179,17 @@ def cmd_mint_credential(argv: list[str]) -> int:
     ap.add_argument("--env", action="store_true", help="print `export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...`")
     ap.add_argument("--json", action="store_true", help="(default output) the credential with bucket, scope, expiry, how it was minted")
     ns = ap.parse_args(argv)
+    if ns.job:
+        given = {k: v for k, v in vars(ns).items() if k not in ("job", "ttl", "env", "json", "store") and v != ap.get_default(k)}
+        if given:
+            raise C.MintError(f"--job {ns.job} fixes the key's actions and where it is minted: drop --{', --'.join(k.replace('_', '-') for k in sorted(given))}")
+        key = CU.job_env(ns.job, ns.ttl)
+        if ns.env:
+            print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in key.items() if k != "expires_utc"))
+            print(f"# a {ns.job} key until {key['expires_utc']}")
+        else:
+            _dump(key)
+        return 0
     actions = [a for a in (ns.actions or "").split(",") if a] or None
     cred = C.mint(via=ns.via, scope=ns.permission, ttl_s=C.parse_ttl(ns.ttl), prefixes=ns.prefix or None, objects=ns.object or None, actions=actions,
                   endpoint=ns.endpoint, bucket=ns.bucket, account_id=ns.account_id)

@@ -1,7 +1,7 @@
 # Onsite and remote Verity's common part: a composition of core protocols as one `Core.Protocol` (each component run
 # through its own `answer` on its case, reject dominating, the commitment the SHA-512 binding of the components' digests),
-# and the stub components that stand in until their ports land. Code: Lean core, C-Flock's verifier for canonical JSON,
-# bytes and SHA-512, and the core interface; no Mathlib.
+# and the stub components that stand in until their ports land. Code: Lean core, the base package (`core_base`) for
+# canonical JSON, bytes and SHA-512, and the core interface; no Mathlib and nothing of C-Flock's verifier.
 name = "core_composition"
 defaultTargets = ["CoreComposition"]
 
@@ -11,8 +11,8 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../../../flock/verifier"
+name = "core_base"
+path = "../../../../circuits/base"
 
 [[require]]
 name = "core_protocol"

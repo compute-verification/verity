@@ -394,6 +394,16 @@ def _mint(ttl: str | int, actions: tuple[str, ...], dir_name: str, flag: str,
     return public, [(f"{dir_name}/{STORE_TOML}", toml.encode()), (f"{dir_name}/{CRED_FILE}", (json.dumps(secret) + "\n").encode())]
 
 
+JOB_ACCESS = {"push": mint_for_machine, "fetch": mint_reader}
+
+
+def job_env(access: str, ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> dict[str, str]:
+    """A cluster job's store key, which it holds in place of the parent pair: the three AWS_* variables and `expires_utc` of the key
+    `mint_for_machine` mints (`access` "push": write, no delete or copy) or `mint_reader` ("fetch": read only).  MintError as theirs."""
+    _, files = JOB_ACCESS[access](ttl, environ=environ)
+    return json.loads(next(data for path, data in files if path.endswith("/" + CRED_FILE)))
+
+
 def reader_env(read_dir: Path) -> dict[str, str]:
     """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the KEY_ENV variables."""
     d = Path(read_dir)
@@ -802,7 +812,7 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
             "rows": rows, "needs_action": len(todo), "settling": sum(1 for r in rows if r["settling"])}
 
 
-__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
-           "drop_credentials", "force_refusal", "has_custody", "mark_failed", "marker_problem", "mint_for_machine", "mint_reader",
+__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "JOB_ACCESS", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
+           "drop_credentials", "force_refusal", "has_custody", "job_env", "mark_failed", "marker_problem", "mint_for_machine", "mint_reader",
            "READ_ACTIONS", "READ_DIR_NAME", "reader_env", "push_run",
            "put_run_record", "ran_evidence", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]

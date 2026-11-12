@@ -1756,6 +1756,7 @@
         "benchmarks/training_slowdown/tests/test_lower.py": "archive/benchmarks/training_slowdown/tests/test_lower.py",
         "benchmarks/training_slowdown/training_slowdown/capture/lower.py": "archive/benchmarks/training_slowdown/training_slowdown/capture/lower.py",
         "examples/README.md": "demos/README.md",
+        "examples/dither_full_util/": "demos/dither_full_util/",
         "examples/h200/": "archive/examples/h200/",
         "examples/h200/e2e_h200/served_weights.py": "benchmarks/torch_gpu/p2_stage/served_weights.py",
         "examples/h200/interfaces/": "benchmarks/one_stage/interfaces/",

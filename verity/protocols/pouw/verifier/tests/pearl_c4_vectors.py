@@ -43,7 +43,7 @@ def rows(case: str, name: str, count: int, k: int) -> list[bytes]:
 
 def ctx_of(case: str, shape: tuple[int, int, int], index: int, weight: int, wide: bool = False) -> Context:
     h = lambda s: hashlib.sha256(f"{s}/{case}".encode()).digest()  # noqa: E731
-    r = (lambda s: hashlib.sha512(f"{s}/{case}".encode()).digest()) if wide else h  # noqa: E731
+    r = (lambda s: hashlib.sha512(f"{s}/{case}".encode()).digest()) if wide else h
     return Context(h("salt"), Matmul(index, Shape(*shape), weight), r("root_a"), r("root_b"))
 
 

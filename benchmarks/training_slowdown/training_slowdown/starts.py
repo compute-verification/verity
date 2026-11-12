@@ -5,7 +5,8 @@ own training (C0) and its loss on the search pool, and the data it was trained o
 installed copy, `root/NAME/{theta.safetensors,start.json}` (the registry's `installed` on a node; `research data
 fetch ART --path PATH/...` gets the same directory from the store), and refuses one whose files aren't the registry's
 or whose start.json records another digest, C0 or loss. θ's file is read here (`tensors`), without the safetensors
-package.
+package. `parts_read(start, root)` is the parts of its data's stream the start's own training read, as that
+start.json names them: what a job asked for fresh windows is not served (`training_slowdown.data.Stream`).
 """
 from __future__ import annotations
 
@@ -85,20 +86,43 @@ def tensors(buf: bytearray) -> dict[str, torch.Tensor]:
     return out
 
 
-def load(s: Start, root: Path | None = None) -> dict[str, torch.Tensor]:
-    """θ of `s`, from its installed directory under `root` (default the registry's `installed`), checked."""
-    d = Path(root if root is not None else registry()["installed"]) / s.name
-    raw = {}
-    for f, want in (("start.json", s.start_json_sha256), ("theta.safetensors", s.theta_file_sha256)):
-        if not (d / f).is_file():
-            raise SystemExit(f"starts: {d / f} is missing (`research data fetch {s.art} --path {s.path}/{f}`)")
-        raw[f] = read_file(d / f)
-        if (got := hashlib.sha256(raw[f]).hexdigest()) != want:
-            raise SystemExit(f"starts: {d / f} has sha256 {got}, the registry's {s.name} {want}")
-    rec = json.loads(bytes(raw["start.json"]))
+def installed(s: Start, root: Path | None = None) -> Path:
+    """`s`'s installed directory under `root` (default the registry's `installed`)."""
+    return Path(root if root is not None else registry()["installed"]) / s.name
+
+
+def _file(s: Start, path: Path, want: str) -> bytearray:
+    """The bytes of `path`, a file of `s`'s installed directory, refused when their sha256 isn't `want`."""
+    if not path.is_file():
+        raise SystemExit(f"starts: {path} is missing (`research data fetch {s.art} --path {s.path}/{path.name}`)")
+    raw = read_file(path)
+    if (got := hashlib.sha256(raw).hexdigest()) != want:
+        raise SystemExit(f"starts: {path} has sha256 {got}, the registry's {s.name} {want}")
+    return raw
+
+
+def record(s: Start, root: Path | None = None) -> dict:
+    """`s`'s start.json, from its installed directory, checked: the file is the registry's, and it records the
+    registry's digest, C0 and loss."""
+    path = installed(s, root) / "start.json"
+    rec = json.loads(bytes(_file(s, path, s.start_json_sha256)))
     p = rec.get("provenance", {})
     found = (rec.get("digest"), float(p.get("c0", {}).get("macs", "nan")), p.get("search_pool", {}).get("bpb"))
     if found != (s.digest, s.c0_macs, s.l0_bpb):
-        raise SystemExit(f"starts: {d / 'start.json'} records digest, C0 and loss {found}, the registry "
+        raise SystemExit(f"starts: {path} records digest, C0 and loss {found}, the registry "
                          f"{(s.digest, s.c0_macs, s.l0_bpb)}")
-    return tensors(raw["theta.safetensors"])
+    return rec
+
+
+def parts_read(s: Start, root: Path | None = None) -> list[dict]:
+    """The parts of its data's stream `s`'s own training read, as its start.json names them (`provenance.data.parts`,
+    each by the `sha256` the stream's manifest lists the part under); none where it names none."""
+    data = record(s, root).get("provenance", {}).get("data")
+    parts = data.get("parts") if isinstance(data, dict) else None
+    return list(parts) if isinstance(parts, list) else []
+
+
+def load(s: Start, root: Path | None = None) -> dict[str, torch.Tensor]:
+    """θ of `s`, from its installed directory, checked: its start.json (`record`) and θ's file are the registry's."""
+    record(s, root)
+    return tensors(_file(s, installed(s, root) / "theta.safetensors", s.theta_file_sha256))

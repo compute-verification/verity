@@ -63,8 +63,8 @@ It fails on a rewritten reference to a directory the map splits across destinati
 larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
 with the reason; one that no longer occurs is an error too. Where the file means another part, the row names it
-(`"old file: old directory" = { to = "verity/core/service/flock", why = "..." }`), and the file's references to the
-directory go there.
+(`"old file: old directory" = { to = "verity/protocols/flock/agreement", why = "..." }`), and the file's references to
+the directory go there.
 """
 from __future__ import annotations
 

@@ -93,9 +93,10 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
 
 def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture_approximates(tmp_path):
     """Two optimizers on the tiny start. AdamW trains every parameter and no op of its step is approximated. Shampoo
-    has no rule for the embedding, so it trains the rest, and its roots are eigendecompositions the capture counts
-    at n³ MACs a matrix: the row holds those MACs and their gates at the price the capture gives one, and the printed
-    row says their share of the step's gates."""
+    on the block and the final gain trains all but the embedding, and its roots are eigendecompositions the capture
+    counts at n³ MACs a matrix: the row holds those MACs and their gates at the price the capture gives one, and the
+    printed row says their share of the step's gates. With the embedding under AdamW beside it, it trains every
+    parameter and has the same roots."""
     reg = starts.registry(tiny_registry(tmp_path / "reg"))
 
     def row(name: str, **dials) -> dict:
@@ -105,11 +106,14 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     assert whole["trains"] == {"parameters": SHAPE["parameters"], "of": SHAPE["parameters"], "share": 1.0}
     assert part["trains"]["parameters"] == SHAPE["parameters"] - VOCAB * 16 and part["trains"]["share"] < 1
     assert whole["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0}
-    # the table's trace is the job's program: bf16 under autocast on this CPU, attention's products too; Shampoo's
-    # own products are float32, as it runs them
-    assert whole["step"]["priced_in"] == {"bfloat16": 1.0} and library.line(whole)[3] == "bfloat16"
-    assert set(part["step"]["priced_in"]) == {"bfloat16", "float32"}
-    assert sum(part["step"]["priced_in"].values()) == pytest.approx(1)
+    # the table's trace is the job's program, bf16 under autocast on this CPU, but for attention's products, which
+    # the capture traces in float32, as torch's math path computes them; so a step prints two dtypes with their
+    # shares, the larger first. Shampoo's own products are float32 too, as it runs them
+    for traced in (whole, part):
+        dtypes = traced["step"]["priced_in"]
+        assert set(dtypes) == {"bfloat16", "float32"} and sum(dtypes.values()) == pytest.approx(1)
+        assert list(dtypes.values()) == sorted(dtypes.values(), reverse=True)
+        assert library.line(traced)[3] == ", ".join(f"{d} {s:.2%}" for d, s in dtypes.items())
     approx = part["step"]["approximated"]
     # each of the seven matrices' two factors, an eigendecomposition each, at its side cubed
     assert approx["macs"] == 4 * 2 * 16 ** 3 + 3 * (16 ** 3 + 32 ** 3)
@@ -118,6 +122,9 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     said = f"; approximated: {approx['share']:.2%} of the step's gates are linear algebra at n³ MACs a matrix"
     assert library.line(part)[-1] == part["binds"] + said and library.line(whole)[-1] == whole["binds"]
     assert library.line(whole)[2] == "100%" and library.line(part)[2] == f"{100 * part['trains']['share']:.3g}%"
+    beside = row("beside", trainable="*", opt="shampoo")
+    assert beside["trains"] == whole["trains"] and beside["step"]["approximated"]["macs"] == approx["macs"]
+    assert beside["step"]["gates"] > part["step"]["gates"] and library.line(beside)[2] == "100%"
 
 
 def test_a_row_prints_the_dtypes_its_circuit_prices_the_steps_products_in():
@@ -134,10 +141,11 @@ def test_a_row_prints_the_dtypes_its_circuit_prices_the_steps_products_in():
 
 
 def test_a_trace_whose_products_and_circuit_differ_in_price_has_no_slowdown_over_its_circuit():
-    """One slowdown has one price. A trace of a capture before `capture.products.JOB_DTYPES_FROM` holds attention's
-    products in float32; that capture's rule prices them in bf16, and the trace's own circuit counts them in
-    float32. Over that circuit there is no slowdown, and the reason names the product and the fix. Over a run's own
-    gates the same trace is read as it was, and a trace of this capture is priced as traced on both sides."""
+    """One slowdown has one price. A trace of a capture before `capture.products.PRICED_AS_TRACED_FROM` holds
+    attention's products in float32; that capture's rule prices them in bf16, and the trace's own circuit counts
+    them in float32. Over that circuit there is no slowdown, and the reason names the product and the fix. Over a
+    run's own gates the same trace is read as it was, and a trace of this capture is priced as traced on both
+    sides."""
     c, pol = GATES / 100, {"c_gates": GATES / 100, "k_bits": K}
     wide = raw("forward", ["m"], 1024, 1024, 1024, 2) | {"dtypes": ["float32", "float32"]}
     rows = [wide, *STEP[1:]]
@@ -147,8 +155,8 @@ def test_a_trace_whose_products_and_circuit_differ_in_price_has_no_slowdown_over
     assert got == {"slowdown": None, "binds": (
         "unmeasured: 2 of the traced step's matrix products are priced in another dtype than its circuit counts "
         "them in (the largest: 2 forward mm of 1024×1024 by 1024×1024, traced in float32 and priced in bfloat16), "
-        "and one slowdown has one price; trace the step under the job's autocast: retrace the record with "
-        "training's slowdown code 4.23.0 or later")}
+        "and one slowdown has one price; retrace the record with training's slowdown code 4.23.0 or later, which "
+        "prices each product as traced")}
     assert calculator.slowdown(pol, stored)["read"] == {"capture": "4.12.9"}
     # the same trace over a run's count of |C|, as the grade reads a stored record: its products at bf16, as before
     over_run = calculator.slowdown(pol, stored, {"gates": GATES})

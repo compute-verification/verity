@@ -45,16 +45,17 @@ def test_a_steps_rows_and_their_kinds():
 
 def test_the_capture_and_the_stored_records_capture_are_the_two_that_are_read():
     """Every stored record was traced by the capture's 4.12.9 rows, which are read still, by that capture's rule
-    (`priced_dtype`); this capture's are the first whose products all have the job's dtype. Moving `CAPTURE` moves
+    (`priced_dtype`); this capture's are the first priced in the dtype each was traced in. Moving `CAPTURE` moves
     the grader's with it, and dropping 4.12.9 from `READS` needs every stored record traced again."""
-    assert products.READS == ("4.12.9", products.CAPTURE) and products.CAPTURE == products.JOB_DTYPES_FROM == "4.23.0"
+    assert products.READS == ("4.12.9", products.CAPTURE)
+    assert products.CAPTURE == products.PRICED_AS_TRACED_FROM == "4.23.0"
 
 
 def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_one_in_bf16():
     """One rule: a product's price is its traced dtype's Definition, which is what the step's circuit counts it at.
-    The rule of the captures before `JOB_DTYPES_FROM` stays for their traces alone: a forward or backward product
-    they traced wider than bf16 (attention's, which those captures ran in float32) is priced in bf16, an optimizer's
-    in its own, and a trace that states no capture is read as theirs."""
+    The rule of the captures before `PRICED_AS_TRACED_FROM` stays for their traces alone: a forward or backward
+    product they traced wider than bf16 (attention's, which every capture traces in float32) is priced in bf16, an
+    optimizer's in its own, and a trace that states no capture is read as theirs."""
     from training_slowdown import gates
 
     def row(phase: str, dtype: str) -> dict:

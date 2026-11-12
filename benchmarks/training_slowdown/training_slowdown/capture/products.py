@@ -15,7 +15,7 @@ too (`raw_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
 What the capture measures and what a price adds are apart: `raw_on_dial` gives the rows with their operands' dtypes
 and no price, as a job's record keeps them, and `priced` makes a raw row the row `rows` states, so a record's rows are
 priced where they are read. A product is priced in the dtype it was traced in (`traced_dtype`), the dtype the step's
-circuit counts it in; the one exception is the rule of the captures before `JOB_DTYPES_FROM` (`priced_dtype`).
+circuit counts it in; the one exception is the rule of the captures before `PRICED_AS_TRACED_FROM` (`priced_dtype`).
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates here are keyed by the capture's values
@@ -37,15 +37,15 @@ from training_slowdown.capture.structure import (
 from training_slowdown.work import is_paid
 from training_slowdown.policy import CONSOLE
 
-#: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has
-#: them is distinguishable from one traced before them
+#: the capture's version of these rows (training_slowdown's VERSION when they, or the rule that prices them, last
+#: changed), so a trace that has them is distinguishable from one traced before them
 CAPTURE = "4.23.0"
-#: the first capture whose traced attention runs in its operands' dtype (`capture.trace._math_attention`), so that
-#: every product of its traces has the dtype the job ran it in
-JOB_DTYPES_FROM = "4.23.0"
+#: the first capture whose every product is priced in the dtype it was traced in (`priced_dtype`)
+PRICED_AS_TRACED_FROM = "4.23.0"
 #: the captures whose raw rows are read: this one, and the one the stored records were traced by
 READS = ("4.12.9", CAPTURE)
-#: the dtype a job's autocast runs its forward's and backward's GEMMs in
+#: the dtype the routes' autocast casts a step's forward to, which the rule of the captures before
+#: `PRICED_AS_TRACED_FROM` prices a wider forward or backward product in
 AUTOCAST = "bfloat16"
 ORDER = "unknown"
 #: the console's dial's k levels in bits: each of its block sizes, the reference's, the served demo's block and the
@@ -143,25 +143,26 @@ def traced_dtype(row: dict) -> str | None:
 
 def priced_dtype(row: dict, capture: str | None) -> str | None:
     """The dtype a raw row's product is priced at, for a trace of `capture`: the one it was traced in
-    (`traced_dtype`). The one exception is the rule of the captures before `JOB_DTYPES_FROM`: their traces ran
-    attention's math backend in float32 where the job's fused kernel ran its operands' dtype, so a forward or backward
-    GEMM they traced wider than `AUTOCAST` is priced at `AUTOCAST`, and the trace's circuit is not
-    (`work.repriced`). The rule lasts as long as the stored records traced by those captures: the rebuild that
-    retraces them deletes it."""
+    (`traced_dtype`). Under bf16 autocast that is float32 for attention's products: the capture runs attention on
+    torch's math path, which computes them from upcast operands, and the train-step circuit wires them so. The one
+    exception is the rule of the captures before `PRICED_AS_TRACED_FROM`, whose traces hold the same float32
+    products: a forward or backward GEMM they traced wider than `AUTOCAST` is priced at `AUTOCAST`, and the trace's
+    circuit is not (`work.repriced`). The rule lasts as long as the stored records traced by those captures: the
+    rebuild that retraces them deletes it."""
     from training_slowdown.capture.structure import _dtype_bits
 
     dtype = traced_dtype(row)
-    if not _job_dtypes(capture) and row["phase"] in ("forward", "backward") and dtype is not None and \
+    if not _priced_as_traced(capture) and row["phase"] in ("forward", "backward") and dtype is not None and \
             _dtype_bits(getattr(torch, dtype)) > _dtype_bits(getattr(torch, AUTOCAST)):
         return AUTOCAST
     return dtype
 
 
-def _job_dtypes(capture: str | None) -> bool:
-    """Whether a trace of `capture` is `JOB_DTYPES_FROM`'s or later; one that states no capture, or none that is a
-    version, is not."""
+def _priced_as_traced(capture: str | None) -> bool:
+    """Whether a trace of `capture` is `PRICED_AS_TRACED_FROM`'s or later; one that states no capture, or none that
+    is a version, is not."""
     try:
-        return [int(x) for x in str(capture).split(".")] >= [int(x) for x in JOB_DTYPES_FROM.split(".")]
+        return [int(x) for x in str(capture).split(".")] >= [int(x) for x in PRICED_AS_TRACED_FROM.split(".")]
     except ValueError:
         return False
 

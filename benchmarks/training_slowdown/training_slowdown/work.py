@@ -148,8 +148,9 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
     their widths. Each output is at its Definition's output width b_y. Token-indexed products keep 1 −
     `SHARED_PREFIX`/n of their MACs, and every output. An operand no token indexes is a
-    weight (`weight`), which `calculator.slowdown` caps at the record's code bits a trained weight, the others
-    activations, which it caps at β(k); a backward product contracting over tokens is a weight gradient (`dw`); the head's are the
+    weight (`weight`), which `calculator.slowdown` holds to the record's code bits a trained weight at most, the
+    others activations, which it holds to β(k) at most; a backward product contracting over tokens is a weight
+    gradient (`dw`); the head's are the
     backward products over its vocabulary width V, the widest output of a forward product indexed by tokens on m that
     the update reaches, a frozen head's too (`head`). The trained weights (`trained_weights`, None without `tokens`) are each forward product's weight
     operands' entries, a product of one token-indexed operand counted as count·(its tokens)/`tokens` weights (to the
@@ -246,8 +247,8 @@ def p_match_reason(broken: list[dict]) -> str:
 def repriced(trace: dict) -> list[dict]:
     """The raw rows of a job's trace whose product is priced in another dtype than it was traced in, the dtype the
     trace's circuit counts it in (`capture.products.priced_dtype` and `traced_dtype`), the largest first by its MACs.
-    A trace of this capture has none; one of a capture before `capture.products.JOB_DTYPES_FROM` has its float32
-    attention products, which that capture's rule prices in the job's autocast dtype."""
+    A trace of this capture has none; one of a capture before `capture.products.PRICED_AS_TRACED_FROM` has its
+    float32 attention products, which that capture's rule prices in bf16 (`capture.products.AUTOCAST`)."""
     from .capture import products
 
     found = [r for r in trace["rows"] if products.priced_dtype(r, trace.get("capture")) != products.traced_dtype(r)]
@@ -263,8 +264,8 @@ def repriced_reason(trace: dict, found: list[dict]) -> str:
     return (f"unmeasured: {sum(x['count'] for x in found)} of the traced step's matrix products are priced in "
             f"another dtype than its circuit counts them in (the largest: {r['count']} {r['phase']} {r['op']} of "
             f"{d['m']}×{d['k']} by {d['k']}×{d['n']}, traced in {products.traced_dtype(r)} and priced in "
-            f"{products.priced_dtype(r, trace.get('capture'))}), and one slowdown has one price; trace the step "
-            f"under the job's autocast: retrace the record with {THE_CODE} {products.JOB_DTYPES_FROM} or later")
+            f"{products.priced_dtype(r, trace.get('capture'))}), and one slowdown has one price; retrace the "
+            f"record with {THE_CODE} {products.PRICED_AS_TRACED_FROM} or later, which prices each product as traced")
 
 
 def priced(trace: dict) -> dict:

@@ -127,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
@@ -248,8 +247,6 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "verity/protocols/inference_only/nci/",
-        "benchmarks/int8_class_rate/",
-        "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
@@ -295,15 +292,11 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
-        "archive/examples/dither_full_util/",
-        "archive/benchmarks/pouw/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
         "e9ac",
-        "ea24",
         "1de3"
       ],
       "examples": [
@@ -323,7 +316,22 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/"
+        "verity/hardware/",
+        "benchmarks/pouw/tensor_kinds/",
+        "benchmarks/pouw/opcode_probe/",
+        "benchmarks/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/",
+        "benchmarks/pouw/dc/",
+        "benchmarks/pouw/theory/",
+        "benchmarks/pouw/lean_headline.py",
+        "benchmarks/pouw/lean_headline_dc.py",
+        "benchmarks/pouw/tests/test_lean_headline.py",
+        "benchmarks/pouw/tests/test_lean_headline_dc.py",
+        "benchmarks/tensor_duty/",
+        "benchmarks/int8_class_rate/"
+      ],
+      "branch_suffixes": [
+        "ea24"
       ]
     },
     {
@@ -606,8 +614,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {
@@ -651,6 +658,7 @@
         "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
+        "benchmarks/exfiltration/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",

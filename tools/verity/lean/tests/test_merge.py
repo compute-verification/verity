@@ -152,6 +152,11 @@ def test_what_only_a_person_writes_is_theirs_where_both_sides_changed_it_beside_
     merged, why = M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-1", "2026-12-31"))
     assert why == [] and merged["open"]["P.Sound"] == {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-2",
                                                        "due": "2026-12-31"}, "one side's issue, the other's due date"
+    def held(rec, **field):
+        return rec | {"open": {"P.Held": opened(rec, "LEAN-1")["open"]["P.Sound"] | {"why": "P.t holds it"} | field}}
+    merged, why = M.merge(held(base), held(ours, digest="b" * 64), held(theirs, due="2026-12-31"))
+    assert why == [] and merged["open"] == held(base, digest="b" * 64, due="2026-12-31")["open"], \
+        "the `why` of an open premise that rests on a read stays where both sides hold its entry"
     def scoped(rec, why, cites=None):
         return rec | {"domain": {"P.Scope": {"owner": "@lean", "digest": "a" * 64, "why": why}
                                  | ({"cites": cites} if cites else {})}}
@@ -823,9 +828,11 @@ def test_a_guarantee_a_side_brings_to_unwitnessed_or_shape_inline_lands_in_updat
         assert why == [] and candidate == []
         assert list(merged["unwitnessed"]) == list(merged["shape"]["inline"]) == ["P.a", "P.b", "P.c", "P.d"]
         assert list(merged["shape"]["inline"]["P.b"]) == premises
-        facts = {"pins": {}, "own_modules": []}
-        assert list(A.unwitnessed_kept(merged, facts, {})) == list(merged["unwitnessed"])
         listed = merged | {"guarantees": dict.fromkeys(merged["shape"]["inline"], {})}
+        # each a listed guarantee in the witnesses rule's scope, built at its entry's hash: the entries `--update` keeps
+        pin = {"kind": "theorem", "reads": [{"name": "P.Claims.Holds", "module": "P.Claims"}]}
+        facts = {"pins": {g: pin | {"type_sha256": h} for g, h in merged["unwitnessed"].items()}, "own_modules": []}
+        assert list(A.unwitnessed_kept(listed, facts, {})) == list(merged["unwitnessed"])
         assert list(A.inline_failures(listed, facts)[1]) == list(merged["shape"]["inline"])
 
 
@@ -1262,6 +1269,80 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
         return PYPROJECT.replace('"torch"]', f'"torch", "{d}"]')
     text, left = _pyproject(tmp_path, PYPROJECT, dep("scipy"), dep("jax"))
     assert left and "<<<<<<< ours" in text, "a dependency both sides added stays git's"
+
+
+TAIL = '          "verity/protocols/pous/prover/circuit.py"]\n'
+#: what a branch adds at the end of a suite's `inputs`, under a comment of its own
+UNDER_A_COMMENT = ('          "verity/protocols/pous/prover/circuit.py",\n'
+                   "          # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the\n"
+                   "          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark\n"
+                   '          "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",\n'
+                   '          "tools/research/src/research/store/labels_sync.py"]\n')
+#: what the other side adds there, with no comment
+PLAIN = ('          "verity/protocols/pous/prover/circuit.py",\n'
+         '          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py"]\n')
+
+
+def test_inputs_one_side_adds_under_a_comment_merge_with_the_other_sides_and_the_comment_stays_above_them(tmp_path):
+    """A branch adds inputs with a comment above them at the end of the list, where the other side added two: the driver
+    left that to git for the comment lines alone, and a crossing ended conflicted.  The list merges, the other side's items
+    after the item they follow there, and the comment above the item it was above."""
+    import tomllib
+    ours, theirs = PYPROJECT.replace(TAIL, UNDER_A_COMMENT), PYPROJECT.replace(TAIL, PLAIN)
+    assert ours != PYPROJECT != theirs
+    text, left = _pyproject(tmp_path, PYPROJECT, ours, theirs)
+    assert left == 0, text
+    want = ["verity/protocols/pous/prover/circuit.py", "tools/research/src/research/__init__.py",
+            "tools/research/src/research/telemetry/__init__.py", "infra/control/nightly_check.py",
+            "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
+            "tools/research/src/research/store/labels_sync.py"]
+    assert tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-7:] == want
+    lines, comment = text.splitlines(), UNDER_A_COMMENT.splitlines()[1:3]
+    at = lines.index(comment[0])
+    assert lines[at + 1] == comment[1] and lines[at + 2].startswith('          "infra/control/nightly_check.py", ')
+    assert lines[at - 1].endswith('"tools/research/src/research/telemetry/__init__.py",')
+    assert all(text.count(c) == 1 for c in (*comment, "          # the H1 units read both."))
+    assert max(len(s) for s in lines if s not in comment) <= M.WIDTH and text.endswith('labels_sync.py"]\nuntraced = ["fixtures"]\n')
+    # merged the other way round, as a branch merged into `main` is: the same items, and the comment above the same one
+    text, left = _pyproject(tmp_path, PYPROJECT, theirs, ours)
+    assert left == 0 and sorted(tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-7:]) == sorted(want), text
+    lines = text.splitlines()
+    assert lines[lines.index(comment[1]) + 1].startswith('          "infra/control/nightly_check.py", ')
+
+
+def test_a_comment_in_a_list_s_conflict_is_one_side_s_or_the_conflict_stays_gits(tmp_path):
+    """Each side's comment stays above its item, and a comment one side rewrote is that side's.  Where merging the list
+    would lose a comment, write one twice or pick between two, the conflict is left as git writes it."""
+    import tomllib
+
+    def end(*rows):
+        return PYPROJECT.replace(TAIL, "".join(f"          {r}\n" for r in rows))
+    circuit, a, b = '"verity/protocols/pous/prover/circuit.py",', '"verity/a.py"', '"verity/b.py"'
+    text, left = _pyproject(tmp_path, PYPROJECT, end(circuit, "# why a", a + "]"), end(circuit, "# why b", b + "]"))
+    assert left == 0 and text.splitlines()[-6:-1] == ["          " + r for r in (circuit, "# why b", b + ",", "# why a", a + "]")]
+    base = end("# old", circuit[:-1] + "]")
+    text, left = _pyproject(tmp_path, base, end("# new", circuit, a + "]"), end("# old", circuit, b + "]"))
+    assert left == 0 and "# old" not in text and text.count("# new") == 1, "a comment one side rewrote is that side's"
+    assert tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:] == [circuit[1:-2], "verity/b.py", "verity/a.py"]
+    text, left = _pyproject(tmp_path, PYPROJECT, end(circuit, "# why", a + ",", '"verity/c.py"]'), end(circuit, "# why", a + ",", b + "]"))
+    assert left == 0 and text.count("# why") == 1, "a comment both sides wrote above one item is written once"
+    assert text.splitlines()[-4:-1] == ["          " + r for r in (circuit, "# why", a + ", " + b + ', "verity/c.py"]')]
+    stays = {
+        "a comment no item follows in its side": (PYPROJECT, end(circuit, a + ",", "# why a"), end(circuit, b + "]")),
+        "a comment above an item the other side removed": (end(circuit, a + "]"), end(circuit, "# why a", a + ",", '"verity/c.py"]'),
+                                                           end(circuit, b + "]")),
+        "one comment above two items": (PYPROJECT, end(circuit, "# why", a + "]"), end(circuit, "# why", b + "]")),
+        "a comment the sides rewrote two ways": (base, end("# ours", circuit, a + "]"), end("# theirs", circuit, b + "]")),
+        "a comment on an item's own line": (PYPROJECT, end(circuit, a + "]  # why a"), end(circuit, b + "]")),
+        "a comment above the list's opening": (PYPROJECT, PYPROJECT.replace('untraced = ["fixtures"]', '# kept\nuntraced = ["fixtures", "out"]'),
+                                               PYPROJECT.replace('["fixtures"]', '["fixtures", "logs"]')),
+    }
+    for why, sides in stays.items():
+        text, left = _pyproject(tmp_path, *sides)
+        assert left == 1 and "<<<<<<< ours" in text, why
+    lake = 'name = "p"\nroots = ["A",\n  "B"]\n'
+    text, left = _lakefile(tmp_path, lake, lake.replace('"B"]', '"B",\n  # why C\n  "C"]'), lake.replace('"B"]', '"B",\n  "D"]'))
+    assert left == 1 and "<<<<<<< ours" in text, "a lakefile's array is merged as before: a comment stays git's"
 
 
 def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_driver(tmp_path, monkeypatch):

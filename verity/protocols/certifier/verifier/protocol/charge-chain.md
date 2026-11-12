@@ -212,7 +212,7 @@ windows send no order entries, and v1's windows send no hits. A session where th
 outside the class: the slice's cache never evicts, so its rows aren't the served ones and ``rows`` refuses. Such a
 session needs a pool slice (`CompileSlice_v2` on, `compile_slice_v2`), and no pool slice charges the length terms yet.
 `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length terms.
-`CompileSlice_v7` (`compile_slice_v7`, the served windows' slice) charges them with
+`CompileSlice_v7` (`compile_slice_v7`, the served windows' slice except under the certified tick) charges them with
 `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
 max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
 certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the

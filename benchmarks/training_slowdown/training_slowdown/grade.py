@@ -40,7 +40,8 @@ no job writes): the grade never reads it and passes it on, beside each record it
   gives on those products (`calculator.slowdown`, which `formalism.bound` calls): the grade computes none. A search
   record with no trace, with one the capture refused or of a capture version this tree doesn't read, or with a step
   `formalism.measure` refuses, has no ρ, and then there is no S; the reason names how the trace is taken again
-  (`retrace`);
+  (`retrace`). So does a record whose trace was not taken (`trace.failed`: the process that traced the step raised, or
+  ended), whose ρ is unmeasured, not refused: nothing was found against the step;
 - **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
@@ -99,7 +100,7 @@ PER_DECADE, FIT_MIN, FIT_SPAN, FIT_TARGET, PARAMS, DIGITS = 20, 3, 10.0, 5, 3, 6
 GAMMAS = np.linspace(0.01, 2.0, 399)
 #: a checkpoint's facts about its output that `formalism.measure` reads, where the record has them
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
-#: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`run.trace_step`)
+#: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`traced.trace_step`)
 TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "carried_scalars")
 #: what the grade reads of a trace beside `TRACE`, where the trace has it, each with what it is: a record without one
 #: still grades, the figures that read it blank (`blank`)
@@ -110,7 +111,8 @@ BESIDE = {"circuit": "the measured step's cut of its gradient and its structure,
 #: work by the calculator's bound, so the products term is the bound of record on the work it chose
 BOUND_IS_RHO = ("rho's products term is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
                 "the same N, O, β, b and F: where products bind, rho is it and S is p times it")
-#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which a refused trace's reason names
+#: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where ρ
+#: has no trace to read: one refused, or one that was not taken
 RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
 
 
@@ -350,9 +352,11 @@ def retrace(record: dict) -> str:
 def changed_steps(record: dict, through: int | None) -> list[dict]:
     """The record's steps through `through` (None: all) after the run's first update: each that read a weight the run
     had changed, as the counter lists a step's `weights` (`flops`). A weight of θ is listed only where its value
-    differs from θ's, and a value derived from a gradient always; a tensor θ doesn't hold (`new/…`: a table a model
-    builds, an adapter) is listed by every step that reads it, so it counts once a value it is read at isn't the
-    first it was read at (a record without digests shows none as changed)."""
+    differs from θ's, as is a buffer of the model under its name (a position table a step wrote), and a value
+    derived from a gradient always; a tensor neither θ nor the model's buffers hold (`new/…`: an adapter, an
+    optimizer's state; in a record of a harness that held no buffers, a table the model builds) is listed by every
+    step that reads it, so it counts once a value it is read at isn't the first it was read at (a record without
+    digests shows none as changed)."""
     first, out = {}, []
     for s in record["steps"]:
         changed = [not key.startswith("new/") or any(v != first.setdefault(key, values[0]) for v in values)
@@ -379,7 +383,7 @@ def with_circuit(record: dict, circuit: dict) -> dict:
 
 def traced(record: dict, row: dict) -> dict:
     """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
-    traced (`run.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
+    traced (`traced.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
     product row is priced here (`work.priced`), at the k the job classified the rows at and at each
     other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
     after the run's first update (`changed_steps`), by their tokens over its own, a `stand_in` where they differ from
@@ -395,12 +399,17 @@ def traced(record: dict, row: dict) -> dict:
 
     Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
     the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
-    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes."""
+    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes. A
+    record whose trace was not taken (`failed`, with why: `run.inside`, `run.outside`) raises a plain `ValueError`
+    with the same way out: its step is unmeasured, and nothing refused it."""
     from .capture import products
 
     tr = record.get("trace")
     if not tr:
         raise F.Refused(f"the search record has no trace, and ρ reads a traced step; {retrace(record)}")
+    if "failed" in tr:
+        raise ValueError(f"the search record's trace was not taken ({tr['failed']}), and ρ reads a traced step; "
+                         f"{retrace(record)}")
     if "refused" in tr:
         r = tr["refused"]
         raise F.Refused(f"the capture refused the search record's step ({r.get('reason')}, {r.get('op')}: "

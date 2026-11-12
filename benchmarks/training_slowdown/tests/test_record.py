@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, lm_loss, mlp
-from training_slowdown.capture import CaptureRefused, capture_step
+from training_slowdown.capture import capture_step
 
 FI, H, O, N = 3, 5, 2, 4
 GEMM = N * (2 * FI * H + 3 * H * O)
@@ -66,32 +66,11 @@ def test_bf16_autocast_reads_through_the_casts():
     assert g.macs == 3 * T * Hd * V + L * (12 * T * Hd * Hd + 6 * T * Hd * I + 6 * T * S * Hd)
     updated = [m for m in g.matmuls if m.role == "updated" and m.phase == "forward"]
     assert len(updated) == 8 * L + 1
-    # every product at bf16, attention's QK and PV too: the capture runs its math backend in its operands' dtype, as
-    # the fused kernel a job runs does; the norms, which autocast runs in fp32, read their gains at 32 bits
-    assert {m.op for m in updated} >= {"aten.bmm.default"} and all(m.dtypes == ("bfloat16",) * 2 for m in updated)
+    # the projections at bf16 (SDPA's math backend runs QK and PV in fp32); the norms, which autocast runs in fp32, read
+    # their gains at 32 bits
+    assert all(m.dtypes == (("float32",) if m.op == "aten.bmm.default" else ("bfloat16",)) * 2 for m in updated)
     assert len(g.updated_elementwise) == 4 * L + 1
     assert sorted({r[4] for r in g.structure()["updated"]}) == [16, 32]
     # the cut: the GEMMs' weights at the 16 bits the forward reads them at, the table and the gains at 32
     gemm = L * (4 * Hd * Hd + 2 * Hd * I) + Hd * V
     assert g.cut_bits == 16 * gemm + 32 * (V * Hd + (2 * L + 1) * 2 * Hd)
-
-
-@pytest.mark.parametrize("allowed", [False, True])
-def test_the_capture_leaves_attentions_math_switch_as_it_found_it(allowed):
-    """The capture keeps attention's math backend in its operands' dtype through a switch of torch's that the whole
-    process shares (it acts on a CPU as on a GPU), and puts it back as it found it: after a step it captured and
-    after one it refused."""
-    switch = torch.backends.cuda
-    was = switch.fp16_bf16_reduction_math_sdp_allowed()
-    switch.allow_fp16_bf16_reduction_math_sdp(allowed)
-    try:
-        model = TinyLM(32, 16, 2, 32, 1)
-        ids = torch.zeros(2, 4, dtype=torch.long)
-        capture_step(model, torch.optim.SGD(model.parameters(), lr=0.1), lm_loss, (ids, ids))
-        assert switch.fp16_bf16_reduction_math_sdp_allowed() == allowed
-        with pytest.raises(CaptureRefused):
-            capture_step(model, torch.optim.SGD(model.parameters(), lr=0.1),
-                         lambda m, b: lm_loss(m, b) / (1 + lm_loss(m, b).item()), (ids, ids))
-        assert switch.fp16_bf16_reduction_math_sdp_allowed() == allowed
-    finally:
-        switch.allow_fp16_bf16_reduction_math_sdp(was)

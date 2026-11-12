@@ -699,5 +699,15 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard (check true (exWiredAt 2 1) none).codes == #["second-wires"]
 #guard (check true { exWired with rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 2, 0, 0⟩]⟩] } none).codes == #["second-wires"]
 #guard (check true (exWiredAt 3 2) none).codes == #["second-statements"]
+-- a wire whose writer's port a link names reads an output the replay block returns, and one whose writer's part is not
+-- before its reader's, or is its reader's own, is out of order: neither makes wires
+#guard wiresOk exTwoParts exWired
+#guard !wiresOk exTwoParts { exWired with links := some #[⟨"Pair_v0", "out", "o0"⟩] }
+#guard (check true { exWired with
+    links := some #[⟨"Pair_v0", "out", "o0"⟩]
+    rows := exWired.rows.push ⟨"Pair_v0", "out", 3, #[⟨0, 3, 0, 1⟩]⟩ } none).codes == #["second-wires"]
+#guard !wiresOk exTwoParts.reverse exWired
+#guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
+#guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }
 
 end Spot.SecondStage
