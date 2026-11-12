@@ -75676,3 +75676,35 @@ I take (a) unless you say otherwise: it is the precedent, it says in the lock wh
   08:30Z, not the 08:05Z of my 07:20Z entry. [run: the same log; guess: the time]
 - Nothing else of mine is out. #8940 is not on `main` (`d6075b75d289`). [run: `git merge-base --is-ancestor 58a598e615b1 origin/main`]
 - When you resume me: I read `32ed`, write its verdict in one entry, and fix what it refuses.
+
+## OLDFOUR, Thu 12 Nov 07:28Z: #8139 stops against lean's merge in seven files, named below, and stays unmarked; #8406's redo has no stop against lean's merge at `5bfd8fd5e34e`; three runs out
+
+**1. #8139 against lean's merge: seven files stop, so no mark**
+
+- `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d f51a277c6e846dda3c99f4a0001ef0b618a1bf08`: exit 1, lean's branch at `de28a691126b`. [run at 07:26Z]
+- **The files it names,** each a content conflict:
+  - `security/Proofs/Properties/Spot.lean`: 5 conflicts beyond import lists.
+  - `verity/protocols/spot/verifier/lean/Spot/Registration.lean`: 2 conflicts beyond import lists.
+  - `security/Properties/Spot.lean`: 1 conflict beyond import lists.
+  - `verity/protocols/spot/verifier/lean/tests/test_difftest.py`
+  - `verity/protocols/spot/device/coins.py`
+  - `benchmarks/verifier_cost/whole_run.py`
+  - `verity/protocols/pous/lean/TRUSTED.sha256`
+- **The locks merge, by the driver's rules, without regenerating:** in `security/lean-audit.json`, `Spot.OneStage.check` (theirs) and `Spot.Registration.Verifier.seedSalt` (removed); in `security/Properties/lean-audit.json`, those two, the guarantee `Properties.Spot.acceptMeans` and the definition `Properties.Spot.AcceptMeans` (both theirs), and `unwitnessed[Properties.Spot.acceptMeans]` (ours). So lean's branch changes `acceptMeans`'s record too, and the lock run after landing regenerates it. [read: `merge.py`'s lines in the same output]
+- I changed nothing in the pull request for this, as your 07:21Z section says. The rest of the 05:49Z ready line stands: head `f51a277c6e84`, `main` at `d6075b75d289` when merged, `9dd0` exit 0 with 71 of 71. `main` has since moved to `bcaf58a45d53`; I have not tried the merge against it. [run: `git fetch origin main` at 07:26Z]
+- It is still not marked, by me or anyone: the queue says "not marked ready at f51a277c". [run: `research queue status` at 07:26Z]
+
+**2. #8406's redo, `cursor/proofs-oldfour-f012` at `5bfd8fd5e34e97cc1068a5d640f18d78295672ab`: no stop against lean's merge**
+
+- The same command at that head: exit 0, no file named. The driver takes two removed definitions in `security/lean-audit.json` without regenerating (`SamplingDeploy.bytesSecond`, `SamplingDeploy.codeTwoAt`), which are #8940's, not the redo's. [run at 07:26Z]
+- Your section's stop for #8406 in `fixtures/artifacts.json` is of its old branch `3d8e9aa8c0af`; the redo's change to that file merges. [run: the same]
+- **Since the 06:43Z entry:**
+  - `r20261112-060026-cf32`, exit 0: `lean_changed.py --build` of the seven leaves, `security/Proofs` exit 0 in 1,438 s, 41 module versions new. Every module that imports `SpotFlock.Code` elaborates. [read: the run's `stdout.log`, its last three lines]
+  - `r20261112-062405-a3a0`, exit 1: the guard's six tests failed at loading the runner's shared library, `undefined symbol: lp_core__base_Flock_Sha512_iv`. **Not the redo's: `guard_node.py` is stale on `main`.** Its list of native libraries predates the three base Lean packages, and 159 symbols of `core_base`, `core_circuits` and `core_commitments` were undefined. [read: the run's log; run: `nm` on the library, `r20261112-070125-d3b6`, exit 0]
+  - **Fixed in a fourth commit, `5bfd8fd5e3`:** `NATIVE` names the three base libraries. One line of Python, no Lean. [run: `git push`]
+  - `r20261112-063940-ffe0`, cancelled by me by id at 07:10Z: the records run landed on a cold Lean tree on cpu-14 under a 60 minute timeout, and after 24 minutes in its slot was still fetching dependencies. [read: its log; run: `research cancel`]
+- **Runs out:**
+  - `r20261112-070357-2a12`, cpu-12: `guard_node.py --pytest` at `5bfd8fd5e3`. The library linked and the tests have run since 07:08Z without a failure line. Its timeout ends it at 08:04Z. [read: its log at 07:27Z]
+  - `r20261112-071011-11dc`, cpu-9: `lean_changed.py --records security --update` at `5bfd8fd5e3`, `--timeout 7200`. About 08:10Z, from `4bcb`'s 52 minutes in its slot. [guess]
+  - `r20261112-071455-accc`, cpu-14: the quick tier, `suites.py --changed 58a598e615b1d170e2b9a19440af93f1ba0ac79e --quick`, 9 suites. About 08:00Z. [guess]
+- **Then:** the records commit, the suites the lock's change reaches, and the ready line by 09:00Z. #8940 is still not on `main`. [run: `git merge-base --is-ancestor 58a598e615b1 origin/main` at 07:26Z]
