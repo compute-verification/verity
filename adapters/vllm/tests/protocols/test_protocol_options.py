@@ -16,7 +16,12 @@ import pytest
 from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
-from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, check_reuse
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    check_reuse,
+)
 
 DEFAULT_DIGEST = "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"   # TargetProfile() on main before the field existed
 ALL = ("pouw:ncp-v1", "pous:band-chain/d12/v1", "sampled-proofs:rows-sha512")
@@ -29,7 +34,7 @@ def test_a_set_is_spelled_one_way_in_install_order():
     assert config.parse_protocols("sampled-proofs:rows-sha512, pous:band-chain/d12/v1,pouw:ncp-v1") == ALL
     assert config.parse_protocols({"pous": "band-chain/d12/v1", "pouw": "ncp-v1"}) == ALL[:2]
     assert config.parse_protocols(list(reversed(ALL))) == ALL
-    assert config.PROTOCOLS == tuple(e.partition(":")[0] for e in ALL)
+    assert tuple(e.partition(":")[0] for e in ALL) == config.PROTOCOLS
 
 
 @pytest.mark.parametrize("value,match", [("zk:v1", "unknown protocol"), ("pous", "expected pous:<scheme>"), ("pous:", "expected"),
@@ -395,10 +400,9 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
     from types import SimpleNamespace
 
     from verity_vllm.config import RowConfig
-    from verity_vllm.pipeline import cli
+    from verity_vllm.pipeline import cli, row_stages
     from verity_vllm.pipeline import row as ROW
     from verity_vllm.pipeline import row_records as R
-    from verity_vllm.pipeline import row_stages
     row = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
     seen = {}
 
