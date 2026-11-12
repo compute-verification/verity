@@ -1,0 +1,3 @@
+[2026-11-12T23:13Z] 213eb5610e9b
+SHEETS46: /tmp/sheets-reconcile.md is written. TLDR: #9434 and #9509 unchanged. Step 6 (no PR, held) drops its whole verity/hardware part (render_prices, lean_prices key, tests). The served record leaves Definitions once its 5 listed readers go: the 4 by-deadline instances (recommend leaving the list; they follow from PearlCSampledByDeadline + SampledDevRev1K; reverses option C, so it needs Daniel) and compute-research's EpsSm120v1. The TOML tie is a test holding clear_work.SM120_LOOP_CAST_8P72's prices to the card file. Base fix 67b2c679198 is merged into steps 4-6 and pushed (no lock change).
+
