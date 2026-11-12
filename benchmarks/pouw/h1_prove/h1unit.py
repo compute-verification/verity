@@ -741,11 +741,11 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
                           + np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes())
 
 
-__all__ = ["A_TABLES_TAG", "LAYOUT", "M32", "OK", "OK_VALUE", "OUT_PORTS", "PROVER", "PUBLIC", "PUB_BITS", "SALT_BYTES",
-           "STREAM", "Shape", "TILE", "V2", "bound_root", "check_known", "commit_strings", "dequant", "domain",
-           "forge_statement", "known_ok", "layout", "levels", "ok_salt", "open_root", "path", "ports", "program_tables",
-           "pub_salt", "pub_words", "receipt_words", "record_words", "records", "register", "register_ok",
-           "registered_domain", "registered_levels", "registered_of", "registered_reads", "row_words", "slot",
-           "split_record", "split_row", "stager", "stand_in_reveal", "statement_tables", "tables", "tile", "unit_reads",
-           "unit_salt", "value_words", "verifier_pub", "verify", "verify_registered", "window_open_root",
+__all__ = ["A_TABLES_TAG", "HW", "LAYOUT", "M32", "OK", "OK_VALUE", "OUT_PORTS", "PROVER", "PUBLIC", "PUB_BITS",
+           "SALT_BYTES", "STREAM", "Shape", "TILE", "V2", "bound_root", "check_known", "commit_strings", "dequant",
+           "domain", "forge_statement", "known_ok", "layout", "levels", "ok_salt", "open_root", "path", "ports",
+           "program_tables", "pub_salt", "pub_words", "receipt_words", "record_words", "records", "register",
+           "register_ok", "registered_domain", "registered_levels", "registered_of", "registered_reads", "row_words",
+           "slot", "split_record", "split_row", "stager", "stand_in_reveal", "statement_tables", "tables", "tile",
+           "unit_reads", "unit_salt", "value_words", "verifier_pub", "verify", "verify_registered", "window_open_root",
            "window_ports", "window_roots", "window_shape"]

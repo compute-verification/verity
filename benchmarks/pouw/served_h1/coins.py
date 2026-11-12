@@ -734,8 +734,8 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if got["ok"] else 1
 
 
-__all__ = ["CHALLENGER_ENV", "COMMITMENT_ENV", "Coins", "Endpoint", "GATE_ENV", "HEX_WITHHELD", "IN_PROCESS",
-           "PEER_ENV", "RoundPipe", "SECRET_ENV", "SESSION_ENV", "SSH", "STAND_IN", "STAND_IN_TAG", "check",
+__all__ = ["CHALLENGER_ENV", "COMMITMENT_ENV", "Ch", "Coins", "Endpoint", "GATE_ENV", "HEX_WITHHELD", "IN_PROCESS",
+           "PEER_ENV", "R", "RoundPipe", "SECRET_ENV", "SESSION_ENV", "SSH", "STAND_IN", "STAND_IN_TAG", "Wd", "check",
            "gate_call", "gate_sample", "key_record", "layout", "layout_reason", "main", "open_coins", "open_window",
            "published", "read_secret", "reserve", "session", "ssh_args", "stand_in_root", "write_secret"]
 

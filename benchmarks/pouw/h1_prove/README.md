@@ -39,5 +39,5 @@ and verifier share; `window.py` is the window's committer and prover, which `run
 imports; `stage.py K WORK` builds the unit's circuit once and stages each round on it; `layer.py` records a decoder
 layer's int8 codes and scales from a checkpoint on the CPU. `live.py` is also read by the vLLM adapter's tests and
 `benchmarks/one_stage/`, and `h1_lanes/served.py` takes the units `served.py` samples. `h1unit.py`, `window.py`,
-`run.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read, the tests' included. Their
-tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.
+`run.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
+included, except underscore names. Their tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.

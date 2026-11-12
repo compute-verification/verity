@@ -290,7 +290,7 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
     return {**{p: bytes.fromhex(op["rows"][p]["bc"]) for p in [*shape.in_rows, "o0"]}, "pub": pub, "o1": ok}
 
 
-def ok_registration(win: SimpleNamespace, com: dict) -> "U.G.Registered":
+def ok_registration(win: SimpleNamespace, com: dict) -> G.Registered:
     """The verifier's own registration of an execution phase's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
     salt), under its own Program's digest and the execution phase's open root (`h1unit.window_open_root`, the verifier's own), from
     the execution phase's name, its b/<K> root and the Program's population alone."""

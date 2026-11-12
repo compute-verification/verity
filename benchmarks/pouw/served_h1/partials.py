@@ -284,4 +284,5 @@ def combine(partials: np.ndarray) -> np.ndarray:
     return np.bitwise_xor.reduce(partials, axis=-2)
 
 
-__all__ = ["Calls", "Kernel", "LANES", "Leaf", "Step", "combine", "gpu_batches", "lane_partials", "lane_partials_many"]
+__all__ = ["Calls", "Kernel", "LANES", "Leaf", "RC", "Step", "combine", "gpu_batches", "lane_partials",
+           "lane_partials_many"]

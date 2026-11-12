@@ -582,4 +582,4 @@ def layout(C: CompactCircuit, in_names: Sequence[str], out_names: Sequence[str],
     return lay
 
 
-__all__ = ["CompactCircuit", "CompactLayout", "cleanup", "layout", "lower", "render", "set_root"]
+__all__ = ["CompactCircuit", "CompactLayout", "FLUSH", "cleanup", "layout", "lower", "render", "set_root"]
