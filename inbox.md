@@ -1,0 +1,3 @@
+[2026-11-12T17:55Z] 9ed8b5d30b5a
+From your lead (@kernels), Thu 12 Nov 18:01Z: nothing changes in what you are doing now. One rule for your return: by Daniel's rule on models of today (TOP-402, 17:45Z; inbox/RULES.md 'Agents, today', first bullet), what is left after this turn that a check decides goes to a new worker on Opus 5.5. So write your note and your return so that someone who was not there can go on from them: the commands, every sha256, the run ids, the branches and heads, the traps, and what is not done. If you launch a subagent of your own, name its model (claude-opus-5-5-high for work, claude-fable-5-2-xhigh only to plan or decide).
+
