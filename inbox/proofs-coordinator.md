@@ -107692,3 +107692,46 @@ Nothing.
 - The `simp` steps in `inputAt_ok` and `accepted_steps` are the most likely to need a fix.
 - The Python twin and difftest are not written.
 - `heldOf` is not started.
+
+## NEEDEDBITS, Thu 12 Nov 23:02Z: GAP, for FRAME: `NeededBits h` is false as stated at a held code whose member's unit reads a wire-fed input; the model's session check admits that circuit and the running verifier refuses it; one conjunct in `templateOk` closes it
+
+**In plain words.** The fact says every gate a checked proof block needs is one of its own committed input bits or one of its own returned output bits. That fails for one kind of circuit the model accepts: a unit that reads a second input group, one of whose ports is filled inside the template instance by a wire from another stage (for example a normalisation unit reading a scalar a lookup stage computes). In the model's program of the members side by side, such a bit is a free input gate of the unit's own proof block, so the block needs it; but it is no bit of any registered row, so it has no commitment position, and it is no returned output either. The running verifier refuses such a session (it holds every session's circuit to the one-input-group form); the two-round model does not. Adding that same condition to the auditor's check of each template's reference statement closes the gap, and I go on with it as a hypothesis.
+
+Clock: `date -u` read 23:00Z. Mailbox `inbox/bc-86459fd4-85aa-549a-ae94-c08e1cbf5726.md` does not exist yet (read 23:00Z). Everything below is read at the base `b8ca16854990`; nothing is compiled.
+
+### The counterexample, in words [derived from the reads below; no run]
+
+- A held code with a template `t` whose reference statement `h.xS₀ t` is a flat (untemplated) circuit with hidden outputs under `--zk`, in one table, every port a `sha512/row/v2` row, unit at most `2^32` rows, and whose unit reads a second input group, one port of which a Flock wire from a stage net fills (no leaf cut), with some unit row reading a bit of that port.
+- It passes `templateOk h t` (`SpotFlock/Code.lean:375-386`): hidden outputs, untyped, `Desc.parseStmt`, `unitLog ≤ 32`, one table, `v2Row` ports. Nothing there reads the unit's input groups [read].
+- Its sessions pass `sessionOk` (`Code.lean:368-369`), whose scope part is `FlockDeploy.scopeCheck true xS` = `Parsed.scope` = `ProvedScope.check` (`Claims/Scope/Readable.lean:149`). For a flat hidden-output circuit that is `wiresAcyclic` then `scopeOkI` (`Flock/ProvedScope.lean:354-365`, `:158-159`), which has no condition on the input groups [read]. `pinOk` (`Code.lean:458`) makes the session's circuit file the reference's [read].
+- In Bits' key program (`Spot/Bits.lean`): the wired port's bit has the source key `.wire …` (`srcAt`, `:166-176`: no leaf cut, a wire into the unit), which is not the zero, so `keyIdx` gives it a key `b` and unit `u` reads gate `2 + u·B + b` (`keyProg`'s `wire`, `:243-246`) [read].
+- That gate's `owner` is `u`, so `consts` leaves it free (`:597-599`), so it is in `insOf … u` and in `u`'s proof block (`blockOf`, `:306-307`); an input gate of a block is on its boundary, so `Prog.Needs` holds at it [read, derived].
+- `rowBit c n (2 + u·B + b)` is `srcPos c u (.wire …) = none` (`:581-591`), so `sourceBits` has no entry there (`WireMap.lean:233-238`); the gate is an input, so `BitOf`'s written arm fails too (`NeededBits.lean:40-44`). `BitOf` fails at a needed gate of a checked unit [derived].
+- So at any accepted run that checks a unit of such a template, `NeededBits h` is false. An honest run of such a circuit needs no cheating prover; I have not built one, and I have not checked that every conjunct of `CheckedRun.Ok` is met at once (`stmtOk`'s `codesOk` and the round-2 checks are about names and roots and read nothing of the unit's groups, by my reading of `readsOk`, `Code.lean:527-535`).
+
+**Why the running verifier is not open here** [read]: Spot's per-session verdict runs `Flock.KsScope.checkOf` after `Zk.verify` (`Spot/OneStageZk.lean:566`, in `verdictOf`), which holds a flat circuit to `ProvedScope.scopeOkH` (one input group, outputs from the unit, `portReadsB`, rows with no pinned output; `Flock/KsScope.lean:87-95`). [guess] The two-round driver's sessions go through the same `verdictOf`; I have not traced that path. So this is a gap between the model `V h` and the code, not a hole in the code, as far as I read.
+
+**Other forms of the same failure, all closed by the same condition** [read]: a unit row reading an input column no port carries (key `.pad`, no row; `portReadsB` refuses it, and `scopeOkI` already has it); a returned output word past the rowed output ports (a pinned output: `outPos` finds no output row, so no `outRowBit`; `unpinned` is in `v1Ports` and `bitRows`, so `scopeOkI` already refuses it).
+
+### The check that closes it (FRAME's file, `Code.lean`)
+
+- **Before**: `templateOk h t` = `r.tags.hiddenOutputs && !r.tags.typed && (Desc.parseStmt … ok) && decide (r.stmt.unit.unitLog ≤ 32) && (shapeOf (h.xS₀ t)).length == 1 && r.stmt.ports.all ProvedScope.v2Row`.
+- **After**: the same, `&& _root_.Flock.ProvedScope.scopeOkH r.stmt`.
+- It is decided on `Held`, so a held code failing it has no accepted run (`two` is none). It mirrors what the running verifier already refuses (`KsScope.checkOf`; a templated statement's unrolled circuit is in `scopeOkH` there too, `KsScope.lean:28-29`), so I expect no honest run the code accepts to be lost [guess].
+- With it, by my reading, the input case follows from `keysRow_of_parse` (one input group and `PortReads`, from `scopeOkH_spec`) and the output case from `unpinned`; I will prove both from it unless FRAME prefers the condition elsewhere (in `sessionOk`, mirroring `KsScope` on the session statement, also works, since `pinOk` makes the two circuits one).
+
+### STOP RULE
+
+- Before: `SpotFlock.V h`'s design evaluation (`two`) admits a member circuit whose unit reads a wire-fed input group; `SpotKSTwo` rests on `AddressesConnected` among others, and `NeededBits` is one step of discharging it.
+- After the change above: `two` is none at such a held code, so `V h` refuses every run of it. The verifier the theorem speaks of accepts less; the running verifier is unchanged. The statement of `SpotKSTwo` reads `two`, so its lock records move at the next records run. This is FRAME's L1 territory; I make no change to `Code.lean`.
+
+### What I do meanwhile
+
+- I write the proof against a named hypothesis, `MembersRowed h` (every free input gate of each member's key program has a commitment position, and every returned output bit has one), with `neededBits_of_rowed : MembersRowed h → NeededBits h`, and `SideBySide h` proved with no hypothesis. Owner of `MembersRowed`: me, from `templateOk` once FRAME's conjunct is in (or FRAME's, if FRAME rules the condition goes elsewhere).
+- Statements by 00:45Z, as owed.
+
+**NEEDS** (FRAME): the `templateOk` conjunct above, or your ruling where the condition goes.
+
+**To post.** Nothing.
+
+**Not established.** That an accepted run with such a template exists in full (I reasoned from the checks, I built none); that the two-round driver's sessions run `KsScope.checkOf`; that `keysRow_of_parse` applies to `stmtOf` (it is stated at `HmRow.parse`, and a hidden-output statement's circuit is `HmOut.parseCommit`'s, then unrolled); the output case from `unpinned` (no lemma read yet). Nothing compiled.
