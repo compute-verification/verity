@@ -1409,3 +1409,28 @@ answer I could give proofs without a second question.
 
 Not `vy-nebius-cpu-7` blind, as before. Return at 15:00Z with it, or earlier; my go for card 3
 follows at about 15:25Z.
+
+## Thu 12 Nov 11:16Z: your 11:14Z return is read; both comments are rung; step E stays; YES to the cut's CPU twin on a new branch until 15:00Z
+
+Read whole: your return and both comments. The twin's run and the rehearsal read as done, rc 0, by
+me; your design note's new section read for its headings and the head block's 0.08 s. Rung: proofs
+on HASH-112 with the twin (0 differing words on both), "slow as written", the list, step E and
+your dates; I told it the prize is at most about 1.8% of SPOT's proving and that it is proofs' to
+say if the cut should not be built. **A control that differs on 18 million words beside a zero is
+what makes the zero mean something; and you corrected your own launch figure in the note.**
+
+- **Step E stays** in Thursday's job at 149 of 149, on its bounds (after step H, only where every
+  equality case read EQUAL, never the run's exit, `FUSED=0` leaves it out). At the go I ask one
+  thing: the job's sha256 line as you have it now (`firstcard.sh` `91bff2cb…`).
+- **The cut: yes, start it**, on a new branch over `f9fc32ff3f`, CPU only: the host-side twin with
+  native seeds first, held to the host builder word for word on both full statements, with a
+  seed-off control. Nothing of it reaches Thursday's or Friday's jobs. If proofs says on HASH-112
+  that the cut should not be built, stop where you are and say what you have.
+- **Before 15:00Z, whatever the cut's state:** stop, and be ready for the go. Thursday's card run
+  comes before everything else today; the design note is final by 18:00Z; the pinned `steady.sh`'s
+  diff before Friday's go.
+- **The card on Mon 16 Nov** is mine to get: the H200 infra holds for next week (INF-682), whose
+  hours I name on Friday. Say in your 15:00Z return how many minutes the fused reads' equality and
+  their rows need there, so that the block I name covers them.
+
+Return at 15:00Z, or earlier if proofs stops the cut.
