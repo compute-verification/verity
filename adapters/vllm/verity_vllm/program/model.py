@@ -527,7 +527,7 @@ def _inv_freq(C: dict[str, Any]) -> np.ndarray:
     inv = (np.float32(1.0) / np.power(base, exps, dtype=np.float32)).astype(np.float32)
     rs = C.get("rope_scaling")
     rtype = (rs.get("rope_type") or rs.get("type") or "").lower() if isinstance(rs, dict) else ""
-    if rtype == "llama3":
+    if isinstance(rs, dict) and rtype == "llama3":
         # vLLM Llama3RotaryEmbedding._compute_inv_freq (fp32): blend between inv_freq and inv_freq / factor by wavelength
         factor = np.float32(rs["factor"])
         low = np.float32(rs["low_freq_factor"])
