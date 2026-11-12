@@ -38,8 +38,8 @@ def fmt(x: float) -> str:
 
 
 def row(e: Estimate) -> dict:
-    s = e.overhead
-    return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "slowdown": s.rho if s else None,
+    s = e.parts
+    return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "slowdown": s.value if s else None,
             "padded": s.padded if s else None, "g": s.g if s else None, "declared_slowdown": e.declared, "outside": e.outside, "excluded": list(e.excluded),
             "binding": {k: v.cut for k, v in s.serving.items()} if s else {},
             "terms": dict(s.terms) if s else {}}
@@ -63,20 +63,20 @@ def padded(r: Result) -> float:
 def best_attack(r: Result) -> tuple[FamilyResult, Estimate] | None:
     """The best known attack over the scenario's families, and the family it trains."""
     found = [(f, f.best_attack) for f in r.families if f.best_attack]
-    return min(found, key=lambda fa: (fa[1].rho, fa[1].padded), default=None)
+    return min(found, key=lambda fa: (fa[1].slowdown, fa[1].padded), default=None)
 
 
 def setter(f: FamilyResult) -> Estimate | None:
     """The bound that sets the lower bound: of those it admits, the one with the most slowdown alone at a standing
     short of refuted."""
-    met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in f.combined.excluded]
-    return max(met, key=lambda e: e.rho, default=None)
+    met = [e for e in f.bounds if e.parts and e.premise != "refuted" and e.argument not in f.combined.excluded]
+    return max(met, key=lambda e: e.slowdown, default=None)
 
 
 def monitored(r: Result) -> float:
     """The share of the adversary's counted weight on monitored gates, for the family the adversary picks."""
     best = picked(r)
-    return best.combined.overhead.monitored if best and best.combined.overhead else math.nan
+    return best.combined.parts.monitored if best and best.combined.parts else math.nan
 
 
 def inference(s: Scenario) -> str:
@@ -179,19 +179,19 @@ def estimates_md(f: FamilyResult) -> list[str]:
     """A family's bounds (each alone, then every one at once: the lower bound) and, in a table of their own, its
     attacks."""
     def cut(e: Estimate) -> str:
-        return ", ".join(f"{k}: {v.cut}" for k, v in e.overhead.serving.items())
+        return ", ".join(f"{k}: {v.cut}" for k, v in e.parts.serving.items())
 
     out = ["| bound | status | premises | slowdown | padded size ratio | g | overhead in one inference block | "
            "binding cut |", "|---|---|---|---|---|---|---|---|"]
     for e in f.bounds:
-        if e.overhead is None:
+        if e.parts is None:
             out.append(f"| {e.argument} | outside | | | | | | {e.outside} |")
         else:
-            out.append(f"| {e.argument} | {e.status} | {e.premise} | {fmt(e.rho)} | {fmt(e.padded)} | "
-                       f"{fmt(e.overhead.g)} | {fmt(e.declared)} | {cut(e)} |")
+            out.append(f"| {e.argument} | {e.status} | {e.premise} | {fmt(e.slowdown)} | {fmt(e.padded)} | "
+                       f"{fmt(e.parts.g)} | {fmt(e.declared)} | {cut(e)} |")
     c = f.combined
-    out.append(f"| **every bound at once: the lower bound** | {c.status} | {c.premise} | **{fmt(c.rho)}** | "
-               f"{fmt(c.padded)} | {fmt(c.overhead.g)} | {fmt(c.declared)} | {cut(c)} |")
+    out.append(f"| **every bound at once: the lower bound** | {c.status} | {c.premise} | **{fmt(c.slowdown)}** | "
+               f"{fmt(c.padded)} | {fmt(c.parts.g)} | {fmt(c.declared)} | {cut(c)} |")
     out.append("")
     if c.excluded:
         out += [(f"Left out of the lower bound at the block that binds, their premises refuted there: "
@@ -199,10 +199,10 @@ def estimates_md(f: FamilyResult) -> list[str]:
     out += ["| attack | status | slowdown | padded size ratio | g | overhead in one inference block | layout |",
             "|---|---|---|---|---|---|---|"]
     for e in f.attacks:
-        if e.overhead is None:
+        if e.parts is None:
             out.append(f"| {e.argument} | outside | | | | | {e.outside} |")
         else:
-            out.append(f"| {e.argument} | {e.status} | {fmt(e.rho)} | {fmt(e.padded)} | {fmt(e.overhead.g)} | "
+            out.append(f"| {e.argument} | {e.status} | {fmt(e.slowdown)} | {fmt(e.padded)} | {fmt(e.parts.g)} | "
                        f"{fmt(e.declared)} | {cut(e)} |")
     return out + [""]
 
@@ -232,7 +232,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
              + (f", set by {sets.argument}" if sets else "") if best else "**Slowdown:** no family")
     attack = best_attack(r)
     attack_md = (f"**Best known attack:** {attack[1].argument} on {attack[0].family} ({attack[1].status}) at slowdown "
-                 f"{fmt(attack[1].rho)}, {when(s, attack[1].rho)} to the target: a construction, beside the bound."
+                 f"{fmt(attack[1].slowdown)}, {when(s, attack[1].slowdown)} to the target: a construction, beside the bound."
                  if attack else "**Best known attack:** none applies.")
     out = [f"## {s.name}", "", setting, "",
            (f"{claim}. **Time to the target ≥ {when(s, r.lo)}** (wall-clock, the slowdown times "
@@ -259,7 +259,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     for f in r.families:
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", ""]
         out += estimates_md(f)
-        terms_ = f.combined.overhead.terms
+        terms_ = f.combined.parts.terms
         out += ["g's terms (lower bound): " + ", ".join(f"{k} {fmt(v)}" for k, v in terms_.items() if v), ""]
         if f.contradictions:
             out += [f"**Contradiction:** {', '.join(f.contradictions)} exceed the best attack: a premise is false here.", ""]
@@ -267,7 +267,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
 
 
 def crossings(ds: list[analysis.Danger]) -> str:
-    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (slowdown {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
+    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (slowdown {fmt(d.slowdown_worst)} at {fmt(d.worst)})" for d in ds)
 
 
 def below_md(name: str, base: float, by_status: dict[str, float], corner: analysis.Corner,
@@ -282,9 +282,9 @@ def below_md(name: str, base: float, by_status: dict[str, float], corner: analys
                 rest += 1
             prev = v
         more = f", and {rest} more that each move it under 0.5%" if rest else ""
-        out.append(f"- **Corner:** slowdown ≥ {fmt(corner.rho)} with every ranged parameter at the worse end of its "
+        out.append(f"- **Corner:** slowdown ≥ {fmt(corner.slowdown)} with every ranged parameter at the worse end of its "
                    f"range at once; one at a time, worst first: {', '.join(steps)}{more}"
-                   + ("." if corner.joint == corner.rho else f" (all at once: {fmt(corner.joint)})."))
+                   + ("." if corner.joint == corner.slowdown else f" (all at once: {fmt(corner.joint)})."))
     else:
         out.append("- **Corner:** no ranged parameter lowers the lower bound.")
     for t in sorted(dangers):
@@ -293,7 +293,7 @@ def below_md(name: str, base: float, by_status: dict[str, float], corner: analys
                 found = f"falls below it within a plausible range: {crossings(dangers[t])}."
             else:
                 found = ("no single parameter's plausible range takes it below; "
-                         + (f"the corner does (slowdown ≥ {fmt(corner.rho)})." if corner.rho < t
+                         + (f"the corner does (slowdown ≥ {fmt(corner.slowdown)})." if corner.slowdown < t
                             else "nor does the corner."))
             weaker = [st for st, v in by_status.items() if v < t]
             if weaker:
@@ -367,11 +367,11 @@ def main() -> None:
         standing = f"{best.combined.status}, {best.combined.premise}" if best else ""
         summary.append(f"| {name} | **{fmt(r.lo)}** | {standing} | {sets.argument if sets else ''} | "
                        f"{fmt(padded(r))} | {inference(s)} | {when(s, r.lo)} | {fmt(by_status['conditional'])} | "
-                       f"{monitored(r):.1%} | {rests(r, terms)} | {fmt(corner.rho)} |")
+                       f"{monitored(r):.1%} | {rests(r, terms)} | {fmt(corner.slowdown)} |")
         attack = best_attack(r)
         contradictions = sorted({c for f in r.families for c in f.contradictions})
         attacks.append(f"| {name} | " + (f"{attack[1].argument} | {attack[0].family} | {attack[1].status} | "
-                                         f"{fmt(attack[1].rho)} | {when(s, attack[1].rho)}" if attack
+                                         f"{fmt(attack[1].slowdown)} | {when(s, attack[1].slowdown)}" if attack
                                          else "none | | | | ")
                        + f" | {', '.join(contradictions) or 'none'} |")
         policy = s.context.policy
@@ -383,7 +383,7 @@ def main() -> None:
                                    "source": reg.param(f"policy.{policy.name}.inference_overhead").source
                                    if f"policy.{policy.name}.inference_overhead" in reg else "not modeled"},
             "attack": {"argument": attack[1].argument, "family": attack[0].family, "status": attack[1].status,
-                       "slowdown": attack[1].rho, "padded": attack[1].padded, "seconds": s.seconds(attack[1].rho)}
+                       "slowdown": attack[1].slowdown, "padded": attack[1].padded, "seconds": s.seconds(attack[1].slowdown)}
             if attack else None,
             "contradictions": contradictions,
             "structure": {"name": s.structure.name, "s_times": s.structure.s_times, "basis": s.structure.basis,
@@ -404,7 +404,7 @@ def main() -> None:
             "tornado": [vars(s) for s in swings],
             "dangers": {str(t): [vars(d) for d in ds] for t, ds in dangers.items()},
             "rescues": {str(t): [vars(d) for d in ds] for t, ds in rescues.items()},
-            "corner": {"slowdown": corner.rho, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
+            "corner": {"slowdown": corner.slowdown, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
                        "path": corner.path},
         }
     text = "\n".join(summary + [""] + attacks + [""] + md + below)

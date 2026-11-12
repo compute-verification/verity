@@ -23,7 +23,7 @@ def test_every_scenario_evaluates_below_its_best_attack_unless_a_premise_is_name
     for f in r.families:
         assert f.lo <= f.attack * (1 + 1e-9) or f.contradictions
         assert f.combined.premise != "refuted"
-        assert all(e.rho <= f.lo * (1 + 1e-9) for e in f.bounds if e.overhead and e.premise != "refuted")
+        assert all(e.slowdown <= f.lo * (1 + 1e-9) for e in f.bounds if e.parts and e.premise != "refuted")
 
 
 def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alone():
@@ -34,9 +34,9 @@ def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alon
     premise = "premise.e1-activation-rate"
     f = evaluate_named(REG.override({f"{premise}.beyond": "refuted"}), "reference-onsite-h200").families[0]
     fp = next(e for e in f.bounds if e.argument == "fanout-priced")
-    assert fp.premise == "refuted" and {s.cut for s in fp.overhead.serving.values()} == {"serving"}
+    assert fp.premise == "refuted" and {s.cut for s in fp.parts.serving.values()} == {"serving"}
     assert f.combined.padded < fp.padded / 10 and f.combined.premise != "refuted"
-    assert all(e.rho <= f.lo * (1 + 1e-9) for e in f.bounds if e.overhead and e.premise != "refuted")
+    assert all(e.slowdown <= f.lo * (1 + 1e-9) for e in f.bounds if e.parts and e.premise != "refuted")
 
 
 def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound():
@@ -55,15 +55,15 @@ def test_a_bound_whose_premise_is_refuted_everywhere_never_sets_the_lower_bound(
     assert set(f.combined.excluded) == citing and replace(f.combined, excluded=()) == without.combined
     assert f.lo < base.lo / 10 and f.combined.premise != "refuted"
     alone = {e.argument: e for e in f.bounds}
-    assert all(alone[a].premise == "refuted" and alone[a].rho == next(e.rho for e in base.bounds if e.argument == a)
+    assert all(alone[a].premise == "refuted" and alone[a].slowdown == next(e.slowdown for e in base.bounds if e.argument == a)
                for a in citing)
-    assert max(e.rho for e in f.bounds if e.overhead) == pytest.approx(base.lo)
+    assert max(e.slowdown for e in f.bounds if e.parts) == pytest.approx(base.lo)
 
 
 def test_s_times_and_gates_per_flop_come_from_one_source():
     """The bound holds a gate at `u/w = ω_max 2G / (κ s_×)` of the reference's weight, so the FLOP model's `G` beside
     a Boolean design's measured `s_×` (681 gates a bf16 product) scales every weight counted at `u` (the unregistered
-    leaves, most of the rate of onsite H200's lower bound, `Overhead.rates`) by `681 w`, about 0.82, with nothing to say
+    leaves, most of the rate of onsite H200's lower bound, `Slowdown.rates`) by `681 w`, about 0.82, with nothing to say
     so. Building refuses the mix;
     with both from that design it builds, and the lower bound moves by that much on the share counted at `u`."""
     design = "boolean:AmpereBF16TcDot16_v3"
@@ -114,9 +114,9 @@ def test_every_lean_citation_is_in_a_lock():
 @pytest.mark.parametrize("name", REG.names("scenario"))
 def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
     r = evaluate_named(REG, name)
-    rhos = [analysis.upto(s)(r) for s in ("proved", "conditional", "draft", "absent")]
-    assert rhos == sorted(rhos) and math.isclose(rhos[-1], r.lo)
-    assert all(0 <= f.combined.overhead.monitored <= 1 for f in r.families)
+    slowdowns = [analysis.upto(s)(r) for s in ("proved", "conditional", "draft", "absent")]
+    assert slowdowns == sorted(slowdowns) and math.isclose(slowdowns[-1], r.lo)
+    assert all(0 <= f.combined.parts.monitored <= 1 for f in r.families)
 
 
 def test_a_scenario_reads_its_own_tables_and_not_the_others():
@@ -127,7 +127,7 @@ def test_a_scenario_reads_its_own_tables_and_not_the_others():
 
 @pytest.mark.parametrize("name", ["reference-remote-h200", "reference-onsite-h200", "reference-onsite-nvl72",
                                   "reference-onsite-h200-per-device"])
-def test_rho_and_the_time_to_the_target_do_not_depend_on_gates_per_flop(name):
+def test_the_slowdown_and_the_time_to_the_target_do_not_depend_on_gates_per_flop(name):
     """Every FLOP-model input becomes gates through the one `units.gates_per_flop`, and the bound compares gates with
     gates (`s_×` at the reference's gates per counted product moves with it), so the conversion cancels: at its low
     and high ends the lower bound, the best attack and their times are today's."""

@@ -1,7 +1,7 @@
 # The slowdown calculator: the slowdown's lower bound on training
 
 This package computes, for each scenario and monitoring period, a lower bound on the **slowdown** a training run pays
-under the regime: `overhead(𝒢, 𝒜′, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
+under the regime: `slowdown(𝒢, 𝒜′, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
 divided by the reference training algorithm's GPU-hours, on the datacenter the adversary actually runs. It is Lean's
 `hardwareMultiple`: the slowdown over the reference at its MFU, `MFU₀`, at least 1, so no protocol gives 1.
 Beside it is the **time to the target** it implies, at least the slowdown times `T_0 / (MFU₀ Φ_total)`, wall-clock.
@@ -24,7 +24,7 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
-- **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,
+- **the padded size ratio** `|A| / T_0` (`Slowdown.padded`): the size of the actual circuit that reaches the target,
   each server block padded to its capacity, over the reference training algorithm's size `T_0`. It is the intermediate the
   server-block bound gives, and what a contradiction compares;
 - **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a server block's layout,
@@ -101,7 +101,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   cuts.
 - **The slowdown lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as inference-block yields
   `q_T(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
-  (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
+  (`theorem.local`), summed over blocks (`theorem.slowdown`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
 | Notation | here |
@@ -115,7 +115,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
 | `𝒜_a`, `δ_a`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
-| the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Overhead.padded`, `Overhead.rho`, `Scenario.seconds` |
+| the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Slowdown.padded`, `Slowdown.value`, `Scenario.seconds` |
 
 **The uncertified cap.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
@@ -211,7 +211,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 Neither writes a file unless told where.
 
 This package has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). A loader puts this directory on
-`sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
+`sys.path` and imports `slowdown`, and one that needs a number of the registry reads its file under `data/` by path. Either
 way its suite names what it reads here among its `inputs`, so this lists every loader:
 
 ~~~sh
@@ -234,11 +234,11 @@ uncertified or unregistered gates at a structure whose `s_×` is above 1, with t
 ## Names
 
 The package and its outputs (`verity/protocols/inference_only/slowdown`, `slowdown.md`, `slowdown.json`) and the
-identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` and `slowdown` all name the
-slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);
+identifiers `Slowdown.value`, `Estimate.slowdown`, `slowdown_worst`, `Corner.slowdown` and the JSON's `slowdown` and `slowdown` all name the
+slowdown (the training cost once called the overhead; `Slowdown` and `theorem.slowdown` keep that name);
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's
 `Nci.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `verity/protocols/inference_only/nci`'s
-slowdown `D`; the padded size ratio `|A| / T_0` (`Overhead.padded`, `Estimate.padded`, the JSON's `padded`) is the
+slowdown `D`; the padded size ratio `|A| / T_0` (`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the
 intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
 
 ## Extending

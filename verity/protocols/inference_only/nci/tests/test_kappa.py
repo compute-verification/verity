@@ -20,7 +20,7 @@ def rows() -> dict:
 
 
 @pytest.mark.parametrize("name", sorted(K.MODELS))
-def test_every_shape_is_rhos(name):
+def test_every_shape_is_the_slowdown_calculators(name):
     """A model's shape is verity/protocols/inference_only/slowdown's (`models.toml`), read through its loader: a recipe states none, and the
     weight matrices priced here are the model's rows there, shape by shape (its MTP modules apart, which the slowdown calculator's rows
     leave out), with its width, depth, vocabulary and attention."""
@@ -30,17 +30,17 @@ def test_every_shape_is_rhos(name):
     assert m == K.shape(shape) | recipe
     assert (m["d"], m["layers"], m["vocab"], m["mtp"]) == (shape.d_model, shape.layers, shape.vocab, shape.mtp)
     assert m["attention"] == shape.attention
-    mine, rhos = Counter(), Counter()
+    mine, theirs = Counter(), Counter()
     for out, inp, copies, active in K.matrices(m | {"mtp": 0}):
         mine[inp, out, "copies"] += copies
         mine[inp, out, "active"] += active
     for x in shape.group(instances.LAYERED):
-        rhos[x.d_in, x.d_out, "copies"] += x.copies
-        rhos[x.d_in, x.d_out, "active"] += x.active
-    assert +mine == +rhos
+        theirs[x.d_in, x.d_out, "copies"] += x.copies
+        theirs[x.d_in, x.d_out, "active"] += x.active
+    assert +mine == +theirs
 
 
-def test_the_library_models_rho_also_has_are_its_sizes():
+def test_the_library_models_the_slowdown_calculator_also_has_are_its_sizes():
     """`models.json` is the library's table, with the thread family's `entry_fee` and `fanout`; where the slowdown calculator has the model,
     its sizes are the slowdown calculator's."""
     both = {m["id"]: m for m in catalog.load("models") if m["id"] in SHAPES}

@@ -174,7 +174,7 @@ def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_he
 def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     inp = LB.inputs()
     assert all(i.mark in LB.MARKS and i.source for i in inp.values())
-    fleet = tomllib.loads((ROOT / LB.RHO).read_text())["fleet"]["world-h200"]
+    fleet = tomllib.loads((ROOT / LB.SLOWDOWN).read_text())["fleet"]["world-h200"]
     card = json.loads((ROOT / LB.WORKLOAD).read_text())
     census = next(e for e in json.loads((ROOT / LB.ADVERSARY).read_text()) if e["id"] == "world-inference-2027")
     peak = next(e for e in json.loads((ROOT / LB.HARDWARE).read_text()) if e["id"] == LB.PEAK)
@@ -184,7 +184,7 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     assert inp["machine_gpus"].mark == inp["peak_flops"].mark == "assumed" and inp["world_machines"].mark == "modeled"
     assert inp["weights"].value == LB.WEIGHTS.bits == card["value"]["params"] * 4
     assert (inp["token_macs"].mark, inp["weights"].mark) == (card["status"], card["status"]) == ("measured", "measured")
-    for name, path in (("world_machines", LB.RHO), ("machine_gpus", LB.RHO_HARDWARE), ("mfu_serve", LB.RHO),
+    for name, path in (("world_machines", LB.SLOWDOWN), ("machine_gpus", LB.SLOWDOWN_HARDWARE), ("mfu_serve", LB.SLOWDOWN),
                        ("datacenter_machines", LB.DEPLOYMENTS), ("request_tokens", LB.ADVERSARY),
                        ("peak_flops", LB.HARDWARE), ("token_macs", LB.WORKLOAD), ("weights", LB.WORKLOAD)):
         assert inp[name].source.startswith(path) and (ROOT / path).is_file()

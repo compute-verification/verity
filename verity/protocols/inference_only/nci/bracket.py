@@ -133,9 +133,9 @@ def search(U: float, splits: bool, flops: float, w: float, t: float, decode: flo
         w_in = w if phi < 1 else 0.0
         per_token = w_in + t
         tokens = min((K - state) / per_token if per_token > 0 else math.inf, (Gamma - dec) / (phi * flops))
-        rho = Gamma / (phi * flops * tokens)
-        if best is None or rho < best["rho"]:
-            best = {"rho": rho, "phi": phi, "tokens": tokens,
+        slowdown = Gamma / (phi * flops * tokens)
+        if best is None or slowdown < best["rho"]:
+            best = {"rho": slowdown, "phi": phi, "tokens": tokens,
                     "reads": {"state": state, "activations": tokens * w_in, "data": tokens * t},
                     "work": {"reference": phi * flops * tokens, "decode": dec}}
     if best is None:
