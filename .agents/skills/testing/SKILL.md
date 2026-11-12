@@ -140,6 +140,10 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   script run outside both sets it itself, before torch's first primitive, which is when oneDNN reads it.
 - **Isolated:** write only under `tmp_path`, and change the environment, `sys.path` or a module only through
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
+- **Environment by name:** compare an environment by the names that differ, taken before the assert, never the whole
+  mapping inside an `assert` (`differ = sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))`,
+  then `assert differ == []`): a failing assert prints its sub-expressions' values into the run's published log, the
+  caller's credentials among them (`tests/test_no_environment_in_asserts.py`).
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
   code rejects by name, not merely that it raises.
 - **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random samples) comes
