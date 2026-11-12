@@ -1469,8 +1469,9 @@ def test_a_tick_in_a_process_of_its_own_takes_what_the_tick_before_judged_on_mai
 
 
 def test_what_a_tick_judged_is_judged_again_on_a_new_main_or_by_other_code(env, monkeypatch):
-    """The judgements kept are those of `main`'s commit and of the code and git that made them: a `main` moved since, or a
-    cache another deploy wrote, is judged afresh, and the cache then holds only the new `main`'s, of the heads open."""
+    """The judgements kept are those of `main`'s commit and of the code and git that made them: a `main` moved since, a cache
+    another deploy wrote, or one that doesn't parse (said in the log) is judged afresh, and the cache then holds only the new
+    `main`'s, of the heads open."""
     main = _judged_world(env)
     cache, merged = env.tmp / "cache", []
     _decided(env.loop(lambda s: [], cache=cache).world)
@@ -1482,6 +1483,10 @@ def test_what_a_tick_judged_is_judged_again_on_a_new_main_or_by_other_code(env, 
     (cache / L.JUDGED_CACHE).write_text(json.dumps({**kept, "judging": "another deploy's"}))
     _decided(env.loop(lambda s: [], cache=cache).world)
     assert set(merged) == heads
+    merged.clear()
+    (cache / L.JUDGED_CACHE).write_text("{")
+    _decided(env.loop(lambda s: [], cache=cache).world)
+    assert set(merged) == heads and any(f"{L.JUDGED_CACHE} can't be read" in x for x in env.out), env.out
     merged.clear()
     moved = _main_to(env, {"m.txt": "m\n"})
     _decided(env.loop(lambda s: [], cache=cache).world)

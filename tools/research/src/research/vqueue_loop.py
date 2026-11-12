@@ -1349,6 +1349,8 @@ class World:
         if self._judged_at is None or self._judged_text is not None:
             return
         self._judged_text = ""
+        if not self._judged_at.is_file():
+            return
         try:
             doc = json.loads(text := self._judged_at.read_text())
             if doc["main"] != main or doc["judging"] != self._judging_key():
@@ -1357,7 +1359,9 @@ class World:
             judged = {(h, main): (bool(lean), bool(conflict)) for h, (lean, conflict) in doc["judged"].items()}
             lacked = {(h, main): [(m, at, names) for m, at, names in v] for h, v in doc["lacked"].items()}
             own = {(self.q.base, h): v for h, v in doc["own"].items()} if self._main == main else {}
-        except (OSError, ValueError, KeyError, TypeError):
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            self.log(f"research queue vqueue: {self._judged_at} can't be read ({type(e).__name__}: {e}): this tick judges "
+                     "every head afresh")
             return
         self._judged_text = text
         for mine, got in ((self._files, files), (self._judged, judged), (self._lacked, lacked), (self.q._own, own)):
