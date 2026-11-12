@@ -481,10 +481,14 @@ def test_a_record_is_published_only_from_a_commit_attempt_that_ran_a_clean_commi
         assert asked == [["research", "data", "show", "r-commit", "--json"]] and not (tmp_path / "row.json").exists()
     research, asked = _shows(monkeypatch, {"source": {"commit": "c0ffee", "dirty": False}}, publish=f"published {record}\n")
     assert RS.publish(o, str(tmp_path), runs, research, how) == 0
-    words = asked[-1]
-    assert words[1:5] == [*RS.CLI, "records", "publish"] and words[words.index("--tree") + 1] == "main@c0ffee" and "--tier" not in words
+    words = [sys.executable, "-m", "verity_vllm.pipeline.cli", "records", "publish", str(tmp_path), ROW, "--build", "art:build", "--match",
+             "art:match", "--match-run", "r-match", "--commit", "art:commit", "--commit-run", "r-commit", "--tree", "main@c0ffee", "--by", "vllm"]
+    rest = ["--summary", f"{tmp_path}/commit/summary.json", "--newest-captures"]
+    assert asked[-1] == [*words, *rest]
     assert json.loads((tmp_path / "row.json").read_text())["record"] == {"artifact": record, "rc": 0}
     assert f"publish - {record} rc=0" in capsys.readouterr().out
+    research, asked = _shows(monkeypatch, {"source": {"commit": "c0ffee", "dirty": False}}, publish=f"published {record}\n")
+    assert RS.publish(o, str(tmp_path), runs, research, {**how, "tier": "fast"}) == 0 and asked[-1] == [*words, "--tier", "fast", *rest]
 
 
 def test_a_stage_that_cites_a_build_is_held_to_the_program_digest_of_the_build_in_its_row_dir(tmp_path, monkeypatch):
