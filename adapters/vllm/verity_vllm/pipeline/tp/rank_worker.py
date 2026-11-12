@@ -130,7 +130,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
     import torch
     from vllm.distributed import parallel_state as ps
 
-    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": settings.raw("CUDA_VISIBLE_DEVICES"),
                            "worker_class": type(worker).__mro__[1].__module__ + "." + type(worker).__mro__[1].__name__,
                            "worker_mro": [f"{c.__module__}.{c.__name__}" for c in type(worker).__mro__[:4]],
                            "runner_class": f"{type(worker.model_runner).__module__}.{type(worker.model_runner).__name__}"}
@@ -152,7 +152,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
+    out["nccl_env"] = settings.redact({k: v for k, v in settings.environ().items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
