@@ -1283,7 +1283,9 @@ def unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH) -> SimpleNamespac
         return r.returncode, r.stdout + r.stderr
 
     def from_own_cache(*targets: str) -> str:
-        """`lake build` as `lean_changed.build` runs it: Lake's own cache read, not written."""
+        """`lake build` with Lake's own cache read, not written, as `lean_changed.build` runs it in the sandbox. Outside
+        the sandbox `build` has Lake restore from no cache, and this helper, which does not go through `build`, reads
+        Lake's own there too."""
         rc, out = lake(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={own}"], *targets)
         assert rc == 0, out
         return out
@@ -1341,7 +1343,8 @@ def unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH) -> SimpleNamespac
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
     """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
-    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
+    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them, which
+    `lean_changed.build` lets Lake do in the sandbox alone) and a build of the
     default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
     unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
     object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
