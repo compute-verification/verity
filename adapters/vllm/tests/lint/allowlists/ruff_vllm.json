@@ -70,8 +70,6 @@
     {"file": "tests/program/beyond_gemm.py", "kind": "SIM300", "symbol": "probe_rmsnorm", "detail": "Yoda condition detected"},
     {"file": "tests/program/beyond_gemm.py", "kind": "SIM300", "symbol": "probe_rope", "detail": "Yoda condition detected"},
     {"file": "tests/program/beyond_gemm.py", "kind": "SIM300", "symbol": "probe_silu", "detail": "Yoda condition detected"},
-    {"file": "tests/program/crosscheck.py", "kind": "E741", "symbol": "check_silu_rope", "detail": "Ambiguous variable name: `I`"},
-    {"file": "tests/program/crosscheck.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/fixtures_query.py", "kind": "E741", "symbol": "silu_mul_program", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/program/fixtures_query.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/fixtures_query.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`", "count": 2},
