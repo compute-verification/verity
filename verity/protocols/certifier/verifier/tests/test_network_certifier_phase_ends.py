@@ -187,21 +187,21 @@ def test_a_runs_last_execution_phase_holds_at_most_what_its_first_buckets_admit(
 class Stamped(Client):
     """A client that keeps the device's clock at each write to it, at its stream's end and at its close."""
 
-    def __init__(self, warden: Warden, data) -> None:
-        self.at, self.ended_at, self.closed_at = [], None, None
-        super().__init__(warden, data)
+    def __init__(self, device: Warden, data) -> None:
+        self.clock, self.at, self.ended_at, self.closed_at = device.clock, [], None, None
+        super().__init__(device, data)
 
     def write(self, data: bytes) -> None:
-        self.at.append(self.warden.clock())
+        self.at.append(self.clock())
         super().write(data)
 
     def write_eof(self) -> None:
-        self.ended_at = self.warden.clock()
+        self.ended_at = self.clock()
         super().write_eof()
 
     def close(self) -> None:
         if self.closed_at is None:
-            self.closed_at = self.warden.clock()
+            self.closed_at = self.clock()
         super().close()
 
 

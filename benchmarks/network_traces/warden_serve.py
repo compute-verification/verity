@@ -852,12 +852,12 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def counts(warden: Warden) -> dict:
+def counts(device: Warden) -> dict:
     """What `warden.json` counts of a run: the connections that took an ordinal, the refusals and their windows, the
     arrivals turned away, which are neither, those of them whose client reset its link after the cell, and the
     ticks."""
-    return {"ordinals": warden.ordinals, "refused": warden.refused, "refused_windows": sorted(warden.refused_windows),
-            "turned_away": warden.turned_away, "turned_away_reset": warden.turned_away_reset, "ticks": warden.ticks}
+    return {"ordinals": device.ordinals, "refused": device.refused, "refused_windows": sorted(device.refused_windows),
+            "turned_away": device.turned_away, "turned_away_reset": device.turned_away_reset, "ticks": device.ticks}
 
 
 def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float,
