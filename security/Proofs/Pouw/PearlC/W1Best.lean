@@ -6,7 +6,7 @@ public import Definitions.Assumptions.PearlC
 /-!
 # TT_OUT along a simulation, and W1's unpriced resources at the adversary's best case
 
-* **A simulation carries TT_OUT down** (`Pouw.ttOutTile_of_simulatedBy`): if `CM'` simulates `CM`
+* **A simulation carries TT_OUT down** (`Pouw.PearlC.ttOutTile_of_simulatedBy`): if `CM'` simulates `CM`
   (`CostModel.SimulatedBy`), every adversary of `CM` is one of `CM'` with the same transcript within the same bounds,
   so TT_OUT per tile at `CM'` is TT_OUT per tile at `CM`.
 * **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100_simulatedBy_best`): the run's memory
@@ -18,9 +18,7 @@ public import Definitions.Assumptions.PearlC
 
 @[expose] public section
 
-namespace Pouw
-
-open Pouw.PearlC
+namespace Pouw.PearlC
 
 variable {Q R S : Type}
 
@@ -42,7 +40,7 @@ theorem ttOutTile_of_simulatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
   simp only [hrun] at key
   exact key
 
-end Pouw
+end Pouw.PearlC
 
 namespace Pouw.PearlC.W1
 

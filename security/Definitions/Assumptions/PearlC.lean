@@ -34,16 +34,16 @@ beside W1's and the game's: the simulation `CostModel.SimulatedBy` and the setti
 
 @[expose] public section
 
-namespace Pouw
+namespace Pouw.PearlC
 
 variable {Q R S : Type}
 
 /-- **`CM'` simulates `CM`**: every program of `CM` has a program of `CM'`, fixed before the oracle and the salt, with the
 same run at no more cost and no more oracle calls on every oracle, workload, activation input, state and salt. An
 adversary of `CM` is then one of `CM'` within the same bounds, so a bound over every adversary of `CM'` holds over
-`CM`'s (`Pouw.ttOutTile_of_simulatedBy`). -/
+`CM`'s (`Pouw.PearlC.ttOutTile_of_simulatedBy`). -/
 def CostModel.SimulatedBy (CM CM' : CostModel Q R S) : Prop :=
-  ∀ p : CM.Prog, ∃ p' : CM'.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
+  ∀ p : CM.Prog, ∃ p' : CM'.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S),
     CM'.run p' H U act σ s = CM.run p H U act σ s ∧ CM'.cost p' H U act σ s ≤ CM.cost p H U act σ s ∧
       CM'.calls p' H U act σ s ≤ CM.calls p H U act σ s
 
@@ -52,9 +52,9 @@ fetch free. Neither price is on a data sheet (the H100 whitepaper's Table 1 and 
 FP32 rates, not a compression's or a word's first read), and the audited hardware and its vendor are untrusted, so
 neither is taken at a measured rate. W1's cost only grows with each: at any `sha, fetch ≥ 0`, `s8H100 sha fetch` is
 simulated by this setting (`Pouw.PearlC.W1.w1Priced_s8H100_simulatedBy_best`), so a bound here holds at every price. -/
-def PearlC.W1.W1Device.s8H100Best : PearlC.W1.W1Device := PearlC.W1.W1Device.s8H100 0 0
+def W1.W1Device.s8H100Best : W1.W1Device := W1.W1Device.s8H100 0 0
 
-end Pouw
+end Pouw.PearlC
 
 namespace Pouw.PearlC.Assumptions
 

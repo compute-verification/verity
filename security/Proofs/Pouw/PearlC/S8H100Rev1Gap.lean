@@ -10,7 +10,7 @@ public import Definitions.Pouw.Guarantees.PearlCS8
 
 `ttOutTilePearlCH100Rev1_of_s8` is the abstract form `TTOutTilePearlCH100Rev1 CM` from its two named parts: W1's
 completeness on the H100 with INT8 (`W1CompleteH100`, a simulation of `CM` by W1 on `W1Device.s8H100Best`) and TT_OUT
-there (`TTOutTilePearlCH100Rev1S8`), by `Pouw.ttOutTile_of_simulatedBy`. The guarantees of
+there (`TTOutTilePearlCH100Rev1S8`), by `Pouw.PearlC.ttOutTile_of_simulatedBy`. The guarantees of
 `Definitions.Pouw.Guarantees.PearlCS8` are the per-tile gaps at 8192³ (`pearlCSampledH100Rev1_8192`) and on Llama 3.2
 1B's served layout (`pearlCSampledH100Rev1_llama32_1b`) at that `CM`.
 -/
