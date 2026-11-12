@@ -1,13 +1,12 @@
 """One training step of ordinary PyTorch code as an ATen graph with shapes and dtypes and no values.
 
     capture_step(model, optimizer, loss_fn, example_batch, *, updated=None, token_dims=None) -> StepGraph
-    capture_fn(step_fn, model, example_batch, *, optimizers=None, updated=None, token_dims=None) -> StepGraph
     capture_steps(step_fns, model, example_batch, *, measured, optimizers=None, token_dims=None) -> StepGraph
 
 `capture_step` runs the standard step: ``zero_grad``, ``loss_fn(model, batch).backward()``, then each optimizer's
-``step()``. `capture_fn` runs any step written as ``step_fn(model, batch, optimizers)`` (a forward-only MeZO step,
-gradient accumulation, two optimizers), which may mark its phases with `phase`. `capture_steps` runs several such
-steps in order, consecutive steps of one run, and measures one of them. All trace with `make_fx` under a
+``step()``. `capture_steps` runs several steps in order, consecutive steps of one run, each any step written as
+``step_fn(model, batch, optimizers)`` (a forward-only MeZO step, gradient accumulation, two optimizers), and measures
+one of them. Both trace with `make_fx` under a
 `FakeTensorMode`, so every tensor is a fake carrying only shape, dtype and device, and the graph is post-dispatch ATen:
 autograd's backward and the optimizer's foreach kernels are nodes like the forward's.
 
@@ -25,8 +24,8 @@ step (``meta["te_step"]``, from a ``te_capture::step::I`` marker around step I),
 batch is a token input, named ``tokens_…``.
 
 Phases come from `record_function` markers in the graph: torch's own ``Optimizer.step#…`` and ``Optimizer.zero_grad#…``,
-``te_capture::backward`` around every `torch.autograd.backward` and `torch.autograd.grad` the step calls, and
-``te_capture::phase::NAME`` from `phase`. A node outside every marker is in the forward.
+and ``te_capture::backward`` around every `torch.autograd.backward` and `torch.autograd.grad` the step calls. A node
+outside every marker is in the forward.
 
 Token axes are found by capture, not by propagating shapes through views: the step is captured again with each token
 axis of the example batch doubled (halved if doubling fails), and a node's dimension is indexed by that axis when its
@@ -61,11 +60,9 @@ from torch._subclasses.fake_tensor import (DataDependentOutputException, Dynamic
                                            FakeTensorMode, UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
-__all__ = ["BACKWARD", "Capture", "CaptureRefused", "PHASE", "STEP", "capture_fn", "capture_step", "capture_steps",
-           "phase"]
+__all__ = ["BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
 
 BACKWARD = "te_capture::backward"
-PHASE = "te_capture::phase::"
 STEP = "te_capture::step::"
 _TORCH_DIR = os.path.dirname(torch.__file__)
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,11 +81,6 @@ class CaptureRefused(Exception):
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where
         super().__init__(f"{reason}: {message}" + (f" [at {where}]" if where else ""))
-
-
-def phase(name: str):
-    """Mark a region of a custom step as phase ``name`` (``"update"``, ``"optimizer"``, ...) in the captured graph."""
-    return torch.autograd.profiler.record_function(PHASE + name)
 
 
 @dataclass
@@ -426,20 +418,12 @@ def capture_step(model: torch.nn.Module, optimizer, loss_fn: Callable[[torch.nn.
                     token_axes=token_axes, device=device, name=name)
 
 
-def capture_fn(step_fn: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Module, example_batch, *,
-               optimizers=None, updated: Iterable[str] | None = None, token_dims=None,
-               token_axes: Sequence[str] = ("batch", "seq"), device=None, name: str | None = None):
-    """Capture ``step_fn(model, batch, optimizers)``, one whole training step written by the caller, as a `StepGraph`;
-    ``optimizers`` are fresh copies of `optimizers` over the captured model's parameters. `updated` as in `capture_step`."""
-    return _capture([step_fn], model, _optimizers(optimizers), example_batch, updated=updated, token_dims=token_dims,
-                    token_axes=token_axes, device=device, name=name)
-
-
 def capture_steps(step_fns: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module, example_batch,
                   *, measured: int, optimizers=None, token_dims=None, token_axes: Sequence[str] = ("batch", "seq"),
                   device=None, name: str | None = None, mid_run: bool = False):
-    """Capture `step_fns` in order, consecutive steps of one run each written as `capture_fn`'s ``step_fn``, on one
-    model and one set of fresh optimizers, each on a batch of its own of `example_batch`'s shapes, as the `StepGraph`
+    """Capture `step_fns` in order, consecutive steps of one run each written as ``step_fn(model, batch, optimizers)``
+    (one whole training step; ``optimizers`` are fresh copies of `optimizers` over the captured model's parameters), on
+    one model and one set of fresh optimizers, each on a batch of its own of `example_batch`'s shapes, as the `StepGraph`
     of step `measured` of them, with its step circuit (module docstring). What the measured step reads of the run is
     what the steps before it wrote, so it takes one before it to read an updated weight; its cut's sinks are the values
     the step after it reads, so the last of `step_fns` has no cut (0). `mid_run` says the first of `step_fns` isn't the

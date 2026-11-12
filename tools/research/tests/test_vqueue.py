@@ -14,6 +14,7 @@ import pytest
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build, Candidate, Commit, Drop, Eject,
                              Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait,
                              decide, meets)
+from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
 
@@ -1275,6 +1276,35 @@ def reads(v: Verdict) -> str:
     return v.state
 
 
+#: the tree a check of the world ran in, which its logs' frames name
+ROOT = "/workspace/research/scratch/r-world/tree"
+
+
+@dataclass(frozen=True)
+class Records:
+    """What a check's records say of one failure (`World.records`), as `vqueue_slim.failing` reads them: its step; of a suite,
+    the report its row is in (``at``: suites.json once the check ended, suites.failed.json while it runs, `-lean` of
+    lean-suites), the row, its log, its guard's report and its children's reads, and what it declares; of another step, its
+    log and what it declares (None: the whole tree)."""
+    step: str
+    log: str
+    at: str | None = None
+    row: dict | None = None
+    report: dict | None = None
+    trace: str = ""
+    declared: frozenset[str] | None = None
+    dirs: frozenset[str] = frozenset()
+
+
+def read_records(r: Records, rest: str) -> Read:
+    """``r`` read as `vqueue_slim.failing` reads a failed step's records: a suite's row by `read_suite`, ``rest`` alone when no
+    row says it failed (`joined` of none), another step's log by `read_step`."""
+    if r.at is None:
+        return read_step(r.step, {"step": r.step, "rc": 1}, r.log, rest, ROOT, r.declared)
+    return joined([read_suite(r.row["name"], r.row, r.log, rest, r.declared, r.dirs, ROOT, r.report, r.trace)] if r.row else [],
+                  rest)
+
+
 class World:
     """The loop's world, scripted by a seed: `main`, the ready marks, the live candidates with graph2's verdicts, and the outcomes
     the loop recorded.  A bad PR fails every candidate whose tree holds it, on a task whose inputs meet its files (and
@@ -1289,11 +1319,14 @@ class World:
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
-    on the way."""
+    on the way.  Each failure a verdict holds is read from the records a check writes of it (`records`), as ``fetch``
+    hands them to the loop's reader (`read`)."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
-                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False):
+                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False,
+                 fetch: Callable[[Records], Records] | None = None):
         self.seed, self.policy, self.tree_ejects = seed, policy, seed % 2 == 0
+        self.fetch = fetch or (lambda r: r)
         rng = self.rng = random.Random(seed)
         numbers = sorted(rng.sample(range(10, 90), rng.randint(3, 12)))
         self.batch, self.depth, self.rings = rng.choice((1, 2, 3, 4, 6)), rng.choice((1, 2, 3)), rng.choice((1, 2, 3))
@@ -1318,6 +1351,8 @@ class World:
                     files[m].add(f"red{i}/break{m}.py")
         self.marks = {m: Ready(m, f"h{m}", frozenset(files[m]), rng.random() < 0.25, rng.randint(0, 4), rng.random() < 0.1)
                       for m in numbers}
+        self.universe = frozenset({p for fs in files.values() for p in fs} | {
+            "shared/x.py", "elsewhere/untouched.py", "elsewhere/flaky.py", "docs/index.md", "pyproject.toml"})
         # the wide file: about half the Lean PRs, and now and then a PR with no Lean change, which isn't wide
         self.wide = frozenset(m for m in numbers if rng.random() < (0.5 if self.marks[m].lean else 0.05)) if wide else frozenset()
         # the pins file: about half the Lean PRs, and now and then a PR with no Lean change, which goes as any other
@@ -1434,10 +1469,64 @@ class World:
         if cached and c.sha not in self.early and rng.random() < 0.3:
             self.early.add(c.sha)
             self.due[c.sha] = self.tick + rng.randint(1, 2)
+            self.read(cached, ended=False)
             return Verdict(FAIL, cached)
         if failed:
+            self.read(failed, ended=True)
             return Verdict(FAIL, failed, infra, ended=True)
         return Verdict(INFRA, (), infra) if infra else Verdict(PASS)
+
+    def records(self, f: Failed, ended: bool) -> Records:
+        """What a check writes of ``f``, by coins of its own (so the world's are the same with and without its records): of a
+        suite (``suite:M``, lean-suites' when M's change is Lean; a red task's; the flake's), its row naming its failing tests
+        (now and then none, failed beyond them), its log's frames through the check's tree and out of it, what it declares
+        (its directory, `shared/`, `docs/` and the workspace's file) and what its run traced: each file it read, but now and
+        then the one a program no tracer sees into read, its module `untraced`, and now and then nothing traced; of an
+        interaction, a step's log naming nothing."""
+        rng = random.Random(f"{self.seed} {f.task} {f.key}")
+        kind, _, name = f.task.partition(":")
+        if kind == "interaction":
+            return Records("lean-agreement", "lean-agreement: the verifiers disagree on 3 of 40 vectors\n")
+        suite = f"pkg{name}" if name.isdigit() else "elsewhere" if kind == "flaky" else name
+        step = "lean-suites" if name.isdigit() and self.marks[int(name)].lean else "pytest"
+        tests = sorted(f"tests/test_{suite}.py::{t.rpartition('::')[2]}" for t in f.tests) or (
+            [f"tests/test_{suite}.py::test_it"] if rng.random() < 0.85 else [])
+        row = {"name": suite, "suite": suite, "status": "failed", "step": step, "failed_tests": tests,
+               "beyond_tests": not tests, "nondeterministic": tests if kind == "flaky" else []}
+        read = sorted(p for p in self.universe if meets((p,), f.inputs))
+        log = ("=" * 20 + " FAILURES " + "=" * 20 + "\n" + "".join(
+            f"tests/test_{suite}.py:4: in {t.rpartition('::')[2]}\n" for t in tests)
+            + "".join(f"{ROOT}/{p}:3: in f\n" for p in read) + "/usr/lib/python3.12/runpy.py:9: in g\nE   AssertionError\n"
+            + "=" * 20 + " short test summary info " + "=" * 20 + "\n" + "".join(f"FAILED {t} - AssertionError\n" for t in tests))
+        blind = bool(read) and bool(tests) and rng.random() < 0.2
+        report = None if rng.random() < 0.1 else {
+            "traced": [f"F\t{p}" for p in (read[:-1] if blind else read)],
+            "untraced": {f"{suite}/{tests[0].partition('::')[0]}": ["git"]} if blind else {}}
+        at = f"suites{'-lean' if step == 'lean-suites' else ''}{'' if ended else '.failed'}.json"
+        return Records(step, log, at, row, report, "", frozenset({suite, "shared", "docs", "pyproject.toml"}),
+                       frozenset({suite, "shared", "docs"}))
+
+    def read(self, failed: tuple[Failed, ...], ended: bool) -> None:
+        """Each of ``failed`` read from its records (`records`) as the loop's reader reads them, through ``fetch``: one whose
+        report names its failing tests, failed for nothing more, is read as those tests and never as unnamed, and what it
+        read is among what any one's records bound its reads to."""
+        for f in failed:
+            r, rest = self.records(f, ended), unnamed(f.key)
+            got = read_records(self.fetch(r), rest)
+            where = f"seed {self.seed} tick {self.tick}: {f.task}"
+            if r.row and r.row["failed_tests"] and not r.row["beyond_tests"]:
+                named = {f"{r.row['name']}::{t}" for t in r.row["failed_tests"]}
+                assert named <= got.tests and not {rest, f"{r.row['name']}::{rest}"} & got.tests, (
+                    f"{where}: its report names {sorted(named)}, read as {sorted(got.tests)}")
+                self.seen["a failure read as the tests its report names"] += 1
+            if got.reads is None:
+                self.seen["a failure read with its reads unbounded"] += 1
+                continue
+            missed = sorted(p for p in self.universe if meets((p,), f.inputs) and not meets((p,), got.reads))
+            assert not missed, f"{where}: it read {missed}, which its reads {sorted(got.reads)} miss"
+            self.seen["a suite's reads narrowed by what its run traced" if got.reads != r.declared
+                      else "a suite's reads its declared inputs"] += 1
+            self.seen["an untraced program's module read as its declared inputs"] += bool(r.report and r.report["untraced"])
 
     def events(self) -> str | None:
         """What happens before the tick's snapshot; the new `main` when someone else moved it."""
@@ -1733,9 +1822,10 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     before it is ejected; a batch holds at most `lean` Lean PRs, and none beside a PR with no Lean change or while one it may
     take waits; a move of main by someone else drops the stale candidates
     and rebuilds on it; an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
-    a red whose drop it didn't apply; and every good PR reaches main and every bad one is ejected within `ticks`, every
-    erring one too with `tree_ejects`, and without it only erring PRs stay live, each with its owner rung.  Each situation
-    the invariants are about happens in some seed."""
+    a red whose drop it didn't apply; every failure is read from its check's records as the loop reads them, never as
+    unnamed where its report names its tests, its reads covering every file it read; and every good PR reaches main and
+    every bad one is ejected within `ticks`, every erring one too with `tree_ejects`, and without it only erring PRs stay
+    live, each with its owner rung.  Each situation the invariants are about happens in some seed."""
     seen: Counter[str] = Counter()
     for seed in SEEDS:
         w = World(seed)
@@ -1754,7 +1844,10 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
                  "a mixed failure", "waited for the rest of a check", "a fix cleared a red", "landed as built",
-                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change"):
+                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change",
+                 "a failure read as the tests its report names", "a failure read with its reads unbounded",
+                 "a suite's reads narrowed by what its run traced", "a suite's reads its declared inputs",
+                 "an untraced program's module read as its declared inputs"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -1843,7 +1936,19 @@ def _failures(s: Snapshot, f: Callable[[Failed], Failed], field: str = "failed")
     return _candidates(s, lambda c: replace(c, verdict=replace(c.verdict, **{field: tuple(map(f, getattr(c.verdict, field)))})))
 
 
-MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
+@dataclass(frozen=True)
+class Fetch:
+    """A misread of the records the loop's reader gets (`World.fetch`), where the others misread the snapshot `decide` gets."""
+    f: Callable[[Records], Records]
+
+
+def _cut(*reports: str) -> Callable[[Records], Records]:
+    """A suite's records with its row's report never fetched (one of ``reports``), and so nothing the reader fetches beside a
+    failed suite's row: its log, its guard's report, its children's reads."""
+    return lambda r: replace(r, row=None, log="", report=None, trace="") if r.at in reports else r
+
+
+MISREADS: dict[str, Callable[[Snapshot], Snapshot] | Fetch] = {
     "tries as one": lambda s: _candidates(s, lambda c: replace(c, tries=1)),
     "tree ejects flipped": lambda s: replace(s, tree_ejects=not s.tree_ejects),
     "reruns as none": lambda s: _candidates(s, lambda c: replace(c, reruns=0)),
@@ -1862,16 +1967,27 @@ MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
     "every change as Lean": lambda s: replace(s, ready=tuple(replace(r, lean=True) for r in s.ready)),
     "nothing pulled": lambda s: replace(s, pulled=frozenset()),
     "no files as built": lambda s: replace(s, flying=()),
+    "an untraced program's module as traced": Fetch(
+        lambda r: replace(r, report={**r.report, "untraced": {}}) if r.report else r),
+    # records as a fetch gave them when it named a file twice, which cut off every file sorted after it: a check that ended
+    # with lean-suites failing one parametrized test of the vLLM suite (and lean-audit one module), each read as unnamed
+    "an ended check's suite reports, cut off": Fetch(_cut("suites.json", "suites-lean.json")),
+    # a check that ended with lean-suites failing 16 tests under one directory of the vLLM suite, read as every member's
+    "an ended check's lean-suites report, cut off": Fetch(_cut("suites-lean.json")),
+    # a shard that failed the repository's own suite on one boundary test while the check ran: its failures so far never
+    # reached the loop, so its early red never read them
+    "a running check's failures so far, cut off": Fetch(_cut("suites.failed.json", "suites-lean.failed.json")),
 }
 
 
 @pytest.mark.parametrize("misread", MISREADS)
 def test_decide_misreading_a_field_of_the_snapshot_breaks_an_invariant_of_the_simulated_queue(misread):
-    """The invariants hold `decide` to every field it reads: handed snapshots with one field misread, it breaks one of them,
-    or doesn't settle, in some seed."""
+    """The invariants hold `decide` to every field it reads, and the loop's reader to every record it reads: handed snapshots
+    with one field misread, or records misread (`Fetch`), it breaks one of them, or doesn't settle, in some seed."""
+    m = MISREADS[misread]
     with pytest.raises(AssertionError):
         for seed in SEEDS:
-            w = World(seed, policy=lambda s: decide(MISREADS[misread](s)))
+            w = World(seed, fetch=m.f) if isinstance(m, Fetch) else World(seed, policy=lambda s: decide(m(s)))
             while not w.done():
                 assert w.tick < ticks(w), f"seed {seed}: not settled after {ticks(w)} ticks"
                 w.step()
