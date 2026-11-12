@@ -30,6 +30,7 @@ TYPES = [
     "mla-split-part", 'mla-split-part:T=64', "gq:K=6144", "gq:K=2048", "gq:K=1536", "gq:K=256", "fi:K=256", "fi:K=1536",
     "fi:K=2048", "fi:K=6144", "fi-quant", "fi-quant:K=2048", "router-row", "router-slots", "dsa-q-row", "rmsnorm-v8",
     "fp8-coord:K=6144", "fp8-coord:K=6144+public-weights", "fp8-coord:K=6144+packed-weights", "s8-linear:K=2048,N=2",
+    "fp8-coord:K=6144+bind", "gq:K=6144+bind", "census:SiluMul_v2{I=256}+bind",
     *(f"census:SparseMlaHeadBlock_{v}{{DR=64,DV=512,NVIS={nv},FIRST={f},BN=64,{_MLA.replace('_v1', '_' + v)}}}"
       for v in ("v1", "v2") for nv, f in ((64, "false"), (63, "false"), (48, "false"), (32, "false"), (1, "true"))),
     'census:SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}',
@@ -79,6 +80,22 @@ def test_names_agree(monkeypatch):
     long = [u for u in TYPES if len(w.name(u, "full")) > 96 + len("-nfull")]
     assert not long, f"names past the cut: {long}"
     assert len({w.name(u, n) for u, n in pairs if u in TYPES}) == len(TYPES) * len(NS), "two statements share a directory"
+
+
+def test_arms():
+    """prove_time.sh's stage() hands stage.py each arm's flags and the type without the arm's suffix; a `+` inside a type's
+    statics is no arm."""
+    arm = re.search(r"^  local u=\$\{1%\+\*\} flag= [^\n]*\n  case \$1 in .*? esac\n", PT, re.M | re.S)
+    assert arm, "prove_time.sh's stage() does not read its arms where this test reads them"
+    script = "name() { :; }\narm() {\n" + arm[0] + '  echo "$u|$flag"\n}\nwhile IFS= read -r u; do arm "$u" 2; done\n'
+    plus = 'census:Scaled_v1{S={"f64":"0x1.0000000000000p+4"}}'
+    want = {"gq:K=6144": "gq:K=6144|", "fp8-coord:K=6144+public-weights": "fp8-coord:K=6144|--public-weights",
+            "fp8-coord:K=6144+packed-weights": "fp8-coord:K=6144|--public-weights --packed",
+            "gq:K=6144+bind": "gq:K=6144|--bind", "census:SiluMul_v2{I=256}+bind": "census:SiluMul_v2{I=256}|--bind",
+            plus: f"{plus}|", f"{plus}+bind": f"{plus}|--bind"}
+    got = subprocess.run(["bash", "-c", script], input="".join(f"{u}\n" for u in want), capture_output=True, text=True,
+                         check=True).stdout.splitlines()
+    assert got == list(want.values())
 
 
 def test_statement_dir():

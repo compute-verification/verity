@@ -40,7 +40,7 @@ Files:
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
 - `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` or
-  `+packed-weights` for those arms)
+  `+packed-weights` for those arms, `+bind` for `stage.py`'s `--bind`)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
   a second ÷ the block's MACs), marginal and amortized at each size. A unit may carry its own sizes (`UNIT@N,N`), and a
