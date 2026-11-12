@@ -92,3 +92,31 @@ OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 2:24 PM PST.
 5. **The hour:** through `Head.digest` elaborating with its guards, 9 PM PST tonight; line 1a whole with its difftest run once, Fri 13 Nov 6 AM PST; 1b after it, and I give its hour with 1a's report. Each depends on a slot of the pool: today's waits were 40 and 13 minutes.
 **The base, which I need your word on within the hour, and what I do meanwhile.** [ran] r20261112-212940-5d68 at `b315500c3a25`, the two suites whole: red, and none of it in my files. The certifier verifier's suite: 1,438 passed, 47 failed, 1 skipped; its `network` suite: 51 passed, 2 failed, 51 errors. 96 of the 100 are one cause: the certifier's Lake manifest on scratch B's base does not list `core_spot`, so no executable of that package builds ("dependency 'core_spot' of 'nci_check' not in manifest"). Lean's marked head `bafae2eaec2e` adds exactly that entry [read: the manifest's diff, 8 lines], is 193 commits past my scratch's base, and merges into my scratch with no conflict [ran: `git merge-tree`, rc 0]. The other two failures are `test_nci_record_difftest.py` (a reader's layout, and the reference against the interface, stage `blocks`), which I have not traced: they read one-stage's registration check, so they may come from proofs' R7 branch meeting lean's merge. My 14 tests passed inside the whole suite, the record writer's 4 and the 128 root tests too. **Since no Lean of this package builds on scratch B's base, I merge `bafae2eaec2e` into my own scratch now** (a scratch, no pull request's branch), and run the two suites once more there with the first Lean. Say so if you want the scratch kept on scratch B's base instead; BOUNDTIE's scratch has the same red. **The late-head paragraph** (which service, which files): by Fri 10 AM PST, noted. TIMER: when the first `verity lean try` ends.
 
+[2026-11-12T22:24Z] 9dfb5492bec9
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 2:24 PM PST. **Your 2:06 PM PST line: the fourth test is on the scratch at `6e4fd315970b`, and the names are built as one commit on a side branch at `debc13167461`, not on the scratch, for the reason in my 2:16 PM PST stop. Both pushed, no pull request.**
+
+**The fourth test** (scratch `cursor/na-scratch-net335-7c2e`, head `6e4fd315970b`) [run on the VM: the file's 35 tests pass]
+
+- **Name:** `test_a_registered_file_whose_certified_output_port_is_one_row_on_is_accepted_at_the_same_value_and_root`.
+- **What it holds:** the egress member's `o1` with proof block k at certified row k + 1 and the last at row 0.
+  - The file names the registration's value and root, and differs from the honest file in `reads` alone.
+  - The registered reads' Python mirror accepts a statement built at those positions and refuses the honest one: "unit 16 reads position 0, and the verifier's program reads 1".
+  - The session reports the honest session's reads, and the record check finds nothing.
+  - Against a table of the same rows one bucket on, which is what the network certifier signs when every row leaves one bucket late, the member's own computed rows are accepted under the shifted file and refused under the honest reads.
+- **All four assert the acceptance today.** The third and the fourth read one helper, the egress member's certified port with its `reads` in another order. The first two are untouched.
+
+**The names** (side branch `cursor/na-scratch-net335-names-7c2e`, one commit `debc13167461` on `6e4fd315970b`)
+
+- **The writer** [read: the diff, two files, 41 lines added and 19 removed]: `scan_zk.py`'s `tree_port` and `tree_entry` name a read by a new `read_as`: `scan/<kind>` for a tree, and `<member>/<port>` for a member's own rows of a port, a block member's under its lane's prefix as the registration lists it. A network certifier port keeps its row registration's value. The statement's header entries carry the same names, since Lean refuses a statement whose entry names another value than the file's port.
+- **No root moves:** the trees' binding tags are unchanged.
+- **Its readers:** the host's mirror (`tree_refusal`) compares the two names and needed no change. Nothing else in the tree reads the scan's file names: the period check, `chain_record.py` and `blocks.py` read `verity/certifier/scan-state/v1` in a tied audit's registration, which is another record and is unchanged.
+- **Tests that moved, all in `test_scan_zk.py`** [run on the VM: 35 passed; `test_scan_zk_v3c.py` 8 passed]:
+  - `test_each_rounds_host_read_is_the_rounds`: the last proof block's `o1` is read as `last/o1`, a block member's `x` as its lane's prefix and `x`, its `o0` as `scan/prog<j>`.
+  - `test_a_group_of_link_windows_is_one_registration_a_member_a_window`: the same for `last/o1`.
+  - `test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_root`: a member's own ports are found by their name, and it now also holds that every port's read is named by its own port, a `scan/<kind>` or a row registration's value, the same in the file and the header entry.
+- **Tests that will fail on that branch until proofs' check takes own-port reads** [argued from my probe; they need the Lean binaries]: the challenger test's honest record, and every real round's record check.
+
+**Runs at 2:24 PM PST:** NET-335's `r20261112-213538-30f1` (tree `e44f824ba63b`) is still running. Job 6's `r20261112-213845-ddd6` still waits for a slot, 46 minutes now; not relaunched.
+
+TIMER: none
+
