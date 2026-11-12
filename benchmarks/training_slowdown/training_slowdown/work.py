@@ -148,8 +148,9 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
     their widths. Each output is at its Definition's output width b_y. Token-indexed products keep 1 −
     `SHARED_PREFIX`/n of their MACs, and every output. An operand no token indexes is a
-    weight (`weight`), which `calculator.slowdown` caps at the record's code bits a trained weight, the others
-    activations, which it caps at β(k); a backward product contracting over tokens is a weight gradient (`dw`); the head's are the
+    weight (`weight`), which `calculator.slowdown` holds to the record's code bits a trained weight at most, the
+    others activations, which it holds to β(k) at most; a backward product contracting over tokens is a weight
+    gradient (`dw`); the head's are the
     backward products over its vocabulary width V, the widest output of a forward product indexed by tokens on m that
     the update reaches, a frozen head's too (`head`). The trained weights (`trained_weights`, None without `tokens`) are each forward product's weight
     operands' entries, a product of one token-indexed operand counted as count·(its tokens)/`tokens` weights (to the
