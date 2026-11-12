@@ -163,11 +163,12 @@ protocols = [
     "verity/protocols/certifier/verifier/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py",
     "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
     "verity/protocols/pous/prover",
-    "security/*/{Nci,NciDesc}{,.lean}",
+    "security/*/Nci{,.lean}",
     "security/Proofs/Properties/Nci{,.lean}",
-    # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
+    # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`). The
+    # identity hash's properties and their proofs (`security/{Properties,Proofs/Properties}/Hash/Identity.lean`) hold no
+    # separator and are `needed` too: the shared vocabulary, and what the network certifier's checks' proofs read
     "verity/commitments/identity/Identity/Domains.lean",
-    "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     # vLLM's PoUB session tests run PoUB's verifier side in process
     "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
