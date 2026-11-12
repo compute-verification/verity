@@ -108592,3 +108592,47 @@ None.
 ### Not established
 
 Nothing of mine has compiled. Whether `Projection.lean` at `506b009d58` parses is unchecked by me; my try builds it as an import.
+
+## GATHER, Thu 12 Nov 23:26Z: the second try's first rehearsal ended exit 0, plain and under a stop rule: round 2 is clean and `second-inputs` passes (`92eb`, V = 2,560, on vy-nebius-2); the first try's stop-rule rehearsal `5326` ended exit 0 too; Friday's tree moved to `496aa183544b` with the serve's branch merged, its rehearsal is about 28 back in vy-nebius-2's line
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `875bc9485045529c3303cd7b3c2deb96637e25fa` (unchanged since my 23:16Z entry).** [run: `research fetch r20261112-231032-92eb --all --on vy-nebius-2`, 23:21Z; `second/summary.json`, `expect.txt` and the interior's registration read as JSON] Its first rehearsal with a prover and the Lean verifier ended exit 0 at 23:19:29Z: the 20-unit class at V = 2,560, 6 spans of 4 tokens, the stand-in serve committing `logits` in round 1's record. Round 2 is `{"ok": true, "codes": []}`, so `second-inputs` passes; the interior registration registers no value; all seven checks of the script hold; the outcome is refused by `two-stage-form` alone, as on every tree. The same rehearsal under a stop rule, the job's second part, ended exit 0 at 23:22:32Z with the same seven checks and a clean round 2. Its third part, four test files, is running: I read it at about 23:45Z.
+
+### 1. What `92eb`'s first part shows
+
+- **Round 1's record** [read: `first/p4-o4/stage1.json`]: ports `b.ingress` (6), `b.egress` (6), `o0` (24 rows) and `logits` (480 rows of 128 words: 6 spans of 4 tokens of 20 units); law `subset`, k 2, of 6; the sample was spans 0 and 3.
+- **The interior** [read: `second/interior/registration.json`, `second/summary.json`]: `registered` is empty; no link; the return is the combine's `o0` at round 1's `o0`; 160 proof blocks, 40 drawn under `work`, k 1.
+- **The reads** [read: `second/statements.json`]: chunk 0 reads `logits` at round 1's port `logits` (480 leaves), rows 0, 20, 40, 60, 240, 260, 280, 300, and its `o0` at its own port of the interior record; the combine reads `logits` at rows 19, 39, …, 319, `r0` at chunk 0's `o0`, and `o0` at round 1's `o0`, rows 0 to 3 and 12 to 15.
+- **The verdicts** [read: `expect.txt`, `second/summary.json`]: `before_draw`, `pins`, `lean_verdicts`, `negatives`, `record`, `round_two`, `outcome` all true; 20 sessions, every circuit file its template's; 18 negatives, each refused; the one-stage audit's record `{"own_reads": true, "failed": []}`; `held` true.
+- **Time and memory** [read: the files' times; `resources.jsonl`, 74 samples]: the job took its place at 23:12:38Z after 92 s in line; builds to 23:17:48Z; `first` about 6 s; `second` about 89 s; done 23:19:29Z. The job's own peak memory was 18.8 GiB (proportional share) on a place of 32 cores; it asked 24 GB.
+- **Under a stop rule** [read: `stop/second/summary.json`, `stop/first/p4-o4/stage1.json`, `stop/first.log`]: round 1's record is the stop class's, ports `b.request`, `b.prompt`, `b.egress`, `o0` and `logits` (480 rows); the stop blocks' sample was 1 and 4 and its order held; the replay sample was spans 2 and 3; the interior registers no value; round 2 `{"ok": true, "codes": []}`; the seven checks true.
+- **The first try under a stop rule** [run: `research fetch r20261112-214142-5326 --all --on vy-nebius-cpu-12`, 23:23Z]: `5326`, at `bdf9fd1086`, ended exit 0 at 23:14:35Z after 92 minutes in cpu-12's line: the seven checks true, round 2 clean, the interior registering `logits` (160 rows), the stop blocks' order held.
+- **Not established by these:** a sampled span that stopped early, with a prover. In the stand-in serve only the first request ends before T, and neither run's replay sample held it (spans 2 and 3; spans 3 and 4). My probe covers it without a prover. One run a tree now samples every span (`--replay rate:6/6`) so that span is proved: `7b1c` and `9585` below.
+- **Not established at all yet:** the second try at V = 154,880 (next, once the tests end); a class that commits history tables beside `logits`; serving's hook on the engine.
+
+### 2. Friday's tree moved: `496aa183544bdf647b2e98943cb1c1bc6c193210`
+
+- [run: `git merge e30d38036c11`, no stop; `git push`, 23:19Z] `cursor/proofs-gather-served-select-b88b` now holds the serve's branch `cursor/vllm-select20-5b1e` at its head. What moved, five commits: the two you named (a test of a class committing its ids beside history tables; the class's tables held to the windows' own capacity), a `--tables` option of the stand-in serve (`two_stage_small.py`, refused beside a stop rule as the serve refuses it), and two tests. No file of the driver changed. `9d4aec0111fb` is an ancestor.
+- [run on my VM, 23:17Z: the probe of what round 2 derives, V = 2,560, with and without a stop rule] The same 20 links, 19 wires and return as at `bdf9fd1086`.
+- [run: `research run`, 23:25Z] Its rehearsal is `r20261112-232549-7b1c` on vy-nebius-2 (24 GB, 2 h): the 20-unit class at V = 2,560, the same with `--tables`, the same under a stop rule with every span sampled, then three test files. It replaces `d55f`, which was **28 back in that node's line at 23:25Z** and never started.
+- [derived] `bdf9fd1086` stays the head every measured run of the first try is at (`7ad8` and `5326` done; `b876` running). If you would rather name `bdf9fd1086` for Friday, nothing is lost: the five commits change no code the audit runs.
+
+### 3. Serving's dry line (VLLM-412, read at 23:24Z)
+
+[read: VLLM-412, the worker's comment of 22:03Z and the lead's of 22:07Z; nothing newer]
+- Tonight's small serve is under the stop rule with no tables: the class's object is `{"check":"GreedySelect_v1{V=154880,N=7744}","inline":true,"per_prompt":0,"per_output":1,"drained":true,"ids":true,"stop":{"ids":[154820,154827,154829],"max_model_len":4096,"outputs":64}}`; 8 requests of at most 64 tokens, none with `ignore_eos`, all of size class 256, so one stop class, p256-o64. It runs from `cursor/vllm-select20-5b1e` at `1536ba03d3`, at 00:25Z on the lead's go of 00:10Z, and ends by 00:55Z. Pass is the line `SELECT20 PASS`. Nothing has run on a card.
+- **For your question 2 of 22:51Z:** serving's `first` after the serve is launched with `CHALLENGER=local` (`tools/twostage_c.moved.sh first`, in the lane's notes, not the tree), with no `--interior`, so the rule comes from `rule_of`, and with the class's own rule as `--stop`. Which `--replay` and `--k` it passes I still have not read: that script is not in the tree.
+- Not established there, in serving's words: that the engine's ids are the new select's on real logits; that a request ends on a stop id within 64 tokens.
+
+### 4. Runs
+
+| Run | What | Head | Where | State at 23:22Z |
+|---|---|---|---|---|
+| `r20261112-231032-92eb` | second try: with `--logits`; the same under a stop rule; four test files | `875bc94850` | vy-nebius-2 | first and second part exit 0; the tests running |
+| `r20261112-232549-7b1c` | first try: plain; with `--tables`; under a stop rule with every span sampled; three test files | `496aa18354` | vy-nebius-2, 24 GB | waiting since 23:25Z, about 28 ahead |
+| `r20261112-232611-9585` | second try: under a stop rule with every span sampled (V = 2,560); then V = 154,880, 6 spans of 2 tokens, with `--logits` | `875bc94850` | vy-nebius-2, 72 GB, 3 h | waiting since 23:26Z |
+| `r20261112-214729-b876` | first try at Friday's shape | `bdf9fd1086` | cpu-12 | running since 23:07:37Z |
+| `r20261112-214142-5326` | first try, V = 2,560, stop rule | `bdf9fd1086` | cpu-12 | **done, exit 0**, 23:14:35Z |
+| `r20261112-215935-8cac` | first try, V = 154,880, k 3 | `bdf9fd1086` | cpu-12 | waiting, first in line |
+| `r20261112-214205-9e10` | the two-stage toy | `bdf9fd1086` | cpu-10 | waiting |
+
+**Next.** `92eb`'s tests at about 23:45Z; `9585` and `7b1c` when the line lets them start; the last three commits of the serve's branch into the second try's branch; `b876` at 00:30Z; VLLM-300 at 01:00Z.
