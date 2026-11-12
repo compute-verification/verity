@@ -10,11 +10,13 @@
 #   - the directory and the environment cicc runs in: here TMPDIR, with PATH, LD_LIBRARY_PATH, LD_PRELOAD and TMPDIR
 #     alone.
 # So after a source moved, or a header it includes did, cicc is handed the text, the arguments and the directory it was
-# handed before, and gives the cubin it gave before. What the program's own text says is left as written: __FILE__
-# expands to a file's name as its #include spells it, so where the compiled text uses it, a move that changes that
-# spelling changes the program. The steps are nvcc's own, taken from its dry run and run in its order; everything but
-# those three is as nvcc would have run it. Refuses a dry run it can't follow: one with no cicc step, or whose cicc step
-# names a variable other than CICC_PATH. Needs CUDA (the toolkit) and TMPDIR, which ship.sh's frame sets.
+# handed before, and gives the cubin it gave before. The program's own text is compiled as written, so it may not name
+# a file: __FILE__ (and an assert, which expands to one) puts into the text the name of the file it stands in, as its
+# #include spells it, and a move that changes that spelling would change the program. A text that holds, outside a system
+# header, the name its line markers give the file it is in, or the source's, is refused before cicc runs, naming the file
+# and the line. The steps are nvcc's own, taken from its dry run and run in its order; everything but those three is as
+# nvcc would have run it. Refuses a dry run it can't follow: one with no cicc step, or whose cicc step names a variable
+# other than CICC_PATH. Needs CUDA (the toolkit) and TMPDIR, which ship.sh's frame sets.
 set -euo pipefail
 : "${CUDA:?the toolkit, which ship_cuda sets}" "${TMPDIR:?which the frame of ship.sh sets}"
 dry=$("$CUDA/bin/nvcc" "$@" -dryrun 2>&1) || { echo "$dry" >&2; exit 1; }
@@ -45,6 +47,19 @@ while IFS= read -r line; do
           exit 1 ;;
       esac
       ii=$(grep -o '"[^"]*\.ii"' <<< "$line" | tr -d '"')
+      # a line marker is `# LINE "FILE" FLAGS`, 3 among the flags for a system header; __FILE__ is FILE, quoted
+      named=$(awk '
+        /^# [0-9]+ "/ { split($0, q, "\""); file = q[2]; n = $2 - 1; system_header = file ~ /^</ || q[3] ~ /(^| )3( |$)/
+                        if (source == "" && file !~ /^</) source = file
+                        next }
+        { n++ }
+        !system_header && source != "" && (index($0, "\"" file "\"") || index($0, "\"" source "\"")) {
+          print file " line " n ": " substr($0, 1, 160); exit }
+      ' "$ii")
+      [ -z "$named" ] || {
+        echo "ship_nvcc.sh: the text cicc compiles names a file, as __FILE__ or an assert leaves it, so the program" \
+          "would follow where that file sits: take it out of $named" >&2
+        exit 1; }
       sed -E -i 's|^# ([0-9]+) "[^"<]*/([^"/]*)"|# \1 "\2"|' "$ii"
       (cd "$TMPDIR" && env -i PATH="$PATH" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" LD_PRELOAD="${LD_PRELOAD:-}" \
         TMPDIR="$TMPDIR" "$BASH" -c "$line") ;;

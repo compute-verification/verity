@@ -53,8 +53,11 @@ def workload_phi(row: str, case: str) -> Phi:
 
     from . import score as S
     w = json.loads(row_file(row).read_text())
+    revision = RowEngine.of(w).revision
+    if revision is None:
+        raise ValueError(f"{row}: its engine block states no checkpoint revision, which names its snapshot's dir")
     home = Path(tempfile.mkdtemp(prefix="step-needs-hf-"))
-    cp = Path(S.hf_config_path(str(home), w["model"], RowEngine.of(w).revision))
+    cp = Path(S.hf_config_path(str(home), w["model"], revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
     return S.phi_of({"row": row, "workload": w}, hf_home=str(home))
@@ -75,7 +78,10 @@ class StepNeeds:
     """`dsa`'s decoder for φ (one tensor-parallel rank), and what it calls for an engine step (`step`)."""
 
     def __init__(self, phi: Phi) -> None:
-        from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT
+        from verity_vllm.program.frontend.rules.vllm_dsa import (
+            DECODE_THRESHOLD,
+            DECODE_THRESHOLD_DEFAULT,
+        )
 
         from . import dsa
         self.phi, self.net = phi, dsa.Net(phi, 1, 8)
@@ -88,8 +94,8 @@ class StepNeeds:
         self.index_topk = int(C["INDEX_TOPK"])
         self.threshold = DECODE_THRESHOLD.get(int(C["NH"]), DECODE_THRESHOLD_DEFAULT)
         NL, first = int(C["NL"]), int(C["FIRST_DENSE"])
-        self._layers = Counter((L in self.net.indexers, L >= first) for L in range(NL))
-        self._rep = {cls: min(L for L in range(NL) if (L in self.net.indexers, L >= first) == cls) for cls in self._layers}
+        self._layers = Counter((L in self.net.indexers, first <= L) for L in range(NL))
+        self._rep = {cls: min(L for L in range(NL) if (L in self.net.indexers, first <= L) == cls) for cls in self._layers}
 
     def kind(self, role: str, **statics: object) -> Need:
         """The vocabulary's Definition for `role` at `statics`, or the refusal naming why it has none."""
@@ -150,7 +156,10 @@ class StepNeeds:
 
     def _cublas(self, M: int, w: object, f32: bool = False) -> Need:
         from verity.definitions.registry.bf16_gemm_check import default_cublas_route
-        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
+
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
+            _f32out_phase,
+        )
         N, K = self._shape[w]
         phase = _f32out_phase(K, N) if f32 else "linear"
         route = default_cublas_route(phase, M, K, N)
@@ -162,7 +171,10 @@ class StepNeeds:
         return self.kind(role, K=K, N=N, DOT=self.net.dot, **route[1])
 
     def _router(self, M: int, w: tuple[int, str]) -> Need:
-        from verity.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
+        from verity.definitions.registry.bf16_gemm_check import (
+            DEFAULT_LL_BF16_FMA,
+            dispatch_sm90,
+        )
         N, K = self._shape[w]
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
@@ -173,7 +185,10 @@ class StepNeeds:
 
     def _all_reduce(self, M: int, n: int) -> Need:
         from verity.definitions.registry import tp_allreduce as AR
-        from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
+
+        from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
+            _ROUTE_KINDS,
+        )
         setting, route = AR.served_route(self.net.settings, M, self.H)
         c = AR.covered(setting, self.H, route, M) if setting else None
         if c is None:
@@ -187,7 +202,7 @@ class StepNeeds:
     def _reduce_norm(self, M: int, n: int) -> list[tuple[Need, int]]:
         from verity.definitions.registry import tp_allreduce as AR
         s = self.net.settings
-        if s["flashinfer"] and M <= AR.fused_max_tokens(self.H, self.W):
+        if s["flashinfer"] and AR.fused_max_tokens(self.H, self.W) >= M:
             setting, _ = AR.served_route(s, M, self.H)
             c = AR.covered(setting, self.H, "fused", M) if setting else None
             if c is None:
@@ -199,10 +214,11 @@ class StepNeeds:
 
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
         from verity.definitions.registry.moe import router_kernel
+
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G
-        E, TOPK, I = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
+        E, TOPK, INTER = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
         pairs = n * TOPK
         out = [(self._router(M, (L, "gate_w")), n), (self._fp8_linear(M, (L, "sh_gate_up_w")), n),
                (self.kind("silu_mul", I=self._shape[(L, "sh_gate_up_w")][0] // 2), n), (self._fp8_linear(M, (L, "sh_down_w")), n)]
@@ -210,7 +226,8 @@ class StepNeeds:
         out.append((self.kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel), n)
                    if kernel else (Need("sigmoid-router", _id("grouped-topk", E=E, M=M), "no capture", "at other statics"), n))
         out.append((self.kind("fp8_group_quant_ue8m0", K=H, G=G), n))
-        cfg = fused_moe_config(E, I, self.net.device, "fp8_w8a8", (G, G), M)
+        cfg = fused_moe_config(E, INTER, str(self.net.device), "fp8_w8a8", (G, G), M)
+        why: str | None
         if cfg is None:
             why = f"no tuned fused-MoE config at M={M}"
         else:
@@ -221,8 +238,8 @@ class StepNeeds:
             out.append((Need("fp8-moe-triton", _id("fused-moe-tile", E=E, M=M), f"no capture: {why}", "at other statics"), 2 * pairs))
         else:
             st = {"E": E, "G": G, "KB": KB, "SWAP": swap, "DOT": TG.moe_expert_fp8_launch_dot(self.tp, BM, BN, warps, swap)}
-            out += [(self.kind("moe_expert_gemm_dot", K=H, N=2 * I, **st), pairs), (self.kind("moe_expert_gemm_w_dot", K=I, N=H, **st), pairs)]
-        out += [(self.kind("silu_mul", I=I), pairs), (self.kind("fp8_group_quant_ue8m0", K=I, G=G), pairs),
+            out += [(self.kind("moe_expert_gemm_dot", K=H, N=2 * INTER, **st), pairs), (self.kind("moe_expert_gemm_w_dot", K=INTER, N=H, **st), pairs)]
+        out += [(self.kind("silu_mul", I=INTER), pairs), (self.kind("fp8_group_quant_ue8m0", K=INTER, G=G), pairs),
                 (self.kind("moe_sum", TOPK=TOPK, H=H), n), (self.kind("residual_add", N=H), n)]
         return out
 

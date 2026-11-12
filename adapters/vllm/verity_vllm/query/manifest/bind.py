@@ -55,10 +55,17 @@ from __future__ import annotations
 
 import math
 from collections import Counter, defaultdict
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
-from verity_vllm.query.manifest.format import RUN_FAMILY, batch_launch_shortfall, promoted_observation
+from verity_vllm.query.manifest.format import (
+    RUN_FAMILY,
+    batch_launch_shortfall,
+    identity_rows,
+    manifest_rows,
+    promoted_observation,
+)
 
 __all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "runtime_place", "source_ports", "split_name"]
 
@@ -110,7 +117,7 @@ def _engine_steps(r: Mapping[str, Any], arrivals: Mapping[str, int] | None, decl
     st, rid = r.get("step"), r.get("request_id")
     if r.get("engine_step") is not None and not (arrivals is not None and st is not None and rid not in (None, "*")):
         return [int(r["engine_step"])]
-    if st in (None, "*"):
+    if st is None or st == "*":
         return []
     lo, hi = st if isinstance(st, list) else (st, st)
     return [int(s) + int((arrivals or {}).get(_request(r, declared), 0)) for s in range(int(lo), int(hi) + 1)]
@@ -148,7 +155,8 @@ class Binder:
         #: engine step -> (op_path, member, invocation) -> {request: the first row of the runtime tensor its Values are (`runtime_rows`)}
         self.offsets: dict[int, dict[tuple[str, str, int], dict[str, int]]] = defaultdict(dict)
         for row in rows:
-            r = {**row, **(row.get("identity") or {})}
+            nested = row.get("identity")                       # a row may hold its key's fields under `identity`: they read as its own
+            r = {**row, **nested} if nested else row
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
                 continue
             key = (str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0)))
@@ -169,12 +177,13 @@ class Binder:
 
     @classmethod
     def of_manifest(cls, manifest: Mapping[str, Any], *, rank: int | None = None, ports: Mapping[str, Port] | None = None,
-                    arrivals: Mapping[str, int] | None = None) -> "Binder":
+                    arrivals: Mapping[str, int] | None = None) -> Binder:
         """The binder of a manifest document: its rows (of `rank`), its shared-instance aliases, its promoted observations and its
         declared requests."""
-        rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+        rows = manifest_rows(manifest)
         rebind = promoted_observation(dict(manifest))["names"] if any(r.get("promoted") for r in rows) else None
-        declared = {str(d["request_id"]): f"r{int(d.get('index', i))}" for i, d in enumerate(manifest.get("requests_declared") or [])
+        requests = manifest.get("requests_declared")           # a global manifest's; a request manifest declares none
+        declared = {str(d["request_id"]): f"r{int(d.get('index', i))}" for i, d in enumerate(() if requests is None else requests)
                     if d.get("request_id") is not None}
         return cls(rows, rank=rank, ports=ports, rebind=rebind, aliases=manifest.get("op_path_aliases"), arrivals=arrivals, declared=declared)
 
@@ -344,8 +353,9 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     request-local range must fit inside its own token rows of it, and a plane whose rows are not a multiple of the step's tokens covers
     no request (named)."""
     if manifest.get("complete") is False:                                        # an incomplete manifest never yields coverage
-        um = manifest.get("unmodelled") or {}
-        n = len(manifest.get("identities") or [])
+        unmodelled = manifest.get("unmodelled")
+        um = {} if unmodelled is None else unmodelled
+        n = len(identity_rows(manifest))
         return {"ok": False, "error": "manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(um.items())),
                 "manifest_digest": manifest.get("manifest_digest"), "checked": n, "missing_n": n, "missing_by_family": {"(unmodelled)": n},
                 "checked_by_family": {}, "families_missing_entirely": sorted(um), "steps_with_missing": [], "missing": [],
@@ -360,12 +370,10 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
             if how == "unbound" and not op.startswith(HIDDEN_FAMILIES):
                 extras += 1
                 continue
-            numel = m.get("numel")
+            numel, shape = m.get("numel"), m.get("shape")
             if numel is None:
-                numel = 1
-                for d in m.get("shape") or []:
-                    numel *= int(d)
-            rows = int(m["shape"][0]) if m.get("shape") else None
+                numel = math.prod(int(d) for d in shape) if shape else 1        # a tensor recorded with no shape is one element
+            rows = int(shape[0]) if shape else None
             for key in (set(binder.spellings(int(step), (op, member, inv)).values()) if how == "port" else ()) or [(op, member, inv)]:
                 have.setdefault((int(step), *key), []).append(int(numel))
                 rows_of.setdefault((int(step), *key), []).append(rows)
@@ -373,9 +381,11 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     # the declared composition: engine step -> {request: token rows}, and the step's token rows
     comp: dict[int, dict[str, int]] = {}
     tokens: dict[int, int] = {}
-    for es in manifest.get("engine_steps") or []:
+    engine_steps = manifest.get("engine_steps")                # a global manifest's composition; a request manifest lists step numbers
+    for es in () if engine_steps is None else engine_steps:
         if isinstance(es, dict):
-            comp[int(es["engine_step"])] = {str(m["request_id"]): int(m["rows"]) for m in es.get("members") or []}
+            listed = es.get("members")
+            comp[int(es["engine_step"])] = {str(m["request_id"]): int(m["rows"]) for m in (() if listed is None else listed)}
             tokens[int(es["engine_step"])] = int(es.get("rows", sum(comp[int(es["engine_step"])].values())))
     missing: list[dict[str, Any]] = []
     by_family_missing: Counter = Counter()
@@ -426,7 +436,8 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     # per-request partition itself is the binding map's `composition_check`.
     composition: list[dict[str, Any]] = []
     if manifest.get("global") and manifest.get("engine_steps") and request_id is None:
-        ref = manifest.get("composition_reference") or {}
+        reference = manifest.get("composition_reference")
+        ref = {} if reference is None else reference
         for es in manifest["engine_steps"]:
             e = int(es["engine_step"])
             want_rows, want_seq = int(es.get("rows", sum(int(m["rows"]) for m in es["members"]))), int(es.get("n_seq", len(es["members"])))

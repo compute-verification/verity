@@ -10,12 +10,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.circuits.defs import bind
+from verity.definitions.registry import b1, cublas_bf16
+
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_weight_view,
+    is_row_major,
+)
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -29,7 +45,7 @@ class CublasLinear:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
             return None
-        from verity.definitions.registry import b1, bf16_gemm_check, cublas_bf16
+        from verity.definitions.registry import bf16_gemm_check
 
         a = bound_args(node)
         x, w, bias = a.get("input", a.get("arg0")), a.get("weight", a.get("arg1")), a.get("bias", a.get("arg2"))
@@ -75,7 +91,9 @@ class CublasMmF32Out:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant or tuple(tp.compute_capability) != (9, 0):
             return None
-        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import f32out_route
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
+            f32out_route,
+        )
 
         a = bound_args(node)
         x, wt, outs = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), node.output_views()
@@ -128,10 +146,10 @@ def _holds(r: ViewDesc, v: ViewDesc) -> bool:
     for n, st in zip(v.shape, v.strides):
         if n == 1:
             continue
-        d = next((d for d in axes if d not in used and r.strides[d] == st), None)
-        if d is None or coord[d] + n > r.shape[d]:
+        ax = next((d for d in axes if d not in used and r.strides[d] == st), None)
+        if ax is None or coord[ax] + n > r.shape[ax]:
             return False
-        used.add(d)
+        used.add(ax)
     return True
 
 
@@ -149,8 +167,6 @@ class MlaAbsorbBmm:
         tp, _recorded = target_of(ctx)
         if tp.batch_invariant:
             return None
-        from verity.definitions.registry import cublas_bf16
-
         a = bound_args(node)
         x, w = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1"))
         outs = [a["out"]] if isinstance(a.get("out"), ViewDesc) else node.output_views()

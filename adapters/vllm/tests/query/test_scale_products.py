@@ -8,11 +8,11 @@ import json
 import types
 
 import pytest
+from verity.definitions.numerics import fp8_twins
+from verity.definitions.registry import fp8
 
 from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from verity.definitions.registry import fp8
-from verity.definitions.numerics import fp8_twins
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
 
@@ -40,10 +40,9 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
     import random
 
     import numpy as np
-
-    from verity.circuits.evaluation.reference import standalone_call
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
 
     K, N, G = 256, 320, 128
     nb, kb = SP.blocks({"K": K, "N": N, "G": G})
@@ -109,11 +108,12 @@ def test_manifest_sites_refuses_two_geometries_at_one_site():
 
 
 def test_the_family_is_in_every_vocabulary():
+    from verity.definitions import word as W_
+
     from verity_vllm.acquire import plan
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
     from verity_vllm.pipeline import manifest as M
-    from verity.definitions import word as W_
 
     assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     assert M.DEFAULT_TAPS == (SP.POLICY,)

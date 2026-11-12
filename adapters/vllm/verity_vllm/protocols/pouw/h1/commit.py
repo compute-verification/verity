@@ -41,16 +41,20 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, Mapping, Sequence
+from typing import Any
 
 import numpy as np
+from verity.circuits.codec import canonical_json
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
-from verity.circuits.codec import canonical_json
+from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as REG
+
 from verity_vllm.commit import step_rows
-from verity_vllm.protocols.pouw.h1 import names as NM, registered as NR
+from verity_vllm.protocols.pouw.h1 import names as NM
+from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1.words import ids_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
@@ -86,7 +90,7 @@ class _EveryStep(dict):
     """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
 
     def get(self, key: Any, default: Any = None) -> Any:
-        return self[0] if 0 in self else default
+        return super().get(0, default)
 
 
 def _host(t: Any) -> np.ndarray:
@@ -204,8 +208,8 @@ class CommitTap:
         self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
         if len(rows) < len(cs):
             return
-        rows, got = self._rows.pop(value), self._at.pop(value)
-        mine, at = np.concatenate([rows[c] for c in cs]), [got[c] for c in cs]
+        rows, places = self._rows.pop(value), self._at.pop(value)
+        mine, at = np.concatenate([rows[c] for c in cs]), [places[c] for c in cs]
         same = words is not None and np.array_equal(mine, words) and value in served.registered
         reg = served.registered[value] if same else served.a_tree(run, call, mine)
         self._put(CR.commit_rows(call.step, call.k), reg, same,
@@ -327,8 +331,8 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
         return (f"the named record's previous is not the window registration's digest {previous[:16]}…: it is chained "
                 "right after the registration whose tables it reuses")
     theirs: dict[Any, list[Mapping[str, Any]]] = {}
-    for e in got[1]:
-        theirs.setdefault(e.get("value"), []).append(e)
+    for entry in got[1]:
+        theirs.setdefault(entry.get("value"), []).append(entry)
     for s, mine, name, calls in _tables(run):
         table = f"A table {served.a_table(calls[0])}" if calls is not None else "input-ids table"
         if mine is None:

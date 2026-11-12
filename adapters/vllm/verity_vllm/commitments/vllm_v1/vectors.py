@@ -133,7 +133,7 @@ def _chunk_leaf_vectors() -> list[dict[str, Any]]:
 
 
 def _thread_leaf_vectors() -> list[dict[str, Any]]:
-    cases = [
+    cases: list[tuple[dict[str, Any], int]] = [
         ({"src_mask": 1, "slab": 0, "m_block": 0, "n_block": 0, "tidx": 0, "seqlen_q": 64, "seqlen_k": 128, "launch_tag": 1,
           "n_block_max": 1, "ok0": True, "ok1": True}, 64),
         ({"src_mask": 27, "slab": 3, "m_block": 2, "n_block": 1, "tidx": 127, "seqlen_q": 150, "seqlen_k": 300, "launch_tag": 42,
@@ -321,7 +321,7 @@ def _layout_vectors() -> list[dict[str, Any]]:
     lay = stream.leaf_layout(3)
     out.append({"leaf": "fa2h-chunk", "chunk_index": 3, "prefix": lay.prefix.hex(), "value": value.hex(), "digest": lay.digest(value).hex()})
     thread = ThreadDomain(digest_of("layout/geo"), 4, 1, HB=1, num_m_block=1, NB=1)
-    position = {"slab": 0, "m_block": 0, "n_block": 0, "tidx": 9, "seqlen_q": 40, "seqlen_k": 100, "n_block_max": 1, "ok0": True, "ok1": True}
+    position: dict[str, Any] = {"slab": 0, "m_block": 0, "n_block": 0, "tidx": 9, "seqlen_q": 40, "seqlen_k": 100, "n_block_max": 1, "ok0": True, "ok1": True}
     value = expand("layout/thread", 256)
     lay = thread.leaf_layout(64, **position)
     out.append({"leaf": "fa2h-thread", "position": position, "prefix": lay.prefix.hex(), "value": value.hex(), "digest": lay.digest(value).hex()})
