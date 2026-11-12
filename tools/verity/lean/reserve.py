@@ -4,7 +4,8 @@ Each step of an audit (`check.py`: `build`, the package's `lake build`, and `rep
 largest the GiB `need` gives it, by what the package pins of the heavy dependencies (``pins``: the names of Mathlib and
 ArkLib its manifest pins, empty for a package that pins neither). A run asks the largest need among the steps it takes
 of every package it audits (`ask`, in GB as `research run --mem-gb` takes it), refuses below the largest `floor`, and
-plans a heavy build's jobs within what it reserved (`reserved`, `build_jobs`). A step whose peak passes `WARN_SHARE` of
+plans a heavy build's jobs and a heavy replay's threads within what it reserved (`reserved`, `build_jobs`,
+`replay_threads`). A step whose peak passes `WARN_SHARE` of
 its need warns, naming the line here to raise (`warning`). No audit's key reads this file (`lean_audit.NOT_READ`): a
 figure changed here reruns no audit and no records run. Standard library only.
 """
@@ -18,9 +19,11 @@ from pathlib import Path
 BUILD_HEAVY_GIB = 86
 #: a build of a package that pins neither, and the replay of one that doesn't pin ArkLib
 LIGHT_GIB = 14
-#: the whole kernel replay of a package that pins ArkLib: one process, which fewer threads don't make smaller, and a figure
-#: of the tree that grows with what the replay checks, so raise it when a replay's report warns
+#: the whole kernel replay of a package that pins ArkLib, one process run alone: a figure of the tree that grows with what
+#: the replay checks, so raise it when a replay's report warns
 REPLAY_ARKLIB_GIB = 240
+#: a heavy replay's threads: one per this many GiB of what its run reserved, since nothing else bounds what it holds
+REPLAY_PER_THREAD_GIB = 4
 #: the least a heavy build runs in: its largest job alone and the python beside it
 ONE_JOB_GIB = 39
 #: each job a heavy build runs beside that one, below `BUILD_HEAVY_GIB`
@@ -51,7 +54,7 @@ def need(step: str, pins: Iterable[str]) -> int:
 
 def floor(step: str, pins: Iterable[str]) -> int:
     """The least GiB a run taking ``step`` of such a package must have reserved: a heavy build's one job, since it runs
-    fewer jobs down to one; an ArkLib replay's need, since nothing makes it smaller; none for the rest."""
+    fewer jobs down to one; an ArkLib replay's whole need; none for the rest."""
     pins = set(pins)
     if step == "replay" and ARKLIB in pins:
         return REPLAY_ARKLIB_GIB
@@ -104,6 +107,12 @@ def build_jobs(reserved_gib: float, jobs: int) -> int:
     if reserved_gib >= BUILD_HEAVY_GIB:
         return jobs
     return max(1, min(jobs, 1 + int((reserved_gib - ONE_JOB_GIB) // PER_JOB_GIB)))
+
+
+def replay_threads(reserved_gib: float, jobs: int) -> int:
+    """How many of ``jobs`` threads a heavy replay runs within ``reserved_gib``: one per `REPLAY_PER_THREAD_GIB`, never
+    none."""
+    return max(1, min(jobs, int(reserved_gib // REPLAY_PER_THREAD_GIB)))
 
 
 def where(name: str) -> str:

@@ -2721,7 +2721,8 @@ def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_
 def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_path):
     """Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with every
     job only where its run reserved `BUILD_HEAVY_GIB`, else one in `ONE_JOB_GIB` and one more per `PER_JOB_GIB`, an
-    explicit `LEAN_NUM_THREADS` (lean_audit.py's and the fast path's) being the most it runs. Its replay keeps every core.
+    explicit `LEAN_NUM_THREADS` (lean_audit.py's and the fast path's) being the most it runs. Its replay runs one thread
+    per `REPLAY_PER_THREAD_GIB` of what the run reserved, up to every core.
     The scope's limit is read where `/proc/self/cgroup` says the process is, and the smallest of it and its parents' holds."""
     proc, cg = tmp_path / "proc", tmp_path / "cg"
     (proc / "self").mkdir(parents=True)
@@ -2746,7 +2747,10 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_pat
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=200) == 3, "an explicit setting is the most it runs"
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64"}, have_gib=R.gib(86)) == 6, "and what the run reserved bounds it"
     assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64", "RESEARCH_RUN_ID": "r1"}) == 64, "a run that reserved nothing"
-    assert A.replay_threads(heavy, env) == A.cores()
+    assert A.replay_threads(heavy, env, have_gib=R.REPLAY_ARKLIB_GIB) == min(A.cores(), R.REPLAY_ARKLIB_GIB // 4)
+    assert A.replay_threads(heavy, env, have_gib=8) == min(A.cores(), 2)
+    assert A.replay_threads(heavy, env, have_gib=1) == 1
+    assert A.replay_threads(heavy, {"CHECK_SLOT_MEM_GB": "12"}) == min(A.cores(), 3), "what the run reserved"
     assert A.replay_threads(heavy, {"LEAN_NUM_THREADS": "3"}) is None
     assert A.replay_threads(light, env) is None
 

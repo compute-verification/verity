@@ -106,7 +106,8 @@ one of the node's Lean audit slots (`lean_slot`). A run is refused where it rese
 the steps it takes of every package it audits, or nothing while one has a floor (a research run that says no
 reservation, or a reservation that is no number), with the command to run at its ask, in GB, and the ask in GiB under
 it (`memory_refusal`, `reserved`; `--ask` prints the ask). A heavy build runs as
-many jobs as what its run reserved holds (`build_threads`), a heavy replay every core (`replay_threads`). The numbers
+many jobs as what its run reserved holds (`build_threads`), a heavy replay one thread per 4 GiB of it, up to every
+core (`replay_threads`). The numbers
 are `reserve.py`'s, which no audit's key reads, and a step whose peak passes 95% of its need warns, naming the line
 there to raise (`peaked`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`

@@ -334,11 +334,15 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
 _HEAVY_REPLAY = threading.Semaphore(1)
 
 
-def replay_threads(pkg: Path, env=os.environ) -> int | None:
+def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
     """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with, alone (`_HEAVY_REPLAY`), when it pins a heavy
-    dependency: every core, since fewer threads don't make its peak smaller and a run below its need refuses
-    (`memory_refusal`); None where `LEAN_NUM_THREADS` is set or ``pkg`` pins neither (`lake_env`'s value)."""
-    return None if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg) else cores()
+    dependency: one per `reserve.REPLAY_PER_THREAD_GIB` of what the run reserved (``have_gib``, else `reserved`, else this
+    machine's memory), up to every core (`reserve.replay_threads`); a run below its need refuses first (`memory_refusal`).
+    None where `LEAN_NUM_THREADS` is set or ``pkg`` pins neither (`lake_env`'s value)."""
+    if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
+        return None
+    have = reserved(env)[0] if have_gib is None else have_gib
+    return reserve().replay_threads(memory_gib() if have is None else have, cores())
 
 
 def rel(p: Path) -> str:

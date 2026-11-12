@@ -65,8 +65,8 @@ def test_it_holds_numbers_and_functions_of_pins_steps_and_a_reservation_and_impo
 
 def test_the_asks_floors_and_plan(tmp_path):
     """A heavy build asks 93 GB, an ArkLib replay 258 and the rest 16, each the GB at or above its need in GiB; the build's
-    floor is one job and the replay's its need; a heavy build runs every job from its need and fewer below it, never
-    none."""
+    floor is one job and the replay's its need; a heavy build runs every job from its need and fewer below it, and a heavy
+    replay one thread per `REPLAY_PER_THREAD_GIB`, each never none."""
     heavy, arklib = frozenset({"mathlib"}), frozenset({"mathlib", "Arklib"})
     assert [R.gb(n) for n in (86, 240, 14, 481)] == [93, 258, 16, 517]
     assert R.gb(R.gib(93)) == 93 and round(R.gib(93), 1) == 86.6
@@ -77,6 +77,8 @@ def test_the_asks_floors_and_plan(tmp_path):
         [R.ONE_JOB_GIB, 0, R.REPLAY_ARKLIB_GIB, 0]
     assert [R.build_jobs(g, 64) for g in (R.BUILD_HEAVY_GIB, R.gib(93), R.gib(86), R.ONE_JOB_GIB, 4)] == [64, 64, 6, 1, 1]
     assert R.build_jobs(60, 2) == 2
+    assert [R.replay_threads(g, 35) for g in (R.REPLAY_ARKLIB_GIB, 100, R.REPLAY_PER_THREAD_GIB, 1)] == [35, 25, 1, 1]
+    assert R.replay_threads(R.REPLAY_ARKLIB_GIB, 90) == R.REPLAY_ARKLIB_GIB // R.REPLAY_PER_THREAD_GIB
 
 
 def test_what_a_run_reserved_is_the_least_said_in_gib():
