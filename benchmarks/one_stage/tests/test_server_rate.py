@@ -309,7 +309,7 @@ def test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement(monkeypat
             pass
 
     monkeypatch.setattr(SR, "Lean", Lean)
-    run(monkeypatch, tmp_path, "--lean", "flock-verify", "--wide-leaf", tmpl_unit=tmp_path / "unit.placed" if tmpl else None)
+    run(monkeypatch, tmp_path, "--lean", "lean", "--wide-leaf", tmpl_unit=tmp_path / "unit.placed" if tmpl else None)
     assert got == [(SR.FC.TMPL_STATEMENT if tmpl else SR.STATEMENT_ID) + "+wide-leaf"]
 
 
@@ -331,10 +331,10 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
 @pytest.mark.parametrize("statement", [SR.STATEMENT_ID + SR.WIDE_LEAF, SR.STATEMENT_ID])
 @pytest.mark.parametrize("refuses", [True, False])
 def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_path, statement, refuses):
-    """A `flock-verify` that refuses the statement's name (exit 2, "unknown statement" on stderr, no VERDICT line) is
-    recorded as a refusal of the name, and for a wide-leaf name as a `flock-verify` that does not list it; any other
+    """A Lean verifier that refuses the statement's name (exit 2, "unknown statement" on stderr, no VERDICT line) is
+    recorded as a refusal of the name, and for a wide-leaf name as a verifier that does not list it; any other
     exit with no verdict keeps the plain reason."""
-    lean = tmp_path / "flock-verify"
+    lean = tmp_path / "lean"
     end = "echo 'unknown statement; known: [verity/flock-circuit]' >&2; exit 2" if refuses else "exit 3"
     lean.write_text(f'#!/bin/sh\n[ "$1" = verify ] || exit 0\n{end}\n')
     lean.chmod(0o755)
@@ -348,5 +348,6 @@ def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_pat
     if not refuses:
         assert got["why"] == "no verdict (rc 3)"
         return
-    assert got["why"].startswith(f"no verdict (rc 2): this flock-verify does not know the statement {statement!r}")
+    assert got["why"].startswith("no verdict (rc 2): this ")
+    assert f" does not know the statement {statement!r} and refused it unread" in got["why"]
     assert ("Flock/Tags.lean" in got["why"]) is statement.endswith(SR.WIDE_LEAF)
