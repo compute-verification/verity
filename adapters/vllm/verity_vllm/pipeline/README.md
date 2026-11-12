@@ -63,7 +63,7 @@ which the benchmarks import). Two modules state no `__all__`: `topp_pin_check`, 
 `vu_export`, which only `program_graph` and `vu_store` read. `match` imports private names of its two readers,
 `match_workload`'s `_workload_doc`, `_workload_enforce_eager`, `_workload_engine_args`, `_workload_execution` and
 `_workload_expected_steps` and `match_fold`'s `_jsonable`, and beside what it lists it hands on the names other
-modules' tests still read through it: the three `INSTANCES_` names, `fold_summary_result`, `persist_program`,
+modules' tests still read through it: `INSTANCES_FORM_ENV`, `fold_summary_result`, `persist_program`,
 `run_stage`, `_workload_moe_construction` and `engine.served`'s `ENFORCE_EAGER`.
 
 ## The Commit and its replay
