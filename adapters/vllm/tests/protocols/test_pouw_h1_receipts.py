@@ -90,7 +90,8 @@ class Window:
     def roots(self, c: int) -> tuple[bytes, bytes]:
         """Call c's (root(a/<K>@<s>), root(b/<K>)) as the record registers them."""
         k, s = int(self.calls[c]["k"]), int(self.calls[c]["step"])
-        return tuple(bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
+        a, b = (bytes.fromhex(self.entry(f"{self.prefix}{v}")["root"]) for v in (f"a/{k}@{s}", f"b/{k}"))
+        return a, b
 
     def operands(self, c: int) -> tuple[np.ndarray, np.ndarray]:
         """Call c's A over the Program's M slots (its served codes as the prover kept them, then zero rows) and its B."""
