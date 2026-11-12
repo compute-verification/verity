@@ -103,7 +103,6 @@ from . import pearl_kw as P
 from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
 
 NAME = "pearl-c-h100-v0"
-NAME_V1 = "pearl-c-h100-v1"
 R = P.R
 WINDOW = P.WINDOW                  # 128 products: four k32 atoms per promotion
 SLICE = 32

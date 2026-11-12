@@ -49,7 +49,6 @@ G = H100.g                             # atoms per promotion group (`Params.pi.G
 ATOM = H100.atom.k
 CAP = H100.cap
 ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `debitOf`: 32 MACs and 1/G of a promotion add per flagged atom-word
-ELEMENT_UNITS = H100.prices.forming_credited       # `Costs.adopted`'s fs per debited forming element
 
 
 def _promoted(device: Device) -> int:
