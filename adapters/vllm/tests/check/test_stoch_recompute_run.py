@@ -10,6 +10,7 @@ import json
 import logging
 import struct
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -28,6 +29,8 @@ from verity_vllm.records.workload import SCHEMA
 V, S, PROMPT_LEN, MAX_TOKENS = 64, 4, 5, 3
 REQUESTS = (("a", 7), ("b", 9))                      # (request id, declared seed)
 TEMPERATURE, TOP_P = 0.8, 0.95
+HEADER_SAMPLING = {"temperature": TEMPERATURE, "top_p": TOP_P, "top_k": 0}
+ABSENT: Any = object()
 WORDS = {"bfloat16": np.uint16, "float32": np.uint32, "int64": np.uint64, "int32": np.uint32}
 OPS = "vllm.v1.sample.ops"
 
@@ -47,12 +50,13 @@ def _launch(event: int, step: int, kernel: str, args: dict, constexprs: dict) ->
 
 def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple[str, int] | None = None, without_logits: tuple[int, ...] = (),
              without_arg: str | None = None, masked_xor: int | None = None, device_seed: int | None = None, header_seeds: dict | None = None,
-             manifest_seeds: dict | None = None, header_first: bool = True, attested_lag: bool = True) -> tuple[Path, Path]:
+             manifest_seeds: dict | None = None, header_first: bool = True, attested_lag: bool = True,
+             header_sampling: Any = HEADER_SAMPLING) -> tuple[Path, Path]:
     """Write the capture under `root/capture` and its workload manifest; return (the run directory, the manifest).  The keywords
     each change one thing: the served token of step `served_xor`'s first row, a launch that is absent (`(kernel, step)`), steps whose
     logits rows were not snapshotted, a small buffer of the Gumbel launch that was not, one word of step `masked_xor`'s masked row,
     the seed the kernels consumed for the first request, the seeds the header or the manifest declares, a log without its header, a
-    header that does not attest the scheduler's profile."""
+    header that does not attest the scheduler's profile, the sampling the header's workload states (`ABSENT`: it states none)."""
     capture = root / "capture"
     (capture / "values").mkdir(parents=True)
     entries = []
@@ -69,8 +73,8 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
         if header_first:
             log.write(RunHeader(schema="x", created_utc="", profile_id="p", model={},
                                 profile={"engine_kwargs": {"async_scheduling": False} if attested_lag else {}},
-                                workload={"requests": [{"request_id": r, "seed": seeds[r]} for r, _ in REQUESTS],
-                                          "sampling": {"temperature": TEMPERATURE, "top_p": TOP_P, "top_k": 0}}))
+                                workload={"requests": [{"request_id": r, "seed": seeds[r]} for r, _ in REQUESTS]}
+                                | ({} if header_sampling is ABSENT else {"sampling": header_sampling})))
         for step in range(MAX_TOKENS):
             pos = PROMPT_LEN - 1 + step
             rows = [(r, pos) for r, _ in REQUESTS]
@@ -305,6 +309,18 @@ def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the
     assert "step 0 row 0 (a): the sampler kernels consumed seed=7 but the manifest declares seed=8" in rep["reasons"]
 
 
+@pytest.mark.parametrize("left_out", [ABSENT, None, {}], ids=["absent", "null", "empty"])
+def test_the_report_carries_the_headers_sampling_and_an_empty_one_where_the_header_states_none(tmp_path, left_out):
+    rep = _recompute(*_capture(tmp_path / "stated"))
+    assert rep["sampling"] == HEADER_SAMPLING and rep["summary"]["verdict"] == "PASS"
+    rep = _recompute(*_capture(tmp_path, header_sampling=left_out))
+    assert rep["sampling"] == {}
+    # such a header declares greedy sampling for its requests, and the manifest, the declared fact, says otherwise by name
+    assert rep["summary"]["verdict"] == "FAIL" and rep["summary"]["rows"] == _tally(exact=6)
+    assert rep["header_vs_manifest"] == rep["reasons"] and len(rep["reasons"]) == 2 * len(REQUESTS)
+    assert rep["reasons"][0] == f"a: manifest declares temperature={TEMPERATURE} but the run's header records temperature=0.0"
+
+
 def test_a_request_whose_record_declares_no_seed_is_skipped_and_the_verdict_fails(tmp_path):
     run, _ = _capture(tmp_path, header_seeds={"b": None})
     rep = _recompute(run, None)
@@ -331,12 +347,13 @@ def test_an_evaluator_that_disagrees_with_the_lane_walk_is_named_as_an_evaluator
             f"disagree on the same Definition and inputs -- an evaluator defect, not a verdict on the record") in rep["reasons"]
 
 
-def test_an_evaluator_it_does_not_know_and_a_log_without_its_header_are_refused(tmp_path):
+def test_an_evaluator_it_does_not_know_is_refused_and_a_log_without_its_header_is_not_read(tmp_path):
+    """No record refuses the log by name: the run's facts are read off its first event, whatever it is."""
     run, manifest = _capture(tmp_path / "ok")
     with pytest.raises(ValueError, match=r"evaluator 'gpu': one of \['lane', 'rows'\]"):
         _recompute(run, manifest, evaluator="gpu")
     run, manifest = _capture(tmp_path / "headless", header_first=False)
-    with pytest.raises(ValueError, match="log does not start with a RunHeader"):
+    with pytest.raises(AttributeError, match="object has no attribute 'workload'"):
         _recompute(run, manifest)
 
 

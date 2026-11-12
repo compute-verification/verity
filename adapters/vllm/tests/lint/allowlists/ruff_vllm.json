@@ -2,7 +2,6 @@
   "rule": "ruff with vLLM's rules (adapters/vllm/tests/lint/ruff_vllm.toml)",
   "entries": [
     {"file": "tests/acquire/test_gate.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/check/test_challenge_seeds.py", "kind": "I001", "symbol": "test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_compiler_form.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_flip_weight_negative.py", "kind": "E741", "symbol": "_canary_flipweight_line", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/check/test_sampled_replay.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
@@ -211,8 +210,6 @@
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "T201", "symbol": "_evaluated", "detail": "`print` found"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "T201", "symbol": "_parallel_replay", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/check/replay/linkage.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/check/replay/linkage.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 10},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "I001", "symbol": "NativeCollectCommitter._commit_step_native", "detail": "Import block is un-sorted or un-formatted"},
