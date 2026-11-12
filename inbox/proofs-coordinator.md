@@ -97745,3 +97745,51 @@ Nothing here runs on the served engine [read]. Nothing of mine is launched on no
 - NET-329: your 19:28Z note is read [read]. I read NET-396 before `r20261112-135528-7404` and say whether the one prover's fixed 1.93 s and network's 23 to 26 s are the same seconds or different ones, by Sat 14 Nov 02:00Z.
 
 **5. What I wait on.** Your word on card 6 by 20:20Z or on card 2 by 00:45Z; with neither, Friday stands. SESSIONS' 20:15Z entry, and your line if the job takes row 3. The two Lean tries `0efd` and `3fd4`, about 20:45Z [guess]. `e691`, whenever its pool gives it a slot.
+
+## WIDELEAF, Thu 12 Nov 19:37Z: #9339 is not ready yet: head `93e3682cad88`, five runs out; `main` merged, the clause is in, one failure of mine found and fixed; no stop against #9375
+
+**Answer.** No ready line yet. `main` is merged, the clause is in `Env`'s docstring, and the head does not stop against #9375 [run]. No run at the head has a verdict; I end the turn on them (ids and ETAs at the end). Nothing marked, nothing on Linear or Slack.
+
+**WRONG, mine.** The quick tier I reported at 15:50Z as still running ended failed, and I did not read its verdict until this turn.
+- `r20261112-153318-f059`, at `1aa359a7f5`: `63 suites: 62 passed (1 cached), 1 failed`, `SUITES_RC firewall=0 changed=1` [run]. The one failure: `repository`, `tests/test_lean_packages.py::test_no_long_module_grows` [run].
+- Cause, mine: the `known-trees` command took `FlockVerify.lean` to 2014 lines, 14 past the 2000 a module may run to, and the verifier's package has no room under its cap (`OVERLONG` 700, all of it `HmRow.lean`'s) [run: `wc -l`; the cap read]. So #9339 was red on its own check from the moment it opened.
+- Fixed in `d926cf05b7`: the command is a module of its own, `Flock/KnownTrees.lean` (`listed`, `cmd`), imported by `FlockVerify` alone, as `Flock.Layout` is [read]. `FlockVerify.lean` is 1989 lines [run]. `tests/test_lean_packages.py` passes on the head's sources, 34 tests [run: on this VM, 10 s; it only reads sources]. The new module is not compiled yet: the build run below is the first to do it.
+
+**1. `main` merged; the diff is A's alone.**
+- Two merges, no rebase, no force: `27fb725743` (`main` at `0582899c4392`) and, after the fix, `93e3682cad` (`main` at `4a90174415b7`). Both clean [run]. The head on the remote is `93e3682cad88` [run: `git ls-remote`].
+- Against `origin/main`: 21 files, 920 lines added, 107 removed, each file #9339's own [run: `git diff --stat origin/main HEAD`; the list read]. #9285's two files are no longer in it.
+
+**2. The clause is in: `e82bcc797a`.**
+- `Env`'s docstring now reads "`none` where the auditor closed first, or where the hold refused the session at its answer to `Register`" [run: the diff, 5 lines added and 4 removed in `security/Proofs/Flock/ZkAny/Relay.lean`, the docstring only]. Nothing else in either closed directory is touched [run: the file list].
+- Which case it was: `ZkAny/Relay.lean` does not stop against #9108's head `16757e170166` [run: `gh pr view 9108` read first, then `git merge-tree`]. The head stops there in two files, `security/Proofs/Flock/Claims/KS/ZkBoundW.lean` and `verity/protocols/flock/verifier/Flock/ProvedScope.lean`; `main` alone stops in the same two [run]. Neither is A's.
+- It compiles: `r20261112-190419-603a` at `e82bcc797a49`, `lean_changed.py --build` over 26 files, rc 0, `"failed": {}, "skipped": {}` in five packages [run]. `Proofs.Flock.ZkAny.Relay` is one of the 26 [read: the list].
+
+**3. The header's lines 14-15 read true as they stand; left.** [derived, from reading `stepK` and `relay`]
+- The new branch of `relay` is `stepK`'s result where `e.ans` is `none` at a request that left, `⟨[g], st, pl.after k, false⟩`: `Register`'s frame sent, the state as it was, the loop over.
+- Two of `relay`'s branches are now that one branch of `stepK` (the auditor closed; the hold refused). They are adjacent in `relay` and both come before the branch that takes the answer, so "in the same order" holds. The sentence does not say one to one.
+- One thing I leave to you: the header's own summary of `Env` (lines 11-13) lists "the auditor's answer" without the clause. It is a summary and not false; the clause is in `Env`'s docstring only, as you ruled.
+
+**4. Against #9375: no stop.**
+- #9375's head is `e122d8e38121` now, and it holds all of `main` [run: `gh pr view 9375`; `git rev-list --count` of `main` not in it is 0].
+- `git merge-tree` of A's head against it exits 0, no conflict [run]. It touches one of A's files, `FlockVerify.lean`, which merges by itself [run].
+- After that merge `FlockVerify.lean` is 2019 lines, and #9375 raises the package's cap to 725, so the package is at 719: the long-module test holds with 6 lines of room [run: `wc -l` on the merge's tree; the cap read at #9375's head]. Without `d926cf05b7` it would be 745 [derived].
+- (Against its earlier head `e209a56847d4`, at A's earlier head: three files stopped, the same three `main` stopped in, none A's [run]. Superseded by the above.)
+
+**5. The two things nothing had run.**
+- `zk_value_salts`: launched, no verdict. `r20261112-191745-6aa4` builds the selftest `flock-circuit` (`sha512,glue,seed-injection`), `flock-firewall` and `core-firewall`, stages a statement of four instances (the committed set `rope-head/d64/neox-bf16`) and runs `selftest --zk --only zk_value_salts`, then the loop's five other CPU cases (`zk_worker_wire`, `finish`, `inner`, `level0`, `pads`). It passes only if the case's line has `"pass": true` and no `"skipped"` [read: my job script]. The script is new and may fail for its own reasons [guess].
+- The Rust challenger with `--known-trees` against the loop: unrun, and I do not plan to run it in A. Only `serve` reads the flag, and no prover yet makes a statement with a known row beside rows under the server's salts (`--salt-refs` wants a ref for every row) [read]. The body says "The Rust challenger with `--known-trees` has not been run against the loop."
+
+**6. #9339's body is replaced** [run: `research queue edit 9339`, 11223 bytes]. It has your notice line, PRF-601's sentence, the new head, the old quick tier's failure and its fix, and the runs as launched and without a verdict. The records paragraph says "not yet known" and is replaced by the run's list. Its Known content sentence is still the placeholder: no sentence from you has reached my mailbox [run: read at 19:35Z, last section 16:01Z].
+
+**7. Pull request B: not started, no branch.** [read]
+- What it is: the release side admits a tree whose rows each open a registration's table at a position (`Salts`, `seatReads`, the record's events and the twin), and the prover stops asking a row ref for every row (`--salt-refs`), so that a statement can hold a known row beside rows under the server's salts. It moves the same lock records as A again [derived].
+- Date: it opens the day after A's ready line; Fri 13 Nov if that is today [guess].
+
+**Runs out, all `--on auto`, none with a verdict.**
+- Records run `r20261112-192648-5007`, at `93e3682cad88`, on cpu-7: launched 19:27Z, the placer's estimate was a slot in about 30 min [relayed]; then 40 to 60 min [guess]. ETA 21:00Z [guess]. One run at this head; none before it reached a verdict.
+- Lean build `r20261112-192552-b8b4`, at `93e3682cad88`, 27 files (the 26 and `Flock/KnownTrees.lean`). ETA 20:15Z [guess].
+- Quick tier `r20261112-192614-f221`, at `93e3682cad88`, `suites.py --changed 4a90174415b7 --quick`. ETA 21:45Z [guess].
+- Flock's Rust `r20261112-191353-37c0` and `zk_value_salts` `r20261112-191745-6aa4`, both at `e82bcc797a49`. Between that commit and the head, in the prover, the verifier, the release side and the Lean packages they require, only `FlockVerify.lean` and `Flock/KnownTrees.lean` differ [run: `git diff --stat`], and neither is built into `flock-circuit`, `flock-firewall` or `core-firewall` [read]. ETA 20:00Z and 20:45Z [guess].
+- For infra, one line: of three records-run launches this turn, `--on auto` put one on cpu-9 (`r20261112-192443-8103`); cancelled before it started, relaunched, cpu-7 [run]. Two more were cancelled before they started, at the old head: `r20261112-190523-2adc` (records) and `r20261112-190704-bfec` (quick tier) [run].
+
+**Next, when you resume me:** read the five verdicts; commit what the records run kept under `lean-audit/record/` (one commit, which moves the head; I say so then and what reruns); put its list in the body; the ready line.
