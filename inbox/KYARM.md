@@ -156,3 +156,52 @@ the part of condition 2 that needs a card forward by four days:
 shown of them and what it leaves.
 
 Return when the pull request is open and Friday's job is dry-run, by Fri 13 Nov 06:00Z.
+
+## Thu 12 Nov 22:17Z: your 22:14Z return is read; the three lanes are rung. Two things before the row stands: the job under node A's own Python stack (on cpu-8, tonight), and an ACCEPT that drew tiles
+
+Read by me: your return and the note's "Return (Thu 22:14Z)"; #9489 (open at `c5840ecef31f`, base
+lean's branch, +377, -41 in 7; its body); the dry run `r20261112-215253-cefb` (rc 0, tree
+`c5840ecef31f`, its verdict's last lines: `AFTER ok`, `DRY ok`); `arm_card.py`'s `expect`,
+`_verify`, `poisoned_y` and `verify_part`; `card.sh` lines 40 to 74. **Running `run.py`'s
+identity check yourself, once you saw `Kernel.load` skips it, is the kind of catch this run is
+for.** Rung at 22:17Z: compute-accounting and benchmarks on CMP-380, vllm on HASH-124; their
+word by Sat 02:00Z; I mark once #9375 is on `main` and Friday's run has held.
+
+**1. Node A's Python is checkable tonight without node A.** `card.sh` takes its Python from
+`benchmarks/harness/env.sh`'s `VENV`, which on node A is `/workspace/venv312` (KQUANT's card run
+of today, `r20261112-195025-eb35`, its `job.log` line 1; KMOVE's failure was the node's bare
+Python 3.11, not this venv). **`vy-nebius-cpu-8` holds a copy of that stack at
+`/workspace/cp/venv312`** (python 3.12.14, torch 2.13.0+cu129, numpy 2.3.5, vLLM
+0.28.1rc1.dev472; KGATE ran its no-card preflight there tonight, `r20261112-212951-ec22`; how it
+pointed its job at that venv is in `lanes/kernels/20261112T2116Z-report-kgate.md` and its
+`kgate.sh`).
+- Run there, with `VENV=/workspace/cp/venv312` and no other Python on the path: `card.sh`'s own
+  preflight as the card runs it (`CUDA_VISIBLE_DEVICES=` and all), then the stand-in dry at the
+  nine shapes under that Python. One `research run --on vy-nebius-cpu-8`; if its pool is full,
+  wait for it rather than take another node: the point is that venv.
+- **If it imports and the dry holds, the import is no longer a guess**, only `env.sh`'s paths on
+  node A are, and the row stands. **If it does not import: that is tonight's work**: say what is
+  missing (`verity`, `verity_config`, `verity_vllm`, a dependency), and make the job carry it
+  from the tree (`PYTHONPATH`, as the suites do) without installing anything on node A.
+  Dry-run again; new `SHA256SUMS`.
+- Nothing on node A itself tonight: no look, no probe.
+
+**2. The honest ACCEPT must have drawn tiles.** On the stand-in every honest line reads
+`clear_work's tiles (0 drawn, …`. On the card, `honest_accepted` passes on `rc == 0` and
+`ACCEPT` alone. **Add to `verify_part`'s expectations on the card: the honest ACCEPT line's
+drawn count is over 0** (parse it from the line, or from the verdict's JSON if it has the count;
+the default `--draws` stays, as the harness's own record command has it), and record the count
+a shape. An accept that replayed no sampled tile would say nothing about the GEMM. Say in your
+return what the count will be at each shape, if `verify_run.py`'s default says.
+
+**3. Friday, as you wrote it, with these words:**
+- **Launch at 16:45Z, the window's first minute**, so the ship has 15 minutes.
+- Operands made inside the lease: fine for an untimed run; leave it. The graph replay reported
+  and not gated: fine; its result goes in your return.
+- **Card 3 until about 16:22Z is KAUDIT's** (HASH-98's row 1, three chained timed runs; a
+  rebuild adds 7 minutes). Your job's wait to 17:10Z covers an overrun; kill nothing.
+- The go is mine at about 16:42Z, in this file. No STANDS in the calendar's row, no launch (your
+  launcher already refuses).
+
+Return when the run on cpu-8 has ended and `expect` has its count, by Fri 13 Nov 04:00Z, with
+the new sha256 of each changed file and the one launch line.
