@@ -6,15 +6,9 @@ measures nothing itself. It reads the verifier's side of the run's record from t
 developer's node reports of what it served.
 
 - `run.py`: the command. Its docstring states the number's formula, each file of a record it reads, what it prints
-  beside the number, the shared result it writes and when it refuses.
-- `tests/`: the printer, the model's MAC count and the shared result, held to the small record under
-  `tests/fixtures/` with a stand-in for the evidence store, so the suite fetches nothing. Capacity is held to one
-  card file's two clocks.
-
-**What a caller may import:** nothing. `run.py` is a command, which `verity bench compute` starts, and only its own
-tests read its names. **What it never does:** it starts no job and measures nothing, it reads no file the developer's
-node wrote about what it served, and it writes nothing but `$OUT/compute.json` and `$OUT/result.json` under
-`research run`.
+  beside the number and when it refuses.
+- `tests/`: the printer and the model's MAC count, held to the small record under `tests/fixtures/` with a stand-in
+  for the evidence store, so the suite fetches nothing.
 
 ~~~text
 verity bench compute --from RUN
@@ -27,16 +21,7 @@ verity bench compute --from RUN --per-call [--uncredited F] [--top N]
   target. With `--per-call`, also where the MACs the credit leaves out went, by cause and by matmul call (the top N
   calls, 10 by default), from the Pearl+ verifier's split of its credit (the record's `verify.json`, or the file
   `--uncredited` names).
-- **What it writes:** under `research run`, two files, and otherwise nothing. With no number printed it writes
-  neither.
-  - `$OUT/compute.json`: the printed document.
-  - `$OUT/result.json`: the shared result, through the harness kit's writer (`verity_bench.kit`), in the fields
-    every resource's benchmark reports: `metric` (the printed number, its unit and its target), `verified` (the
-    credited MACs), `capacity`, `free` (capacity less verified) and `error` (the answer's δ_s, sampling's alone).
-    A recorded run's record holds no registration of its hardware and no span the verifier holds its passes to, so
-    `capacity` and `free` are one entry each, with no value and why. `capacity()` in `run.py` gives them for a
-    registered site and a span, at each data-sheet reading: a clock of a registered device's card file
-    (`clock.tensor`, `clock.sm`).
+- **What it writes:** under `research run`, the printed document as `$OUT/compute.json`; otherwise nothing.
 - **Exit code:** 0 with the number printed; 1 with none (the answer is not an accept, the Lean verifier's verdict is
   not the answer's, or the run left no answer); 2 when the command line, the run or its policy can't be read, or the
   split `--per-call` reads is not the answer's.
