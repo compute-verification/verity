@@ -90,7 +90,8 @@ verifier and counted apart from measured, and the class prints as `complete (run
 for PIECES)`, OPEN being each unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
 from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
 count's line names what is missing; a `withheld` piece or control prints as `withheld: OPEN`, and a withheld control
-is not refused. With no run carrying the record the print is as it was before the command read
+is not refused. A control on a withheld piece refused by that piece's verifier (the same module and commit) counts as
+refused. With no run carrying the record the print is as it was before the command read
 any.
 
 ## The share of compute

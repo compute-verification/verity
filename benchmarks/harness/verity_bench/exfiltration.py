@@ -572,7 +572,8 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
     """Whether the stop class's ``verdicts`` (`stop_verdicts`) let the sums under the rows whose schedules are 0 take a
     response's output count at 0 on a run (`complete`): each of `PIECES` accepted and complete on its honest run, and
     each of `CONTROLS` refused, on a piece, by the verifier that accepted that piece, and none accepted; a `withheld`
-    verdict is neither, so it keeps the class short of complete and names what it was withheld for. Where it is,
+    verdict is neither, so it keeps the class short of complete and names what it was withheld for, and a control on a
+    withheld piece refused by that piece's verifier counts as refused. Where it is,
     `mark` is what the output count's 0 is marked: `measured` only where every piece's record names the Lean guarantee
     that proves its verifier (`proved_by`), else `RUN_NOT_PROVED`. Where it is not, `lacks` names what is missing, the
     mark is None and the output count keeps its own. `said` is what the print says of the class."""
@@ -592,7 +593,8 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
             accepted = honest.get(v["piece"])
             if v["verdict"] != "refuse":
                 lacks.append(f"the control with {what} on {PIECES[v['piece']]} {_read(v)}, not refused")
-            elif accepted is None or accepted["verdict"] != "accept" or accepted["verifier"] != v["verifier"]:
+            elif (accepted is None or accepted["verdict"] not in ("accept", "withheld")
+                  or accepted["verifier"] != v["verifier"]):
                 lacks.append(f"the control with {what} is refused on {v['run']} by {_by(v)}, not by a verifier that "
                              f"accepted the honest run's verdict on {PIECES[v['piece']]}")
     out = {"record": VERDICTS, "runs": list(runs), "complete": not lacks, "mark": None, "lacks": lacks,

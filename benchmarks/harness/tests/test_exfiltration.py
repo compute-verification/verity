@@ -1303,7 +1303,8 @@ def test_without_both_negative_controls_refused_the_class_is_not_complete_and_sa
     """The class is complete only with every piece accepted, a changed id and a changed `max_tokens` each refused, and
     each refusal by the verifier that accepted the honest run's verdict on its piece. Short of that the inputs print as
     they do with no verdicts, and the output count's line names what is missing. A `withheld` verdict is neither an
-    accept nor a refusal: a withheld piece or control keeps the class short, printed `withheld: <open>`."""
+    accept nor a refusal: a withheld piece or control keeps the class short, printed `withheld: <open>`, and a control
+    on a withheld piece refused by that piece's verifier counts as refused and prints nothing more."""
 
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
     honest = complete()[:4]
@@ -1327,6 +1328,16 @@ def test_without_both_negative_controls_refused_the_class_is_not_complete_and_sa
             ("withheld control", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verdict="withheld")],
              [f"the control with a changed `max_tokens` on the request tie on r20261113-000000-a011, withheld: {OPEN}, "
               "not refused"]),
+            ("withheld, its controls refused", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"),
+                                                made_up_verdict("second_stage", "id"),
+                                                made_up_verdict("second_stage", "max_tokens")],
+             [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}"]),
+            ("withheld, a control refused by another", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"),
+                                                        made_up_verdict("second_stage", "id", verifier=other),
+                                                        made_up_verdict("second_stage", "max_tokens")],
+             [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}",
+              "the control with a changed id is refused on r20261113-000000-a008 by `made_up.stop_verifier` at "
+              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the compute audit's second stage"]),
             ("missing", complete()[1:], ["no verdict on the stop record"])):
         doc = E.build(store=with_verdicts(tmp_path / name, verdicts).store, root=REPO)
         stop = doc["stop_class"]
