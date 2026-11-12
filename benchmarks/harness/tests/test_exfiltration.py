@@ -1045,7 +1045,7 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
     # the holes' block over the fixture runs' made-up commit, which no repository holds: test_spot_status.py decides them
     monkeypatch.setattr(E.spot_status, "commit_known", lambda root, commit: False)
-    monkeypatch.setattr(E.spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lean-audit.json")
+    monkeypatch.setattr(E.spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
 
     def run(*argv: str) -> tuple[int, str, str]:
         monkeypatch.setattr(sys, "argv", ["run.py", *argv])

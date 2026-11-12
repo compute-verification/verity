@@ -15,7 +15,8 @@ import pytest
 from verity_bench import cli, prove_records
 from verity_bench import spot_status as S
 
-LOCK = Path(__file__).parent / "fixtures" / "spot_status" / "lean-audit.json"
+#: a lock's shape under a name no Lean tool takes for a package's lock
+LOCK = Path(__file__).parent / "fixtures" / "spot_status" / "lock.json"
 REDRAWN, RECOMMITTED = S.HOLES
 BASE, ONE, BOTH = "r20261112-000001-aaaa", "r20261112-000002-bbbb", "r20261112-000003-cccc"
 
