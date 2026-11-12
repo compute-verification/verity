@@ -511,12 +511,14 @@ def gate_observation(run: RunArtifacts) -> GateResult:
         problems.append("no boundary hash comparisons")
     elif n_eq != n_cmp:
         problems.append(f"boundary hashes {n_eq}/{n_cmp} equal")
-    if ni.get("mismatches"):
-        problems.append(f"{len(ni['mismatches'])} hash mismatches")
-    if ni.get("problems"):
-        problems.append(f"{len(ni['problems'])} problems recorded: {ni['problems'][:2]}")
-    toks = ni.get("tokens") or {}
-    variants = {k: {str(r): [int(t) for t in v] for r, v in (toks.get(k) or {}).items()} for k in ("a_observer", "b_hooks", "c_bare")}
+    mismatches, recorded = ni.get("mismatches"), ni.get("problems")   # a report that lists neither counts none
+    if mismatches:
+        problems.append(f"{len(mismatches)} hash mismatches")
+    if recorded:
+        problems.append(f"{len(recorded)} problems recorded: {recorded[:2]}")
+    toks = ni.get("tokens")   # each variant's generated ids by request; a variant the report leaves out is `missing` below
+    stated = {k: toks.get(k) if toks else None for k in ("a_observer", "b_hooks", "c_bare")}
+    variants = {k: {str(r): [int(t) for t in v] for r, v in by_request.items()} if by_request else {} for k, by_request in stated.items()}
     missing = [k for k, v in variants.items() if not v]
     if missing:
         problems.append(f"tokens missing for variants {missing}")
@@ -531,7 +533,9 @@ def gate_observation(run: RunArtifacts) -> GateResult:
                 problems.append(f"{k} tokens differ from the control run's ({control_src})")
     if variants["a_observer"] and variants["b_hooks"] and variants["a_observer"] != variants["b_hooks"]:
         problems.append("(a) and (b) tokens differ")
-    steps = ni.get("steps") or []
+    steps = ni.get("steps")
+    if not steps:
+        steps = []   # a report that states no step compared none
     rows = [s for s in steps if isinstance(s, dict) and "error" not in s]
     if len(rows) != len(steps):
         problems.append("a step is present in only one variant")
@@ -567,7 +571,7 @@ def gate_observation(run: RunArtifacts) -> GateResult:
     detail["noninterference"] = {"PASS": ni.get("PASS"), "hash_comparisons": n_cmp, "hash_equal": n_eq, "steps": len(steps),
                                  "expected_steps": exp, "layers": ni.get("layers"), "expected_layers": ni.get("expected_layers"),
                                  "control_source": control_src, "tokens_equal_control": {k: (v == control) if control and v else None for k, v in variants.items()},
-                                 "n_mismatches": len(ni.get("mismatches") or []), "n_problems": len(ni.get("problems") or [])}
+                                 "n_mismatches": len(mismatches) if mismatches else 0, "n_problems": len(recorded) if recorded else 0}
     # -- census
     t = _get(cr, "totals", "census_reconcile")
     residue = _int(_get(t, "residue_kernels", "census_reconcile.totals"), "residue_kernels")
@@ -578,7 +582,8 @@ def gate_observation(run: RunArtifacts) -> GateResult:
         problems.append(f"census: {ambiguous} ambiguous compute claims")
     if not cr.get("steps_aligned"):
         problems.append(f"census steps ({cr.get('census_steps')}) not aligned with log steps ({cr.get('log_steps')})")
-    step_errors = [s for s in (cr.get("steps") or []) if isinstance(s, dict) and "error" in s]
+    census_steps = cr.get("steps")   # a reconciliation that lists no step has none without a log step
+    step_errors = [s for s in census_steps if isinstance(s, dict) and "error" in s] if census_steps else []
     if step_errors:
         problems.append(f"{len(step_errors)} census steps without a resolved log step")
     counts = _int(_get(t, "count_mismatches", "census_reconcile.totals (a reconciliation without the launch-count gate: "
@@ -632,7 +637,9 @@ def gate_semantic_closure(run: RunArtifacts) -> GateResult:
     fold_unresolved = _int(_get(fs, "unresolved", "fold_summary"), "fold_summary.unresolved")
     fold_errors = _int(_get(fs, "errors", "fold_summary"), "fold_summary.errors")
     if unsupported:
-        problems.append(f"{unsupported} Unsupported resolutions ({list((res.get('primary_report') or {}).get('unsupported_ops') or {})[:4]})")
+        report = res.get("primary_report")   # the resolver's own report names the ops; without it the count stands alone
+        ops = report.get("unsupported_ops") if report else None
+        problems.append(f"{unsupported} Unsupported resolutions ({list(ops)[:4] if ops else []})")
     if res_errors:
         problems.append(f"{res_errors} steps with a ResolutionError")
     if fold_unsupported:
@@ -655,10 +662,11 @@ def gate_semantic_closure(run: RunArtifacts) -> GateResult:
                     {"unsupported": unsupported, "fold_unresolved": fold_unresolved})
     if amb:
         problems.append(f"{amb} ambiguous pattern matches ({amb_src})")
+    totals = res["totals"]   # stated: the counts above were read from it
     detail = {"unsupported": unsupported, "resolution_errors": res_errors, "fold_unsupported": fold_unsupported,
               "fold_unresolved": fold_unresolved, "fold_errors": fold_errors, "fold_error_classes": fs.get("error_classes"),
               "ambiguous": amb, "ambiguity_source": amb_src, "steps": steps, "expected_steps": exp,
-              "computes": (res.get("totals") or {}).get("computes"), "compute_rows": (res.get("totals") or {}).get("compute_rows"),
+              "computes": totals.get("computes"), "compute_rows": totals.get("compute_rows"),
               "n_instances": fs.get("n_instances"), "header_mismatches": res.get("header_mismatches")}
     return _result(problems, ev, detail)
 
@@ -675,13 +683,16 @@ def gate_root_closure(run: RunArtifacts) -> GateResult:
     fs = run.need("fold_summary")
     ev = [run.rel("fold_summary")]
     problems: list[str] = []
-    unknown = list(fs.get("unknown_roots") or [])
+    stated = fs.get("unknown_roots")   # a fold summary that lists no unknown root has none
+    unknown = list(stated) if stated else []
     if unknown:
         problems.append(f"fold: {len(unknown)} unknown roots: {unknown[:4]}")
     res = run.json("resolution")
     if isinstance(res, dict):
         ev.append(run.rel("resolution"))
-        ru = list(((res.get("roots") or {}).get("unknown")) or [])
+        roots_report = res.get("roots")   # the resolver's root classes; a report without them names no unknown root
+        named = roots_report.get("unknown") if roots_report else None
+        ru = list(named) if named else []
         if ru:
             problems.append(f"resolution: {len(ru)} unknown roots: {ru[:4]}")
     opaque = _int(fs.get("opaque_fallbacks", 0), "fold_summary.opaque_fallbacks")
@@ -691,27 +702,33 @@ def gate_root_closure(run: RunArtifacts) -> GateResult:
     ev.append(run.rel("root_policy"))
     if rp.get("status") != "pass":
         problems.append(f"root_policy status {rp.get('status')!r}" + (f": {rp['reason']}" if rp.get("reason") else ""))
-    new_classes = list(rp.get("new_root_classes") or [])
+    stated = rp.get("new_root_classes")   # a root policy report lists what it found; a field it leaves out found none
+    new_classes = list(stated) if stated else []
     if new_classes:
         problems.append(f"{len(new_classes)} new root classes: {new_classes[:4]}")
-    classes = rp.get("classes") or {}
+    classes, roots, claims = rp.get("classes"), rp.get("roots"), rp.get("alias_claims")
+    if not classes:
+        classes = {}
+    if not roots:
+        roots = []
+    if not claims:
+        claims = []
     failed_total = sum(int((c or {}).get("failed") or 0) for c in classes.values() if isinstance(c, dict))
     if failed_total:
         problems.append(f"{failed_total} root validations failed")
-    roots = rp.get("roots") or []
     bad_roots = [r for r in roots if isinstance(r, dict) and r.get("status") not in ("pass", "validated", "ok")]
     if bad_roots:
         problems.append(f"{len(bad_roots)} roots not validated: {[r.get('name') for r in bad_roots[:3]]}")
     opaque_roots = [r.get("name") for r in roots if isinstance(r, dict) and str(r.get("class", "")).lower() in ("opaque", "prescribed")]
     if opaque_roots:
         problems.append(f"{len(opaque_roots)} opaque/prescribed roots in root_policy: {opaque_roots[:3]}")
-    bad_alias = [a for a in (rp.get("alias_claims") or []) if isinstance(a, dict) and a.get("status") not in ("pass", "proven", "ok")]
+    bad_alias = [a for a in claims if isinstance(a, dict) and a.get("status") not in ("pass", "proven", "ok")]
     if bad_alias:
         problems.append(f"{len(bad_alias)} alias claims unproven: {[a.get('name') for a in bad_alias[:3]]}")
     detail = {"unknown_roots": unknown, "opaque_fallbacks": opaque, "unbound_roots": fs.get("unbound_roots"),
               "root_policy_status": rp.get("status"), "new_root_classes": new_classes,
               "classes": {k: dict(v) if isinstance(v, dict) else v for k, v in classes.items()},
-              "roots": len(roots), "roots_failed": len(bad_roots), "alias_claims": len(rp.get("alias_claims") or []),
+              "roots": len(roots), "roots_failed": len(bad_roots), "alias_claims": len(claims),
               "alias_unproven": len(bad_alias)}
     return _result(problems, ev, detail)
 
@@ -730,11 +747,12 @@ def quarantine_specs(res: dict | None) -> list[str]:
     q = res.get("quarantine_specs")
     if isinstance(q, list):
         out += [str(x) for x in q]
+    report, by_spec = res.get("primary_report"), res.get("by_spec")   # a report without either names no module and counts no specialization
     for key in ("spec_modules", "by_spec_module", "registries"):
-        m = res.get(key) or (res.get("primary_report") or {}).get(key)
+        m = res.get(key) or (report.get(key) if report else None)
         if isinstance(m, dict):
             out += [str(s) for s, mod in m.items() if "quarantine" in str(mod)]
-    for s in list((res.get("by_spec") or {}).keys()):
+    for s in list(by_spec.keys()) if by_spec else []:
         if "quarantine" in str(s).lower():
             out.append(str(s))
     return sorted(set(out))
@@ -749,8 +767,10 @@ def gate_primitive(run: RunArtifacts) -> GateResult:
     ev = [run.rel("replay_a")]
     problems: list[str] = []
     status, k = rep.get("status"), rep.get("k")
-    uncovered = list(rep.get("uncovered_specs") or [])
-    cov = rep.get("coverage") or {}
+    stated, cov = rep.get("uncovered_specs"), rep.get("coverage")   # a sample report that lists neither left no specialization out and covered none
+    uncovered = list(stated) if stated else []
+    if not cov:
+        cov = {}
     if status != "pass":
         problems.append(f"tier a status {status!r}" + (f": {rep['reason']}" if rep.get("reason") else ""))
     if not isinstance(k, int) or isinstance(k, bool):
@@ -783,8 +803,8 @@ def gate_primitive(run: RunArtifacts) -> GateResult:
             problems.append(f"quarantine.json missing while the run uses quarantine specs {qspecs[:3]}")
     else:
         ev.append(run.rel("quarantine"))
-        diff = q.get("differential") or {}
-        passed, total = diff.get("passed"), diff.get("total")
+        diff = q.get("differential")   # a quarantine report without its differential count ran no test: a problem below
+        passed, total = (diff.get("passed"), diff.get("total")) if diff else (None, None)
         neg = q.get("negative_matcher_tests")
         detail["quarantine"] = {"differential": {"passed": passed, "total": total}, "negative_matcher_tests": neg, "status": q.get("status")}
         if not isinstance(passed, int) or not isinstance(total, int) or total <= 0:
@@ -822,15 +842,19 @@ def gate_composition(run: RunArtifacts) -> GateResult:
     # (a) exhaustive provenance
     w = run.need("wiring")
     ev.append(run.rel("wiring"))
-    st = w.get("streams") or {}
-    sc = w.get("schema") or {}
+    st, sc = w.get("streams"), w.get("schema")
+    if not st:
+        st = {}   # no stream census: a problem below
+    if not sc:
+        sc = {}   # no schema census: no write is counted outside it
     detail["provenance"] = {"status": w.get("status"), "reads": w.get("reads"), "writes": w.get("writes"), "instances": w.get("instances"),
                             "n_mismatch": w.get("n_mismatch"), "uncovered": w.get("uncovered"), "single_stream": st.get("single_stream"),
                             "streams": st.get("distinct_streams"), "writes_outside_schema": sc.get("writes_outside_schema"),
                             "schema_roots": sc.get("schema_roots"), "triton_roots": sc.get("triton_roots"),
                             "declared_unwritten": sc.get("declared_unwritten"), "seconds": w.get("seconds")}
     if w.get("status") != "pass":
-        problems.append(f"wiring status {w.get('status')!r}: {'; '.join(w.get('failures') or [])}")
+        failures = w.get("failures")   # a failed report may name no failure
+        problems.append(f"wiring status {w.get('status')!r}: {'; '.join(failures) if failures else ''}")
     if (w.get("n_mismatch") or 0) > 0:
         problems.append(f"{w['n_mismatch']} operand read(s) not reproduced by the independent provenance map (first: {(w.get('mismatches') or [{}])[0]})")
     if (w.get("uncovered") or 0) > 0:
@@ -846,7 +870,7 @@ def gate_composition(run: RunArtifacts) -> GateResult:
     # (b) sampled semantics + served tokens
     rep = run.need("replay_a")
     ev.append(run.rel("replay_a"))
-    toks = rep.get("tokens") or {}
+    toks = rep.get("tokens")   # the served-token reproduction; a report without it is a problem below
     detail["sample"] = {"status": rep.get("status"), "k": rep.get("k"), "seed": rep.get("seed"), "strata": rep.get("strata"),
                         "specs": rep.get("n_specs"), "specs_covered": rep.get("n_specs_covered"), "summary": rep.get("summary")}
     if rep.get("status") != "pass":
@@ -854,16 +878,17 @@ def gate_composition(run: RunArtifacts) -> GateResult:
     if not toks:
         problems.append("tier a report has no `tokens` section (served-token reproduction)")
     else:
-        steps = [int(x) for x in (toks.get("steps") or [])]
+        checked, unequal = toks.get("steps"), toks.get("mismatch")   # a section that lists neither checked no step and found no unequal token
+        steps = [int(x) for x in checked] if checked else []
         decode = [x for x in steps if x > 0]
         detail["tokens"] = {"steps": steps, "evaluated": toks.get("evaluated"), "equal": toks.get("equal"), "skipped": toks.get("skipped"),
-                            "mismatch": (toks.get("mismatch") or [])[:5], "all_rows_equal": toks.get("all_rows_equal")}
+                            "mismatch": unequal[:5] if unequal else [], "all_rows_equal": toks.get("all_rows_equal")}
         if 0 not in steps:
             problems.append("served tokens: step 0 (prefill) not checked")
         if len(decode) < MIN_DECODE_TOKEN_STEPS:
             problems.append(f"served tokens checked at {len(decode)} decode step(s) < MIN_DECODE_TOKEN_STEPS={MIN_DECODE_TOKEN_STEPS}")
-        if toks.get("mismatch"):
-            problems.append(f"{len(toks['mismatch'])} served token(s) not reproduced from the logits boundary: {toks['mismatch'][:3]}")
+        if unequal:
+            problems.append(f"{len(unequal)} served token(s) not reproduced from the logits boundary: {unequal[:3]}")
         if toks.get("skipped"):
             problems.append(f"{toks['skipped']} TokenSelect instance(s) skipped (missing logits snapshot?)")
         if not toks.get("evaluated"):
@@ -871,15 +896,18 @@ def gate_composition(run: RunArtifacts) -> GateResult:
     # (c) chained slices
     ch = run.need("replay_chain")
     ev.append(run.rel("replay_chain"))
+    slices = ch.get("slices")
+    if not slices:
+        slices = []   # a chain report that lists no slice replayed none; its own count is what the floor below reads
     detail["chain"] = {"status": ch.get("status"), "n_slices": ch.get("n_slices"), "n_edges_chained": ch.get("n_edges_chained"),
                        "slices": [{"step": sl.get("step"), "status": sl.get("status"), "edges": sl.get("edges_chained"),
-                                   "specs": [str(x).split("{")[0] for x in sl.get("specs") or []]} for sl in (ch.get("slices") or [])],
+                                   "specs": [str(x).split("{")[0] for x in specs] if (specs := sl.get("specs")) else []} for sl in slices],
                        "seconds": ch.get("seconds")}
     if ch.get("status") != "pass":
         problems.append(f"chain status {ch.get('status')!r}" + (f": {ch.get('status_reason') or ch.get('reason')}" if (ch.get('status_reason') or ch.get('reason')) else ""))
     if (ch.get("n_slices") or 0) < CHAIN_MIN_SLICES:
         problems.append(f"{ch.get('n_slices') or 0} chained slice(s) < CHAIN_MIN_SLICES={CHAIN_MIN_SLICES}")
-    if ch.get("n_slices") and any(int(sl.get("edges_chained") or 0) < 1 for sl in ch.get("slices") or []):
+    if ch.get("n_slices") and any(int(sl.get("edges_chained") or 0) < 1 for sl in slices):
         problems.append("a chained slice chained no producer->consumer edge")
     # diagnostic: full replay when present
     full: dict[str, Any] = {}
@@ -889,8 +917,9 @@ def gate_composition(run: RunArtifacts) -> GateResult:
             continue
         rb = run.json(replay_b_key(int(m.group(1))))
         if isinstance(rb, dict):
+            served = rb.get("tokens")   # a full replay that reproduced no token states no count
             full[m.group(1)] = {"status": rb.get("status"), "partial": bool(rb.get("partial")), "n_instances": rb.get("n_instances"),
-                                "n_diverged": rb.get("n_diverged"), "tokens_equal": (rb.get("tokens") or {}).get("equal"),
+                                "n_diverged": rb.get("n_diverged"), "tokens_equal": served.get("equal") if served else None,
                                 "n_from_earlier_steps": rb.get("n_from_earlier_steps")}
     detail["full_replay"] = full or "not run (diagnostic only)"
     return _result(problems, ev, detail)
@@ -927,7 +956,9 @@ def gate_canonicality(run: RunArtifacts) -> GateResult:
     ev.append(run.rel("golden"))
     if g.get("status") != "pass":
         problems.append(f"golden status {g.get('status')!r}" + (f": {g['reason']}" if g.get("reason") else ""))
-    entries = g.get("entries") or []
+    entries = g.get("entries")
+    if not entries:
+        entries = []   # a golden report that lists no entry changed none
     bad = [e for e in entries if isinstance(e, dict) and (e.get("status") != "pass" or (e.get("expected_digest") is not None and e.get("expected_digest") != e.get("got_digest"))
                                                         or (e.get("expected_attribution_sha") is not None and e.get("expected_attribution_sha") != e.get("got_attribution_sha")))]
     if bad:
@@ -949,9 +980,10 @@ def gate_holdout(run: RunArtifacts) -> GateResult:
     ev = [run.rel("holdouts")]
     if h is None:
         raise _Skip("holdouts.json missing (the orchestrator has not run the holdout workloads)", ev)
-    holdouts = h.get("holdouts") or []
+    holdouts = h.get("holdouts")
     problems: list[str] = []
     if not holdouts:
+        holdouts = []
         problems.append("no holdouts")
     if h.get("status") not in (None, "pass"):
         problems.append(f"holdouts status {h.get('status')!r}")
@@ -960,7 +992,9 @@ def gate_holdout(run: RunArtifacts) -> GateResult:
         if not isinstance(ho, dict):
             problems.append(f"malformed holdout entry {ho!r}")
             continue
-        gates = ho.get("gates") or {}
+        gates = ho.get("gates")
+        if not gates:
+            gates = {}   # a holdout that states no gate passes none
         statuses = {g: (gates.get(g, {}).get("status") if isinstance(gates.get(g), dict) else gates.get(g)) for g in HOLDOUT_GATES}
         failing = sorted(g for g, s in statuses.items() if s != "pass")
         per[str(ho.get("name"))] = {"workload": ho.get("workload"), "run_dir": ho.get("run_dir"), "gates": statuses, "pass": not failing}
@@ -999,9 +1033,10 @@ def gate_vu_partition(run: RunArtifacts) -> GateResult:
     width = _get(v, "width", f"{what}.verdict")
     p_status = _get(part, "status", f"{what}.verdict.partition")
     w_status = _get(width, "status", f"{what}.verdict.width")
-    codes = [str(c) for c in (part.get("codes") or [])]
-    violators = list(width.get("violators") or [])
-    unsupported = list(width.get("unsupported") or [])
+    listed = part.get("codes"), width.get("violators"), width.get("unsupported")   # a verdict lists what it found; a field it leaves out found none
+    codes = [str(c) for c in listed[0]] if listed[0] else []
+    violators = list(listed[1]) if listed[1] else []
+    unsupported = list(listed[2]) if listed[2] else []
     w_max = width.get("w_max", use.get("w_max"))
     v_status = v.get("status")                      # "ok" | "fail" | "not-ready" | "unsupported" (qpart INTERFACE NOTE 21:45Z)
     # Two classes of finding (lead's decision 22:22Z).  FAIL: a wrong partition (overlap / gap), a width violation, `not-ready` (a
@@ -1044,6 +1079,7 @@ def gate_vu_partition(run: RunArtifacts) -> GateResult:
     rd = v.get("readiness_32")
     if not isinstance(rd, dict):
         rd = {}
+    over_32 = rd.get("violators")
     detail: dict[str, Any] = {
         "schema": doc.get("schema"), "binding_id": doc.get("binding_id"), "use": {"kind": use.get("kind"), "w_max": use.get("w_max")},
         "status": v_status,                          # the document's verdict.status, verbatim
@@ -1051,7 +1087,7 @@ def gate_vu_partition(run: RunArtifacts) -> GateResult:
         "width": {"status": w_status, "w_max": w_max, "max_seen": width.get("max_seen"), "n_violators": len(violators),
                   "violators": violators[:16], "n_unsupported": len(unsupported), "unsupported": unsupported[:16]},
         "count": v.get("count"), "verdict_status": v_status,
-        "readiness_32": {"ok": rd.get("ok"), "max_w": rd.get("max_w"), "n_violators": len(rd.get("violators") or [])} if rd else None,
+        "readiness_32": {"ok": rd.get("ok"), "max_w": rd.get("max_w"), "n_violators": len(over_32) if over_32 else 0} if rd else None,
         "evaluator": doc.get("evaluator"),
         "binding": binding, "binding_checked": binding["checked"],
         "undecided": undecided,
