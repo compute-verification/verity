@@ -48,6 +48,7 @@ from verity_vllm.program.frontend.rules.training import training_rules
 from verity_vllm.program.frontend.rules.training_survey import survey, with_holes
 from verity_vllm.program.frontend.train_step import (
     AdamW,
+    _patched,
     export_step,
     in_bits_beyond_theta,
     step_program,
@@ -946,6 +947,24 @@ def test_gpu_export_takes_the_steps_cuda_branches() -> None:
 
     assert dtypes(False) == {torch.float32} and dtypes(True) == {torch.bfloat16}
     assert not isinstance(torch.Tensor.__dict__.get("is_cuda"), property) and torch.zeros(1).is_cuda is False
+
+
+def test_a_patch_is_put_back_as_the_owner_held_it() -> None:
+    """The translator's own patch (`train_step._patched`, which the GPU trace puts on `Tensor.is_cuda`): inside the block the
+    owner answers with the value; afterwards an attribute of its own is that attribute again and one it inherited is inherited
+    again, also when the block raises."""
+    class Base:
+        inherited = "the base's"
+
+    class Owner(Base):
+        own = "the owner's"
+
+    with _patched(Owner, "own", "patched"), _patched(Owner, "inherited", "patched"):
+        assert (Owner.own, Owner.inherited) == ("patched", "patched")
+    assert vars(Owner)["own"] == "the owner's" and "inherited" not in vars(Owner) and Owner.inherited == "the base's"
+    with pytest.raises(RuntimeError, match="inside the block"), _patched(Owner, "inherited", "patched"):
+        raise RuntimeError("inside the block")
+    assert "inherited" not in vars(Owner) and Owner.inherited == "the base's"
 
 
 def test_gpu_export_reads_the_steps_tf32(monkeypatch) -> None:
