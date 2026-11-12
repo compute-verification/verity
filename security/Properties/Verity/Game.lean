@@ -201,7 +201,8 @@ def subprotocols (k : Verity.Registration.Composite) : Finset Subprotocol :=
 
 /-- The id composite `k`'s verifier answers under: onsite's and remote's are the code's (`Core.Onsite.protocol`'s,
 `verity/onsite/v0`, and `Core.Remote.protocol`'s, `verity/remote/v0`), and any other list's is its ids,
-comma-separated, under `verity/composite/v0`. -/
+comma-separated, after a prefix no protocol's id has. No code builds a verifier under such an id
+(`Core.Composites.ofIds` refuses the list), so it names the composition only in this game. -/
 def compositeId (k : Verity.Registration.Composite) : String :=
   if k = .onsite then Onsite.protocol.id else if k = .remote then Remote.protocol.id
   else "verity/composite/v0:" ++ ",".intercalate k
