@@ -30,7 +30,7 @@ import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
 from . import carry, policy
 from .notes import ART_RE
@@ -246,6 +246,13 @@ def shard_machines(on: str, n: int) -> list[str]:
     shared.  train.sh twins only when no slot is free, so shards given one list all took its one free slot, one behind another."""
     ms = on.split(",")
     return [",".join(ms[k::n]) if len(ms) >= n else ms[k % len(ms)] for k in range(n)]
+
+
+def elsewhere(on: str, ran: Iterable[str]) -> str:
+    """``on`` (machines, a comma list) without those of ``ran``, for a run launched again after a machine's fault; all of it
+    when that leaves none (`auto`, or only those)."""
+    ran = set(ran)
+    return ",".join(m for m in on.split(",") if m not in ran) or on
 
 
 def _hhmm(t: float) -> str:
@@ -1074,8 +1081,7 @@ class Landing:
     def _elsewhere(self, states: dict, on: str = "") -> str:
         """``on`` (else `on`) without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a
         machine's fault; all of it when that leaves none (`auto`, or one machine)."""
-        ran, on = self._ran_on(states), on or self.on
-        return ",".join(m for m in on.split(",") if m not in ran) or on
+        return elsewhere(on or self.on, self._ran_on(states))
 
     def _open(self) -> dict[int, PR]:
         if self._prs is None:

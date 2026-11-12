@@ -3018,8 +3018,9 @@ class Loop:
             return [self.record(t, "bookkeeping", **line, done=False)]
         return [self.record(t, "bookkeeping", **line, posted=self._say(t, "bookkeeping", text, to, sha=tip), done=True)]
 
-    def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
-        """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is
+    def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started", avoid: Iterable[str] = ()) -> list[dict]:
+        """The run beside candidate ``sha``'s check started (`vqueue_slim.start`, off the machines ``avoid`` names where it
+        has others), its record logged; a start that fails is
         logged with no record, which `vqueue_slim.judge` reads as infra.  A base still in flight lends the record of its
         check, as judged this tick or, put on the chain by a `Commit` of this tick, as started (`Tick.committed`), and the
         candidates below it theirs, or, landed, the run beside `main` (`_audit_from`)."""
@@ -3029,10 +3030,10 @@ class Loop:
         below = began[base] if base in began else \
             t.judged[base].record if base not in (t.main, t.advanced) and base in t.judged else None
         return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why, below,
-                              _lent(t.judged, t.below, t.main, t.advanced))]
+                              _lent(t.judged, t.below, t.main, t.advanced), avoid)]
 
     def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None,
-                 lent: Lent | None = None) -> dict:
+                 lent: Lent | None = None, avoid: Iterable[str] = ()) -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         heavy = self._heavy_on(line) if self.gate == CHECK_GATE else ""
         try:
@@ -3045,7 +3046,8 @@ class Loop:
                                              **({"audit_from": audit} if audit else {}),
                                              **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {}),
                                              **({"after": after} if after else {}),
-                                             **({"heavy_on": heavy} if heavy else {})), None
+                                             **({"heavy_on": heavy} if heavy else {}),
+                                             **({"avoid": tuple(avoid)} if avoid else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
@@ -3323,7 +3325,8 @@ class Loop:
         """Enqueue ``c``'s check again: graph2 lists it again, reruns what ended in infra errors once its own verdict is
         infra, or leaves it running; while graph2's verdict is another (a task still runs, or one failed), the infra keys are
         rerun here (graph2's `rerun`).  The infra results so far are set aside (`Past.since`), so it is pending until graph2
-        says something newer, and a run beside it that ended in infra is started again."""
+        says something newer, and a run beside it that ended in infra, or failed only where its machine failed it
+        (`vqueue._erred`), is started again on its machines but those its runs failed on (``erred_on``)."""
         j, line = t.judged[c.sha], dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads)
         built = t.past.built(c.sha) or {}
         priority = built.get("priority") if isinstance(built.get("priority"), int) else 0
@@ -3331,9 +3334,10 @@ class Loop:
         self.world.enqueue(c.sha, priority)
         said = self.world.rerun(c.sha, list(counts)) if counts and j.graph2 != INFRA else None
         rec = self.record(t, "retry", **line, priority=priority, why=f"{c.verdict.state}: {j.note or 'enqueued again'}",
-                          failed=c.verdict.infra, mark=j.mark, counts=counts, enqueued=True, done=True,
+                          failed=vqueue._erred(c.verdict), mark=j.mark, counts=counts, enqueued=True, done=True,
                           **({"rerun": said} if said is not None else {}))
-        again = self._start(t, c.sha, c.base, line, "started again") if j.slim is not None and j.slim.state == INFRA else []
+        again = self._start(t, c.sha, c.base, line, "started again", avoid=(j.record or {}).get("erred_on") or ()) if (
+            j.slim is not None and (j.slim.state == INFRA or vqueue._erred(j.slim))) else []
         return [rec, *again]
 
     def _rerun(self, a: Rerun, c: Candidate, t: Tick) -> list[dict]:
@@ -3753,12 +3757,14 @@ class Loop:
     def _ring(self, a: Ring, c: Candidate, t: Tick) -> list[dict]:
         if (c.sha, a.why) in t.past.rung():
             return []
-        infra = "; ".join(f"{f.task} (key {f.key})" for f in c.verdict.infra)
+        erred = vqueue._erred(c.verdict)
+        infra = "; ".join(f"{f.task} (key {f.key})" for f in erred)
         members = " ".join(f"#{n}" for n in c.members)
+        state = vqueue._reading(c.verdict) if c.verdict.state == FAIL else c.verdict.state
         text = (f"the verified queue's candidate queue/{c.sha[:12]} ({members}), whose check waits for its records run: {a.why}"
-                if c.waits else f"the verified queue's candidate ready:{c.sha} ({members}) is {c.verdict.state} after "
+                if c.waits else f"the verified queue's candidate ready:{c.sha} ({members}) is {state} after "
                 f"{c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
-        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
+        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=erred, text=text)
         if a.pr is not None and (held := self._outage(c, t)) is not None:
             return [self.record(t, "ring", **line, done=True, posted=False, held=held)]
         if self.shadow:
@@ -3773,7 +3779,8 @@ class Loop:
         """Why a ring to the owner of ``c``'s lone member about its check erring is held, logged and not posted: in the same
         tick another candidate's check, or the run beside `main`'s own, reads infra too, as an outage reads, which graph2 can't
         tell from one change's erring.  Infra is rung all the same."""
-        if others := [o.sha[:12] for o in t.snap.candidates if o.sha != c.sha and (o.verdict.state == INFRA or o.verdict.infra)]:
+        if others := [o.sha[:12] for o in t.snap.candidates if o.sha != c.sha and (o.verdict.state == INFRA
+                                                                                     or vqueue._erred(o.verdict))]:
             return f"{', '.join(others)} read infra too"
         if ((t.below or {}).get("verdict") or {}).get("state") == INFRA:
             return f"the run beside {t.main[:12]}'s check ended in infra"

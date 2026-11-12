@@ -2668,8 +2668,9 @@ class Slim:
     """`research.vqueue_slim`'s functions, faked: each start registers a run (one on `main` itself, ``main-N``, kept in
     ``below``; a candidate's, ``run-N``, in ``started``), judged as ``verdicts`` says (pending unless it names it), and a
     verdict other than pending is kept in its record, as `judge` keeps it: with the steps ``steps`` says it failed and passed,
-    as `judge` keeps them, each failed step a `Failed` whose inputs are ``inputs``.  Each record judged is kept in ``judged``.
-    With ``launching``, a candidate's start is a detached launch, pending until ``registered`` names the run ids it printed
+    as `judge` keeps them, each failed step a `Failed` whose inputs are ``inputs`` and kind ``kinds`` names, and the machines
+    ``erred_on`` names for its run kept in its record.  Each record judged is kept in ``judged``, and each start's ``avoid`` in
+    ``avoided``.  With ``launching``, a candidate's start is a detached launch, pending until ``registered`` names the run ids it printed
     for its sha (none: it registered no run)."""
 
     def __init__(self):
@@ -2680,8 +2681,12 @@ class Slim:
         self.inputs = frozenset({"tests/**"})
         self.judged: list = []
         self.launching, self.registered = False, {}
+        self.kinds: dict[str, str] = {}
+        self.erred_on: dict[str, list[str]] = {}
+        self.avoided: list[tuple[str, ...]] = []
 
-    def start(self, driver, sha: str, base: str) -> dict:
+    def start(self, driver, sha: str, base: str, avoid=()) -> dict:
+        self.avoided.append(tuple(avoid))
         if sha == base:
             self.below.append((driver, sha))
             return {"ids": [f"main-{len(self.below)}"], "tip": sha, "base": base}
@@ -2705,8 +2710,10 @@ class Slim:
         kept, run = rec.get("verdict"), rec["ids"][0]
         state = (kept["state"] if isinstance(kept, dict) else kept) or self.verdicts.get(run, PENDING)
         failed, passed = self.steps.get(run, ((), ()))
-        fails = tuple(vqueue.Failed(f"step {s}", f"{rec['tip']}:{s}", self.inputs, f"{rec['base']}:{s}", frozenset({f"step:{s}"}))
-                      for s in failed) if state == FAIL else ()
+        fails = tuple(vqueue.Failed(f"step {s}", f"{rec['tip']}:{s}", self.inputs, f"{rec['base']}:{s}", frozenset({f"step:{s}"}),
+                                    kind=self.kinds.get(s)) for s in failed) if state == FAIL else ()
+        if run in self.erred_on:
+            rec["erred_on"] = self.erred_on[run]
         if state != PENDING:
             rec["verdict"] = state if run not in self.steps else {"state": state, "failed": [{"task": f.task} for f in fails],
                                                                   "passed": list(passed)}
@@ -2755,6 +2762,31 @@ def test_the_run_beside_a_check_starts_with_its_build_its_record_is_kept_and_bot
     started_again = env.loop(vqueue.decide, clone="again", slim=slim)         # a restart reads its records from the log
     started_again.world.slim_driver = lambda: "drive"
     assert started_again.tick() == [] and len(slim.started) == 2 and slim.below == [("drive", main)]
+
+
+@pytest.mark.parametrize("kind", [None, *vqueue.MACHINE_KINDS])
+def test_the_run_beside_a_check_that_erred_starts_again_off_the_machines_its_failed_runs_ran_on(env, kind):
+    """After infra, or a fail whose failed steps the machines made (`vqueue.MACHINE_KINDS`), which `decide` reads as infra, the
+    run beside the check starts again avoiding the machines its failed runs ran on (its record's ``erred_on``)."""
+    env.main()
+    env.put(1, {"a.txt": "1\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda: "drive"
+    _, built, _ = loop.tick()
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert loop.tick() == []
+    if kind:
+        slim.end("main-1")
+        slim.end("run-1", "preflight-lints")
+        slim.kinds["preflight-lints"] = kind
+    else:
+        slim.verdicts["run-1"] = INFRA
+    slim.erred_on["run-1"] = ["m1"]
+    logged = [r for r in loop.tick() if r["sha"] == built["sha"]]
+    assert [r["action"] for r in logged] == ["slim", "retry", "slim"] and logged[2]["why"] == "started again"
+    assert logged[0]["record"]["erred_on"] == ["m1"] and slim.avoided == [(), (), ("m1",)] and env.withdrawn == []
 
 
 def test_the_run_beside_starts_with_each_candidate_s_build_up_to_depth_once_across_a_restart_and_a_dry_run_starts_none(env):

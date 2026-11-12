@@ -112,8 +112,8 @@ def _rewrite(d, **steps: dict | None) -> None:
     (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
-def _down(rid: str, sha: str, why: str) -> Verdict:
-    return Verdict(INFRA, (), (Failed(f"the run beside its check ({rid}) {why}", f"{sha}:{rid}", frozenset()),))
+def _down(rid: str, sha: str, why: str, launch: bool = False) -> Verdict:
+    return Verdict(INFRA, (), (Failed(f"the run beside its check ({rid}) {why}", f"{sha}:{rid}", frozenset(), launch=launch),))
 
 
 class Plans:
@@ -187,12 +187,13 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     h.got = ([], "train.sh: no machine answered")
     assert start(h.d, sha, base) is None
     assert any(x.endswith("registered no run: train.sh: no machine answered") for x in world.logs), world.logs
-    assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset()),))
+    assert judge(h.d, None) == Verdict(INFRA, (), (Failed("the run beside its check registered no run", ":no run", frozenset(),
+                                                          launch=True),))
     h.got = launch = {"dir": str(tmp_path / "launch"), "pid": 1}
     h.d.launched = lambda got: ([], "train.sh: refused")
     rec = start(h.d, sha, base)
     want = Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: train.sh: refused (log {launch['dir']}/log)",
-                                      f"{sha}:no run", frozenset()),))
+                                      f"{sha}:no run", frozenset(), launch=True),))
     assert judge(h.d, rec) == want and "launch" not in rec and judge(h.d, rec) == want
     h.d.launched = lambda got: (None, "")
     rec = start(h.d, sha, base)
@@ -205,21 +206,21 @@ def test_a_launch_that_registers_no_run_is_infra(world, monkeypatch, tmp_path):
     assert judge(h.d, rec).infra == (lost,), "the record keeps it, launch and all"
 
 
-@pytest.mark.parametrize("tail, launch", [
-    ("train: no run launched in the wait; stopped its launcher (pid 7), so none launches later; see /l/log", True),
-    ("train: 0e4f on m1 (its process is gone with no exit written: a restart of the pod)", True),
-    ('Traceback (most recent call last):\n  File "tools/verity/check/check.py", line 9, in <module>\nImportError: boom\n'
-     "train: no run launched; see /l/log", False),
-    ("train.sh: refused", False)])
-def test_only_a_launch_that_outran_its_wait_or_that_the_pod_lost_is_launch_only_infra(world, monkeypatch, tmp_path, tail,
-                                                                                         launch):
-    """train.sh runs the candidate's own check.py, so a launcher that exited without a run may be the tree's doing: only a
-    launcher stopped in its wait, or one the pod lost, is `Failed.launch`, which the loop retries before blaming anyone."""
+@pytest.mark.parametrize("tail", [
+    "train: no run launched in the wait; stopped its launcher (pid 7), so none launches later; see /l/log",
+    "train: 0e4f on m1 (its process is gone with no exit written: a restart of the pod)",
+    "train: 9644ff10525e on m1,m2 shard 1/5; log /l/train-9644ff10525e-1of5.log\nTerminated",
+    'Traceback (most recent call last):\n  File "tools/verity/check/check.py", line 9, in <module>\nImportError: boom\n'
+    "train: no run launched; see /l/log",
+    "train.sh: refused"])
+def test_every_launch_that_registered_no_run_is_launch_only_infra(world, monkeypatch, tmp_path, tail):
+    """A launch that registered no run started none of the candidate's steps, whatever ended its launcher (its wait, the pod,
+    a signal, a check.py that refused or crashed): `Failed.launch`, which the loop retries and never splits a candidate for."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.got = {"dir": str(tmp_path / "launch"), "pid": 1}
     h.d.launched = lambda got: ([], tail)
     got = judge(h.d, start(h.d, sha, base))
-    assert got.state == INFRA and got.infra[0].launch is launch, got
+    assert got.state == INFRA and got.infra[0].launch, got
 
 
 @pytest.mark.parametrize("how", ["dry_run", "shadow"])
@@ -325,7 +326,7 @@ def test_a_run_that_never_ran_was_stopped_or_was_killed_is_infra(world, monkeypa
     h, base, sha, _ = _harness(world, monkeypatch)
     rec = start(h.d, sha, base)
     h.run_state["r-post-0"] = ("done", rc, None)
-    assert judge(h.d, rec) == _down("r-post-0", sha, why)
+    assert judge(h.d, rec) == _down("r-post-0", sha, why, launch=rc in (NOT_STARTED, SIGTERM_RC))
 
 
 def test_a_step_its_machine_killed_is_infra_and_no_failure(world, monkeypatch, tmp_path):
@@ -365,6 +366,38 @@ def test_a_run_that_ended_failing_nothing_without_passing_a_step_it_judges_is_in
     _rewrite(_slim(h, tmp_path), preflight_fixtures=fixtures)
     assert judge(h.d, rec) == _down("r-post-0", sha, "ended (done rc=0) without passing preflight-fixtures: each skipped, or "
                                                      "absent from its steps.jsonl")
+
+
+@pytest.mark.parametrize("steps, launch", [(None, True), ('{"step": "preflight-lock", "status": "passed"}\n', False)])
+def test_a_run_that_failed_before_any_step_is_launch_only_infra_and_one_that_started_its_steps_is_not(
+        world, monkeypatch, tmp_path, steps, launch):
+    """A check.py that refused its own plan or settings exits 2 having started none of the candidate's steps (no steps.jsonl):
+    launch-only infra (`Failed.launch`), which the loop never splits a candidate for.  One that failed after it started a
+    step is any other infra.  Either way its record keeps the machines its failed runs ran on (``erred_on``)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base)
+    d = tmp_path / "r-post-0"
+    d.mkdir()
+    if steps is not None:
+        (d / "steps.jsonl").write_text(steps)
+    h.run_state["r-post-0"], h.evidence = ("done", 2, None, None, "m1"), [d]
+    got = judge(h.d, rec)
+    assert got.state == INFRA and got.infra[0].launch is launch, got
+    assert got.infra[0].task.startswith("the run beside its check (r-post-0) ended (done rc=2) without passing ")
+    assert rec["erred_on"] == ["m1"]
+
+
+@pytest.mark.parametrize("shards, on, want", [(0, "m1,m2", ["m2"]), (0, "m1", ["m1"]), (3, "m1,m2,m3,m4", ["m4", "m2", "m3"]),
+                                              (2, "m1,m2,m3", ["m3", "m2"])])
+def test_a_launch_again_after_infra_goes_to_other_machines_of_each_shards_set(world, monkeypatch, shards, on, want):
+    """`start` with ``avoid`` (the machines the runs before failed on, ``erred_on``) launches each shard on its set but those,
+    the whole set where that leaves none, and the record keeps them."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, launch = on, [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    rec = start(h.d, sha, base, **({"shards": shards} if shards else {}), avoid=["m1"])
+    assert machines == want and rec["avoid"] == ["m1"]
 
 
 def test_judge_keeps_its_verdict_in_the_record_and_reads_the_run_no_more(world, monkeypatch, tmp_path):
@@ -519,7 +552,7 @@ def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_regi
         assert "shards" not in rec and "verdict" not in rec
     else:
         assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
-        assert not got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
+        assert got.infra[0].launch and h.cancelled == ["r-1"] and judge(h.d, rec) == got
 
 
 def test_a_shard_whose_train_sh_printed_no_run_at_once_stops_the_others_and_start_gives_no_record(world, monkeypatch):
@@ -678,8 +711,8 @@ def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_
 @pytest.mark.parametrize("how", ["failed", "lost", "late", "another n"])
 def test_an_auto_plan_that_failed_or_was_not_made_in_time_is_infra_its_directories_gone(world, monkeypatch, tmp_path, how):
     """A plan that failed (`check.py --shard-plan` exited nonzero, or the pod lost its job), has another N than asked, or wasn't
-    made `PLAN_WAIT_S` after the start (its job stopped): infra, kept, no shard launched, the plan's directories removed.  Only
-    a lost job points at the machines (`Failed.launch`): the planner runs the candidate's own check.py."""
+    made `PLAN_WAIT_S` after the start (its job stopped): infra, kept, no shard launched, the plan's directories removed, and
+    launch-only (`Failed.launch`): none of the candidate's steps ran."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, stopped = "m1,m2", []
     plans = Plans(h.d, tmp_path)
@@ -696,7 +729,7 @@ def test_an_auto_plan_that_failed_or_was_not_made_in_time_is_infra_its_directori
     why = {"failed": "failed: `check.py --shard-plan` exited 2: no costs", "lost": f"failed: {gone}",
            "late": f"was not made in {PLAN_WAIT_S // 60} min (stopped)", "another n": "has 3 shards, not 2"}[how]
     assert got == Verdict(INFRA, (), (Failed(f"the run beside its check registered no run: its auto plan {why}", f"{sha}:no run",
-                                             frozenset(), launch=how == "lost"),))
+                                             frozenset(), launch=True),))
     assert stopped == ([(7001, signal.SIGTERM)] if how == "late" else []) and h.posted == []
     assert not Path(rec["plan"]["out"]).exists() and not Path(rec["plan"]["dir"]).exists()
     assert judge(h.d, json.loads(json.dumps(rec))) == got and rec["verdict"]["state"] == INFRA
