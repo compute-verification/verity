@@ -3,8 +3,8 @@ with the kernel's dQ buffers at that B and H, and refuses the rest.  The Definit
 (`fixtures/fa2_train_bwd_sm120.npz`, cut by `fixtures/fa2_train_bwd_sm120.py` from the capture `cc12_fa2_backward_capture`
 cites) on rows and keys that reach each part of the kernel: rows that see one, a few and every key of their diagonal block, a
 row over two key blocks, a row over five whose word tells the kernel's buffers from the sum in the key blocks' order, and a key
-block through its two tiles, the one on the diagonal last.  A small head is its tiles in the kernel's order, and each Definition
-on bits (`boolean_fa2_train_bwd`) gives its words on random inputs."""
+block through its two query blocks, the one on the diagonal last.  A small head is its rows and keys in the kernel's order, and
+each Definition on bits (`boolean_fa2_train_bwd`) gives its words on random inputs."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -36,8 +36,41 @@ def test_train_sdpa_backward_binds_each_captured_shape() -> None:
     assert "a multiple of BM" in W.Fa2TrainBwdHead.refuse({"T": 1024, "D": 64, "BM": 48, "BN": 128, "NS": 4})
     assert "multiple of 32" in W.Fa2TrainBwdPre.refuse({"D": 16})
     assert "1 to BN" in W.Fa2TrainBwdRow.refuse({"D": 64, "BN": 128, "NVIS": 129})
-    assert "0, BM, .." in W.Fa2TrainBwdTile.refuse({"D": 64, "BM": 64, "BN": 128, "OFF": 32})
-    assert W.Fa2TrainBwdTile.refuse({"D": 64, "BM": 64, "BN": 128, "OFF": 64}) is None
+    assert "k16 steps" in W.Fa2TrainBwdKey.refuse({"D": 64, "BM": 40})
+    assert W.Fa2TrainBwdRow.refuse({"D": 64, "BN": 128, "NVIS": 128}) is None
+
+
+def _loop(q, k, v, do, o, lse, bm: int, bn: int):
+    """The kernel's loop over rows q, do, o, lse against keys k, v, the first key at the first row's key block's start and the
+    last key block ending at the last row: each row's dQ parts in the key blocks' order, and each key's (dK, dV)."""
+    T, D = q.shape
+    first = T - len(k)
+    pre = [evaluate(bind(W.Fa2TrainBwdPre, D=D), _ints(do[r]), _ints(o[r]), [int(lse[r])]) for r in range(T)]
+    parts: list[list[int]] = [[] for _ in range(T)]
+    dk, dv = [], []
+    for n in range(len(k) // bn):
+        keys = slice(n * bn, (n + 1) * bn)
+        acc: list[list[int]] = []
+        for m in range(T // bm - 1, (first + n * bn) // bm - 1, -1):
+            p, ds = [], []
+            for r in range(m * bm, (m + 1) * bm):
+                row = bind(W.Fa2TrainBwdRow, D=D, BN=bn, NVIS=min(bn, r - first - n * bn + 1))
+                out = _ints(evaluate(row, _ints(q[r]), _ints(k[keys]), _ints(v[keys]), _ints(do[r]), [pre[r][0]], [pre[r][1]]))
+                p.append(out[:bn])
+                ds.append(out[bn:2 * bn])
+                parts[r] += out[2 * bn:]
+            block = (_ints(do[m * bm:(m + 1) * bm]), _ints(q[m * bm:(m + 1) * bm]))
+            for c in range(bn):
+                col = ([x[c] for x in p], [x[c] for x in ds])
+                if len(acc) < bn:
+                    acc.append(_ints(evaluate(bind(W.Fa2TrainBwdKeyFirst, D=D, BM=bm), *col, *block)))
+                else:
+                    acc[c] = _ints(evaluate(bind(W.Fa2TrainBwdKey, D=D, BM=bm), *col, *block, acc[c]))
+        for c in range(bn):
+            out = _ints(evaluate(bind(W.Fa2TrainBwdDkDv, D=D), acc[c]))
+            dk.append(out[:D])
+            dv.append(out[D:])
+    return parts, dk, dv
 
 
 def _parts(d, case: str, i: int, r: int) -> list[int]:
@@ -74,21 +107,9 @@ def test_each_row_s_dq_is_the_captured_kernels_words() -> None:
 def test_a_key_block_s_dk_and_dv_are_the_captured_kernels_words() -> None:
     d = np.load(FIXTURE)
     case = "block/l16/unit"
-    q, do, o, lse = (d[f"{case}/{f}"] for f in ("q", "do", "o", "lse"))
-    D = q.shape[1]
-    k, v = _ints(d[f"{case}/k"]), _ints(d[f"{case}/v"])
-    pre = [evaluate(bind(W.Fa2TrainBwdPre, D=D), _ints(do[r]), _ints(o[r]), [int(lse[r])]) for r in range(BN)]
-    dv = dk = _ints(evaluate(bind(W.Fa2TrainBwdClear, D=D, BN=BN)))
-    for m in (1, 0):
-        rows = slice(m * BM, (m + 1) * BM)
-        out = _ints(evaluate(bind(W.Fa2TrainBwdTile, D=D, BM=BM, BN=BN, OFF=m * BM), _ints(q[rows]), k, v, _ints(do[rows]),
-                             [x for p in pre[rows] for x in _ints(p)], dv, dk))
-        dv, dk = out[:BN * D], out[BN * D:2 * BN * D]
-    after = bind(W.Fa2TrainBwdDkDv, D=D)
-    for c in range(BN):
-        out = _ints(evaluate(after, dv[c * D:(c + 1) * D], dk[c * D:(c + 1) * D]))
-        assert out[:D] == _ints(d[f"{case}/dk"][c]), c
-        assert out[D:] == _ints(d[f"{case}/dv"][c]), c
+    _, dk, dv = _loop(*(d[f"{case}/{f}"] for f in ("q", "k", "v", "do", "o", "lse")), BM, BN)
+    assert dk == [_ints(x) for x in d[f"{case}/dk"]]
+    assert dv == [_ints(x) for x in d[f"{case}/dv"]]
 
 
 def _bf16(rng, shape, scale=1.0):
@@ -100,37 +121,20 @@ def _f32(rng, shape, scale=1.0):
     return (rng.standard_normal(shape) * scale).astype(np.float32).view(np.uint32)
 
 
-def test_a_head_is_its_tiles_in_the_kernels_order() -> None:
-    """A head of 64 rows at D = 32, BM = 16, BN = 32 and two dQ buffers, against the kernel's loop written out here: key block
-    n's tiles from the last query block down to its own first, then the keys' ends; a row's parts in the key blocks' order
-    into its buffers."""
+def test_a_head_is_its_rows_and_keys_in_the_kernels_order() -> None:
+    """A head of 64 rows at D = 32, BM = 16, BN = 32 and two dQ buffers, against the kernel's loop written out here (`_loop`):
+    key block n's query blocks from the last down to its own first, in each the rows and then the keys, then the keys' ends;
+    a row's parts in the key blocks' order into its buffers."""
     T, D, bm, bn, NS = 64, 32, 16, 32, 2
     rng = np.random.default_rng(4207)
     do, q, k, v, o = (_bf16(rng, (T, D)) for _ in range(5))
     lse = _f32(rng, (T,), 2.0)
     head = _ints(evaluate(bind(W.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bn, NS=NS), *map(_ints, (do, q, k, v, o, lse))))
-    pre = [_ints(evaluate(bind(W.Fa2TrainBwdPre, D=D), _ints(do[r]), _ints(o[r]), [int(lse[r])])) for r in range(T)]
-    parts: list[list[int]] = [[] for _ in range(T)]
-    dk_all, dv_all = [], []
-    for n in range(T // bn):
-        keys = slice(n * bn, (n + 1) * bn)
-        dv = dk = _ints(evaluate(bind(W.Fa2TrainBwdClear, D=D, BN=bn)))
-        for m in range(T // bm - 1, n * bn // bm - 1, -1):
-            rows = slice(m * bm, (m + 1) * bm)
-            tile = bind(W.Fa2TrainBwdTile, D=D, BM=bm, BN=bn, OFF=min(bn, m * bm - n * bn))
-            out = _ints(evaluate(tile, _ints(q[rows]), _ints(k[keys]), _ints(v[keys]), _ints(do[rows]),
-                                 [x for p in pre[rows] for x in p], dv, dk))
-            dv, dk = out[:bn * D], out[bn * D:2 * bn * D]
-            for r in range(bm):
-                parts[m * bm + r] += out[2 * bn * D + r * D:2 * bn * D + (r + 1) * D]
-        for c in range(bn):
-            out = _ints(evaluate(bind(W.Fa2TrainBwdDkDv, D=D), dv[c * D:(c + 1) * D], dk[c * D:(c + 1) * D]))
-            dk_all += out[:D]
-            dv_all += out[D:]
+    parts, dk, dv = _loop(q, k, v, do, o, lse, bm, bn)
     dq = [x for r in range(T) for x in _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=r // bn + 1, NS=NS), parts[r]))]
     assert head[:T * D] == dq
-    assert head[T * D:2 * T * D] == dk_all
-    assert head[2 * T * D:] == dv_all
+    assert head[T * D:2 * T * D] == [x for row in dk for x in row]
+    assert head[2 * T * D:] == [x for row in dv for x in row]
 
 
 def test_on_bits_each_is_its_words() -> None:
@@ -143,13 +147,14 @@ def test_on_bits_each_is_its_words() -> None:
     dpsum, ms = _f32(rng, (N,)), _f32(rng, (N,), 4.0)
     p, ds = _bf16(rng, (N, bm)), _bf16(rng, (N, bm))
     dob, qb = _bf16(rng, (N, bm, D)), _bf16(rng, (N, bm, D))
-    dv, dk = _f32(rng, (N, D)), _f32(rng, (N, D))
+    acc = _f32(rng, (N, 2, D))
     parts = _f32(rng, (N, 5, D))
     for word, on_bits, args in (
             (bind(W.Fa2TrainBwdPre, D=D), bind(BX.Fa2TrainBwdPre, D=D), (do, o, lse)),
             (bind(W.Fa2TrainBwdRow, D=D, BN=bn, NVIS=5), bind(BX.Fa2TrainBwdRow, D=D, BN=bn, NVIS=5), (q, k, v, do, dpsum, ms)),
-            (bind(W.Fa2TrainBwdKey, D=D, BM=bm), bind(BX.Fa2TrainBwdKey, D=D, BM=bm), (p, ds, dob, qb, dv, dk)),
-            (bind(W.Fa2TrainBwdDkDv, D=D), bind(BX.Fa2TrainBwdDkDv, D=D), (dv, dk)),
+            (bind(W.Fa2TrainBwdKeyFirst, D=D, BM=bm), bind(BX.Fa2TrainBwdKeyFirst, D=D, BM=bm), (p, ds, dob, qb)),
+            (bind(W.Fa2TrainBwdKey, D=D, BM=bm), bind(BX.Fa2TrainBwdKey, D=D, BM=bm), (p, ds, dob, qb, acc)),
+            (bind(W.Fa2TrainBwdDkDv, D=D), bind(BX.Fa2TrainBwdDkDv, D=D), (acc,)),
             (bind(W.Fa2TrainBwdDq, D=D, NP=5, NS=2), bind(BX.Fa2TrainBwdDq, D=D, NP=5, NS=2), (parts,))):
         bits = BS.evaluate_words(on_bits, *args)
         for i in range(N):
