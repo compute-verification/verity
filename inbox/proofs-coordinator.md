@@ -107170,3 +107170,99 @@ Not established:
 **To post.** Nothing.
 
 **Not established.** Everything above: nothing written or compiled. That the session's circuit at an accepted run is `stmtOf (h.xS₀ t)` (the member's) is not read yet; if no lemma on the base says it, it is the one premise I would name.
+
+## PROVED, Thu 12 Nov 22:55Z: THE LIST, changes since 21:40Z: 62 rows now, 46 open, 5 compiled on a branch, 7 on a pull request, none closed on `main`, 4 dropped or folded; one row compiled (A12), one reached a pull request (A27), seven rows are new, and no row closed
+
+**In plain words, for Daniel.** This is the list of what stands between today's accepts and a fully proved audit, as it changed in the last hour and a half. Nothing on it closed. One missing lemma now compiles. The theorem for a sample that spans several kinds of block reached a pull request, with three of its hypotheses still unproved. The compiled check gave its first "accept" on two small cases, but only in a scratch build with one line changed, so it is not yet an accept of record. Seven rows are new, each a way an accept can say less than it reads or a fact a proof needs that nobody holds: the theorem holds only for a challenger key made for that one audit; the certified read trusts the file for which row each block reads; and five in the two-round form. Workers found all seven by reading; none is fixed.
+
+Clock: `date -u` read 22:55Z before the push. Mailbox read at `3f86b1b936`: your 22:42Z message is its last. Sources: the workers' entries up to NEEDEDBITS's of 22:55Z [relayed, each named], your 22:25Z and 22:42Z messages [relayed], and the pull requests [run: `gh pr view` at 22:54Z]. No file of the tree changed; no run of mine is out.
+
+### The count
+
+| | rows |
+|---|---|
+| open (not started, started, written or stated but not compiled) | 46 |
+| compiled or built on a branch, no pull request | 5: A2, A5, A12, A22, B5 |
+| on a pull request | 7: A4, A8, A19, A27, A31, A32, B2 |
+| closed on `main` | 0 |
+| dropped, folded or closed for this goal by a ruling | 4: A3, A13, A18, A39 |
+| **all** | **62**: A1 to A41, B1 to B21 |
+
+A23 and A24 count as open: their statements compile and nothing is proved. B5 counts as compiled on its width half only.
+
+### Part A, rows that changed
+
+| # | what changed | owner | state now | waits on |
+|---|---|---|---|---|
+| A1 | The check's last refusal on a real case is one function that reads a window's ports by bare name. A scratch build with that one change accepts both one-member cases (runs `d2b2`, `871c`). The change is now pushed on a branch, unmarked, and a run builds it with its proofs, its difftest and the accept test [relayed: FIRSTACCEPT 22:34Z, 22:46Z]. Its wait, #9416, merged at 22:35Z [run]. | FIRSTACCEPT | started: accepted in scratch only | run `7cc7`; Daniel's yes; every proof that reads the check compiling over it |
+| A2 | Built: the run's record gains the commit, the verifier's SHA-512, the cited guarantee and its listing in the lock. | FIRSTACCEPT | built on a branch; no suite on a node | A1 |
+| A3 | Dropped: the first accept of record will be a new run. | — | dropped | — |
+| A4 | The pull request's head moved (one wrong test fixed) [relayed: STOPDRIVER 22:15Z]. | STOPDRIVER | on #9458 | its landing |
+| A5 | The refusal's Lean compiles (run `e3a2`); its branch merged #9458's head [relayed: RELAX 22:35Z]. | RELAX | compiled, on a branch | ready line by Fri 06:00Z |
+| A6 | Owner named. Scoped (my 22:53Z): the goal needs nothing of it that Lean does not already decide. I propose it leaves this list for a row under the monitoring-period statement. | proofs, a new worker | scoped | your word on the proposal |
+| A11 | The session's statement and the accept-side lemmas are written, not compiled. Two hypotheses remain, one of them A14's [relayed: SESSIONOF 22:28Z]. | SESSIONOF | started | A8's head; A14 |
+| A12 | Compiled and proved, standard axioms only (run `0a7f`). | SESSIONOF | compiled, on a branch | A11's pull request |
+| A13 | Folded into A11 (written inside its file). | SESSIONOF | folded | — |
+| A14 | Ruled: a refusal now, the wider theorem as its own goal. The refusal's line and place are written (my 22:15Z and 22:40Z entries), not built. | PROVED for the text; the file is MEMBERS's | open: ruled, not built | the file's holder; which design Friday's one-statement run uses |
+| A15, A16 | Owner named; a branch exists. | soundness | started | its pull request, by Fri 18:00Z |
+| A17 | Read: accepted and not covered (my 22:21Z). A39 is folded in. Step 3 is a notice to Daniel, drafted at 22:46Z. | proofs, a new worker when a slot frees | open | a slot; Daniel's answer; whether Friday's audit has a registered read (asked, not answered) |
+| A18 | Closed for this goal by ruling: the audit is remote, and the signature assumption is approved for remote. Open at onsite. | soundness | ruled | at onsite, Daniel's answer to an ask due Fri 17:00Z |
+| A19 | One of its two statements loses a quantifier over the key, so a notice goes to Daniel [relayed: your 22:42Z]. | REDRAW | on #9237 | #9375; the notice |
+| A20 | Owner named. | proofs, after soundness's deployed session | not started | A15 |
+| A21 | Statements written: the key and `main`'s line become the verifier's arguments and leave the evidence. Nothing compiled. Ruled: one key for the whole run, now in its branch [relayed: REDRAW 22:21Z, 22:53Z]. | REDRAW | started | #9237's head |
+| A22 | The ledger's half passed its quick tier, 61 of 61; the audit's half compiles and its difftest passes. Neither is opened as a pull request. The worker is paused since 22:41Z [relayed: PERIODREAD 22:43Z]. | PERIODREAD | compiled, on branches | its resume; one run (`8e84`) |
+| A23 | Its statement compiles. Not proved. Its hour, Fri 22:00Z, moves by the length of the pause [relayed: same]. | PERIODREAD | stated | A22 |
+| A24 | Owner named. Both forms compile as statements: one takes nothing of the device, the other one new named premise, in no lock entry until Daniel answers. Both have A40's hole, as the normal case [relayed: PERIODREAD 22:28Z, 22:43Z]. | PERIODREAD | stated | A40 |
+| A25 | Owner named. | proofs' lead with serving | not started | A1 |
+| A27 | On a pull request since 22:26Z: #9520. It still takes three hypotheses [run: its body]. | soundness | on #9520 | A28 |
+| A28 | Dated: the whole by Sat 14 Nov 20:00Z [its guess], five files and the first half of its fourth part by Sat 02:00Z. The third file is written, not compiled. One question to soundness [relayed: WINDOWAT 22:37Z]. | WINDOWAT | started | soundness's answer; runs `1827`, `3d6c` |
+| A32 | Soundness's pull request carries the changed order rule with the closing round's code ported onto it [run: #9520's body]. | CLOSEROUND; soundness | on pull requests (#9230, #9520) | #9520 |
+| A33 | Owner named. Statement written, checked on a model, not in the tree [relayed: WINDOWAT 22:05Z]. | WINDOWAT | started | #9475; two fields of the window's instance |
+| A34, A35 | Owner named. Dated three working days after the several-member acceptance lands, itself not before Fri 27 Nov. | soundness | not started | A26 |
+| A36 | Answered: nothing refuses it, and the window theorem's count of sessions needs a refusal. Ruled: refuse a statement of a member the sample missed. Written on a branch (`cc35d5892178`), not compiled in the tree [relayed: WINDOWAT 22:37Z]. | WINDOWAT | started | run `3d6c`; #9441 |
+| A37 | Owner named. | MEMBERS | not started | A32 |
+| A38 | Owner named. | STOPDRIVER | not started | circuits' stop block |
+| A39 | Folded into A17. Its five premises stay with the lock's sorting. | — | folded | — |
+| **A40** | **New.** The theorem's model of the challenger holds one audit. A strategy whose evidence carries a genuine signature from an earlier period is outside every bound. The compiled check does exclude an earlier session (my 22:34Z), so the gap is in the model: the theorem speaks only of a key and ledger made for that audit. | soundness, with the key pins | open | Tue 17 Nov |
+| **A41** | **New, beside A5.** The certified read holds a certified port to its value and root but takes each unit's row from the file's own list; a file that reverses rows is accepted [relayed: your 22:25Z; found on the Python mirror, Lean's verdict not run]. | RELAX | open | a design entry Fri 16:00Z; not buildable by Fri 20:00Z in soundness's form [relayed: RELAX 22:30Z] |
+
+### Part B, rows that changed
+
+| # | what changed | owner | state now | waits on |
+|---|---|---|---|---|
+| B3, B4 | The model now runs the check of a replay block's inputs and round 2's check of the design; the address map is defined; the five facts are statements. Nothing compiled [relayed: FRAME 22:32Z]. | FRAME | started | two runs waiting for a slot |
+| B5 | The width fact compiles (run `25a6`); the copy's proofs are in a run [relayed: ADDRWC 22:19Z]. | ADDRWC | compiled in part | run `8986`; B17 |
+| B6 | Settled in part: round 2's checks decide the row at every port but one that reads a registered value; one check is missing and is FRAME's to add [relayed: ADDRROW 22:16Z, your 22:25Z]. | ADDRROW | started | run `a6ba`; FRAME's check; one question on shared-row tables |
+| B7 | Serving said yes at 22:07Z: two workers, a joined branch aimed at Fri 06:00Z [relayed: your 22:25Z]. | vllm | started | if it misses Fri 08:30Z, a third run Sat 14 Nov |
+| B8 | The registration is written in Lean with four of the five design premises proved at it, and is in a run. Its statements hand the model the rule after the rate is resolved, which my 22:40Z entry left open [relayed: HONEST2 21:52Z, 22:57Z]. | HONEST2 | started | run `d4a5`; B7 |
+| B9 | The statements and twenty proofs are written, not compiled. The templates' names being distinct is a premise the model takes [relayed: RUNSAS 21:56Z, 22:56Z, your 22:25Z]. | RUNSAS | started | a slot (run `04fc`); B21 |
+| B10 | The run's coins are stated as the device's coins or the model's break, with no premise of its own. The whole chain from an accepted run to an accepting play is written. Not compiled [relayed: RUNCOINS 22:33Z, 22:52Z]. | RUNCOINS | started | tries waiting; A21; B18 |
+| B11 | Cut into eight pieces; four workers started at 22:38Z to 22:40Z. The file four pieces waited on is pushed, with the one statement a worker found unprovable changed. Two pieces have proofs written and waiting for a slot; one of them finds the coins' pieces false at the form's reading as it stood [relayed: TWOLEG 22:27Z, 22:49Z; COINMAP 22:40Z; ASSEMBLY, CUT 22:50Z]. | TWOLEG and eight workers | started | slots |
+| B12 | Owner named. Soundness has no objection to replay blocks as the claim's units, under two conditions, and dates its five files' two-round restatement Fri 18:00Z. Daniel ruled the two-round accept waits for this row, so it is on Friday's path. | TWOLEG's split, one worker a piece | started | B11; what the claim counts, to Daniel |
+| B13 | A probe passed for all 20 members: statements of the sampled rows only, the Lean verifier accepting every session, 18 of 18 negatives refused. The compiled round 2 gives the Python check's verdict on such statements at a second draw. Three more places read every block of a kind [relayed: STOPS 22:34Z, 22:53Z]. | STOPS | started | its difftest, waiting for a machine |
+| B15 | Recounted by circuits: 14 of 254 block types have a statement the Lean verifier accepted, 73.4% of the 11.28 billion blocks; 8 more, 17.2%, provisional; 232, 9.4%, none. The node's Program is not in registered form [relayed: your 22:25Z]. | circuits | started | circuits' date, due 02:00Z |
+| B16 | Owner named. | FRAME | not started | — |
+| **B17** | **New.** Nothing refuses a wired reader port whose width differs from its writer's, so the width fact is false as a plain premise [relayed: ADDRWC 22:19Z]. | none named; the model is FRAME's | open | — |
+| **B18** | **New.** The run's coin check never fixes which coin family a stage reads: the name comes from the evidence, and the choice is not counted as grinding [relayed: RUNCOINS 22:33Z]. | none named; A21 changes the same function's arguments | open | — |
+| **B19** | **New.** Five clauses of the model's statement check have no source in round 2: they are about the session statement's own bytes, the design and the records. Each is a named premise of B9's statement, and one is a gap for the run as it stands [relayed: RUNSAS 21:56Z]. | RUNSAS names who can discharge each | open | B10 for one of them |
+| **B20** | **New.** One fact sits under all five address facts and nobody holds it: a gate a checked proof block needs is one of that block's own input bits or returned output bits. Stated on the base, compiled by no run [relayed: FRAME 22:45Z, NEEDEDBITS 22:55Z]. | NEEDEDBITS, started 22:55Z | open | — |
+| **B21** | **New.** A clause the model gained on a replay block's inputs refuses every value round 1's record registers, and the running round 2 accepts such a value. So where the interior registers any value, the model refuses a run the code accepts [relayed: RUNSAS 22:56Z]. | FRAME's model, or a premise of B9 | open | FRAME's answer |
+
+### Two points left from the question I was to write for Daniel, which you dropped
+
+Neither needs a ruling for this goal. Both follow from which theorem the accept cites.
+
+- **The record's custody.** It is proved inside the theorem's model (`recordCustodyZKJPLaw_deployed`, `security/Proofs/Properties/Verity/Sampled/Deployed.lean:60`). It stays an open premise only of two older session guarantees, and in the trust base as a default. An accept that cites the model's theorem does not read it [read: the lock's record of `remote_soundness_deployedReady`].
+- **The challenger's log.** The three log assumptions (`security/Definitions/Core/Assumptions/Challenger.lean:33-44`) and `trusted-host` are read by none of the theorems on this goal's path. The one-statement theorem models the device's code in the game and takes one fact of the log as an input premise (`LogOpensRecorded`). What it does read is the signature assumption, A18. So "the honest challenger's uniform coins and its log" enters this goal as the device model plus A18 and A40, not as a named assumption of the cited theorem [read].
+
+### Not established
+
+- Every [relayed] line: I read the entries, not the branches or the runs behind them.
+- That A1's scratch accept is an accept of the listed check: it is a copy with one function changed.
+- B17, B18 and B19 have no owner I could find; I may have missed a ruling made outside the inbox.
+- The count's line between "started" and "compiled" where a statement compiles and its proof does not (A23, A24, B5).
+
+### To post
+
+- Owners needed: B17, B18, B19.
+- For soundness, with A40: my 22:34Z entry's three pieces, and the question whether Friday's challenger key and ledger are made for the run.
