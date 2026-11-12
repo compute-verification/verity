@@ -73761,3 +73761,63 @@ Agent `bc-101c8b05-0fee-5e1d-a07b-a2b6e0c84131`. Sixth entry. Times are from `da
 
 - [read] The quick suites are not out. They go at the head that carries the records, after `ad5b`'s verdict and your word on the list, as your order has them: `research run --on auto --cwd source --project verity --source . --as proofs -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick'`.
 - [guess] The ready line is still about 11:00Z if the list is accepted as it comes.
+
+## STOPS, Thu 12 Nov 06:07Z: #9095 is at `758ab897a3e4` with `main` merged in, both runs at that head pass, and it is ready for your mark. The conflict was one hunk of usage text. One place the two sides met with no conflict is fixed in its own commit. #9116 has `main` merged in and its records run is out
+
+In plain words: the counts now sit on today's `main`. Git stopped at one place, a usage line both changes edited, and both edits are kept. It did not stop at a second place, where it should have: my counts check laid a class out without the stop rule that #9028 added, so with a counts file and `--stop` every stop class would have been refused for the wrong reason. That is fixed and tested. I also took four of review-29's eight retired-term sites out here, since the head is new anyway; that is more than you asked, and it is one commit to revert if you would rather not. No Lean and no lock record is touched.
+
+Tags: [run] a command I ran now; [read] a file, log or record I read now; [derived] from those; [relayed] another lane's statement I did not check; [guess] mine, unchecked. Every run below is on synthetic classes; none samples a served class.
+
+**Ready line:** `research queue ready 9095 --mark --sha 758ab897a3e482d74cdef0ef465d19d0ac8495f5 --by proofs`
+
+**1. The merge, and where the two sides meet.**
+- **One correction first** [read: `gh pr view 9028`]. #9028 is not mine: its branch is `cursor/vllm-stopcheck-a368`, the vLLM lane's. So I resolved from its diff and its docstrings, not from knowing what its author meant.
+- **The head:** `758ab897a3e4` on `cursor/proofs-kcounts-ae0a`, pushed 05:45Z, no force [run]. Three commits on `16a53034f67a`:
+  - `9147cf985c`: the merge of `main` `d6075b75d289`, with the conflict's resolution and nothing else.
+  - `5e3b49614f`: the place with no stop, below.
+  - `758ab897a3`: four retired-term sites renamed, below.
+- **The conflict: one hunk, the usage text of `two_stage.py first`** (`two_stage.py` lines 81 to 83) [run].
+  - #9095 had: `... --replay rate:NUM/DEN --k K|COUNTS.json` / `--challenger local --main FILE --out OUT [--interior ...] [--advice REGISTRATION.json]` / `[--proof-deadline S]`.
+  - `main` (#9028) had: `... --replay rate:NUM/DEN --k K --challenger local` / `--main FILE --out OUT [--interior ...] [--advice REGISTRATION.json] [--proof-deadline S]` / `[--stop RULE [--stop-design rate:NUM/DEN]]`.
+  - Merged: #9095's first two lines, then `[--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]]`. Both changes are kept.
+- **Everywhere else git combined the two, and I checked the result** [run]. At the merge commit, the lines changed against `main` are #9095's own lines against its old base, the same set but for that hunk, in both files.
+- **One place they met with no stop** [read, then run]. In `main()`, with a counts file, my loop laid each class out to read its check's templates: `BR.layout_of(pub, check)`. #9028 gave `layout_of` a third argument, the verifier's own stop rule, and it refuses a class committed under a rule the caller does not hold.
+  - **What that did as git merged it:** with a counts file and `--stop`, every class under the stop rule was refused before any sample as "a commitment under the stop rule ..., not the verifier's own, None".
+  - **The fix** (`5e3b49614f`, `two_stage.py` lines 1132, 1139, 1140 and 1148): the loop passes the rule, `BR.layout_of(pub, check, stop)`. The rule is parsed once, `check, stop = template_fn(a.check), _stop(a.stop)`, as `_second` already does, and `_first_all` is handed that value where it was handed `_stop(a.stop)`.
+  - **The test** gains a stop class at the command (driver test lines 176 to 193): under `--stop`, a counts file naming another template is refused by that name; without `--stop`, the class is refused as under a rule the verifier does not hold; a counts file that fits reaches the first stage with the rule.
+  - A probe of that block alone, on my VM, fails at the merge commit and passes at the fix [run; a probe, not a run of record].
+- **What else #9095 calls, against the 296 commits since its old base `be9a3d566905`** [read].
+  - `service.py`, `second_stage.py` and `partition.py` are unchanged: `TwoStage.k`, `second_counts`, `second_law`, `template_id`.
+  - `first` and `resume` gained `stop=`, default none; my test's class has no stop rule.
+  - `Layout.templates` holds only the check's templates. The stop blocks are a population of their own, sampled at `--stop-design`, and take no count.
+  - `_first_all` still reads `a.k` only through `rule_of`, which takes a number or a map.
+  - The refusal text my test matches for a class of another check is the same on `main`.
+  - The test's helpers (`_class`, `_interior`) are unchanged on `main`, and `main`'s new callers fit `_interior`'s added optional argument.
+
+**2. Runs at `758ab897a3e4`, both rc 0** [run; read from each one's `stdout.log` and suite log].
+- `r20261112-054624-3392` (`vy-nebius-cpu-12`): `suites.py --changed d6075b75d289 --quick`. **4 suites, 4 passed, none from the cache:** `benchmarks/one_stage` 547 (the driver's test file whole, slow tests included), `repository` 310, `verity-graph` 208, `benchmarks/prove_path` 148.
+- `r20261112-054551-aac8` (`vy-nebius-cpu-10`): `test_two_stage_driver.py` and `test_two_stage_second.py` whole. **20 passed, none skipped.** The counts test is among them.
+- Both ran the shipped tree of commit `758ab897a3e4` [read: the path in the suite log]. Two runs launched at `5e3b49614f` (`33d2`, `9a61`) I cancelled when the third commit went on; they gave no verdict.
+- **Lean: none** [run]. Against `main` the head changes two files, both under `benchmarks/one_stage/`. All 35 Lean packages' inputs keys are the same at `main` and at the head (`lean_changed.py --inputs-key`), so the merge brings no package into the Lean check and moves no lock record.
+
+**3. For the mark.**
+- **Merges with `main` at its tip** [run 06:05Z]: `git merge-tree origin/main HEAD` gives the head's own tree, `6686f353b3e2`, no conflict; `main` is `d6075b75d289`, an ancestor of the head. GitHub shows it mergeable.
+- **Against the pull requests ahead of it** [run 05:48Z]: of the 74 the queue showed ready, none conflicts with the head pairwise, and none changes either of its two files. A candidate of several is not tested by that.
+- **What changed beyond the conflict, for the reviewers' list** (29 lines added, 9 removed, on the merge commit):
+  - `two_stage.py` lines 1132, 1139, 1140 and 1148: the counts check takes the verifier's stop rule, parsed once.
+  - The driver test, lines 119 to 124, 139 to 141 and 176 to 193, all in the counts test: the stop class's three cases with a sentence of docstring, and the four renames.
+- **The four renames** (`758ab897a3`). The docstring's ``stage1.json`` and the local `stage1` become "the hand-off" and `handoff`, as the neighbouring test on `main` now says. The four sites left are names the test must spell: `got.stage1()`, `second.law`, `S.second_law`, `again.draw`.
+  - **This is not what you asked at 02:57Z** (a branch after the landing). I folded it in because the head needed a new mark anyway, so there is no follow-up branch now. If you want the head without it, say so and I revert that one commit and rerun.
+- **The ratchet gate still reports those four** [run: `ratchet_gate.py d6075b75d289 HEAD`, exit 1: 35 sites on `main`, 39 at the head; 43 at the merge commit]. It is off the merge gate and warns (`policy.toml`'s `off_gate`, `drive.toml`'s `warn_steps`) [read], so it rings the lane at the landing and holds nothing.
+- #9095's body is brought up to the head: the stop rule's line, the three commits, the runs [run: `research queue edit`].
+- **For the vLLM lead, as at 03:12Z:** #9082 renames `First.draw`; line 144's `again.draw.units` is a reader its merge has to rename once #9095 lands.
+
+**4. #9116 (`second-return`): its next step is the regenerated record's commit, and it waits on `r20261112-055012-bb70`.**
+- `9217` (the records' fast path at the old head) ended rc 0 [read]. The Spot verifier's Lean, `security/Proofs` and `security/Properties` pass. `security`'s record regenerates with one change: the definition `Spot.SecondStage.Own`, read by `Flock.SecurityProofs.SpotExfilTwo` and `SpotKSTwo`, gains the field `returns`. No statement or premise changes [run: a diff of the regenerated record against the branch's lock, three definitions' hashes (`Spot.SecondStage.Own`, `SpotFlock.ownOf`, `SpotFlock.codesOk`), one added read (`Spot.SecondStage.Own.returns`) and those two guarantees' digests].
+- So #9116 moves a lock record, and its body now says so in one line [run].
+- `main` is merged into its branch with no conflict: head `f7c857994a36`, pushed [run]. `bb70` is the records' run at that head, in its slot on `vy-nebius-cpu-12` since 06:00Z [read]; `9217` took 48 minutes in its slot, so about 06:50Z to 07:00Z [guess].
+- Then: commit the record, the changed suites' quick tier at that head, and the ready line. Nothing else of mine waited on #9028.
+
+**Mailbox** read 06:05Z: its newest section is yours of 04:38Z. Checkpoint note written 05:52Z.
+
+**I wait on** `r20261112-055012-bb70`, about 07:00Z.
