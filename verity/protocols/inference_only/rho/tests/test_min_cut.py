@@ -191,17 +191,16 @@ def work_he_on(t, s, q, b, o):
     return t + math.sqrt(s * o / q) / 2 + math.sqrt(s * t / (q * b)) / 2
 
 
-def test_the_charged_count_is_the_lean_statement_which_no_lock_lists_a_proof_of():
+def test_the_charged_count_is_the_lean_statement_whose_proof_the_lock_lists():
     """`macs_on` against `workHEOn`, transcribed from the text pinned here, and `HECharged`'s two bounds as its file
     concludes them: `N` is at most the MACs the charged blocks hold whole and `workHEOn`, and with MACs of at least
     `γ` gates and charged blocks of at most `c`, `γ N ≤ x c + γ workHEOn`, which `bound_charged` solves at
-    `x c / γ`. At every block under one cap it is `HE`'s count. The statement is in Lean and no lock lists a proof of
-    it, so the lock records neither it nor `workHEOn`: their text is read from the files that define `workHE` and
-    state `HE`, where they are. The period's bound on the untied words and an untied word's bits are no Lean
-    statement."""
+    `x c / γ`. At every block under one cap it is `HE`'s count. The statement is in Lean and the lock lists its proof.
+    Its text and `workHEOn`'s are read from the files that define `workHE` and state `HE`, where they are. The
+    period's bound on the untied words and an untied word's bits are no Lean statement."""
     assert WORK_ON in lean_text(f"{min_cut.AREA}.workHE") and HE_CHARGED in lean_text(min_cut.HE)
     assert f"def {min_cut.HE_CHARGED.rsplit('.', 1)[1]} : Prop :=" in lean_text(min_cut.HE)
-    assert lean.status(min_cut.HE_CHARGED) == "absent"
+    assert lean.status(min_cut.HE_CHARGED) == "proved"
     assert lean.status(min_cut.UNTIED_WORDS) == lean.status(min_cut.WORD_BITS) == "draft"
     for (_, o, _, _, k, bw, bx, b), m in itertools.product(POINTS, (1.0, 7.0, 1e6)):
         q = bw * bx

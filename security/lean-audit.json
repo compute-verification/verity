@@ -4547,6 +4547,11 @@
    "nontrivial": "Nci.Cut.SecurityProofs.CountHE_nontrivial",
    "kind": "exclusion"
   },
+  "Nci.Cut.SecurityProofs.HECharged": {
+   "honest": ["Nci.Cut.SecurityProofs.HECharged_honest"],
+   "nontrivial": "Nci.Cut.SecurityProofs.HECharged_nontrivial",
+   "kind": "exclusion"
+  },
   "Nci.SecurityProofs.DampenerRemotePeriod": {
    "honest": ["Nci.SecurityProofs.DampenerRemotePeriod_honest"],
    "nontrivial": "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
@@ -17399,6 +17404,15 @@
    "type_hash": "b000b5bec794317656efaaa9852766b6eae9e26af5efa54bba951adbc560d84d",
    "unfolded_hash": "e2469f7e62238584eb95c4cfe189d7706edb89ccb575a7603de3e5be72c1e4ec"
   },
+  "Nci.Cut.SecurityProofs.HECharged": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.HECharged_honest": {
+   "owner": "@training"
+  },
+  "Nci.Cut.SecurityProofs.HECharged_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Cut.SecurityProofs.HEShared": {
    "owner": "@training",
    "signature": ["Nci.Cut.SecurityProofs.HEShared : Nci.Cut.Guarantees.HEShared"],
@@ -27627,9 +27641,7 @@
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
    "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
-   "Nci.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: Nci.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (Nci.Cut.SecurityProofs.CountsOn, security/Proofs/Nci/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
-   "Nci.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Nci.Cut.Toy, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
-   "Nci.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
+   "Nci.Cut.SecurityProofs.HECharged": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry (ValuesInjective, NoSharedPair), under the named (H) and (E) (security/Definitions/Assumptions.lean), with the fresh-input budget k on a set G of a partition's blocks only: the blocks outside G are charged whole, at the MACs each holds whole, and what all the blocks read outside θ is a total T. It is not about the code of the inference-only policy's check; nothing joins it to a verdict yet.",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): as WorkSoundH200, over every card table, menu and host row; the statements at the two cards are its consequences.",
    "NetTiming.Guarantees.PeriodLeakChecked": "unstated: PeriodLeakAccepted with each window's checked inputs left out of the count (the check held to the run at the network certifier's rows, CheckedWitness at certifierRun) and the client's view read from the records under a registered parameter (RecordFormat.ReadsBy), so the count is the registered parameters' times the windows'; stated first, and its theorem NetTiming.SecurityProofs.PeriodLeakChecked is not proved yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's monitoring period of sampled audits, pooled (RealizesCommOfPooledLeakAccepted), from PooledLeakAccepted's first conjunct at the run's coins: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
