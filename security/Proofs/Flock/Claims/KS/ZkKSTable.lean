@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.ZkExtend
 public import Proofs.Flock.Claims.KS.KSTable
+public import Proofs.Flock.Claims.KS.TableErrJ
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -55,8 +56,7 @@ own error (`tableErrJ true`), with no premise (`zk_KSTable_untrim`): the extract
 waits stop at `k_j = ⌈4·N_j/e⌉` accepted reruns, is knowledge sound at that table's own relation, and its knowledge
 error reads that table's error alone, not `ε_table`, the tables' errors summed.
 
-* **A table's own error** (`tableErrJ`): `tableErr` at the statement's table `j`, `0` past its tables; at most
-  `ε_table` (`tableErrJ_le_εtable`).
+* **A table's own error** (`tableErrJ`, defined in `TableErrJ`) is at most `ε_table` (`tableErrJ_le_εtable`).
 * **Each table's bound at its own error, counted per round** holds there with no premise (`zk_tableBoundEachR_untrim`):
   the live sessions' bound (`zk_tableBoundEachAccAtR_of_sessionsW`) at Flock ZK's padded tables
   (`zk_tableBoundEachAccAtR_live`), where no run accepts with no escapes
@@ -98,11 +98,6 @@ open Flock
 namespace Gen
 
 variable [S : ZkSetup]
-
-/-- **A table's own error at a statement**: `tableErr` at the statement's table `j`, `0` past its tables. `ε_table`
-is these summed over the statement's tables. -/
-noncomputable def tableErrJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℝ :=
-  ((tables zk x)[j]?).elim 0 fun p => tableErr zk p.1 p.2
 
 theorem tableErrJ_eq {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} {j : ℕ}
     (h : (tables zk x)[j]? = some (spec, st)) : tableErrJ zk x j = tableErr zk spec st := by
@@ -240,11 +235,6 @@ theorem zk_KSTable_untrim :
     (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _)) (zk_conflictTiedJ _) zk_tableBoundEachR_untrim
 
 end Gen
-
-/-- **A table's own error at a statement**: `tableErr` at the statement's table `j`, `0` past its tables. `ε_table`
-is these summed over the statement's tables. -/
-noncomputable def tableErrJ (zk : Bool) (x : Claims.Msg) (j : ℕ) : ℝ :=
-  ((tables zk x)[j]?).elim 0 fun p => tableErr zk p.1 p.2
 
 /-- **A table's own error is at most `ε_table`**, the tables' errors summed. -/
 theorem tableErrJ_le_εtable (zk : Bool) (x : Claims.Msg) (j : ℕ) : tableErrJ zk x j ≤ εtable zk x :=

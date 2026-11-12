@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.KS.TableErrJ
+public import Definitions.Claims.SamplingTable
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -43,6 +46,10 @@ import Mathlib.Topology.Sheaves.Init
 `Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK`. `MaskedZK` holds `Claims.Flock.ZK`'s text in the lock in
 place of `Flock.Guarantees.ClaimsStated`.
 
+`MaskedKSTable` is a third, beside `MaskedKS`: `Claims.Flock.KSTable`, knowledge soundness at one table of a session,
+at the same record and oracle, at each table's own word length and error. Its proof is
+`Flock.SecurityProofs.MaskedKSTable : Flock.Guarantees.MaskedKSTable`.
+
 Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at the deployed plan) are still in its
 proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Definitions.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Masked` does.
@@ -59,6 +66,32 @@ recovers no witness under the relation is at most `κ(x) + √(γ(x)·Pr[B outpu
 `γ`, with `B` the claim's collision finder built from the prover. It takes no hypothesis. -/
 def MaskedKS : Prop :=
   Claims.Flock.KS FlockDeploy.sha512 (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+
+/-- **Masked knowledge soundness at one table of a session.** `Claims.Flock.KSTable` at SHA-512 at the untrimmed masked
+record of the deployed relation, at each table's own word length (`FlockDeploy.KS.wordLenJ true`) and error
+(`FlockDeploy.KS.tableErrJ true`): at every decoder that meets the list-decoding spec and every index `j`, for every
+statement and every prover, the probability that the verifier accepts the session and the extractor at table `j`
+(`Claims.Flock.ETable`) recovers no witness of the statement the record's `table` gives at `j` (`Claims.Flock.RTable`)
+is at most `κ_j(x) + √(γ(x)·Pr[B outputs a collision])`, with `κ_j` the knowledge error at table `j`
+(`Claims.Flock.κTable`), which reads table `j`'s error and its `k_j = ⌈4·N_j/e⌉` accepted reruns a wait, `γ` the
+record's, and `B` the claim's collision finder built from the prover. It takes no hypothesis.
+
+What it does not say:
+
+* It is knowledge soundness only: it says nothing of zero knowledge or of the extractor's expected work.
+* At a statement of one table it is `MaskedKS`'s bound and no better: the two probabilities are equal there
+  (`Claims.Flock.prBad_zero_eq`, `Claims.Flock.ksTable_one_table`, `Claims.Flock.ksTable_zero_of_ks`; at this record,
+  `FlockDeploy.KS.ks_one_table_zk`).
+* No compiled verifier is shown to use it: the sampled compiler is knowledge sound at the table's extractor only
+  where a compiled verifier meets its contract at tables (`Claims.SamplingGeneric.Compiled.atTables_ks_complete`, its
+  `hS`), and none is shown to. The Lean verifier refuses a session above `Tags.MAX_TABLES` tables.
+* It extracts one table's witness. No witness of a whole session is assembled from the tables' extractions.
+* Past the statement's tables it says nothing: there the word is empty and `κ_j ≥ 1`
+  (`FlockDeploy.KS.one_le_κTable_past`).
+* It is a statement about the record. Nothing served reads it. -/
+def MaskedKSTable : Prop :=
+  Claims.Flock.KSTable FlockDeploy.sha512 (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+    (FlockDeploy.KS.wordLenJ true) (FlockDeploy.KS.tableErrJ true)
 
 open Claims.ZKMal.Masked FlockSoundness.Discharge in
 open Classical in
