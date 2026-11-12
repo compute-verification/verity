@@ -171,9 +171,10 @@ Then the table again, once the server's record of the tries' sampled ids is ther
 - The front's address has no default. Only the deviating process reads it, from its environment, and nothing a try
   writes holds it: the relay's upstream is the deviating process on the loopback.
 - A try keeps `DIR/CLASS.json`: the schedule, the check's verdict and its words, each connection's request name,
-  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, and the
-  size and SHA-256 of every file of its run directory. The run directory, with the relay's records and their salts,
-  is under `--scratch`, by default a temporary directory that is removed. The table is made from `DIR` alone.
+  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, the
+  watermark's last line, lost releases and error, and the size and SHA-256 of every file of its run directory. The
+  run directory, with the relay's records and their salts, is under `--scratch`, by default a temporary directory
+  that is removed. The table is made from `DIR` alone.
 - The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words; a
   shorter hold is accepted and isn't seen at the client's bucket. `tokens` and `length` leave id-form cells, which the
   relay's check accepts; the I/O tie's content refuses them (`io_tie.cells_match` on each bucket of the egress
@@ -194,6 +195,16 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
   after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
   until the tie has the server's record.
+- A lost release or a watermark's error stops the tries. Under `--watermark` (a rehearsal flag, after `--`) the
+  network certifier names on its watermark each release that its server connection lost. A try that lost a release
+  did not reach its server whole, and a server whose gate does not read lost names stops ordering there. So after
+  each try the command reads the network certifier's own log of the run, in the try's run directory: when its
+  `watermark` names a lost release or an error, or the network certifier ran with the watermark and wrote no log, no
+  later class is tried, the command says which try it stopped at, why, and which classes it left, and it exits 5.
+  The log has an error only where the stream did not open, backed up, or was closing before a line or its
+  terminating chunk was written, so its server did not get the watermark whole; a stream that ended clean has none.
+  A try keeps what that log says of the watermark: its last line, the lost releases and the kind of error that
+  stopped it, if one did.
 
 ## The chain's run of record
 
