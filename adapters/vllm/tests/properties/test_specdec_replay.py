@@ -208,17 +208,17 @@ def test_every_step_the_engine_scheduled_has_its_record_when_the_runner_stops(dr
     assert (any(after_the_end), all(after_the_end)) == (bool(drafts), False), after_the_end
 
 
-def test_a_scheduled_step_whose_output_the_engine_does_not_hold_stops_the_runner_by_name():
-    class Dropped(Queued):
+def test_an_engine_that_never_processes_a_scheduled_steps_output_stops_the_runner_by_name():
+    """The engine keeps the step in its queue and processes nothing once no request is left. Its scheduler output stays alive:
+    the trace keys a step in flight by its scheduler output's ``id``, which a freed one would hand to the next."""
+    class Stalled(Queued):
         def step(self) -> list[Any]:
-            out = super().step()
-            if not self.requests:
-                self.queue.clear()
-            return out
+            return super().step() if self.requests else []
 
-    limit = next(n for n in range(2, 14) if not _queued(Queued(3, {"first": n}), "serve", TWO[:1])["steps"][-1]["emitted"])
-    with pytest.raises(SystemExit, match=r"step \d+ was scheduled and the engine holds no output for it"):
-        _queued(Dropped(3, {"first": limit}), "serve", TWO[:1])
+    served = [_queued(Queued(3, {"first": n}), "serve", TWO[:1])["steps"] for n in range(2, 14)]
+    limit, last = next((n, steps[-1]["step"]) for n, steps in enumerate(served, 2) if not steps[-1]["emitted"])
+    with pytest.raises(SystemExit, match=rf"step {last} was scheduled and two engine steps with no request left processed no output"):
+        _queued(Stalled(3, {"first": limit}), "serve", TWO[:1])
 
 
 # ---- vLLM's scheduler under vLLM's engine-core loop, with no model -----------------------------------------------------------

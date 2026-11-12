@@ -173,8 +173,8 @@ def drive(eng: Any, trace: Any, phase: str, due: list[dict[str, Any]], add: Call
     A step gets its record when its output is processed. Under a draft the scheduler schedules a request's next row before
     the output that ends it is back, so the engine can hold a step when no request is unfinished; vLLM's own loop steps
     while its batch queue holds one, and so does this, until the trace has a record for every step scheduled. An engine
-    that holds no output for a scheduled step is refused at the second engine step in a row that processes none, instead
-    of being stepped forever."""
+    that processes no output for a scheduled step is refused at the second engine step in a row that processes none,
+    instead of being stepped forever."""
     from verity_vllm.engine.hooks import Hooks
 
     due = list(due)
@@ -223,7 +223,8 @@ def drive(eng: Any, trace: Any, phase: str, due: list[dict[str, Any]], add: Call
         iteration += 1
         unprocessed = unprocessed + 1 if owed == trace.executed else 0
         if unprocessed > 1:
-            raise SystemExit(f"specdec-replay: step {owed} was scheduled and the engine holds no output for it")
+            raise SystemExit(f"specdec-replay: step {owed} was scheduled and two engine steps with no request left processed no "
+                             f"output for it")
     hooks.uninstall()
     return {"steps": [r for r in trace.records if r["kind"] == "step"], "drafted": {str(s): d for s, d in sorted(drafted.items())},
             "tokens": tokens, "empty_schedules": empty,
