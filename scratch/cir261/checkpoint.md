@@ -1,1 +1,2 @@
 2026-11-12T14:48Z FP8READBACK: head ef693941ef (capture test added); suites r20261112-140436-e34f running (repository passed, circuit-check rc 0); capture at 17:31Z.
+2026-11-12T15:47Z FP8READBACK: r20261112-140436-e34f done (circuit-check rc 0, 2 targets; repository, circuit-check, verity/definitions passed; verity-vllm 570 failed + 82 errors, none in this PR's files); final-head suites r20261112-152637-c6d8 running on vy-nebius-cpu-4 at ef693941ef; launcher's compare now checks the .so against the wheel's sha256 6acb4075…ac42; capture at 17:31Z.

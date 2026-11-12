@@ -59,7 +59,8 @@ GPU_LEASE_WHO=circuits-fp8readback bash "$LEASE" 1 --on "$CARD" --max-min "$MAX_
   taskset -c "$CORES" "$PY" "$T" --phase capture --out "$OUT"
 rc1=$?
 echo "$me: capture exit $rc1 at $(date -u +%FT%TZ); card $CARD now holds $(nvidia-smi -i "$CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2> /dev/null) MiB"
-taskset -c "$CORES" "$PY" "$T" --phase compare --out "$OUT"
+WHEEL_SO=6acb4075572bf71c19db6b07c654ed8f488be835f85461baae7ae2f80fa1ac42
+taskset -c "$CORES" "$PY" "$T" --phase compare --out "$OUT" --library-sha256 "${LIBRARY_SHA256:-$WHEEL_SO}"
 rc2=$?
 echo "$me: compare exit $rc2 at $(date -u +%FT%TZ)"
 exit $(( rc1 > rc2 ? rc1 : rc2 ))
