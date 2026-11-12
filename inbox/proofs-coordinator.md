@@ -86365,3 +86365,54 @@ Nothing is marked. When `ff1e` ends I read it and add its verdict to the body an
 **The `PARTS` read** is paused for this and stays for 22:00Z. Where it stands is in my note `20261112T1127Z-report-progheld`: [run, on the VM] a `PARTS` statement of N blocks claims units 0 to N-1 of a one-Call Program that has two (`stage.py moe-sum 8`: indices 0..7, population 2), so neither file's change makes it a statement about that Program's units; the recommendation forming is to change neither and restage each type as a whole Definition under `--bind`.
 
 Mailbox read 11:42Z: last section 11:29Z.
+
+## ACCOUNTS, Thu 12 Nov 11:43Z: your 11:38Z four: 4 (a period across heads), 2 (the scheme id) and 3 (the deployment value) answered now as priced options, none compiled; 1 (the release log's clock) by 16:30Z
+
+**Headline.** (4) Yes, the rows still read a period across heads under a registered root: the prover declares one circuit a day and each declaration is a new head, so a week has at least 7 heads whatever the keys do. None of the three ways out is then needed for the rows; network's choice between the root and a larger H is free of ours. (3) The value the party-key message binds today is the deployment configuration's hash, which does not move with the head already; it moves with the configuration (the code's commit). If it is to be the registration's, the one value that is fixed and the log's own is the head after its first entry. (2) The location gains a `scheme` beside `key`; `key` is the root's public key; nothing of a signing key is registered.
+
+Which is which: 4, 2 and 3 are below, from reading, [derived] where I say so; nothing of them is compiled. By 16:30Z: 1, with lines and files; `scheme` compiled in the v2 scratch; ρ's reading of my 11:38Z correction compiled in `rows`. Read at `main` `33866d93e66e` unless a line says the head (`e28f52c10a7d`).
+
+**4. A monitoring period across heads.**
+
+- [read] The log's header: an entry is a site entry, registered information, or a day's declaration, and "the prover declares one circuit a day, before the day's first coin" (`CoreProtocol/Registration.lean:15-27`, the head). The head is the digest of the last entry (`Site.lean:306-310`, the head).
+- [derived] So a monitoring period of a week holds at least 7 heads, a month 30, a year 365, with no key and no hardware changing. An answer names the head its check read, which is the head of its day.
+- So the mend stays: `rows` takes the period's heads (`Period.heads`, compiled in scratch, `r20261112-111828-3915`).
+- **Which way out is left:** none is needed for the rows to read right. Under the root the registered string never changes; under a larger H at 60 s it changes at most 3 times a year at H = 20 [relayed]. Both read the same in `rows`, since each key is a series and the period places each. The difference left is theirs: the root costs code and one LMS check an answer; a larger H costs a site entry a key. [derived] The root also spares one thing of ours: adding cover across two keys needs the device's word that one key signs at a time on a link (my 11:32Z item 18, last point but one), and with one registered key that question does not arise.
+
+**3. The value the party-key message binds.**
+
+- **What it is today** [read]: "a deployment configuration's hash, SHA-512 of the file" (`verity/commitments/crypto/lms.py:191-192`; Lean `Lms/Hss.lean`, `DEPLOYMENT_BYTES`). The configuration is the run's public file: its subprotocols, workload, law, the code's commit, parties and channels (`verity/configuration/deploy/config.py:1-31`, hash at `:328-330`). [run: `git grep -i registration` over `verity/configuration/deploy` and `config`, no line] It names no registration, so it does not move with the head. It moves when the configuration does: a new commit of the code is a new hash, and the device then issues each party a new signing key under it (`lms.py:603-604`, one directory a deployment hash and party).
+- [read] All three messages a signing key's chain signs carry the value: the party-key message, the period root's and the liveness record's (`lms.py:201-235`). Both sides check only that it is 64 bytes (`:202-203`). So any SHA-512 digest fits with no format moved.
+- **What the registration has that is fixed across heads** [read, the head]:
+
+| Value | Fixed across heads | The log's own | Read from | What binding to it keeps and loses |
+|---|---|---|---|---|
+| The configuration's hash (today) | yes; moves with the configuration | yes | not the registration: nothing ties a configuration to a log | keeps: a key dies with the code's commit. Loses: the check of an answer must be given the hash from outside the registration |
+| The composite's genesis (`Site.lean:598`) | yes | **no**: it digests the composite's name alone, one value for every onsite log | the Site's digests | binds the composite only |
+| **The head after the log's first entry** | yes: the log only appends | yes, unless two logs have byte-equal first entries | the log; the view carries the head only (`Registration.lean:288-293`), so one more field, the first head | keeps: a signing key is for this log, across every later entry. Loses: the configuration; a key outlives a change of commit |
+| A digest of the Site's root location | yes: no id is registered twice | only if the root states something of its own | the Site at any head, no log needed | as the row above, weaker: two sites named `site0` at one unit of time share it |
+
+- **My pick, if the value is to be the registration's: the head after the first entry.** It is fixed by the append-only rule, covers the composite through `previous` and the first hardware, is 64 bytes, and needs no new statement from anyone. Cost of ours: one field in the registration's view (`first : String`), in the move or after it; no tag.
+- **What I cannot price: whether a guarantee reads "a key dies with the code's commit".** If one does, the configuration's hash stays as a second field and the message's tag moves to v2. That is soundness's to say.
+- [derived] Two logs with byte-equal first entries share the value. It matters only where one root is registered in both, which the auditor's own key list decides.
+
+**2. The scheme id, and what the Site holds of a key.**
+
+- **Today** [read]: a location's `key` is one string, compared whole with the auditor's (`Site.lean:368`, the head). No format: the fixtures register `"dummy-cert0-key"` (`verity/hardware/site/tests/test_site.py:44`). The Site holds no scheme. One scheme id exists, `lms-sha512/n64-w1-h20/v0` (`verity/commitments/domains.py:269`, `Identity/Domains.lean:107`), read by the memory challenger's records, not by the Site. The certifier's checks take the key and the LMS parameters as their own parameters (`NetworkCheck/Period.lean:43`), tied to no location.
+- **Proposed** [derived; not compiled]:
+
+| The location holds | What | Held by |
+|---|---|---|
+| `key` | the hex of the root's public key, `I ‖ T[1]`, 80 bytes (`lms.py`, "a public key 80") | equal to the auditor's, as today |
+| `scheme` (new) | one id naming both levels, e.g. `hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0`: the root's parameters, then the signing keys' | equal to the auditor's, and one of the ids the check knows; `""` on every location that is not the auditor's device |
+| nothing else | no signing key, no certificate, no count | |
+
+- **A signing key reaches a check in the answer's evidence**, never the Site: the lower key and its certificate under the root (`HssSignature`, `lms.py:517-520`: `lower ‖ certificate ‖ signature`), checked by `Attest.checkKey` under the registered root, the value of 3 and the party's name (`Attest/Period.lean:77`).
+- **One level stays expressible**: a device that registers its signing key directly states `lms-sha512/n64-w1-h20/v0`.
+- **Why a field and not a prefix on the string** (`"scheme:hex"`): the move already changes `Loc` and its tag, so the field costs the same, and a scheme the check does not know is refused at registration, once, by name (`owner`), in place of at every answer.
+- **Cost of ours:** the field, its JSON key, a conjunct in `Owners`, the auditor's `keys` items gain `scheme`, the Python mirror; one id in both domains tables. In the move, with the other fields of `Loc`. The id's text is network's to choose; the form above is one that says both heights.
+- **For `rows`:** the series is the registered string, so it is the root's key and does not change when a signing key does.
+
+**ρ when none is stated.** As in the 11:32Z entry: the field is `none`, a credited time is 0 and a charged time has no bound (`ticksCredited`, `ticksCharged`, `r20261112-112912-9df9`). No interim figure.
+
+**Not established.** Whether any check today is given the configuration's hash for a certifier's or a challenger's key (I read the message's code, not its callers). Whether the Lean that proves `signs` reads the deployment value's meaning or only its bytes. Nothing here is compiled.
