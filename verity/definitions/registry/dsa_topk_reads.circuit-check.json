@@ -129,20 +129,20 @@
    "type": "ffb44b0fd6c3bed8f35e83eda78c13a4bfcc35a5714154788ee32af391fe37f351bb5cb27f4cf0f61ec3474d29029dc98abf01ff34b4eb382a5640db2bad37a4"
   },
   "DsaMaskPositions_v2{N=14,AT=0,K=4}": {
-   "and": 132,
-   "type": "d2111b6f0c15dd53f21c44dc04da78c03dcb077387c190ba95a31ce3bfe265f1ed3d69529656a3141959ca1b6da2cb190e3b2a7911509d22bcd66dab29cfde66"
+   "and": 162,
+   "type": "a8fa369faf3e38e5ab0fae3b6b7589098f5da2f677605d96f3a326eae918c538cda58582b0bd9d554a82414a7f739ca072102bdc77fb6590169e5966c1ac2d32"
   },
   "DsaMaskPositions_v2{N=37,AT=5,K=9}": {
-   "and": 856,
-   "type": "80e9f91a128eafb95536f194329a27657efaa13fdf794e731c291977d3000e4a159d1dd753eb1acab14ffe8f1bf8cf9db4c0aded9c1caa7f1b2fd03da0e0dfa4"
+   "and": 947,
+   "type": "c386eaa1dcbd5845065c11537ec99ed642278985c3ee9d2eb392d76e8417e70d7665a1fcf772aba8c7bc953e29ad3280e9ff6f222776b4ff1c3517d51fd1ce9b"
   },
   "DsaMaskPositions_v2{N=6,AT=8,K=4}": {
-   "and": 49,
-   "type": "0d65145419b996a03446839f0affe8ec7e785944be356d555e09aba992c2ef08ff51569db45099a6714836fa2db8a4dedd13d98bcabbfe3d5ae00e2037f3fe2a"
+   "and": 59,
+   "type": "6227327c920d674ad9bff37ff31ce02b740895047b9f671eb6dd6ed73e0468412cf14c3ff8992ed27328c15b8db09044415f674d20c091115005c067595d0dde"
   },
   "DsaMaskPositions_v2{N=8,AT=0,K=4}": {
-   "and": 52,
-   "type": "0e269ae7d9ac72b15062e950aa79c0f0b1a662a8ffeca5e0fd470fdcaddf85f56f80e8b163f30e047ba9379d8897c3733d5434051b3f2410baa9091d3fb39ceb"
+   "and": 66,
+   "type": "afa7d7134e7ffc8251782312e51b11e7d37243c8bbf97111873cb7444ed459629a969fe2b95f21bca7111effa695cc3e9ca79a4fd6225d7f26c5530506792726"
   },
   "DsaPositionWord_v1{L=1,HI=20}": {
    "and": 0,

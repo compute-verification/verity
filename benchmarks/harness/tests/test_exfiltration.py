@@ -1357,6 +1357,9 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     s = recorded(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    # the holes' block over the fixture runs' made-up commit, which no repository holds: test_spot_status.py decides them
+    monkeypatch.setattr(E.spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(E.spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lean-audit.json")
 
     def run(*argv: str) -> tuple[int, str, str]:
         monkeypatch.setattr(sys, "argv", ["run.py", *argv])
@@ -1370,9 +1373,12 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
     assert "- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542%" in out
     assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
+    assert "\n\n## SPOT's resampling holes in the code that ran\n" in out and "- label: **SPOT**\n" in out
+    assert "\n- redrawn sample: " in out and "\n- re-committed execution phase: " in out and ": closed\n" not in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == E.SCHEMA and doc["value"] == pytest.approx(15053.889111429447)
+    assert doc["spot_holes"]["label"] == "SPOT" and doc["spot_holes"]["runs"] == len(doc["runs"])
     assert doc["at_assumed_prices"]["GB"] == pytest.approx(ASSUMED * doc["value"], rel=1e-12)
     code, out, _ = run("--row", "(i) honest")
     assert code == 0 and "- **the compute audit's part, at the planner's assumed prices: 17,800 GB** (modeled)" in out

@@ -91,7 +91,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, spot_status
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 SCHEMA = "exfiltration/v3"
@@ -1332,7 +1332,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
-    print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else render(doc))
+    doc["spot_holes"] = spot_status.status(doc["runs"])
+    print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else
+          render(doc) + "\n\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
