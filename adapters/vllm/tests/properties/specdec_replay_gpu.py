@@ -173,7 +173,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     else:
         recs = load(out / "trace.jsonl")
         cfg = recs[0]["config"]
-        due = [{"id": r["request"], "before_step": r["before_step"]} for r in recs if r["kind"] == "arrive"]
+        due = [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
+               for r in recs if r["kind"] == "arrive"]
     model = Path(tempfile.mkdtemp(prefix="specdec-stand-in-"))
     stand_in(model)
     eng = engine(model, cfg, eager=not a.compiled)
@@ -181,29 +182,28 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     trace = StepTrace(out / "trace.jsonl" if a.phase == "serve" else None).install(eng)
     drafted: dict[int, dict[str, int]] = {}
     tokens: dict[str, list[int]] = {}
-    # a schedule that scheduled nothing takes no step index, so the trace cannot say whether a request arrived before
-    # or after it: the serve counts such arrivals, which the replay puts back before it
-    empty: dict[int, int] = {}
-    after_empty: list[str] = []
+    empty = 0
 
     def add(rid: str) -> None:
         r = reqs[rid]
-        if empty.get(trace.scheduled):
-            after_empty.append(rid)
         got = eng.add_request(rid, {"prompt_token_ids": r["prompt_ids"]}, params(r["sampling"], r["max_tokens"]))
         if got not in (None, rid):
             raise SystemExit(f"specdec-replay: the engine named {rid} {got}")
 
     def schedule(orig: Any) -> Any:
         def wrapped(*args: Any, **kw: Any) -> Any:
-            while a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled:
+            nonlocal empty
+            # a request goes back before the schedule it arrived before: the first at its step, or the one after as many
+            # schedules that scheduled nothing as its arrival says
+            while (a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled
+                   and due[0]["after_empty"] == trace.empty):
                 add(due.pop(0)["id"])
             before = trace.scheduled
             so = orig(*args, **kw)
             if trace.scheduled > before:
                 drafted[before] = {rid: len(ids) for rid, ids in (getattr(so, "scheduled_spec_decode_tokens", None) or {}).items()}
             else:
-                empty[before] = empty.get(before, 0) + 1
+                empty += 1
             return so
         return wrapped
 
@@ -230,8 +230,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     steps = [r for r in trace.records if r["kind"] == "step"]
     doc = {"phase": a.phase, "arm": a.arm, "weights": a.weights, "compiled": a.compiled, "config": trace.records[0]["config"],
            "redrawn": redrawn, "steps": steps, "drafted": {str(s): d for s, d in sorted(drafted.items())}, "tokens": tokens,
-           "sampling": {rid: r["sampling"] for rid, r in reqs.items()}, "empty_schedules": sum(empty.values()),
-           "arrived_after_an_empty_schedule": after_empty}
+           "sampling": {rid: r["sampling"] for rid, r in reqs.items()}, "empty_schedules": empty,
+           "arrived_after_an_empty_schedule": {r["request"]: r["after_empty"] for r in trace.records
+                                               if r["kind"] == "arrive" and "after_empty" in r}}
     (out / f"{a.phase}.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
 
