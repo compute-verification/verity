@@ -11262,7 +11262,19 @@
    "type_hash": "0759a70bbd6545c1088cb7165cd6e06810ba0fa9758373812e93f22b1a2dc804"
   },
   "Claims.Flock.KSTable_fails": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Flock.KSTable_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Exists fun N => Exists fun ε => Not (Claims.Flock.KSTable H D N ε)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Flock.ListWithin"],
+    "reads": []
+   },
+   "type_hash": "0716a3d1d9bc37a2f5995e05a2ada225b5c77ff05be1e81e82750ef26e24f6ec"
   },
   "Claims.Flock.KS_fails": {
    "owner": "@proofs",
@@ -15413,13 +15425,50 @@
    "unfolded_hash": "7da7b31fc745cf3916021e210ad7423f0aa879a96bf961a4235b4b451f50fc87"
   },
   "Flock.SecurityProofs.MaskedKSTable": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.MaskedKSTable : Flock.Guarantees.MaskedKSTable"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Flock.ListWithin"],
+    "reads": []
+   },
+   "type_hash": "aec8d751b0de2a791f975fc2d8b2502008a2ede361823e619595068f469d68d5",
+   "unfolded_hash": "49a01dee3ce609390f6a2d33d0b40abda93a9a19fd4fd26f1e0f645e6b0a3cde"
   },
   "Flock.SecurityProofs.MaskedKSTable_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.MaskedKSTable_honest :",
+    "  Claims.Flock.ListWithin (FlockDeploy.deployZk Flock.Readable.relation).len",
+    "    (FlockDeploy.deployZk Flock.Readable.relation).enc (FlockDeploy.deployZk Flock.Readable.relation).θ",
+    "    (FlockDeploy.deployZk Flock.Readable.relation).decode"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1f254770fefb036b51bf30078349c874980639b4e83e10e3032bbfc4436bef0e",
+   "unfolded_hash": "df70d420656e5fe61f306602d6fcc1c5949c4ead4874f65920b72ab062a1d58d"
   },
   "Flock.SecurityProofs.MaskedKSTable_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.MaskedKSTable_nontrivial :",
+    "  Not (Claims.Flock.KSTable FlockDeploy.sha512 (Claims.Witness.Flock.ksD Bool) Claims.Witness.Flock.ksN fun x x_1 => 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Flock.ListWithin"],
+    "reads": []
+   },
+   "type_hash": "4776a4b9a34b698b42752cabef82f4027a52f5fec3096ffaff8095e6affae58c"
   },
   "Flock.SecurityProofs.MaskedZK": {
    "owner": "@proofs",
@@ -28893,8 +28942,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -34195,6 +34244,18 @@
     "Claims.Sampling.lightBits": "573935eff52fd4e7e854b689bb6b874bbf3dd7be792e11ada4150bdd3ab61720",
     "Claims.Sampling.lightOf": "d848ab05205d283ebe42d5f70d7032b752c0e739173bcf857721eb52572c83eb",
     "Claims.Sampling.servedBits": "fd1af0d5b30633a67b2904336bd420c55227b25b3245d102fd436a4736c8c84c"
+   }
+  },
+  "Definitions.Claims.SamplingTable": {
+   "digest": "5add499f54ba7b2dafd631d1367fae4b0cf4caa8367ec9cdfda4709703c36f76",
+   "definitions": {
+    "Claims.Flock.ETable": "b5e699fd09ad832dc9fd6cfc752d227b860147cf63ded1023264fc54605592c0",
+    "Claims.Flock.KSTable": "10f989758acced0ba7669299754dfee7164895ca2673c34f13711ebda47be28b",
+    "Claims.Flock.RTable": "8e45242be38309c2558e853d9214aaaa7f11df6f2a7dc4297349b73f0980ea4a",
+    "Claims.Flock.assembleTable": "41a4a450d30662dd87a85faf5a1a11e2c4cad8c2b44479275d34d144454976cf",
+    "Claims.Flock.checkTable": "35a465cc1d50d5ebc0886c0457e3d40ac952ba9c95fd06f91ead9f8575a3f3bf",
+    "Claims.Flock.kTable": "4ffe25f456490e0d389ea1ef9ff618f2ac968f9ead6a1e705fc7d914438e2620",
+    "Claims.Flock.κTable": "6a690e80f4df4ec96e53842e3379670d0b4839e3e6a3557d96447ac47db2a454"
    }
   },
   "Definitions.Claims.SamplingTwo": {
@@ -48119,6 +48180,18 @@
     "FlockDeploy.zcNs": "f503ce928abe2a662c5c82679921cb0387cad352d40e5bdd1aa7de62fbeff350"
    }
   },
+  "Proofs.Flock.Claims.KS.TableErrJ": {
+   "digest": "fd0e91bf124584f94d10c2fe19d0f51ad278574c80b70110a5d597c5cbd76438",
+   "definitions": {
+    "FlockDeploy.KS.tableErrJ": "0d95502a2614f84ee8761be2ed914fd7580269d1b5d15fe4fce25dfece72f6ac"
+   }
+  },
+  "Proofs.Flock.Claims.KS.ZkTables": {
+   "digest": "5892ee48f67f051b2fce655f5c065141f3cbcce3aad3839db9e333bfa146f143",
+   "definitions": {
+    "FlockDeploy.KS.wordLenJ": "101554a8052aaaa73e46f0a8af70114329f27a81678d47c9c9f5a80764d63065"
+   }
+  },
   "Proofs.Flock.Claims.Numbers": {
    "digest": "89c96571182ae99074d5002c63088bcc498a74bb461264da0430437ebee39392",
    "definitions": {
@@ -49323,6 +49396,12 @@
    "digest": "64fc5a37e656be5cf9707d0898d98862a1da9e545a50af1edaa810fca33df3f5",
    "definitions": {
     "Claims.Witness.Flock.ksD": "87897a2f9a1e219ade726c7f2e60ed7d1b01311b15346dbd19410b978eb6b05b"
+   }
+  },
+  "Proofs.Flock.Claims.Witnesses.KSTable": {
+   "digest": "4d0810ae6e10bd38e4f8945604d9483c8d4f5ed068688c1cb46b57c61e287f20",
+   "definitions": {
+    "Claims.Witness.Flock.ksN": "9324a4c7992addd99b902119f3bc698969dfaf52e83ca0331d72a8ab79c83e9a"
    }
   },
   "Proofs.Flock.Claims.Witnesses.Recursion": {
@@ -50775,9 +50854,10 @@
    }
   },
   "Proofs.Flock.Masked.Statement": {
-   "digest": "7d8c42005bac5e57d0c2f20974600bce0249aa48cdb2795f9735a446bcc0d90b",
+   "digest": "212e1da8fafd4a88c7dd9c75cca21021f66a8cc6a422f8735f0b08f02e328c4a",
    "definitions": {
     "Flock.Guarantees.MaskedKS": "c8908fff7f287ba2818e37cbdd4f1eecf190c499ce27072921adfa7dd7ac137d",
+    "Flock.Guarantees.MaskedKSTable": "094ad4594f31e25a928ad1b8e2ed3c5c1260bf16d005019ec7d056d3dd73bd58",
     "Flock.Guarantees.MaskedZK": "04e53db942e9f36a07ad69d8fbb46e252b8c17a27df9c07b5f08f92810a0b98e"
    }
   },
