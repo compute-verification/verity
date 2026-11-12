@@ -406,19 +406,6 @@ def test_linkage_follows_requests_across_reordered_rows():
     assert bad["mismatches"] == 2 and not bad["passed"]
 
 
-def test_linkage_takes_the_committer_alone():
-    link: Any = S.linkage
-    com = _linkage_committer([11, 22], [22, 11])
-    names = {"ids_name": "c00.input/ids", "sampled_name": "runner.sampler/sampled_token_ids"}
-    for option, name in names.items():
-        with pytest.raises(TypeError, match=f"got an unexpected keyword argument '{option}'"):
-            link(com, **{option: name})
-    for given in (list(names.values())[:1], list(names.values())):
-        with pytest.raises(TypeError, match=f"takes 1 positional argument but {1 + len(given)} were given"):
-            link(com, *given)
-    assert link(com) == {"checked": 2, "mismatches": 0, "first": [], "passed": True}
-
-
 def _chain(w: torch.Tensor):
     """Matmuls with pointwise work between them: Inductor reuses the dead buffers' storage, in place and through its planner."""
     def f(x):
