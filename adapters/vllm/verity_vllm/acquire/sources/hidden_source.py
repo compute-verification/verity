@@ -530,3 +530,8 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
     if manifest is not None:
         src.require_row3(guarded_max_policy(manifest))
     return src
+
+
+__all__ = ["HiddenM1Source", "HiddenM1SourceFA3", "make_hidden_source", "attention_hidden", "with_hidden_class", "CHUNK_WORDS",
+           "KBLOCK_M", "fa2_kblock_n", "fa2_swapped", "fa2_tap_buffer_words", "fa2_tap_words_per_seq", "fa3_tile", "mat_total_words",
+           "plan_fa2_tap_groups"]

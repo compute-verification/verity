@@ -390,4 +390,5 @@ class AttentionSource:
         return fused_norm_rope
 
 
-__all__ = ["AttentionSource", "BINDER", "ARGUMENTS", "TAPS", "CALL_TAPS", "TAP_PORTS", "binds", "call_tap", "mla_rows", "indexer_rows"]
+__all__ = ["AttentionSource", "BINDER", "ARGUMENTS", "TAPS", "CALL_TAPS", "TAP_PORTS", "MLA_ROWS", "INDEX_ROWS", "INDEX_SCALE", "binds",
+           "call_tap", "mla_rows", "indexer_rows"]

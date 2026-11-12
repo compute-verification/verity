@@ -664,7 +664,7 @@ class TPPartialSource:
                               f"on the shard); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
+__all__ = ["TPPartialSource", "late_read_check", "SITES", "COVERS_FAMILIES"]
 
 
 def _layer_of(member: str) -> int:

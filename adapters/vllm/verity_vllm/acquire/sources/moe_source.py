@@ -543,5 +543,6 @@ class MoeBlockSource:
                               f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",
-           "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS", "PORTS", "CALL_PORTS"]
+__all__ = ["MoeBlockSource", "moe_layers_of", "plane_layer", "router_kernel", "grouped_topk_args", "binds_planes", "claims",
+           "hash_router_input", "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS",
+           "PORTS", "CALL_PORTS"]

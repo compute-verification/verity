@@ -647,3 +647,6 @@ def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str =
             if int(ids[lo]) != int(sampled[i]):
                 bad.append({"step": s + 1, "request": rid, "input": int(ids[lo]), "sampled": int(sampled[i])})
     return {"checked": checked, "mismatches": len(bad), "first": bad[:3], "passed": checked > 0 and not bad}
+
+
+__all__ = ["ServedCompiledSource", "linkage"]
