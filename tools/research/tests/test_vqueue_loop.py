@@ -4006,6 +4006,21 @@ class Runs:
         self.dirs += [d] if d not in self.dirs else []
         return f"c-{n}"
 
+    def runs_on(self, sha: str, shard: int, step: str, plan: tuple[tuple[str, ...], ...] = PLAN) -> str:
+        """Shard ``shard`` of the newest check of ``sha`` still runs ``step``, each other step it holds passed, as its live
+        record and its state say.  The run's id."""
+        from research.landing import LIVE
+
+        n = [n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-len(plan):][shard - 1]
+        (d := self.tmp / f"c-{n}").mkdir(parents=True, exist_ok=True)
+        done = [{"step": x, "status": "passed"} for x in (*PREFLIGHT, *plan[shard - 1]) if x != step]
+        (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in done))
+        (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": "running", "steps": [
+            *({"step": r["step"], "state": "passed"} for r in done), {"step": step, "state": "running"}]}))
+        self.state[f"c-{n}"] = ("running", None, None, None)
+        self.dirs += [d] if d not in self.dirs else []
+        return f"c-{n}"
+
 
 def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Runs]:
     loop = env.loop(decide, slim=vqueue_slim, gate="check", **kw)
@@ -4876,6 +4891,36 @@ def test_under_gate_check_what_a_candidate_fails_off_the_gate_waits_for_its_base
     logged = loop.tick()
     assert _acts(logged) == ["slim", *(["ring"] if base == "passed" else [])]
     assert len(env.posts) == (base == "passed") and loop.tick() == []
+
+
+def test_under_gate_check_a_candidate_whose_shard_runs_only_circuit_check_lands_and_its_red_there_rings_once_the_run_ends(
+        env, monkeypatch):
+    """circuit-check is off the merge gate: a candidate whose check passed every step it is judged on while one shard still
+    runs circuit-check lands at once, and its drop on `main` cancels nothing, its line keeping the run's record.  While that
+    runs, nothing is read or rung of it; once it ended, what it failed there that `main`'s check passed rings the pins' owner,
+    as a candidate's red off the gate does, an `off_gate` line saying it was read, and no later tick reads it again."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS, decide=vqueue.decide)
+    runs.end(main)
+    runs.end(sha)
+    shard = runs.runs_on(sha, 3, "circuit-check")
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == sha
+    judged, drop = logged[1], logged[-1]
+    assert judged["record"]["verdict"]["state"] == PASS and judged["record"]["still_running"]
+    assert (drop["sha"], drop["why"]) == (sha, "on main") and "beside_cancelled" not in drop
+    assert drop["off_gate_running"]["still_running"] and not runs.cancelled and runs.state[shard][0] == "running"
+    assert loop.tick() == [] and env.posts == [] and not runs.cancelled
+    runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}")})
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "ring", "off_gate"] and not runs.cancelled
+    beside, ring, read = logged
+    assert (beside["sha"], beside["why"], "still_running" in beside["record"]) == (sha, "judged pass beside `main`", False)
+    assert (ring["sha"], ring["step"], ring["failures"], ring["to"]) == (
+        sha, "circuit-check", [f"lowering/pin-mismatch {HEAD}"], ["@heads"])
+    assert env.posts == ["@heads vqueue: " + _off_said(sha, "#1", "circuit-check", main,
+                                                       f"lowering/pin-mismatch {HEAD} it failed")]
+    assert (read["sha"], read["base"], "still_running" in read["record"]) == (sha, main, False)
+    assert loop.tick() == [] and len(env.posts) == 1 and not L.Past.read(env.log, 0).off_gate_running()
 
 
 def test_under_gate_check_a_red_off_the_gate_waits_for_the_run_beside_main_s_check_started_again_after_infra(env, monkeypatch):

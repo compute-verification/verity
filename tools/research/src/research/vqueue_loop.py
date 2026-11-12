@@ -116,10 +116,12 @@ there waits on graph2, its reading of a candidate, and its word that a followed 
 ticks (`Shadow`, kept beside the log), and a tick reads `G2_FRESH` candidates' afresh at most, so `graph2_s` is that coarse
 while the check runs: one is read again at once once the candidate's check ended, at its drop, and after an enqueue, a
 rerun or a cancel of it.  `--no-graph2-shadow` reads none.  The steps the
-check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run: once a candidate's verdict is pass or fail,
-what it failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the
-lane of each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`); a red
-its base shares rings nobody.
+check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run, and hold no pass: a check passes once every
+step it is judged on passed in every shard holding it (`vqueue_slim._passed_early`), and no drop, its landing's among them,
+cancels the runs still running one.  Once a candidate's verdict is pass or fail and its runs ended, what it failed of one
+that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of each member
+whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its drop while
+they run (`Past.off_gate_running`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
@@ -616,6 +618,17 @@ class Past:
             if r.get("action") == "drop" and isinstance(r.get("follow"), dict) and r.get("sha"):
                 out[r["sha"]] = r
             elif r.get("action") == "compare":
+                out.pop(r.get("sha"), None)
+        return out
+
+    def off_gate_running(self) -> dict[str, dict]:
+        """The drops whose candidate's check passed while its runs still ran steps off the gate (``off_gate_running``,
+        `Loop._drop`), by sha, but those an `off_gate` line has read since (`Loop._off_gate`)."""
+        out: dict[str, dict] = {}
+        for r in self.lines:
+            if r.get("action") == "drop" and isinstance(r.get("off_gate_running"), dict) and r.get("sha"):
+                out[r["sha"]] = r
+            elif r.get("action") == "off_gate":
                 out.pop(r.get("sha"), None)
         return out
 
@@ -1984,9 +1997,9 @@ class World:
 
 def _running(j: Judged | None) -> dict:
     """The record of the run beside a judged candidate's check while that runs: pending, or a check that gates failed before
-    it ended, a fail `vqueue_slim.judge` doesn't keep; {} once it ended."""
-    if j is None or j.slim is None or not (j.slim.state == PENDING or j.slim.state == FAIL
-                                           and "verdict" not in (j.record or {})):
+    it ended, a fail `vqueue_slim.judge` doesn't keep; {} once it ended or its verdict is kept, as a pass is while its runs
+    still run steps off the gate (`vqueue_slim._passed_early`), which no drop stops."""
+    if j is None or j.slim is None or "verdict" in (j.record or {}) or j.slim.state not in (PENDING, FAIL):
         return {}
     return j.record or {}
 
@@ -3168,13 +3181,15 @@ class Loop:
         auto plan still being made is given up (`vqueue_slim.abandon`), so no shard of it launches.  Where the check gates, the
         line says how graph2's check, in shadow, read (``graph2``), and one `_follow` keeps is left running (``follow``).
         One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and
-        when it was dropped (``early_red``)."""
+        when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
+        (`vqueue_slim._passed_early`) leaves them running, its line keeping their record (``off_gate_running``), which
+        `_off_gate` reads until they end."""
         w, j = self.world, self._reread(t, c)
         shadow = j.shadow if j is not None else None
         follow = self._follow(c, t)
         cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
         why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
-        rec = _running(j)
+        rec, kept = _running(j), (j.record if j is not None else None) or {}
         if "plan" in rec:
             self.slim.abandon(rec)
         ids = list(rec.get("ids") or ())
@@ -3190,6 +3205,7 @@ class Loop:
                            **({"follow": follow} if follow is not None else {}),
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
                            **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
+                           **({"off_gate_running": kept} if kept.get("still_running") else {}),
                            **({"records_cancelled": rids} if rids else {}),
                            **({"records_cancel_failed": rfailed} if rfailed else {}),
                            **({"records_launching": regen} if "launch" in regen else {}),
@@ -3475,31 +3491,53 @@ class Loop:
         leaves out (policy.toml's `off_gate` at its base, drive.toml's `warn_steps`), once its verdict is pass or fail, and that
         the run beside its base's check (`Tick.below` beside `main`, else the base candidate's) didn't fail too (`_off_new`):
         whom `_off_owners` names, with each failure's line, once a candidate and step (`Past.rung`, by why).  Nothing is held or
-        ejected for it.  A post that fails is rung again by the next tick; with --shadow it is only logged."""
+        ejected for it.  A post that fails is rung again by the next tick; with --shadow it is only logged.  What a check
+        that passed while its runs still ran those steps (`vqueue_slim._passed_early`) failed of them is read once they ended
+        (`vqueue_slim.failures`), its candidate dropped by then or not: a dropped one's runs (`Past.off_gate_running`, its
+        landing's drop among them) are judged each tick until they and its base's have ended, then rung as a candidate's
+        are, and an `off_gate` line says they were read, unless a post failed, which the next tick rings again."""
         recs, rung, d = [], t.past.rung(), self.world.slim_driver()
         for c in t.snap.candidates:
             if (j := t.judged[c.sha]).slim is None or j.slim.state not in (PASS, FAIL):
                 continue
-            base = t.below if c.base == t.main else t.past.slim(c.base)[1]
-            for step in sorted({*d._policy(c.base).off_gate, *d.warn_steps}):
-                if (c.sha, why := f"off the gate: {step} failed") in rung or not (
-                        new := self._off_new(d, c, j.record, base, step)):
-                    continue
-                to, said = self._off_owners(c, step, new), [f"`{x[:200]}`" for x in new.values()]
-                text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) failed {step}, "
-                        f"off the merge gate, where its base {c.base[:12]} doesn't: {'; '.join(said[:OFF_SAID])}"
-                        + (f"; and {len(said) - OFF_SAID} more" if len(said) > OFF_SAID else "")
-                        + ". Nothing is held or ejected for it: fix it forward")
-                line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, step=step, failures=list(new),
-                            text=text, to=list(to))
-                if self.shadow:
-                    recs.append(self.record(t, "ring", **line, done=False))
-                elif not self._say(t, "ring", text, to, sha=c.sha, why=why):
-                    recs.append(self.record(t, "ring", **line, done=False, posted=False,
-                                            error=f"ringing {', '.join(to)} about {c.sha[:12]}'s {step} failed: the next tick "
-                                                  "rings again"))
-                else:
-                    recs.append(self.record(t, "ring", **line, done=True, posted=True))
+            recs += self._off_rings(t, d, c, j.record, t.below if c.base == t.main else t.past.slim(c.base)[1], rung)
+        for sha, drop in t.past.off_gate_running().items():
+            c = Candidate(sha, drop.get("base") or "", tuple(drop.get("members") or ()), tuple(drop.get("heads") or ()))
+            rec, base = dict(drop["off_gate_running"]), t.below if c.base == t.main else t.past.slim(c.base)[1]
+            self.slim.judge(d, rec)
+            if base is not None and base.get("still_running"):
+                self.slim.judge(d, base := dict(base))
+            if rec.get("still_running") or base is not None and ("verdict" not in base or base.get("still_running")):
+                continue
+            recs += (rings := self._off_rings(t, d, c, rec, base, rung))
+            if not any(r.get("posted") is False for r in rings):
+                recs.append(self.record(t, "off_gate", sha=sha, base=c.base, members=c.members, heads=c.heads, record=rec,
+                                        done=True, why="its runs ended after its drop: what they failed off the gate is read"))
+        return recs
+
+    def _off_rings(self, t: Tick, d: Landing, c: Candidate, rec: dict | None, base: dict | None,
+                   rung: set[tuple[str, str]]) -> list[dict]:
+        """`_off_gate`'s rings of what ``c``'s check (``rec``) failed of each step off the gate that its base's (``base``)
+        didn't (`_off_new`), but one ``rung`` holds."""
+        recs = []
+        for step in sorted({*d._policy(c.base).off_gate, *d.warn_steps}):
+            if (c.sha, why := f"off the gate: {step} failed") in rung or not (new := self._off_new(d, c, rec, base, step)):
+                continue
+            to, said = self._off_owners(c, step, new), [f"`{x[:200]}`" for x in new.values()]
+            text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) failed {step}, "
+                    f"off the merge gate, where its base {c.base[:12]} doesn't: {'; '.join(said[:OFF_SAID])}"
+                    + (f"; and {len(said) - OFF_SAID} more" if len(said) > OFF_SAID else "")
+                    + ". Nothing is held or ejected for it: fix it forward")
+            line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=why, step=step, failures=list(new),
+                        text=text, to=list(to))
+            if self.shadow:
+                recs.append(self.record(t, "ring", **line, done=False))
+            elif not self._say(t, "ring", text, to, sha=c.sha, why=why):
+                recs.append(self.record(t, "ring", **line, done=False, posted=False,
+                                        error=f"ringing {', '.join(to)} about {c.sha[:12]}'s {step} failed: the next tick "
+                                              "rings again"))
+            else:
+                recs.append(self.record(t, "ring", **line, done=True, posted=True))
         return recs
 
     def _off_new(self, d: Landing, c: Candidate, rec: dict, base: dict | None, step: str) -> dict[str, str]:
