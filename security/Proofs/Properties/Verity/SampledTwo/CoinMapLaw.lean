@@ -162,4 +162,185 @@ theorem avg_indep {ι T C : Type} [Fintype ι] [DecidableEq ι] [Fintype T] [Non
     _ = avg fun x => avg fun q => G₂ x q := hv fun x => avg fun q => G₂ x q
     _ = avg fun x => avg fun r => G x r := congrArg avg (funext fun x => (hrest x).symm)
 
+theorem avg_swap {C D : Type} [Fintype C] [Fintype D] (f : C → D → ℝ≥0∞) :
+    avg (fun c => avg fun d => f c d) = avg fun d => avg fun c => f c d := by
+  unfold avg
+  simp only [Finset.mul_sum]
+  rw [Finset.sum_comm]
+  refine Finset.sum_congr rfl fun d _ => Finset.sum_congr rfl fun c _ => ?_
+  ring
+
+/-- An average over independent coordinates of a function of one of them is its average over that one. -/
+theorem avg_coord {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c, Fintype (T c)] [∀ c, Nonempty (T c)]
+    (c : C) (F : T c → ℝ≥0∞) : avg (fun f : (c : C) → T c => F (f c)) = avg F := by
+  calc avg (fun f : (c : C) → T c => F (f c))
+      = avg (fun y : T c × ((j : {j // j ≠ c}) → T j) => F y.1) :=
+        Tape.avg_equiv (Equiv.piSplitAt c T) (fun y => F y.1)
+    _ = avg F := by
+        rw [Tape.avg_prod]
+        simp only [avg_const]
+
+/-- `avg_le_write` at a function of the node's value alone. -/
+theorem avg_le_write1 {P C : Type} [Fintype P] [Nonempty P] [Fintype C] [Nonempty C] (w : P → C → C)
+    (A : C → ℝ≥0∞) (hA : ∀ c, A c ≤ 1) : avg A ≤ avg (fun p : P => avg fun c : C => A (w p c)) + shortfall w := by
+  have h := avg_le_write (T := fun _ : C => Unit) w (fun z => A z.1) fun z => hA z.1
+  have e : ∀ B : C → ℝ≥0∞, avg (fun z : C × (C → Unit) => B z.1) = avg B := fun B => by
+    rw [Tape.avg_prod]
+    simp only [avg_const]
+  rw [e A] at h
+  simpa only [e] using h
+
+/-! ## The law at one node -/
+
+variable {β : Type}
+
+/-- A tape of a coin node, averaged over a function of its value and the tape after it. -/
+theorem avg_tape_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
+    (s : Strategy (@Game.coin β C iF iN k)) (Φ : (c : C) → Tape (k c) (s c) → ℝ≥0∞) :
+    avg (fun t : C × ((c : C) → Tape (k c) (s c)) => Φ t.1 (t.2 t.1)) =
+      avg fun c => avg fun τ : Tape (k c) (s c) => Φ c τ := by
+  classical
+  rw [Tape.avg_prod]
+  exact congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) c (Φ c))
+
+/-- A tape of a coin node, averaged over a function of the tape after a fixed value. -/
+theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
+    (s : Strategy (@Game.coin β C iF iN k)) (c₀ : C) (Φ : Tape (k c₀) (s c₀) → ℝ≥0∞) :
+    avg (fun t : C × ((c : C) → Tape (k c) (s c)) => Φ (t.2 c₀)) = avg Φ := by
+  classical
+  rw [Tape.avg_prod]
+  simp only [avg_const]
+  exact avg_coord (T := fun c => Tape (k c) (s c)) c₀ Φ
+
+/-- **The law at a node** with the map `P` of uniform coins `R` and the term `G`: every bounded function of the play's
+output is on average at most its average at the mapped tape and uniform coins, plus `G`. -/
+def LawHolds {R : Type} [Fintype R] (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (G : ℝ≥0∞) : Prop :=
+  ∀ H : β → ℝ≥0∞, (∀ b, H b ≤ 1) →
+    avg (fun t : Tape g s => H (Tape.out g s t)) ≤
+      avg (fun r : R => avg fun t : Tape g s => H (Tape.out g s (P r t))) + G
+
+variable {R : Type} [Fintype R] [Nonempty R]
+
+theorem law_mono {g : Game β} {s : Strategy g} {P : R → Tape g s → Tape g s} {G G' : ℝ≥0∞} (h : LawHolds g s P G)
+    (hG : G ≤ G') : LawHolds g s P G' :=
+  fun H hH => (h H hH).trans (add_le_add_left hG _)
+
+theorem law_id (g : Game β) (s : Strategy g) : LawHolds g s (fun (_ : R) t => t) 0 := fun H _ => by
+  rw [avg_const, add_zero]
+
+theorem law_opt {γ : Type} (n : Game β) (y : γ → Game β) {fn : R → (s : Strategy n) → Tape n s → Tape n s}
+    {fy : R → (a : γ) → (s : Strategy (y a)) → Tape (y a) s → Tape (y a) s} {gn : Strategy n → ℝ≥0∞}
+    {gy : (a : γ) → Strategy (y a) → ℝ≥0∞} (hn : ∀ s, LawHolds n s (fun r => fn r s) (gn s))
+    (hy : ∀ a s, LawHolds (y a) s (fun r => fy r a s) (gy a s)) :
+    ∀ (o : Option γ) (s : Strategy (optGame o n y)),
+      LawHolds (optGame o n y) s (fun r => placeOpt n y (fn r) (fy r) o s) (gapOpt n y gn gy o s)
+  | none, s => hn s
+  | some a, s => hy a s
+
+theorem law_ite {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) {f₁ : R → (s : Strategy G₁) → Tape G₁ s → Tape G₁ s}
+    {f₂ : R → (s : Strategy G₂) → Tape G₂ s → Tape G₂ s} {g₁ : Strategy G₁ → ℝ≥0∞} {g₂ : Strategy G₂ → ℝ≥0∞}
+    (h₁ : ∀ s, LawHolds G₁ s (fun r => f₁ r s) (g₁ s)) (h₂ : ∀ s, LawHolds G₂ s (fun r => f₂ r s) (g₂ s)) :
+    ∀ s : Strategy (@ite _ c dc G₁ G₂),
+      LawHolds (@ite _ c dc G₁ G₂) s (fun r => placeIte dc G₁ G₂ s (f₁ r) (f₂ r)) (gapIte dc G₁ G₂ s g₁ g₂) := by
+  cases dc with
+  | isFalse _ => exact h₂
+  | isTrue _ => exact h₁
+
+/-- **At a coin node the map keeps**: the node's term is the average of the terms after it. -/
+theorem law_keep {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
+    {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} {G : C → ℝ≥0∞}
+    (h : ∀ c, LawHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
+    LawHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k id (f r) s) (avg G) := by
+  intro H hH
+  have e : ∀ r, avg (fun t : Tape (@Game.coin β C iF iN k) s =>
+      H (Tape.out _ s (placeCoin k id (f r) s t))) =
+        avg fun c => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ)) :=
+    fun r => avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) (f r c (s c) τ))
+  calc avg (fun t : Tape (@Game.coin β C iF iN k) s => H (Tape.out _ s t))
+      = avg fun c => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) τ) :=
+        avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
+    _ ≤ avg fun c => (avg fun r : R => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ))) +
+          G c := avg_mono fun c => h c H hH
+    _ = (avg fun c => avg fun r : R => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ))) +
+          avg G := avg_add _ _
+    _ = (avg fun r : R => avg fun c => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ))) +
+          avg G := by rw [avg_swap]
+    _ = (avg fun r : R => avg fun t : Tape (@Game.coin β C iF iN k) s =>
+          H (Tape.out _ s (placeCoin k id (f r) s t))) + avg G :=
+        congrArg (· + avg G) (congrArg avg (funext fun r => (e r).symm))
+
+/-- **The split of the coins at a write**: averaging a function of the written value `v r` and of the coins is averaging
+it at independent values, for every function that `Rel`-related coins give the same value. -/
+def Splits {C : Type} [Fintype C] (v : R → C) (Rel : R → R → Prop) : Prop :=
+  ∀ F : C → R → ℝ≥0∞, (∀ c r r', Rel r r' → F c r = F c r') →
+    avg (fun r => F (v r) r) = avg fun c => avg fun r => F c r
+
+/-- **At a coin node the map writes `v r`**, a value independent of what the map reads after it: the node's term is the
+average of the terms after it. -/
+theorem law_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} (s : Strategy (@Game.coin β C iF iN k))
+    {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} {G : C → ℝ≥0∞} (v : R → C)
+    (Rel : R → R → Prop) (hv : Splits v Rel) (hf : ∀ c r r' τ, Rel r r' → f r c (s c) τ = f r' c (s c) τ)
+    (h : ∀ c, LawHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
+    LawHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k (fun _ => v r) (f r) s) (avg G) := by
+  intro H hH
+  let B : C → R → ℝ≥0∞ := fun c r => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ))
+  have e : ∀ r, avg (fun t : Tape (@Game.coin β C iF iN k) s =>
+      H (Tape.out _ s (placeCoin k (fun _ => v r) (f r) s t))) = B (v r) r :=
+    fun r => avg_tape_at s (v r) fun τ => H (Tape.out (k (v r)) (s (v r)) (f r (v r) (s (v r)) τ))
+  have hB : ∀ c r r', Rel r r' → B c r = B c r' := fun c r r' hr =>
+    congrArg avg (funext fun τ => by rw [hf c r r' τ hr])
+  calc avg (fun t : Tape (@Game.coin β C iF iN k) s => H (Tape.out _ s t))
+      = avg fun c => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) τ) :=
+        avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
+    _ ≤ avg fun c => (avg fun r : R => B c r) + G c := avg_mono fun c => h c H hH
+    _ = (avg fun c => avg fun r : R => B c r) + avg G := avg_add _ _
+    _ = (avg fun r : R => B (v r) r) + avg G := by rw [hv B hB]
+    _ = (avg fun r : R => avg fun t : Tape (@Game.coin β C iF iN k) s =>
+          H (Tape.out _ s (placeCoin k (fun _ => v r) (f r) s t))) + avg G :=
+        congrArg (· + avg G) (congrArg avg (funext fun r => (e r).symm))
+
+/-- **At a coin node the map writes `W (e r)` of the node's value**, with `e r` independent of what the map reads after
+it: the node's term is `W`'s shortfall below uniform plus the average of the terms after the written value. -/
+theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [Nonempty P] {k : C → Game β}
+    (s : Strategy (@Game.coin β C iF iN k)) {f : R → (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s}
+    {G : C → ℝ≥0∞} (W : P → C → C) (e : R → P) (Rel : R → R → Prop) (he : Splits e Rel)
+    (hf : ∀ c r r' τ, Rel r r' → f r c (s c) τ = f r' c (s c) τ)
+    (h : ∀ c, LawHolds (k c) (s c) (fun r => f r c (s c)) (G c)) :
+    LawHolds (@Game.coin β C iF iN k) s (fun r => placeCoin k (W (e r)) (f r) s)
+      (shortfall W + avg fun p => avg fun c => G (W p c)) := by
+  intro H hH
+  let A : C → ℝ≥0∞ := fun c => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) τ)
+  let B : C → R → ℝ≥0∞ := fun c r => avg fun τ : Tape (k c) (s c) => H (Tape.out (k c) (s c) (f r c (s c) τ))
+  have hA : ∀ c, A c ≤ 1 := fun c =>
+    (avg_mono fun τ => hH (Tape.out (k c) (s c) τ)).trans_eq (avg_const 1)
+  have e₁ : ∀ r, avg (fun t : Tape (@Game.coin β C iF iN k) s =>
+      H (Tape.out _ s (placeCoin k (W (e r)) (f r) s t))) = avg fun c => B (W (e r) c) r := fun r => by
+    show avg (fun t : C × ((c : C) → Tape (k c) (s c)) =>
+      H (Tape.out (k (W (e r) t.1)) (s (W (e r) t.1)) (f r (W (e r) t.1) (s (W (e r) t.1)) (t.2 (W (e r) t.1))))) = _
+    rw [Tape.avg_prod]
+    exact congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) (W (e r) c)
+      fun τ => H (Tape.out (k (W (e r) c)) (s (W (e r) c)) (f r (W (e r) c) (s (W (e r) c)) τ)))
+  have hB : ∀ p r r', Rel r r' → (avg fun c => B (W p c) r) = avg fun c => B (W p c) r' := fun p r r' hr =>
+    congrArg avg (funext fun c => congrArg avg (funext fun τ => by rw [hf (W p c) r r' τ hr]))
+  calc avg (fun t : Tape (@Game.coin β C iF iN k) s => H (Tape.out _ s t))
+      = avg A := avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
+    _ ≤ avg (fun p : P => avg fun c : C => A (W p c)) + shortfall W := avg_le_write1 W A hA
+    _ ≤ avg (fun p : P => avg fun c : C => (avg fun r : R => B (W p c) r) + G (W p c)) + shortfall W := by
+        gcongr with p c
+        exact h (W p c) H hH
+    _ = (avg fun p : P => avg fun c : C => avg fun r : R => B (W p c) r) +
+          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
+        simp only [avg_add]
+    _ = (avg fun p : P => avg fun r : R => avg fun c : C => B (W p c) r) +
+          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
+        simp only [avg_swap (fun (c : C) (r : R) => B _ r)]
+    _ = (avg fun r : R => avg fun c : C => B (W (e r) c) r) +
+          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
+        rw [he (fun p r => avg fun c => B (W p c) r) hB]
+    _ = (avg fun r : R => avg fun t : Tape (@Game.coin β C iF iN k) s =>
+          H (Tape.out _ s (placeCoin k (W (e r)) (f r) s t))) +
+          (shortfall W + avg fun p => avg fun c => G (W p c)) := by
+        rw [add_assoc, add_comm (avg fun p : P => avg fun c : C => G (W p c)) (shortfall W)]
+        exact congrArg (· + _) (congrArg avg (funext fun r => (e₁ r).symm))
+
 end Verity.SampledTwo.CoinMap
