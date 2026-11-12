@@ -76,3 +76,46 @@ pull request." So the head of `cursor/lean-remote-merge-onmain-fc8d` to build on
 at is `bafae2eaec2e`: merge it once now and say that sha in what you report. Its candidate's check
 is the first Lean build and the first suites' verdict on that tree, so it may still come back red;
 if lean says so on LEAN-249 I tell you here. When it is on `main`, your base is `main`.
+
+## Thu 12 Nov 20:53Z: your list is read and rung; lean answered (HASH-125, 20:52Z). Go on NOW with the 39 names that are settled; proofs' six stay out until proofs says
+
+Read whole: your return and your comment on HASH-125; five rows checked by me at `bafae2eaec2e`
+(the three period-game lines, `windowK` and `audit_window_split_of_record` with their lock entries,
+`MAX_SESSION_ID` in both locks). Rung: proofs and lean, with your three questions. **A list of 45
+with each name's sibling, row and lock reads, the maps run in both orders, and the one condition
+that would have doubled three names found before anything was built: that is the reading the
+move needed.**
+
+**lean's answers (read its comment whole):**
+1. **Its 8 go in your move**, each with the name you gave. The two short names that then stand
+   in two namespaces (`challengePhaseNamed_ok`, `trustedChallengePhaseOf_ok`): the build is the
+   judge; if a file that opens both namespaces stops resolving, those two keep their old names
+   and you say so on HASH-125.
+2. **The three modules are not in this move.**
+3. **Your condition holds:** Sunday's stage-4 map is variant B, with `monitoringPeriodGood` in
+   its keep strings.
+4. **The hour:** lean's renames are cut on `main` on Sun 15 Nov at 16:00Z and land that evening.
+   Your move is on `main` before Sun 16:00Z, or it lands after lean's. "If yours opens Sat noon
+   PST and is not on `main` by Sat 10 PM PST, say so here and we set the order then."
+
+**proofs has not answered on the six** (`windowK`, `audit_window_split_of_record`,
+`MAX_SESSION_ID`, `SESSION_FORM`, `WINDOW_FORM`, `Supplied.WINDOW_SALT`). Do not wait for it:
+
+- **Now: the map with the 39 settled names** (proofs' 31 that no listed guarantee's statement
+  reads, and lean's 8) in the tree on your branch, in `tools/move`'s form; `resolve_check`; the
+  dry run on `bafae2eaec2e` on a CPU node you name: the move applies, the Lean of every touched
+  package builds, the records run says which lock records move (with these 39, none should:
+  say what it finds).
+- **Keep the six as rows of their own** (a second block or file, not applied), so that proofs'
+  yes adds them with one more records run and `--moved`, and its no costs nothing. Note that a
+  name of the 31 may be used inside one of the six's statements or proofs: the build says.
+- **The pull request:** open it, unmarked, with `Lane proofs`, when the dry run holds: the base
+  is `main` if #9375 has landed by then, else say that it waits for it. Aim for Sat 14 Nov
+  20:00Z or earlier; say on HASH-125 if a slot or a build makes that slip.
+- The lint is its own pull request after the move, as the issue says.
+
+If a run has no slot after 20 minutes, say so on HASH-125 and try another named node once
+(`--pool research`; the pool is full today); do not wait on a run for more than 40 minutes
+inside a turn: end your turn naming it and I resume you.
+
+Return when the dry run has its verdict, or by Fri 13 Nov 04:00Z with where it stands.
