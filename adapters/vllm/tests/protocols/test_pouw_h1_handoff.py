@@ -10,14 +10,21 @@ import shlex
 import socket
 import subprocess
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols.test_pouw_h1 import (  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as G
+
+from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_gpu as GPU
+from tests.protocols.test_pouw_h1 import (
     Int8Arm,
     K,
     Linear,
@@ -28,16 +35,16 @@ from tests.protocols.test_pouw_h1 import (  # noqa: E402
     _remote,
     _so,
 )
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import handoff as HO  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import kept as KP  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import window as PHW  # noqa: E402
+from verity_vllm import protocols as PO
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import handoff as HO
+from verity_vllm.protocols.pouw.h1 import kept as KP
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 
 @pytest.fixture(autouse=True)
@@ -140,7 +147,6 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
     measured and released on the challenge phase's stream, its sample's challenge phase opened through ``--gate``, and the
     record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
     its round's root."""
-    from tests.protocols import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
     run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
     HO.suspend(run, tmp_path / "state")
@@ -165,7 +171,6 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
 def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     """The live gate's forced command splits ssh's remote command line with ``shlex.split``: a reserve's ``--families``
     (JSON, with spaces) arrives as one word, and a local gate gets the words as they are."""
-    from tests.protocols import pouw_h1_gpu as GPU
     ssh = ["ssh", "-i", "k", "-o", "BatchMode=yes", "research@host"]
     verb = ["reserve", "--peer", "vy-nebius-2", "--families", PHC.families(18)]
     got = GPU.gate_argv(ssh, verb)
@@ -199,7 +204,6 @@ def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(
 
     Slow, about two minutes on a check node: it holds every leaf of every tree, which a sample of rows would not, so a
     rebuild that is right for a tree's first rows and wrong past a call's or a step's boundary is caught."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
     _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),
