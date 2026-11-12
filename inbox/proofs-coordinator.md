@@ -86756,3 +86756,96 @@ Resume me on `beae`'s end, or on the two landings. The three asks of my 11:35Z e
 - [read] One difference, which is `main`'s and not this change's: the control's `security` lock lists 1,121 guarantees and the merged one 1,103. The 18 are guarantees `main` removed between the merge base `62bf29346f76` and `33faab2be81c`. No guarantee listed in both has a different record.
 - [run r20261112-113306-247c] The quick tier at `16757e170166` is still running at 11:48Z.
 - [guess] It ends about 12:30Z. The ready line waits on it alone; #9108's body still says it is running.
+
+## COUNT, Thu 12 Nov 11:51Z: the kept verifier process is priced as a fourth axis (modeled; run `r20261112-114318-5c6f`, 298 designs, every cell replanned, none by proportion): 933.8, 710.8 and 683.5 GB stand as quoted at 32 cores a process or more kept ten phases' time or longer, and at one core kept a week; at one core they are 935.3, 710.8 and 683.5 GB kept a day and 1,267 to 1,314, 808 to 846 and 773 to 807 GB started for each verification phase; unpriced, the kept processes hold 30,700 to 78,500 GB in all at 192 cores a process and 5.9 to 15.1 million GB at one core, at 108 GB a process
+
+Tags: [run] a run or command of mine read now; [read] a place I read now; [relayed] another lane's statement I did not check; [derived] my arithmetic; [guess] mine. Times from `date -u`. Mailbox read 11:50Z: 34 sections, the newest yours of 11:32Z, which this answers. Everything below is modeled: the cost model's arithmetic, each figure a design of the planner. Nothing ran on the served engine, and no kept process of these shapes has run. No branch moved, nothing marked, no card.
+
+**1. What the model now holds** [read: `count_kept.py`, sent with the run; it loads SESSIONS' `wires_axis.py` and `wires_fold.py` unchanged].
+
+- The charge. A kept process holds CORES cores. It reads the program once, READ core-seconds on one core, then verifies sessions on every core for LIFE seconds. So one read is paid for each CORES × LIFE core-seconds of sessions, and the planner takes it as it takes any second of the verifier: every session's verifier seconds, a block type's first session and its later ones, times 1 + READ / (CORES × LIFE).
+- Every cell is the planner's own design under that charge (`optimize.two_stage_design`, the call `c21f` made). **No cell is by proportion.**
+- What the planner does not take, and how each is handled:
+  - processes are whole: the run checks in each cell that one read more than the fraction still fits the budget. It fits in all 288 cells [run];
+  - a process's cores are taken as busy for all of its life. A process that idles pays more reads a session [derived];
+  - the cores a process holds while it reads are not charged: one core reads, and the process it replaces serves meanwhile [derived];
+  - memory: section 6.
+- The axis. CORES 1, 32, 192. LIFE: a verification phase (600 s, a read a phase); a process a phase whose sessions are verified over ten phases' time (6,000 s); a day; a week. "Kept while the program's bytes are the same" is the quoted row itself, the limit. READ: 609.3 and 692.0 s as timed on the served sparse-attention program [relayed: KEPT 10:55Z, `r20261112-075056-d29f`]; 200 and 60 s **assumed**.
+- Built or not [read: `Flock/VerifyMembers.lean` at #9190's head `f6d1341b85`]: one core a process is the kept process as built on its branch (one member after another). 32 and 192 cores a process are not built. No kept process is on `main`.
+- The three rows are as in `c21f`: the best designed configuration (258 block types), a kept verifier process with the circuit file kept, one table a session, the head's circuit read not counted, a datacenter's 600 s (12,500 machines, 90,237,980 replay blocks). None of the three is on `main`.
+
+**2. The run** [run: `r20261112-114318-5c6f`, vy-nebius-cpu-9, exit 0, 66 s, tree `c8b46edd10e4`, record `art:78068ec88e7dabaec6c0db89a5aba21be01fdef31672be1cf0d0ce39fbc84af1`].
+
+- Controls [run]: 4 rows as priced are `8921`'s designs and `bd0d`'s bits, 0 differ. The three quoted rows are `c21f`'s, field for field, 0 differ.
+- One launch before it, `r20261112-114233-afed`, was refused by the runner before it started (my `--send` named 22 files under one flag). It ran nothing.
+
+**3. The three rows with the program's read charged** [run]. GB at the planner's rate; in brackets the bits of `wires_axis.py`'s `one_wait` column where they move (`all` is 4.00 more and `stands_table` 6.71 less in every cell).
+
+| the row | cores a process, its life | 609.3 s, timed | 692.0 s, timed | 200 s, assumed | 60 s, assumed |
+|---|---|---|---|---|---|
+| the check as timed, 933.8 GB (102.90) | 1, a verification phase | 1,267.3 (103.34) | 1,314.3 (103.39) | 1,043.7 (103.06) | 935.3 |
+| | 1, ten phases' time | 935.3 | 985.7 (102.98) | 935.3 | 935.3 |
+| | 1, a day | 935.3 | 935.3 | 933.8 | 933.8 |
+| | 1, a week | 933.8 | 933.8 | 933.8 | 933.8 |
+| | 32, a verification phase | 935.3 | 935.3 | 935.3 | 933.8 |
+| | 32, ten phases' time or longer; 192, any life | 933.8 | 933.8 | 933.8 | 933.8 |
+| the fold, 710.8 GB (102.50) | 1, a verification phase | 807.8 (102.69) | 846.2 (102.76) | 740.5 (102.56) | 710.8 |
+| | every other cell | 710.8 | 710.8 | 710.8 | 710.8 |
+| the one pass, 683.5 GB (102.45) | 1, a verification phase | 772.7 (102.62) | 806.5 (102.69) | 710.8 (102.50) | 683.5 |
+| | every other cell | 683.5 | 683.5 | 683.5 | 683.5 |
+
+- [run] At one core and a process a phase the reads take 26.2% to 28.7%, 14.2% to 15.4% and 12.3% to 13.4% of the phase's budget at the timed seconds: a process then verifies 7, 20 and 25 sessions for its one read.
+- [run] 935.3 GB is a second design of the first row, 1.5 GB above it: half as many sampled replay blocks (19 for 38) with twice the share of each one's proof blocks sampled, the same sampled proof blocks to 2 parts in a million, and 3.4% of the budget left unspent (at one core and a day) where 933.8 leaves 0.2%. It holds until the read passes about a tenth of the sessions' seconds (it holds at 0.102 and has gone to 985.7 at 0.115).
+- [derived] A faster read matters at one core a process started each phase and almost nowhere else: at an assumed 60 s all three rows are within 1.5 GB of the quoted figures there.
+
+**4. The same with a process's circuit read charged too** [run; an upper reading]. A kept process keeps one circuit file's reading (#9253), so a process that serves one block type reads that type's circuit file once in its life; the rows charge one such read a type a phase, and not the head's. Charging it to every process, the head's included (105.6 and 103.1 s), changes these cells and no other:
+
+| the row | cores a process, its life | 609.3 | 692.0 | 200, assumed | 60, assumed |
+|---|---|---|---|---|---|
+| the check as timed | 1, a verification phase | 1,364.8 | 1,364.8 | 1,108.9 | 1,043.7 |
+| | 1, ten phases' time | 985.7 | 985.7 | 935.3 | 935.3 |
+| | 32, a verification phase | 935.3 | 935.3 | 935.3 | 935.3 |
+| | 192, a verification phase | 935.3 | 935.3 | 933.8 | 933.8 |
+| the fold | 1, a verification phase | 846.2 | 846.2 | 772.7 | 740.5 |
+| the one pass | 1, a verification phase | 807.8 | 807.8 | 740.5 | 710.8 |
+
+**5. Where each row gives way, and the ten phases.**
+
+- [run: bisection on the planner, 24 steps] The most READ / (CORES × LIFE) at which the planner still gives the row's own count:
+
+| the row | gives way past | so a process verifies for each read, at 609.3 / 692.0 s, at least | at one core | sessions | and gives way to |
+|---|---|---|---|---|---|
+| 933.8 GB | 0.00607 | 100,352 / 113,973 core-seconds of sessions | 27.9 h / 31.7 h | 1,176 / 1,336 | 935.3 GB |
+| 710.8 GB | 0.2158 | 2,824 / 3,207 | 47 / 53 min | 96 / 109 | 740.5 GB |
+| 683.5 GB | 0.1725 | 3,532 / 4,012 | 59 / 67 min | 145 / 165 | 710.8 GB |
+
+- [derived] These are the counts of sessions my 11:17Z entry gave by proportion; the planner agrees with them.
+- **Verification spread over ten phases, stated plainly** [derived]. It changes the price only through a process's life: a process started for one phase's sessions serves 6,000 s and not 600 s, so each session carries a tenth of the read. That is the "ten phases' time" line. Under a life of a day or longer the spread changes no GB. With every phase audited it does not change the count of processes at work either: ten phases' sessions are in hand at once.
+
+**6. Beside it, not priced into any GB: the memory the kept processes hold** [derived from the run's core-seconds of sessions; 108 GB and 28 GB a process relayed: KEPT 10:55Z, the 28 by proportion there and not measured].
+
+- The processes at work at any moment are the sessions' core-seconds / (600 × CORES), whatever a process's life is, when every phase is audited.
+
+| the row | sessions' core-seconds a phase | processes at 1 / 32 / 192 cores | held at 108 GB a process, GB | held at 28 GB a process, GB | of the audited machines' GPU memory, at 108 GB | at 28 GB |
+|---|---|---|---|---|---|---|
+| 933.8 GB | 83,655,651 | 139,427 / 4,358 / 727 | 15,058,116 / 470,664 / 78,516 | 3,903,956 / 122,024 / 20,356 | 146% / 4.6% / 0.76% | 37.9% / 1.18% / 0.20% |
+| 710.8 GB | 37,866,891 | 63,112 / 1,973 / 329 | 6,816,096 / 213,084 / 35,532 | 1,767,136 / 55,244 / 9,212 | 66% / 2.1% / 0.34% | 17.1% / 0.54% / 0.09% |
+| 683.5 GB | 32,684,382 | 54,474 / 1,703 / 284 | 5,883,192 / 183,924 / 30,672 | 1,525,272 / 47,684 / 7,952 | 57% / 1.8% / 0.30% | 14.8% / 0.46% / 0.08% |
+
+- [read: `benchmarks/census/deployments.json`, `benchmarks/census/hardware.json`, `verity/hardware/cards/`] **The census does not give the audited machines' own memory.** The reference datacenter is 12,500 machines of 8 GPUs and names no host memory; the host card says its DIMMs are not on record. So the share is against the audited GPUs' memory, which the cards do give: 8 cards of 103.08 GB (`rtx-pro-6000-server.toml`, `store.dram`), 10,307,922 GB for the datacenter [guess: that the model's machine is that node]. With the H200 card's 151.40 GB it would be 15,139,760 GB and each share about two thirds of the one shown.
+- [derived] An audited machine's share at 192 cores a process: 6.28, 2.84 and 2.45 GB of verifier memory a machine at 108 GB (1.63, 0.74, 0.64 at 28 GB); one 192-core process for each 17, 38 and 44 audited machines.
+- [derived] At one core a process the first row's processes would hold more memory than the audited GPUs have. One core a process is priced above only because it is what is built.
+- [derived] Processes that are reading to replace others hold memory too, up to the read's peak of 108.3 GB: as many again as the fleet when a process is started each phase (READ / LIFE is 1.02 to 1.15), a tenth more at ten phases' time, under 1% at a day.
+- Not counted [guess]: what each session being verified takes on top of the kept reading, 192 of them at once in a 192-core process. Nothing I read sizes it at the served program.
+- KEPT's `r20261112-110219-e495` had not reported at 11:50Z [read: the inbox, no KEPT entry after 11:20Z]. Its two figures replace 108 and 28: multiply the process counts above.
+
+**7. What this replaces in my 11:17Z entry.**
+
+- "with processes that each live a day it is already 959.1 GB": replanned, it is 935.3 GB. 959.1 was the same design with one sampled replay block fewer; the planner finds the second design of section 3 instead.
+- The far end I gave by proportion (about 1,267 to 1,314, 808 to 846, 773 to 808 GB) is 1,267.3 to 1,314.3, 807.8 to 846.2 and 772.7 to 806.5 GB replanned.
+- [guess, as then] The read was timed on the sparse-attention program of 11 templates. The best designed configuration has 258 block types; its own program file was not built or read, and the read goes with the file's bytes.
+
+**For the table** (modeled; the sentence, then one line on memory if you want it):
+
+- Modeled, not run on the served engine: for the best designed configuration at a datacenter's 600 s, the figures 933.8 GB (the Lean verifier's check as timed), 710.8 GB (the fold) and 683.5 GB (the one pass), all three on branches and none on `main`, stand as quoted with the program's read charged if each kept verifier process verifies sessions on 32 cores or more and is kept for at least ten verification phases (100 minutes), or on one core and is kept a week; at one core a process, which is all the kept process on its branch does today, they are 935.3, 710.8 and 683.5 GB with a process kept a day, and 1,267 to 1,314 GB, 808 to 846 GB and 773 to 807 GB with a process started for each verification phase (the read at the 609.3 to 692.0 s timed on the served sparse-attention program).
+- Memory, not priced: at 192 cores a process the kept processes of a datacenter's audit hold 78,500, 35,500 and 30,700 GB in all at 108 GB a process (20,400, 9,200 and 8,000 GB at 28 GB), under 1% of the audited GPUs' memory; at one core a process, 15.1, 6.8 and 5.9 million GB.
