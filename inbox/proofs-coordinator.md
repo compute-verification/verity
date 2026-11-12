@@ -90909,3 +90909,51 @@ Not in it: network's rule for the mark, `Row.premises`, the name `egress` for th
 - #9313's quick tier at its head; I put its verdict in the body.
 - #9249 on `main`, for (2). Lean's remote merge on `main`, for (3). NET-368, for #9312's mark.
 - `research queue open` warned twice that no label of MEM-279 names the goal `top/architecture-signed`. That is Linear's, so yours.
+
+## CROSSCLOSE, Thu 12 Nov 14:13Z: #9253 yes (`474f` ended clean for `b58ece80e982`); #9091 not yet (`279b` still runs, clean so far, about 14:50Z); #9237's head owes a close in spot's `test_difftest.py`, and three open heads void a close of ours without a stop when they land
+
+- **Unpushed: nothing.** [run] `cursor/proofs-landing-closes-99d1` on the remote is `0add9868cafe`, which is #9091's pin at its head `675dea740d6a`, the step that sentence began; `cursor/proofs-cross-main-closes-51ee` is `199bb09f8a3c`; my 13:11Z entry is commit `2dfcb4656e` here. The VM restarted about 13:46Z and took my local trial trees and scripts, none of which is ever pushed; I rebuilt the scripts from the transcript and a closed merge on today's tips.
+- **#9253 at `cf5587e21642`: yes.** [run] `r20261112-123447-474f` done, exit 0: 63 of 63 suites passed, none failed.
+- **#9091 at `675dea740d6a`: not yet.** [run] `r20261112-130251-279b` is running: its five tries and two selections exit 0, 54 of 70 suites passed, none failed (14:11Z). One line here when it ends.
+
+### 1. The runs, each read from its own files
+
+| run | tree it ran on | ended | tries | selections | suites | the close |
+|---|---|---|---|---|---|---|
+| `r20261112-123447-474f` | `918d16506c32`: closed merge `5aa240932c0c` (lean's trial `f1c9670a85d3` + `main` `5456b937e7e5`) + #9253 `cf5587e21642`, `FlockVerify.lean` as `b58ece80e982` has it | done, exit 0, 13:49Z, no timeout | 4 of 4 exit 0 (`FlockVerify.lean`, `Flock/VerifyMembers.lean`, `Flock/CircuitRead.lean`, `Flock/ProgramRead.lean`); no axiom beyond the three | flock prover's three files: 36 passed, 2 skipped; the cap test: 1 passed | **63 of 63 passed**, none failed, none reused; 36,171 tests | `b58ece80e982` stands |
+| `r20261112-123556-a91e` | `1201f91fe8f7`: that tree + #9234 `95fe2956f926` (no stop), the file byte for byte `fed2063c5d79`'s | done, exit 0, 13:50Z | 6 of 6 exit 0 (those four, `Flock/ProvedScope.lean`, `Flock/Test/ProgramHeld.lean`) | the same two: 36 passed, 2 skipped; 1 passed | **63 of 63 passed**, none failed; 36,201 tests | `fed2063c5d79` stands |
+| `r20261112-123514-07a7` | `87921c37b712`: `5aa240932c0c` + #9075 `aa874cd26b1e`, spot's `test_difftest.py` as `1d9bf7eaa19e` has it | done, exit 0, 14:01Z | 4 of 4 exit 0 (`Spot/Pieces.lean`, `Run.lean`, `SecondStage.lean`, `SecondStageExamples.lean`) | difftest selection 9 passed; `test_served_select.py` + `test_two_stage.py` 100 passed | **72 of 72 passed**, none failed; `verity-core-sampled-proofs` ran `test_difftest.py` whole, slow tests too: 270 passed, 2 skipped | `1d9bf7eaa19e` stands for `aa874cd26b1e` and for `ad209cd579d3` (the file is the same blob `fac82cab1a73` in both) |
+| `r20261112-130251-279b` | `56ec45258a67`: closed merge `f8ae2a0e3c8c` (`main` `71a2afe671aa`) + #9091 `675dea740d6a`, the pin as `0add9868cafe` has it | **running**; started 13:03Z, hard limit 15:33Z | 5 of 5 exit 0 (`Select/Second.lean`, `SecondFirst.lean`, `SecondLaw.lean`, `SecondUnits.lean`, `Claims/Sampling.lean`) | `test_pous_trusted.py` 9 passed; spot_figures' two files 33 passed | 54 of 70 passed, none failed; the twelve one-at-a-time suites are left | not said until it ends, about 14:50Z [guess, from `474f`'s last twelve taking 40 minutes] |
+
+- [run] Every row above is the run's `status.json`, `out/exits.txt`, `out/suites.txt` and `out/suites.json`, fetched whole at 13:51Z to 14:11Z.
+- [run] `r20261112-114014-0008` (#9234 with `b7fb9c30eab1`, #9199 and #9215 on my earlier stand-in line) ended 13:18Z, exit 1: eight tries and three selections exit 0, 73 of 74 suites passed. The one failure is `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`, my stand-in for @memory-accounting's `public_boundary.toml`; [run] `repository` passes, 348 tests, in `474f`, `a91e` and `07a7`, which stand on lean's trial with that owner's close. `b7fb9c30eab1` stands.
+- [derived] The 2 skipped in the flock selection of `474f` and `a91e`: by their place in the 38, the two tests that fetch a recorded session from the evidence store, which my plain `pytest` line did not reach. [run] The first, `test_a_zk_member_on_registered_reads_gets_verifys_verdict_whichever_bytes_name_its_program`, then passed in each run's `verity-flock` suite, where its module ran whole. The second, `test_a_session_verified_with_registered_reads_is_held_to_them`, ran nowhere in either run. I put it in the next run with the store on its path.
+
+### 2. What moved since 13:11Z
+
+- [run] Lean's tip is still `f3837f57d113`; its trial is still `44d0bf03d49e`. `main` went `1cfd02137251` → `3d8530f5268a` (six commits: #9198, #9181, #9269, #9276, #9169, #9263). It stops against lean's tip in the same 31 files; none of the six changes a file of ours that a close holds, nor a file PoUS's pin reads.
+- [run] No head of the 13:11Z table landed. One moved: #9149 `328c0e6fb2ca` → `1f136cf79060` (it merged `main`): by name 0 candidates, no stop.
+- New heads, each read by name both ways and merged against lean's tip, against `main` + the head, and against a closed merge I rebuilt on today's tips (`21ff0aadf96c`, local: lean's trial `44d0bf03d49e` + `main` `3d8530f5268a`, ours by `f58b4a3ef6e9`, seven other-owner stops stood in) [run]:
+
+| head | added lines | by name, real of candidates | stops against the closed merge | close |
+|---|---|---|---|---|
+| #9285 `2308c3b05d46` | 27 in 2 files | 0 of 0 | none | none owed |
+| #9286 `f7902b5a9958` | 290 in 6 files | 0 of 0 | none | none owed |
+| #9237 `9d4aec0111fb` | 4,188 in 51 files | 0 of 6 | **spot's `lean/tests/test_difftest.py`**, one stop | **owed**, below |
+| #9108 `16757e170166` | 2,534 in 303 files | 0 of 1 | none | none owed alone; see the last point |
+
+- [read] The candidates, all other things of the same name: #9237's `r` (a bound variable), `Draw` (`service.py`'s own class, which lean's side keeps), `BR.Layout` (vllm's, and #9237 holds #9081's head), "Session" in a docstring; #9108's `Layout st` (`FlockSoundness`'s `Layout (st : Stmt)` in `Soundness/ExecPlacement.lean`, not `Flock.Layout`). The other way, what each head removes against lean's added lines: 0 candidates for all five.
+- **#9237's stop.** [read] One import line: the crossed line's side imports `law_problem` and `ran_out as draw_ran_out` from `spot.device.coins`, #9237 adds `FAMILY_ROOT` to the same import. Both stand; no choice between meanings. I cut it now, with its try.
+- **Rows that change without a stop.** [derived] A close is a file whole, so it is void for a `main` on which a later pull request changed that file, even where git merges that pull request's lines into the close with no stop. [run] The open heads that change one of our seven stopping files:
+  - #9199 `7a528d6b1c01` (marked): `benchmarks/one_stage/a5.py` and spot's verifier `README.md`. No stop in either. Once it is on `main`, rows 3 and 4 need those two files again with its lines.
+  - #9237: `a5.py`, the `README.md`, and `test_difftest.py` (the stop).
+  - #9116 `3a580254f8bf` and #9075 `ad209cd579d3`: the `README.md` beside `test_difftest.py`. `494bd85fb553` and `1d9bf7eaa19e` hold only `test_difftest.py`, so rows 6 and 7 each lack a `README.md`.
+  - #9173 `54c9370d08e5`: `optimize.py` and `test_optimize.py`, no stop; row 5 needs both again once it lands.
+  - I cut these as whole files now, #9199's first since it is marked, each the three-way merge of the head into the close, and name them with their runs in my next entry. If lean merges `main` into its trial rather than taking our paths from an older close, git gives the same bytes and they cost nothing.
+- **#9108 and `FlockVerify.lean`.** [run] It changes the file and merges into the closed merge and into each of the four flock closes with no stop (2,019 to 2,022 lines). [derived] So the four closes (`a8c9ac795709`, `b58ece80e982`, `b7fb9c30eab1`, `fed2063c5d79`) are void for a `main` that holds #9108, and the other way round: say if #9108 is to land before lean's merge and I cut the joined file. [run] #9108 widens 22 verifier signatures (`Zk.schedule` takes `st.wideLeaf`, ...); lean's added Lean lines call none of them (three hits, all other declarations: a local `repCoins`, PearlPlus's `drawBytes`). [derived] My pass reads removals and renames, not a changed signature, so only a build of the merged tree shows it for certain; not run.
+- [relayed] #9305 (your 13:57Z): read; nothing done on it until you say.
+- [run] PoUS's pin: no file it reads, nor the README that holds its command, changed on `main` from `71a2afe671aa` to `3d8530f5268a`, and no other open head of ours changes one, so `0add9868cafe` is still the command's output for today's `main` with #9091 in.
+
+### Runs and what I wait on
+
+`r20261112-130251-279b` on `vy-nebius-cpu-9`, running, about 14:50Z. Next: the closes for #9199 and #9237 with a run each, then one entry. No open choice.
