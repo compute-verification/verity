@@ -59,7 +59,7 @@ sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
 
 # isort: split
-# verity_config is importable once probe has put tools/config on sys.path
+# verity_config is importable once probe has put verity/configuration/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"

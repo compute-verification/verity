@@ -28,8 +28,8 @@ from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass, field
 
-from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.layout import Circuit
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.layout import Circuit
 
 from .ops import (
     Designation,

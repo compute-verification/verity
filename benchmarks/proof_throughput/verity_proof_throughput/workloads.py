@@ -7,7 +7,7 @@ session proves the B units the verifier samples from it by the stratified sampli
 (``instances``). Its unit is the coordinate class the ``Q_word`` partition of a ``Gemm_v2`` Call gives, gate for gate.
 
 ``bf16-k6144`` is the VU family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
-(``verity/ml/definitions/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
+(``verity/definitions/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
 (N = 160) are ``Gemm_v2``, whose coordinate is the VU; the MoE router (N = 256) past 16 tokens is cuBLAS's ``GemmF32Out_v1``
 over the same dot chain, its output the f32 word rather than its bf16 rounding. The sites differ in N, the number of
 coordinates a token row makes, not in the coordinate, so one VU family stands for them. ``fp8-coord-k*`` are served_units' block-scaled FP8
@@ -30,7 +30,7 @@ class Workload:
     #: the VU Definition a statement's instances are (one output coordinate)
     vu: str
     K: int
-    #: the target the overhead divides by (``verity.ml.circuits.targets.target.TARGETS``): its anchor's dense peak
+    #: the target the overhead divides by (``verity.definitions.circuits.targets.target.TARGETS``): its anchor's dense peak
     profile: str
     #: the served GEMMs whose coordinates these are, each with its N per TP8 rank (None: vocabulary-sized)
     sites: dict[str, int | None]

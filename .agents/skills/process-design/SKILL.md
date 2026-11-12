@@ -66,10 +66,10 @@ A good process makes the right thing easy while exploring, and the wrong thing l
 
    ~~~sh
    git fetch origin main
-   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/core/protocols/pous  # changes by path
+   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/protocols/pous  # changes by path
    git log origin/main --since=1.week --format=%h -- AGENTS.md | wc -l  # how often a file changes
    gh pr list --state merged --limit 300 --json number,createdAt,mergedAt,files --jq '
-     .[] | select(any(.files[]; .path | startswith("verity/core/protocols/")))
+     .[] | select(any(.files[]; .path | startswith("verity/protocols/")))
      | [.number, (((.mergedAt|fromdate) - (.createdAt|fromdate)) / 3600 * 10 | floor / 10)] | @tsv'  # hours to merge
    wc -w AGENTS.md ~/.research/notes/kb/LANE-CONTRACT.md  # always-read words
    ~~~

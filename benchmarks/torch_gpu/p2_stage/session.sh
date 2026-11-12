@@ -7,7 +7,7 @@
 #   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on H200_NODE --project verity --source . --cwd source --timeout 240m \
 #     [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
-#     --send /tmp/p2lib.tar --send examples/h200/e2e_h200/served_weights.py --send h200-manifest.json \
+#     --send /tmp/p2lib.tar --send benchmarks/torch_gpu/p2_stage/served_weights.py --send h200-manifest.json \
 #     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
@@ -100,7 +100,7 @@ print(*L.Weights.of(json.load(open(os.environ["MANIFEST"]))).span(int(os.environ
 EOF
 )
 if [ ! -e "$SRC/w.key" ]; then
-  "$PY" -m e2e_h200.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
+  "$PY" -m benchmarks.torch_gpu.p2_stage.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
     --workers "$(nproc)" 2>> "$O/prepare.log" && echo "$SEED $LO $HI" > "$SRC/w.key"
   step prepare $?
 else

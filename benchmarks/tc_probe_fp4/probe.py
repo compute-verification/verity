@@ -1,5 +1,5 @@
 """Blackwell FP4 tensor-core probe: one ``mma.sync`` per tile on sm_120 (RTX 5090, RTX PRO 6000), raw bits captured and
-compared bit for bit against ``verity.ml.circuits.silicon.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
+compared bit for bit against ``verity.definitions.silicon.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
 the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
 the verity rule must remove).  Families under ``families_fp4_re`` are the accumulator families of discrepancy-log entries D16-D18; ``specials`` is
 record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted), and so
@@ -14,7 +14,7 @@ Instructions (``--instruction``): ``nvf4`` = ``mma.sync.aligned.kind::mxf4nvf4.b
 (``sm120.mma.m16n8k64.e2m1.mxf4``, capture + model5-with-ue8m0-shift as a hypothesis, no hot clip); ``f8f6f4`` = the unscaled
 ``mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32`` (``sm120.mma.m16n8k32.e2m1.f8f6f4``, autoproof probe2
 replay only); ``bf16`` = ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` (``sm120.mma.m16n8k16.bf16``), compared with
-``verity.ml.circuits.silicon.models.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
+``verity.definitions.silicon.models.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
 
 The kernel (``mma_fp4.cu``) is built with ``-arch=sm_120a``: ptxas refuses ``.block_scale`` / ``.kind::f8f6f4`` on plain
 ``sm_120`` ("not supported on .target sm_120"), the arch-specific target is required.  ``--sass-check`` runs ``cuobjdump -sass``
@@ -99,8 +99,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.models (and verity) from the shipped tree
-for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
+_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.definitions.silicon.models (and verity) from the shipped tree
+for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "verity" / "configuration" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
 from verity_config.settings import SHARED  # noqa: E402
@@ -114,7 +114,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import ArrayLike
 
-    from verity.ml.circuits.silicon.models import BlockScaledAlignAdd
+    from verity.definitions.silicon.models import BlockScaledAlignAdd
 
 MAX_TILES_PER_CALL = 1 << 14
 
@@ -1200,7 +1200,7 @@ def verity_models(instr: str) -> dict:
     named alternatives (mxf4: the sign of an underflowed zero, log entry D13; for the sm_100 instructions the sm_120 models are the
     hypothesis under test); the K=32 rows (``f8f6f4`` and the rest of ``k32.ROWS``) evaluate ``k32.candidates``, whose
     ``bsaa_g16`` is the scale-free instance earlier runs called ``verity``."""
-    from verity.ml.circuits.silicon import models as M
+    from verity.definitions.silicon import models as M
     if instr in ("nvf4", "tcgen05_nvf4"):
         return {"verity": M.BLACKWELL_SM120_NVF4}
     if instr in ("mxf4", "tcgen05_mxf4", "tcgen05_mxf4kind"):
@@ -1273,7 +1273,7 @@ def _init(instr: str, group: int) -> None:
     _CTX["group"] = group
     try:
         if instr == "bf16":
-            from verity.ml.circuits.silicon import models as S
+            from verity.definitions.silicon import models as S
             _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
             _CTX["tc_dot"] = S.tc_dot
         else:
@@ -1557,17 +1557,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     primary = args.expect_model or PRIMARY_MODEL[instr]
     if instr == "bf16":
-        model_desc, model_src = "verity.ml.circuits.silicon.models.tc_dot", "verity.ml.circuits.silicon.models"
+        model_desc, model_src = "verity.definitions.silicon.models.tc_dot", "verity.definitions.silicon.models"
     elif instr in k32.ROWS:
         model_desc = "k32.candidates: " + ", ".join(sorted(verity_models(instr))) + (" (control: autoproof model5)" if instr in MODEL5_ROWS else "")
-        model_src = str(HERE / "k32.py") + " + verity.ml.circuits.silicon.models"
+        model_src = str(HERE / "k32.py") + " + verity.definitions.silicon.models"
     else:
-        model_desc = "verity.ml.circuits.silicon.models." + {"nvf4": "BLACKWELL_SM120_NVF4", "mxf4": "BLACKWELL_SM120_MXF4",
+        model_desc = "verity.definitions.silicon.models." + {"nvf4": "BLACKWELL_SM120_NVF4", "mxf4": "BLACKWELL_SM120_MXF4",
                                                "tcgen05_nvf4": "BLACKWELL_SM120_NVF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)",
                                                "tcgen05_mxf4": "BLACKWELL_SM120_MXF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)",
                                                "tcgen05_mxf4kind": "BLACKWELL_SM120_MXF4 (the sm_120 model as the hypothesis for sm_100 tcgen05)"}[instr] + \
                      " (control: autoproof model5)"
-        model_src = "verity.ml.circuits.silicon.models + " + str(HERE / "model5.py")
+        model_src = "verity.definitions.silicon.models + " + str(HERE / "model5.py")
     if args.expect_model and instr != "bf16" and args.expect_model not in {**verity_models(instr), **({"model5": 1} if instr in MODEL5_ROWS else {})}:
         ap.error(f"--expect-model {args.expect_model!r} is not a model of {instr}")
     results: dict = {"schema": "fp4-re/tc-probe-fp4/v1", "instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr],
@@ -1833,7 +1833,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "chain": args.chain,
                                      "replays": [Path(p).name for p in args.replay_autoproof]},
             "validation": {"status": "passed" if not failures else "failed",
-                           "checker": "tc_probe_fp4 vs verity.ml.circuits.silicon.models (control: model5) / tc_dot / autoproof vectors",
+                           "checker": "tc_probe_fp4 vs verity.definitions.silicon.models (control: model5) / tc_dot / autoproof vectors",
                            "detail": "; ".join(failures) or ("every hardware word reproduced" if primary is not None else
                                                              "capture recorded (layout, SASS and identity gates passed); candidates "
                                                              f"reproducing every word: {(results.get('candidate_finding') or {}).get('agreeing')}"),

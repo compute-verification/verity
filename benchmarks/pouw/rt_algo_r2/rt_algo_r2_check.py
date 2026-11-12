@@ -22,8 +22,8 @@ import itertools
 import math
 import random
 
-from verity.ml.protocols.pouw.circuit import compile as C, h1tile, segment as SG
-from verity.ml.protocols.pouw.circuit.h1tile import Layout, reference
+from verity.protocols.pouw.prover.circuit import compile as C, h1tile, segment as SG
+from verity.protocols.pouw.prover.circuit.h1tile import Layout, reference
 
 M32 = (1 << 32) - 1
 
@@ -100,9 +100,9 @@ def check_compiled_unit_is_cp_w():
     reference: the lane absorbs KS + m sets in one fx1 chain, each read by two `PouwXinFinal` halves (a checkpoint after
     every set); set s < KS is `PouwSegDot0` (s = 0) or `PouwSegDot` extending set s - 1's partials, reading byte segment s
     of its X row; O' extends T_(KS-1); every digit set is a fresh `PouwSegDot0`."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.ml.circuits.refs import runs
+    from verity.circuits.defs import bind
+    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.refs import runs
     K, ks = 128, 4
     m = SG.n_digits(ks)
     grid = C.Tile(4, 8, tuple((i, j) for i in range(4) for j in range(8)))

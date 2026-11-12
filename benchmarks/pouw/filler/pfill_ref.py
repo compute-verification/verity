@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 for _name, _path in (("dfill_ref", Path(__file__).with_name("dfill_ref.py")),
-                     ("receipt_folds", Path(__file__).resolve().parents[1] / "receipts" / "receipt_folds.py")):
+                     ("receipt_folds", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "receipts" / "receipt_folds.py")):
     if _name not in sys.modules:
         _spec = importlib.util.spec_from_file_location(_name, _path)
         sys.modules[_name] = importlib.util.module_from_spec(_spec)

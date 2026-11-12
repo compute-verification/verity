@@ -205,14 +205,14 @@ CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
-              "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
-              "verity/core/protocols/remote_bandwidth/lean",
-              "verity/core/protocols/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
-              "verity/core/protocols/spot", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
-              "verity/core/primitives/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/sigma", "verity-core-sampled-proofs",
+              "verity/protocols/poub/verifier/lean",
+              "verity/protocols", "verity-pouw-window-difftest",
+              "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "memory-challenger-lean", "benchmarks/pous",
+              "verity/protocols/spot", "verity/protocols/certifier", "verity-pouw-benchmarks",
+              "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
-              "benchmarks/live_verifier", "verity-network-traces", "verity-vllm")
+              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -701,7 +701,7 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 
 def flock_lean() -> Path:
     """The Lean verifier, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
-    return ROOT / "verity" / "core" / "service" / "flock"
+    return ROOT / "verity" / "protocols" / "flock" / "verifier"
 
 
 def lean_on_path() -> None:
@@ -880,7 +880,7 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
 def fetch_env() -> dict[str, str]:
     """The fixture fetch's environment, with the store the tests reach: a recorded check's steps and a `research run` carry no
     store config, only the run's custody key (`$CHECK_STORE_CUSTODY`, `store_custody`), which goes into this subprocess's
-    environment as the tests' own store helpers hand it to theirs (integrations/vllm's `store_io`, Flock's `verifier/ci.py`),
+    environment as the tests' own store helpers hand it to theirs (adapters/vllm's `store_io`, Flock's `verifier/ci.py`),
     when no store config is set here.  Without it the fetch read the public export alone, so a fixture registered since failed
     its suite before any test, though the tests that read it would have fetched it."""
     env = SETTINGS.environ()

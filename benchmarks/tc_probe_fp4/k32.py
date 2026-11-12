@@ -27,9 +27,9 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from verity.ml.circuits.silicon import models as M
-from verity.ml.circuits.silicon.errors import InvalidArtifact
-from verity.ml.circuits.silicon.term import FORMATS, FP32_MAX_EXPONENT, PRODUCT_WIDTH, ZERO, Term, fp32_term, pack_fp32
+from verity.definitions.silicon import models as M
+from verity.definitions.silicon.errors import InvalidArtifact
+from verity.definitions.silicon.term import FORMATS, FP32_MAX_EXPONENT, PRODUCT_WIDTH, ZERO, Term, fp32_term, pack_fp32
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence

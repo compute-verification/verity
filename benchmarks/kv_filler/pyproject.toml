@@ -8,5 +8,5 @@ testpaths = ["tests"]
 # commitments, which import blake3), and for cuda_lib.py, which opens the kernels
 inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/cuda_lib.py", "verity/__init__.py", "verity/errors.py",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/remote_bandwidth/__init__.py", "verity/core/protocols/remote_bandwidth/codec.py",
-          "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto"]
+          "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/codec.py",
+          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto"]

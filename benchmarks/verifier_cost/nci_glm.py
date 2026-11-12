@@ -598,7 +598,7 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
 def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
     """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
     registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
-    from verity.core.protocols.spot.one_stage import registration as REG
+    from verity.protocols.spot.verifier.one_stage import registration as REG
 
     desc, ann = load(Path(args.node))
     text, size = described(desc)
