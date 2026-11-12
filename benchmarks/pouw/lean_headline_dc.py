@@ -415,7 +415,6 @@ def _sheet_check(fam: Family, pi: E.Machine, c: dict) -> dict[str, list]:
 def reading(fam: Family, vector: str, full: bool = False, q: Fraction = Q) -> Reading:
     """The family's reading on `vector`; `full` puts every census MMA class on a measured menu `honest_menu` limits,
     and `q` is the floors `q = q_T` (A6's ½, or (I3)'s on the measured reading's twin)."""
-    B_ = LH._eps_budget()
     sheet = vector == fam.sheet
     ln_p = LH.LN_P if sheet else fam.ln_p_m
     pi = E.machine(vector, fam.data)
@@ -512,7 +511,7 @@ def reading(fam: Family, vector: str, full: bool = False, q: Fraction = Q) -> Re
     flat = max((r for r in pi.rows if any(c[k].get(r) for k in pi.cuda)), key=lambda r: load(r, n0))
     # design_skip's float sums run in string-hash order, so its last bits vary with PYTHONHASHSEED: read it at 1e-12,
     # rounded up (a larger ε_skip only raises the bound), so every run writes the same data.
-    eps_skip = Fraction(math.ceil(B_.design_skip(d, data=fam.data, vector=vector).eps_time * 10 ** 12), 10 ** 12)
+    eps_skip = Fraction(math.ceil(LH.design_skip(d, data=fam.data, vector=vector).eps_time * 10 ** 12), 10 ** 12)
     lanes = [k for k in pi.cuda if c[k].get(flat)]
     skip = min(lanes, key=lambda k: max(c[k].get(r, Fraction(0)) / c[k][flat] for r in pi.rows))
     ns = {skip: eps_skip / (1 - eps_skip) * B0 / c[skip][flat]}
