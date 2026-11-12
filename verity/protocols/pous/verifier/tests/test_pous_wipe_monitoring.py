@@ -170,9 +170,10 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
 
 
 def test_a_record_over_the_sessions_own_real_time_window_is_refused_too(uncounted):
-    """The challenger signs the session's times on its monotonic clock, and the window that says when they were in real
-    time is under no signature. So a record over exactly that window is refused as any other is: holding a record's
-    `t0_unix_ns` and `t1_unix_ns` against the signed times would compare two clocks."""
+    """Nothing the memory challenger signs ties a record's span to the session: it signs the session's times on its
+    monotonic clock, and a record's window is real time. So a record over exactly the session's own real-time window is
+    refused as any other is: holding its `t0_unix_ns` and `t1_unix_ns` against the signed times would compare two
+    clocks."""
     with pytest.raises(ValueError, match="comparing the two would compare two clocks"):
         WM.counted(uncounted, RECORD | WINDOW)
     with pytest.raises(ValueError, match="comparing the two would compare two clocks"):
