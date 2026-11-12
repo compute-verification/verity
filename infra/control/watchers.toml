@@ -1,7 +1,8 @@
 # The loops the watchers supervisor (watchers.py) runs on the control pod: each loop that watches the system and used to run in tmux
 # on an agent VM. Deployed as /data/watchers/watchers.toml; the supervisor reads it when it starts. `{dir}` and `{src}`
 # stand for the two paths below. A credential reaches a loop only through the files its `env_files` names (watchers.py's
-# docstring); a loop whose `needs` or `env_files` is missing waits for it.
+# docstring); a loop whose `needs` or `env_files` is missing waits for it. Every loop the pod runs is in this file: README.md's
+# deploy copies it over the pod's copy only when that copy has no loop this file lacks (`watchers.py check --replaces`).
 dir = "/data/watchers"
 src = "/data/watchers/src"                       # a pushed commit's tree: `git archive` of the paths README.md's deploy names
 host = "vy-control-verity"
@@ -35,11 +36,16 @@ argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
 env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
 
-# node 2's monitors, the machine watchdogs' alerts and the relay-side monitors, posted to #agent-alerts (tmux `watchdog-relay`)
+# the relay-side monitors and CPU node 1's watchdog alerts, posted to #agent-alerts (tmux `watchdog-relay`). The node-side
+# monitors run only on node 2 (deploy.toml's vy-monitors.timer), which is stopped. The relay reads the `--on` host's node alert
+# dir over ssh every pass, and a host that doesn't answer is a failed read each pass, so `--on` names CPU node 1: it answers and
+# runs no node-side monitors. `--only` lists every relay-side monitor but `node-heartbeat`, which reads the node-side monitors'
+# last pass on the `--on` host and pages while no machine runs them. While node 2 runs, the relay takes `--on n2`, a
+# `--machine-alerts` for node 2's watchdog and no `--only`
 [[loop]]
 name = "monitors-relay"
-argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "n2",
-        "--machine-alerts", "vy-nebius-2=n2:/workspace/monitoring/watchdog/alerts",
+argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "vy-nebius-cpu-1",
+        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check",
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
         "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
@@ -92,7 +98,8 @@ needs = ["{dir}/top-asks.json"]
 
 # top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
 # thread, main stalled while next is ahead, idle H200s from fleet's samples, and the Linear audit with relay.env's Linear app
-# credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl
+# credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl; it also saves the Goals
+# page each hour in {dir}/goals/, read with the site key in {dir}/goals.key (events:read) once that is placed
 [[loop]]
 name = "top-sweep"
 argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]
@@ -107,6 +114,14 @@ name = "challenger-publish"
 argv = ["bash", "{dir}/challenger/publish.sh", "--every", "300"]
 env_files = ["/root/.config/verity/r2.env"]
 env = { VY_CHALLENGER_STATE = "{dir}/challenger/state", RESEARCH_STORE = "/root/watchers-challenger-store" }
+
+# the landing order's priority list (/data/drive/priority, which the verified queue reads) rebuilt every 10 min from the goals
+# its PRs serve on the Goals page, or only proposed while the script runs dry. The script is ci's, installed on the pod in
+# /data/drive/bin-ci and not part of {src}; it holds its own lock, sets its own environment and reads the credential files it
+# needs itself, so the loop names no env_files
+[[loop]]
+name = "ci-priority-from-goals"
+argv = ["bash", "/data/drive/bin-ci/priority_from_goals_loop.sh"]
 
 # the labels pack, rebuilt and uploaded hourly (research data labels-pack): every assertion of the store's labels/ as one
 # tarball at a fixed key, which a labels sync that lacks most of them takes in one request. Its store is on the pod's own disk,
