@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from verity.definitions.registry import bf16_gemm_check as BC
 
+__all__ = ["route_pin_gate", "stamp"]
+
 
 def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | None]:
     """Returns (record block | None when the replay's Program binds none of the pin's Definitions, FAIL text | None); the block's `why`

@@ -26,6 +26,8 @@ from typing import Any
 
 import numpy as np
 
+__all__ = ["Rewrites", "absorbed", "build_roles", "requant", "served_words"]
+
 REQUANT_ROLES = ("fp8_w_requant_ue8m0", "fp8_ws_requant_ue8m0")
 ABSORB_ROLE = "mla.absorb"
 SCALE = ".weight_scale_inv"

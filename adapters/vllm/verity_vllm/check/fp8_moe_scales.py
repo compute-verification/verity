@@ -20,6 +20,8 @@ from typing import Any
 
 import numpy as np
 
+__all__ = ["on_rank_grid"]
+
 
 def on_rank_grid(parts: list[np.ndarray], srcs: list[str], which: str, ck: Any, world: int, note: dict[str, Any]) -> list[np.ndarray]:
     """One expert's checkpoint parts `srcs` (served width) for the `which` stack ("w13" or "w2"), with block scales

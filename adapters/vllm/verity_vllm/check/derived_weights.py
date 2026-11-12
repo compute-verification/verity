@@ -16,6 +16,8 @@ import numpy as np
 
 from verity_vllm.check.tp_shards import rows_of
 
+__all__ = ["compose"]
+
 NEG_INF_F32 = 0xFF800000
 
 

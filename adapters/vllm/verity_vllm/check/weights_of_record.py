@@ -87,6 +87,11 @@ from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest import format as MF
 
+__all__ = ["CheckpointIndex", "ENGINE_CONSTANT_RE", "EXPERTS_RE", "FUSED", "Options", "PARAM", "SCHEMA", "build_record",
+           "check", "compose", "derivation_provenance", "live_param_digests", "main", "program_weight_fields",
+           "rank_composer", "record_shard_pin", "served_record", "stamp_of_record_set", "strip_prefix", "weight_param",
+           "weights_of_record"]
+
 logger = init_logger(__name__)
 
 SCHEMA = "verity/commit/weights-of-record/v2"       # v2: host-independent root (analytic entries keyed by their exact inputs)

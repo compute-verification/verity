@@ -40,6 +40,8 @@ from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
 from verity_vllm.program.sampling_event import circuit_token_id
 
+__all__ = ["account_links"]
+
 #: the committed family a served token is opened from
 FAMILY = (SAMPLER_OP, SAMPLED_MEMBER)
 

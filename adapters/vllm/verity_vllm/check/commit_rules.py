@@ -22,6 +22,9 @@ from verity_vllm.check.result import (
 from verity_vllm.records.commit_binding import CommitBinding
 from verity_vllm.records.fields import RecordError
 
+__all__ = ["HIDDEN_CLASS_BY_FA", "REQUIRED_CLASSES_DEFAULT", "class_coverage", "hidden_classes_required",
+           "required_classes_default"]
+
 BINDING = "the run's Commit block"
 
 # The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model: the canary rows' `required_classes`

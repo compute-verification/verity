@@ -59,7 +59,7 @@ from verity_vllm.check.commit_pass import (  # noqa: F401
     commit_verdict,
 )
 from verity_vllm.check.commit_rules import (
-    REQUIRED_CLASSES_DEFAULT,  # noqa: F401
+    REQUIRED_CLASSES_DEFAULT,
     _d,
     _int,
 )
@@ -77,6 +77,8 @@ from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
+
+__all__ = ["REQUIRED_CLASSES_DEFAULT", "commit_verdict", "from_record"]
 
 SCHEMA = "vllm-verdict/v1"
 

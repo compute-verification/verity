@@ -29,6 +29,8 @@ from verity.circuits.intervals import Intervals, full, isect, norm
 from verity.circuits.liveness import Liveness
 from verity.circuits.types import RecordType, Tuple, Type, field_starts, field_types
 
+__all__ = ["BATCH", "Fields", "SHARED", "Template", "own", "separable"]
+
 
 class _Mark:
     def __init__(self, name: str) -> None:

@@ -19,6 +19,8 @@ import numpy as np
 
 from verity_vllm.config import checkpoint_entries
 
+__all__ = ["CheckpointIndex", "manifest_entry"]
+
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
              "I64": (np.int64, 8), "I32": (np.int32, 4), "I16": (np.int16, 2), "I8": (np.int8, 1), "U8": (np.uint8, 1),

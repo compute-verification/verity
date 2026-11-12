@@ -27,6 +27,8 @@ import torch
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine.profiles import layer_classes as LC
 
+__all__ = ["ValueChecker", "run_value_check"]
+
 
 def _cls(m: Any) -> str:
     names = {c.__name__ for c in type(m).__mro__}

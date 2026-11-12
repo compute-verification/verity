@@ -8,6 +8,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+__all__ = ["load_program_head", "post_load_tensors"]
+
 
 class StoredRows:
     """The rows of an `instances.json.gz`, decoded from the file on each iteration in the form it stores them (a v2 row's argument
