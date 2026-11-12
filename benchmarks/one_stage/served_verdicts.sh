@@ -1121,7 +1121,7 @@ private_pieces() {
 # audit's summary, audit record, registration and runs (which it reads where V3c's audit writes no summary:
 # `sampled_of_record`), the pieces it read, and the inference-only verdict it carries. The
 # composite's: PoUW's period case, Pearl+'s case's parts and blobs (served_pearlplus.sh's step 4c), and the serve's first
-# registration record (deployment-registration.json), which the inference-only case's log starts at. Under DAY, the
+# registration record (deployment-registration.json), which Pearl+'s W is chained after. Under DAY, the
 # serve's declaration.json and the deferral's copy of the day's log and parameters. And deferred.env, the settings the
 # follow-on runs at. Each is listed where it exists.
 deferred_inputs() {
