@@ -366,7 +366,7 @@ def test_the_network_certifiers_part_is_beside_it_at_the_planners_requests(tmp_p
     assert f"sweep.cases()['{E.PLAN}']" in planned["source"] and planned["request_tokens"]["value"] == 3320.5
 
     lb = E._load(REPO, "network_traces", "leak_bounds")
-    assert planned["scopes"]["world year"]["requests"] < lb.inputs()["world_requests"].value        # the census's request
+    assert planned["scopes"]["world year"]["requests"] < lb.inputs(requests="census")["world_requests"].value  # the census's request
     theirs = lb.document(lb.inputs(world_requests=year["requests"]), only=("world",), periods=("year",))["rows"]
     assert [{k: v for k, v in r.items() if k != "requests"} for r in doc["certifier"]["rows"]] == [
         {k: v for k, v in r.items() if k != "requests"} for r in theirs]

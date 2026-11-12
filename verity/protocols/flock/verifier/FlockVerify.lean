@@ -286,6 +286,36 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   unfold buildSession
   simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
 
+/-- `buildSessionOf`, the verifier's program read by `readDesc` and `readProg` where a statement with hidden outputs sets up
+(`Stmt.setupTablesBy`); any other sets up as `buildSession` does. -/
+def buildSessionBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg : ByteArray → V Program.Prog)
+    (parsed : V Circuit) (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins)
+    (tables : List (String × ByteArray)) (count : Nat) (draw : Option Lean.Json := none) (partition : Option Lean.Json := none)
+    (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
+    (stratified : Option Nat := none) (closure : Option (Std.HashMap Nat (Array Nat)) := none)
+    (registered : Option (Array Registered.Port) := none) (publicInputs : Option ByteArray := none)
+    (identifier : Option String := none) : V (SessionSpec × Array Stmt) :=
+  if tags.hiddenOutputs && tags.hm96Rows then do
+    let (spec, sts) ← Stmt.setupTablesBy readDesc readProg parsed tags circuitB pubB coins count tables draw partition
+      program work stratified closure publicInputs
+    for st in sts do
+      checkRegistered st registered
+      checkIdentifier st identifier
+    Registered.checkFull registered draw
+    return (spec, sts)
+  else buildSession tags circuitB pubB compB coins tables count draw partition program work stratified closure registered
+    publicInputs identifier
+
+/-- **`verifyCmd`'s one reading of its program sets up what `buildSessionOf` sets up**: `buildSessionBy` at the readings a
+`ProgramRead` keeps, of whatever bytes, is `buildSessionOf`. -/
+theorem buildSessionBy_read (read : ByteArray) (parsed : V Circuit) :
+    @buildSessionBy (ProgramRead.of read).descAt (ProgramRead.of read).progAt parsed = @buildSessionOf parsed := by
+  funext tags circuitB pubB compB coins tables count draw partition program work stratified closure registered publicInputs
+    identifier
+  rw [ProgramRead.descAt_of, ProgramRead.progAt_of]
+  unfold buildSessionOf buildSessionBy
+  rw [Stmt.setupTablesOf_eq_by]
+
 /-- The SHA-512 of a JSON value's canonical JSON (`canon`), as `Spot.canonSha512` digests one. -/
 def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
@@ -1081,17 +1111,20 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
+  -- the program parsed once, for its digest and the three readers below: each is what it is with the program read anew
+  -- (`ProvedScope.programDigestOf_read`, `Registered.checkProgramBy_read`, `buildSessionBy_read`, `…checkCoverBy_read`)
+  let read := ProgramRead.of (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
-        Registered.checkProgram program registered.isSome
+        Registered.checkProgramBy read.descAt program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
         RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
-        let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
-          registered publicInputs (identifier.map Prod.snd)
+        let r ← buildSessionBy read.descAt read.progAt parsed tags circuitB pubB compB coins tables count draw partition
+          program work stratified closure registered publicInputs (identifier.map Prod.snd)
         if let some own := registered then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c own
-        r.2.forM fun (st : Stmt) => Registered.checkCover st.c program partition registered params
+        r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.progAt st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
@@ -1110,7 +1143,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programSha := program.bind ProvedScope.programDigest
+  let programSha := program.bind fun b => ProvedScope.programDigestOf (read.jsonAt b)
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
