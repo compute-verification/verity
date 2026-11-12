@@ -91,7 +91,7 @@ def test_workload_rules():
         Matmul(1 << 64, Shape(16, 64, 64), 0)
 
 
-def test_draws_are_work_weighted_and_reproducible():
+def test_the_sample_is_work_weighted_and_reproducible():
     s, work, weights, acts, prover, epoch = setup([(Shape(64, 64, 64), 1), (Shape(16, 64, 64), 2)])
     tr = prover.prove(epoch, acts)
     refs = tile_refs(s, work)
