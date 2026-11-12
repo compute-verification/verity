@@ -21,17 +21,19 @@ states its law.
   round becomes one of those whose first `n` coins are the round's coin's next `n` elements (`pickIn` of the class,
   as the one-stage leg's `writeOpening` picks), the node's own where there is none; every other node keeps its value.
   `placeK` writes along the releases' continuation form `relK`, and `place` at the period's game (`game_eq`).
-* **What the device released for a round** (`relBytes`, `devBytes`, `dev`): the bytes of the releases the locator puts on
-  round `i`, in log order; none where it puts none or more than a coin's 65536 elements.
-* **The hiding term** (`gapK`, `gapOf`): along the play at the uniform tape, the sum of the written openings'
-  shortfalls below uniform (`Verity.Game.shortfall`, the one-stage leg's `openGap` at each node). A fresh coin's write
-  costs nothing: its 512 bits are the coin's 4 elements one for one.
-* **The law** (`LawAt`, `CoinMapLawB`, `CoinMapHolds`): the period's play is at most as likely, at every event, as the
-  frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`, `CoinMapLaw`'s first clause); and
-  `CoinMapLawB`, the law with the second clause read at bytes: on the frame's plays counted, every byte string the device
-  released for a read round is a prefix of the run's coin there. `CoinMapLaw`'s second clause as stated (the device's
-  release *is* the run's coin, at every tape and coins) fails at a strategy that closes the device before any frame,
-  whose log is empty at every tape, and wherever a release carries fewer bytes than a coin's `2^20`.
+* **What the device released for a round** (`devBits`, `elemOfBits`, `dev`): the coin whose elements are the bits of
+  the releases the locator puts on round `i`, in log order, padded with zeros; none where it puts none or more than a
+  coin's 65536 elements.
+* **The hiding term** (`bitsOf`, `gapK`, `gapOf`): along the frame's play, at each written opening, the written round's
+  shortfall below uniform (`Verity.Game.shortfall`, the one-stage leg's `openGap` at each node) plus the chance its class
+  at the run's uniform elements is empty. A fresh coin's write costs nothing: its 512 bits are the coin's 4 elements one
+  for one.
+* **The law** (`LawAt`, `Agrees`, `CoinMapLawB`, `AgreeCovers`, `CoinMapHolds`): the period's play is at most as likely,
+  at every event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`,
+  `CoinMapLaw`'s first clause); and `CoinMapLawB`, the law with the agreement read in the event: on the frame's plays
+  counted, every release the log holds for a read round agrees with the run's coin there. `CoinMapLaw`'s second clause
+  (the agreement at every tape and coins) fails at an opening whose class at the run's elements is empty: the device
+  releases the tree's own round there, whose bits are not the run's, and the log does not show the run's coins.
 
 Statements and definitions: `LawAt`'s and `CoinMapHolds`' proofs are to come. Nothing imports this module.
 -/
@@ -212,23 +214,30 @@ noncomputable def frame (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray
 
 /-! ## What the device released for a round -/
 
-/-- A release's coins as bytes, bit `t` bit `t % 8` of byte `t / 8` (`bytesOfBits`). -/
-def relBytes (rl : Verity.Release) : Claims.Msg :=
-  (bytesOfBits (rl.coins.length / 8) fun t => rl.coins.getD t false).data.toList
-
-/-- **The bytes the log `log` released for round `i`**, after the releases `pre`: each release the locator puts on round
+/-- **The bits the log `log` released for round `i`**, after the releases `pre`: each release the locator puts on round
 `i`, in order. -/
-def devBytes (L : Locate) (i : ℕ) : List Verity.Release → List Verity.Release → Claims.Msg
+def devBits (L : Locate) (i : ℕ) : List Verity.Release → List Verity.Release → List Bool
   | _, [] => []
   | pre, rl :: log =>
-    (if locAt L pre rl.frame rl.answers = some i then relBytes rl else []) ++ devBytes L i (pre ++ [rl]) log
+    (if locAt L pre rl.frame rl.answers = some i then rl.coins else []) ++ devBits L i (pre ++ [rl]) log
 
-/-- **The device's release for round `i` in a log** (`Reading.dev`, at bytes): the bytes of the releases the locator puts
-on round `i`; none where it puts none, or more than a coin's 65536 elements. -/
-def dev (L : Locate) (log : List Verity.Release) (i : ℕ) : Option Claims.Msg :=
-  if usedOf L i [] log = 0 ∨ 65536 < usedOf L i [] log then none else some (devBytes L i [] log)
+/-- The element of GF(2^128) whose bit `j < 128` is `g j` (`F128.bit`'s order: `lo`'s bits, then `hi`'s). -/
+def elemOfBits (g : ℕ → Bool) : Flock.F128 :=
+  ⟨UInt64.ofNat ((List.range 64).foldr (fun j a => 2 * a + if g j then 1 else 0) 0),
+    UInt64.ofNat ((List.range 64).foldr (fun j a => 2 * a + if g (64 + j) then 1 else 0) 0)⟩
+
+/-- **The device's release for round `i` in a log** (`Reading.dev`): the coin whose element `j` is the bits
+`128 j` to `128 j + 127` the releases the locator puts on round `i` carry, padded with zeros; none where it puts none, or
+more than a coin's 65536 elements. -/
+def dev (L : Locate) (log : List Verity.Release) (i : ℕ) : Option FlockDeploy.Coin :=
+  if usedOf L i [] log = 0 ∨ 65536 < usedOf L i [] log then none
+  else some fun j => elemOfBits fun b => (devBits L i [] log).getD (128 * j.val + b) false
 
 /-! ## The hiding term -/
+
+/-- `n` elements' bits laid end to end, bit `t % 128` of element `t / 128` (`openBits`' order). -/
+def bitsOf {n : ℕ} (e : Fin n → Fin 128 → Bool) : List Bool :=
+  List.ofFn fun t : Fin (128 * n) => e ⟨t.val / 128, by have := t.isLt; omega⟩ ⟨t.val % 128, Nat.mod_lt _ (by omega)⟩
 
 /-- The hiding term at an `ite` node. -/
 noncomputable def gapIte {β : Type} {c : Prop} :
@@ -243,10 +252,11 @@ noncomputable def gapOpt {β γ : Type} (n : Game β) (y : γ → Game β) (gn :
   | none, s => gn s
   | some a, s => gy a s
 
-/-- **The hiding term along the device's releases**, from the releases `pre`: at each opening the locator puts on a
-round and whose elements fit, the written round's shortfall below uniform over the node's rounds (`shortfall`, at the
-round's coin's uniform `n` elements), plus the term after each round averaged over the node's uniform round; at every
-other coin node the term after it, averaged. -/
+/-- **The hiding term along the device's releases**, from the releases `pre`, along the frame's play: at each opening the
+locator puts on a round and whose elements fit, the written round's shortfall below uniform over the node's rounds
+(`shortfall`, at the round's coin's uniform `n` elements), plus the chance the class at those elements is empty, plus
+the term after the written round, averaged over the elements and the node's round; at every other coin node the term
+after it, averaged. -/
 noncomputable def gapK {β : Type} (L : Locate) (K : ℕ) :
     (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) → (pre : List Verity.Release) →
       (f : List Verity.Release → Game β) → Strategy (relK k fs ts f) → ℝ≥0∞
@@ -280,15 +290,18 @@ noncomputable def gapK {β : Type} (L : Locate) (K : ℕ) :
             (fun _ => 0)
             (fun p s₄ =>
               haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-              (match slot L K pre (.opening i sn n) b n with
-                | some _ => shortfall fun e : Fin n → Fin 128 → Bool =>
-                    openW (t := T.sample) (s := p.1) (r := p.2) (ν := T.nonce) n
-                      (List.ofFn fun t : Fin (128 * n) =>
-                        e ⟨t.val / 128, by have := t.isLt; omega⟩ ⟨t.val % 128, Nat.mod_lt _ (by omega)⟩)
-                | none => 0) +
-              avg fun dr : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
+              let next := fun dr : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
                 gapK L K k fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
-                  (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) (s₄ dr))
+                  (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) (s₄ dr)
+              match slot L K pre (.opening i sn n) b n with
+              | some _ =>
+                shortfall (fun e : Fin n → Fin 128 → Bool =>
+                    openW (t := T.sample) (s := p.1) (r := p.2) (ν := T.nonce) n (bitsOf e)) +
+                  avg (fun e : Fin n → Fin 128 → Bool =>
+                    if (Finset.univ.filter fun e' : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
+                        TreeDraw.opened e'.1 n = bitsOf e).Nonempty then 0 else 1) +
+                  avg fun e : Fin n → Fin 128 → Bool => avg fun dr => next (openW n (bitsOf e) dr)
+              | none => avg next)
             (T.next sn n) s₃)
           ts[i]? s'')
         (fun _ => 0)
@@ -310,32 +323,34 @@ def LawAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array B
     ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x => E ((frame V A x θ F c σ L P).out s.1 s.2)) +
       gapOf V θ F c σ L (A.L.V.k x)
 
-/-- **The device released a prefix of the run's coins**: at the play `o` and the run's coins `r`, every byte string the
-device released for a round `reads` names is a prefix of the run's coin's bytes there. -/
-def DevPrefix (A : Live₂) (x : Msg) (reads : ℕ → Prop) (dv : List Verity.Release → ℕ → Option Claims.Msg)
-    (o : Verity.Exchange) (r : Coins A x) : Prop :=
-  ∀ i : Fin (A.L.V.k x), reads i.val → ∀ b, dv o.log i.val = some b → b <+: (r i).bytes
+/-- **The releases agree with the run's coins** (`CoinMapLaw`'s second clause at one play): at the play `o` and the run's
+coins `r`, every release the log holds for a read round agrees with the run's coin there. -/
+def Agrees (A : Live₂) (x : Msg) (Rd : Reading A) (o : Verity.Exchange) (r : Coins A x) : Prop :=
+  ∀ i : Fin (A.L.V.k x), Rd.reads i.val → ∀ c, Rd.dev o.log i.val = some c → Rd.agree o i.val c (r i)
 
-/-- **The coin map's law, at bytes** (the change `CoinMapLaw` needs): the period's play is at most as likely, at every
-event, as the frame's play at a uniform tape and uniform run coins on which the device released a prefix of the run's
-coin for each read round, plus `hide`. -/
+/-- **The coin map's law, the agreement read in the event** (the change `CoinMapLaw` needs): the period's play is at
+most as likely, at every event, as the frame's play at a uniform tape and uniform run coins on which every release the
+log holds for a read round agrees with the run's coin, plus `hide`. -/
 def CoinMapLawB (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (reads : ℕ → Prop)
-    (dv : List Verity.Release → ℕ → Option Claims.Msg) (hide : ℝ≥0∞) : Prop :=
+    (σ : Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Rd : Reading A) (hide : ℝ≥0∞) : Prop :=
   ∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
     ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
-      E (Fr.out s.1 s.2) ∧ DevPrefix A x reads dv (Fr.out s.1 s.2) s.2) + hide
+      E (Fr.out s.1 s.2) ∧ Agrees A x Rd (Fr.out s.1 s.2) s.2) + hide
 
-/-- **The coin map's law holds** at every vocabulary, statement, strategy, locator and prover: `CoinMapLawB` at the frame
-of `L` and the device's release `dev L`, with `hide` the hiding term plus the frame's plays on which some read round's
-release is not a prefix of its coin (an opening whose class at the written bits is empty). -/
+/-- **The parse's agreement covers the released elements**: a coin read at round `i` of a play agrees with a run's coin
+wherever the two have the same elements below what the locator's releases for round `i` carry. -/
+def AgreeCovers (L : Locate) {A : Live₂} (Rd : Reading A) : Prop :=
+  ∀ (o : Verity.Exchange) (i : ℕ) (c c' : FlockDeploy.Coin),
+    (∀ j : Fin 65536, j.val < usedOf L i [] o.log → c j = c' j) → Rd.agree o i c c'
+
+/-- **The coin map's law holds** at every vocabulary, statement, strategy, locator and prover, for a reading whose `dev`
+is the locator's (`dev L`) and whose agreement covers the released elements: `CoinMapLawB` at the frame of `L`, with
+`hide` the hiding term (`gapOf`: the written openings' shortfalls and empty classes along the frame's play). -/
 def CoinMapHolds : Prop :=
   ∀ (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) (reads : ℕ → Prop),
-    CoinMapLawB V A x θ F c σ (frame V A x θ F c σ L P) reads (dev L)
-      (gapOf V θ F c σ L (A.L.V.k x) +
-        ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
-          ¬ DevPrefix A x reads (dev L) ((frame V A x θ F c σ L P).out s.1 s.2) s.2))
+    (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) (Rd : Reading A),
+    Rd.dev = dev L → AgreeCovers L Rd →
+      CoinMapLawB V A x θ F c σ (frame V A x θ F c σ L P) Rd (gapOf V θ F c σ L (A.L.V.k x))
 
 /-! ## Probes -/
 
