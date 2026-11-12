@@ -1,7 +1,6 @@
 {
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "compile_settings", "detail": "except Exception"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception", "count": 2},

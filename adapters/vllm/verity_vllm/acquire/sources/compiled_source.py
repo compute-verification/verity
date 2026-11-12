@@ -7,24 +7,19 @@ from typing import Any
 import torch
 
 from verity_vllm import settings
+from verity_vllm.engine import handle
 
 
-def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
+def compile_settings(llm: Any = None) -> dict[str, Any]:
     """What is actually compiled / graphed in this engine: CompilationMode, CUDAGraphMode, capture sizes, splitting ops, inductor graph
     partition, enforce_eager.  Recorded for every attempt (control and treatment must agree)."""
     out: dict[str, Any] = {}
     try:
-        vc = None
-        eng = getattr(llm, "llm_engine", None)
-        vc = getattr(eng, "vllm_config", None)
-        if vc is None and runner is not None:
-            vc = getattr(runner, "vllm_config", None)
+        vc = getattr(handle.engine_of(llm), "vllm_config", None)
         if vc is None and llm is not None:
             try:
-                from verity_vllm.engine import handle
-
                 vc = getattr(handle.model_runner(llm), "vllm_config", None)
-            except Exception:  # noqa: BLE001
+            except RuntimeError:
                 vc = None
         if vc is not None:
             cfg = vc.compilation_config
@@ -48,3 +43,6 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
         out["error"] = repr(e)[:200]
     out["compile_cache_disabled"] = settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1"
     return out
+
+
+__all__ = ["compile_settings"]

@@ -8,7 +8,6 @@
     {"file": "verity/definitions/word.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/acquire/install.py", "kind": "schema-literal", "symbol": "OccurrenceSink.to_json", "detail": "verity-vllm/acquisition-observed/v1"},
     {"file": "verity_vllm/acquire/served.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/served-required-manifest/v1"},
-    {"file": "verity_vllm/acquire/sources/narrowed_source.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "schema-literal", "symbol": "main", "detail": "cb-a/compare/v1"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/replay/opening.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 7},
