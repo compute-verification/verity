@@ -40,7 +40,7 @@ ADAPTER = Path(__file__).resolve().parents[2]
 CONFIG = ADAPTER / "verity_vllm/engine/profiles/hf_configs/GLM53.config.json"
 #: the stand-in's decoder layers (GLM-5.3's three dense layers, then MoE layers with a shared and an own index) and experts
 LAYERS, EXPERTS = 7, 16
-#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight drawn uniform on [-1, 1]
+#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight sampled uniform on [-1, 1]
 STD = 0.02
 FP8_SCALE = STD * 3 ** 0.5
 #: one speculative config an arm; ``synthetic`` accepts by a rate instead of the model's probabilities, so a stand-in whose
@@ -138,8 +138,8 @@ def rescale(eng: Any) -> dict[str, int]:
                     p.fill_(1.0)
                     count["norm"] += 1
                 elif torch.finfo(p.dtype).bits < 16:
-                    draw = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
-                    p.copy_(draw.to(p.dtype))
+                    fresh = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
+                    p.copy_(fresh.to(p.dtype))
                     count["fp8"] += 1
                 else:
                     p.normal_(0.0, STD, generator=gen)
