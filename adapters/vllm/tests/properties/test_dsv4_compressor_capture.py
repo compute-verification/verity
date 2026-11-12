@@ -9,7 +9,6 @@ import contextlib
 import copy
 import hashlib
 import json
-import sys
 import types
 from types import SimpleNamespace
 
@@ -18,6 +17,7 @@ import pytest
 from verity.definitions.numerics import dsv4_compressor_twin as T
 from verity.definitions.numerics import flashmla_twin as FT
 
+from tests import fake_vllm
 from tests.properties import dsv4_compressor_capture_gpu as X
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
@@ -426,13 +426,8 @@ def test_the_ptx_phase_reads_each_kernels_kept_ptx_and_cubin(kept, tmp_path, mon
     """`ptx` on the served kernels as their caches hold them: with the PTX and cubin kept, each kernel's PTX is written under
     out/ptx with the pinned counts and the phase is ok; without (the e245 run), `kept` fails by name and so does the phase."""
     texts = {k: _ptx_text(X.PTX_COUNTS[k]) if kept else None for k in ("c4", "c128", "store")}
-    K = _kernels(texts)
-    for name in ("vllm", "vllm.models", "vllm.models.deepseek_v4", "vllm.models.deepseek_v4.nvidia"):
-        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
-    ops = types.ModuleType("vllm.models.deepseek_v4.nvidia.ops")
-    vars(ops).update(sparse_attn_compress_cutedsl=K)
-    monkeypatch.setitem(sys.modules, ops.__name__, ops)
-    monkeypatch.setitem(sys.modules, f"{ops.__name__}.sparse_attn_compress_cutedsl", K)
+    kernels = "vllm.models.deepseek_v4.nvidia.ops:sparse_attn_compress_cutedsl"
+    fake_vllm.install(monkeypatch, extra=[kernels]).set(kernels, _kernels(texts))
     monkeypatch.setattr(X.shutil, "which", lambda tool: None)
     monkeypatch.setenv("CUTE_DSL_KEEP", "ptx,cubin" if kept else "")
     rec = X.ptx(tmp_path)
@@ -498,11 +493,10 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     ob = observed["c4"]
     for k in ENV_KEYS:
         monkeypatch.delenv(k, raising=False)
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})

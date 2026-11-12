@@ -206,7 +206,8 @@ class Gate:
     """The gate's verbs as ``argv + VERB``, each call and its answer kept in ``log``."""
 
     def __init__(self, argv: list[str]) -> None:
-        self.argv, self.log = argv, []
+        self.argv = argv
+        self.log: list[dict[str, Any]] = []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
         from tests.protocols.pouw_h1_gpu import gate_argv
@@ -260,6 +261,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     import os
     import shutil
     import time
+
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import prover as PV
     prover = PV.private(Path(a.prover_root) / reserved["session"])
@@ -303,6 +305,7 @@ def key_custody(prover: Path, published: Path) -> dict[str, Any]:
     `published` (the run's ``$OUT``)."""
     import os
     import stat
+
     from verity_vllm.protocols.pouw.h1 import prover as PV
     path = prover / PV.KEY
     if not path.is_file():
@@ -379,6 +382,7 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
     from verity.protocols.pouw.verifier import window as Wd
+
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
     from verity_vllm.protocols.pouw.h1 import window as PHW

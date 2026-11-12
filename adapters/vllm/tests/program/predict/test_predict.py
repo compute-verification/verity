@@ -18,10 +18,12 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.definitions.registry.tp_allreduce import settings_of
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
+from verity_vllm.program.predict import dsv4
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
 from verity_vllm.program.predict.model_shape import model_shape, weight_leaves
@@ -207,6 +209,40 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
     cfg = {**phi.hf_config, "compress_ratios": [1] + phi.hf_config["compress_ratios"][1:]}
     with pytest.raises(Unexpressible, match=re.escape("compress ratios [1] (the compressors: [4, 128]")):
         build_program(Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": cfg}}), "step")
+
+
+def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quantization_block(tmp_path):
+    """A φ whose engine states no `env` runs its all-reduce under no switch (`tp_allreduce.settings_of` of an empty env), as one
+    whose `env` is empty does.  A checkpoint config without `quantization_config` is refused by that name."""
+    phi = _row_phi(DSV4, "DSV4_PRO", tmp_path)
+    doc, stated = phi.to_json(), {k: v for k, v in phi.engine.items() if k != "env"}
+    nets = [dsv4.Net(Phi.from_json({**doc, "engine": e}), 1, 8) for e in (stated, {**stated, "env": {}})]
+    assert nets[0].settings == nets[1].settings == settings_of(False, {})
+    bare = {k: v for k, v in phi.hf_config.items() if k != "quantization_config"}
+    with pytest.raises(Unexpressible, match="a checkpoint without its block-FP8 quantization_config"):
+        dsv4.Net(Phi.from_json({**doc, "model": {**phi.model, "hf_config": bare}}), 1, 8)
+
+
+def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
+    """φ read from a document without `engine` or `workload` declares no engine argument and no request, and a model without
+    `hf_config` has an empty one.  A request's `max_tokens` is its own, else its `sampling_params`', else 0."""
+    doc = {k: v for k, v in Phi(model={"repo": "org/m"}).to_json().items() if k not in ("engine", "workload")}
+    phi = Phi.from_json(doc)
+    assert (phi.engine, phi.workload, phi.hf_config, phi.requests, phi.request_shapes()) == ({}, {}, {}, [], [])
+    reqs = [{"prompt_len": 3}, {"prompt_len": 3, "sampling_params": {"max_tokens": 5}},
+            {"prompt_len": 3, "max_tokens": 7, "sampling_params": {"max_tokens": 5}}]
+    assert Phi(workload={"requests": reqs}).request_shapes() == [(3, -1), (3, 4), (3, 6)]
+
+
+def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
+    """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
+    row's as with them."""
+    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    full = S.phi_of({"row": DSV4, "workload": w}, config=config)
+    bare = S.phi_of({"row": DSV4, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
+    assert bare.workload == {"requests": []} and len(full.requests) == len(w["requests"]) > 0
+    assert {**bare.to_json(), "workload": full.workload} == full.to_json()
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
@@ -415,6 +451,34 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         build_program(_phi(cfg, **phi_kw), "step")
+
+
+@pytest.mark.parametrize("empty", ["absent", None, {}, 0, "", False, []])
+def test_a_family_that_states_no_rules_facts_or_constructor_is_read_as_one_with_none(monkeypatch, empty):
+    """A family's entry of the family facts table may leave `rules`, `facts` or `arch` out, or state it empty.  The predictor then
+    reads no rule (qwen2 without its rule has no q/k/v bias), no fact the vocabulary lacks, and no constructor, which
+    `model_shape` refuses by name."""
+    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    from verity_vllm.program.predict import model_shape as MS
+    cfg = {**TINY, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32}
+    stated = FAMILY_FACTS["qwen2"]
+
+    def entry(block: str) -> dict:
+        rest = {k: v for k, v in stated.items() if k != block}
+        return rest if empty == "absent" else {**rest, block: empty}
+
+    as_stated = model_shape(cfg)
+    assert as_stated.qkv_bias
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("rules"))
+    assert not model_shape(cfg).qkv_bias
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("facts"))
+    with monkeypatch.context() as m:
+        m.setattr(MS, "resolve_facts", lambda hf, C: ({}, {}))    # the table's own reader of the block is not the predictor's
+        assert model_shape(cfg) == as_stated
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("arch"))
+    named = None if empty == "absent" else empty
+    with pytest.raises(Unexpressible, match=re.escape(f"family 'qwen2' constructor {named!r} (the dense and MoE blocks only)")):
+        build_program(_phi(cfg), "step")
 
 
 def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():
