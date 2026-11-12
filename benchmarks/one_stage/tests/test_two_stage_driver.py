@@ -92,6 +92,22 @@ def _samples_q(got: TS.First) -> bool:
     return got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
 
 
+def _laid_out(pub: dict, check, rule: TS.Rule, coins) -> TS.First:
+    """What `two_stage.first` hands back for a class, without the verifier's checks of it: the layout, the stream and the
+    boundary record as `first` builds them, the registration the stream returns for that record first in its log (its
+    digest the record's own), the coins committed to that digest, and the sample they give under the rule
+    (`service.select_draw`). The record is not put through the registration's checks, the sample not through the
+    verifier's, and the stream logs neither, so its second stage can't follow."""
+    layout, coins = BR.layout_of(pub, check), TS.Recorded(coins)
+    stream = TS.stream_of(layout, rule, coins)
+    law = S.selection_law(stream.spec.selection, layout.spans)
+    rec = BR.record(pub, check, law)
+    reg = S.WindowCommitmentRecord(dict(rec), R.receipt(rec, TS.CHALLENGER, received="0"), R.digest(rec), 0)
+    coins.commit(bytes.fromhex(reg.digest))
+    sample = S.Draw(reg, law, S.select_draw(stream.spec.selection, law, layout.spans, coins))
+    return TS.First(dict(pub), rule, layout, stream, rec, reg, sample, coins, bytes(coins.read))
+
+
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     """The first stage samples Q of the class's N spans on the challenger's coins after the boundary registration;
     ``stage1.json`` alone gives the replay side the same registration and sample on the bytes it read; its interior
@@ -316,7 +332,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     """Round 2's read check (`second_stage._read_ok`) on a table read's ``root`` and ``domain`` ports, from a record the
     serve wrote: a class committed as the engine core commits it (`boundary_rows.commit`, its ``commit.json`` read
     back), its check two reads of one table inlined, so its replay block is `Layout.replay`, the check's two instances a
-    span. The first stage registers that record on the class's stream (`first`), whose ports are ``b.ingress``,
+    span. The first stage registers that record on the class's stream, whose ports are ``b.ingress``,
     ``b.egress`` and each span's table: a table's name has a ``/``, so round 2 names each link
     ``<replay block>/<parameter>``, the replay block's descriptor id and not the check's. The interior of the sampled
     spans' reads, committed with no test key, registers the reads' parameters under those names: ``root`` and ``domain``
@@ -324,7 +340,10 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     span's table (`interior_rows.sources`, resolved through `First.history`). Round 2 takes each read of them at its
     instance's row, and refuses the same read under the check's id or the bare parameter. A class with no tables names
     no port with a ``/``. What a cheaper test cannot show: the names on the serve's own layout, whose table rows are the
-    served 576 words."""
+    served 576 words. What this one leaves to cheaper tests: the verifier's checks of the registration and of the
+    sample, which `first` runs and `_laid_out` does not. `_laid_out` is held to `first` here on a class with no tables;
+    a class with tables and an inlined class each register on a toy check in this module's other tests, and none of
+    them is both."""
     reads, capacity, prompt, outputs = 2, 8, 4, 2
     rd = E.read(capacity, BT.WORDS)
     params, ret = rd.signature()
@@ -352,12 +371,17 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     rule = TS.Rule(f"rate:{Q}/{N}", K, tuple(v for m in w.members for v in TS.interior_values(m)), 60.0,
                    IR.span_values(links))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
-    got = TS.first(pub, check, rule, FC.Challenger("first"))
+    got = _laid_out(pub, check, rule, FC.Challenger("first"))
     assert got.stream.replay is not None and descriptor_id(got.layout.replay) == key
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     named = SS._by_template(got.record)
     assert named and not any("/" in x for x in BR.PORTS)
-    assert not SS._by_template(TS.first(_class().public(), PAIR, RULE, FC.Challenger("first")).record)
+    toy = _class().public()
+    registered, laid = TS.first(toy, PAIR, RULE, FC.Challenger("first")), _laid_out(toy, PAIR, RULE, FC.Challenger("first"))
+    assert (laid.record, laid.registration, laid.draw, laid.read) == (
+        registered.record, registered.registration, registered.draw, registered.read)
+    assert _samples_q(got)
+    assert not SS._by_template(registered.record)
 
     defs = definitions(got.layout.program)
     cs = SS._callers_of(defs, defs[key])
