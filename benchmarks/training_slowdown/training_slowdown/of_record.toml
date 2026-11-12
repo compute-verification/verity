@@ -519,3 +519,12 @@ path = "out/run/run.json"
 sha256 = "42d025b69edda49f0b7a4073db0f7828fce35004179cb3cc6ac42e8c331e6326"
 partial = "none"
 step = { counted = 3, why = "the gains of each repeated copy sit behind its zeroed output projections, so they get no gradient at the first step and undecayed AdamW leaves them θ′'s: they leave it at the second step, and the third is the first a later step's structure has" }
+
+[[held."m-t20-2x-hybrid-grow-depth".record_only]]
+phase = "fwd"
+kind = "theta"
+op = "mul"
+shapes = [[]]
+count = 4
+macs = 4
+why = "the program's running total of the loss, which it prints: each forward's loss times its share of the batch"
