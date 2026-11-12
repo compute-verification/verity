@@ -185,6 +185,7 @@ def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     """Rank `job["rank"]`'s θ parameters committed (`registered_rows.commit`) one tensor at a time, each opened against the rank's
     committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts."""
     from verity.circuits.types import type_from_json
+
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.commit import registered_rows as RR
     from verity_vllm.pipeline import cpu_replay as CPU

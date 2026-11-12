@@ -17,13 +17,13 @@ import pytest
 
 from research import merge
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
-                              SIGTERM_RC, shard_machines, step_paths, step_records)
+                              SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, abandon, audit_failures, based, combine, failures,
-                                  judge, key, reads, shard_count, start, step_test, unnamed)
+from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures, audited, audits, based,
+                                  combine, failures, judge, key, lean_inputs, reads, shard_count, start, step_test, unnamed)
 from test_policy import LIVE, TEST
-from test_landing import GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
+from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
@@ -422,6 +422,38 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
 
 
+@pytest.mark.parametrize("shards", [0, 1, 3, "auto:2"])
+@pytest.mark.parametrize("drops", [False, True])
+def test_a_candidate_is_sent_only_the_steps_its_own_ci_toml_declares_as_jobs(world, monkeypatch, tmp_path, shards, drops):
+    """check.py refuses a `--deferred` naming a job the candidate's own ci.toml doesn't declare (`declared_steps`): a candidate
+    whose ci.toml drops a step's job (lean-changed, or ratchet-gate beside its check) is sent every other step, beside its
+    check, whole, as each shard or to its auto plan, with one line naming the step; one declaring every step is sent them all."""
+    dropped = "lean-changed" if shards else "ratchet-gate"
+    jobs = CI_TOML.replace(f'[[job]]\nname = "{dropped}"\nowner = "ci"\ngroup = 1\n', "")
+    assert jobs != CI_TOML
+    h, base, sha, _ = _harness(world, monkeypatch, agreement=True,
+                               change={"tools/verity/check/ci.toml": jobs} if drops else None)
+    h.d.on, plans = "m1,m2,m3", Plans(h.d, tmp_path)
+    start(h.d, sha, base, shards=shards)
+    want = ",".join(s for s in (AFTER_LANDING if shards else SLIM_STEPS) if not (drops and s == dropped))
+    sent = [steps for _, steps, _ in h.posted] + [steps for _, steps, *_ in plans.asked]
+    assert sent == [want] * {0: 1, 1: 1, 3: 3, "auto:2": 1}[shards]
+    said = (f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job {dropped}, which "
+            "check.py refuses: left out of its --deferred")
+    assert (said in world.logs) == drops and not any("ci.toml can't be read" in x for x in world.logs)
+
+
+@pytest.mark.parametrize("ci", [None, "not toml ["])
+def test_a_candidate_whose_ci_toml_can_t_be_read_is_sent_every_step_and_one_line_says_so(world, monkeypatch, ci):
+    """Where git can't read the candidate's ci.toml (gone, or not TOML), `declared_steps` can't say which jobs it declares: its
+    check is sent every step, as before the tree's own list was read, and one line says why."""
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": ci})
+    start(h.d, sha, base, shards=1)
+    assert [steps for _, steps, _ in h.posted] == [",".join(AFTER_LANDING)]
+    assert world.logs.count(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its "
+                            f"--deferred keeps every step ({','.join(AFTER_LANDING)})") == 1
+
+
 def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_names(world, monkeypatch, tmp_path):
     """The loop's deselect list, read at each launch: every shard is sent the node ids it names (`train.sh --deselect`), written
     beside it; a line that is no node id is logged and left out, so a typo drops no test and reds no candidate; no list, or one
@@ -703,6 +735,113 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     assert f.key != f.base_key and f.inputs == {"security/Proofs/A.lean"} and _inherited(f) is (not more)
     assert f.tests - f.base_tests == ({"security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
+
+
+# -- lean-audit taken from the base's check
+
+#: the steps a check taking lean-audit from its base's is sent
+FREE = ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+
+
+@pytest.mark.parametrize("shards", [1, 3, "auto:2"])
+def test_a_check_taking_lean_audit_from_its_base_s_runs_every_step_but_it_and_its_record_says_whose(world, monkeypatch,
+                                                                                                    tmp_path, shards):
+    """``audit_from``, the candidate the check is built on: every step of `AFTER_LANDING` but lean-audit is sent, to each
+    shard alike and to an auto plan's making, and the record says whose verdict on lean-audit it takes (``lean_audit_from``).
+    Judged on no lean-audit, it lends none to a check above it (`audits`), where the check of its base, which ran it, does.
+    The run beside a graph2 check runs no lean-audit, so it takes none."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, plans = "m1,m2,m3", Plans(h.d, tmp_path)
+    rec_base = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=shards, audit_from=base)
+    if shards == "auto:2":
+        assert plans.asked == [(sha, FREE, None, 2)] and rec["plan"]["deferred"] == FREE and len(h.posted) == 1
+    else:
+        assert [steps for _, steps, _ in h.posted[1:]] == [FREE] * shards
+    assert (rec["lean_audit_from"], rec["gate"], "lean-audit" in rec["steps"]) == (base, CHECK, False)
+    assert any(f"as candidate {sha[:12]}'s check, lean-audit {base[:12]}'s: " in x for x in world.logs), world.logs
+    assert audits(h.d, rec_base) and not audits(h.d, rec) and not audits(h.d, None)
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, audit_from=base)
+
+
+@pytest.mark.parametrize("says", ["passed", "failed", "running", "no record"])
+def test_a_check_that_took_lean_audit_from_its_base_s_passes_it_exactly_when_that_check_passed_it(world, monkeypatch,
+                                                                                                   tmp_path, says):
+    """The candidate's own check passed every step it ran, and its base, whose check ran lean-audit, has landed: its verdict
+    on lean-audit is the one the run beside `main` keeps, here its base's run beside itself.  Where that run passed it, a
+    pass; where it failed it, `main` red on lean-audit, a fail on that very failure, ended, which `based` reads as the
+    base's; either kept in the candidate's record as if it had run the step, so it answers for it once its candidate is
+    `main`, and read from there.  While that run runs, or with none given, as while its base is in flight, a pass is pending
+    and a fail not ended, the record unchanged: the candidate never passes on its other steps alone."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec_base = start(h.d, base, base, shards=1)
+    if says in ("passed", "failed"):
+        _slim(h, tmp_path, **({"lean_audit": AUDIT.format(n=1)} if says == "failed" else {}))
+        assert judge(h.d, rec_base).state == (FAIL if says == "failed" else PASS)
+    rec = start(h.d, sha, base, shards=1, audit_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    assert own == Verdict(PASS) and "lean-audit" not in rec["verdict"]["passed"]
+    was, below = json.loads(json.dumps(rec)), None if says == "no record" else rec_base
+    got = audited(h.d, own, rec, below)
+    if says == "passed":
+        assert got == own and rec["verdict"]["passed"] == [*was["verdict"]["passed"], "lean-audit"]
+    elif says == "failed":
+        (f,) = based(got, rec_base).failed
+        assert (got.state, got.ended, f.task, _inherited(f)) == (FAIL, True, "step lean-audit", True)
+        assert rec["verdict"]["state"] == FAIL and rec["verdict"]["failed"] == rec_base["verdict"]["failed"]
+    else:
+        assert got == Verdict(PENDING) and rec == was
+        red = Verdict(FAIL, (_failed(h, base, sha, "pytest"),), ended=True)
+        assert audited(h.d, red, rec, below) == replace(red, ended=False)
+    if says in ("passed", "failed"):
+        assert judge(h.d, rec) == got == audited(h.d, judge(h.d, rec), rec, None), "kept, it is read from the record"
+
+
+def test_where_lean_audit_gates_nothing_no_check_lends_it_and_none_waits_on_its_base_s(world, monkeypatch, tmp_path):
+    """drive.toml's warn step gates nothing: a check that ran it lends no verdict on it, and one that took it from its base's
+    check doesn't wait on that check's."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec_base = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=1, audit_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    assert audits(h.d, rec_base) and audited(h.d, own, rec, rec_base) == Verdict(PENDING)
+    h.d.warn_steps = ("lean-audit",)
+    assert not audits(h.d, rec_base) and audited(h.d, own, rec, rec_base) == own == Verdict(PASS)
+
+
+def test_a_lean_input_is_a_lean_or_lake_file_or_lock_anywhere_the_check_s_or_lean_check_s_code_or_the_lean_tree_whole():
+    """The conservative set a member's change is judged against: a README under security/ counts as much as a Lean file;
+    `Security/`, the tree's name before, too; a path that only starts like one of them doesn't, nor the environment's
+    files, which every step reads."""
+    lean = ["security/README.md", "security/Definitions/Core.lean", "Security/Proofs/README.md", "Main.lean",
+            "verity/core/protocols/pous/lean/Grader.lean", "verity/core/service/flock/lakefile.toml",
+            "verity/core/service/flock/lakefile.lean", "lean-toolchain", "verity/x/lake-manifest.json",
+            "verity/core/protocols/nci/lean/lean-audit.json", "tools/verity/lean/check.py", "tools/verity/check/policy.toml"]
+    other = ["docs/security.md", "verity/security/x.py", "tools/verity/checkers/x.py", "tools/verity/lean-tools/x.py",
+             "verity/ml/circuits/ops.py", "uv.lock", ".python-version", "lean.md"]
+    assert [p for p in [*lean, *other] if meets((p,), LEAN_INPUTS)] == lean
+
+
+def test_a_tree_s_lean_inputs_hold_each_directory_of_a_lakefile_or_a_lock_whole_where_the_tree_puts_it():
+    """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
+    pouw's `check/models.json`: every directory of the tree holding a lakefile or a lock is a Lean input whole, a file the
+    tree doesn't hold yet too, and the root's is all of it; a directory beside or above one isn't, nor one named like it."""
+    pouw, rand, pous = ("verity/protocols/pouw/verifier/lean/check", "verity/commitments/randomness",
+                        "verity/protocols/pous/lean")
+    files = [f"{pouw}/lakefile.toml", f"{pouw}/models.json", f"{rand}/lakefile.lean", f"{rand}/__init__.py",
+             f"{pous}/lean-audit.json", f"{pous}/check.sh", "verity/protocols/README.md", "verity/protocols/pouw/models.json",
+             "a.txt"]
+    inputs = lean_inputs(files)
+    assert inputs[:len(LEAN_INPUTS)] == LEAN_INPUTS
+    lean = [f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
+            f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
+    other = ["verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
+             "verity/protocols/pous/leaner/x.json", "a.txt"]
+    assert [p for p in [*lean, *other] if meets((p,), inputs)] == lean
+    assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
 
 
 def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(

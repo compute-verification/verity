@@ -42,7 +42,7 @@ def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = N
         return {"why": f"all-reduce switches {settings!r} name no captured setting"} if world == ROUTED_WORLD else None
     facts = {"world": world, "device": device, "transport": settings.get("nccl_transport")}
     fused = None
-    if norm is not None and settings.get("flashinfer") and M <= T.fused_max_tokens(N, world):
+    if norm is not None and settings.get("flashinfer") and T.fused_max_tokens(N, world) >= M:
         fused = T.covered(setting, N, "fused", M, **facts)
     if fused is not None:
         defn, statics = T.AllReduceRmsNormMnnvl, {"WORLD": world, "N": N, "SHOT": T.mnnvl_shot(M, N, world), "CLUSTER": T.mnnvl_grid(M, N)[1],
@@ -214,7 +214,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
         recv = tensor_of(step, rm) if rm is not None else None
         why = None
         if part is None or recv is None:
-            def _gone(meta) -> str:
+            def _gone(meta, step=step) -> str:
                 return unverified.get((step, meta.name), "bytes not retained")
             why = ("partial " + ("not in this step's layout" if pm is None else _gone(pm)) if part is None else "") + \
                   ("; " if part is None and recv is None else "") + \

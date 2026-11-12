@@ -1,0 +1,112 @@
+"""The schema ids of the records that have no type in this package yet: the string a record carries as ``schema``.
+
+Each id is written once, here; its writers and readers read the constant.  Beside each: the record, and what writes it.
+An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.
+"""
+from __future__ import annotations
+
+# --- the observation of one eager run (`verity_vllm.observe`)
+#: the raw observation log (its `RunHeader.schema`), which `observe.capture.make_header` writes
+CAPTURE_LOG_SCHEMA = "verity-capture/log/v1"
+#: a capture's snapshot index, `snapshots.json`, which `observe.capture.Capture._write_snapshot_index` writes
+CAPTURE_SNAPSHOTS_SCHEMA = "verity-capture/snapshots/v1"
+
+# --- the query (`verity_vllm.query`)
+#: whether a Commit used the manifest of record, which `query.manifest.verify.verify` and `acquire.compiled`'s `main`
+#: write
+MANIFEST_VERIFY_SCHEMA = "verity-sweep/manifest-verify/v1"
+
+# --- the acquisition (`verity_vllm.acquire`)
+#: a committer's coverage declaration (`acquire.committer_api.DECLARATION_SCHEMA`), which `declaration` writes
+COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
+#: the record of `verity-vllm gate call-boundaries` (`acquire.gate.CALL_BOUNDARIES_SCHEMA`), which `call_boundaries_of`
+#: writes
+CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+
+# --- the Match (`verity_vllm.check.match`)
+#: the global workload Program's interface as the Match reads it (`check.match.declaration.GP_SCHEMA`)
+GLOBAL_PROGRAM_SCHEMA = "cb-a/global-program/v1"
+#: the batch decomposition's document, which `check.match.batch_decomp.decompose` writes
+BATCH_DECOMP_SCHEMA = "cb-a/batch-decomp/v1"
+#: the batch decomposition's phase profile, which `check.match.batch_decomp.decompose` writes
+X09_PROFILE_SCHEMA = "cb-a/x09-profile/v1"
+#: the cross-rank check's result, which `check.match.rank_match.cross_rank_check` writes
+RANK_MATCH_SCHEMA = "tp2/rank_match/v1"
+#: the ranks' commit binding, which `check.match.rank_match.commit_binding` writes (not `records.commit_binding`, a
+#: Commit record's `binding` block)
+RANK_COMMIT_BINDING_SCHEMA = "verity/tp2/commit-binding/v1"
+#: the comparison of two Programs, which `check.match.program_compare`'s `main` writes
+PROGRAM_COMPARE_SCHEMA = "cb-a/compare/v1"
+
+# --- the sampled replay (`verity_vllm.check.replay`)
+#: the sampled replay's record (`check.replay.driver.SCHEMA`), which `check.replay.driver` writes; `pipeline.c2_replay`,
+#: `pipeline.replay_bundle` and `pipeline.tp.rank_replay` write it for a replay that did not run
+SAMPLED_REPLAY_SCHEMA = "verity-sweep/sampled-replay/v1"
+#: the MoE planes' alias check, which `check.replay.population.moe_plane_alias_check` writes
+MOE_PLANE_ALIAS_CHECK_SCHEMA = "verity-sweep/moe-plane-alias-check/v1"
+#: the PoUW circuit's replay, which `check.replay.pouw_circuit.replay` writes
+POUW_CIRCUIT_REPLAY_SCHEMA = "verity-vllm/pouw-ncp-v2-replay/v3"
+#: the boundary linkage's record (`check.replay.linkage.LINKAGE_SCHEMA`); `pipeline.c2_replay`, `pipeline.replay_bundle`
+#: and `pipeline.tp.rank_replay` write it for a linkage that did not run
+BOUNDARY_LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
+
+# --- the TP row (`verity_vllm.pipeline.tp`)
+#: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
+TP_REPLAY_DEFERRED_SCHEMA = "verity-vllm/tp-replay-deferred/v1"
+#: one rank's replay result (`pipeline.tp.commit_replay.RESULT_SCHEMA`), which `replay_rank` writes
+TP_RANK_REPLAY_SCHEMA = "verity-vllm/tp-rank-replay/v1"
+#: the ranks' fold match (`pipeline.tp.fold_match.SCHEMA`), which its `main` writes
+TP_FOLD_MATCH_SCHEMA = "verity/tp2/fold-match/v1"
+#: the TP Commit's sampled replay (`pipeline.tp.rank_replay.SCHEMA`), which `in_process` and `defer` write, and
+#: `pipeline.tp.commit`'s `main`
+TP_SAMPLED_REPLAY_SCHEMA = "verity-sweep/tp-sampled-replay/v1"
+#: the Build's relabel report (`pipeline.tp.emit_ranks.SCHEMA`), which `finish` and `read_report` write
+BUILD_RELABEL_SCHEMA = "verity-vllm/build-relabel/v1"
+#: the relabel's guard record (`pipeline.tp.relabel_build.SCHEMA`), which `derive` writes
+BUILD_RELABEL_GUARD_SCHEMA = "verity-vllm/build-relabel-guard/v1"
+#: a rank's links, which `pipeline.tp.links.write_tp_links` writes
+TP_LINKS_SCHEMA = "cb-a/tp_links/v2"
+#: a rank's cross-rank picks, which `pipeline.tp.xrank_dump.dump` writes
+XRANK_PICKS_SCHEMA = "verity/tp2/xrank-picks/v1"
+#: which `pipeline.tp.import_path.write_import_path_runtime` writes
+IMPORT_PATH_RUNTIME_SCHEMA = "verity/tp2/import-path-runtime/v1"
+#: which `pipeline.tp.rank_worker`'s `tp2_param_hashes` writes
+TP_PARAM_HASHES_SCHEMA = "verity-capture/tp2-param-hashes/v0"
+#: which `pipeline.tp.rank_worker`'s `tp2_profiler_stop` writes
+CENSUS_RANK_SCHEMA = "verity-capture/census-rank/v0"
+#: the late-read check on a fused-MoE block's received output, which `acquire.sources.partial_source.late_read_check`
+#: writes for one rank, and `pipeline.tp.rank_worker` and `pipeline.tp.commit` for the ranks
+LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
+
+# --- the engine (`verity_vllm.engine`)
+#: the engine's profile manifest, which `engine.engine_profile.build_manifest` writes and `pipeline.tp.rank_worker` reads
+ENGINE_PROFILE_SCHEMA = "verity-vllm/profile/v1"
+#: the manifest `engine.run_facts.profile_manifest` writes in place of the engine's profile when building that one raises
+PROFILE_FALLBACK_SCHEMA = "verity-capture/profile-fallback/v1"
+#: the record of the served switches (`engine.served.SCHEMA`), which `record` writes, and `require` on a failing summary
+SERVED_SWITCHES_SCHEMA = "verity-vllm/served-switches/v1"
+#: an engine spec (`engine.spec.SCHEMA`); `from_mapping` and `load` refuse any other
+ENGINE_SPEC_SCHEMA = "verity-vllm/engine-spec/v0"
+#: the static schedule's check (`engine.static_schedule.SCHEMA`), which `check` writes
+STATIC_SCHEDULE_SCHEMA = "verity-vllm/static-schedule/v1"
+#: the registered int8 K-scales manifest (`engine.int8_k_scales.SCHEMA`), which `with_entry` writes into a new one
+INT8_K_SCALES_SCHEMA = "verity-vllm/int8-k-scales/v1"
+#: an int8 checkpoint's error report, which `engine.int8_checkpoint.report` writes
+INT8_ERROR_REPORT_SCHEMA = "verity-vllm/int8-error-report/v1"
+
+# --- the ahead-of-time compiler (`verity_vllm.program.predict`)
+#: a phi (`program.predict.phi.PHI_SCHEMA`), which `Phi.from_json` refuses any other than
+PHI_SCHEMA = "verity-predict/phi/v1"
+#: the comparison of a predicted Build with the Build of record (`program.predict.aot.SCHEMA`)
+AOT_COMPARISON_SCHEMA = "verity-vllm/aot-comparison/v1"
+#: `node.json`, which `program.predict.cli.node_main` writes
+PREDICT_NODE_SCHEMA = "verity-predict/node/v1"
+#: `registration.json`, which `program.predict.node_registration.register` writes
+NODE_REGISTRATION_SCHEMA = "verity-vllm/node-registration/v1"
+
+# --- PoUW's H1 (`verity_vllm.protocols.pouw.h1`)
+#: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
+POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
+#: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
+#: any other than
+POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"

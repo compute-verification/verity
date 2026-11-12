@@ -103,6 +103,16 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
+from verity.definitions.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
+from verity.definitions.ops.fp32 import f32_sub_bits as sub
+from verity.definitions.registry import boolean_rope as BR
+from verity.definitions.registry import dsa
+from verity.definitions.registry import ref_prims as RP
+from verity.definitions.registry import sparse_mla as M
+from verity.definitions.registry import sparse_mla_split as W
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -260,7 +270,7 @@ def slot_bytes(cache: np.ndarray, slot: int) -> tuple[np.ndarray, int]:
 
 def slot_mask(n_blocks: int, slots) -> np.ndarray:
     """The bytes of a [n_blocks, BLOCK, STRIDE] cache that writing ``slots`` touches."""
-    m = np.zeros(n_blocks * BLOCK * STRIDE, dtype=bool)
+    m: np.ndarray = np.zeros(n_blocks * BLOCK * STRIDE, dtype=bool)
     for slot in slots:
         blk, off = divmod(int(slot), BLOCK)
         base = blk * BLOCK * STRIDE
@@ -306,7 +316,7 @@ def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> t
 
 def topk_short(lens: np.ndarray, width: int = TOPK) -> np.ndarray:
     """`DsaTopKShortRow_v1{TOPK}` per row: slot j holds j when j < len, else -1."""
-    j = np.arange(width, dtype=np.int64)[None, :]
+    j: np.ndarray = np.arange(width, dtype=np.int64)[None, :]
     return np.where(j < np.asarray(lens, dtype=np.int64)[:, None], j, -1).astype(np.int32)
 
 
@@ -318,7 +328,7 @@ def topk_valid(vals: np.ndarray, n: int, idx: np.ndarray) -> dict[str, Any]:
     ties = None
     if ok:
         v = np.asarray(vals[:n], dtype=np.float32)
-        mask = np.zeros(n, dtype=bool)
+        mask: np.ndarray = np.zeros(n, dtype=bool)
         mask[sel] = True
         thr = v[mask].min()
         ok = not bool((v[~mask] > thr).any())
@@ -345,8 +355,6 @@ def convert_rows(topk: np.ndarray, block_table: np.ndarray, block_stride_rows: i
 def split_counts(valid, num_sm: int, num_splits: int = 0) -> list[int]:
     """Each token's FA3 split count in one sparse decode launch over the valid counts ``valid`` on ``num_sm`` SMs, the call's
     ``num_splits`` 0 (none, as `forward_mqa` passes) or the count it gives (`sparse_mla_split.launch_num_splits`)."""
-    from verity.definitions.registry import sparse_mla_split as W
-
     return W.launch_num_splits(valid, num_sm, TOPK, num_splits)
 
 
@@ -373,8 +381,9 @@ def rope_forms(x1, x2, c, s) -> dict[str, np.ndarray]:
 
 def rope_forms_exact(x1: int, x2: int, c: int, s: int) -> dict[str, int]:
     """`rope_forms` of one quadruple through core's exact bit functions (the non-flushing forms)."""
-    from verity.definitions.ops.fp32 import f32_add_bits as add, f32_fma_bits as fma, f32_mul_bits as mul, f32_sub_bits as sub
-    from verity.definitions.ops.fp32 import BF16_NAN_TORCH, f32_to_bf16_rn_bits
+    from verity.definitions.ops.fp32 import f32_add_bits as add
+    from verity.definitions.ops.fp32 import f32_fma_bits as fma
+    from verity.definitions.ops.fp32 import f32_mul_bits as mul
 
     X1, X2, Cc, Ss = ((v & 0xFFFF) << 16 for v in (x1, x2, c, s))
     n = 0x80000000
@@ -468,7 +477,7 @@ def index_k_probe(launch: int, seed: int = 0) -> tuple[list[int], list[int]]:
     s = rng.uniform(0.25, 1.0, half) * rng.choice([-1.0, 1.0], half)
     cs = [bf16_word(v) for v in np.concatenate([c, s])]
     cf = np.array([np.float64(np.uint32(w << 16).view(np.float32)) for w in cs])
-    b = np.zeros(D, dtype=np.float32)
+    b: np.ndarray = np.zeros(D, dtype=np.float32)
     for p in range(half):
         small = (1 + (2 * int(rng.integers(8)) + 1) / 16) * 2.0 ** int(rng.integers(-5, -1)) * rng.choice([-1, 1])
         large = rng.uniform(64, 400) * rng.choice([-1, 1])
@@ -486,7 +495,6 @@ def index_k_forms(b: np.ndarray, cs: np.ndarray, got: np.ndarray) -> dict[str, A
     Definition's) = fma(x, cos, RN(+-partner sin)), B = fma(+-partner, sin, RN(x cos)), N = RN(x cos) + RN(+-partner sin), separately
     for even (L) and odd (H) elements; b (launches, D) f32 words, cs (launches, ROPE) bf16 words, got (launches, D) bytes."""
     from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 
     half = ROPE // 2
     x = np.asarray(b, dtype=np.uint32)[:, :ROPE]
@@ -718,7 +726,7 @@ def rope_probe_inputs(n_tokens: int) -> tuple[np.ndarray, np.ndarray]:
     half = ROPE // 2
     quads = (quads * (-(-n_tokens * half // len(quads))))[:n_tokens * half]
     q = np.array(quads, dtype=np.uint16).reshape(n_tokens, half, 4)
-    x = np.empty((n_tokens, ROPE), dtype=np.uint16)
+    x: np.ndarray = np.empty((n_tokens, ROPE), dtype=np.uint16)
     x[:, 0::2], x[:, 1::2] = q[..., 0], q[..., 1]
     return x, np.concatenate([q[..., 2], q[..., 3]], axis=1)
 
@@ -797,10 +805,6 @@ def phase_q(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], lis
 def phase_rope(o: dict[str, Any], kst: dict[str, Any], qst: dict[str, Any]) -> dict[str, Any]:
     """Which candidate contraction the k_pe and q_pe words are (served tokens and the subnormal probe), the reference
     `RoPEHeadGptJ_v1` on a sample of them against the L_a/H_a candidate words."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import ref_prims as RP
-
     pos = o["pos"].cpu().numpy()
     cs_rows = _u16(o["cs"])[pos]
     half = ROPE // 2
@@ -1117,10 +1121,6 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache slots [r0, r1): their bytes and scale against `DsaIndexerKRow_v1{128,64,1e-06}` (the reference itself)."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa
-
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS)
     for r in range(*job["rows"]):
@@ -1136,10 +1136,6 @@ def compare_kslots(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [r0, r1): index_q_fp8 and index_weights_out against `DsaIndexerQ_v1{32,128,64}` (the reference itself)."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa
-
     a = _load(job["paths"])
     fn = bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE)
     for r in range(*job["rows"]):
@@ -1155,10 +1151,6 @@ def compare_qtok(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, the reference on the first two."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa
-
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
     lo, hi = job["range"]
@@ -1183,11 +1175,6 @@ def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_attn(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One (token, head) of FA3's sparse output against `SparseMlaHead_v1{T,...}`, or `SparseMlaHeadSplit_v1{T,NS,...}` where
     the launch splits the token's keys (the reference itself)."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import sparse_mla as M
-    from verity.definitions.registry import sparse_mla_split as W
-
     a = _load(job["paths"])
     h, T, NS = job["head"], job["T"], job["NS"]
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
@@ -1255,13 +1242,8 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at GLM-5.3's statics."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import boolean_rope as BR
-    from verity.definitions.registry import dsa
-    from verity.definitions.registry import sparse_mla as M
-    from verity.definitions.registry import sparse_mla_split as W
-
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
+    targets: dict[str, Any]
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),
                f"DsaIndexerQ_v1{{H={H},D={D},ROPE={ROPE}}}": lambda: bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
                f"DsaMqaLogit_v3{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitV3, H=H, D=D),

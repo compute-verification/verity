@@ -16,10 +16,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from verity_vllm.query.manifest.format import split_name
-from verity_vllm.program.frontend.export_ops import ensure_ops
 from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.export_ops import ensure_ops
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.query.manifest.format import split_name
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16

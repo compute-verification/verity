@@ -24,6 +24,7 @@ def load_program_head(program_dir: str) -> dict[str, Any]:
     """`format.load_program` with the instance file's header (schema, digest, params) in memory and its rows `StoredRows`.  A document
     whose params or digest follow its rows (not `derive_step`'s order) is read whole, its rows as stored."""
     import gzip
+
     from verity_vllm.query.program_view import _read_instance_header
     path = os.path.join(program_dir, "instances.json.gz")
     inst = _read_instance_header(path)

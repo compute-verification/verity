@@ -9,21 +9,24 @@ card) replaces the block types of the served rows it recuts.
 **A proof system** (`ProofSystem`) turns a census into a `Table`: a row a block type with the blocks of it proved a
 served token, the prover GPU-seconds a block and where that figure is from (`SOURCES`, best first):
 
-- `steady`: a row of the proof server's rate (`Steady`) at the stated prover count: statements of the type proved back
-  to back by that many provers, every session accepted and the statement cache's hit rate flat. A row whose staged
-  Definition is no block type of the census is on no row of the table and in no figure, the range's other end
+- `steady`: a row of the proof server's rate (`Steady`) at the stated prover count and the stated host cores a card:
+  statements of the type proved back to back by that many provers holding that many CPU cores, every session accepted
+  and the statement cache's hit rate flat. A type whose rows at that prover count were all timed at more cores takes
+  the one at the fewest, and its row says so; a row timed at fewer cores than stated prices nothing. A row whose
+  staged Definition is no block type of the census is on no row of the table and in no figure, the range's other end
   included: the table lists it as unread (`Table.unread`);
-- `family`: no row of its own, but a steady-state row of its Definition and K at other statics, at 2^Δk its seconds a
-  block (Δk between the two k_logs), the dearest such where there are several. It is priced, not measured: the
-  steady-state share and the measured status count it as neither;
+- `family`: no row of its own, but a steady-state row of its Definition and K at other statics, chosen as above, at
+  2^Δk its seconds a block (Δk between the two k_logs), the dearest such where there are several. It is priced, not
+  measured: the steady-state share and the measured status count it as neither;
 - `single`: one warm process's sessions on the type alone, a block's marginal seconds plus its share of a full
   statement's fixed seconds;
 - `k_log`: no measurement of the type, so the single-session types' median seconds a witness bit times its 2^k_log
   bits, and a statement's fixed seconds on their least-squares line in k_log;
 - `missing`: neither a measurement nor a k_log, so no figure, and the totals leave the type out and say so.
 
-`Flock` proves every block: its row counts are the census's. It prices a type at a stated prover count (`provers`), from
-the steady-state rows at that count only, so no type's figure depends on which counts were run or in what order. `Spot`
+`Flock` proves every block: its row counts are the census's. It prices a type at a stated prover count (`provers`) and
+a stated count of host CPU cores a card (`cores`), from the steady-state rows at that prover count only and never from
+one timed at fewer cores, so no type's figure depends on which counts were run or in what order. `Spot`
 wraps a proof system with a sampling plan: the same costs, and the blocks the plan samples a served token. A plan that
 states the prices its own planner sized the sample at gets a second total beside the table's, the same blocks at those
 prices (`planned`), with where the two differ: a plan's sample fits its planner's prices, and the table's sources may
@@ -31,7 +34,8 @@ hold others.
 
 **The totals** (`report`) are the same for every system: the prover GPU-seconds a served token, the served tokens a
 prover GPU covers a second (its inverse) and the prover GPUs a serving GPU needs (over a served token's GPU-seconds,
-`Serving`, a stated and modeled input), with the share of the proving time each source covers. Their range's other end
+`Serving`, a stated and modeled input), with the share of the proving time each source covers and the share that rests
+on rows timed at more cores than the stated host's. Their range's other end
 prices every type not measured at steady state at the steady-state types' median seconds a witness bit. The totals are
 `measured` only when every block type is measured at steady state, `partial` when a type has no figure (they leave its
 proving out, so they name each such type with its share of the blocks, and of the MACs where the census holds them: a
@@ -55,6 +59,11 @@ STATEMENT_BITS = 2**35
 #: a MAC is a fused multiply-add, which the data sheets' rates count as two FLOP
 FLOP_PER_MAC = 2
 SCHEMA = "verity-bench/prove/v1"
+#: the CPU cores a card's provers hold on the host a table prices for, where none is stated: the whole cores of the
+#: share node A's provider gives a card
+HOST_CORES = 10
+#: the CPU cores a steady-state row is read as timed at where its record states none
+UNSTATED_CORES = 24
 #: the verifier a steady-state row times
 VERIFIER = ("the proof server's own verifier (`flock-circuit serve --zk`), its seconds a statement (a row's `verify_s`) "
             "over the statement's blocks; the Lean verifier's seconds aren't in these figures")
@@ -137,7 +146,7 @@ class Cost:
     `missing`), the run or art that holds it, the staged type that measured it as its record names it (a sampling plan
     names its cells' the same way), the same block at the steady-state types' median seconds a witness bit (the range's
     other end; None for a type measured at steady state), the verifier's seconds and the proof's bytes where a record
-    holds them, and the prover count a steady-state figure was measured at."""
+    holds them, and the prover count and the host CPU cores a card a steady-state figure was measured at."""
 
     source: str
     seconds: float | None = None
@@ -148,6 +157,7 @@ class Cost:
     verifier_seconds: float | None = None
     proof_bytes: float | None = None
     provers: int | None = None
+    cores: int | None = None
 
 
 @dataclass(frozen=True)
@@ -168,14 +178,21 @@ class Row:
 @dataclass(frozen=True)
 class Table:
     """A proof system's costs on a census, a row a block type; `range_basis` says what the range's other end is,
-    `verifier_basis` which verifier's seconds the rows hold, and `unread` the steady-state rows it was given whose
-    staged Definition is no block type of the census: they are on no row and enter no figure."""
+    `verifier_basis` which verifier's seconds the rows hold, `unread` the steady-state rows it was given whose
+    staged Definition is no block type of the census (they are on no row and enter no figure), and `cores` the host
+    CPU cores a card its types are priced at, where its proof system states them."""
 
     system: str
     rows: tuple[Row, ...]
     range_basis: str | None = None
     verifier_basis: str | None = None
     unread: tuple[Steady, ...] = ()
+    cores: int | None = None
+
+    def above(self, row: Row) -> bool:
+        """Whether `row`'s figure rests on a steady-state row timed at more cores than the table's host holds."""
+
+        return self.cores is not None and row.cost.cores is not None and row.cost.cores > self.cores
 
     def gpu_seconds_per_token(self) -> float:
         """The prover GPU-seconds a served token, over the rows that have a figure."""
@@ -218,9 +235,10 @@ class Session:
 class Steady:
     """One row of a proof server's rate, a staged type at a prover count: the Definition it staged (by its id), its
     statements of `blocks` blocks where a full one holds `full`, the GPU-seconds and the verifier's seconds a statement,
-    the provers that proved them, and why the row isn't a steady-state measurement (`refused`, None when it is one).
-    `run` is the run that measured it and `report` the file that holds it: in the run's own files, or in `art` where
-    an art holds the run's rows in their place."""
+    the provers that proved them, the host CPU cores they held for their card (`UNSTATED_CORES` where its record
+    states none), and why the row isn't a steady-state measurement (`refused`, None when it is one). `run` is the run that
+    measured it and `report` the file that holds it: in the run's own files, or in `art` where an art holds the run's
+    rows in their place."""
 
     type: str
     definition: str
@@ -234,6 +252,7 @@ class Steady:
     refused: str | None = None
     provers: int = 1
     art: str | None = None
+    cores: int = UNSTATED_CORES
 
     @property
     def measured(self) -> bool:
@@ -260,8 +279,11 @@ class Steady:
         return f"{self.provers} prover{'' if self.provers == 1 else 's'}"
 
 
-def _fullest(s: Steady) -> tuple[int, str]:
-    return s.blocks, s.run
+def _preferred(s: Steady) -> tuple[int, int, str]:
+    """The order a type's steady-state measurements price it in, among rows at the host's cores or more: the fewest
+    cores (a row at the host's own before any above it), then the fullest statement, then the newest run."""
+
+    return -s.cores, s.blocks, s.run
 
 
 def _newest(s: Steady) -> tuple[str, int]:
@@ -289,10 +311,17 @@ def _family(block: str) -> tuple[str, int | None]:
     return block.split("{")[0], int(k[1]) if k else None
 
 
-def _kin(block: Block, kin: Sequence[Steady]) -> Cost:
-    """`block` priced from the steady-state rows of its Definition and K at other statics: each at 2^Δk its seconds a
-    block, Δk from the row's k_log to the block's, and the dearest of them, so a family's cheapest member never prices
-    the rest. The verifier's seconds stay the type's own: none."""
+def _above(s: Steady, cores: int) -> str:
+    """What a figure's note says of a row timed at more cores than the host's `cores`; nothing of one at the host's."""
+
+    return f"; timed at {s.cores} cores, above the host's {cores}" if s.cores > cores else ""
+
+
+def _kin(block: Block, kin: Sequence[Steady], cores: int) -> Cost:
+    """`block` priced from the steady-state rows of its Definition and K at other statics, each the row that prices
+    its own type on a host of `cores` cores a card: each at 2^Δk its seconds a block, Δk from the row's k_log to the
+    block's, and the dearest of them, so a family's cheapest member never prices the rest. The verifier's seconds stay
+    the type's own: none."""
 
     def dk(s: Steady) -> int:
         return 0 if block.k_log is None else block.k_log - s.k_log
@@ -300,30 +329,36 @@ def _kin(block: Block, kin: Sequence[Steady]) -> Cost:
     s = max(kin, key=lambda s: (s.gpu_seconds / s.blocks * 2.0**dk(s), s.definition))
     others = f"; the dearest of {len(kin)} measured" if len(kin) > 1 else ""
     return Cost(FAMILY, s.gpu_seconds / s.blocks * 2.0**dk(s), s.record,
-                f"its Definition and K's, `{s.type}` (`{s.definition}`), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}",
-                s.type, provers=s.provers)
+                f"its Definition and K's, `{s.type}` (`{s.definition}`), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}"
+                f"{_above(s, cores)}", s.type, provers=s.provers, cores=s.cores)
 
 
 @dataclass(frozen=True)
 class Flock:
-    """Flock's prover with every block proved, each type priced at `provers` provers. A type takes its steady-state
-    measurement from the rows at that prover count alone: the fullest statement any of them measured, the newest such
-    run's (a row an art holds is its run's); else `card`'s single-session one: its own block's, or its Definition and
-    K's at 2^Δk the seconds and 2^-Δk the statement, Δk between the two k_logs as the census holds them; else the k_log
-    model fitted on the card's types. A type no row at that count measured names its newest attempt at it, and the
-    other counts that measured it. A row whose staged Definition is no block type of the census, at any prover count,
-    is the table's `unread` and enters no figure, the range's other end included."""
+    """Flock's prover with every block proved, each type priced at `provers` provers on a host that gives a card
+    `cores` CPU cores. A type takes its steady-state measurement from the rows at that prover count alone, and among
+    them from those timed at `cores` cores: the fullest statement any of them measured, the newest such run's (a row
+    an art holds is its run's). A type those rows measured only at more cores takes the rows at the fewest cores
+    above, by the same order, and its note says which; a row timed at fewer cores prices nothing, since the host's
+    share is the least a prover holds. Else it takes `card`'s single-session measurement: its own block's, or its
+    Definition and K's at 2^Δk the seconds and 2^-Δk the statement, Δk between the two k_logs as the census holds
+    them; else the k_log model fitted on the card's types. A type no row measured for it names its newest attempt at
+    that prover count, the other prover counts that measured it, and the core counts under the host's that did. A row
+    whose staged Definition is no block type of the census, at any prover count, is the table's `unread` and enters no
+    figure, the range's other end included."""
 
     steady: Sequence[Steady] = ()
     sessions: Sequence[Session] = ()
     card: str | None = None
     name: str = "flock"
     provers: int = 1
+    cores: int = HOST_CORES
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
         tried: dict[str, Steady] = {}
         elsewhere: dict[str, set[int]] = {}
+        under: dict[str, set[int]] = {}
         held = {definition_id(b.name) for b in census.blocks}
         unread = []
         names: dict[str, set[str]] = {}
@@ -336,7 +371,10 @@ class Flock:
                 if s.measured:
                     elsewhere.setdefault(s.definition, set()).add(s.provers)
                 continue
-            best, order = (measured, _fullest) if s.measured else (tried, _newest)
+            if s.measured and s.cores < self.cores:
+                under.setdefault(s.definition, set()).add(s.cores)
+                continue
+            best, order = (measured, _preferred) if s.measured else (tried, _newest)
             if (old := best.get(s.definition)) is None or order(s) > order(old):
                 best[s.definition] = s
         rates = [s.gpu_seconds / s.blocks / 2**s.k_log for s in measured.values() if s.blocks == s.full]
@@ -350,12 +388,13 @@ class Flock:
             spelled = definition_id(b.name)
             if s := measured.get(spelled):
                 where = s.held if s.art is None else f"{s.held}, measured in {s.run}"
-                cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record, f"`{s.type}`, {s.at}, {s.fill} ({where})", s.type,
+                cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record,
+                            f"`{s.type}`, {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
-                            provers=s.provers)
+                            provers=s.provers, cores=s.cores)
             else:
                 kin = families.get(_family(spelled), [])
-                cost = _kin(b, kin) if kin else single(b)
+                cost = _kin(b, kin, self.cores) if kin else single(b)
                 why = []
                 if s := tried.get(spelled):
                     why.append(f"steady state tried as `{s.type}` at {s.at} in {s.run} ({s.held}): {s.refused}")
@@ -363,6 +402,9 @@ class Flock:
                 if others := elsewhere.get(spelled):
                     why.append(f"measured at steady state at {', '.join(map(str, sorted(others)))} provers, which "
                                f"price no type at {self.provers}")
+                if fewer := under.get(spelled):
+                    why.append(f"measured at steady state at {', '.join(map(str, sorted(fewer)))} cores, which price no "
+                               f"type at {self.cores}")
                 if why:
                     cost = replace(cost, note="; ".join(filter(None, [cost.note, *why])))
                 if steady_rate is not None and b.k_log is not None and cost.seconds is not None:
@@ -372,7 +414,7 @@ class Flock:
                  f"every type not measured at steady state at {self.provers} prover{'' if self.provers == 1 else 's'} "
                  f"priced at the full-statement steady-state types' median, "
                  f"{steady_rate:.3g} GPU-seconds a witness bit")
-        return Table(self.name, tuple(rows), basis, VERIFIER, tuple(unread))
+        return Table(self.name, tuple(rows), basis, VERIFIER, tuple(unread), self.cores)
 
     def _single(self, census: Census) -> Callable[[Block], Cost]:
         """Each block type's cost off the steady state: `single`, `k_log` or `missing`."""
@@ -477,7 +519,8 @@ class Spot:
                 f"{len(bare)} block type(s){_some(bare)}, and the census no block type for {len(unread)} cell(s)"
                 f"{_some(unread)}. It is another census's or cut's plan, or no steady-state row of record names "
                 "those cells' staged types")
-        return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread)
+        return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread,
+                     inner.cores)
 
 
 def _some(names: Sequence[str]) -> str:
@@ -492,9 +535,11 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     GPU-seconds. The totals are `measured` only when every block type is measured at steady state, and `partial` when a
     type has no figure: `missing` then names each such type, the most blocks first, with its share of the blocks, and
     of the MACs where every row holds them (a type with no time has no share of the proving time). `planned` is the
-    same blocks at their sampling plan's own prices, where the plan states them (`_planned`). `unread` names each
-    steady-state row that is on no block type's row: what holds it, the run that measured it, the type and Definition
-    it staged, its prover count, and a block's GPU-seconds where it is a steady-state measurement, else why it isn't."""
+    same blocks at their sampling plan's own prices, where the plan states them (`_planned`). `above_cores` is the
+    share of the proving time that rests on steady-state rows timed at more cores than the table's host holds
+    (`_above_cores`). `unread` names each steady-state row that is on no block type's row: what holds it, the run that
+    measured it, the type and Definition it staged, its prover count and cores, and a block's GPU-seconds where it is
+    a steady-state measurement, else why it isn't."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -505,7 +550,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
 
     rows = [{"block": r.block, "k_log": r.k_log, "per_token": r.per_token, "seconds": r.cost.seconds,
              "planned_seconds": r.planned, "source": r.cost.source, "record": r.cost.record, "provers": r.cost.provers,
-             "note": r.cost.note,
+             "cores": r.cost.cores, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
             for r in table.rows]
@@ -528,12 +573,13 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     else:
         status = "measured" if table.rows and all(r.cost.source == STEADY for r in table.rows) else "modeled"
     unread = [{"record": s.record, "run": s.run, "type": s.type, "definition": s.definition, "provers": s.provers,
-               "seconds": s.gpu_seconds / s.blocks if s.measured else None, "why": s.refused} for s in table.unread]
+               "cores": s.cores, "seconds": s.gpu_seconds / s.blocks if s.measured else None, "why": s.refused}
+              for s in table.unread]
     return {
         "system": table.system, "rows": sorted(rows, key=lambda r: -(r["time_share"] or 0.0)), "sources": sources,
         "unread": unread,
         "totals": {
-            "status": status, "steady_time_share": steady, "missing": missing,
+            "status": status, "steady_time_share": steady, "above_cores": _above_cores(table), "missing": missing,
             "blocks_per_token": blocks, "gpu_seconds_per_token": total, "gpu_seconds_per_token_range": [low, high],
             "tokens_per_gpu_second": share(1.0, total),
             "tokens_per_gpu_second_range": [share(1.0, high), share(1.0, low)],
@@ -545,6 +591,26 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
             "planned": _planned(table, serving_seconds),
         },
     }
+
+
+def _above_cores(table: Table) -> dict[str, Any] | None:
+    """How much of the table's proving time rests on steady-state rows timed at more cores than its host holds, None
+    where its proof system states no host cores: the share of the proving time, the block types, the core counts
+    those rows were timed at, and the same share and count for each source that holds one (a type's own row, or its
+    family's)."""
+
+    if table.cores is None:
+        return None
+    total = table.gpu_seconds_per_token()
+    above = [r for r in table.rows if table.above(r)]
+
+    def of(rows: Sequence[Row]) -> dict[str, Any]:
+        return {"block_types": len(rows),
+                "time_share": sum(r.per_token * r.cost.seconds for r in rows) / total if total else None}
+
+    return {"cores": table.cores, **of(above), "timed_at": sorted({r.cost.cores for r in above}),
+            "sources": [{"source": source, **of(mine)} for source in SOURCES
+                        if (mine := [r for r in above if r.cost.source == source])]}
 
 
 def _planned(table: Table, serving_seconds: float) -> dict[str, Any] | None:

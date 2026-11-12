@@ -1567,7 +1567,7 @@ in `ReplayStep_v1`'s scheduling order:
   - The replay step (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
     walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
     `looked (W + A)×1` after `used`, the candidates whose lookup it read, which `replay_vectors --EW` holds to the
-    replay's `_KV.hit` calls.
+    replay's `BlockPool.hit` calls (`verity_vllm.pipeline.advice_code.pool`).
   - `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
     `CacheStep_v1`'s `_in_fields` order:
 
@@ -1675,7 +1675,7 @@ Its step rows are held to the committed ``srv`` row, which the verifier holds by
 registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
 blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
-chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice, is v1 charging the length terms too:
+chain. `CompileSlice_v7` (`compile_slice_v7`), the served windows' slice except under the certified tick, is v1 charging the length terms too:
 `ChargeLink_v2{D, 0, 0, K}`, a length slot for each certified arrival, its certified max_tokens in ``cert``. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
 857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
@@ -2052,7 +2052,8 @@ cut into a cell or reaches the server, and it fails at once. It is never clamped
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
-them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
+them; an uncapped schedule hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the cap
+with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
 **The lengths rows** (`WardenParams.lengths`, id form only, none by default) are what the network certifier signs of the
 requests it released, beside its cells: each one's place in the release order, its request's bytes, its response's

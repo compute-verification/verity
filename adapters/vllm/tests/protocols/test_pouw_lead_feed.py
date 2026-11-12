@@ -8,6 +8,7 @@ import random
 
 import numpy as np
 import pytest
+
 from verity_vllm.protocols.pouw.lead import feed as F
 
 #: Llama-3.2-1B's four linears, (K, n)
@@ -60,8 +61,8 @@ def sampled(m: int, k: int, n: int, seed: int = 0) -> tuple[F.Call, F.CallCoins,
 def test_sizes_at_llama_shapes(m, k, n):
     sh = F.Shape(m, k, n)
     assert sh.S == want_steps(k) == {2048: 74, 8192: 293}[k]
-    assert sh.H == {2048: 3, 8192: 10}[k]
-    assert (sh.R, sh.C, sh.T) == (16 * -(-m // 16), n, -(-m // 64))
+    assert {2048: 3, 8192: 10}[k] == sh.H
+    assert (16 * -(-m // 16), n, -(-m // 64)) == (sh.R, sh.C, sh.T)
     assert sh.feed_words() == sh.R * sh.H + n
     assert (sh.lane_words(), sh.source_words()) == (sh.T * sh.S * n, 2 * sh.T * n)
     assert sh.computed(128) == sh.computed(256) == n
