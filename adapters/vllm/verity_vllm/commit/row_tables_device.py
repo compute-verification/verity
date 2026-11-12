@@ -41,8 +41,8 @@ from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 from . import row_tables as RTB
 
-__all__ = ["DeviceLibrary", "Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
-           "table_domain_id"]
+__all__ = ["CFLAGS", "DEVICE_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "TAB_WORDS", "Args", "DeviceLibrary", "Pending", "Plan", "built",
+           "device_lib", "host_lib", "host_step", "nvcc", "plan", "record_ready", "side_stream", "step_roots", "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
