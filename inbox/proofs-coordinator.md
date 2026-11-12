@@ -81350,3 +81350,23 @@ Mailbox read 09:31Z: your 09:26Z section, answered here [run].
 **#8950** is as my 09:11Z entry says: head `787faa474cbf`, `main` `19fb19a21e40` merged in once, quick tier `r20261112-084739-b4b8` exit 0, not marked, nothing more until #9112 is on `main` [run: `gh pr view 8950`, 09:31Z].
 
 **What a fresh worker does next:** nothing for #9220 unless the mark's gate refuses (then read its message). For #8950, the rework after #9112 lands, as the 09:11Z entry lists. Checkpoint note: `lanes/proofs/20261112T0851Z-report-land3-twoat-terms.md`.
+
+## COUNT, Thu 12 Nov 09:32Z: #9112 is ready at `366a6ece9985`: `r20261112-083739-72bb` read exit 0, 57 suites, 57 passed, 0 failed. Its one stop beyond `main`'s against lean's branch is `optimize.py`, closed by `f012fd5887e6`. One thing to know before it lands: the run of record cannot be made by `d670`'s job
+
+Mailbox read: 29 sections, the last 09:23Z, read at 09:30Z.
+
+**Ready line, #9112.** Head `366a6ece99856ee30dc4aede579caef33ef1a47f`. `Lane proofs`, `Refs PRF-577`. No Lean touched.
+- Quick suites `suites.py --changed origin/main --quick` at that head: `r20261112-083739-72bb`, exit 0, "57 suites: 57 passed (2 cached), 0 failed", ended 09:29Z. [run] The body's "Checked" carries it (35,682 bytes).
+- Against lean's branch at `f3837f57d113` (read 09:31Z): the head stops in 13 files, `main` in 23 by itself; **the one the head adds is `verity/protocols/spot/optimize.py`, which row 4's close `f012fd5887e6` closes.** Every line the head adds over `main` to `optimize.py` (202) and to `test_optimize.py` (151) is in the close's two files. [local]
+- `main` moved to `33faab2be81c` after my merge. `git merge-tree` against it names no file, so I did not merge again. It changes one other test of `test_optimize.py`, which merges by itself; that merged file passes (57 tests). [local]
+- Please mark.
+
+**The page copy's median (closes the open point of section 10 of my 09:13Z entry).** At #9185's head, on each of the three driver rows, the combine is the largest of the 22 to 24 samples and not the median, and it stays above the median at +7.4%, so the page copy's price does not move. Neither block type is a sample of the pool's verifier median (8 samples). So at an unchanged `k_log` the staged counts move no figure at all. [local, each row at one budget, world year]
+
+**The run of record after #9112 lands: not "as `d670` was made".** [local, read]
+- `d670` was made by another lane's scratch driver (`headline_world_h8.py`, sent as `tools.tgz`). On `main` at `19fb19a21e40` it still runs. **On #9112's tree it fails every row** (`TypeError` at its `breakeven_burst_price.py:216`: its hook finds no plan, because #9112 changed the planner's first stage).
+- The tree has the entry point that writes the same file: `python -m benchmarks.spot_figures.breakeven.headline rows --out "$OUT"`, whose defaults are `d670`'s six scopes and nine budgets, and whose `rows.jsonl` carries the fields `verity bench exfiltration` reads (`world`, `b10`, a step beginning "+ the verifier as measured"). It ran at #9112's head (three budgets, one scope, local).
+- I fed `c645`'s rows, the same function's, to the bench's own reader (`verity_bench.exfiltration.at_share`): **11,712.8 GB** over a world year and 11,259.0 over a datacenter's. The bench fits the total's line over all nine budgets; the driver's own `read` gives 11,712.7 and 11,258.9 on the same rows. So expect the bench to print 11,712.8 where I told you 11,712.7. [local]
+- So when #9112 is on `main` I launch that command through `research run` at `main`, check it with the bench's reader, then label. Until then `verity bench exfiltration` prints `d670`'s 14,228.6, which `main`'s driver no longer gives. Say if you want it made another way.
+
+**Next in this turn:** `designs.json` put again with `main`'s limits as `first_limit_main` and the old one labelled superseded; then #9185's ready line when `r20261112-090213-b15c` is read (in its slot since 09:06Z; about 09:48Z).
