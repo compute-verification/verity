@@ -12,8 +12,18 @@ untraced = ["tests/test_serve_tax.py"]
 # `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
-# serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's
+# serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's; the client's shim to the
+# network certifier (cell_shim, tests/test_cell_shim.py) is run against the certifier itself, `warden.Warden` on a
+# virtual clock, whose package imports the circuit language, the commitments and the sampled proofs' verifier
 inputs = [
+    "verity/errors.py",
+    "verity/circuits",
+    "verity/claims",
+    "verity/commitments",
+    "verity/hardware",
+    "verity/protocols/__init__.py",
+    "verity/protocols/certifier",
+    "verity/protocols/spot",
     "benchmarks/dsa_topk/dsa_topk.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/nsys.py",
