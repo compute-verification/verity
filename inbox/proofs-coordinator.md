@@ -95851,3 +95851,124 @@ Your order of about 18:40Z. Clock read for every time here; runs through `resear
 - Nothing written to Linear or Slack. Pushed: `cursor/proofs-fold-columns-7d9a` (two merges) and the new `cursor/proofs-fold-onepass-trial-8a5a`; both without force.
 
 I end my turn on the runs above. Resume me when `909d` and `cdb1` have ended and the next entry is #9264's ready line; the trial's verdicts go in the same entry if they are back.
+
+## PERIODREAD, Thu 12 Nov 18:55Z: the second registration is run: the compiled one-stage checks refuse nothing of a second registration on one session (v1 accepts it; v2 goes exactly as far as for a sole registration and stops at the stand-in proofs); two different records pass the registration checks on one window root; PR 0 is open and unmarked, #9416 at `4f9e065fa33a`, its ready line waits on one run
+
+**The limit first: no v2 accept on real proofs exists on `main` for any registration, and this run makes none.** What accepted is v1, the compiled check that is handed the proofs' verdict. Mailbox read at `4a6ad9bb4f96` (your 18:30Z section). I can pause here: nothing is half-written, and the one run I wait on needs no hands.
+
+### In plain words
+
+The auditor's challenger gives a prover random coins only after the prover has committed to what it computed. The coins pick which proof blocks the prover must prove. The rule is one commitment, one sample.
+
+I ran a prover that commits a second time on the same challenger session, after seeing its first sample, to different values. It got a second, fresh sample. Then I gave the second commitment alone to the compiled checks, as if the first had never happened.
+
+- The check that is handed the proofs' verdict (v1) **accepted** it.
+- The check that verifies the proofs itself (v2) went exactly as far as it goes for a prover that committed once. It stopped only because this test's proof files are stand-ins, not real proofs.
+- Neither check noticed the first commitment.
+- A prover that repeats this until the sample misses the one block it wants to hide needed 1 to 6 commitments in 12 tries. Its last commitment passed the same way each time.
+
+So today the only thing between a prover and a redraw is that somebody looks at the whole session. No compiled check does. The period's check of PRF-600 is designed to (below).
+
+### What was run
+
+Run `r20261112-184540-ece6`, vy-nebius-cpu-1, rc 0, 2 tests passed in 81 s, at `4f9e065fa33a` [run]. That head's Lean and difftest files are `main`'s: `git diff --stat HEAD origin/main` over SPOT's verifier, Flock's verifier and the difftest harness is empty at `main` `0582899c4392` [run]. The output is the run's `out/two-registrations.txt`, 47 lines, sha256 `c727f7fddd0b6a61…`. The script is scratch and in no tree.
+
+**What it is made of.** The Lean difftest's own pieces (`test_challenger_difftest.Drawn`, `test_difftest`'s cases), changed in one way: the session's family `draw` is sampled after several registrations in turn.
+
+- The challenger is the in-process `LiveChallenger`. No gate and no device process.
+- The key is the difftest's stand-in at the deployed LMS parameters (W 1, H 20). The difftest says a verifier can't tell it from a whole key (`test_challenger_difftest.py:400-405`) [read].
+- The ledger and the pins are the difftest's honest ones; the session is withheld.
+- The program is the difftest's toy: 5 proof blocks, a sample of 2.
+- The proof session's files are stand-ins that are no statement, so v2 cannot accept anything here.
+
+**Each session's signed release log** shows it [run], for example:
+
+`root draw 7522e3f9, release draw#0, root draw 7522e3f9, release draw#1, root draw 22329429, release draw#2, root draw 22329429, release draw#3, coin-tree, tree-open session/0, ...`
+
+The first registration's digest gets coins 0 and 1, the second's gets coins 2 and 3, then the proof session's coin tree.
+
+**The second registration, three ways.** Its port roots are a hash of the first sample, so they differ from the first's and are chosen after it.
+
+| | the second record | the log in the verifier's parameters | v1 on the first | v1 on the second | v2 on the second | v2, control: a session that sampled the second record only |
+|---|---|---|---|---|---|---|
+| A | same `window` object, `previous` null | empty | accept | **accept** | reject: `verdict flock-verify/s did not accept` | the same reject |
+| B | `window` with another `row`, `previous` the first's digest | the first record | accept | **accept** | reject: `verdict flock-verify/s did not accept` | the same reject |
+| C | same `window` object, `previous` the first's digest | the first record | accept | reject: `registration: R6-window` | reject: `registration: R6-window` | the same reject |
+
+- All `[run]`. On every v1 case the Python reference answers the same as the Lean but for the reason (`verity_difftest.replay`) [run].
+- v2 on the first registration's case, on the same session: `verdict flock-verify/s did not accept` in all three [run].
+
+**Registering again until the sample misses block 0** [run]. Each record names another `window` object and chains `previous`, and the verifier's log holds every earlier record, as an honest verifier's would.
+
+- 12 seeds. Registrations needed: 1 in seven of them, 2 in four, 6 in one. The samples of that one: `[0,3] [0,3] [0,1] [0,1] [0,1] [1,2]`.
+- The last registration's case alone, in all 12: v1 **accept**, Python agreeing; v2 `verdict flock-verify/s did not accept`.
+
+### What the v2 line means
+
+`verdict flock-verify/s did not accept` is the last refusal v2 can give before it accepts.
+
+- `checkOneAt` runs, in order: one session, the coins and trees under the challenger's key and the window's root, the release order, the session's tree, the population, the public file, then the session's own verifier, then v1's `checkAt` on that verifier's verdict (`OneStageZk.lean:750-768`) [read].
+- The reject has no `proofs:` prefix, so it is `checkAt`'s, on a verdict that did not accept [read: `:762-768`; run].
+- `checkAt` reaches the registration before the verdict: row C rejects with `registration: R6-window` on the same stand-in files [run].
+- With an accepting verdict handed in, `checkAt` accepts the same registration on the same coins: that is v1's column [run].
+- **So with real proofs of the second sample's blocks, v2 would accept the second registration** [derived from the three lines above; not run].
+
+### Your question: can two different records pass the registration checks on one window root
+
+**Yes** [run: rows A and B].
+
+- **The window's root is not what the registration check compares.** R6 refuses a record whose `window` object equals an earlier record's, or whose `previous` is not the last record's digest, against the `log` in the verifier's parameters (`Registration.lean:576-577`, `:651-652`; Python `registration.py:375-379`) [read]. The window's root enters only through registered values' domains and the seed salt (`Registration.lean:19-28`) [read].
+- **Row A:** a case whose parameters hold an empty log passes any record. The log is a parameter of the case (`OneStage.lean:266`) [read].
+- **Row B:** with the honest log, a second record passes if it names another `window` object and chains `previous`. That is what a prover's next window looks like, and what a second rank's record looks like.
+- **Row C:** the one thing R6 does refuse, given the honest log.
+- **The port roots are free.** In A and B the second record's roots differ from the first's, under one window root [run].
+- **Registered values, not run:** R7 holds a registered value to the root the log's earlier records registered under the same domain (`registration.py`, `held_roots`, and the module docstring's "Registered values") [read]. So with an honest log, a tied audit's second record could not change a value registered under the window's domain. No case here has registered values.
+
+### What this changes in PRF-600's design
+
+1. **Steps 7 and 8 with your ruling 2 are what refuse it, and nothing below them does.** The session's signed log shows two registrations sampled; step 8 wants a case for each; ruling 2 refuses a window with more than one by name [derived]. A root dropped for a fresh one is step 3 to 5's [derived].
+2. **New, for PR 2's table: `log` is the period's check's own, never the case's.** The check gives the case of each registration the records of the cases before it, in the ledger's order, after the verifier's log from before the period. Each of those records is already held to a digest in a signed release log by step 8, so it is held to the ledger, as your ruling 3 asks. Otherwise row A is open inside the period's check too [derived from row A].
+3. **Your 18:30Z ask, soundness's read 3 (a second run commitment's second coin).** I read REDRAW's read 3 on PRF-596 and the three places at lean's tip `f3ffe4e2bbcb`.
+   - **Where the design holds it today: for sampled proofs' own coin only.** A second run commitment is a second root on the lane's ledger, so a second window (`windowsOf`, PR 1), and it needs its own accepting audit (steps 7 to 10, PR 2). The tie to `verity/remote/v1` is PR 6.
+   - **Where it does not: Pearl+'s coin.** Pearl+'s sample session has the layout `pouw/draw` alone (`pouw/verifier/window.py:819`) [read]. My step 3 calls a session a window only if its layout holds the family `draw`, so `windowsOf` sets Pearl+'s session aside. The Python that refuses it is `pearlplus_live_draw`: the lane's first reserve after its Pearl-C period closed, withheld, with that layout alone, and the one session the ledger opens on C (`served_verdicts.py:1653-1666`) [read]. The Lean says it leaves "the auditor's ledger, key and period" to the compose (`PouwPearlPlus/Coins.lean:17-18`), and the compose's ties are the record and the window (`CoreRemote.lean:463-481`) [read].
+   - **So I add it, in three places, if you say so:**
+     - **PR 1:** `windowsOf` returns every session of the lane that the ledger opens on a root at a time in the monitoring period, whatever its layout, each with its families, whether withheld, its place among the lane's reserves, and its period. The statement `LedgerMeans` then says every such root is in the list exactly once. That is "the same statement as the bound on roots per phase".
+     - **PR 2:** the check audits the sessions whose layout holds `draw`, as designed. Every other one it publishes as `others: [{root, session, families, withheld, place, period}]`. It accepts nothing about them and hides none.
+     - **PR 6** (`CoreRemote.lean`, lean's file, on the merged tree): v1 takes the period's verdict as a component and adds one tie. The `others` are exactly the sessions of the Pearl-C period whose verdict v1 holds, and one session of the draw layout, withheld, opened on Pearl+'s C, the lane's next reserve after that period's close. Any other entry rejects. That is `pearlplus_live_draw`'s rule over the compiled reader's list.
+   - **Cost:** about 40 more Lean lines across PRs 1 and 2, and PR 6 grows from 30 to about 70. PRs 1 to 4 still touch no file of PoUW's.
+   - **What I need:** your word on the wider `windowsOf` before PR 1's Lean is pushed, since it sets the type PRs 2 to 4 build on. PR 6's rule is lean's and PoUW's to agree; the alternative is a check in PoUW's Lean that calls `windowsOf` itself, which is not mine to write.
+
+### What a real accept would take, not built (your 18:30Z)
+
+- **A key at the deployed parameters: nothing to build.** `main` has `records_audit.py audit --challenger local --deployed-key` since #9199 [read]. It costs the keygen, about a quarter of a core-hour a key by the difftest's note [read], spread over the workers.
+- **The one-member relay: one condition in `a5.py`, and one question in Lean.** A one-member window's proof session runs on a challenger of the verifier's own; `window_trees` wants at least two members and one rank (`a5.py`, `window_trees`) [read]. Opening it to one member is a few lines. The question is the closing round the relay ends a member's session with: whether the one-statement check takes a session's tree with that round, or refuses it as an extra opening. If it refuses, the change is in the compiled check and brings its proof with it. I have not read that far.
+- **A real second registration** is then a two-rank step whose second rank registers after the first's sample: the audit's own multi-rank path puts both registrations on one session already (`a5_coins.Draws`, one turn a rank) [read]. It needs the relay for more than one rank too.
+
+### PR 0: #9416, open, unmarked
+
+- **Head `4f9e065fa33a5acfa876ea2f116709ff61de67df`** on `cursor/proofs-prf600-case-names-7d2e`, base `main` [run: `gh pr view 9416`, no label].
+- **What it is.** `case-v2.json` and `case-sampled.json` name the challenger, the family and the window's root and carry the coins' evidence, through `main`'s own `case_coins`. #9199 landed while I worked, so the branch merges `main` and has one mechanism, not two. One fix on the way: `case_coins` loads `replay` as the rest of `write_case` does (`own_replay`), since every streamed audit now reaches it.
+- **Size:** `a5.py` +19 −12, `test_a5_case_v2.py` +72 −2 [run: `git diff --numstat`].
+- **Quick tier:** run `r20261112-182706-1608`, rc 0, 4 suites passed: `benchmarks/one_stage` 593, `benchmarks/prove_path` 155, `repository` 352, `verity-graph` 220 [run].
+- **`git merge-tree --write-tree` of the head:** against `main` `0582899c4392`, against #9199's head `7a528d6b1c01` (merged, an ancestor of the head) and against #9362's head `260823dd87e6`: exit 0, no conflict, each [run].
+- **No ready line yet.** Run `r20261112-183105-4ac7` makes three real one-member audits (a local key, and `--deployed-key` twice) and runs the compiled check on each one's own `case-v2.json`. It waited 23 minutes in line and took its slot at 18:54Z [run: its `slot.json`]. I expect it to end between 19:05Z and 19:20Z [guess]. The ready line is a second entry, with its table in the pull request's body. By reading I expect `KEY_PARAMS` under the local key and a refusal at the session's coin tree under the deployed one.
+
+### Not established
+
+- **No v2 accept**, of a first or a second registration, here or anywhere on `main`.
+- **No device and no gate.** The session is in-process objects. That a real device releases after a second commitment is read (`spot/device/remote.py:268-289`), not run. The audit's own two-rank test does put two commitments on one local session (`test_a5_reserve.py:198-222`) [read].
+- **The stand-in key.** I take the difftest's word that a verifier can't tell it from a whole key.
+- **Registered values and the window's root:** read only, above.
+- **That `checkAt` checks nothing after the verdict that v1's accept would not have covered** is by v1's accept on the same case, not by reading every line of `checkAt`.
+- **PR 0 on a real case:** not yet (the run above). A tied audit's case: not run at all.
+- **The wider `windowsOf` and PR 6's tie** are a proposal. Nothing of it is written.
+
+### To post
+
+- **PRF-600, for soundness** (yours to post, if you want it there): "Run, at the smallest sizes and on stand-in proofs: a prover that registers a second time on one challenger session after seeing its first sample gets a fresh sample, and one-stage's compiled checks do not see the first. v1 accepts the second registration; v2 goes as far as for a sole registration. No v2 accept on real proofs exists on `main` for any registration, so none was made. The period's check refuses it: every registration a session's signed log shows sampled needs its own accepting case, and v1 of the check refuses a window with more than one. On read 3: the design as written holds a second root only for sampled proofs' coin; for Pearl+'s coin it needs the ledger's reader to list every session of the lane and the compose to tie them, which is added to the design if proofs' lead agrees."
+
+### State
+
+- PR 0: #9416 at `4f9e065fa33a`, unmarked. Part 1: #9362 at `260823dd87e6`, marked by you.
+- Runs: `r20261112-184540-ece6` done, rc 0 (this entry). `r20261112-182706-1608` done, rc 0 (PR 0's quick tier). `r20261112-183105-4ac7` running since 18:54Z (PR 0 on real cases).
+- Next: the ready line when `4ac7` ends; then PR 1, the ledger's half, on your word about `windowsOf`'s list.
