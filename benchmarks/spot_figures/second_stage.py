@@ -89,10 +89,11 @@ def _split(k: int, sizes: Sequence[int]) -> list[int]:
 
 def design_cells(cells: Sequence[Cell], row: Mapping[str, Any]) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """The second stage's cells of a sampled replay block under the planner's two-stage design `row`, as (ns, ks): one
-    cell a proof-block type of `cells`, of its ⌈n⌉ proof blocks.  The planner samples a stratum's types at one rate
-    (`optimize.two_stage_statements`), so a stratum's k (`row["k"]`, over `figure1.split_cells`'s strata) is split
-    among its types' cells in proportion to their proof blocks (`_split`): each cell's count is at least 1, which the
-    second stage asks of every cell, and at most its proof blocks."""
+    cell a proof-block type of `cells`, of its ⌈n⌉ proof blocks.  A by-template design's strata are the cells, each
+    with its own count (`row["k"]`, over `figure1.split_cells`'s strata).  In a design with a stratum of several types
+    the planner samples them at one rate (`optimize.two_stage_statements`), so the stratum's k is split among its
+    types' cells in proportion to their proof blocks (`_split`): each cell's count is at least 1, which the second
+    stage asks of every cell, and at most its proof blocks."""
     split = f1.split_cells(cells, row["merged"])
     ns = [ceil(c.n) for c in split]
     ks = [0] * len(split)
@@ -108,8 +109,9 @@ def at_design(cells: Sequence[Cell], row: Mapping[str, Any]) -> dict[str, Any]:
 
     - `cells`, `sampled` and `read`: a sampled replay block's cells, the proof blocks the second stage samples of them
       (Σ_t k_t) and the bytes they read first;
-    - `sample`: the most replay blocks K a verification phase samples, which the row makes public
-      (`registration_cap`), and 1 for a design whose statements each hold one sampled replay block's proof blocks;
+    - `sample`: the replay blocks K the first stage samples of a verification phase, a whole count
+      (`registration_sample`); with no `registration` one verification phase holds every replay block, and K is the
+      scope's (`replay_sample`);
     - `stages` and `coins`: the rounds and the challenger's coins that hold K replay blocks' first read;
     - `fits`: the sampled replay blocks whose first reads one commitment of the challenger's holds
       (`challenger.MAX_COINS` coins), to hold against K: on a replay sample of more, the second stage refuses;
@@ -120,7 +122,7 @@ def at_design(cells: Sequence[Cell], row: Mapping[str, Any]) -> dict[str, Any]:
     `whole` marks a design that proves every cell whole: it samples whole replay blocks, its second stage reads no
     coin, and every figure after `sampled` is 0."""
     ns, ks = design_cells(cells, row)
-    sample = max(1, int(row.get("registration_cap") or 1))
+    sample = int(row["registration_sample"]) if row.get("registration") else max(1, round(row["replay_sample"]))
     out = {"cells": len(ns), "sampled": sum(ks), "whole": ks == ns, "sample": sample}
     if ks == ns:
         return out | {"read": 0, "stages": 0, "coins": 0, "fits": None, "refusal": 0.0, "pooled": 0.0}

@@ -266,6 +266,41 @@ def test_the_registered_roots_are_runs_in_their_order_each_a_record_of_its_own()
     assert [(e.name, e.roots) for e in UN.registered_entries([])] == [("<registered>:0", [])]
 
 
+#: a registry module that registers eight primitives, `SynBASE0_v1` to `SynBASE7_v1`, when it is imported
+REGISTRY_MODULE = """
+from verity.circuits import Value, primitive
+
+V = Value(16)
+for i in range(8):
+    primitive(f"SynBASE{i}", 1, [("a", V)], V)(lambda a: a)
+"""
+
+
+def test_the_registered_records_hold_the_same_roots_whichever_registry_module_was_imported_first(tmp_path, monkeypatch):
+    """`units.registered_entries` cuts `targets._registered` into records by position, and a record counts only for the roots
+    it lists: so the cut is the same whichever of two registry modules made the registry first.  circuit-check's own process
+    loads the registries before anything else, and a session of this suite imports its test modules first."""
+    import importlib
+
+    from circuit_check import targets as TG
+    from circuit_check import units as UN
+    from verity.circuits.defs import REGISTRY
+
+    names = ("syn_registry_a", "syn_registry_b")
+    for name in names:
+        (tmp_path / f"{name}.py").write_text(REGISTRY_MODULE.replace("BASE", name[-1].upper()))
+    monkeypatch.syspath_prepend(str(tmp_path))
+    cuts = []
+    for order in (names, names[::-1]):
+        monkeypatch.setattr(REGISTRY, "defs", {})
+        for name in order:
+            monkeypatch.delitem(sys.modules, name, raising=False)
+            importlib.import_module(name)
+        cuts.append([e.root_ids for e in UN.registered_entries(TG._registered())])
+    assert cuts[0] == cuts[1], cuts
+    assert len(cuts[0]) == UN.REGISTERED_RECORDS and sum(map(len, cuts[0])) == 16
+
+
 def test_an_edit_of_a_registered_roots_module_rebuilds_only_the_record_that_holds_it(tmp_path):
     """Two registered roots take a record each (`units.registered_entries`): an edit of SynX's module rebuilds SynX's record
     alone, SynIdle's counts, and the run gives the verdicts a full build gives."""

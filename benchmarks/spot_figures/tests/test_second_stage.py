@@ -58,15 +58,22 @@ def test_a_design_s_cells_split_each_stratum_s_count_in_proportion():
 
 
 def test_the_second_stage_at_a_design():
-    """A verification phase of at most 3 sampled replay blocks: their cells' first reads, 82, 226 and 100 bytes a
+    """A verification phase of 8 replay blocks that samples 3: their cells' first reads, 82, 226 and 100 bytes a
     replay block, in rounds and in coins, the replay blocks of 408 bytes a commitment's coins hold, and Lean's bound at
-    3·12 sampled proof blocks; over the scope's 12.5 sampled replay blocks, 12.5·12 of them."""
+    3·12 sampled proof blocks; over the scope's 12 sampled replay blocks, 12·12 of them.  With no verification phase
+    stated the scope is one, and its 12 sampled replay blocks are the first stage's count.  A by-template design's
+    counts are its cells' own."""
     cells = [Cell(3, 16), Cell(100.5, 16), Cell(7, 64)]
-    row = {"merged": 16, "k": {0: 10, 64: 2}, "registration_cap": 3, "replay_sample": 12.5}
+    row = {"merged": 16, "k": {0: 10, 64: 2}, "registration": 8.0, "registration_sample": 3, "replay_sample": 12.0}
     assert s2.at_design(cells, row) == {
         "cells": 3, "sampled": 12, "whole": False, "sample": 3, "read": 408, "stages": 1, "coins": 20,
-        "fits": MAX_COINS * COIN_BYTES // 408, "refusal": 36 / 2.0 ** 64, "pooled": 150 / 2.0 ** 64}
-    assert s2.at_design(cells, row | {"registration_cap": 0})["sample"] == 1
-    whole = s2.at_design([Cell(2, 16)], {"merged": 16, "k": {0: 2}, "registration_cap": 1, "replay_sample": 4.0})
+        "fits": MAX_COINS * COIN_BYTES // 408, "refusal": 36 / 2.0 ** 64, "pooled": 144 / 2.0 ** 64}
+    alone = s2.at_design(cells, row | {"registration": 0.0, "registration_sample": 0})
+    assert (alone["sample"], alone["coins"], alone["refusal"]) == (12, 77, 144 / 2.0 ** 64)
+    by_template = row | {"merged": "template", "k": {0: 2, 1: 9, 2: 7}}
+    assert s2.design_cells(cells, by_template) == ((3, 101, 7), (2, 9, 7))
+    assert s2.at_design(cells, by_template)["sampled"] == 18
+    whole = s2.at_design([Cell(2, 16)], {"merged": 16, "k": {0: 2}, "registration": 4.0, "registration_sample": 1,
+                                         "replay_sample": 4.0})
     assert whole == {"cells": 1, "sampled": 2, "whole": True, "sample": 1, "read": 0, "stages": 0, "coins": 0,
                      "fits": None, "refusal": 0.0, "pooled": 0.0}
