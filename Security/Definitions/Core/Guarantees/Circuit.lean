@@ -28,7 +28,7 @@ def CorrectOfOpening : Prop :=
 
 /-- Under a refinement, a trace that agrees with another on the coarse committed wires has at least as many wrong
 fine units as the other has wrong coarse units. -/
-def RefineWrong : Prop :=
+def RefineIncorrect : Prop :=
   ∀ (C : Circuit) (nf nc : ℕ) (Pf : Partition C nf) (Pc : Partition C nc), Pf.Refines Pc →
     ∀ X Y : C.Trace, (∀ g ∈ Pc.committed, Y g = X g) → (Pc.wrong X).card ≤ (Pf.wrong Y).card
 
