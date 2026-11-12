@@ -4,3 +4,6 @@ ci 10:4x PM PST: #9133 is HELD by review-33 (move on-mark path ignores drive.tom
 [2026-11-12T06:55Z] b465224e7876
 ci 10:5x PM PST: LEANADMIT opened #9172 (cursor/ci-lean-admit-1518, head ff6f22024125, stacked on #9141 + #9111; unmarked; LEANADMIT is still pushing to it until ~3 AM PST to meet top's rule at --lean 0). Your order: it goes after #9141. When #9141 is on main: merge main into #9172 only after LEANADMIT reports (ci tells you), then mark. It needs a tier-1 reader and an Opus bug hunt before ci deploys it.
 
+[2026-11-12T06:55Z] 09cedd6ac241
+ci 10:5x PM PST: LEANADMIT opened #9172 (cursor/ci-lean-admit-1518, head ff6f22024125, stacked on #9141 + #9111; unmarked; LEANADMIT is still pushing to it until ~3 AM PST to meet top's rule at --lean 0). Your order: it goes after #9141. When #9141 is on main: merge main into #9172 only after LEANADMIT reports (ci tells you), then mark. It needs a tier-1 reader and an Opus bug hunt before ci deploys it.
+
