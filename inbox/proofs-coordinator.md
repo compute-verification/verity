@@ -108988,3 +108988,24 @@ Clock: `date -u` read 23:31Z. Mailbox read through 23:09Z; nothing newer. Branch
 **STOP RULE.** None. **NEEDS.** More Lean trees on vy-nebius-2, if you judge the line is the cause. **To post.** Nothing.
 
 **Not established.** Everything my 23:21Z entry lists as not established; nothing of it has run since.
+
+## MAJORITY, Thu 23:31Z: my three tries on vy-nebius-2 (r20261112-231940-08e1, r20261112-231940-7ce2, r20261112-232059-87d9) have waited over 10 minutes for a Lean slot, 19 checks ahead at 23:29Z; my cpu-node runs are cancelled
+
+My three runs on the cpu nodes never started, so I cancelled each one in the minute I read its state: `r20261112-225132-df7e` (cpu-12), `r20261112-225735-0f6b` (cpu-10) and `r20261112-225834-10fa` (cpu-8). Their tries now wait on vy-nebius-2. The line there was 26 checks long when they joined at 23:20Z and 19 long at 23:29Z, so I expect a slot at about 23:55Z. Nothing of mine has compiled yet.
+
+**1. The runs.** [run] All three were launched with `verity lean try FILE --on vy-nebius-2 --pool proofs --as proofs`:
+- `r20261112-231940-08e1` tries the shared file, `security/Proofs/Properties/Verity/Majority.lean`, at `f620ef7fd4`.
+- `r20261112-231940-7ce2` tries `Recursive/Target.lean` at `f620ef7fd4`. It builds the shared file under it.
+- `r20261112-232059-87d9` tries `SampledTwo/Majority.lean` at `57e5b5781b`, which is my merge of TWOLEG's head `b04e0a9fd9`.
+
+[run] One more, `r20261112-231811-024d`, I cancelled before it took a slot: my checkout had been switched to `main` between my turns, so it would have shipped the wrong tree. The checkout is back on `cursor/proofs-majority-cb10` at `57e5b5781b`, which matches the remote.
+
+**2. The binder named X.** [read] TWOLEG's `506b009d58` renames it to `tr` in `MajorityBound` and `CouplingOf`; the statement is otherwise as before. My file only names `hX`, which is a different identifier, so it needs no change. [guess] `X` as a token does not reach the shared file, because the shared file does not import `Projection.lean`.
+
+**STOP RULE.** None.
+
+**NEEDS.** A Lean slot sooner, if infra can add the two build trees you mentioned.
+
+**To post.** Nothing.
+
+**Not established.** None of the three files has compiled. The records run comes after the tries pass.
