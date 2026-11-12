@@ -28,9 +28,10 @@ channel several times past anything a short calibration text does (Llama-3.2-1B'
 entry is a swapped channel has s ≤ √(k/8)·ρ whatever its size. The rows are screened in float64, and a row within a band of
 a threshold is decided exactly (`pearl_c.s5_stats`, `pearl_c.live_row`).
 
-    python channel_swaps.py make --out DIR [--checkpoint SNAPSHOT | --rev REV] [--report F]
+    python channel_swaps.py make --out DIR [--checkpoint SNAPSHOT | --rev REV] [--swaps F] [--report F]
         the swaps (DIR/channel_swaps.json), the permuted snapshot (DIR, a copy of the checkpoint's files with its
-        model.safetensors permuted) and the logit check (`check`)
+        model.safetensors permuted) and the logit check (`check`); with --swaps, an earlier make's channel_swaps.json
+        instead of the calibration (it must name the same checkpoint)
     python channel_swaps.py check --original SNAPSHOT --permuted SNAPSHOT [--report F]
         the two snapshots' logits on the calibration and a held-out public text, in float64 and in BF16
     python channel_swaps.py screen-case CASE --swaps F [--out F]
@@ -579,6 +580,7 @@ def main(argv: list[str] | None = None) -> int:
     mk.add_argument("--out", required=True, help="the permuted snapshot's directory")
     mk.add_argument("--checkpoint", help="the original snapshot (default: fetched at --rev into OUT.original)")
     mk.add_argument("--rev", default=REV)
+    mk.add_argument("--swaps", help="an earlier make's channel_swaps.json, in place of the calibration")
     mk.add_argument("--report")
     ck = sub.add_parser("check")
     ck.add_argument("--original", required=True)
@@ -605,8 +607,15 @@ def main(argv: list[str] | None = None) -> int:
     src = Path(a.checkpoint) if a.checkpoint else fetch(a.rev, Path(str(out) + ".original"))
     tok = Tokenizer(src / "tokenizer.json")
     data, header, base, w, shape = load(src)
-    doc = calibrate(w, shape, tok)
-    doc["source"] = {"repo": REPO, "rev": a.rev, "files": {n: _sha256(src / n) for n in FILES if (src / n).exists()}}
+    source = {"repo": REPO, "rev": a.rev, "files": {n: _sha256(src / n) for n in FILES if (src / n).exists()}}
+    if a.swaps:
+        doc = json.loads(Path(a.swaps).read_text())
+        if doc.get("schema") != SCHEMA or doc.get("source") != source:
+            raise SystemExit(f"{a.swaps}: not {SCHEMA} swaps of this checkpoint ({REPO} @ {a.rev})")
+        doc.pop("permuted", None)
+    else:
+        doc = calibrate(w, shape, tok)
+        doc["source"] = source
     if doc["screen"]["total_after"]:
         _write(a.report, doc)
         return 1
