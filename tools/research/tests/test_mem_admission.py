@@ -255,6 +255,7 @@ def test_a_reservation_with_no_pid_whose_run_directory_is_gone_is_not_counted_an
     res.write_text(json.dumps({**json.loads(res.read_text()), "started": "t"}))
     (row,) = [x for x in M.reservations(machine["ram"]) if x["file"] == res.name]
     assert not row["live"] and "stale: 40 GB reserved at a time its record doesn't give (started 't') for run r-gone, " in row["why"]
+    assert [M._ago(t) for t in ("2026-10-19T08:15:00Z", "2026-10-18T03:00:00Z", "2026-10-17T09:00:00Z")] == ["45 min ago", "30 h ago", "2 d ago"]
 
 
 def test_a_reservation_with_no_pid_whose_run_ended_or_was_refused_is_not_counted(machine):

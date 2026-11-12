@@ -173,12 +173,13 @@ def _gone(run_dir: str) -> bool:
 
 
 def _ago(started: Any) -> str:
-    """How long ago a reservation says it began (its `started`, as admit() writes it): hours up to two days, then days."""
+    """How long ago a reservation says it began (its `started`, as admit() writes it): minutes up to two hours, hours up to two
+    days, then days."""
     try:
-        h = (time.time() - datetime.fromisoformat(str(started)).timestamp()) / 3600
+        m = (time.time() - datetime.fromisoformat(str(started)).timestamp()) / 60
     except (ValueError, OverflowError, OSError):
         return f"at a time its record doesn't give (started {started!r})"
-    return f"{h:.0f} h ago" if h < 48 else f"{h / 24:.0f} d ago"
+    return f"{m:.0f} min ago" if m < 120 else f"{m / 60:.0f} h ago" if m < 2880 else f"{m / 1440:.0f} d ago"
 
 
 def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
