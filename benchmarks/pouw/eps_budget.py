@@ -48,7 +48,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
-from verity_machine_model.eps import PRODUCTS, Design, design, designs, honest, machine, setup
+from verity_machine_model.eps import PRODUCTS, Design, design, designs, machine, setup
 from verity_machine_model.model import DATA, device, devices
 
 L = 32                      # transcript stride and the low-rank noise's rank
@@ -459,7 +459,10 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
     tile = 128 * 2 * (32 + 1)
     counts = SASS.get(data.name, {}).get("APV_TAIL", APV_TAIL)
     four = {(imma if k == "IMMA" else k): v for k, v in counts.items()}
-    top = lambda n: max(pi.load(n).values())
+
+    def top(n: dict) -> float:
+        return max(pi.load(n).values())
+
     return Prices(pi.vector, setup(d, pi, data, "floor", "floor").baseline.T * 4096 / d.L, top(four) / tile,
                   top({**four, imma: counts["IMMA"] - 1}) / tile)
 
