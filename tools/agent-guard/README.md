@@ -26,8 +26,9 @@ the system's), and `settings.py` (every environment variable the hooks share, re
 A checkout belongs to the first agent that runs git in it, and the stamp outlives the agent. `worktree_guard.py reclaim
 DIR` gives the checkout holding DIR, and every branch registered to its owner, to the VM's coordinator once that owner
 is gone. Both tests read what the VM records and nothing the caller says, so a running worker is never evicted on a
-guess and a worker can't take another's checkout. The coordinator is an agent that holds a handle in the Slack
-registry: the hook takes the caller from Cursor's event, which no command line sets, and refuses a `reclaim` typed by
+guess and a worker can't take another's checkout. The coordinator is an agent that holds a handle in origin/main's
+Slack registry, which the hook and the command both read (a checkout's own copy decides only where origin/main can't
+be read): the hook takes the caller from Cursor's event, which no command line sets, and refuses a `reclaim` typed by
 any other agent; the command stamps only an id that holds a handle, so a made-up id gives the checkout to a
 coordinator, never to the agent that made it up. Gone is no hook run in two hours, six times the 20 minutes one
 command may block, in the record every hook run adds a line to (`settings.EVENT_LOG`: each shell command, each Task,

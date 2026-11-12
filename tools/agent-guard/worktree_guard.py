@@ -10,8 +10,8 @@
 A worktree belongs to the first agent (Cursor conversation) that runs a git command in it: the coordinator's `/workspace`, or
 the worktree a worker made with `git worktree add`. The owner is stamped in the worktree's git dir (`agent-owner`), and the
 branch it had then is registered to it. The stamp outlives its agent, so the VM's coordinator takes a checkout back from an
-owner that is gone (`reclaim`): the coordinator is an agent that holds a handle in the Slack registry (`task_hook.holders`,
-origin/main's copy where `hook.sh` runs the hook), and gone is no hook run of the owner's in the last GONE_S, by the VM's
+owner that is gone (`reclaim`): the coordinator is an agent that holds a handle in origin/main's Slack registry
+(`coordinators`), and gone is no hook run of the owner's in the last GONE_S, by the VM's
 record of every hook run (`settings.recorded_runs`), which must reach back that far and hold a shell-hook run of the caller's
 (`gone_reason`). The checkout and every branch registered to its owner are then the coordinator's. The hook refuses a
 `reclaim` typed by an agent that holds no handle, the command judges the rest when it runs, and a checkout goes to no agent
@@ -56,7 +56,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from settings import CONVERSATION_ID, EVENT_LOG, PUSH_REMOTES, recorded_runs
-from task_hook import REGISTRY, holders
+from task_hook import OWN_REGISTRY, REGISTRY, holders
 
 STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
@@ -151,19 +151,30 @@ def gone_reason(owner: str, caller: str, now: float | None = None) -> str:
     return ""
 
 
+def coordinators() -> tuple[dict[str, str], str]:
+    """(agent id -> the handle it holds, the registry that says so), by the registry the hooks read. `hook.sh` hands a hook
+    origin/main's copy (REGISTRY); a command an agent runs is handed none, and reads origin/main's from the checkout this file
+    is in, so that a checkout's own copy, older than its coordinator's handle or edited, decides only where origin/main can't
+    be read."""
+    name = OWN_REGISTRY.relative_to(root := OWN_REGISTRY.parents[3])
+    if REGISTRY == OWN_REGISTRY and (text := git(str(root), "show", f"origin/main:{name}")):
+        return holders(text), f"origin/main's {name}"
+    return holders(), str(REGISTRY)
+
+
 def reclaim_note(owner: str, agent: str, top: str) -> str:
     """What a refusal that names `owner`, the agent stamped on the checkout `top`, adds for `agent`: the command that takes the
     checkout back, when `agent` is the VM's coordinator and `owner` is gone; else ""."""
-    if (handle := holders().get(agent)) is None or gone_reason(owner, agent):
+    if (handle := coordinators()[0].get(agent)) is None or gone_reason(owner, agent):
         return ""
     return (f" Agent {owner} has run no command on this VM in the last {GONE_S / 3600:g} h, and you hold @{handle}: take back "
             f"{top} and the branches {owner} holds with `{RECLAIM} {top}`.")
 
 
-def not_coordinator(agent: str, directory: str) -> str:
-    """The refusal of a `reclaim` by an agent that holds no handle."""
+def not_coordinator(agent: str, directory: str, registry: str) -> str:
+    """The refusal of a `reclaim` by an agent that holds no handle in `registry`."""
     return (f"only the VM's coordinator takes a checkout back, and {agent or 'this shell (no CURSOR_CONVERSATION_ID)'} holds no "
-            f"handle in the Slack registry ({REGISTRY}): ask your coordinator to run `{RECLAIM} {directory}`, or work in a "
+            f"handle in the Slack registry ({registry}): ask your coordinator to run `{RECLAIM} {directory}`, or work in a "
             f"checkout of your own (`git worktree add ../wt-<name> -b <branch>`)")
 
 
@@ -171,8 +182,9 @@ def reclaim(directory: str, agent: str, now: float | None = None) -> tuple[int, 
     """Give the checkout holding `directory`, and every branch registered to its stamped owner, to `agent`: (0, what changed),
     or (1, why not). Only an agent that holds a handle takes a checkout back, only one stamped to another agent, and only
     once that owner is gone (`gone_reason`)."""
-    if (handle := holders().get(agent)) is None:
-        return 1, not_coordinator(agent, directory)
+    handles, registry_read = coordinators()
+    if (handle := handles.get(agent)) is None:
+        return 1, not_coordinator(agent, directory, registry_read)
     gitdir, top = git(directory, "rev-parse", "--absolute-git-dir"), git(directory, "rev-parse", "--show-toplevel")
     if gitdir is None:
         return 1, f"{directory} is in no checkout: name a checkout's directory"
@@ -200,7 +212,8 @@ def reclaim_reason(commands: list[list[str]], agent: str) -> str | None:
     for words in commands:
         for i, w in enumerate(words[:-1]):
             if w.endswith("worktree_guard.py") and words[i + 1] == "reclaim":
-                return None if agent in holders() else not_coordinator(agent, " ".join(words[i + 2:i + 3]) or "DIR")
+                handles, registry_read = coordinators()
+                return None if agent in handles else not_coordinator(agent, " ".join(words[i + 2:i + 3]) or "DIR", registry_read)
     return None
 
 

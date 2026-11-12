@@ -770,7 +770,7 @@ def vm(tmp_path, event_log):
         subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env=env)
 
     class VM:
-        root = tmp_path
+        root, environment = tmp_path, env
 
         @staticmethod
         def ask(command: str, agent: str, cwd: Path = ws) -> dict:
@@ -870,6 +870,40 @@ def test_reclaim_takes_nothing_from_a_live_owner_for_a_caller_without_a_handle_o
     assert out.returncode == 1 and "is in no checkout" in out.stderr, out.stderr
 
     assert vm.reclaim(ws, LEAD).returncode == 0, "and the gone owner's still goes"
+
+
+def test_the_command_reads_who_holds_a_handle_from_origin_mains_registry_as_the_hook_does(vm):
+    """`hook.sh` hands the hook origin/main's registry, and the command an agent runs judges by the same one: a checkout's own
+    copy can be older than its coordinator's handle, and a worker's edit to it makes the worker no coordinator."""
+    ws, repo = vm.root / "ws", vm.root / "repo"
+    shutil.copytree(HOOK.parent, repo / "tools/agent-guard", ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    own = repo / ".agents/skills/using-slack/registry.json"
+    own.parent.mkdir(parents=True)
+    own.write_text(json.dumps({"handles": [{"handle": "infra", "holder": LEAD}]}))
+    for args in (["init", "-q", "-b", "main"], ["add", "."], ["commit", "-q", "-m", "a"],
+                 ["update-ref", "refs/remotes/origin/main", "HEAD"]):
+        subprocess.run(["/usr/bin/git", "-C", str(repo), *args], check=True, capture_output=True, env=vm.environment)
+    own.write_text(json.dumps({"handles": [{"handle": "infra", "holder": WORKER}]}))      # the checkout's copy, edited
+
+    def reclaim(agent: str) -> subprocess.CompletedProcess:
+        env = {k: v for k, v in vm.environment.items() if k != "AGENT_GUARD_REGISTRY"}
+        return subprocess.run([sys.executable, repo / "tools/agent-guard/worktree_guard.py", "reclaim", str(ws)],
+                              capture_output=True, text=True, env={**env, "CURSOR_CONVERSATION_ID": agent})
+
+    assert vm.ask("git status", PAST) == {"permission": "allow"}
+    vm.long_ago()
+    assert vm.ask("git status", LEAD, vm.root / "fresh") == {"permission": "allow"}
+    out = reclaim(WORKER)
+    assert out.returncode == 1 and f"{WORKER} holds no handle in the Slack registry (origin/main's .agents/skills/" in out.stderr
+    assert vm.owner(ws) == PAST
+    subprocess.run(["/usr/bin/git", "-C", str(repo), "update-ref", "-d", "refs/remotes/origin/main"], check=True,
+                   env=vm.environment)
+    out = reclaim(LEAD)                                                         # no origin/main to read: the checkout's own
+    assert out.returncode == 1 and f"{LEAD} holds no handle in the Slack registry ({own})" in out.stderr, out.stderr
+    subprocess.run(["/usr/bin/git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", "HEAD"], check=True,
+                   env=vm.environment)
+    out = reclaim(LEAD)
+    assert out.returncode == 0 and f"{ws} is now {LEAD}'s (@infra)" in out.stdout and vm.owner(ws) == LEAD, out.stderr
 
 
 def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is_writing(vm, event_log):
