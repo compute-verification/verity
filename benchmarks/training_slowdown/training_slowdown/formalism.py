@@ -479,6 +479,23 @@ def log_products(op: str, shapes: list) -> list[tuple[int, int, int, int]] | Non
     return [(1, m, K, n)]
 
 
+def products_of_log(log: dict) -> tuple[dict[str, list], list[str]]:
+    """An op log's matrix products, as every reader of a log's shapes takes them: each of its `ops`' keys that
+    `log_products` places with its products (b, m, K, n), and the keys it couldn't read, whose shapes aren't their
+    op's operands'."""
+    placed, unread = {}, []
+    for key in log.get("ops", {}):
+        op, shapes = split_key(key)[2:4]
+        try:
+            prods = log_products(op, json.loads(shapes))
+        except (ValueError, TypeError, IndexError, ZeroDivisionError):
+            unread.append(key)
+            continue
+        if prods:
+            placed[key] = prods
+    return placed, unread
+
+
 def other_program(rows: list[dict], log: dict) -> dict | None:
     """Whether a trace's product rows are of the run whose op log is `log` (its `ops`), as far as their shapes say: None
     where every shape (m, K, n) of the rows' `PLAIN_PRODUCTS` is a product of one of the log's ops (`log_products`), in
@@ -488,16 +505,8 @@ def other_program(rows: list[dict], log: dict) -> dict | None:
     trains, but a weight's gradient is a product with that weight's shape as m by n, so a rank, a width or a batch the
     trace took and the run didn't shows here; a program that differs from the run's only in a vector it trains, or only
     in a batched product, doesn't."""
-    ran: set = set()
-    unread = []
-    for key in log.get("ops", {}):
-        op, shapes = split_key(key)[2:4]
-        try:
-            prods = log_products(op, json.loads(shapes))
-        except (ValueError, TypeError, IndexError, ZeroDivisionError):
-            unread.append(key)
-            continue
-        ran |= {(m, K, n) for b, m, K, n in prods or () if b == 1}
+    placed, unread = products_of_log(log)
+    ran = {(m, K, n) for prods in placed.values() for b, m, K, n in prods if b == 1}
     runs: dict = {}
     for r in rows:
         if r["op"] in PLAIN_PRODUCTS:

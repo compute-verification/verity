@@ -416,26 +416,21 @@ def priced_apart(tr: dict, log: dict) -> list[dict]:
     in another dtype (`capture.products.priced_dtype`) than the record's op log names for them: ρ divides the work of
     the trace's products by the record's count, so the two have one price only where the two dtypes are one. `log` is
     the record's `macs_log` through the checkpoint ρ is read at. A product is matched to the log's ops as
-    `formalism.other_program` matches a trace to a run, by its shape (m, K, n) in either orientation
-    (`formalism.log_products`), and by whether it is the backward's; the dtypes the log names for it are those of
-    every op of that shape. Each found is {"row", "priced", "named"}, the largest first by its MACs.
+    `formalism.other_program` matches a trace to a run, by its shape (m, K, n) in either orientation, from the one
+    reading of a log's products (`formalism.products_of_log`), and by whether it is the backward's; the dtypes the
+    log names for it are those of every op of that shape. Each found is {"row", "priced", "named"}, the largest first
+    by its MACs.
 
     What this finds is a product priced in a dtype the record ran no product of its shape in. A product whose shape
-    the log never ran is `other_program`'s to find, one the log names in several dtypes is apart from none it is
-    priced in, and an op whose row names no dtype names none: a record written before rows named one is counted by
-    the assumed dtypes, and has nothing here to differ from."""
+    the log never ran is `other_program`'s to find, as is an entry of the log that reading can't read; one the log
+    names in several dtypes is apart from none it is priced in; and an op whose row names no dtype names none: a
+    record written before rows named one is counted by the assumed dtypes, and has nothing here to differ from."""
     from .capture import products
 
     named: dict[tuple, set] = {}
-    for key in log.get("ops", {}):
-        phase, _, op, shapes, dtype = gates.split_key(key)
-        if dtype is None:
-            continue
-        try:
-            prods = F.log_products(op, json.loads(shapes))
-        except (ValueError, TypeError, IndexError, ZeroDivisionError):
-            continue
-        for _, m, k, n in prods or ():
+    for key, prods in F.products_of_log(log)[0].items():
+        phase, *_, dtype = gates.split_key(key)
+        for _, m, k, n in prods if dtype is not None else ():
             named.setdefault((phase == "bwd", m, k, n), set()).add(dtype)
     found = []
     for r in tr["rows"]:
