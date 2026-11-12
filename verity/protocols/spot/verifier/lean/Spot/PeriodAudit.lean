@@ -224,11 +224,19 @@ def ONE_MEMBER : String :=
 def SHARED_ROWS : String :=
   "the public file's header names shared_rows: a registration whose members share row tables is not covered"
 
-/-- One case at a window: the registration's record and what one-stage v2 answers on it. The case's registration is
-the one the session sampled (`want`, `evidence`); the parameters at the window are one-stage v2's and its public file
-shares no rows (`names`); its evidence is one-stage v2's (`evidence`). -/
-def caseAt (p : AuditParams) (ledger pins session : Json) (w : Window) (want : String) (before : Array Json)
-    (k : Case) (bs : Core.Blobs) : Except (Code × String) (Json × Core.Outcome OneStage.Public Core.Integrity) := do
+/-- An audit of one registration at parsed parameters, on a commitment, evidence and blobs: one-stage v2's
+(`OneStageZk.checkBlobs`) in the period's check. The check's steps are written over any, so that the difftest runs
+them to an accept without a proof. -/
+abbrev Inner :=
+  OneStageZk.Params → OneStage.Commitment → OneStageZk.Evidence → Core.Blobs →
+    Core.Outcome OneStage.Public Core.Integrity
+
+/-- One case at a window: the registration's record and what the audit `inner` answers on it. The case's registration
+is the one the session sampled (`want`, `evidence`); the parameters at the window are one-stage v2's and its public
+file shares no rows (`names`); its evidence is one-stage v2's (`evidence`). -/
+def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : Window) (want : String)
+    (before : Array Json) (k : Case) (bs : Core.Blobs) :
+    Except (Code × String) (Json × Core.Outcome OneStage.Public Core.Integrity) := do
   let c ← match Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8 with
     | .ok c => pure c
     | .error why => throw (Code.evidence, s!"session {w.session}: registration: {why}")
@@ -247,15 +255,15 @@ def caseAt (p : AuditParams) (ledger pins session : Json) (w : Window) (want : S
       fun s => OneStageZk.evidenceOf s.toUTF8 with
     | .ok e => pure e
     | .error why => throw (Code.evidence, s!"session {w.session}: {why}")
-  return (c.record, OneStageZk.checkBlobs params c e bs)
+  return (c.record, inner params c e bs)
 
 /-- One window (module docstring, **The check**): its session is the one the ledger sealed, run from a commit the pins
 log records on main's first-parent line, and withheld (`coin`); it sampled one registration (`missing`, `members`);
-the evidence holds one case (`evidence`); and one-stage v2 answers the case (`caseAt`): an accept adds the window, a
+the evidence holds one case (`evidence`); and the audit answers the case (`caseAt`): an accept adds the window, a
 reject refuses the period (`audit`), and an undecided is kept as the period's, the first one, while later windows are
 still checked. -/
-def windowAt (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress) (w : Window)
-    (ev : WindowEvidence) : Except (Code × String) Progress := do
+def windowAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress)
+    (w : Window) (ev : WindowEvidence) : Except (Code × String) Progress := do
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
   if let some why := Challenger.pinsReason a.session opened pins then throw (Code.coin, why)
   if let some why := Challenger.firstParentReason a.session a.pinned p.main then throw (Code.coin, why)
@@ -270,7 +278,7 @@ def windowAt (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs)
   let #[k] := ev.audits
     | throw (Code.evidence, s!"session {w.session}: {ev.audits.size} cases for the one registration its log " ++
         "shows sampled")
-  let (record, o) ← caseAt p ledger pins ev.session w want st.before k bs
+  let (record, o) ← caseAt inner p ledger pins ev.session w want st.before k bs
   let at_ := s!"session {w.session}, registration {want.take 16}"
   match o with
   | .accept published profile =>
@@ -282,7 +290,7 @@ def windowAt (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs)
 
 /-- The ledger's half, then every window in the ledger's order against its evidence (`windowAt`): the windows and
 the lane's other sessions with the check's state at the end, or the first refusal. -/
-def run (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
+def run (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     Except (Code × String) (Windows × Progress) := do
   let r ← read p.ledger c.ledger
   let ws ← windowsIn p.ledger r
@@ -290,16 +298,16 @@ def run (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     throw (Code.evidence, s!"the evidence holds {e.windows.size} windows' sessions, and the ledger lists " ++
       s!"{ws.windows.size} windows in the monitoring period")
   let st ← (ws.windows.zip e.windows).foldlM (init := ({} : Progress))
-    fun st (w, ev) => windowAt p r c.ledger e.pins bs st w ev
+    fun st (w, ev) => windowAt inner p r c.ledger e.pins bs st w ev
   return (ws, st)
 
-/-- **The period's check** on the blobs: a refusal of `run` rejects under its code; an audit one-stage v2 left
-undecided leaves the period undecided; otherwise every window of the lane in the monitoring period has one accepted
-audit of the one registration its session sampled, and the period is accepted, publishing them with the lane's other
+/-- The period's check with the audit `inner`: a refusal of `run` rejects under its code; an audit left undecided
+leaves the period undecided; otherwise every window of the lane in the monitoring period has one accepted audit of
+the one registration its session sampled, and the period is accepted, publishing them with the lane's other
 sessions, its profile each audit's in order. -/
-def checkBlobs (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
+def checkWith (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome Public (Array Core.Integrity) :=
-  match run p c e bs with
+  match run inner p c e bs with
   | .error (code, why) => .reject s!"{code.name}: {why}"
   | .ok (ws, st) =>
     match st.undecided with
@@ -308,6 +316,12 @@ def checkBlobs (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blob
       .accept { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop, windows := st.passed,
                 others := ws.others }
         (st.passed.flatMap fun x => x.audits.map (·.profile))
+
+/-- **The period's check** on the blobs (module docstring, **The check**): `checkWith` at one-stage v2's audit on
+the proofs themselves. -/
+def checkBlobs (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome Public (Array Core.Integrity) :=
+  checkWith OneStageZk.checkBlobs p c e bs
 
 def Audit.toJson (a : Audit) : Json :=
   Json.mkObj [("published", OneStage.publicJson a.published), ("registration", Json.str a.registration)]
@@ -356,10 +370,23 @@ def askedPiece (j : Json) : V Json := do
       | .error why => Json.mkObj [("refused", Json.str s!"evidence: {why}")]
       | .ok e => Json.mkObj [("evidence", e), ("params", paramsAt p root pub before)]
 
-/-- `{"blobs", "evidence", "ledger", "params"}` to the period's check's answer (`checkBlobs`): `{verdict: accept,
-published, profile}`, or `{verdict, reason}` for a reject or an undecided; `{refused}` where the parameters or the
-evidence are not of their form. A request in another form is the request's fault. -/
-def checkPiece (j : Json) : V Json := do
+/-- The difftest's stand-in for one-stage v2: it answers as the case's evidence's `statement` tells it under `stub`
+(`accept`, `undecided`, anything else a reject), and an accept publishes, as its bound, how many records the
+parameters' log holds, with a profile of no level at the parameters' δ. So an accept, an undecided and the log each
+audit is handed are run without a proof. -/
+def stubInner : Inner := fun p _ e _ =>
+  match getD e.base.statement "stub" with
+  | .str "accept" =>
+    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none }
+      { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := p.base.delta,
+        drawn := #[] }
+  | .str "undecided" => .undecided "the stand-in leaves it undecided"
+  | _ => .reject "the stand-in rejects"
+
+/-- `{"blobs", "evidence", "ledger", "params"}` to the period's check's answer with the audit `inner`: `{verdict:
+accept, published, profile}`, or `{verdict, reason}` for a reject or an undecided; `{refused}` where the parameters
+or the evidence are not of their form. A request in another form is the request's fault. -/
+def checkPieceWith (inner : Inner) (j : Json) : V Json := do
   unless keys? j == some #["blobs", "evidence", "ledger", "params"] do
     throw "a request's keys are blobs, evidence, ledger, params"
   let (.arr hs, .arr _) := (getD j "blobs", getD j "ledger") | throw "blobs and ledger are lists"
@@ -373,10 +400,17 @@ def checkPiece (j : Json) : V Json := do
       match Evidence.of (getD j "evidence") with
       | .error why => Json.mkObj [("refused", Json.str s!"evidence: {why}")]
       | .ok e =>
-        match checkBlobs p { ledger := getD j "ledger", digest := ByteArray.empty } e (Core.Blobs.ofArray blobs) with
+        match checkWith inner p { ledger := getD j "ledger", digest := ByteArray.empty } e
+            (Core.Blobs.ofArray blobs) with
         | .accept pub prof => Json.mkObj [("profile", Json.arr (prof.map Core.Integrity.toJson)),
             ("published", pub.toJson), ("verdict", Json.str "accept")]
         | .reject why => Json.mkObj [("reason", Json.str why), ("verdict", Json.str "reject")]
         | .undecided why => Json.mkObj [("reason", Json.str why), ("verdict", Json.str "undecided")]
+
+/-- The period's check's answer (`checkBlobs`), as `checkPieceWith` gives it. -/
+def checkPiece : Json → V Json := checkPieceWith OneStageZk.checkBlobs
+
+/-- The period's check's answer with the stand-in for one-stage v2 (`stubInner`), as `checkPieceWith` gives it. -/
+def checkStubPiece : Json → V Json := checkPieceWith stubInner
 
 end Spot.Period
