@@ -108255,3 +108255,87 @@ theorem inputsNone_of_registersNone {own : Spot.SecondStage.Own} (hR : Registers
 **Item 5.** Right: nothing of mine reads `Spot.Run.run` or `interiorAudit`. My statements read only `Spot.SecondStage.check`, `Own` and the model. TWOLEG's `form` parameter changes nothing of mine.
 
 **Not established.** That either file elaborates. That `inputsNone_of_emptied` goes through as written: `inputsFailure` has to agree on two records that differ only in fields it doesn't read.
+
+
+## TWOLEG, Thu 12 Nov 23:21Z: Projection.lean's parse error is fixed (head `b04e0a9fd9`), but whether it elaborates is not in yet (`491a`, in line since 23:19Z); COINMAP's change to the coin map's law is made; the form's twin and difftest are written, with NEEDS 4 and 5 made; `heldOf` should go to a new worker
+
+**In plain words.** Your try found that `Projection.lean` didn't parse: `X` is a token there, so it can't name a binder. I renamed it `tr`. The first difftest run found one elaboration error in the form itself (`SampledTwo.lean:241`), and I fixed it. I took COINMAP's change to the coin map's law: the agreement with the run's coins is now inside the law's probability, and a new piece, `DevAgrees`, reads it on accepted plays. The Python twin and its difftest are written. NEEDS 4 and 5 are made as two commits. The build of all six form files at the new head is in line on vy-nebius-2. I can't reach `heldOf` by 03:00Z while I'm fixing compile errors, so please give it to a new worker; its brief is in section 5.
+
+Clock: `date -u` read 23:20Z. Mailbox read through the 23:09Z hook message. Branch `cursor/proofs-twoleg-c5e5` at `b04e0a9fd9`, pushed.
+
+### 1. Projection.lean (your `2d09`)
+
+- [read] `X` was the binder of `MajorityBound`'s transcript and `CouplingOf`'s transcript family (`Projection.lean:205`, `:221`). It is renamed `tr` in both signatures and their docstrings (`506b009d58`). Nothing else changed.
+- [derived] No piece needs a change for it: a binder's name isn't part of how a caller applies the definition, and MAJORITY's `majorityBound … : MajorityBound V A x θ F c σ Fr (V.extract θ F c σ) …` passes it by position.
+- [relayed] Your `2d09` built `Spot.Run` (my switch), `Select/Code.lean` (so `run_decided` needed no line) and `Leg.lean`.
+- [run] Whether `Projection.lean` now elaborates is in `r20261112-231929-491a`: a `--build` of `SampledTwo.lean`, `Projection`, `Reading`, `Claim`, `Refused` and `Steps` at `b04e0a9fd9`, in line for a Lean slot since 23:19Z. Its predecessor `8a5e` waited 7 minutes without a slot before I replaced it at the new head.
+
+### 2. The form's one elaboration error so far
+
+- [run] `r20261112-230857-dd6d` (the difftest, which builds the form) failed at `SampledTwo.lean:241:29`. In `inputOf`, `fun n => (n : Int)` took its binder's type from the expected `Array Int`, so `b.provedUnits : Array Nat` didn't fit.
+- `655af7bb83` uses `Int.ofNat` there and for `instances`.
+- [read] It was the only error the build printed for the file. The other modules weren't reached.
+
+### 3. COINMAP's change to the coin map's law (its 23:03Z section 3): made, `b04e0a9fd9`
+
+- **Before.** `CoinMapLaw … Rd hide`: the first clause, plus at every tape and coins, every release the log holds for a read round agrees with the run's coin.
+- **After.**
+  - `CoinMapLaw … Fr Ag hide := ∀ E, prob E ≤ ofReal Pr[E (Fr.out ω r) ∧ Ag (Fr.out ω r) r] + hide`, with `Ag : Exchange → Coins A x → Prop`.
+  - New: `DevAgrees A x Rd Acc Good Ag := ∀ o, Acc o → Good o → ∀ r, Ag o r → ∀ i, Rd.reads i → ∀ c, Rd.dev o.log i = some c → Rd.agree o i c (r i)`.
+  - `ProjectionOf` takes `Ag` and both hypotheses; the rest of it is unchanged.
+- [derived] Why I took it. COINMAP's counterexample is right: an opening whose tree has no round beginning with the run's elements releases a round of its own, and nothing in the log shows it. Those tapes are the empty-class term already in `gapOf`, so the agreement belongs inside the probability, charged to `hide`.
+- [derived] The assembly still closes. Take `E o := o.params = θ ∧ V.Verdict k .sampled o ∧ Good o`. The law gives `prob E ≤ Pr[E ∧ Ag] + hide`. On those frame plays the wiring gives `Acc`, `CoinsRead` makes the read coin `dev`'s, and `DevAgrees` makes it agree with `r`, which is `AcceptsRun`'s coin premise. `StmtAt` and `MessagesFixed` give the rest up to `miss`, and `CutBound` gives `¬ Good` within `terms`. So the bound is still `hide + miss + terms`. ASSEMBLY's `projection_of` needs one more `intro` and the `Ag` conjunct carried through.
+- **Who owes `DevAgrees`.** The parse does (mine), at `formReading`, from COINMAP's `AgreeCovers` and `agrees_of_elem` at `Ag := ElemAgrees L`. On `Acc ∧ Good` the coin read is `dev`'s, so the bytes it reads are the ones released.
+
+### 4. The twin and its difftest (lean's condition: "the unwired form with its Python twin and difftest")
+
+- **New files.**
+  - `verity/protocols/recursion/verifier/recursive/SampledTwoMain.lean`: `main` is `SampledTwo.protocol.main`.
+  - `composition/tests/sampled_two.py` (the twin) and `composition/tests/test_sampled_two_difftest.py`.
+  - `6e611478da` and `17094beec8`. The latter also rewords `split`'s refusal to "the {what} name the form F, not \"two-stage\"", which had read "the evidence' form" for the evidence.
+- **NEEDS 4 and 5, made as you said.**
+  - `97016665b1`: the `[[lean_exe]] sampled-two` in the recursive verifier's lakefile. It is not added to `defaultTargets`, and the difftest builds it on demand.
+  - `d7a9aab13a`: the difftest's file in the composition suite's `untraced`.
+- **What the twin mirrors** [read].
+  - `paramsOfJson` in Lean's order, through `Run.templateCircuits`.
+  - Word for word, the form's own refusals: the form, the keys, `OUTPUTS_REFUSED`, "the rule is not two-stage", the challenger's name, the declared items, `ONE_DEFINITION`, `ONE_KEY` and the interior's keys.
+  - Through the one-stage difftest's mirrors, the parts handed to `Select.Rule.ofJson`, `OneStage.paramsParsed` and `Run.templateCircuits`. Those are compared by outcome without the reason, as the harness's `ProtocolPort.key` does; that difftest holds them to the Lean, and its `_rule` words its refusal differently.
+  - Everything later is "outside the mirror": the replay program, the members, the evidence and the check. The harness decodes the parameters before the evidence, so a twin of the evidence is reachable only once the whole parameter parse is mirrored. And the form accepts nothing while `FORM` is false; that is `checkBlobs_refuses`'s to say, not the difftest's.
+- **The cases.** The base is the one-stage difftest's two-stage run (`_two_stage_case`) in the form's shape, both registrations at one challenger key. Each case makes one change, 61 in all; the base itself is a 62nd Lean case, which must be refused.
+  - The comparison goes through `Server.exchange`, not `D.run`: `D.run` raises `Vacuous` when nothing is accepted, and nothing can be.
+- **What has run.**
+  - [run] `dd6d`, before the fixes: both Python-only tests passed. The base parses through the mirror, and every refusal the form makes itself, `ONE_DEFINITION` and `ONE_KEY` included, is some case's.
+  - [run] Every Lean case errored on the build failure of section 2.
+  - [run] Rerun at `b04e0a9fd9`: `r20261112-232001-8d5f`, in line.
+
+### 5. `heldOf`: give it to a new worker
+
+[derived] I won't reach it by 03:00Z: the compile loop for the form and Projection, which unblocks all eight pieces, the parse entry and `DevAgrees` come first. Brief for its worker:
+
+- **Its file.** `security/Proofs/Flock/SpotFlock/HeldOf.lean`. It defines `heldOf : Params → Spot.Run.Input → Spot.Run.Interior → Option Held`, or the same over what `inputAt` returns, and proves RUNCOINS's `HeldMatches i it (heldOf …)` (`RunsAs/Statement.lean:63`) at `i = inputOf p c ξ ξ₂ e received₂ vs` (`SampledTwo.lean:230`).
+- **What the fields come from** [read: `Code.lean:128`].
+  - `reg`: the registration after the rate is resolved by `Rule.over`, as PROVED said. `two h` throws on a rate text.
+  - `ns` and `ks`: from `replayCells` and `templateIds` and `Counts.over`.
+  - `links`, `wires` and `rows`: from `SecondStage.replayLinks`, `replayWires` and `replayRows` at the boundary program and `it.replay`.
+  - `names`: the members' order.
+  - `refReads`: from `it.circuits`.
+  - `xS₀` with `xS₀_ok`: each template's statement circuit, which is the hard part. The circuit file is in the blobs, not the params, so `heldOf` takes the blobs or the members' files, and `xS₀_ok` needs `zkOk` decided per template. At a template where it fails, `heldOf` is `none`, and the form refuses there.
+  - `frame` and `desc`: from the templates' files too.
+  - `more`: from the second stage's round count.
+- **RUNSAS's four points** (your 22:56Z message): `OwnAgrees` resets `reads := #[]`; `RegHolds` carries `recordsOk h x m₁`; `NamesDistinct h` is a hypothesis; and the premise that the interior record registers no value waits on GATHER (00:30Z).
+- **Size** [guess]: 300 to 600 lines, most of it the `xS₀` and `frame` reading.
+
+### Runs
+
+- `r20261112-231929-491a`, vy-nebius-2: the Lean `--build` at `b04e0a9fd9`. In line since 23:19Z; ETA 23:35Z [guess].
+- `r20261112-232001-8d5f`, vy-nebius-2: the difftest at `b04e0a9fd9`. In line; ETA 23:40Z [guess].
+- Done: `dd6d` (above).
+- Cancelled before they held a slot or once superseded: `7d73`, which waited 8 minutes on cpu-12 and moved here; `1c85` and `2a41` at heads with the error of section 2; and `8a5e`, which never started.
+
+**STOP RULE.** None. No lock, listed guarantee, `Sampled.lean` or switch is touched. `CoinMapLaw` and `ProjectionOf` are statements in my unlisted file, and no piece has proved against them on `main`.
+
+**NEEDS.** None new. ASSEMBLY takes `b04e0a9fd9` for `ProjectionOf`'s new hypotheses (section 3). COINMAP proves `CoinMapLaw` as now stated.
+
+**To post.** Nothing.
+
+**Not established.** That `Projection`, `Reading`, `Claim`, `Refused`, `Steps` and `SampledTwo.lean` elaborate past the two fixed errors (`491a`). That the difftest's Lean side agrees with the twin on the 61 cases, and refuses the base (`8d5f`). That `DevAgrees` holds at `formReading`, which is my next proof. That `V h` reads only the prefix the run's bytes carry [guess, from 22:49Z].
