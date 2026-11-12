@@ -26,6 +26,7 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
 __all__ = ["phase_anchor", "population", "split_not_executed"]
 
@@ -140,7 +141,7 @@ def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
                                   "sha256": hashlib.sha256(got["up"][:n]).hexdigest()[:16]})
     n_ident = sum(v["identical"] for v in per_layer.values())
     result = None if compared == 0 else (n_ident == 0)
-    return {"schema": "verity-sweep/moe-plane-alias-check/v1", "result": result, "compared": compared, "identical_n": n_ident,
+    return {"schema": MOE_PLANE_ALIAS_CHECK_SCHEMA, "result": result, "compared": compared, "identical_n": n_ident,
             "identical": identical, "read_errors_n": len(errors), "read_errors": errors, "per_layer": per_layer,
             "plane_words": {k: sorted(v) for k, v in widths.items()},
             "rule": "for every (request, step, MoE layer) with both planes committed: committed up bytes != committed down bytes over their common "

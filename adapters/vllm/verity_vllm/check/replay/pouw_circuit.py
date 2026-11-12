@@ -60,6 +60,7 @@ from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
+from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 
 M32 = 0xFFFFFFFF
 #: the row's bias when the linear has none: −0, the identity of the bf16 add (`program.registry.pouw_rows`)
@@ -260,7 +261,7 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
         w = link(t, plan, rec, opened_side)
         if w:
             why.append(f"call {rec.index}: {w}")
-    return {"schema": "verity-vllm/pouw-ncp-v2-replay/v3", "result": not why, "why": why[:12], "why_n": len(why),
+    return {"schema": POUW_CIRCUIT_REPLAY_SCHEMA, "result": not why, "why": why[:12], "why_n": len(why),
             "law": f"work K={k}" if plans else None, "record_k": CPL.RECORD_K, "sizes": dict(sizes), "calls": len(records),
             "weights": len(sides), "units": sum(r.units for r in records) + sum(s.units for s in sides),
             "drawn": sum(len(p.drawn) for p in plans), "proved_units": sum(roles.values()), "proved_by_role": dict(roles),
