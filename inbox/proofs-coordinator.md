@@ -96763,3 +96763,157 @@ The last of ours is 12, so the date I would keep for ours as a whole is Mon 30 N
 - #9333's and #9378's diffs: I read #9333's title and state only. [run]
 - That a refused boundary outcome refuses the stop record on a served run: read from `boundary_audit` and soundness's sentence, run on the small rehearsal's `unaccepted` case only (#9081's runs), not on a served record. [read; derived]
 - Each "to rule" item is my reading of a gap, checked with no one. [derived]
+
+## FINDER, Thu 12 Nov 19:18Z: READY: #9332 at `5a6be198a5ed`, then #9346 at `949c03c3a7a1`; both checks passed at each head; each merges clean onto today's `main`
+
+In plain words first. The two heads above #9149 are ready for your mark, in this order. Neither head changed since my
+18:11Z entry: the four checks that were waiting then have ended and passed, and no lock record was regenerated. Both
+bodies now carry the runs and are read back. One check is still out, and it is not a check of either head: whether the
+stack's top still builds on today's `main` (run `r20261112-185229-dc89`, below).
+
+Ready lines, in landing order:
+
+1. **#9332 ready at `5a6be198a5ed1bdd592bedfc71dca639c7d018ca`.** It sits on #9149's marked head
+   `4a31b967c5944e1fedec15a2f3ad2d5a0bad1652` (which holds `main` at `6d95fcc68dd3`), plus the one commit that puts its
+   module at `security/Proofs/Flock/Claims/ChargeOnce.lean` (`Proofs.Flock.Claims.ChargeOnce`).
+   - [run] Records run `r20261112-180633-110c` (cpu-1), at that commit: rc 0; `security`, `security/Proofs` and
+     `security/Properties` each pass; `security/Proofs` 195,891 declarations in 3,902 modules, no axiom beyond the
+     three; nothing regenerated. It is the fast path: every file built, no kernel replay, no tests.
+   - [run] Quick tier `r20261112-180738-6d81`: rc 0; 12 suites, 12 passed, 0 reused, 0 failed. `verity-flock`, the
+     suite that failed at the head before, ran whole: 1,455 passed, 30 skipped.
+   - [derived] Limits file, `Proofs/Flock`: 275 modules and 2,320 declarations = #9149's 274 and 2,317 plus 1 and 3.
+2. **#9346 ready at `949c03c3a7a1e3d2628b37b0c3dc0bf3ad000521`.** It sits on #9332's head above.
+   - [run] Records run `r20261112-180633-b5da` (cpu-1), at that commit: rc 0; the three packages pass;
+     `security/Proofs` 195,964 declarations in 3,906 modules, no axiom beyond the three; nothing regenerated. Fast path.
+   - [run] Quick tier `r20261112-180738-1260`: rc 0; 12 suites, 12 passed, 0 failed. Six of the twelve were reused
+     from #9332's head, where they passed in `6d81` (no input of theirs differs between the two heads).
+   - [derived] Limits file: 279 and 2,367 = 275 and 2,320 plus 4 and 47.
+
+Neither adds a lock entry, a file under `security/Definitions/`, a named assumption or a change to a listed statement.
+What would be listed, if Daniel lists one, is as in my 17:06Z line: the one a deployed guarantee would read is
+`CompiledTwo.eventTwoX_oneWait_le_cls_exp`.
+
+The other checks:
+
+- [run] `git merge-tree` at 19:13Z: each of the three heads merges clean with `main`, now `4a90174415b7`. Against the
+  Lean lane's `f3ffe4e2bbcb` each leaves the two files `main` itself leaves there
+  (`tools/verity/check/public_boundary.toml`, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`), neither a
+  file of the stack.
+- [run] Retired terms, the test itself: 13 passed at each head (run before my 18:11Z entry; the heads are the same).
+- [run] The bodies of #9332 and #9346 are edited (`research queue edit`) and read back with `gh pr view`: each says
+  what it lands after, the limits arithmetic and the four runs above. Both are open and unmarked.
+- **Not yet known: whether the stack's top builds on today's `main`.** [read] Since `6d95fcc68dd3`, `main` has taken
+  #8915, #9208, #9220 and others that change 58 files under `security/Proofs/Flock` and `security/Definitions`. The
+  text merges clean and none of the stack's 25 Lean files calls the four lemmas #9220 renamed a binder in, but that
+  is reading, not a build. [run] So I merged `949c03c3a7a1` with `main` at `0582899c4392` in a scratch worktree
+  (local commit `f09d91a6e8`, never pushed) and launched the records run on it: `r20261112-185229-dc89`, cpu-7,
+  waiting for a slot at 19:11Z. Nothing under `security/` or the limits file changed on `main` between `0582899c4392`
+  and `4a90174415b7`. [guess] It ends by about 20:10Z. If it fails I tell you which file and why, and I do not
+  merge `main` into #9149, which is marked.
+
+Two runs I cancelled, both placed on cpu-8 before 19:30Z and both before their check started:
+`r20261112-183247-e938` (a try of one of section 4's files) and `r20261112-185047-3ba3` (the scratch merge's records
+run). The second was my slip: I launched without reading what the placement dry run answered. The launcher I use now
+reads it and refuses.
+
+One thing for you to rule: [read] #9149's body has three sentences that #8915's landing made false ("#8915 lists it
+as `SpotFirstHitTwo` and has not landed"; "It lands after #8915 too"; the two allowlist entries "allow nothing until
+#8915 lands"). #9149 is marked, so I have not touched its body. Say if you want the three sentences corrected now
+(body only, no push), or left for the queue.
+
+Section 4, for the hour's line: [run] five new modules are written on `cursor/proofs-period-once-6b3f` (local, not
+pushed): the phases' union bound with the calls charged once, its twelve rows as `norm_num` instances, the same at
+the prover's expected calls, the phase's bound at numbers (next entry), and SPOT[Flock]'s averages
+(`A_s ≤ C_s·T + N·T_R`) with the instance at the code. The first whole build of the first four is
+`r20261112-184638-2d3c` (cpu-1, waiting; [guess] ends by about 20:15Z); the fifth has not been compiled. **It is past
+the 1,000 lines I said I would flag: about 1,350 lines of Lean**, 410 of them the file at the code, whose statements
+repeat the compiled verifier's long name. The mathematics has not stopped anywhere. Still Fri 13 Nov 18:00Z.
+
+## FINDER, Thu 12 Nov 19:18Z: for CIR-270: the figure is an instance of `Claims.SamplingGeneric.CompiledTwo.eventTwoX_oneWait_le_cls_exp`; no instance at the plan's sizes exists yet; I add it in the next pull request, not in #9346
+
+In plain words first. The theorem is in #9346. The nearest `norm_num` fact is #9149's, so it is on #9346's branch,
+but it stops short on one size and no theorem carries it to #9346's form. I have written both missing pieces in one
+new file. They go in section 4's pull request, not into #9346, whose head is checked and ready. Circuits can build
+against the existing fact today and switch names when the new one lands.
+
+**1. The theorem.** `Claims.SamplingGeneric.CompiledTwo.eventTwoX_oneWait_le_cls_exp`
+(`security/Proofs/Flock/SamplingGeneric/TwoOneWaitAvg.lean:123` at `949c03c3a7a1`). [read] On a statement in scope,
+an accepted run samples an incorrect proof block with probability at most
+
+`3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·(T·(1 + e_s·N_s) + c) + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·c)) / 2^256`,
+
+with `T` a run's expected SHA-512 calls (both parties'), `N_s`, `K_s`, `K_m` the sample's three counts at every
+sample, `e_s` the reruns a session's one wait collects plus one, and `c = n_PU·openCalls` the opening checks' calls.
+It is a lemma: the lock does not list it. The listed guarantee with the same expression, at a limit on every run's
+calls in place of the average, is #9149's `Flock.SecurityProofs.SpotOneWaitTwo`.
+
+The part a `norm_num` instance evaluates is the last term: it is `2 · hashBound T e_s N_s K_s K_m c`, with
+`Claims.Flock.Numbers.hashBound` (on `main`, `SamplingGeneric/TwoFirstHitClassNumbers.lean:50`) a rational
+expression. The first two terms are premises in numbers (the sessions' knowledge error and the fork term), not
+arithmetic the tool can hold to an instance.
+
+**2. Does an instance at those sizes exist? Not quite, and not in #9346.** [read] #9346 has no numbers at all. What
+exists is in #9149, in `security/Proofs/Flock/SamplingGeneric/TwoOneWaitNumbers.lean` (on #9346's branch; on `main`
+only when #9149 lands):
+
+- `Claims.Flock.Numbers.hashBound_oneWait_513` (line 50), by `norm_num [hashBound, firstHitCalls]`:
+  `hashBound (513 * 2 ^ 80) 12343987 (2 ^ 26) (2 ^ 38) (2 ^ 38) (513 * 2 ^ 80) ≤ 1 / 2 ^ 103`.
+- `hashBound_oneWait_513_k40` (line 56): the same at `N_s ≤ 2^30`, `K_s, K_m ≤ 2^40`, `≤ 1 / 2 ^ 101`.
+
+Two gaps. The first row's `N_s ≤ 2^26` holds the plan's sessions (895,873) but not its sampled proof blocks
+(453,189,300 > 2^26 = 67,108,864), and the proof blocks are what the Lean's proved count of a sample's sessions
+is (`Compiled.card_firstSlots_le`: at most the sample's length) and what the pricing run's printed figure reads. The second row holds
+them but gives 101 where the figure is 103. And both rows are carried only to the listed, at-budget theorem
+(`CompiledTwo.eventTwoX_oneWait_le_cls_513`, `… + 2^-102`), not to #9346's.
+
+**3. What I add, and where.** One new file, `security/Proofs/Flock/SamplingGeneric/TwoOneWaitAvgNumbers.lean`:
+
+- `Claims.Flock.Numbers.hashBound_oneWait_513_n29`:
+  `hashBound (513 * 2 ^ 80) 12343987 (2 ^ 29) (2 ^ 38) (2 ^ 38) (513 * 2 ^ 80) ≤ 1 / 2 ^ 103`, by the same `norm_num`.
+- `Claims.SamplingGeneric.CompiledTwo.eventTwoX_oneWait_le_cls_exp_513`: #9346's theorem at those limits, with the
+  right-hand side `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`.
+
+[run] Written; not yet compiled (its first build is in `r20261112-184638-2d3c`). [derived] The inequality holds in
+exact rationals on my machine: the left side is $2^{-103.4357}$.
+
+**Not in #9346**: its head has passed both checks and is in the ready line above, and you told circuits you post
+that head. **In the next pull request** (section 4's, Fri 13 Nov 18:00Z), which lands after #9346. If circuits needs
+the name on `main` sooner, I can open this one file as a pull request of its own on #9346's head: say so.
+
+**4. The sizes, and where each is read.** I took "the plan of record's sizes, one table a session" to be the rows
+with `config` `plan` and `T` 1 in `out/sessions_tables.json` of the sessions worker's run `r20261112-081540-7ffe`
+(rc 0). [read] There are four, one a pricing:
+
+| pricing | sampled proof blocks | sessions (expected) | classes needed, $K_m$ | printed bits (`one_wait`) |
+|---|---|---|---|---|
+| A | 151,065,880 | 298,692 | 59,161,862,760 | 104.650 |
+| B | 422,974,874 | 836,124 | 165,649,120,042 | 103.165 |
+| C | 453,189,300 | 895,873 | 177,482,019,720 | 103.065 |
+| C43 | 404,101,229 | 798,865 | 158,257,982,883 | 103.231 |
+
+[derived] I reproduce each printed figure to its three decimals as $-\log_2$ of the last term above, in exact
+rationals, at these values:
+
+- `T` and `c`: `513 · 2^80`, that is $2^{80}$ calls each charged as the 513 compressions of a 64 KiB row, the
+  convention of `main`'s instances (`hashBound_table1_513`).
+- `e_s`: 12,343,987 = 1 + 12,343,986, the accepted reruns one wait collects at one table, `⌈4·2^23/e⌉`
+  (`Deploy.k`, `security/Definitions/Claims.lean:309`; `SpotFlock.ref_one_table`).
+- `N_s`: the sampled proof blocks of the table (the run's own reading; with the sessions instead the figures move
+  in the third decimal: 103.071 for C).
+- `K_s = K_m`: the classes needed, as the run prices them by template.
+
+Every row is within the new instance's limits (`N_s ≤ 2^29`, `K_s, K_m ≤ 2^38`), so the instance says at least 102
+bits where the tool prints 103.065 for C: the test can hold "printed ≥ 102, inputs within the limits". [derived] At
+the four rows' own numerals `hashBound … ≤ 1 / 2 ^ 104` holds for each, so an instance at exact numerals would say
+103, one bit closer. I have not written that one: the numerals are a pricing run's modeled counts, and whether those
+may stand in a Lean file is your ruling, not mine.
+
+**5. Two things I could not settle from the tree, for you or circuits.**
+
+- Which pricing "the plan of record" means for the test. I assumed C. All four are within the instance.
+- [read] The same run has the plan at 4, 16 and 64 tables a session too (for C: 101.065, 99.065 and 97.065 bits).
+  The theorem covers them at their own `e_s`; the instance here and the figure are for one table a session only,
+  as you named it.
+
+Not established: nothing here is proved over a monitoring period; the figure is one phase's. The first two terms of
+the bound are premises. The two new statements have not been through Lean yet.
