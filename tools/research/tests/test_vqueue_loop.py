@@ -3930,6 +3930,57 @@ class Runs:
         return f"c-{n}"
 
 
+class TickRuns(Runs):
+    """`Runs`, read from their dirs through the loop's Landing's own reads (`landing.Reads`), each read recorded (`asked`:
+    the run, the files asked, and how many judges of a check's run (`vqueue_slim.judge`) had begun)."""
+
+    def __init__(self, env: Env, loop: Loop, monkeypatch):
+        from research.landing import Reads
+
+        super().__init__(env, loop, monkeypatch)
+        self.asked, self.judges, judge = [], 0, vqueue_slim.judge
+        d = loop.world.slim_driver()
+        d.reads = Reads(read=self.read, node=lambda rid: "m1")
+        d.states, d.evidence = d.reads.states, d.reads.evidence
+
+        def counted(driver, rec):
+            self.judges += 1
+            return judge(driver, rec)
+
+        monkeypatch.setattr(vqueue_slim, "judge", counted)
+
+    def read(self, rid: str, names: tuple[str, ...]):
+        self.asked.append((rid, names, self.judges))
+        (d := self.tmp / rid).mkdir(parents=True, exist_ok=True)
+        st = self.state[rid]
+        return d, {"state": st[0], "rc": st[1], "ended_utc": st[2], "dir": str(d)}
+
+
+def test_a_tick_reads_every_run_it_judges_once_and_at_once_before_its_first_judge(env, monkeypatch):
+    """The judge step read each candidate's runs one candidate after another, and each candidate's twice or three times
+    (their states, what the failing ones failed, the early pass's records), each read costing its slowest run's 7 s.  A tick
+    reads every run of each check not yet decided, `main`'s and the candidates', at once before judging any, and judges each
+    on that read: no run is read again, and the candidate advances as before."""
+    from research.landing import EVIDENCE
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide, slim=vqueue_slim, gate="check")
+    runs = TickRuns(env, loop, monkeypatch)
+    sha = loop.tick()[1]["sha"]
+    runs.end(main)
+    runs.runs_on(sha, 3, "pytest")
+    del runs.asked[:]
+    runs.judges = 0
+    assert _acts(loop.tick()) == ["slim"] and env.main() == main
+    assert sorted(runs.asked) == [(f"c-{k}", EVIDENCE, 0) for k in range(1, 7)], "each run once, before the first judge"
+    runs.end(sha)
+    del runs.asked[:]
+    runs.judges = 0
+    assert _acts(loop.tick()) == ["slim", "advance", "on_main", "drop"] and env.main() == sha
+    assert sorted(runs.asked) == [(f"c-{k}", EVIDENCE, 0) for k in range(4, 7)], "a check decided is read no more"
+
+
 def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Runs]:
     loop = env.loop(decide, slim=vqueue_slim, gate="check", **kw)
     return loop, Runs(env, loop, monkeypatch)
@@ -5346,8 +5397,8 @@ def test_a_tick_prints_one_line_of_its_steps_seconds_and_peak_resident_size(env)
     (line,) = timed
     assert line.startswith("research queue vqueue: tick 1: ") and ", peak 2.5 GB; s/GB: log 1.0/2.5 fetch 1.0/2.5 " in line
     steps = line.split("; s/GB: ")[1].split("; ")[0].split()
-    assert steps[::2] == ["log", "fetch", "ready", "below", "judge", "chain", "decide", "notices", "followed", "on_main",
-                          "build", "keep", "mapped"]
+    assert steps[::2] == ["log", "fetch", "ready", "reads", "below", "judge", "chain", "decide", "notices", "followed",
+                          "on_main", "build", "keep", "mapped"]
     assert all(x.endswith("/2.5") for x in steps[1::2]) and line.endswith("; graph2 0 read(s) 0.0 MB 0.0 s, 0 cached")
 
     def broken():
