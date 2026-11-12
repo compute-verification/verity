@@ -474,7 +474,17 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the sampled
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (the profile, audit record and incorrect-block bound tests, under each sampling design).
+One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.check` gives it) publishes `{"bound",
+"complete", "drawn", "per_template", "proved"}`. `complete` is the record's own: whether every verdict ran. An accept
+waits on the verdicts of record and on those that ran, so an accept can say `complete` is false, and then a verdict
+that is not of record did not run. A reader that wants a complete audit reads `audit.answer_complete`, never the
+verdict alone: it is true only of an accept whose `complete` is true, so an answer without the field (one written
+before it, a reject, an undecided) is not complete. A two-stage outcome says it only under `second_stage.complete`:
+the two-stage form allowed, the replay block the registered request Definition, and each audit record accepted and
+complete.
+
+Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
+sampling design).
 
 ### The consumers
 
