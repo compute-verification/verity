@@ -605,11 +605,14 @@ class Judged:
 class Skip:
     """A PR a build left out (`World.build`) and why: ``held`` names what of the build holds its head already (the member
     whose head does, else the candidate it is built on), and ``by`` the members above `main` it conflicts with where it merges
-    onto `main` alone."""
+    onto `main` alone.  A move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or
+    has ``fix``, what its owner is told to do."""
     pr: PR
     why: str
     held: str = ""
     by: tuple[int, ...] = ()
+    waits: bool = False
+    fix: str = ""
 
 
 class _Seen:
@@ -1484,6 +1487,7 @@ class World:
             else:
                 merged.append(Member(p.number, p.head, p.owner or "", commit))
                 tip = commit
+        self._keep_moves(main)
         return tip, merged, left
 
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
@@ -1494,15 +1498,16 @@ class World:
         which covers its head: merged as any PR."""
         if below := self.q._scripts_below(tip, main):
             return None, Skip(p, f"the members below it change {', '.join(below)}, which judge its move: it waits until they "
-                                 "land")
+                                 "land", waits=True)
         commit, why = self.q._regenerate(tip, p, main)
-        self._keep_moves(main)
         if commit is not None:
             self.certified[p.number] = {"map": p.move, "tip": tip, "commit": commit, "on_mark": p.number in self.on_mark,
                                         "certificate": self.q._made[Queue._move_key(tip, p, main)].get("certificate")}
             return commit, None
         if p.number in self.on_mark:
-            return None, Skip(p, f"it came on its mark alone, and {why}")
+            return None, Skip(p, f"it came on its mark alone, and {why}",
+                              fix="It lands with a land verdict, or on its mark once a candidate on a later `main` certifies "
+                                  "its move.")
         self.log(f"research queue vqueue: #{p.number}'s move isn't regenerated on {tip[:12]} ({why}): its land verdict covers "
                  "its head, merged as any PR's")
         return None, None
@@ -2419,8 +2424,9 @@ class Loop:
         for s in left:
             p, key = s.pr, f"{s.pr.head}@{a.base}"
             line = dict(base=a.base, members=[p.number], heads=[p.head], number=p.number)
-            if s.held:                                      # it reaches `main` with what holds it
-                recs.append(self.record(t, "skip", **line, why=s.why, held=True, done=False))
+            if s.held or s.waits:                           # it reaches `main` with what holds it, or is built once that has
+                recs.append(self.record(t, "skip", **line, why=s.why, **({"held": True} if s.held else {"waits": True}),
+                                        done=False))
                 continue
             if key not in t.told and (now := self._landed(t, p.head)):
                 recs.append(self.record(t, "skip", **line, why=f"{s.why}; `main` {now[:12]}, fetched again, holds its head",
@@ -2429,6 +2435,8 @@ class Loop:
             names = ", ".join(f"#{n}" for n in s.by)
             fix = f"merge `main` into it once {names} {'is' if len(s.by) == 1 else 'are'} on it" if s.by else "merge `main` into it"
             text = None if key in t.told else (
+                f"#{p.number} at {p.head[:12]} isn't built on the verified queue's candidate on {a.base[:12]}: {s.why}. {s.fix}"
+                if s.fix else
                 f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {s.why}. "
                 f"It is left out until it merges: {fix}")
             posts = text is not None and not self.shadow
