@@ -10,6 +10,7 @@ import torch
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 
+
 class _HostWindows:
     """The raw bytes of one step retained on host as pinned windows (P0 windowed staging); quacks like the contiguous `keep` tensor for
     openings (`blk[lo:hi]` -> CPU uint8 tensor, may span two windows), `numel()`, `is_cuda`.  `wins` = [(k, hv, n)] with k the window
@@ -62,7 +63,7 @@ class _HostWindows:
                 parts.append(hv[a:b])
         return parts[0] if len(parts) == 1 else torch.cat(parts)
 
-    def cpu(self) -> "_HostWindows":
+    def cpu(self) -> _HostWindows:
         return self
 
 
@@ -123,7 +124,7 @@ class _HostRanges:
         parts = [hv[max(lo, rlo) - rlo:min(hi, rhi) - rlo] for rlo, rhi, hv in cov]
         return parts[0] if len(parts) == 1 else torch.cat(parts)
 
-    def cpu(self) -> "_HostRanges":
+    def cpu(self) -> _HostRanges:
         return self
 
 

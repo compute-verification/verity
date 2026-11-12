@@ -478,7 +478,8 @@ class _Hyper(nn.Module):
 
     def __init__(self, rng, norm_weight: bool = True, norm_eps: float = EPS) -> None:
         super().__init__()
-        p = lambda words: nn.Parameter(_tensor(words), requires_grad=False)
+        def p(words):
+            return nn.Parameter(_tensor(words), requires_grad=False)
         self.fn0, self.fn0_broadcast = p(_f32(rng, OUT, HC * HID, sd=0.1)), p(_f32(rng, OUT, HID, sd=0.1))
         self.fn1 = p(_f32(rng, OUT, HC * HID, sd=0.1))
         self.scale0, self.base0, self.scale1, self.base1 = (p(_f32(rng, n, sd=0.5)) for n in (3, OUT, 3, OUT))
@@ -499,7 +500,8 @@ class _Hyper(nn.Module):
 def _twin(model: _Hyper, x: np.ndarray, NS: int, NS0: int, M: int | None = None) -> list[int]:
     """The model's output as the twin composes the kernels at T tokens in a launch of M (T without one): the FMA path at most 16
     tokens, the TF32 path above."""
-    u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
+    def u(t):
+        return np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     TN, TH, TH_HEAD = GEOMETRY["TN"], GEOMETRY["TH"], GEOMETRY["TH_HEAD"]
     h, post, comb = W.pre_broadcast(x, m["fn0_broadcast"], m["scale0"], m["base0"], m["norm0"], NS0, TN, REPEAT, EPS, EPS)
@@ -703,7 +705,8 @@ class _SparseAttn(nn.Module):
     def __init__(self, rng, ratio: int, window: int, calls: tuple[int, ...], topk: int = 1024, NHP: int = 64, p0: int = 0,
                  skip: int = 0) -> None:
         super().__init__()
-        p = lambda words: nn.Parameter(_tensor(words), requires_grad=False)
+        def p(words):
+            return nn.Parameter(_tensor(words), requires_grad=False)
         self.ratio, self.window, self.calls, self.topk, self.NHP, self.p0, self.skip = ratio, window, calls, topk, NHP, p0, skip
         self.cos_sin_cache, self.attn_sink = p(TQ._cs(rng, (p0 + sum(calls) + skip * len(calls), SPARSE_DR))), p(_f32(rng, NHP))
         if ratio > 1:
@@ -734,12 +737,15 @@ def _sparse_inputs(rng, model: _SparseAttn) -> list[np.ndarray]:
 def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None = None) -> list[int]:
     """The layer's outputs as the twins compose the kernels over its window, state and compressed histories from position P; the
     decode at position p planned among the (window, compressed) lengths and at the index `launch[p]` gives, else alone."""
-    u = lambda t: np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
+    def u(t):
+        return np.array(_words(t), np.uint16 if t.dtype == torch.bfloat16 else np.uint32).reshape(t.shape)
     m = {k: u(v) for k, v in model.named_parameters()}
     ratio, window, cs, sink = model.ratio, model.window, m["cos_sin_cache"], m["attn_sink"][:2]
     D, DN, QB, BN, k = SPARSE_D, SPARSE_D - SPARSE_DR, SPARSE_DR, SPARSE_BN, 3 if model.ratio > 1 else 2
-    stack = lambda rows: [np.stack(c) for c in zip(*rows)]
-    words = lambda v: np.array(v, np.int64).astype(np.uint32)
+    def stack(rows):
+        return [np.stack(c) for c in zip(*rows)]
+    def words(v):
+        return np.array(v, np.int64).astype(np.uint32)
     win, state, comp, outs, P = [], [], [], [], model.p0
     p0 = P
     for call in zip(*(xs[i::k] for i in range(k))):
@@ -926,7 +932,8 @@ class _OProj(nn.Module):
     def __init__(self, rng, expr: str = "bhr,hdr->bhd", recipe: tuple = (1, 128, 128)) -> None:
         super().__init__()
         self.expr, self.recipe = expr, list(recipe)
-        p = lambda t: nn.Parameter(t, requires_grad=False)
+        def p(t):
+            return nn.Parameter(t, requires_grad=False)
         self.cos_sin_cache = p(_tensor(TQ._cs(rng, (16, 16), p=0.0)))
         self.weight = p(torch.from_numpy(rng.standard_normal((2, self.N, 256)).astype(np.float32)).to(torch.float8_e4m3fn))
         self.weight_scale_inv = p(torch.from_numpy((np.abs(rng.standard_normal((2, 1, 2))) * 0.01).astype(np.float32)))
@@ -1119,7 +1126,8 @@ class _MarlinLaunches(nn.Module):
         E, H, I = MARLIN_E, MARLIN_H, MARLIN_I
         self.codes13, self.codes2 = rng.integers(0, 16, (E, 2 * I, H)), rng.integers(0, 16, (E, H, I))
         self.bytes13, self.bytes2 = rng.integers(118, 128, (E, 2 * I, H // 32)), rng.integers(118, 128, (E, H, I // 32))
-        p = lambda a: nn.Parameter(torch.from_numpy(a.astype(np.uint8)), requires_grad=False)
+        def p(a):
+            return nn.Parameter(torch.from_numpy(a.astype(np.uint8)), requires_grad=False)
         self.w13, self.w2 = p(MR.pack_e2m1(self.codes13)), p(MR.pack_e2m1(self.codes2))
         self.s13, self.s2 = p(self.bytes13), p(self.bytes2)
         self.block_m = block_m
@@ -1150,7 +1158,8 @@ def _marlin_inputs(rng) -> tuple:
 
 def _derive_marlin(model, xs, monkeypatch, served=MARLIN_SMALL):
     monkeypatch.setattr(vllm_marlin_moe, "MARLIN_SERVED", served)
-    to = lambda a: torch.from_numpy(a) if a.dtype == np.int32 else _tensor(a)
+    def to(a):
+        return torch.from_numpy(a) if a.dtype == np.int32 else _tensor(a)
     inputs = tuple(to(a) for a in xs)
     return derive_report(model, inputs, mode="profile", profile=PROFILE_B1_EAGER_V3.name, name="marlin", rules=vllm_ruleset()), inputs
 

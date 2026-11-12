@@ -18,7 +18,8 @@ import random
 
 import pytest
 
-from verity_vllm.commit import binding as B, step_rows
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = step_rows.ROW_BYTES
@@ -275,7 +276,6 @@ def test_late_read_verifies_but_fails_correspondence():
     c, run, bmap = commit(overwritten)
     pop = list(B.expected_population(structure(), workload()))
     assert B.coverage_check(pop, bmap)["ok"]                    # the identity IS bound (to the wrong bytes)
-    ident = B.identity(PD, "r0", 1, 0, "model.layers.0.self_attn.qkv_proj", "0", 0, -1, 0)
     e = B.map_index(bmap)[("r0", 1, 0, "model.layers.0.self_attn.qkv_proj", "0", 0)][0]
     ops = c.open([(1, e["leaf_lo"] + 1)])
     assert all(c.verify(run, o) for o in ops), "openings verify against the committed root"
@@ -583,7 +583,8 @@ def test_load_required_manifest_accepts_a_one_request_manifest_whose_engine_step
     subscript ('int' object is not subscriptable -> every B=1 Commit 'binding map not built').  The loader must keep the numbers, declare NO composition, and composition_check must skip (named) on that header."""
     p, doc = _b8_doc(tmp_path)
     doc["global"] = False
-    doc.pop("requests_declared"); doc.pop("composition_reference")
+    doc.pop("requests_declared")
+    doc.pop("composition_reference")
     doc["engine_steps"] = [0, 1, 2]                                        # what `build` writes for one request arriving at engine step 0
     p1 = _write(tmp_path, "b1_numbers.json", doc)
     pop, hdr = B.load_required_manifest(p1, PD, requests=[f"r{k}" for k in range(8)], steps=max(B8_CAP), arrivals={f"r{k}": 0 for k in range(8)})

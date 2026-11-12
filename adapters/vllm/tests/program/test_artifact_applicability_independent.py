@@ -1129,10 +1129,10 @@ def _r9_recorded_applicability(m: dict) -> dict:
         out["numerics_profile"] = m["profile"]
     pkgs = ((m.get("inputs_trace") or {}).get("site_packages_by_package") or {})
     for name in pkgs:
-        for pkg, field in (("torch-", "torch_version"), ("triton-", "triton_version"), ("vllm-", "vllm_version")):
+        for pkg, key in (("torch-", "torch_version"), ("triton-", "triton_version"), ("vllm-", "vllm_version")):
             if name.startswith(pkg) and name.endswith(".dist-info"):
                 ver = name[len(pkg):-len(".dist-info")]
-                out[field] = ver[:-len(".cu129")] if field == "vllm_version" and ver.endswith(".cu129") else ver
+                out[key] = ver[:-len(".cu129")] if key == "vllm_version" and ver.endswith(".cu129") else ver
     return out
 
 

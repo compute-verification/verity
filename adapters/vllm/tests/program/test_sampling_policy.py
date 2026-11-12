@@ -204,7 +204,6 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
 
 def test_geometry_refusals_are_named(tmp_path):
     from verity_vllm.pipeline.build import sampler_geometry
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     # B > 64: vLLM runs `_topk_topp_kernel`, not the split pipeline
     pol = sampling_policy(None, _requests_manifest(tmp_path, 65))
     ref = sampler_geometry(pol, _l40s(), LP=8, T=15)

@@ -7,12 +7,19 @@ GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bou
 test_binding_negatives)."""
 from __future__ import annotations
 
-import pytest
-
-from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
-from verity_vllm.commit import binding as B, executed_prefix as EP
+from tests.commit.test_binding_negatives import (
+    B8_CAP,
+    B8_LP,
+    PD,
+    b8_engine_rows,
+    b8_manifest,
+    b8_stream,
+    commit,
+)
 from verity_vllm.check import executed_prefix as EPL
 from verity_vllm.check.replay.linkage import linkage_horizon
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import executed_prefix as EP
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 EOS = 50279
@@ -407,7 +414,9 @@ def test_a_reduced_prefix_is_accepted_only_linked_to_the_match_account_of_the_sa
     assert L["tokens_equal"] is True and L["tokens_json"]["tokens_equal"] == {"r0": True, "r1": True} and L["tokens_json"]["lag"] == 1
     # with the Commit's served lists the equality is the FULL generated_token_ids list: the same length + last token but
     # one interior id different -> not one serving transcript, first differing position named
-    same_len = _served({"r0": 11, "r1": 32}, {"r0"}); same_len["r0"] = list(same_len["r0"]); same_len["r0"][4] = 99
+    same_len = _served({"r0": 11, "r1": 32}, {"r0"})
+    same_len["r0"] = list(same_len["r0"])
+    same_len["r0"][4] = 99
     Lf = EPL.link_to_match_account(e, acc, order=ORDER, declared_lag=1, served_tokens=same_len)
     assert not Lf["ok"] and Lf["tokens_json"]["tokens_equal"] == {"r0": False, "r1": True} and Lf["tokens_json"]["tokens_equal_rule"] == "full generated_token_ids list"
     assert any("first differing position 4" in p and "not one serving transcript" in p for p in Lf["problems"]), Lf["problems"]

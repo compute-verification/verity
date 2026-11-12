@@ -3,20 +3,33 @@
 inputs cannot be resolved is not evaluable by name (`_Unresolved`), never skipped."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay.replay_dump import dump_row_words
-from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity.definitions.numerics.kernel_registry import Declined
 from verity.definitions.numerics.rows import EVALUATORS, ROWS
-from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, row_args
-from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
-from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
+
+from verity_vllm.check.replay.compare import (
+    _interior_slice,
+    _tp_member_alias,
+    lifted_compare,
+    padded_slot_enable,
+)
 from verity_vllm.check.replay.delegate import DELEGATES, Place
+from verity_vllm.check.replay.index import (
+    IDS_MEMBER,
+    SAMPLER_OP,
+    SEED_PARAM,
+    ProgramIndex,
+    const_word,
+    row_args,
+)
+from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
+from verity_vllm.check.replay.replay_dump import dump_row_words
+from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity_vllm.program.compact import is_file_prog
+from verity_vllm.query.manifest import format as RM
 
 TOPP_SPLITS_OPERAND = 5     # a sampler select's 6th operand: the top-p select's split count S, the one select with six
 
@@ -240,7 +253,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(f"run value {pname}.{f['name']}: the run Record's values are not read by the replay yet")
                     else:
                         # the registered value as the build's layout records it: what registration binds, never a committed word
-                        words.append(np.array([f["bits"]], dtype=_NP_BY_BITS[int(f["width"])] if int(f["width"]) in _NP_BY_BITS else np.uint64))
+                        words.append(np.array([f["bits"]], dtype=_NP_BY_BITS.get(int(f["width"]), np.uint64)))
                         inputs_rec.append({"kind": "registered", "param": pname, "field": f["name"], "bits": f"0x{f['bits']:x}"})
                 elif pname == SEED_PARAM:
                     # the sampler's named INPUT: the committed runner.sampler/seed word of THIS (step, request).  Never the declared /
