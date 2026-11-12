@@ -767,7 +767,7 @@ def test_what_the_point_never_meets_stays_a_premise():
     assert w.N == (T - 1) * K * N and {g.weight for g in w.groups} == {(True, True)}
 
 
-#: a bf16 weight of one-word rows, more rows than the point draws bf16 words, so that its rows repeat at one point
+#: a bf16 weight of one-word rows, more rows than the point samples bf16 words, so that its rows repeat at one point
 NB = 2048
 BF16 = P.BF16
 LIN_NB = bind(RP.LinearRef, K=1, N=NB, DT="f32", BIAS=False)
@@ -778,8 +778,8 @@ def _widen(B, a: Coll) -> Coll:
 
 
 def test_a_narrow_row_is_compared_at_enough_points_to_hold_64_bits():
-    """A bf16 weight's one-word rows hold `points.held(16)` = 10 drawn bits each, so they are compared at
-    ceil(64 / 10) = 7 points: at one, its NB rows, more than the 1024 bf16 words the point draws, would repeat
+    """A bf16 weight's one-word rows hold `points.held(16)` = 10 sampled bits each, so they are compared at
+    ceil(64 / 10) = 7 points: at one, its NB rows, more than the 1024 bf16 words the point samples, would repeat
     whatever the weight. Rounded after each update and widened before its product, the weight is charged and not
     refused."""
     assert (PT.points(1, PT.held(16)), PT.points(K, PT.held(32)), PT.points(1, 4)) == (7, 1, 16)
@@ -830,8 +830,8 @@ def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
         "rather than out of a scan whose contexts repeat")
 
 
-def test_the_point_is_drawn_once_a_program_and_read_at_every_k():
-    """Two walks of one Program draw one point (SHA-512 of its digest, nothing else), and its reads at two k make
+def test_the_point_is_sampled_once_a_program_and_read_at_every_k():
+    """Two walks of one Program sample one point (SHA-512 of its digest, nothing else), and its reads at two k make
     one pass."""
     p = carried_loop()
     w, R, root, reasons = WK._read(p, KB, WK.PRODUCTS, WK.LOOKUPS)
@@ -857,7 +857,7 @@ def test_the_point_is_drawn_once_a_program_and_read_at_every_k():
 
 def test_the_product_kernel_is_the_products_body():
     """`points.dot`, by which the point computes a `DotRef` and an f32 `LinearRef` without a bias, gives the words
-    their bodies give, on the point's draws and on uniform words with edge words mixed in."""
+    their bodies give, on the point's samples and on uniform words with edge words mixed in."""
     import numpy as np
     from verity.circuits.evaluation.batch import evaluate_batch, sample_uniform
 
@@ -865,7 +865,7 @@ def test_the_product_kernel_is_the_products_body():
     for f, rows in ((DOT, 1), (LIN, N)):
         params = [t for _n, t in f.signature()[0]]
         for words in ([np.asarray(a, dtype=np.uint64) for a in sample_uniform(rng, 256, params)],
-                      [PT.draw(rng, 32, (256, t.leaves)) for t in params]):
+                      [PT.sample(rng, 32, (256, t.leaves)) for t in params]):
             x, w = (a.reshape(256, -1) for a in words)
             ref = np.asarray(evaluate_batch(f, x, w, kernel="reference"), dtype=np.uint64).reshape(256, rows)
             assert (PT.dot(x[:, None, :], w.reshape(256, rows, K)) == ref).all()
@@ -874,7 +874,7 @@ def test_the_product_kernel_is_the_products_body():
 
 def test_each_twin_is_the_reference():
     """Each numpy twin (`points.TWINS`) gives the reference's words, on uniform words with the edge words
-    `sample_uniform` mixes in and on the point's own draws: bit-exact for every word but the exponential's, which is
+    `sample_uniform` mixes in and on the point's own samples: bit-exact for every word but the exponential's, which is
     held on these words only."""
     import numpy as np
     from verity.circuits.defs import REGISTRY
@@ -886,7 +886,7 @@ def test_each_twin_is_the_reference():
         params = [t for _n, t in f.signature()[0]]
         n = 512 if fid == "F32ExpRn_v1" else 4096
         uni = [np.asarray(a, dtype=np.uint64) for a in sample_uniform(rng, n, params)]
-        near = [PT.draw(rng, max(t.width_set()), (n,)) for t in params]
+        near = [PT.sample(rng, max(t.width_set()), (n,)) for t in params]
         for words in (uni, near):
             ref = np.asarray(evaluate_batch(f, *words, kernel="reference"), dtype=np.uint64).reshape(-1)
             got = np.asarray(twin(*words), dtype=np.uint64).reshape(-1)

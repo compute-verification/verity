@@ -5,12 +5,12 @@ specific, no gather's rows, no current input: `claims`) is claimed to have no tw
 words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
 is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
-(`Input<w>`) is one word, drawn generic and nonzero, repeated through every array it fills (all tokens are one
-token), and every word of `θ` and of a registered input is drawn on its own: a finite float at its width (four
+(`Input<w>`) is one word, sampled generic and nonzero, repeated through every array it fills (all tokens are one
+token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
 binades about 1, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no float
-has. The draw is seeded by SHA-512 of the Program's digest, with no other randomness, so two reads agree.
+has. The sample is seeded by SHA-512 of the Program's digest, with no other randomness, so two reads agree.
 
-Rows are equal only where they agree at `points` points, enough to hold 64 drawn bits a row: P = ceil(64 / (K b)),
+Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
 by chance. A row with a NaN is unequal to every row.
@@ -28,10 +28,10 @@ or else by the reference a word at a time (`Tally.reference`), and a `DotRef` or
 by `dot`, its body's chain of multiply-adds on its operands as they are, so a batch's shared operand is never
 repeated a member. Every twin is bit-exact for all words but the exponential's, which is held to the reference on the
 twins test's words only. A lookup (`work.LOOKUPS`) reads its
-index modulo its table's rows, so a drawn token picks a row: the point's rule, not the reference's (which gives a NaN
+index modulo its table's rows, so a sampled token picks a row: the point's rule, not the reference's (which gives a NaN
 out of range).
 
-What the point doesn't meet stays a premise (`work`'s docstring): rows equal only at values the draw never takes (W
+What the point doesn't meet stays a premise (`work`'s docstring): rows equal only at values the sample never takes (W
 plus z plus -1 times z, a one-word multiplier that is 0, inputs fitted to the weights, a circuit that tests its own
 weights against a stated constant).
 """
@@ -52,7 +52,7 @@ from verity.circuits.refs import Affine, Concat, Strided
 
 from . import work as WK
 
-#: the drawn bits a row must hold
+#: the sampled bits a row must hold
 ROW_BITS = 64
 #: the bits a word of each rounding's format holds at the point: its sign, its mantissa and two of its exponent
 ROUNDED = {"F32ToBf16Rn": 10, "F32ToF16Rn": 13, "F32ToE4m3Sat": 6, "F32ToE2m1Sat": 4}
@@ -60,17 +60,17 @@ F32_NAN, F32_NAN_PTX = 0x7FC00000, 0x7FFFFFFF
 
 
 def held(w: int) -> int:
-    """The bits a drawn word of width ``w`` holds: f32's, bf16's and e4m3's sign, mantissa and two exponent bits (four
+    """The bits a sampled word of width ``w`` holds: f32's, bf16's and e4m3's sign, mantissa and two exponent bits (four
     binades), every other width's own."""
     return {32: 26, 16: 10, 8: 6}.get(w, w)
 
 
 def points(K: int, b: int) -> int:
-    """P: the points at which rows of ``K`` words of ``b`` bits hold `ROW_BITS` drawn bits between them."""
+    """P: the points at which rows of ``K`` words of ``b`` bits hold `ROW_BITS` sampled bits between them."""
     return max(1, math.ceil(ROW_BITS / (K * b)))
 
 
-def draw(rng: np.random.Generator, w: int, shape) -> np.ndarray:
+def sample(rng: np.random.Generator, w: int, shape) -> np.ndarray:
     """Words of width ``w``, each generic and nonzero: a finite float of four binades about 1 at 32, 16 and 8 bits
     (f32, bf16, e4m3), any nonzero word at every other width."""
     def bits(n: int) -> np.ndarray:
@@ -293,9 +293,9 @@ class Walk:
             if is_input(nd.fn):
                 w = _leaf_width(nd)
                 if is_registered(nd.fn) or k in theta:
-                    env["n", k] = draw(rng, w, (self.P, nd.out.leaves))
+                    env["n", k] = sample(rng, w, (self.P, nd.out.leaves))
                 else:
-                    env["n", k] = np.repeat(draw(rng, w, (self.P, 1)), nd.out.leaves, axis=1)
+                    env["n", k] = np.repeat(sample(rng, w, (self.P, 1)), nd.out.leaves, axis=1)
         return env
 
     def run(self) -> Tally:

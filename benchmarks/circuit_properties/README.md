@@ -64,7 +64,7 @@ multiply or a divide only where every other argument is one no input reaches, on
 batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
 a multiply by a stated 0 reaches nothing. Each charged operand whose rows only these rules show distinct is tested at a
 point (`points.check`): the Program evaluated once, θ's words generic and every input's one word repeated, the
-submitter's worst case, and refused (`work.RepeatedRows`) where two rows are equal at enough points to hold 64 drawn
+submitter's worst case, and refused (`work.RepeatedRows`) where two rows are equal at enough points to hold 64 sampled
 bits a row. So a weight combined with its own words whose rows are equal whatever the weight is refused: cancelled
 against itself (M plus -1 times M; W times v plus -1 times v), or times its own rows in another order (M times
 swap(M)), and so is a weight times a difference of an input's words. The pass is about one evaluation of the step,
