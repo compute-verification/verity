@@ -39,11 +39,11 @@ from fractions import Fraction
 from pathlib import Path
 
 import generate
-import lean_headline as H
-import lean_headline_dc as D
 import loads
 import pytest
 import test_lean_headline as T
+from verity_machine_model import dc_reading as D
+from verity_machine_model import lean_headline as H
 from verity_machine_model.model import DATA, devices, model, vector
 
 SASS = Path(__file__).resolve().parent / "fixtures" / "census_cover_sass.json"
