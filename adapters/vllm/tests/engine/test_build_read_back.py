@@ -3,7 +3,8 @@
 The effective-execution document whole, for an engine whose config holds every field, for one whose config holds none
 of the optional ones, and for an object that is no engine; the compilation facts where the config names its mode
 ``level`` and where the config cannot be read; the FlashAttention versions a model's layers carry; vLLM's FlashInfer
-verdict; and the ``kernel_config`` of `engine_kwargs_for`, whatever the target's engine args hold under that key.
+verdict; the ``kernel_config`` of `engine_kwargs_for`, whatever the target's engine args hold under that key; and what a
+build in one process installs on its model and says of it.
 """
 from __future__ import annotations
 
@@ -277,3 +278,50 @@ def test_an_engine_arg_replaces_the_kernel_config_whole(checkpoints: Any) -> Non
     kw, _, _ = build.engine_kwargs_for(checkpoints, case="M", target=_Target(kernel_config={"moe_backend": "triton"}),
                                        engine_args={"kernel_config": {"gemm": "tuned"}})
     assert kw["kernel_config"] == {"gemm": "tuned"}
+
+
+@pytest.mark.parametrize(("rope", "producers"), [
+    ({"layers": 2, "launches": 1}, {"layers": 2, "rows": ["q", "k"]}),
+    ({"layers": 2, "launches": 1}, None),
+    (None, {"layers": 2, "rows": ["q", "k"]}),
+    (None, None),
+])
+def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_model_and_says_each_record(
+        checkpoints: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, rope: Any, producers: Any) -> None:
+    """The real `build_engine` at a world of one, on a stand-in ``vllm.LLM`` whose driver worker holds a model runner: what
+    `rope_cache.install` and `int8_producers.install` return for the runner's model is the engine's ``rope_cache`` and
+    ``fused_producers``, and a record that is not None is said once, under its switch's name, the rope's first.  The two
+    modules are stood in (the rope's imports Triton as it is imported): each holds its switch's name and an `install`."""
+    from verity_vllm import engine
+    from verity_vllm.engine import moe_align, sparse_mla, topp_pin
+    for switch in (moe_align, sparse_mla, topp_pin):
+        monkeypatch.setattr(switch, "arm", lambda: None)
+    model = _Model(_Layer(3))
+    given: list[tuple[str, Any]] = []
+
+    def stood_in(module: str, switch: str, record: Any) -> None:
+        def install(m: Any) -> Any:
+            given.append((module, m))
+            return record
+        monkeypatch.setattr(engine, module, NS(ENV=switch, install=install), raising=False)
+
+    stood_in("rope_cache", "VERITY_ROPE_CACHE_FUSED", rope)
+    stood_in("int8_producers", "VERITY_INT8_FUSED_PRODUCERS", producers)
+
+    class _LLM:
+        def __init__(self, **kw: Any) -> None:
+            config = NS(cache_config=NS(), scheduler_config=NS(), model_config=NS(enforce_eager=kw["enforce_eager"]),
+                        compilation_config=NS(), use_v2_model_runner=1)
+            runner = NS(get_model=lambda: model)
+            self.llm_engine = NS(vllm_config=config, engine_core=NS(engine_core=NS(model_executor=NS(driver_worker=NS(model_runner=runner)))))
+
+    monkeypatch.setattr(prof, "breakable_cudagraph", lambda: False)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm:LLM", _LLM)
+    fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
+    eng = build.build_engine(checkpoints, case="M", execution="eager")
+    assert eng.model is model and given == [("rope_cache", model), ("int8_producers", model)]
+    assert (eng.rope_cache, eng.fused_producers) == (rope, producers)
+    want = [f"[engine] {name}: {json.dumps(record)}" for name, record in (("VERITY_ROPE_CACHE_FUSED", rope),
+                                                                        ("VERITY_INT8_FUSED_PRODUCERS", producers)) if record is not None]
+    assert capsys.readouterr().out.splitlines() == want
