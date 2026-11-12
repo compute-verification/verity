@@ -1,0 +1,1 @@
+2026-11-12T12:17Z CHECKTIME: Part A head 26f9c8b476 pushed; r20261112-120313-5403 passed (definitions 496.0 s at 10 workers, served case skipped); next: the opt-in run of the served case, then the PR.
