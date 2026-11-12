@@ -27,8 +27,8 @@ PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, q
                      ingress_buckets=3, egress_cells=9, every=2)
 CLASSES = ((4, 4, 2), (128, 8, 3), (128, 8, 1))
 ROWS = dataclasses.replace(PLAIN, lengths=1, content=CLASSES)
-#: the same schedule at the lengths rows' form 2
-ENDS = dataclasses.replace(ROWS, lengths=2)
+#: the same schedule at the lengths rows' form 2, each class its two sizes
+ENDS = dataclasses.replace(ROWS, lengths=2, content=tuple(c[:2] for c in CLASSES))
 T = PLAIN.window
 SERVE = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00", "--windows", "1"]
 REHEARSE = ["rehearse", "--fake", "--out", "o", "--ids"]
@@ -46,27 +46,34 @@ def schedule_of(argv: list[str]) -> WardenParams:
 
 def test_the_connection_rows_are_schedule_flags_rehearse_passes_to_serve():
     """`--lengths 1` and `--content P,O,ROWS ...` give the schedule its lengths rows and its content rows' classes, in
-    order, two of one size among them, and `--lengths 2` the lengths rows' form 2, another schedule; `rehearse`
-    passes its schedule's to `serve`, which reads the same schedule; without them the schedule is the one it was and
-    no flag is passed; and a class that isn't three integers, a form that is none, or content rows without lengths
-    rows, is refused. Under form 2 a rehearsal runs long enough to admit its last request (`closing_windows`)."""
+    order, two of one size among them, and `--lengths 2` with `--content P,O ...` the lengths rows' form 2, another
+    schedule; `rehearse` passes its schedule's to `serve`, which reads the same schedule; without them the schedule
+    is the one it was and no flag is passed; and a class that isn't two or three integers, a form that is none, a
+    class of the other form's numbers, or content rows without lengths rows, is refused. Under form 2 a rehearsal
+    runs long enough to admit its last request (`closing_windows`)."""
     rows = ["--lengths", "1", "--content", *(",".join(map(str, c)) for c in CLASSES)]
+    pairs = ["--content", *(",".join(map(str, c[:2])) for c in CLASSES)]
     got = schedule_of(REHEARSE + SCHEDULE + rows)
     assert got == ROWS and got.digest != PLAIN.digest
     assert crr.flags_of(got) == rows and schedule_of(SERVE + SCHEDULE + crr.flags_of(got)) == got
     lengths = schedule_of(REHEARSE + SCHEDULE + ["--lengths", "1"])
     assert (lengths.lengths, lengths.content) == (1, None) and crr.flags_of(lengths) == ["--lengths", "1"]
-    ends = schedule_of(REHEARSE + SCHEDULE + ["--lengths", "2", *rows[2:]])
+    ends = schedule_of(REHEARSE + SCHEDULE + ["--lengths", "2", *pairs])
     assert ends == ENDS and ends.digest not in (ROWS.digest, PLAIN.digest)
-    assert crr.flags_of(ends) == ["--lengths", "2", *rows[2:]]
+    assert crr.flags_of(ends) == ["--lengths", "2", *pairs]
     assert schedule_of(SERVE + SCHEDULE + crr.flags_of(ends)) == ends
     for argv in (REHEARSE, SERVE):
         plain = schedule_of(argv + SCHEDULE)
         assert plain == ws._params(ws.parser().parse_args(argv + SCHEDULE)) and crr.flags_of(plain) == []
         assert plain.digest == PLAIN.digest
-    for bad in (["--content", "4,4"], ["--content", "4,4,x"], ["--lengths", "3"], ["--lengths", "0"]):
+    for bad in (["--content", "4"], ["--content", "4,4,2,1"], ["--content", "4,4,x"], ["--lengths", "3"],
+                ["--lengths", "0"]):
         with pytest.raises(SystemExit):
             ws.parser().parse_args(REHEARSE + SCHEDULE + bad)
+    with pytest.raises(ValueError, match="drop its third number"):
+        schedule_of(REHEARSE + SCHEDULE + ["--lengths", "2", *rows[2:]])
+    with pytest.raises(ValueError, match="give the rows of each of its tables"):
+        schedule_of(REHEARSE + SCHEDULE + ["--lengths", "1", *pairs])
     with pytest.raises(ValueError, match="has lengths rows"):
         schedule_of(REHEARSE + SCHEDULE + ["--content", "4,4,2"])
     # a request sent in bucket b is admitted by bucket b + 2, which is at most the run's last bucket less the span
@@ -244,20 +251,33 @@ def device_key(out):
 def test_under_form_2_every_execution_phase_has_one_line_and_the_runs_last_its_head(tmp_path, process):
     """The six connections at the lengths rows' form 2, inline and in the publisher process: each of the run's four
     execution phases has one line and one blob, in order, and each its registration, the last one's signed at the
-    run's last close. The last two released nothing and their tables are the schedule's all the same. The check
-    accepts the run, counts four of four registered, and no word that an execution phase has no head, of none due."""
+    run's last close. Its lengths and fails tables are the schedule's, and each class's three tables, their salts
+    and the line's cost are of the rows the execution phase's releases filed in the class: the last two released
+    nothing, so each of their content tables has no row and the zero root. The check accepts the run, counts four of
+    four registered, and no word that an execution phase has no head, of none due."""
     out = tmp_path / "run"
     device, requests = served(out, tmp_path / "key", process=process, params=ENDS)
     assert len(device.log) == len(PROMPTS) and all(c["failed"] is None and not c["cut"] for c in device.log)
     assert phases_of(out, ENDS) == [(w, "registration") for w in range(4)]
     listed = CR.tables_of(ENDS)
-    for doc, salts in crr.read(out, ENDS):
-        assert [(t["name"], t["rows"]) for t in doc["registration"]["tables"]] == [(n, rows) for n, rows, _ in listed]
-        assert {name: len(s) for name, s in salts.items()} == {name: rows for name, rows, _ in listed}
+    assert [rows for _, rows, _ in listed[2:]] == [ENDS.phase_releases] * 9
     records = ws.read_records(out, ENDS)
     held = CR.of_records(ENDS, records["requests"], records["responses"])
     assert sorted(held) == [0, 1, 2, 3] and sorted(w for w in held if any(held[w])) == [0, 1]
     assert sum(len(stride) for w in held for stride in held[w]) == len(PROMPTS)
+    counts = []
+    for w, (doc, salts) in enumerate(crr.read(out, ENDS)):
+        filed = [CT.file(ENDS, r) for stride in held[w] for r in stride]
+        counts.append([filed.count(i) for i in range(3)])
+        want = [(name, rows) for name, rows, _ in listed[:2]]
+        want += [(name, counts[w][i]) for i in range(3) for name in CT.names(i)]
+        entries = doc["registration"]["tables"]
+        assert [(t["name"], t["rows"]) for t in entries] == want
+        assert {name: len(s) for name, s in salts.items()} == dict(want)
+        assert doc["cost"]["rows"] == sum(rows for _, rows in want)
+        assert all((t["root"] == CR.NO_ROWS_ROOT.hex()) == (not t["rows"]) for t in entries)
+    assert [sum(c) for c in counts] == [sum(map(len, held[w])) for w in range(4)] and counts[2:] == [[0, 0, 0]] * 2
+    assert len({tuple(c) for c in counts}) == 3
     result = ws.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]["connection_rows"]
@@ -298,7 +318,8 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
 def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_due(tmp_path):
     """The run above, its lines changed: the check refuses an execution phase with neither a head nor the word, one
     with a head where the word is due, one with the word where a head is due, one with two lines, a word signed for
-    another execution phase, and a word whose signature is changed, each by the execution phase it names."""
+    another execution phase, a word whose signature is changed, and a word with salts beside it, each by the
+    execution phase it names."""
     out = tmp_path / "run"
     params = dataclasses.replace(ENDS, queue=5)
     served(out, tmp_path / "key", params=params)
@@ -347,6 +368,49 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
     assert problem.startswith("execution phase 1's word that it has no head: ") and "doesn't verify" in problem
     assert edited(refusal) == [neither.format(1)]
 
+    def salted(lines, salts) -> None:
+        salts[1] = bytes(crr.WR.SALT_BYTES)
+
+    word = f"execution phase 1 has the network certifier's word that it has no head, and {crr.WR.SALT_BYTES} bytes"
+    assert any("don't read" in p and word in p for p in edited(salted))
+
+
+def test_under_form_2_the_check_reads_a_tables_salts_by_the_rows_its_registration_counts(tmp_path):
+    """Under form 2 a line's blob of salts is one a row of each table as its registration counts them. The check
+    takes the run; with a salt lost from a blob, or a count changed and its salts not, the files no longer read;
+    with a class's count one more in its three entries and a salt more for each, the registration isn't the
+    schedule's signed head, by the execution phase it names; and with a salt changed the rows aren't its records'
+    releases."""
+    out = tmp_path / "run"
+    served(out, tmp_path / "key", params=ENDS)
+    assert ws.check(out)["accepted"]
+    size = crr.WR.SALT_BYTES
+
+    def edited(change) -> list[str]:
+        return [p for p in refused(out, lambda: edit_rows(out, change)) if "connection rows" in p]
+
+    def lost(lines, salts) -> None:
+        salts[0] = salts[0][:-size]
+
+    def recounted(lines, salts) -> None:
+        lines[0]["registration"]["tables"][2]["rows"] += 1
+
+    def one_more(lines, salts) -> None:
+        for t in lines[0]["registration"]["tables"][2:5]:
+            t["rows"] += 1
+        salts[0] += b"".join(bytes([k + 1]) * size for k in range(3))
+
+    def other_salt(lines, salts) -> None:
+        salts[0] = salts[0][:-1] + bytes([salts[0][-1] ^ 1])
+
+    for change in (lost, recounted):
+        assert any("don't read" in p and "execution phase 0's blob" in p for p in edited(change))
+    problems = edited(one_more)
+    assert len(problems) == 2 and problems[0].startswith("execution phase 0's connection rows: ")
+    assert problems[1] == "execution phase 0's connection rows aren't registered"
+    assert edited(other_salt) == ["execution phase 0's connection rows aren't its records' releases",
+                                  "execution phase 0's connection rows aren't registered"]
+
 
 @pytest.mark.parametrize("form", [1, 2])
 def test_the_check_reads_the_release_order_past_an_execution_phase_that_isnt_complete(tmp_path, form):
@@ -358,7 +422,7 @@ def test_the_check_reads_the_release_order_past_an_execution_phase_that_isnt_com
     check can't place the later releases and takes no head past the fault; and with a log that gives a later
     release another place, the head isn't the tables'. The run is refused in each case on the faulted execution
     phase's own records."""
-    params = dataclasses.replace(ROWS, lengths=form)
+    params = {1: ROWS, 2: ENDS}[form]
     out = tmp_path / "run"
     prompts, answers = PROMPTS[:4], ANSWERS[:4]
     arrive = {0: 0, 1: T + 4, 2: 2 * T + 2, 3: 3 * T + 2}
@@ -411,6 +475,11 @@ def test_a_run_without_lengths_rows_writes_and_checks_what_it_did(tmp_path):
     assert crr.check(out, {}, PLAIN, [], [], [], ws.LINK) == (None, [])
 
 
+#: the cost command's flags of a small schedule
+SMALL_COST = ["--slots", "2", "--lanes", "2", "--window", "32", "--every", "2", "--delay", "5", "--ingress-cells", "4",
+              "--egress-cells", "9"]
+
+
 def test_the_costs_load_is_the_classes_rows_or_what_the_grids_carry_and_its_close_is_measured(tmp_path):
     """`loaded`: with `rows`, every row of every class, each release its class's longest request and most ids, filed
     in its class by the network certifier's rule; with `grid`, no more than an execution phase's grids carry; a
@@ -437,6 +506,54 @@ def test_the_costs_load_is_the_classes_rows_or_what_the_grids_carry_and_its_clos
                                   "sign_ms")} == {2}
     out = tmp_path / "cost.json"
     assert crr.main(["cost", "--out", str(out), "--classes", "4,4,2", "128,8,3", "--load", "rows", "--phases", "1",
-                     "--height", "4", "--slots", "2", "--lanes", "2", "--window", "32", "--every", "2", "--delay", "5",
-                     "--ingress-cells", "4", "--egress-cells", "9"]) == 0
+                     "--height", "4", *SMALL_COST]) == 0
     assert json.loads(out.read_text())["releases"] == 5
+
+
+#: pinned from the runner before it took `--lengths`: the digest of the schedule the cost command measures by
+#: default, and its load's releases and handed bytes, to the grid and to the rows
+COSTED_DIGEST = ("a45d70304d29e91ffab9df9860e7fb57fb63454452add2369af50be06d8ff1bebbf3d9828fa4d1bea82d48f0716592e9"
+                 "51cf58267774e62a6a05f35b35c2b64b")
+COSTED_LOADS = {"grid": (90, 1195378), "rows": (96, 1360768)}
+
+
+def test_the_cost_is_of_form_1_by_default_and_of_form_2_a_classes_rows_are_the_execution_phases(tmp_path):
+    """Without `--lengths` the cost command measures the schedule and the load it measured before it took the flag,
+    held to that digest and those loads. With `--lengths 2` the default classes are the same sizes, each (P, O), and
+    the schedule another. Its `rows` load is the costliest close the schedule has: R = `phase_releases` releases, all
+    of the class whose rows are the most bytes, each its longest request and most ids. Its `grid` load is the
+    classes in turn and no more than R releases or than the grids carry. At a small schedule the close hands
+    execution phase 0 alone, and its tables are the lengths and fails tables' and the one class's R rows three
+    times, the other class's of no row; a class of the other form's numbers is refused by the schedule."""
+    default = crr.costed(crr.parser().parse_args(["cost", "--out", "x"]))
+    assert (default.lengths, default.content, default.digest.hex()) == (1, crr.CLASSES, COSTED_DIGEST)
+    for load, (releases, handed) in COSTED_LOADS.items():
+        got = crr.loaded(default, load)
+        assert (len(got), sum(size + 4 * n for size, n in got)) == (releases, handed)
+    held = crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--lengths", "2"]))
+    assert (held.lengths, held.content) == (2, tuple(c[:2] for c in crr.CLASSES)) and held.digest != default.digest
+    widest = (min(CT.request_room(512, 4096), 96 * held.payload), 4096)
+    assert crr.loaded(held, "rows") == [widest] * held.phase_releases and held.phase_releases == 336
+    cells = held.slots * held.lanes * held.window
+    grid = crr.loaded(held, "grid")
+    assert len(set(grid)) == 6 and len(grid) <= held.phase_releases and sum(n + 1 for _, n in grid) <= cells
+    small = crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--lengths", "2", "--classes", "4,4", "128,8",
+                                                *SMALL_COST]))
+    R = small.phase_releases
+    rows = crr.loaded(small, "rows")
+    filed = [CT.file(small, Released(0, size, n, False, bytes(size), bytes(4 * n))) for size, n in rows]
+    assert (R, len(rows), filed) == (12, R, [1] * R)
+    assert [CT.file(small, Released(0, size, n, False, bytes(size), bytes(4 * n)))
+            for size, n in crr.loaded(small, "grid")] == [0, 1] * (R // 2)
+    out = tmp_path / "cost.json"
+    assert crr.main(["cost", "--out", str(out), "--lengths", "2", "--classes", "4,4", "128,8", "--load", "rows",
+                     "--phases", "2", "--height", "4", *SMALL_COST]) == 0
+    got = json.loads(out.read_text())
+    slots = sum(n for _, n, _ in CR.tables_of(small)[:2])
+    assert (got["parameters"], got["classes"]) == (small.digest.hex(), [[4, 4], [128, 8]])
+    assert (got["releases"], got["tables"], got["rows"]) == (R, 8, slots + 3 * R)
+    assert {got[k]["n"] for k in ("hand_ms", "pickle_ms", "build_ms", "commit_ms", "sign_ms")} == {2}
+    for form, numbers, fix in (("2", "4,4,2", "drop its third number"),
+                               ("1", "4,4", "give the rows of each of its tables")):
+        with pytest.raises(ValueError, match=fix):
+            crr.main(["cost", "--out", str(out), "--lengths", form, "--classes", numbers, *SMALL_COST])
