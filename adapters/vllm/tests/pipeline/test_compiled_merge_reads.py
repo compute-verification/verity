@@ -11,10 +11,14 @@ from typing import Any
 
 import pytest
 
-from tests.pipeline.test_compiled_merge import COMPILATION, KERNELS
+import verity_vllm.pipeline.compiled_merge as cm
 from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import compiled_merge as cm
 
+#: the compile settings both arms report, and the generated kernels each identifies
+COMPILATION: dict[str, Any] = {"compilation_mode": "VLLM_COMPILE", "cudagraph_mode": "PIECEWISE", "cudagraph_capture_sizes": [1, 2],
+                               "enforce_eager": False, "use_inductor_graph_partition": False, "splitting_ops": ["attention"],
+                               "inductor_compile_config": {}}
+KERNELS: dict[str, Any] = {"kernel_set_sha256": "aa", "kernels": {"triton_poi_fused_0": "s0"}, "wrappers": 3, "distinct_kernel_sources": 1}
 ABSENT = "<absent>"
 #: what stands in a block's place where a record has none: the block left out, null, and each empty or zero value
 NOTHING: list[Any] = [ABSENT, None, {}, [], "", 0, False]
