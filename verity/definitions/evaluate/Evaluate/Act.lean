@@ -2,8 +2,8 @@ module
 
 public import Evaluate.Fp32
 public import Evaluate.GeluErfTable
-public import Flock.Bytes
-public import Flock.Hash
+public import Base.Bytes
+public import Base.Hash
 
 /-!
 # The activations, the rotation and the registered tables

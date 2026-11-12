@@ -30,7 +30,7 @@ from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
-from verity_vllm.query.program_view import spec_statics
+from verity_vllm.query.program_view import spec_base, spec_statics
 
 from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
@@ -47,7 +47,7 @@ V = 16
 SERVED_V = 154880
 ROW = descriptor_id(bind(SA.GumbelTopPTokenSelectSharedGreedy, V=V))
 TMPLS = [t for t, _n in SRW.unit_templates(ROW)[1:]]
-CAPS = dict.fromkeys(TMPLS, 7)
+PER_CHUNK = dict.fromkeys(TMPLS, 7)
 STEP = 4
 
 
@@ -90,8 +90,8 @@ class Served:
         return self.tok[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS):
-    return ST.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK):
+    return ST.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
 def read(s: Served, ms, tmpls=TMPLS):
@@ -182,8 +182,8 @@ def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
     words = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
     WI.salts(ms, words, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
     at, plan = places(ms, TMPLS, rows=2), {u.key: u for u in T.plan(V)}
-    ops = [{x: int(s.ops[6 * p + g].view(f"<u{s.ops[6 * p + g].dtype.itemsize}")[0]) for g, x in enumerate(ST.OPERANDS) if g}
-           for p in range(2)]
+    ops = [{x: int(s.ops[6 * p + g].view(f"<u{s.ops[6 * p + g].dtype.itemsize}")[0])
+            for g, x in enumerate(ST.OPERANDS[spec_base(ROW)]) if g} for p in range(2)]
     for m, (g, entries) in zip(ms, got):
         stager(m.template).reference_check(g["rows"], g["outs"])
         lo = min(x.base for x in ms if x.template == m.template)
