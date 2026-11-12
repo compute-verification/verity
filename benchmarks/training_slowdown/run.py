@@ -22,14 +22,20 @@ evicted or out of its time, writes a record that says so (`training_slowdown.TOL
 and never in the run's exit status, which is whatever stopped it reports: a lease out of time ends the job through
 `timeout`, whose status is 124 whatever the job's own. So a run that ended with any status but 0 is stopped when
 its record says it was told to stop, and failed when it holds no record or one that doesn't say so. A job told to
-stop before its own process is up, while its environment is made or its state fetched, has written no record and
-is failed. Nothing runs a stopped job again by itself: the command's
-next run finds it stopped and starts it again, from the state it kept, or from θ where it kept none (one stopped
-before its first checkpoint). Where the state is between the two runs is
+stop before its own process is up, while its environment is made or its state fetched, is stopped too: its shell
+writes the record of the stop, the job's own (`stop_record`), where the job wrote none (`ENV`). A crash with no
+stop stays a failure. Nothing runs a stopped job again by itself: the command's
+next run finds it stopped and starts it again, from the latest state a run of it kept (a run stopped before it
+was up kept none, and loses no earlier one), or from θ where none kept one. A job whose last `STALLS` runs were
+each stopped and kept no newer state than the one before them is stalled: it is stopped every time before its
+next checkpoint, and only `--continue-stalled` continues it, for `STALLS` more such stops. A job that continues is given the CPU thread count its kept
+record states. Where the state is between the two runs is
 `NODE_STATE`: by default with the stopped run's output, on the store, from where the next run fetches it on
 whichever machine it gets. The command tells that run which state it continues from (`--continues`: the sha256 the
 store lists for the `state.json` in the stopped run's record, or `nothing`), and the job refuses any other it finds
-in its state directory; a state on a node's disk has no copy in a record, and the job is told nothing of it. A
+in its state directory; a state on a node's disk has no copy in a record, and the job is told nothing of it. The
+state is fetched beside `$OUT` and moved into `$OUT/state` once whole, so a run stopped while it fetched keeps no
+part of one. A
 state is a cache: one that is lost costs the job a start from θ, and no result is read from it.
 
 A queued job writes nothing into the tree it runs from, which every run of its commit shares. Its Python
@@ -62,7 +68,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-from training_slowdown import BUDGET_SLACK, NOTHING, config, starts, told  # noqa: E402
+from training_slowdown import BUDGET_SLACK, NOTHING, config, starts, stop_record, told  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 
 KIND = "training-attack"
@@ -74,11 +80,17 @@ TMP = "/tmp"
 #: a queued job's Python environment is the run's own, in a directory it makes under `TMP`, never the tree's `.venv`,
 #: which every run of the commit would share. Per run and not per commit: a node's /tmp is every run's and nothing
 #: empties it, so an environment a commit's runs shared would stay there after the last of them, and each run would
-#: execute what an earlier one left in it. The job's shell removes the directory when it ends (`trap ... EXIT`). To
-#: do so it outlives a stop (`trap : TERM`): what stops a run signals every process of it, so the job's own process is
-#: told beside its shell, and the shell goes on waiting for the job, which keeps the run's end the job's.
-ENV = ('tmp=$(mktemp -d {tmp}/training-slowdown.XXXXXX) && trap \'rm -rf "$tmp"\' EXIT && trap : TERM && '
-       'export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
+#: execute what an earlier one left in it. The job's shell removes the directory when it ends (`trap ... EXIT`), and
+#: `$fetching`, where a kept state is fetched before it moves into `$OUT/state` whole. It outlives a stop (`trap ...
+#: TERM`): what stops a run signals every process of it, so the job's own process is told beside its shell, and bash
+#: runs the trap once the command it waits on has ended, the job included, which keeps the run's end the job's. The
+#: trap then writes the job's record of the stop (`stop_record`, in `$stopped`) where the job wrote no record (one
+#: stopped before its own process was up), and ends the script with the status of the command the stop ended, so
+#: nothing after it starts
+ENV = ('tmp=$(mktemp -d {tmp}/training-slowdown.XXXXXX) && fetching="$(dirname "$OUT")/fetching" && '
+       'trap \'rm -rf "$tmp" "$fetching"\' EXIT && stopped={record} && '
+       'trap \'status=$?; [ -e "$OUT/run.json" ] || {{ mkdir -p "$OUT" && printf "%s\\n" "$stopped" > "$OUT/run.json"; }}; '
+       'exit $status\' TERM && export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
 #: the environment's programs
 PYTHON, RESEARCH = '"$UV_PROJECT_ENVIRONMENT/bin/python"', '"$UV_PROJECT_ENVIRONMENT/bin/research"'
 #: what goes into the environment: the workspace with the members' CUDA torch (the suites' `--extra torch-cpu`
@@ -101,7 +113,12 @@ STATE_COPIES = 3
 #: queue's own figure for a job that declares none. The queue holds a run for room on the filesystem of its runs, so
 #: where `TMP` is on another one the environment is in the figure and not in what the hold measures.
 OUTSIDE_GB = 20
-DONE, PENDING, STOPPED, FAILED, MISSING = "done", "pending", "stopped", "failed", "missing"
+DONE, PENDING, STOPPED, STALLED, FAILED, MISSING = "done", "pending", "stopped", "stalled", "failed", "missing"
+#: a job whose last this many runs were each stopped and kept no newer state than the one before them is stalled, and
+#: `--continue-stalled` continues it for this many more
+STALLS = 3
+#: where a run's record holds the state its job kept
+STATE_JSON = "out/state/state.json"
 
 
 @dataclass
@@ -109,11 +126,12 @@ class State:
     state: str
     where: str = ""
     note: str = ""
-    #: of a stopped job: the record of its run that holds its state, the store's sha256 of the state.json in it, and
-    #: that run's machine
+    #: of a stopped job: the record of its latest run that holds a state, the store's sha256 of the state.json in it,
+    #: the CPU thread count that state's record states, and its latest run's machine
     kept: str = ""
     stated: str = ""
     machine: str = ""
+    threads: int | None = None
 
 
 def find(arg: str) -> Path:
@@ -162,10 +180,11 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
     except ValueError:
         raise SystemExit(f"training-slowdown: a queued job reads its config from the tree it ships, and "
                          f"{job.config.path} is outside {HERE}") from None
-    py = " ".join(shlex.quote(x) for x in job_args(job, str(rel), a))
-    # the stopped run's out/state, into this run's $OUT (the run directory's out/)
-    fetch = (f'{RESEARCH} data fetch {after.kept} --path "out/state/*" --to "$(dirname "$OUT")" && '
-             if after and after.kept else "")
+    threads = ["--threads", str(after.threads)] if after and after.threads is not None else []
+    py = " ".join(shlex.quote(x) for x in job_args(job, str(rel), a) + threads)
+    # the stopped run's out/state, into this run's $OUT (the run directory's out/) once whole
+    fetch = (f'{RESEARCH} data fetch {after.kept} --path "out/state/*" --to "$fetching" && mkdir -p "$OUT" && '
+             f'mv "$fetching/out/state" "$OUT/state" && ' if after and after.kept else "")
     if NODE_STATE:
         # no record holds a copy of a state on a node's disk: the job continues from the one it finds there
         state = shlex.quote(f"{NODE_STATE}/{job.label}")
@@ -173,7 +192,8 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
         # the job is told which state.json the stopped run's record holds, and continues from no other
         state = f'"$OUT/state" --continues {after.stated if fetch else NOTHING}'
     # no exec: the shell stays, to remove the environment once the job has ended (`ENV`)
-    cmd = (f'{ENV.format(tmp=TMP)} && {SYNC} && {fetch}cd {HERE.relative_to(ROOT)} && {PYTHON} {py} '
+    record = shlex.quote(json.dumps(stop_record(job.seed, job.split)))
+    cmd = (f'{ENV.format(tmp=TMP, record=record)} && {SYNC} && {fetch}cd {HERE.relative_to(ROOT)} && {PYTHON} {py} '
            f'--state {state} --out "$OUT"')
     minutes = run_minutes(job.config)
     if a.on:
@@ -190,12 +210,12 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
 
 
 def reads(path: Path, of: str) -> object:
-    """The run.json at `path`, which `of` holds, as its job wrote it. One that doesn't read is no record (None), which
-    leaves its job failed, and the command says what it found there."""
+    """The run.json (or state.json) at `path`, which `of` holds, as its job wrote it. One that doesn't read is no
+    record (None), which leaves its job failed, and the command says what it found there."""
     try:
         return json.loads(path.read_text())
     except (OSError, ValueError) as e:
-        print(f"training-slowdown: {of} holds no run.json that reads ({type(e).__name__}: {e}): read as no record",
+        print(f"training-slowdown: {of} holds no {path.name} that reads ({type(e).__name__}: {e}): read as no record",
               file=sys.stderr)
         return None
 
@@ -230,13 +250,13 @@ class Store:
         p = self.research("data", "show", run, "--json", check=False)
         return json.loads(p.stdout) if p.returncode == 0 else None
 
-    def says(self, record: str) -> object:
-        """The run.json a run's record holds, as its job wrote it; None where it holds none, or one that doesn't
-        read (`reads`)."""
+    def says(self, record: str, path: str = "out/run.json") -> object:
+        """The run.json (or the file at `path`) a run's record holds, as its job wrote it; None where it holds none,
+        or one that doesn't read (`reads`)."""
         with tempfile.TemporaryDirectory(prefix="training-slowdown-") as d:
-            if self.research("data", "fetch", record, "--path", "out/run.json", "--to", d, check=False).returncode:
+            if self.research("data", "fetch", record, "--path", path, "--to", d, check=False).returncode:
                 return None
-            return reads(Path(d) / "out" / "run.json", record)
+            return reads(Path(d) / path, record)
 
     def keeps(self, record: str) -> str:
         """The sha256 of the state.json a run's record holds, as the store lists it: '' where it holds no state."""
@@ -263,7 +283,7 @@ class Store:
 def store_state(job: config.Job, labels: dict[str, list[str]], store: Store, write: bool) -> State:
     """Where `job` stands by its latest run. One that ended with status 0 and a record is done. Any other is stopped
     when the run.json in its record says the job was told to stop (`told`), whatever its status, and failed when
-    its record holds none or one that doesn't say so."""
+    its record holds none or one that doesn't say so; a stopped job goes on as `continued` says."""
     targets = labels.get(job.label, [])
     runs = sorted(t for t in targets if RUN_RE.fullmatch(t))
     if not runs:
@@ -282,11 +302,41 @@ def store_state(job: config.Job, labels: dict[str, list[str]], store: Store, wri
         machine = (a.get("execution") or {}).get("machine") or ""
         if NODE_STATE:
             return State(STOPPED, run, f"its state is on {machine}, under {NODE_STATE}", machine=machine)
-        stated = store.keeps(record)
-        return State(STOPPED, run, "its record holds its state" if stated else "it kept no state: it starts again "
-                     "from θ", kept=record if stated else "", stated=stated, machine=machine)
+        return continued(runs, record, store, machine)
     return State(FAILED, run, f"rc {rc}, " + ("no record" if said is None else "a record that doesn't say the job was "
                                               "told to stop"))
+
+
+def continued(runs: list[str], record: str, store: Store, machine: str) -> State:
+    """Where a job whose latest run (`runs[-1]`, its record `record`) was told to stop goes on: from the state of its
+    latest run that kept one, since a run stopped before its job was up kept none and loses no earlier one, with the
+    CPU thread count that state's record states. Every run of a label but its latest was a stopped one: a label is
+    run again only while it is stopped. A job whose runs since its last new state number a multiple of `STALLS` is
+    stalled: each was stopped before its next checkpoint, and only `--continue-stalled` continues it, for `STALLS`
+    more such stops. A stall is no failure: it chooses nothing, and the job it continues ends with the unbroken
+    job's record; the bound keeps the command from continuing by itself a job that never reaches a checkpoint."""
+    records = [((store.attempt(r) or {}).get("outputs") or {}).get("run_record") or "" for r in runs[:-1]] + [record]
+    shas = [store.keeps(r) if r else "" for r in records]
+    newest, stalls = "", 0
+    for sha in shas:
+        stalls = 0 if sha and sha != newest else stalls + 1
+        newest = sha or newest
+    i = max((i for i, sha in enumerate(shas) if sha), default=None)
+    if i is None:
+        how = State(STOPPED, runs[-1], "it kept no state: it starts again from θ", machine=machine)
+    else:
+        kept = store.says(records[i], STATE_JSON)
+        rec = kept.get("record") if isinstance(kept, dict) else None
+        threads = rec.get("threads") if isinstance(rec, dict) else None
+        how = State(STOPPED, runs[-1], "its record holds its state" if i == len(runs) - 1 else
+                    f"it kept no state: it goes on from the state {runs[i]} kept", kept=records[i], stated=shas[i],
+                    machine=machine, threads=threads if isinstance(threads, int) else None)
+    if stalls and stalls % STALLS == 0:
+        how.state, how.note = STALLED, (
+            f"its last {STALLS} runs, {', '.join(runs[-STALLS:])}, were each stopped and kept no newer state than the "
+            f"one before them: it is stopped every time before its next checkpoint, and `--continue-stalled` "
+            f"continues it for {STALLS} more such stops")
+    return how
 
 
 def local_state(job: config.Job, root: Path) -> State:
@@ -334,6 +384,9 @@ def parse(argv=None) -> argparse.Namespace:
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry (default starts.toml)")
     ap.add_argument("--starts-root", type=Path, help="where the starts are installed (default the registry's)")
     ap.add_argument("--device", help="the jobs' device (default: theirs, cuda where there is one)")
+    ap.add_argument("--continue-stalled", action="store_true",
+                    help=f"continue each stalled job too, for {STALLS} more stops before its next checkpoint (a "
+                         "failed job is never run again)")
     a = ap.parse_args(argv)
     a.starts = a.starts.resolve()
     a.starts_root = a.starts_root.resolve() if a.starts_root else None
@@ -356,9 +409,9 @@ def main(argv=None, store: Store | None = None) -> int:
         labels = store.labels()
         states = [store_state(j, labels, store, not a.dry_run) for j in jobs]
     for i, (j, s) in enumerate(zip(jobs, states)):
-        if s.state not in (MISSING, STOPPED):
+        if not (s.state in (MISSING, STOPPED) or s.state == STALLED and a.continue_stalled):
             continue
-        after = s if s.state == STOPPED else None
+        after = s if s.state in (STOPPED, STALLED) else None
         if a.dry_run:
             argv = local_argv(j, a, root) if a.local else research_argv(j, a, after)
             print("would run: " + " ".join(shlex.quote(x) for x in argv))
@@ -380,10 +433,13 @@ def main(argv=None, store: Store | None = None) -> int:
     if not a.local:
         print(f"queued as {KIND} (infra/cluster/kinds/training.toml): one GPU, preemptible; a stopped job continues "
               f"from its kept state when this command runs again" if not a.on else f"run on {a.on}")
-    n = {k: sum(s.state == k for s in states) for k in (DONE, PENDING, STOPPED, FAILED, MISSING)}
+    n = {k: sum(s.state == k for s in states) for k in (DONE, PENDING, STOPPED, STALLED, FAILED, MISSING)}
     if n[FAILED]:
         print(f"{n[FAILED]} of {len(jobs)} jobs failed: a failed job is never run again")
         return 1
+    if n[STALLED]:
+        print(f"{n[STALLED]} of {len(jobs)} jobs stalled: run the command with --continue-stalled to continue them")
+        return 4
     if n[PENDING] or n[MISSING] or n[STOPPED]:
         print(f"{n[PENDING] + n[MISSING] + n[STOPPED]} of {len(jobs)} jobs pending" +
               (f", {n[STOPPED]} of them stopped: run the command again to continue them" if n[STOPPED] else ""))

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -18,10 +19,17 @@ _spec.loader.exec_module(cmd)
 ART = "art:" + "e" * 64
 #: the store's sha256 of the state.json a record holds
 STATED = "5" * 64
-#: how a queued job's script starts: a directory of the run's own under /tmp, removed when its shell ends, which a
-#: SIGTERM doesn't end, and the job's Python environment in it
-ENV = ('tmp=$(mktemp -d /tmp/training-slowdown.XXXXXX) && trap \'rm -rf "$tmp"\' EXIT && trap : TERM && '
-       'export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
+
+
+def env(job) -> str:
+    """How a queued job's script starts: a directory of the run's own under /tmp and the directory a state is fetched
+    into, both removed when its shell ends; a SIGTERM that writes the job's record of the stop where the job wrote
+    none and ends the script with the stopped command's status; and the job's Python environment in that directory."""
+    told = shlex.quote(json.dumps(stop_record(job.seed, job.split)))
+    return ('tmp=$(mktemp -d /tmp/training-slowdown.XXXXXX) && fetching="$(dirname "$OUT")/fetching" && '
+            'trap \'rm -rf "$tmp" "$fetching"\' EXIT && stopped=' + told + ' && '
+            'trap \'status=$?; [ -e "$OUT/run.json" ] || { mkdir -p "$OUT" && printf "%s\\n" "$stopped" > '
+            '"$OUT/run.json"; }; exit $status\' TERM && export UV_PROJECT_ENVIRONMENT="$tmp/venv"')
 
 
 class Research:
@@ -35,8 +43,10 @@ class Research:
         #: the records that hold a job's state, and the sha256 the store lists for each one's state.json
         self.states: set[str] = set()
         self.sha256 = STATED
-        #: the text of the run.json each record holds
+        self.shas: dict[str, str] = {}
+        #: the text of the run.json, and of the state.json, each record holds
         self.said: dict[str, str] = {}
+        self.kept: dict[str, str] = {}
 
     def __call__(self, argv):
         assert argv[0] == "research", argv
@@ -45,17 +55,19 @@ class Research:
             return SimpleNamespace(returncode=0, stdout=f"queued r20990101-000000-{len(self.runs):04x}\n", stderr="")
         verb = argv[2]
         if verb == "fetch" and "--to" in argv:
-            assert argv[4:7] == ["--path", "out/run.json", "--to"] and len(argv) == 8, argv
-            if argv[3] not in self.said:
+            assert argv[4] == "--path" and argv[6] == "--to" and len(argv) == 8, argv
+            texts = {"out/run.json": self.said, cmd.STATE_JSON: self.kept}[argv[5]]
+            if argv[3] not in texts:
                 return SimpleNamespace(returncode=1, stdout="", stderr="no file matches")
-            (Path(argv[7]) / "out").mkdir()
-            (Path(argv[7]) / "out" / "run.json").write_text(self.said[argv[3]])
+            (Path(argv[7]) / argv[5]).parent.mkdir(parents=True)
+            (Path(argv[7]) / argv[5]).write_text(texts[argv[3]])
             return SimpleNamespace(returncode=0, stdout=argv[7], stderr="")
         if verb == "fetch":
             assert argv[4:] == ["--list", "--json", "--path", "out/state/state.json"], argv
             held = argv[3] in self.states
             return SimpleNamespace(returncode=0 if held else 1, stderr="" if held else "no file matches",
-                                   stdout=json.dumps([{"path": "out/state/state.json", "sha256": self.sha256}])
+                                   stdout=json.dumps([{"path": "out/state/state.json",
+                                                       "sha256": self.shas.get(argv[3], self.sha256)}])
                                    if held else "")
         if verb == "labels-sync":
             return SimpleNamespace(returncode=self.sync_rc, stdout="", stderr="unreachable")
@@ -106,7 +118,7 @@ def test_each_missing_job_is_queued_once_and_labelled(tree, reg_path, capsys):
                              "verity", "--source", str(tree.parents[2]), "--cwd", "source", "--gpus", "1"]
         script = argv[-1]
         assert argv[-3:-1] == ["bash", "-lc"] and script.startswith(
-            f'{ENV} && {cmd.SYNC} && cd benchmarks/training_slowdown && "$UV_PROJECT_ENVIRONMENT/bin/python" '
+            f'{env(job)} && {cmd.SYNC} && cd benchmarks/training_slowdown && "$UV_PROJECT_ENVIRONMENT/bin/python" '
             f'-m training_slowdown.run ')
         assert (f"--config attacks/a.toml --seed {job.seed} --split {job.split} --starts {reg_path.resolve()}"
                 in script and script.endswith(f'--state "$OUT/state" --continues {cmd.NOTHING} --out "$OUT"'))
@@ -210,9 +222,11 @@ def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, 
     again, fresh = r.runs[2:]
     assert again[:6] == fresh[:6] == ["research", "run", "--queue", "--kind", "training-attack", "--preemptible"]
     assert again[-5] == "--store-read" and "--store-read" not in fresh and "--on" not in again
-    assert again[-1].startswith(f'{ENV} && {cmd.SYNC} && "$UV_PROJECT_ENVIRONMENT/bin/research" data fetch {ART} '
-                                f'--path "out/state/*" --to "$(dirname "$OUT")" && cd benchmarks/training_slowdown '
+    assert again[-1].startswith(f'{env(search)} && {cmd.SYNC} && "$UV_PROJECT_ENVIRONMENT/bin/research" data fetch '
+                                f'{ART} --path "out/state/*" --to "$fetching" && mkdir -p "$OUT" && mv '
+                                f'"$fetching/out/state" "$OUT/state" && cd benchmarks/training_slowdown '
                                 f'&& "$UV_PROJECT_ENVIRONMENT/bin/python" -m ')
+    assert "--threads" not in again[-1]
     assert "research data fetch" not in fresh[-1] and fresh[-1] == r.runs[1][-1]
     assert again[-1].endswith(f'--state "$OUT/state" --continues {STATED} --out "$OUT"')
     assert fresh[-1].endswith('--state "$OUT/state" --continues nothing --out "$OUT"')
@@ -233,6 +247,83 @@ def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, 
     assert "(it kept no state: it starts again from θ)" in capsys.readouterr().out
     assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 3
     assert r.runs[2][-1] == r.runs[0][-1] and "--store-read" not in r.runs[2] and "touch" not in r.runs[2][-1]
+
+
+def test_a_run_stopped_before_its_job_was_up_loses_no_earlier_state(tree, reg_path, capsys):
+    """A run stopped before its job was up kept no state of its own: the job goes on from the latest state an earlier
+    run of it kept, told the store's sha256 for it and the CPU thread count that state's record states."""
+    path = write_config(tree / "a.toml")
+    (job,) = config.load(path, starts.registry(reg_path)).jobs()
+    args = ("a", "--starts", str(reg_path))
+    r = Research()
+    command(r, *args)
+    r.states.add(ART)
+    r.kept[ART] = json.dumps({"record": {"threads": 3}})
+    first = stop(r, job, ART)
+    assert command(r, *args) == 3 and len(r.runs) == 2
+    continued = r.runs[1][-1]
+    assert f"data fetch {ART} " in continued
+    assert f' --threads 3 --state "$OUT/state" --continues {STATED} ' in continued
+    second = stop(r, job, "art:" + "f" * 64)
+    capsys.readouterr()
+    assert command(r, *args, "--dry-run") == 3
+    assert f"stopped  {second} (it kept no state: it goes on from the state {first} kept)" in capsys.readouterr().out
+    assert command(r, *args) == 3 and len(r.runs) == 3 and r.runs[2][-1] == continued
+
+
+def test_a_job_stopped_every_time_before_its_next_checkpoint_stalls_until_told_to_continue(tree, reg_path, capsys):
+    """A job whose last `STALLS` runs each kept no newer state than the one before them, none or the one they were
+    started on, is stalled: the command names those runs and continues it only under `--continue-stalled`, which
+    allows `STALLS` more such stops; a run that keeps a new state starts the count again. A failed job is never run
+    again, under `--continue-stalled` too."""
+    path = write_config(tree / "a.toml")
+    (job,) = config.load(path, starts.registry(reg_path)).jobs()
+    args = ("a", "--starts", str(reg_path))
+    none, same = "art:" + "f" * 64, "art:" + "a" * 64
+    r = Research()
+    command(r, *args)
+    r.states.update({ART, same})
+    stop(r, job, ART)
+    assert command(r, *args) == 3 and len(r.runs) == 2
+    continued = r.runs[1][-1]
+    stalled = [stop(r, job, none)]
+    assert command(r, *args) == 3 and len(r.runs) == 3
+    stalled.append(stop(r, job, none))
+    assert command(r, *args) == 3 and len(r.runs) == 4
+    stalled.append(stop(r, job, same))
+    capsys.readouterr()
+    assert cmd.STALLS == 3 and command(r, *args) == 4 and len(r.runs) == 4
+    out = capsys.readouterr().out
+    assert (f"stalled  {stalled[-1]} (its last 3 runs, {', '.join(stalled)}, were each stopped and kept no newer "
+            "state than the one before them: it is stopped every time before its next checkpoint, and "
+            "`--continue-stalled` continues it for 3 more such stops)" in out)
+    assert "1 of 1 jobs stalled: run the command with --continue-stalled to continue them" in out
+    assert command(r, *args) == 4 and len(r.runs) == 4
+    assert command(r, *args, "--continue-stalled") == 3 and len(r.runs) == 5
+    assert r.runs[4][-1] == continued.replace(ART, same)
+    for n in range(cmd.STALLS - 1):
+        stop(r, job, none)
+        assert command(r, *args) == 3 and len(r.runs) == 6 + n
+    stop(r, job, none)
+    assert command(r, *args) == 4 and len(r.runs) == 6 + n
+    assert command(r, *args, "--continue-stalled") == 3
+    newer = "art:" + "b" * 64
+    r.states.add(newer)
+    r.shas[newer] = "6" * 64
+    stop(r, job, newer)
+    assert command(r, *args) == 3
+    stop(r, job, none)
+    assert command(r, *args) == 3 and f"data fetch {newer} " in r.runs[-1][-1] and "6" * 64 in r.runs[-1][-1]
+
+    r = Research()
+    command(r, *args)
+    for _ in range(cmd.STALLS - 1):
+        stop(r, job, none)
+        assert command(r, *args) == 3
+    stop(r, job, none)
+    assert command(r, *args) == 4 and len(r.runs) == cmd.STALLS
+    r.attempts[last_run(r, job)] = {"status": {"rc": 1}, "outputs": {}}
+    assert command(r, *args, "--continue-stalled") == 1 and len(r.runs) == cmd.STALLS
 
 
 def test_a_state_kept_on_the_nodes_disk_sends_the_job_back_to_its_machine(tree, reg_path, monkeypatch):
