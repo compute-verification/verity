@@ -45,10 +45,11 @@ def _shared(files: dict[str, dict]) -> tuple[dict[str, dict], dict[str, str], di
     return out, schema, readers
 
 
-def _audit(V, R, rec, receipt, draw, proved, n_inst, statement, verdicts, delta, sessions, served, roots) -> dict:
+def _audit(V, R, rec, receipt, draw, proved, n_inst, statement, verdicts, delta, sessions, served, roots,
+           own_reads=False) -> dict:
     r = V.audit_record(rec, receipt if receipt is not None else R.receipt(rec, "probe_registered.py"), draw,
                        rec["law"], proved, n_inst, statement, verdicts, delta, sessions=sessions, served=served,
-                       session_roots=roots)
+                       session_roots=roots, **({"own_reads": True} if own_reads else {}))
     c = r["checks"]
     return {"accepted": r["accepted"], "checks": {k: v["ok"] for k, v in c.items()},
             "registered": c.get("registered", {}).get("detail"), "verifiers": r.get("verifiers")}
@@ -75,9 +76,10 @@ def run(M, pg, members, rec, receipt, draw, proved, n_inst, statement, verdicts,
     own_roots = [r for r in rec["roots"] if not r["port"].startswith(SHARED)]
     moved = {**rec, "format": R.FORMAT_V2, "roots": own_roots, "registered": [vals[v] for v in sorted(vals)]}
 
-    def audit(rec_, verdicts_=verdicts, proved_=proved, n_=n_inst, served_=served, roots_=session_roots, own=False):
+    def audit(rec_, verdicts_=verdicts, proved_=proved, n_=n_inst, served_=served, roots_=session_roots, own=False,
+              own_reads=False):
         return _audit(V, R, rec_, receipt if own else None, draw, proved_, n_, statement, verdicts_, delta, sessions,
-                      served_, roots_)
+                      served_, roots_, own_reads)
 
     def less(m):
         mine = [u for u in proved if m["base"] <= u < m["base"] + m["n"]]
@@ -86,10 +88,12 @@ def run(M, pg, members, rec, receipt, draw, proved, n_inst, statement, verdicts,
                     served_=[u for u in served if u not in mine],
                     roots_={p: r for p, r in session_roots.items() if not p.startswith(f"{m['at']}/")})
 
-    def renamed(old, new):
-        return {k: {**v, "registered": {p: ({**e, "value": new} if e["value"] == old else e)
-                                        for p, e in v["registered"].items()}}
-                if isinstance(v.get("registered"), dict) else v for k, v in verdicts.items()}
+    def renamed(old, new, of=None, root=None):
+        """The verdicts with the sessions' reads of value `old` reported as `new` (at `root`, when given)."""
+        of = verdicts if of is None else of
+        return {k: {**v, "registered": {p: ({**e, "value": new, **({"root": root} if root else {})}
+                                            if e["value"] == old else e) for p, e in v["registered"].items()}}
+                if isinstance(v.get("registered"), dict) else v for k, v in of.items()}
 
     drawn = sorted({k.split("/", 1)[-1] for k, v in verdicts.items() if v.get("of_record")})
     a = {"today": audit(rec, own=True), "moved": audit(moved)}
@@ -106,6 +110,23 @@ def run(M, pg, members, rec, receipt, draw, proved, n_inst, statement, verdicts,
         a[f"today, the sessions' {by_root[rec_root(rec, port)]} named {port}"] = audit(
             rec, verdicts_=renamed(by_root[rec_root(rec, port)], port), own=True)
 
+    # today's record, the shared trees in its roots, each session's read of one named as that root's port
+    as_ports = verdicts
+    for r in shared:
+        if by_root.get(r["root"]):
+            as_ports = renamed(by_root[r["root"]], r["port"], of=as_ports)
+    a["today, the reads named as the roots' ports"] = audit(rec, verdicts_=as_ports, own=True)
+    a["today, the reads named as the roots' ports, own_reads"] = audit(rec, verdicts_=as_ports, own=True,
+                                                                      own_reads=True)
+    if port is not None:
+        a[f"today, the reads named as the roots' ports, {port} read at another root, own_reads"] = audit(
+            rec, verdicts_=renamed(port, port, of=as_ports, root=OTHER_ROOT), own=True, own_reads=True)
+    for m in members:
+        if m["name"] in drawn:
+            x = less(m)
+            x["verdicts_"] = {k: v for k, v in as_ports.items() if k in x["verdicts_"]}
+            a[f"today, the reads named as the roots' ports, own_reads, {m['name']}'s session left out"] = audit(
+                rec, own=True, own_reads=True, **x)
     res = {"members_drawn": drawn, "members": [m["name"] for m in members],
            "values": {v: {"readers": readers[v], "leaves": e["leaves"], "words": e["words"]} for v, e in vals.items()},
            "moved_from": moved_from, "record": a}
