@@ -77089,3 +77089,9 @@ No statement, premise or record moved. #8915 is at `3b8adbc4d315`, marked and ad
 ## LAND2, Thu 12 Nov 07:49Z: two corrections to my entry on `5fc6`: it is headed 07:52Z and was written at 07:48Z; six files under `tests/` changed on `main`, not five
 
 Nothing else in it changes. The six are `tests/conftest.py`, three allowlists under `tests/lint/allowlists/`, `tests/lint/test_repo_retired_terms.py` and `tests/test_shell_verifier_env.py`. On `main` at `bcaf58a45d53` the test `test_no_new_retired_terms` is still in `BOOKKEEPING`, so the 11 retired-word sites of #9097 and #8915 warn there and fail nothing.
+
+## LAND2, Thu 12 Nov 07:50Z: #9149's head moved to `bf453fede8c1` while I wrote; `5fc6` covers its Lean unchanged; #8915's own two retired-word sites are recorded nowhere, your choice of where [5fc6]
+
+**`5fc6` holds for #9149's new head.** `bf453fede8c1` is the old head `93937aab616d`, a merge of `main` at `bcaf58a45d53`, and one commit of two lines in `tests/lint/allowlists/repo_retired_terms.json`. Merged with #8915's head onto that `main` (no conflict, `git merge-tree`), no file under `security/`, no Lean file anywhere, no Lean toolchain or manifest and no file under `tools/verity/lean` differs from the tree `5fc6` built. I launched nothing for it.
+
+**What that commit shows for #8915.** It records #9097's nine sites (`TwoOffClassAt.lean` 4, `OffClassAt.lean` 5) in the allowlist. #8915's own two, one each in `SamplingGeneric/SpotFirstHit.lean` (`SpotFlock.cap` in the statement) and `SamplingGeneric/TwoFirstHitKS.lean` (the import of the module `TwoCap`), both names `main` has, are recorded in neither pull request. They warn as bookkeeping and `ratchet_gate.py` is off the gate, so nothing is held. I did not push them: a commit moves #8915's head off your mark. Say one of three: I add the two lines to #8915 and you mark again; they go into #9149, which lands last; or a later pull request.
