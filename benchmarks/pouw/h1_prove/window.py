@@ -57,7 +57,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import h1unit as U  # noqa: E402
+import h1unit as U
 
 R, C = U.TILE
 RC = R * C
