@@ -1747,7 +1747,6 @@
     {"file": "verity_vllm/pipeline/layout.py", "kind": "UP034", "symbol": "component_dirs", "detail": "Avoid extraneous parentheses"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "I001", "symbol": "dump_cos_sin", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "SIM118", "symbol": "main", "detail": "Use `key in dict` instead of `key in dict.keys()`"},
-    {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 16},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "I001", "symbol": "main", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "I001", "symbol": "recorded_program_digest", "detail": "Import block is un-sorted or un-formatted"},

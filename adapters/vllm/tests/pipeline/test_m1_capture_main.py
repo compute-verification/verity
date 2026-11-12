@@ -7,13 +7,14 @@ are the module's own.  The module's clock is one the stand-in run moves (`Clock`
 number in a line is one the test states.
 
 Held: the files `main` writes (`versions.json`, `spec_tokens.json`, `tokens.json`, `stats.json`,
-`acquisition_observed.json`, the tables' words), what each stand-in was handed, every line and how `main` ends: by
+`acquisition_observed.json`, the tables' words), what each stand-in was handed, every line it logs and how `main` ends: by
 returning or by exit 3.  CPU only."""
 from __future__ import annotations
 
 import contextlib
 import copy
 import json
+import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -247,9 +248,16 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 
 
 @pytest.fixture
-def said(capsys: pytest.CaptureFixture[str]) -> Lines:
-    """The lines `m1_capture` has printed since the last call."""
-    return lambda: capsys.readouterr().out.splitlines()
+def said(caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]) -> Lines:
+    """The lines `m1_capture` has logged since the last call, each after its record's level; it prints none."""
+    caplog.set_level(logging.INFO, logger=M1.__name__)
+
+    def lines() -> list[str]:
+        assert capsys.readouterr().out == ""
+        got = [f"{r.levelname} {line}" for r in caplog.records if r.name == M1.__name__ for line in r.getMessage().splitlines()]
+        caplog.clear()
+        return got
+    return lines
 
 
 def options(w: World, **given: Any) -> M1.Options:
@@ -279,19 +287,19 @@ def row(rid: str, served: list[int], accepted: list[int] | None, equal: bool | N
 
 ROW0 = row("r0", [7, 8, 9, 10], [7, 8, 9, 10], True, finish=STEPS["r0"], executed=4, exhausted=True, stopped=False, lag=1)
 ROW1 = row("r1", [5, 2], [5, 2], True, finish=STEPS["r1"], executed=3, exhausted=False, stopped=True, lag=1)
-BUILT = "[m1] engine built in 1.5s (case B0, org/model); kwargs={'enforce_eager': True, 'max_num_seqs': 2}"
-TREE = "[m1] runtime tree 2 modules, 1 buffers -> runtime_tree.json"
-WARMED = "[m1] warm-up (uninstrumented, 2 throwaway requests): 0.50s, 5 steps"
-INSTALLED = "[m1] observer installed: 3 roots, profile_id=profile-1, reenter impls={'op': 'impl'}"
-OBSERVED = "[m1] observed run 2.00s: 40 events, 5 steps, recorder=pinned, storage=arena, snapshot_bytes=0, errors=0"
-SAID0 = ["[m1] r0: prompt_len=3 arrive=0 steps=0..3 (length) generated [7, 8, 9, 10]", "[m1]   accepted  [7, 8, 9, 10]  equal=True"]
-SAID1 = ["[m1] r1: prompt_len=2 arrive=0 steps=1..2 (stop) generated [5, 2]", "[m1]   accepted  [5, 2]  equal=True"]
+BUILT = "INFO [m1] engine built in 1.5s (case B0, org/model); kwargs={'enforce_eager': True, 'max_num_seqs': 2}"
+TREE = "INFO [m1] runtime tree 2 modules, 1 buffers -> runtime_tree.json"
+WARMED = "INFO [m1] warm-up (uninstrumented, 2 throwaway requests): 0.50s, 5 steps"
+INSTALLED = "INFO [m1] observer installed: 3 roots, profile_id=profile-1, reenter impls={'op': 'impl'}"
+OBSERVED = "INFO [m1] observed run 2.00s: 40 events, 5 steps, recorder=pinned, storage=arena, snapshot_bytes=0, errors=0"
+SAID0 = ["INFO [m1] r0: prompt_len=3 arrive=0 steps=0..3 (length) generated [7, 8, 9, 10]", "INFO [m1]   accepted  [7, 8, 9, 10]  equal=True"]
+SAID1 = ["INFO [m1] r1: prompt_len=2 arrive=0 steps=1..2 (stop) generated [5, 2]", "INFO [m1]   accepted  [5, 2]  equal=True"]
 
 
 def test_the_capture_arm_serves_the_workload_under_the_observer_and_records_what_was_served(world: World, said: Lines) -> None:
     M1.main(options(world, snapshot_steps="0,2", max_tokens=4, engine_arg=["max_num_batched_tokens=64"], target="t.json"))
     out = world.out
-    assert said() == [BUILT, "[m1] cos_sin_cache -> None", TREE, WARMED, INSTALLED, OBSERVED, *SAID0, *SAID1, f"[m1] done -> {out}"]
+    assert said() == [BUILT, "INFO [m1] cos_sin_cache -> None", TREE, WARMED, INSTALLED, OBSERVED, *SAID0, *SAID1, f"INFO [m1] done -> {out}"]
     assert world.names() == ["workload", "engine", "stage", "throwaway", "run", "protocols", "header", "observer", "installed", "run",
                              "closed"]
     assert world.called("workload") == [("workloads/workload_32x16_1req.json", 4)]
@@ -335,9 +343,9 @@ def test_the_capture_arm_serves_the_workload_under_the_observer_and_records_what
 
 def test_the_control_arm_serves_the_same_workload_with_no_observer(world: World, said: Lines) -> None:
     M1.main(options(world, no_observer=True, case="B1", max_num_seqs=2, verify_weights=True, adapter_revision="abc123"))
-    assert said() == ["[m1] engine built in 1.5s (case B1, org/model); kwargs={'enforce_eager': True, 'max_num_seqs': 2}",
-                      "[m1] cos_sin_cache -> None", TREE, WARMED, "[m1] control run (no observer): 2.00s", *SAID0, *SAID1,
-                      f"[m1] done -> {world.out}"]
+    assert said() == ["INFO [m1] engine built in 1.5s (case B1, org/model); kwargs={'enforce_eager': True, 'max_num_seqs': 2}",
+                      "INFO [m1] cos_sin_cache -> None", TREE, WARMED, "INFO [m1] control run (no observer): 2.00s", *SAID0, *SAID1,
+                      f"INFO [m1] done -> {world.out}"]
     assert world.names() == ["workload", "engine", "stage", "throwaway", "run", "protocols", "run"]
     (_, built), = world.called("engine")
     assert (built["case"], built["max_num_seqs"], built["verify_weights"]) == ("B1", 2, True)
@@ -354,7 +362,7 @@ def test_with_no_warm_up_the_run_of_record_is_the_engine_s_first(world: World, s
     del world.runs[0]
     M1.main(options(world, no_warmup=True, no_reenter=True, no_triton=True, no_module_hooks=True, snapshot_max_bytes=64,
                     snapshot_max_bytes_op=8))
-    assert said() == [BUILT, "[m1] cos_sin_cache -> None", TREE, INSTALLED, OBSERVED, *SAID0, *SAID1, f"[m1] done -> {world.out}"]
+    assert said() == [BUILT, "INFO [m1] cos_sin_cache -> None", TREE, INSTALLED, OBSERVED, *SAID0, *SAID1, f"INFO [m1] done -> {world.out}"]
     assert world.called("throwaway") == [] and world.called("run") == [(["r0", "r1"], SAMPLING)]
     (_, _, _, config), = world.called("observer")
     assert config == OC.ObserverConfig(mode="record", reenter=False, triton=False, module_hooks=False, write_log=True,
@@ -385,8 +393,8 @@ def test_tokens_that_differ_from_the_accepted_ones_are_recorded_as_unequal(world
         row("r0", [7, 8, 9, 10], None, None, finish=STEPS["r0"], executed=4, exhausted=True, stopped=False, lag=1),
         row("r1", [5, 3, 2], [5, 2], False, finish=STEPS["r1"], executed=4, exhausted=False, stopped=True, lag=1)]
     assert tokens["children"] == [{"request_id": "1_r1", "generated_token_ids": [5, 4]}]
-    assert said()[6:10] == ["[m1] r0: prompt_len=3 arrive=0 steps=0..3 (length) generated [7, 8, 9, 10]", "[m1]   accepted  None  equal=None",
-                            "[m1] r1: prompt_len=2 arrive=0 steps=1..2 (stop) generated [5, 3, 2]", "[m1]   accepted  [5, 2]  equal=False"]
+    assert said()[6:10] == ["INFO [m1] r0: prompt_len=3 arrive=0 steps=0..3 (length) generated [7, 8, 9, 10]", "INFO [m1]   accepted  None  equal=None",
+                            "INFO [m1] r1: prompt_len=2 arrive=0 steps=1..2 (stop) generated [5, 3, 2]", "INFO [m1]   accepted  [5, 2]  equal=False"]
 
 
 def test_the_observer_s_errors_and_its_log_s_size_are_said(world: World, said: Lines) -> None:
@@ -395,8 +403,8 @@ def test_the_observer_s_errors_and_its_log_s_size_are_said(world: World, said: L
     (world.out / "log.jsonl.gz").write_bytes(bytes(2_500_000))
     M1.main(options(world))
     first, *rest = json.dumps(world.stats["errors"], indent=1).splitlines()
-    assert said()[5:-5] == ["[m1] observed run 2.00s: 40 events, 5 steps, recorder=pinned, storage=arena, snapshot_bytes=0, errors=1",
-                            f"[m1] ERRORS: {first}", *rest, "[m1] log size 2.5 MB"]
+    assert said()[5:-5] == ["INFO [m1] observed run 2.00s: 40 events, 5 steps, recorder=pinned, storage=arena, snapshot_bytes=0, errors=1",
+                            f"ERROR [m1] ERRORS: {first}", *(f"ERROR {line}" for line in rest), "INFO [m1] log size 2.5 MB"]
     assert read(world, "stats.json")["errors"] == world.stats["errors"]
 
 
@@ -406,11 +414,11 @@ def test_the_plan_s_hooks_count_beside_the_observer_and_come_off_before_it_close
     monkeypatch.setenv(stage.MANIFEST_ENV, "/row/required_manifest.json")
     M1.main(options(world))
     observed = world.out / "acquisition_observed.json"
-    hooked = ("[m1] acquisition plan hooks installed beside the observer: 2 sites (1 deferred to their sources: taps / registered "
+    hooked = ("INFO [m1] acquisition plan hooks installed beside the observer: 2 sites (1 deferred to their sources: taps / registered "
               "inputs / prescribed)")
     assert said()[2:9] == [
-        TREE, f"[m1] acquisition plan {'d' * 16}: 2 Value classes, 0 unsupported, 3 hooks, 0 residuals -> None", WARMED, INSTALLED,
-        hooked, f"[m1] acquisition observed: 7 occurrences over 2 sites -> {observed}", OBSERVED]
+        TREE, f"INFO [m1] acquisition plan {'d' * 16}: 2 Value classes, 0 unsupported, 3 hooks, 0 residuals -> None", WARMED, INSTALLED,
+        hooked, f"INFO [m1] acquisition observed: 7 occurrences over 2 sites -> {observed}", OBSERVED]
     assert world.called("stage") == [("the runner", "/row/required_manifest.json", world.out, "m1_capture")]
     (plan, runner, sink), = world.called("hooks")
     assert plan is world.plan and runner == "the runner" and isinstance(sink, Sink)
@@ -429,7 +437,7 @@ def test_the_option_names_the_manifest_before_the_environment_does(world: World,
 def test_a_plan_with_an_unsupported_value_refuses_before_any_run(world: World, said: Lines) -> None:
     world.plan_refusal = "1 unsupported Value(s): v0: no site"
     refused(lambda: M1.main(options(world)))
-    assert said() == [BUILT, "[m1] cos_sin_cache -> None", "[m1] REFUSE: acquisition plan: 1 unsupported Value(s): v0: no site"]
+    assert said() == [BUILT, "INFO [m1] cos_sin_cache -> None", "ERROR [m1] REFUSE: acquisition plan: 1 unsupported Value(s): v0: no site"]
     assert world.called("run") == [] and not (world.out / "tokens.json").exists()
     assert sorted(p.name for p in world.out.iterdir()) == ["spec_tokens.json", "versions.json"]
 
@@ -446,7 +454,7 @@ def test_the_protocols_serve_the_run_and_are_closed_after_it(world: World, said:
 def test_a_declared_static_schedule_the_warm_up_also_ran_is_reported(world: World, said: Lines) -> None:
     world.runs = [({}, timing(0.5, schedule=declared("5c" * 32))), (copy.deepcopy(SERVED), timing(2.0, schedule=declared("5c" * 32)))]
     M1.main(options(world))
-    assert said()[-2:] == [f"[m1] static schedule: ok (digest {'5c' * 8}, warm-up equal)", f"[m1] done -> {world.out}"]
+    assert said()[-2:] == [f"INFO [m1] static schedule: ok (digest {'5c' * 8}, warm-up equal)", f"INFO [m1] done -> {world.out}"]
     assert read(world, "tokens.json")["timing"]["static_schedule"]["content_invariance"]["ok"] is True
 
 
@@ -455,9 +463,9 @@ def test_a_run_that_is_not_its_declared_static_schedule_ends_with_exit_3_after_i
     failed = declared("5c" * 32, ok=False, problems=["r1 stopped at step 2 of 4"])
     world.runs = [(copy.deepcopy(SERVED), timing(2.0, schedule=failed))]
     refused(lambda: M1.main(options(world, no_warmup=True, no_observer=True)))
-    assert said()[-3:] == [f"[m1] static schedule: FAILED (digest {'5c' * 8}, no warm-up to compare)",
-                           "[m1] REFUSE: the workload declares the static schedule (sampling.ignore_eos) and the run is not it:",
-                           "  r1 stopped at step 2 of 4"]
+    assert said()[-3:] == [f"ERROR [m1] static schedule: FAILED (digest {'5c' * 8}, no warm-up to compare)",
+                           "ERROR [m1] REFUSE: the workload declares the static schedule (sampling.ignore_eos) and the run is not it:",
+                           "ERROR   r1 stopped at step 2 of 4"]
     assert read(world, "tokens.json")["requests"] == [ROW0, ROW1]
     assert world.timeline[-1][0] == "work.control_run"
 
@@ -466,9 +474,9 @@ def test_a_warm_up_that_ran_another_schedule_fails_the_run_s_declared_one(world:
     """The warm-up serves the same lengths with other tokens: a schedule that differs from it depends on the prompts' contents."""
     world.runs = [({}, timing(0.5, schedule=declared("aa" * 32))), (copy.deepcopy(SERVED), timing(2.0, schedule=declared("5c" * 32)))]
     refused(lambda: M1.main(options(world, no_observer=True)))
-    assert said()[-3:] == [f"[m1] static schedule: FAILED (digest {'5c' * 8}, warm-up DIFFERS)",
-                           "[m1] REFUSE: the workload declares the static schedule (sampling.ignore_eos) and the run is not it:",
-                           "  the schedule depends on the prompts' contents, not only on the declaration: digests differ"]
+    assert said()[-3:] == [f"ERROR [m1] static schedule: FAILED (digest {'5c' * 8}, warm-up DIFFERS)",
+                           "ERROR [m1] REFUSE: the workload declares the static schedule (sampling.ignore_eos) and the run is not it:",
+                           "ERROR   the schedule depends on the prompts' contents, not only on the declaration: digests differ"]
     assert read(world, "tokens.json")["timing"]["static_schedule"]["ok"] is False
 
 
@@ -481,7 +489,7 @@ def test_the_rotary_table_s_words_are_written_as_the_engine_holds_them(world: Wo
     world.buffers.update({"model.embed.weight_scale": torch.ones(2), ROTARY: table, "model.normalizer": torch.tensor(8.0).to(torch.bfloat16)})
     M1.main(options(world, no_observer=True))
     out = world.out
-    assert said()[1:3] == [f"[m1] cos_sin_cache -> {out / 'cos_sin_cache.npy'}", f"[m1] normalizer -> {out / 'normalizer.npy'}"]
+    assert said()[1:3] == [f"INFO [m1] cos_sin_cache -> {out / 'cos_sin_cache.npy'}", f"INFO [m1] normalizer -> {out / 'normalizer.npy'}"]
     got = np.load(out / "cos_sin_cache.npy")
     assert got.dtype == np.uint16 and got.shape == (4, 3) and (got == words(table)).all()
     assert read(world, "cos_sin_cache.json") == {"dtype": "bfloat16", "shape": [4, 3], "file": "cos_sin_cache.npy",
