@@ -21,8 +21,8 @@ not observation) x the workload (requests, engine steps, TP ranks).  The Program
 same key and replaces `expected_population` when delivered (`coverage_check(pop, bmap)` takes any iterable of identities).
 
 Two separate verdicts: `coverage_check` = required-value coverage (every required Value has >= 1 binding; duplicates/aliases/extra
-bytes cannot hide a missing one) and `value_correspondence` (the opened bytes under an identity are the producer's bytes -- the late-read / relabel negatives;
-openings that verify against the root do NOT imply correspondence).
+bytes cannot hide a missing one), and value correspondence (the opened bytes under an identity are the producer's bytes), which is not
+graded here: a late read or a relabel passes coverage, and openings that verify against the root do NOT imply correspondence.
 """
 from __future__ import annotations
 
@@ -773,27 +773,3 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         leaf = e["leaf_lo"] + pick(2000 + j, max(e["leaf_hi"] - e["leaf_lo"], 1))
         out.append((ident, e, leaf))
     return out
-
-
-# ---------------------------------------------------------------------- value correspondence (separate from coverage)
-
-def value_correspondence(openings: list, entries: list[dict[str, Any] | None], reference, *, chunk: int) -> dict[str, Any]:
-    """For each (opening, map entry): the opened chunk bytes must equal the PRODUCER's bytes for that identity.  `reference(entry)` returns
-    the bytes the producer wrote for that (step, name, invocation) -- the test's producer, or a replay -- or None (not checkable).
-    Openings can verify against the root and still fail here (late read after overwrite; relabelled occurrence)."""
-    bad = []
-    checked = 0
-    for o, e in zip(openings, entries, strict=True):
-        if e is None:
-            bad.append({"step": o.step, "index": o.index, "why": "no binding"})
-            continue
-        ref = reference(e)
-        if ref is None:
-            continue
-        checked += 1
-        start = o.index * chunk - e["stream_offset"]
-        want = ref[max(start, 0):max(start, 0) + len(o.value)] if start >= 0 else ref[:len(o.value) + start]
-        got = o.value[:len(want)] if start >= 0 else o.value[-start:]
-        if got[:len(want)] != want:
-            bad.append({"step": o.step, "index": o.index, "name": e["name"], "why": "opened bytes != producer bytes"})
-    return {"ok": not bad, "checked": checked, "bad_n": len(bad), "bad": bad[:8]}
