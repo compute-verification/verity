@@ -44,7 +44,7 @@ def pins(hf_home):
 
 
 environ.__getitem__, environ.__iter__, env.apply_engine = reads, walks, pins
-import verity_vllm.pipeline.tp.capture  # noqa: E402,F401
+import verity_vllm.pipeline.tp.capture
 
 print(json.dumps({"at_the_pins": at_the_pins[:1], "in_force": {k: os.environ[k] for k in env.ENGINE}}))
 """
