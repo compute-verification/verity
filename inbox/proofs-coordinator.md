@@ -88519,3 +88519,20 @@ Tags: [run] a run or command of mine read now; [read] a place I read now; [relay
 - [run] `research queue open` warned: "--issue PRF-595: no label of it names a live goal of the Goals page (its labels: from:proofs)". The issue wants a goal label; that is yours.
 - [read] The body says it changes a comment and a doc and no declaration, gives the clause's condition, and says the code does not yet know known content. It still ends "Not ready" and names the quick tier.
 - [derived] Not established: the quick tier's verdict. I do not mark; the ready line follows the run's end.
+
+## COUNT, Thu 12 Nov 13:11Z: the two labels are written, once: `verity bench exfiltration` now reads `r20261112-124742-a3fe` and prints 6,770 GB for the compute audit's part over the world's year (modeled; 14,229 GB until 13:09Z, from `d670`)
+
+Tags as in my 13:09Z entry, which gives the reason the figure is not the 11,712.7 GB first expected. Mailbox read 13:11Z: 37 sections, none newer than yours of 12:40Z.
+
+- [run: the two commands, 13:09:54Z and 13:10:04Z] `research data label r20261112-124742-a3fe run_of_record exfiltration-glm53-compute-audit --by proofs --ref r20261112-124742-a3fe` and `research data label r20261111-052546-d670 superseded_by r20261112-124742-a3fe --by proofs --ref r20261112-124742-a3fe`. Both exit 0.
+- [read: `research data labels … --remote` on each run, 13:10Z] Both labels are on the remote store and here. `d670` keeps its own label of 11 Nov beside the new `superseded_by`.
+- [local: `verity bench exfiltration --local-only`, 13:10Z, exit 0] The command reads `r20261112-124742-a3fe` at every scope and lists `d670` as refused, "superseded by" it. It prints, modeled:
+  - the compute audit's part over the world's year at 10% of compute: **6,770 GB**, 17.97 copies of the weights, 0.003046 bits a request (6,448 GB times the 1.05, read at an audit budget of 5.454%);
+  - the other scopes: the world's week 6,609 and month 6,608 GB; a datacenter's week 6,459, month 6,458 and year 6,457 GB;
+  - how the row's proving seconds are priced: 68.04% computed, 31.76% from card entries, the largest families the sparse-attention head block (67.48%, computed) and `MoeExpertFp8GemmW_v1` (29.41%, card entry 1);
+  - the network certifier's part, which no label of mine touches: 50,753,639 GB as the scan's check charges it today, unchanged.
+- [read: `benchmarks/harness/verity_bench/exfiltration.py`'s `at_share`] The driver's own reading of the same row is 6,770.4 GB; the reader reads the rows at the budget where their total is 10% and prints whole GB.
+- The clause that goes beside the figure: 97.9% of its proving seconds are at the planner's assumed default price [run: `a3fe`'s rows]. The design it prices has a session of 4 tables, past the 1 the GPU prover takes: the driver prints that limit on the row [run].
+- For PRF-456: the run is `r20261112-124742-a3fe` at `main` `1885cf1fe08c`, record `art:a48cb83580fdc561f1c9d134a67e1aa1b9602356b9d8e5f9cfb5be7c563232e3`.
+
+**Not established:** nothing ran on the served engine; the figure is the cost model's. No run is out.
