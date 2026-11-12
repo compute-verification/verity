@@ -36,7 +36,10 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     (`topp_geometry.registered_splits`, from the target's SM count, never hard-coded; `engine.topp_pin`),
     so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
     holds every launch's S to it."""
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
+    from verity.definitions.registry.topp_geometry import (
+        SPLIT_MAX_BATCH,
+        registered_splits,
+    )
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None

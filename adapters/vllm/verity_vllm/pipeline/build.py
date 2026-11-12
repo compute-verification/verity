@@ -23,19 +23,36 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
+from verity.definitions.boolean import write_word
+
 from verity_vllm.config import RowConfig, option, workload_arg
-from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
-from verity.definitions.boolean import write_word
+from verity_vllm.pipeline.build_instances import (  # noqa: F401 (read through here)
+    INSTANCES_GZ_LEVEL,
+    _instance_rows,
+    _instance_sequence,
+    _write_instances,
+    _write_instances_file,
+    write_instances,
+)
+from verity_vllm.pipeline.build_sampling import (
+    SAMPLERS_BOUND,
+    sampler_geometry,
+    sampling_policy,
+)
+from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
+    module_in_model_vocabulary,
+    read_tp_links,
+    same_module_path,
+    write_tp_links,
+)
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.program.prune import BATCHED, registered_form
 from verity_vllm.records import schema_ids as SID
-from verity_vllm.pipeline.build_sampling import SAMPLERS_BOUND, sampler_geometry, sampling_policy
-from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
-                                                 _write_instances, _write_instances_file, write_instances)
-from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
 
 __all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
 logger = init_logger(__name__)
@@ -130,8 +147,12 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
                              launch: dict | None = None) -> dict:
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
     which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
-    from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, tuned_gemm_table_sha256
     from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        GEMM_PINS,
+        RMS_PINS,
+        tuned_gemm_table_sha256,
+    )
     # the registered GEMM specialization the construction pinned (verity_vllm.program.frontend.gemm_targets, selected by the target's
     # capability + the arch family vLLM applied): its key and k16 step are conditions of reuse; None (with the refusal) when unregistered.
     gt, gt_refusal = try_gemm_target_for(profile.compute_capability, applied.get("tuned_gemm_arch_family"))
@@ -275,7 +296,10 @@ class _Refused(Exception):
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
                dead_free: bool = False, stop: dict | None = None, batched: bool = False, table_reads: bool = False) -> None:
-    from verity_vllm.program.frontend.target_profile import applied_kernels, profile_mismatches
+    from verity_vllm.program.frontend.target_profile import (
+        applied_kernels,
+        profile_mismatches,
+    )
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
@@ -410,7 +434,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             write(out, res, rep, rank=rank)
             if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
-                from verity_vllm.program.frontend.export_ops import rank_embedding_shards
+                from verity_vllm.program.frontend.export_ops import (
+                    rank_embedding_shards,
+                )
                 rep = None                                                 # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
@@ -421,8 +447,11 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
-    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
-    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES, kv_prefix as KP
+
+    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS
+    from verity_vllm.correspondence.runtime import correspondence_digest
+    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
+    from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
@@ -476,7 +505,11 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
 def _derive_context(vm, cfg, ntok: int, target, model, *, apply_target: bool = False):
     """The contexts the derive runs in; `apply_target`: with the declared target applied again (a relabel, after the construction's)."""
     import torch
-    from verity_vllm.program.frontend.export_compat import apply_target_profile, export_compat
+
+    from verity_vllm.program.frontend.export_compat import (
+        apply_target_profile,
+        export_compat,
+    )
     from verity_vllm.program.frontend.triton_capture import intercept_triton_launches
     with contextlib.ExitStack() as st:
         if apply_target:
