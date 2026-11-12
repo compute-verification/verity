@@ -154,6 +154,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
                          transcript_dir=str(tdir), key=KEY, served=served,
                          commit={"cp": cp, "run_id": f"pouw-h1-ranks-{name}-{os.getpid()}"})
+    w: dict[str, Any]
     h1, w = holder.run, {"install_s": round(time.monotonic() - t0, 1)}
     if edit is not None:
         w["edit"] = {"kind": edit, "ranks": [x for x in holder.executor.collective_rpc(
