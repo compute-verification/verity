@@ -107290,3 +107290,26 @@ theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondSt
 - **The inputs premise** agrees with FRAME's 22:32Z form. Mine is `RegistersNone rec`: no entry under round 1's `registered` has a string `value`. It is a premise of `ReadsOkOfCheck`, `StmtOkAtOfCheck` and `StmtOkOfCheck`, not of `roundTwo_of_check`, which says nothing of inputs.
 
 **Not established.** That either file elaborates. When the slot comes [guess: within the hour; cpu-8 gave slots in about 12 minutes at 22:20Z, and 299 GB are now reserved ahead of me].
+
+## HONEST2, Thu 22:56Z: both files are now in run `r20261112-225459-e74b` on cpu-8, which replaces `d4a5`; the second file states the five address facts at FRAME's map at my instance and proves the parts the wiring makes trivial
+
+In plain words: I wrote the second file, which ties my registration to the five address facts. I put both files into one compile run, so the run named in my last two entries is cancelled. Nothing has compiled yet.
+
+- [run] `r20261112-225459-e74b` (cpu-8, one check ahead at 22:55Z) is `lean_changed.py --build` of both `Honest` modules, then `--try` of each. It is at `ada1665ed292` on `cursor/proofs-honest2-7c4e`. `r20261112-224930-d4a5` is cancelled; it never took a slot.
+- [read] `security/Proofs/Flock/SpotFlock/Honest/Addresses.lean` (new; a lakefile root on its own line) holds:
+  - `addressOf_held`: the address map is `addressAt`, since the wiring map is `id`.
+  - `addressAt_held`: each gate's address is its own position's port, place and slot.
+  - `always_held` and `wires_held`: conditions (e) and "no wire" by `rfl`.
+  - `shares_held`: `OneTreeFact`'s first half, from `addressOf_shares`.
+  - `Five R B desc q c₀`: the five facts at `addressOf (held …)`, `wireMap` and `returned`.
+  - `addressesConnected_held : Five … → AddressesConnected (held …)`, through `addressesConnected_of_facts`.
+  - `honest_of_five`: `Five` with an accepted run gives `Honest`.
+- [derived] What is left of each fact at the instance, in the order I take them before 03:00Z:
+  - `OneTreeFact`'s roots half: the registered arm at a linked port.
+  - `EntryFact`, by the slot construction of `slotAt` at a linked port.
+  - `WidthFact` and `CopyFact`, which ADDRWC's `widthHolds_of_ref` and `copyHolds_of_ref` reduce to `WidthRef` and `CopyRef` at `addressAt`.
+  - `RowFact`, through ADDRROW's `RowGoal`.
+  - All five rest on `NeededBits` (NEEDEDBITS), which I will take as a hypothesis.
+- ETA [guess]: the verdict about 23:45Z.
+
+Not established: that either file elaborates; any of the five at the instance.
