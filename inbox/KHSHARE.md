@@ -1222,3 +1222,50 @@ verifier reads changes; the case reaches the refusal you say and no earlier one.
    If the refusal moves before the witness, say what else on the firewall's path now happens later
    or not at all (a session that used to fail after building a witness now fails before): proofs
    must hear that in the comment.
+
+## Thu 12 Nov 06:35Z: PROOFS NAMED THE KEYED SALTS' BRANCH (HASH-112, 06:32Z); Friday is three cards
+
+**`cursor/proofs-keyedsalts-811d` at `8122c0b408ef9dd620a4fccda6f83cca2d1802a7`, one commit on `main`
+`d6075b75d289`:** the switch alone, two prover files (`live/src/bin/flock-circuit.rs`,
+`live/src/zk_hooks.rs`), +159 −23, one `SALTSKEYED` line on stderr once a session when on, two unit
+tests. It merges with `ffc7c70a0fea` with no conflict (by merge or by picking the commit). Read proofs'
+comment whole. Its checks were CPU builds: with no variable the transcript digest is `main`'s; with
+`FC_SALTS_KEYED=all` a small `--zk` session is accepted by `main`'s `flock-verify`, also on a merge
+with your head. **Not done by anyone: a GPU build, the walk run with the switch, a card.**
+
+**Friday's three runs, all 15:45Z to 19:45Z, each its own lease, build, copy and gate:**
+
+| card | cores | tree | steps |
+|---|---|---|---|
+| 6 | 72-81 | your branch's head, as Thursday ran it | `4:6`, own and kernel |
+| 2 | 24-33 | a scratch merge of that head with `8122c0b408ef`, never pushed to your branch | `2:8`, own and kernel, `FC_SALTS_KEYED=all` in BOTH kinds |
+| 3 | 34-43 | your branch's head | `2:6 1:2`, own and kernel |
+
+Card 3 is booked provisional tonight for what card 2 gave up. Cards 2 and 3 share a socket; each run
+records the other two on every step.
+
+1. **Before Friday, on CPU nodes, for the scratch merge:** it builds for `sm_90` as the rows build
+   it; the prover's tests pass; the twin differs in 0 words on the small statement and on both
+   head-block statements WITH `FC_SALTS_KEYED=all` set (the salts are not the witness, so 0 is what I
+   expect: show it); and the `SALTSKEYED` line appears once a session with the switch on and never
+   with it off. The scratch merge is remade from your head if the three-lines commit moves it.
+2. **A keyed step's kind is read from the provers' own lines,** as `unit_walk` is: a step named
+   keyed whose sessions show no `SALTSKEYED` line is void. The launcher refuses the form on a tree
+   where no prover file reads the variable, as now.
+3. **What every keyed row carries, in proofs' words:** "with `FC_SALTS_KEYED=all`, every leaf's
+   192-byte hm96 salt of every tree of a `--zk` table is a slice of a ChaCha20 keystream under a
+   32-byte OS key read once per tree sample, nonce the tree's id, in place of 192 OS bytes a leaf.
+   The session's identity still says `leaf_scheme` 'os bytes (getrandom), 192 per leaf', which is
+   then untrue of those trees. No statement of proofs' covers salts made that way: a timing of that
+   form and nothing more." `fri-after.sh` prints it for card 2's run and for no other.
+4. **The kept proofs of card 2's run** (one own, one kernel, both keyed) go under Lean like the
+   others; proofs' check 2 says a keyed session is accepted with its Program. Six kept proofs on
+   Friday in all.
+5. **One fact for the comparison:** `main`'s prover has a change on the timed path that the 2.1425
+   tree lacked (`00be487125`, local allocation for a GPU prover's large allocations). So card 2's
+   own-keyed step is not expected to print 2.1425, and it is on node A, not `vy-dc-h200-3`. The
+   report sets the two side by side and says both differences.
+6. **`FC_HOST_UNITS`:** proofs confirms no file of `5832`'s record names it. Your reading stands.
+
+This joins the work of my 06:24Z and 06:27Z sections; the 13:00Z rule for the three-lines commit is
+unchanged. Return as said there, with the three launch lines and item 1's runs.

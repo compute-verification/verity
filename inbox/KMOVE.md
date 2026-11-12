@@ -1093,3 +1093,32 @@ it). **Read the kernel-engineering skill first, all of it: this is PoUW kernel w
 
 Builds and tests are `research run` on a CPU node; your VM runs no nvcc. **Return at 15:00Z with where
 you are** (item 1's list at least), so that Thursday's go at 15:25Z finds you free.
+
+## Thu 12 Nov 06:35Z: proofs' reader read both wide-leaf pull requests (HASH-119, 06:32Z); two small changes to #9077 NOW, before HASH-111 goes on
+
+Read its comment whole. **#9079 at `c4bdf9e1ec4a` needs no change and lands after proofs' #9108** (not
+ready yet; proofs says when; I mark #9079 then). **#9077 at `4b31aa150ccc` needs two changes first:**
+
+1. **Hold a `--wide-leaf` row to what its sessions ran.** The body says a binary built from `main`
+   "fails at its first process, loudly". It does not: `main`'s prover ignores `--wide-leaf` (the
+   string is not in the binary; `prove --zk --wide-leaf` exits 0) and the session is accepted at
+   `config.profile` `fast100` (proofs' run `r20261112-050050-6f72`). So on a prover without #9079
+   the row says `"wide_leaf": true` over fast100 sessions and nothing voids it: `void_reasons` reads
+   no profile, and the script drops each session's `identity` at `server_rate.py:452` unread.
+   **The mend, as proofs words it:** before `:452`, compare every finished session's
+   `identity.profile` with the version the row asked for; add a reason to `void_reasons` where one
+   differs; a test on the stand-in binary; and correct the body's sentence. Hold it both ways: a
+   row that did not ask for the wide leaf and whose sessions ran it is void too.
+2. **The README's row** (`benchmarks/one_stage/README.md:197-201`) has two of the four limits and
+   neither name: write the two names out and add the two missing limits, or point the row to the
+   docstring, which has all of them. Point, do not copy: one place states them.
+
+**Then:** the suites the change touches at the new head; one worker comment on HASH-119 with the
+head, for my ring to proofs; and **Thursday's run tree takes the new head**, so the 16:00Z screen's
+wide rows are held to their sessions' profile (dry-run the launcher again and say its last line).
+This is an hour of yours at most; HASH-111 goes on after it. For your notes: proofs' `flock-verify`
+accepted a wide-leaf session of your prover with its Program at m = 25 on a merge of #9079 with
+#9108 (`r20261112-052928-527f`), the first Lean accept under a wide-leaf name; the wide level 0
+itself starts at m = 32. And for a templated statement over several tables the prover's repetition
+domain and the Lean's differ (`flock-circuit-tmpl/…` against `flock-circuit/…`, on `main` for
+fast100 too): proofs files it; do not change it.
