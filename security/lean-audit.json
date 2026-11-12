@@ -4424,7 +4424,7 @@
    "nontrivial": "Claims.Witness.SamplingGeneric.rankinTwo_nontrivial"
   },
   "Claims.Sampling.admissibleTwo_rankin_patterns": {
-   "honest": ["Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest"],
+   "honest": ["Claims.Witness.SamplingGeneric.rankinTwo_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.rankinTwoPatterns_nontrivial"
   },
   "Claims.Sampling.admissibleTwo_rankin_served": {
@@ -14197,41 +14197,6 @@
     "reads": []
    },
    "type_hash": "99d4413bc8aeae33ce3213446fc7f73305b4be1f2d2c5fd66d197d55b7638dd6"
-  },
-  "Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest :",
-    "  And",
-    "    (Claims.Sampling.InScopeTwo Claims.Witness.SamplingGeneric.twoPart Claims.Witness.SamplingGeneric.rankinTwo",
-    "      Claims.Witness.SamplingGeneric.twoStmt)",
-    "    (And",
-    "      (∀ (T : Finset Nat),",
-    "        Finset.instPartialOrder.le T (Finset.range Claims.Witness.SamplingGeneric.rankinTwo.part.blocks.length) →",
-    "          Real.instLE.le",
-    "            (Claims.Witness.SamplingGeneric.rankinTwo.replay.Pa Claims.Witness.SamplingGeneric.rankinTwo.part T)",
-    "            (T.prod fun _ρ => instHSub.hSub 1 (1 / 2)))",
-    "      (∀ (r : Unit),",
-    "        Exists fun ρ =>",
-    "          ∀ (v : Nat),",
-    "            SetLike.instMembership.mem",
-    "                (Claims.Sampling.blocksTo Claims.Witness.SamplingGeneric.twoStmt.prog",
-    "                  Claims.Witness.SamplingGeneric.twoPart (fun x => Unit.unit)",
-    "                  (Finset.range Claims.Witness.SamplingGeneric.twoPart.blocks.length) r)",
-    "                v →",
-    "              Eq",
-    "                (Claims.Sampling.replayOf Claims.Witness.SamplingGeneric.twoPart",
-    "                  Claims.Witness.SamplingGeneric.rankinTwo.part v)",
-    "                (Option.some ρ)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "79200a921557641ef049aac000278b37e94ee5f0bc6d2040b5701ee06ca85ff5"
   },
   "Claims.Witness.SamplingGeneric.rankinTwoPatterns_nontrivial": {
    "owner": "@proofs",

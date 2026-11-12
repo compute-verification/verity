@@ -126,7 +126,7 @@
   "Properties.Spot.RequestsCover": {
    "owner": "@proofs",
    "digest": "e20735f9c7c79581fb75505594e7260b7d61d0de7ffff787643bd340bcd963bf",
-   "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
+   "why": "The requests the patterns' point describes: disjoint, and in each replay block as many and as wide as its class says."
   },
   "Properties.Spot.ServedCover": {
    "owner": "@proofs",
