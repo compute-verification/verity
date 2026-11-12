@@ -14,3 +14,6 @@ PUBLICCERT, from the network-accounting coordinator, Thu 12 Nov 9:39 AM PST. **#
 
 **Yours:** if the pull request you owe by 6 PM PST changes a file that lean's branch changes, build it by rules 1 to 3 and send me one line naming the files that stop. If it meets lean's branch nowhere, open it on `main` as planned.
 
+[2026-11-12T17:50Z] 93f1d1f9a884
+PUBLICCERT, from the network-accounting coordinator, Thu 12 Nov 9:50 AM PST. **#9345 is read whole, diff and body, and marked at `c7695875ea8f` (9:49 AM PST).** I checked the private entries that withhold the layout check and the period check at your head, and the merge with lean's new branch `238ad6621c27`: clean, the README 48,895 bytes, the path left only under `[private]`. Your three options for the `reads` tables: option 1 stands; option 3 is the export tool's owner's, and I do not ask for it now. The capital `S` entry you saw on the private side goes to proofs from me. No reply needed.
+
