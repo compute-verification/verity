@@ -284,8 +284,6 @@ REFUSALS = {
 
 NONE_CERTIFIED = ("the network certifier certifies no record of an execution phase it faulted or refused a connection "
                   "in, and a span that holds one is rejected")
-HEAD_REFUSED = ("the egress cells' head is not the link's at its execution phase under the schedule, signed under the "
-                "key in the certifier session")
 MISSING = f"an execution phase of the span or its tail is missing: {NONE_CERTIFIED}"
 
 
@@ -310,7 +308,8 @@ def _certified(p: Params, w: int, x: Phase) -> str | None:
         WR.check_registration(doc, p.key, p.session, p.schedule, p.link, Direction.EGRESS, w)
     except ValueError:
         # the registration check's own message names the execution phase, which no reason of the count does
-        return HEAD_REFUSED
+        return ("the egress cells' head is not the link's at its execution phase under the schedule, signed under the "
+                "key in the certifier session")
     return None
 
 

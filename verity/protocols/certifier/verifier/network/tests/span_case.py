@@ -80,6 +80,7 @@ _MARK = {m: f"mark: {span.REFUSALS[code]}" for m, code in {
     "mark-moved": "signature"}.items()}
 _UNSIGNED = "certificate does not verify under the key in the certifier session"
 _HEAD = "the egress cells' head: "
+_REFUSED = "the egress cells' head is not the link's at its execution phase under the schedule"
 REASONS: dict[str, tuple[str, str]] = {m: (why, why) for m, why in ({
     "order": "the marks are out of order: the end mark's execution phase is before the start mark's",
     "missing": span.MISSING, "tail-short": span.MISSING, "no-tail": span.MISSING,
@@ -93,11 +94,11 @@ REASONS: dict[str, tuple[str, str]] = {m: (why, why) for m, why in ({
     "head-schedule": "the egress cells' head names another schedule's digest than the parameters'",
     "schedule": "the egress cells' head names another schedule's digest than the parameters'",
 } | _MARK).items()} | {
-    "head-phase": (f"{_HEAD}not the link's egress rows at its execution phase", span.HEAD_REFUSED),
-    "head-link": (f"{_HEAD}not the link's egress rows at its execution phase", span.HEAD_REFUSED),
-    "head-ingress": (f"{_HEAD}not the link's egress rows at its execution phase", span.HEAD_REFUSED),
-    "head-session": (f"{_HEAD}not the execution phase's domain", span.HEAD_REFUSED),
-    "head-key": (f"{_HEAD}its certificate does not verify under the key in the certifier session", span.HEAD_REFUSED),
+    "head-phase": (f"{_HEAD}not the link's egress rows at its execution phase", _REFUSED),
+    "head-link": (f"{_HEAD}not the link's egress rows at its execution phase", _REFUSED),
+    "head-ingress": (f"{_HEAD}not the link's egress rows at its execution phase", _REFUSED),
+    "head-session": (f"{_HEAD}not the execution phase's domain", _REFUSED),
+    "head-key": (f"{_HEAD}its certificate does not verify under the key in the certifier session", _REFUSED),
 }
 """Each rejection of the check a change is aimed at, by what Lean's reason and the mirror's say of it. Neither holds a
 number: a reason names no execution phase."""
