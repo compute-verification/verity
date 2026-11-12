@@ -1469,6 +1469,19 @@ def checkAny (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
     else check allow own stmts
   | _, _ => check allow own stmts
 
+/-- Where no statement is of only its part's sampled proof blocks, `checkAny` is `check`: what is proved of `check`
+(`check_ok` and what follows from it) holds of `checkAny` at every such run. -/
+theorem checkAny_eq_check {allow : Bool} {own : Own} {stmts : Option (Array Json)}
+    (h : ∀ ps ss, own.parts = some ps → stmts = some ss → anySampled own ps ss.toList = false) :
+    checkAny allow own stmts = check allow own stmts := by
+  unfold checkAny
+  cases hp : own.parts with
+  | none => rfl
+  | some ps =>
+    cases stmts with
+    | none => rfl
+    | some ss => simp [h ps ss hp rfl]
+
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
 `reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where
 `c` does, as a failed check of its own fails it (`Record.record`): not accepted, and no profile, integrity profile or
