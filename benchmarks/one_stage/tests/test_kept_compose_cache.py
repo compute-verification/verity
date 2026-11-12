@@ -5,8 +5,8 @@ compose it makes. A cache one window's warm made is taken whole by a later windo
 templates once the first window's serve dir is gone, as links under the first's partition and program and as the
 circuits composed bound to its own under another's; a window whose templates differ in their Definition, statement or
 id takes none, composes its own and keeps them beside the first's, which stay as they were; unset or empty, the warm
-and the audit get the window's own directory, the script's steps, limits and lines the same; and without V3C_WARM_JOBS
-no step reads it."""
+and the audit get the window's own directory, the script's steps, limits and lines the same; without V3C_WARM_JOBS no
+step reads it; and a relative path is refused before any step runs."""
 
 from __future__ import annotations
 
@@ -202,3 +202,18 @@ def test_v3c_compose_cache_without_v3c_warm_jobs_starts_no_warm_and_gives_the_au
     assert rc == 0 and "warm" not in order and "audit" in order, (lines, order)
     assert "--compose-cache" not in json.loads((tmp_path / "run" / "order.audit").read_text())
     assert not any(x.startswith("V3C-WARM") for x in lines) and not kept.exists()
+
+
+@pytest.mark.parametrize("given", ["kept", "./kept", "../kept"])
+@pytest.mark.parametrize("jobs", ["3", None])
+def test_the_preflight_refuses_a_relative_v3c_compose_cache_and_no_absolute_one(tmp_path, given, jobs):
+    """The warm and the audit run in the tree, where a relative path would put a kept cache: the preflight refuses one,
+    with or without a warm, before any step runs and with nothing made at it; the same name from / is not refused."""
+    root = tmp_path / "run"
+    rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS=jobs, V3C_COMPOSE_CACHE=given)
+    assert (rc, lines, order, limits) == (3, [
+        "PREFLIGHT: V3C_COMPOSE_CACHE is the kept compose cache's directory, an absolute path (the warm and the audit "
+        f"run in the tree, where a relative one would put it), not {given}: name it from /"], [], [])
+    assert not list(root.rglob("kept")) and not (tmp_path / "kept").exists()
+    rc, lines, order, _limits = SV._v3c(tmp_path / "absolute", V3C_WARM_JOBS=jobs, V3C_COMPOSE_CACHE=f"/{given}")
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
