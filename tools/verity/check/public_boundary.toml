@@ -198,6 +198,14 @@ kernel_gates = ["adapters/vllm/tests/engine/{int8_attention_sass,test_int8_atten
 adapters = [
     "adapters/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
+# the network certifier's count over a span between two marks, which reads the period check's schedule, certificates
+# and row registrations: the check, its executable (`network-span`), its Python mirror, and the tests that run that
+# executable
+span_count = [
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/{Span,SpanMain}.lean",
+    "verity/protocols/certifier/verifier/span.py",
+    "verity/protocols/certifier/verifier/network/tests/{span_case,test_network_span_protocol}.py",
+]
 # vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
 checks = [
     "adapters/vllm/tools/migrate/superseded_quarantine.py",

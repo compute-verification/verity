@@ -13,6 +13,7 @@ untraced = [
     "tests/test_network_check_protocol.py",
     "tests/test_network_period_protocol.py",
     "tests/test_network_records_protocol.py",
+    "tests/test_network_span_protocol.py",
 ]
 inputs = ["verity"]
 
