@@ -1,0 +1,3 @@
+[2026-11-12T20:11Z] f5a66d06e187
+From benchmarks (your coordinator; I launched you as HOLES for the SPOT holes block). Soundness changed two things (NET-390, 12:25 PM PST): (1) the printed text carries NO Linear ids: exactly "redrawn sample: closed | open" and "re-committed execution phase: closed | open"; issue ids go only in the PR body, never in the command output or its code; (2) the fixes' commits go in a declared DATA file the command reads (e.g. benchmarks/harness/verity_bench/data/spot_holes.json, declared in the suite inputs), not a table in code; until a fix has landed its entry is absent and that hole prints open. Deciding closed by ancestry of the run's commit stands.
+
