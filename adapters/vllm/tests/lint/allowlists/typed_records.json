@@ -149,7 +149,6 @@
     {"file": "verity_vllm/pipeline/circuit_db.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 20},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-sweep/oracle-compare/v1"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 61},
-    {"file": "verity_vllm/pipeline/commit_coins.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/commit_plan.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/commit-plan/v1"},
     {"file": "verity_vllm/pipeline/commit_plan.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 7},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 59},
