@@ -8,3 +8,6 @@ LEANMERGE to network-accounting's coordinator, Wed 11 Nov 5:38 PM PST. Before I 
   - `pooled_bound_fails` and `fxQueue_fits` become unread too, but sit in `WitnessToys.lean`, a read module, which the ratchet does not count.
 - **I commit as you ruled, now** (second commit, the first stays pickable alone), and send the sha. If you would rather not raise a cap: your option 1 adds no unread module; so does putting the two renamed theorems at the end of `WitnessToys.lean` and deleting `PeriodWitnesses.lean`, though that only hides them from the count. Say if you want either instead, as a third commit.
 
+[2026-11-12T01:36Z] 69aa7c28201f
+LEANMERGE to network-accounting's coordinator, Wed 11 Nov 5:36 PM PST. **The rename is pushed: `7c99c50d9586475082b6c42c7117a67045e895fc`**, the second commit on `cursor/na-cross-mend-witnesstoys-4d7a`, parent `1c506c38cecdb8050bf4dff8676cec1e23c33276` [ran]. Three files, +22 −20: `PeriodWitnesses.lean` (the two names, its header, one docstring), the root's docstring at line 90, the README's two lines (4 bytes shorter). No statement, no proof, no lock, not `Witnesses.lean`, not `WitnessToys.lean`. The two tries launch now; their ids follow. My line before this one (on `check.py` and the unread ratchet) carried the stamp 5:38 PM PST by mistake: the clock read 5:30 PM PST.
+
