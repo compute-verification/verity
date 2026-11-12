@@ -3,6 +3,8 @@ starts, in each xdist worker, once collection is done and before conftest builds
 
     CCMEM_KEYED=DIR   write DIR/<worker>.json: the variables of this process that key a circuit-check record as conftest's
                       `_from_records` looks one up (`cache.key`'s environment, less what conftest leaves out of it)
+    CCMEM_ORDER=DIR   load the registries as `units.plan` does and write DIR/<worker>.json: the registered roots' ids in this
+                      process's order, which the records of `<registered>:0..7` are cut from
     CCMEM_PLAN=1      call conftest's own `_from_records` and write a row to $CCMEM_OUT/plan.<worker>.jsonl: what it gave, how
                       many lookups hit, and for the first binding whose record did not count, why
 
@@ -18,6 +20,7 @@ import pytest
 
 OUT = os.environ.get("CCMEM_OUT")
 KEYED = os.environ.get("CCMEM_KEYED")
+ORDER = os.environ.get("CCMEM_ORDER")
 PLAN = os.environ.get("CCMEM_PLAN") == "1"
 WORKER = os.environ.get("PYTEST_XDIST_WORKER")
 
@@ -174,8 +177,19 @@ def _trial(mod) -> dict:
     return notes
 
 
+def _order() -> None:
+    """The registered roots' ids in this process's order, once the registries are loaded as `units.plan` loads them."""
+    from circuit_check import targets as TG
+    TG.load_registries()
+    os.makedirs(ORDER, exist_ok=True)
+    with open(os.path.join(ORDER, f"{WORKER}.json"), "w") as f:
+        json.dump([getattr(r, "id", repr(r)[:80]) for r in TG._registered()], f)
+
+
 def _probe() -> None:
     from circuit_check import cache as CC
+    if ORDER:
+        _order()
     if KEYED:
         os.makedirs(KEYED, exist_ok=True)
         with open(os.path.join(KEYED, f"{WORKER}.json"), "w") as f:
@@ -190,7 +204,7 @@ def _probe() -> None:
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_collection_finish(session):
-    if WORKER and (KEYED or PLAN):
+    if WORKER and (KEYED or PLAN or ORDER):
         try:
             _probe()
         except Exception as x:  # noqa: BLE001

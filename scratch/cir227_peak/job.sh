@@ -4,7 +4,8 @@
 #
 #   MODE=records bash scratch/cir227_peak/job.sh    the bindings' records made first, in a cache of the run's own, so they count
 #   MODE=clean   bash scratch/cir227_peak/job.sh    a clean cache of the run's own: no record counts, the first worker builds apart
-#   MODE=keys    bash scratch/cir227_peak/job.sh    only: which variables key a record in a session suites.py starts (SMOKE_GB=12)
+#   MODE=keys    bash scratch/cir227_peak/job.sh    only: which variables key a record in a session suites.py starts
+#   MODE=order   bash scratch/cir227_peak/job.sh    that, and the registered roots' order in a session against circuit-check's own
 #
 # A record counts only under the key it was stored with, and the key holds every VERITY_ and CIRCUIT_CHECK_ variable of the
 # process (`cache.key`).  suites.py inside a `research run` sets two for its suites (`store_custody`), as check.py's `env()`
@@ -31,8 +32,8 @@ echo "   keyed names in the environment: $(compgen -e | grep -E '^(VERITY_|CIRCU
 uv sync -q --all-packages --extra torch-cpu < /dev/null || { echo "uv sync failed"; exit 9; }
 PY="$ROOT/.venv/bin/python"
 SITE=$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
-cp "$D/ccmem_peak.py" "$D/ccmem_plan.py" "$SITE/" || exit 9
-echo "   synced; the plugins are at ${SITE#"$ROOT"/}/ccmem_{peak,plan}.py $(stamp)"
+cp "$D/ccmem_peak.py" "$D/ccmem_plan.py" "$D/ccmem_first.py" "$SITE/" || exit 9
+echo "   synced; the plugins are at ${SITE#"$ROOT"/}/ccmem_{peak,plan,first}.py $(stamp)"
 
 SCR=$(mktemp -d)
 trap 'rm -rf "$SCR"' EXIT
@@ -97,6 +98,33 @@ EOF
 [ "$(rows "$OUT/smoke" test | wc -l)" -ge 1 ] || { echo "== the plugin wrote no test row: stopping"; exit 5; }
 [ "$MODE" = keys ] && { echo "done (keys only) $(stamp)"; exit 0; }
 
+status() {  # status DIR: what suites.py said of the one suite it ran there
+  "$PY" -c 'import json, sys
+for s in json.load(open(sys.argv[1])):
+    print("   suites.json:", {k: s.get(k) for k in ("status", "seconds", "workers", "counts", "outside", "child_outside", "unguarded")})' "$1/suites.json" 2>/dev/null \
+    || echo "   suites.json: not read"
+}
+
+if [ "$MODE" != clean ]; then
+  # the registered roots' order (which the records of <registered>:0..7 are cut from): circuit-check's own process, a session's
+  # workers, and those of a session that loads the registries before pytest imports a test module (ccmem_first.py)
+  echo "== the registered roots' order $(stamp)"
+  ORD="$OUT/order"
+  mkdir -p "$ORD"
+  ( cd "$ROOT/$S" && PYTHONPATH="$ROOT/tools/verity/check/guard/child" "$PY" -P -c 'import json, sys
+from circuit_check import cache, cli, targets, units
+targets.load_registries()
+json.dump([getattr(r, "id", repr(r)[:80]) for r in targets._registered()], open(sys.argv[1], "w"))' "$ORD/cli.json" < /dev/null ) \
+    || echo "   the order of circuit-check's own process: not written"
+  CCMEM_ORDER="$ORD/session" suite "$OUT/order-session" "$SMOKE_GB" 2 -p ccmem_plan -k "$CHEAP" > "$OUT/order-session.log" 2>&1
+  status "$OUT/order-session"
+  CCMEM_ORDER="$ORD/first" suite "$OUT/order-first" "$SMOKE_GB" 2 -p ccmem_first -p ccmem_plan -k "$CHEAP" > "$OUT/order-first.log" 2>&1
+  status "$OUT/order-first"
+  "$PY" "$D/ccmem_order.py" "$ORD" | cut -c1-1500
+fi
+[ "$MODE" = order ] && { echo "done (order only) $(stamp)"; exit 0; }
+PRE=""
+
 if [ "$MODE" = records ]; then
   t0=$SECONDS
   HOME="$H" "$PY" "$D/with_env.py" "$K" "$PY" -m circuit_check --all --records-only -q --cache "$C" --jobs "$(nproc)" \
@@ -105,15 +133,25 @@ if [ "$MODE" = records ]; then
   tail -n 4 "$OUT/records.log" | cut -c1-400
   why "with suites.py's path" "$ROOT/tools/verity/check/guard/child"
   # conftest's own `_from_records`, called in each worker of a session suites.py starts, with why the first record misses
-  echo "== conftest's _from_records in a session $(stamp)"
-  CCMEM_PLAN=1 WRAP="timeout -k 120 900" suite "$OUT/plan" 100 2 -p ccmem_plan -k "$CHEAP"
+  counted() { [ "$(cat "$1"/rows/plan.gw*.jsonl 2>/dev/null | grep -c '"how": "from records')" -eq 2 ]; }
+  echo "== conftest's _from_records in a session, as suites.py starts it $(stamp)"
+  CCMEM_PLAN=1 WRAP="timeout -k 120 900" suite "$OUT/plan" 100 2 -p ccmem_plan -k "$CHEAP" > "$OUT/plan.log" 2>&1
   echo "   rc=$?"
-  cat "$OUT"/plan/rows/plan.gw*.jsonl 2>/dev/null | cut -c1-3000
-  [ "$(cat "$OUT"/plan/rows/plan.gw*.jsonl 2>/dev/null | grep -c '"how": "from records')" -eq 2 ] \
-    || { echo "== _from_records did not give the catalog from the records in both workers: stopping"; exit 4; }
+  status "$OUT/plan"
+  cat "$OUT"/plan/rows/plan.gw*.jsonl 2>/dev/null | cut -c1-2200
+  if ! counted "$OUT/plan"; then
+    echo "== the same in a session that loads the registries first (-p ccmem_first) $(stamp)"
+    CCMEM_PLAN=1 WRAP="timeout -k 120 900" suite "$OUT/plan-first" 100 2 -p ccmem_first -p ccmem_plan -k "$CHEAP" > "$OUT/plan-first.log" 2>&1
+    echo "   rc=$?"
+    status "$OUT/plan-first"
+    cat "$OUT"/plan-first/rows/plan.gw*.jsonl 2>/dev/null | cut -c1-2200
+    counted "$OUT/plan-first" || { echo "== _from_records gave the catalog from the records in neither session: stopping"; exit 4; }
+    PRE="-p ccmem_first"
+  fi
+  echo "== every session from here runs with: ${PRE:-nothing added}"
   # and the session's own: one cheap catalog test; a session they do not count in builds apart, for long
   echo "== the records in a session, on one catalog test $(stamp)"
-  WRAP="timeout -k 120 900" suite "$OUT/first" 100 2 -k test_circuit_check_keeps_every_task
+  WRAP="timeout -k 120 900" suite "$OUT/first" 100 2 $PRE -k test_circuit_check_keeps_every_task
   echo "   rc=$? (124: stopped at 900 s)"
   rows "$OUT/first" catalog
   rows "$OUT/first" built_apart
@@ -126,8 +164,8 @@ for gb in $PASSES; do
   before=$(find "$C" -type f | wc -l)
   L="$OUT/pass-$gb"
   t0=$(date -u +%s)
-  echo "== pass: suites.py --fresh --timeouts --jobs $(nproc) --mem-gb $gb starts $(stamp); files in the records cache: $before"
-  suite "$L" "$gb" "$(nproc)"
+  echo "== pass: suites.py --fresh --timeouts --jobs $(nproc) --mem-gb $gb ${PRE:+-- $PRE }starts $(stamp); files in the records cache: $before"
+  suite "$L" "$gb" "$(nproc)" $PRE
   rc=$?
   [ $rc -eq 0 ] || rc_all=$rc
   t1=$(date -u +%s)
