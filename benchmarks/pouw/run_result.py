@@ -1,6 +1,7 @@
 """The ``research/result/v0.1`` document (``tools/research/src/research/result.py``) each PoUW benchmark writes when it runs
 under ``research run`` (``$RESEARCH_RUN_DIR`` set): the gates as its validation, its headline numbers as measurements, and
-its full JSON as the measurement file.  Stdlib only, so the benchmarks need not import ``research``."""
+its full JSON as the measurement file.  Stdlib only, so the benchmarks need not import ``research``.
+It stands beside the harness kit's writer because it writes a run's result whole, so the last of a run's writers stands."""
 
 from __future__ import annotations
 

@@ -133,7 +133,8 @@ def dumps(doc: dict) -> str:
 
 def _result(doc: dict, verdict_path: str | None, detail: str) -> None:
     """The run's ``research/result/v0.1`` document (tools/research/src/research/result.py), written without importing
-    `research`, as benchmarks/pouw/run_result.py does."""
+    `research`, as benchmarks/pouw/run_result.py does.
+    It stands beside the harness kit's writer because a check runs where the harness is not installed."""
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
