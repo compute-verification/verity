@@ -136,6 +136,8 @@ REGISTRY_REFS = ("origin/main",)                                  # where a chec
 FRONT_DOOR = "agent-coordination"
 ASKS_ON_LINEAR = True                                             # an ask is also an issue in its owner's team (`linear.py`)
 LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0-9]*-\d+)>")
+#: a Linear issue named anywhere in a post: an announcement to several names that asks for comments on it is answered there
+LINEAR_ISSUE_URL_RE = re.compile(r"https://linear\.app/[^/\s|>]+/issue/([A-Z][A-Z0-9]*-\d+)")
 LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
@@ -2002,19 +2004,17 @@ def render_audit(found: list[dict], counts: dict[str, dict[str, int]]) -> str:
 def render_asks(rows: list[dict], now: float) -> str:
     """People's asks (`Linear.asks`) by lane: each one not delivered, with its state, due date, slips and restatements, then
     the counts.  Delivered means Done; an ask canceled with its asker's yes (`asker-ok`) or as a duplicate is closed."""
-    from .linear import ASK_SLIPS, ASKER_OK, OPEN_TYPES
+    from .linear import ASK_SLIPS, ASKER_OK, ask_open
 
-    def live(a: dict) -> bool:
-        return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]
     lines = []
     for lane in sorted({a["lane"] for a in rows}):
         mine = [a for a in rows if a["lane"] == lane]
-        todo = [a for a in mine if live(a)]
+        todo = [a for a in mine if ask_open(a)]
         lines.append(f"@{lane}: {len(todo)} not delivered, {sum(a['type'] == 'completed' for a in mine)} delivered")
         lines += [f"  {a['issue']:<9} {a['state']:<12} due {a['due'] or '-':<10} {a['slips']} slip(s), asked again {a['again']}, "
                   f"{(now - a['created']) / 3600:.0f} h old: {a['title']}" for a in todo]
     askers = ", ".join(sorted({a["asker"] for a in rows})) or "anyone"
-    todo = [a for a in rows if live(a)]
+    todo = [a for a in rows if ask_open(a)]
     lines.append(f"{len(rows)} ask(s) of {askers} open or closed recently: {sum(a['type'] == 'completed' for a in rows)} delivered, "
                  f"{len(todo)} not ({sum(a['type'] in ('backlog', 'canceled') and not a['ok'] for a in todo)} parked without `{ASKER_OK}`, "
                  f"{sum(a['type'] in ('triage', 'unstarted') for a in todo)} with no worker, "
@@ -2889,6 +2889,19 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
     return cache[ident]
 
 
+def issue_commenters(ident: str, cache: dict[str, set[str] | str]) -> set[str] | str:
+    """Who commented on the Linear issue `ident` (`comment_by`), or why Linear can't say."""
+    if ident not in cache:
+        from . import linear
+        q = "query($id: String!) { issue(id: $id) { comments { nodes { botActor { userDisplayName } user { name } body } } } }"
+        try:
+            nodes = linear.Linear().gql(q, {"id": ident})["issue"]["comments"]["nodes"]
+            cache[ident] = {w for c in nodes if (w := comment_by(c))}
+        except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
+            cache[ident] = f"{RECORD_UNREADABLE} ({e})"
+    return cache[ident]
+
+
 PAGE_WAITING = "Waiting on Daniel"                               # an ask's page's Status until a decision (or its deadline) moves it
 PAGE_OTHERWISE = "Decided otherwise"                             # Daniel's own Decision text, not the recommendation
 PAGE_DECISIONS = ("Approved", PAGE_OTHERWISE, "Decided by lane", "Default applied")   # the Statuses that record a decision
@@ -3255,6 +3268,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
+    said: dict[str, set[str] | str] = {}                             # Linear issue -> who commented on it, or why unreadable
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
@@ -3278,6 +3292,14 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             answered, state = issue_state(link[1], x["by"], taken)
             answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
+        elif len(x["to"]) > 1 and (named := LINEAR_ISSUE_URL_RE.search(m.get("text") or "")):
+            replied = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
+            who, names = issue_commenters(named[1], said), len(x["to"])
+            if not isinstance(who, str):
+                x["to"] = [n for n in x["to"] if n not in who]
+            answered = True if replied else None if isinstance(who, str) else not x["to"]
+            x.update(record="linear", ref=named[1],
+                     state=who if isinstance(who, str) else f"{names - len(x['to'])} of its {names} names commented there")
         else:
             answered = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
             x.update(record="slack", ref=None, state=("replied" if m.get("reply_count") else "reacted") if answered else "no reply or reaction")
@@ -4020,7 +4042,16 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
                            "Deadline": {"date": {"start": body["deadline"]}},
                            "Lane checked": {"checkbox": True},
                            "Asked by": {"url": body["agent_url"]}},
-            "markdown": with_reply(markdown), "markdown_version": "v2"}
+            "markdown": with_reply(display_math(markdown)), "markdown_version": "v2"}
+
+
+#: a display equation on one line: Notion shows `$$ x $$` as its literal text, and renders it only with each `$$` on a line of its own
+ONE_LINE_DISPLAY = re.compile(r"(?m)^([ \t]*)\$\$[ \t]*(\S(?:.*\S)?)[ \t]*\$\$[ \t]*$")
+
+
+def display_math(markdown: str) -> str:
+    """Each one-line `$$ x $$` as the three lines `$$`, `x`, `$$`; inline `$x$` and display blocks already split stay."""
+    return ONE_LINE_DISPLAY.sub(lambda m: f"{m[1]}$$\n{m[1]}{m[2]}\n{m[1]}$$", markdown)
 
 
 def with_reply(markdown: str) -> str:

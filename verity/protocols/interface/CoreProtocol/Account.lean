@@ -437,7 +437,9 @@ leaves it is about. None when the site holds no such leaf.
 A flow's amounts add only over spans shown disjoint. Its verified amount is the largest total over certified answers
 whose named spans are of one series and pairwise disjoint, or the largest amount of one that names no span, whichever
 is more: two answers of one span, or of overlapping spans, count the larger once, and an answer that names no span, or
-a span of another series, adds to none. Its free amount is the certified answers' amounts summed, plus the capacity of
+a span of another series, adds to none. The total is sound because each span's amount is a lower bound on what its own
+steps did, and what disjoint steps did adds: of three spans in a chain, the two ends add where they outweigh the
+middle. Its free amount is the certified answers' amounts summed, plus the capacity of
 the ticks they do not cover, a tick's cover counted once: the steps of one series' named spans, or the longest span
 that names none, whichever is more. Where the registration holds no capacity for those ticks it prints no amount.
 
