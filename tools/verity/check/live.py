@@ -116,17 +116,22 @@ def progress(out: Path, step: str) -> dict | None:
         return {"error": f"{type(e).__name__}: {e}"[:200]}
 
 
-def custody_put(custody: Path, timeout: float = 30.0) -> Callable[[str, bytes], None]:
-    """A `put(key, bytes)` onto the store's remote with the run's custody key (its staged `store.toml` and `cred.json`), never through
-    this process's environment, which the steps inherit."""
+def custody_remote(custody: Path, timeout: float = 30.0):
+    """The store's remote with the run's custody key (its staged `store.toml` and `cred.json`), never through this process's
+    environment, which the steps inherit."""
     import tomllib
 
     from research.store.remote_s3 import S3Remote
 
     cfg = tomllib.loads((custody / "store.toml").read_text())["remote"]
     cred = json.loads((custody / "cred.json").read_text())
-    remote = S3Remote(cfg["endpoint"], cfg["bucket"], cred["AWS_ACCESS_KEY_ID"], cred["AWS_SECRET_ACCESS_KEY"],
-                      region=cfg.get("region", "auto"), timeout=timeout, session_token=cred.get("AWS_SESSION_TOKEN"))
+    return S3Remote(cfg["endpoint"], cfg["bucket"], cred["AWS_ACCESS_KEY_ID"], cred["AWS_SECRET_ACCESS_KEY"],
+                    region=cfg.get("region", "auto"), timeout=timeout, session_token=cred.get("AWS_SESSION_TOKEN"))
+
+
+def custody_put(custody: Path, timeout: float = 30.0) -> Callable[[str, bytes], None]:
+    """A `put(key, bytes)` onto the store's remote with the run's custody key (`custody_remote`)."""
+    remote = custody_remote(custody, timeout)
 
     def put(key: str, data: bytes) -> None:
         with tempfile.TemporaryDirectory(prefix="check-live-") as d:

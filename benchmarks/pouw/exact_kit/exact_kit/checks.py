@@ -136,10 +136,8 @@ def _result(doc: dict, verdict_path: str | None, detail: str) -> None:
         return
     rel = None
     if verdict_path:
-        try:
-            rel = str(Path(verdict_path).resolve().relative_to(Path(run_dir).resolve()))
-        except ValueError:
-            rel = None
+        verdict, root = Path(verdict_path).resolve(), Path(run_dir).resolve()
+        rel = str(verdict.relative_to(root)) if verdict.is_relative_to(root) else None
     out = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"script": doc["script"], "args": doc["args"], "mutations_run": doc["mutations_run"],
                                     "source_sha": os.environ.get("RESEARCH_SOURCE_SHA")},

@@ -41,8 +41,8 @@ def test_loops_counts_a_backward_branch_by_address_and_by_label():
     sass = _fn("f", ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8", "IADD3 R3, R3, R4, R5", "NOP", "ISETP.GE.AND P0, PT, R0, R9, PT"])
     [loop] = TK.loops(TK.parse_sass(sass)["f"])
     assert loop == {"mma": 1, "mma_ops": ["IMMA.16832.S8.S8"], "other": 3, "iadd3": 1, "ffma": 0}
-    labelled = "\tFunction : g\n.L_x_0:\n        /*0000*/  HMMA.16816.F32 R8, R4, R2, R8 ;\n" \
-               "        /*0010*/  @P0 BRA `(.L_x_0) ;\n"
+    labelled = ("\tFunction : g\n.L_x_0:\n        /*0000*/  HMMA.16816.F32 R8, R4, R2, R8 ;\n"
+                "        /*0010*/  @P0 BRA `(.L_x_0) ;\n")
     assert TK.loops(TK.parse_sass(labelled)["g"]) == [
         {"mma": 1, "mma_ops": ["HMMA.16816.F32"], "other": 1, "iadd3": 0, "ffma": 0}]
 
@@ -216,3 +216,24 @@ def test_a_faster_schedule_joins_the_refit_and_measures_the_margin(tmp_path: Pat
     assert TK.refit([m1], search=[srch])["sched"] == {f"JI3o_{i}": 1.0 for i in range(3)}
     assert TK.main(["tensor_kinds.py", "search", str(srch)]) == 0
     assert json.loads((srch / "search.json").read_text())["gate_failures"] == []
+
+
+def test_render_writes_a_row_a_form_and_a_dash_for_what_a_run_did_not_measure():
+    summary = {
+        "imma_s8_m16n8k32": {
+            "mma_ops": ["IMMA.16832.S8.S8"], "slots": 128, "alone_smsp_cycles_per_mma": 2.0, "words_per_sm_clk": 256.0,
+            "a": 1.9871, "a_by_lane": {"iadd3+ffma": 1.9871, "iadd3": None}, "a_per_slot": 0.01552, "vs_ref": 1.0,
+            "below_ref": False, "ji3e": {"JI3e_0": {"load": 0.98, "over": False, "at": "spec R=32"},
+                                         "JI3e_1": {"load": 1.031, "over": True, "at": "mixu R=64"}}},
+        "hmma_f16_m16n8k16": {
+            "mma_ops": ["HMMA.16816.F16", "HMMA.16816.F32"], "slots": 64, "alone_smsp_cycles_per_mma": None, "a": None,
+            "a_per_slot": None, "vs_ref": 0.9, "below_ref": True, "ji3e": {}},
+        "lane_op_alone": {"iadd3+ffma": {"issue_per_smsp_cycle": 1.0004}, "iadd3": {"issue_per_smsp_cycle": 0.99951}},
+    }
+    head, rule, imma, hmma, blank, lanes = TK.render(summary).splitlines()
+    assert head.count("|") == rule.count("|") == imma.count("|") == hmma.count("|") == 11 and blank == ""
+    assert imma == ("| imma_s8_m16n8k32 | IMMA.16832.S8.S8 | 128 | 2.00 | 256.00 | 1.987 | 1.987 / – | 0.0155 | 1.000 | "
+                    "0.980 (spec R=32) / 1.031 **over** (mixu R=64) |")
+    assert hmma == "| hmma_f16_m16n8k16 | HMMA.16816.F16, HMMA.16816.F32 | 64 | – | – | – |  | – | 0.900 **below** | – |"
+    assert lanes == ("Lane ops alone, 8 warps a SMSP, warp instructions a SMSP-cycle: iadd3+ffma 1.000, iadd3 1.000 "
+                     f"(mixed points use {TK.MIXED_LANE}).")

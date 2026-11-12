@@ -147,22 +147,29 @@ def zk_check(partition: Mapping[str, Any], tps: Iterable[Any]) -> None:
                 raise ValueError(f"a partition for --zk sessions names {why}")
 
 
+#: the rows of DSA's long row's index units that the verifier supplies (a chunk's ``c``, a slot's ``j``: each an I32, its index
+#: among its template's units of an instance), by family, and the row format they are committed in, the one place that names it
+INDEX_ROWS = {"DsaPositionsChunk_v1": "c", "DsaPositionsSlot_v1": "j"}
+INDEX_SCHEMA = IF.V2
+
+
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """Chunked template ``tp``'s rows as `UnitStager` stages them, ``(in_rows, out_rows)``: its Definition's bit rows
     (`interface.unit_rows`) under its cuts (`chain_rows.cuts`, a ``CHAINS`` combine's), parameter g's row ``in<g>``, or
-    ``in<g>.<s>`` for its row s when cut. The one exception is a ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8
-    codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then ``sw[c]``, v2), then the v2 output row ``o0``: each operand
-    packed with its scale in one row is the layout serving commits (`serving_rows`' s8 row tables), where
+    ``in<g>.<s>`` for its row s when cut, a ``bits`` template's ``INDEX_ROWS`` row in `INDEX_SCHEMA`. The one exception is a
+    ``ScaledMmS8Coordinate``'s A6 rows, ``x`` (the token's s8 codes then its f32 scale, row-seg) and ``w`` (``W[c, :]`` then
+    ``sw[c]``, v2), then the v2 output row ``o0``: each operand packed with its scale in one row is the layout serving
+    commits (`serving_rows`' s8 row tables), where
     `interface.unit_rows` would give ``x``, ``sx``, ``wrow`` and ``sw`` a row each."""
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.pipeline import chain_rows as CH
-    from verity_vllm.query.program_view import spec_statics
+    from verity_vllm.query.program_view import spec_base, spec_statics
 
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
     if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "history", "expert",
-                         "fused"):
+                         "fused", "bits"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 
@@ -171,7 +178,8 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
         return f"in{g[nm]}" + (f".{s}" if s else "")
 
     in_rows, out_rows = IF.unit_rows(tp.fn, CH.cuts(tp) if tp.layout == "chain" else None)
-    return [(port(p), *rest) for p, *rest in in_rows], out_rows
+    index = INDEX_ROWS.get(spec_base(tp.id)) if tp.layout == "bits" else None
+    return [(port(p), INDEX_SCHEMA if p == index else schema, *rest) for p, schema, *rest in in_rows], out_rows
 
 
 def unit_member(tp: Any, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
