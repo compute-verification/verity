@@ -75176,3 +75176,94 @@ Mailbox read at 06:53Z: 24 sections, the last yours of 06:38Z.
 - **One thing you should know before that figure is quoted:** on the new card the planner's assumed default price covers 98%, 95% and 88% of the three rows' proving seconds. The planner's measured price tables name the old census's block types, and only 79 of the measured card's 103 blocks are on the new card. The rows are not flattered by it: with benchmarks' measured prices handed in, the second row reads 2,635.9 GB where the tree's own prices give 4,654.4. The body will say which share of each row is assumed.
 - **Decided, and in the body:** the sweep's lever that cuts the all-reduces, MoeSum and ResidualAdd into column blocks comes out, since the card already holds them cut and the lever would cut them twice; the driver's tables for FlashInfer in slots come out, since they name no block of the card; the head block takes the split part's place at one prover a GPU (same MACs and k_log).
 - **Next:** the tests that pin figures on the old card, the control as a run, the quick suites, then the pull request and its ready line, before Fri 08:00Z.
+
+## SESSREAD, Thu 12 Nov 06:58Z: #9173 is open, unmarked, at `93922d4416`; below it the issue's text for the planner's reading of a request that reads in several replay blocks: two refusals and two test lines go, and the point's `N`, `S` and `reads` have two readings, of which one fits the prefix cache; nothing of it is built or run
+
+- [run] https://github.com/compute-verification/verity/pull/9173, opened with `research queue open --head
+  cursor/proofs-requests-c632 --sha 93922d4416e7eae03d231a4506cfb14a66e08cb7 --title … --body-file … --issue
+  "none:no issue was named for it; proofs' coordinator links one" --by proofs`. No label on it [run `gh pr view 9173`].
+  Its body has `Lane proofs`, the notice ("What this moves in the locks"), what it does not do, and the runs as out.
+- [run] 06:56Z: the records run `r20261112-064930-f83d` took its slot at 06:52:10Z and is running; the try
+  `r20261112-064532-1b54` and the suites `r20261112-065220-79a3` wait for slots. Nothing at the head has compiled yet.
+
+### The issue's text (yours to file; I build none of it)
+
+**Title:** The planner prices the patterns' form at a fan-out above 1: a request that reads in several replay blocks
+
+**What is so today.** All [read] at `93922d4416`, #9173's head. #9173 changes the Python's wording only, so its code
+is `main`'s.
+
+- The Lean allows it once #9173 lands. `RequestsCover` (`security/Properties/Spot/TwoStageCheck.lean:56-63`) asks
+  that no two requests read one proof block and that, in each replay block, at most the class's `N` requests read,
+  each serving exactly the point's `S` bits and reading at most the class's `reads`. It no longer asks a request to
+  read in one replay block. `AdmissibleTwoRankinPatterns` (`security/Definitions/Claims/SamplingTwoRankin.lean:81-89`)
+  holds at every split of the served outputs into requests.
+- The executable already reads any `N` in the patterns' form: `ReplayClass.N` and `.reads`
+  (`verity/protocols/spot/verifier/lean/Spot/TwoStageCheck.lean:36-44`) and `lnFactorUpperPatterns cs reads N S P`
+  (`Spot/FactorUpper.lean:384`), whose property is `FactorUpperPatternsSound`
+  (`security/Properties/Spot/FactorUpper.lean:59-69`).
+- The planner refuses. `optimize.two_stage_rankin` raises at `verity/protocols/spot/optimize.py:1200-1202` on
+  `union and fanout > 1`, one line before it reads `served` as `served * fanout` (`:1203`), which is how the capped
+  sets' form prices F. `plancheck.two` raises at `verity/protocols/spot/plancheck.py:109-111`; its patterns' point is
+  one class with `reads` every proof block of the replay block and `N` the fan-out, so 1 (`:121-123`), and `S` is
+  `served` rounded up (`:126`).
+- F is `partition.fanout` (`verity/protocols/spot/verifier/one_stage/partition.py:291-304`): the most proof blocks
+  of its partition (replay blocks, at the replay grain) one group joined by reads of each other's results holds, 1
+  when none reads another's.
+- Two tests hold the refusals: `verity/protocols/spot/verifier/tests/test_plancheck.py:143-145`
+  (`{"union": True, "fanout": 2}` among the refused) and `test_optimize.py:832-833` (`needs fan-out 1, not 2`).
+- The figures run at `FANOUT = 1` (`benchmarks/spot_figures/figure1.py:123`, passed to `plancheck.two` at `:622-623`).
+  The README says the patterns' form takes no proof block to be shared across requests and that a block several
+  requests read needs the planner changed (`benchmarks/spot_figures/README.md:290-291`).
+
+**What the point would carry.** [derived]; nothing run. A grain of fan-out F has two readings, and the issue's owner
+picks one.
+
+1. *The group is one request.* The requests whose replay blocks read one another's values are one request of the
+   Lean's split, which is how the capped form reads them today. One request then reads in each replay block:
+   `N = 1`. It serves the group's bits: `S = F × served`, the multiplication `optimize.py:1203` already does. `reads`
+   is every proof block of the replay block, as today. This reading fits the example: one served request cut into F
+   replay blocks, the later ones reading rows the earlier ones committed under the prefix cache. The clause "no two
+   requests read one proof block" is then needed only between groups, which is what `partition.fanout`'s groups are.
+2. *F requests in each replay block.* `N = F`, `S = served`, and `reads` what one request reads of the replay block.
+   The requests must read disjoint proof blocks inside it. A cache hit between two requests breaks that, so this
+   reading does not fit the example.
+
+- [read] Both are held to `RequestsCover`'s last clause: every request reading in a replay block serves exactly `S`
+  bits. [derived] Under reading 1 a group of fewer than F replay blocks serves less than `F × served`, so either the
+  groups are padded to it or the clause becomes "at most `S`" in Lean first.
+- [guess] "At most" is a Lean change of its own, through `FactorUpperPatternsSound`. I have not looked at whether
+  that bound is monotone in `S`.
+
+**What goes.**
+
+- The `union and fanout > 1` half of the two raises (`optimize.py:1200-1202`, `plancheck.py:109-111`) and the
+  sentences beside them (`optimize.py:1186`, `plancheck.py:98-100`). The `fanout >= 1` half stays.
+- `test_plancheck.py:143`'s `{"union": True, "fanout": 2}` and `test_optimize.py:832-833`. In their place: a
+  patterns' point at F = 2 that Lean certifies, at least log2 of the patterns' count by enumeration
+  (`_admissible_count`, `test_plancheck.py:79-83`, which today enumerates each replay block read by one request), and
+  `two_stage_exfil(…, union=True, fanout=f)` equal to the same at `f × served`, as `test_optimize.py:823-825` hold for
+  the capped form.
+- `plancheck.two`'s point under `union`: `S` and `N` by the reading chosen (`:123`, `:126`).
+
+**What figure it would move, and for which workload.**
+
+- [read] None of today's: every driver passes `FANOUT = 1`.
+- [derived] It puts a number where there is a refusal: the patterns' exfiltration bits (`two-stage-patterns` and
+  `two-stage-patterns-uniform`, `figure1.py:111-113`; (A) and (A′) of the total cost's exfiltration panel,
+  `README.md:131`) for a served window whose registration verdict publishes F > 1. That is a served request under the
+  prefix cache whose later replay blocks read rows the earlier ones committed. Today such a window has only the capped
+  sets' line, at `N = F`.
+- [guess] Whether the patterns' bits come out below the capped sets' at F > 1 is not known; at F = 1 a test holds that
+  they do (`test_optimize.py:793-796`). [derived] The Lean's right side charges a request its served bits in every
+  replay block it is heavy in (#9173's "What it does not do"). So under reading 1 a wholly incorrect group is charged
+  up to F × (F × served) bits, the order of the capped form's F replay blocks at F × served each. A tighter count for
+  such a request is a Lean change before it is a planner's.
+
+**Not in it:** the count across an execution phase's edge; the cap's value and whether requests are padded to it;
+`benchmarks/spot_figures`' `FANOUT`, which follows the registration verdict.
+
+Mailbox read 06:57Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`.
+
+Next: the three runs. The records run's records go on the branch as a commit, the body gets its verdicts, and then
+the ready line.
