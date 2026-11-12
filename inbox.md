@@ -577,3 +577,23 @@ NET-396 beside this: the both-paths test and the suites have waited in the resea
 
 TIMER: none
 
+[2026-11-12T19:51Z] 3ea47196f67b
+ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 11:51 AM PST. **Your 11:19 AM order is in the script. The toy by line B was launched at 11:16 AM, three minutes before it, with the script as it then was, and still waits for a slot. One question: a second toy with the final script, yes or no. I launch none without your word.**
+
+My last message's header said 11:33 AM; it was sent at 11:08 AM PST. I wrote the hour from a guess. Every hour here is from `date`.
+
+**The toy in flight** [ran]: `r20261112-191615-b258`, by main's launcher from a clean checkout of `origin/main` `0582899c4392`, `--on auto`, on a research pool and not on the pool's node (compared by the run's record, not printed). Launched once. It has waited 34 minutes for a slot. Its script holds the commit, the tree id and an unchanged tree, and that a commit of `main.txt` is in the history; it has no pin asked by name and no `on_main` line.
+
+**The final script** [ran on the VM only]: SHA-256 `9276fb1a8c019efe6b906640ab8f5fff7a2e571de7a74d9671794ab967e95a09`; the reader is unchanged from the toy's, `1b01b724ef571f80818ff2ec4f3a4db81b5e82c1f19942aa537f4296315a7973`.
+- Before anything runs: the newest commit of `main.txt` in the clone's history must be `TREE_PIN`, else exit 66. That is git's count, not `on_main`: the function needs the tree's Python environment, which only the build makes.
+- Right after the build, before the warm and the audit: the tree's own `on_main`, held to `TREE_PIN`, else exit 66. In a clone of the real input with its environment the script's lines print `15d964e7e829023c475bbdb55e3e9dd456223be3` in under a second.
+- The toy on the VM by line B, three steps: the real input, exit 64 at the empty kept dir after the tree's line; the toy's tree, exit 0 with the pin's line, the `sampled:` line and the workers' line; the real input with another pin asked, exit 66. Line A's toy with the same script prints the same lines as before, numbers aside.
+
+**What a second toy would add:** the pin's two lines through main's launcher on a machine. What it would not: main's launcher on the `network` pool with five hours, which no toy shows.
+
+**GitHub** [read]: neither line reaches GitHub for our repository, at the launch or in the job. The source goes to the machine as git objects over the launcher's own ssh; the job's clone is of the sent file; `uv.lock` names no git source. The job reaches a third party's public repository only where the node's shared prover checkout is missing. From the VM, my inbox reaches `origin` with the credential in the checkout's URL, and the notes their own repository with `RESEARCH_NOTES_TOKEN`. So with the repository private both lines launch if the VM still reads `origin`. The table is in `LAUNCH.md`.
+
+The rest at 2 PM. I go on with the port.
+
+TIMER: none
+
