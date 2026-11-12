@@ -651,6 +651,23 @@ def test_measured_refusal_follows_panel_append():
     assert "SM clocks" in L.measured_refusal(meta | {"metrics": {"sm_clock": {"arm": [2090.0], "base": []}}})
 
 
+def test_a_clock_list_that_isn_t_numbers_and_a_price_twin_table_that_doesn_t_load_are_errors(tmp_path, monkeypatch):
+    """A row whose per-rep SM clocks aren't MHz joined by commas is refused by name, and a price-twin table that doesn't
+    load raises its own error, rather than the row going on with no clocks or no gap."""
+    res = json.loads(result(tmp_path / RUN, None).read_text())
+    assert L.records(res, run_id=RUN, commit=COMMIT)[0]["meta"]["metrics"]["sm_clock"]["arm"] == [2090.0, 2092.0]
+    panel = res["shapes"][0]["arms"]["pc"]["panel"]
+    with pytest.raises(L.LedgerError, match=r"sm_clock_arm is '2090,n/a', not MHz joined by commas"):
+        L.records(res | {"shapes": [res["shapes"][0] | {"arms": {"pc": res["shapes"][0]["arms"]["pc"] | {
+            "panel": panel | {"sm_clock_arm": "2090,n/a"}}}}]}, run_id=RUN, commit=COMMIT)
+    table = tmp_path / "price_twins.json"
+    table.write_text(json.dumps({"schema": "price-twins/v0", "twins": []}))
+    load = P.load
+    monkeypatch.setattr(L.P, "load", lambda: load(table))
+    with pytest.raises(P.TwinError, match=f"{table} is 'price-twins/v0'"):
+        L.records(res, run_id=RUN, commit=COMMIT)
+
+
 def test_the_ledger_s_words_are_the_store_s():
     _, vocab = L.store_module()
     from research.store import kinds

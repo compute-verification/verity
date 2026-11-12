@@ -220,13 +220,6 @@ def eps(gap: Fraction) -> Fraction:
     return gap / (1 - gap)
 
 
-def _twins() -> list[dict] | None:
-    try:
-        return P.load()
-    except (OSError, ValueError, KeyError):
-        return None
-
-
 # ---- one record per (arm, shape) ------------------------------------------------------------------------------------------------
 
 
@@ -251,8 +244,8 @@ def _clocks(p: dict, side: str) -> list[float]:
     raw = p.get(f"sm_clock_{side}") or ""
     try:
         return [float(x) for x in str(raw).split(",") if x.strip()]
-    except ValueError:
-        return []
+    except ValueError as ex:
+        raise LedgerError(f"sm_clock_{side} is {raw!r}, not MHz joined by commas") from ex
 
 
 def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: dict, run_id: str) -> dict:
@@ -331,7 +324,7 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
     verification = {(v["arm"], v["shape"]): v for v in (result.get("verification") or {}).get("rows", [])}
     versions = result.get("versions") or {}
     refused = typed_gamma(result)
-    table = _twins() if twins == "table" else twins
+    table = P.load() if twins == "table" else twins
     out = []
     for shape in result.get("shapes", []):
         for name, r in (shape.get("arms") or {}).items():
