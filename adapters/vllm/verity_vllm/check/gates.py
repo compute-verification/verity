@@ -214,8 +214,9 @@ class GateResult:
 
     @classmethod
     def from_json(cls, d: dict) -> GateResult:
+        gid, name, status = d["id"], d.get("name", GATE_NAMES.get(d["id"], "")), d["status"]   # read first: an entry that is no object is refused here
         evidence, detail = d.get("evidence"), d.get("detail")   # a result written without either consulted no artifact and details nothing
-        return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
+        return cls(id=gid, name=name, status=status,
                    evidence=list(evidence) if evidence else [], detail=dict(detail) if detail else {}, reason=d.get("reason"))
 
     def result(self) -> CheckResult:
