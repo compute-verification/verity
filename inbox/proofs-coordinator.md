@@ -109834,3 +109834,43 @@ LEAN SLOT WAIT OVER TEN MINUTES: try `r20261112-233803-98af` has waited since 23
 **Not established.** Nothing of PR 3's two statement files has elaborated at its new head, and nothing of PR 4 (`line_of_device` included) has been built. #9546's suites beyond the one file. Whether `ddb2` moves any record. `CommittedOnce`'s hour: unchanged, and I say at Fri 04:00Z which it is.
 
 Mailbox read at `1f0d4a143d` (23:43:55Z), and your 23:52Z hook message `428fb6ee31f6`.
+
+## COINMAP, Thu 12 Nov 23:57Z: my coin map gives DevFirst and DevSecond only once the case's family and digest are fixed before the coins; the second clause is written; my tries have waited 18 to 28 minutes for a Lean slot and nothing has compiled
+
+My coin map does not give STAGECOINS's `DevFirst` as it is stated, and gives `DevSecond` only in part. The reason is the same for both. A coin map writes each coin into the play's tape at the moment the device releases it, so its locator (which release feeds which round) can read only what the log shows so far. `DevFirst` asks for round 0 to start with the coins of whatever family and digest the case names (`firstDraw`: the label from the evidence's segment and the digest from the commitment). The prover writes both after it has seen the coins. A prover that asks for fresh coins under two families or two digests, and then names whichever it likes, makes `DevFirst` false at every locator. That is grinding over the draw, not a gap in the coin map. Two conditions would make both hold: the form refuses a case whose family and digest are not the first ones its log shows, or they come from the parameters θ and a single registration. Given either condition, I can prove both with the locator below. Separately, the second clause, `CoinMapHolds` (the agreement inside the event, with the hiding term counted once), is now written end to end in `SampledTwo/CoinMapAgree.lean`. No run has compiled it yet.
+
+**DevFirst and DevSecond, and what they rest on.**
+- [read] `Verity.Sampled.freshCoins label after log` (SampledDraw.lean:507) keeps the coins of the fresh releases whose frame is `.fresh label` and whose `answers` are `after`. So a locator can see each release's family and digest when the device releases it. What it cannot see is which pair the case will name.
+- [read] `firstDraw` (STAGECOINS's FirstCoins.lean:80) takes the label from `e.coins.segment.label` in the evidence and the digest from the case's commitment. STAGECOINS's own "Not established" says that the family comes from the evidence and not from the parameters.
+- [derived] With a locator L that reads only the past, `DevFirst C (dev L)` fails on any accepted play whose log holds fresh releases of two (label, digest) pairs where the case names the one L did not put on round 0. The same holds for `DevSecond`'s digest (`c₂.digest`, taken from the evidence's interior record). Its family, from the interior audit's parameters, is fine.
+- [derived] What I can prove: take `L` to put on round 0 the fresh releases of the first (label, digest) pair the log shows, and on round 1 + ⌊n / 65536⌋ the releases of the second family's first digest (n is how many of that pair's elements came before). Then `DevFirst` and `DevSecond` hold on the plays where the case's pair is the log's first pair of that family. The premise is `FirstPair o.log = (C o).bind firstDraw`, and its counterpart for the second stage. That premise is a check the form makes, or a named hypothesis whose owner is TWOLEG (the form) or STAGECOINS. It is not mine to add to the verifier (stop rule). A fresh release has 4 elements and 4 divides 65536, so no release straddles two coins on these rounds.
+- [derived] Still to write for this: the two locators; a lemma `devBits L 0 [] log = (freshCoins label after log).flatten` for them (cut off at one coin); and the byte-order lemma tying `SpotFlock.src d` to my `elemOfBits` bit order (F128.bit order: `lo`'s bits, then `hi`'s) and to `Properties.Challenger.bitsOf`. I size it at 250–400 lines. I will start it after the second clause compiles, unless you put it first.
+- [run, pushed] To serve `DevFirst`'s `∃ d, dev o.log 0 = some d` when more than one coin was released, `dev` now cuts off at 65536 elements instead of returning none. The agreement (`ElemAgrees`) and the parse's obligation (`AgreeCovers`) now range over `fitOf`, the elements of the releases that fit in the coin, which are always the round's first. Commit fac99ffc18.
+
+**For HISTORY, `split` (unchanged from entry 3).** `split log` = (log₁, log₂), where log₁ is the longest prefix with no release that `locAt` puts on a round whose `groupOf` is not `.first`. With the locator above, that is the prefix before the first fresh release of the second family's pair.
+
+**The second clause (`CoinMapHolds`).**
+- [derived, not compiled] `coinMapHolds : CoinMapHolds` is in `SampledTwo/CoinMapAgree.lean`, against TWOLEG's `CoinMapLaw` at b04e0a9fd9 with its `Ag`, for `Ag = ElemAgrees L A x reads` and `hide = gapOf …`.
+- [derived, not compiled] `devAgrees_of_cover` (CoinMap.lean) turns it into TWOLEG's `DevAgrees`, given `Rd.dev = dev L` and `AgreeCovers L Rd (Acc ∧ Good)`. That obligation belongs to the form's parse.
+- [derived] The proof follows the play release by release: a run's coins agree with a release when the release's bits are the run's coin's elements at the place the coin map wrote them. The bound is the first clause's, with the agreement inside the indicator. Where a round is filtered empty, the `gapRound` term already counts it.
+
+**Runs.** All are on vy-nebius-2, pool proofs, as proofs. `verity lean try` takes no `--timeout`, so research warns.
+- r20261112-232506-34ea (try7, CoinMap.lean at 541a510d9d): cancelled at 23:53Z after waiting 28 minutes for a Lean slot. try8 builds the same file.
+- r20261112-233618-2d34 (try8, CoinMapLaw.lean at 9735d19957): waiting for a slot since 23:36Z.
+- r20261112-235349-19c9 (try9, CoinMapAgree.lean at fac99ffc18, which builds all three files): waiting since 23:53Z.
+
+**Branch.** `cursor/proofs-coinmap-8b0c` at fac99ffc18, pushed. Nothing is left unpushed. I am at the base's composite, before #9375.
+
+**STOP RULE.** I have not touched any listed guarantee or lock, the accept, Sampled.lean, or another lane's files.
+
+**NEEDS.**
+1. A ruling on the first draw's family and digest: should the form check that the case names the log's first pair of the family (my proposal), should they come from θ and a single registration, or should the choice be charged? Until then, `DevFirst`/`DevSecond` hold only under the premise above, which I would state as a named hypothesis owned by TWOLEG.
+2. Lean slots on vy-nebius-2. Both of my tries are queued behind others, and nothing of mine has compiled.
+
+**To post.** For STAGECOINS and TWOLEG: as stated, `DevFirst` is false against a prover that draws fresh coins under two families or digests and names one after seeing them. It needs the form to bind the case's pair to the log's first pair, or the pair to come from the parameters.
+
+**Not established.**
+- No file of mine has compiled yet, neither clause.
+- The two locators and the `freshCoins` and byte-order lemmas are not written.
+- The earlier-period signature hole is noted, not worked around.
+- Whether the device lets a prover register more than one digest in a period [guess: it does; I have not read the device].
