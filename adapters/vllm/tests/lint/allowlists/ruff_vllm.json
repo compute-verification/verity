@@ -18,7 +18,6 @@
     {"file": "tests/commit/test_rows_cuda.py", "kind": "B023", "symbol": "test_windows_folded_together_copy_their_levels_on_another_stream.fold", "detail": "Function definition does not bind loop variable `n_levels`", "count": 2},
     {"file": "tests/commit/test_rows_cuda.py", "kind": "B023", "symbol": "test_windows_folded_together_copy_their_levels_on_another_stream.fold", "detail": "Function definition does not bind loop variable `tops`", "count": 2},
     {"file": "tests/commit/test_rows_cuda.py", "kind": "SIM115", "symbol": "<module>", "detail": "Use a context manager for opening files", "count": 2},
-    {"file": "tests/commit/test_scheme_cuda.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/commit/test_scheme_cuda.py", "kind": "UP031", "symbol": "test_fa2_tap_thread_leaf", "detail": "Use format specifiers instead of percent format"},
     {"file": "tests/engine/int8_attention_capture_gpu.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/engine/int8_kscale_gpu.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
@@ -590,8 +589,6 @@
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "SIM105", "symbol": "prove", "detail": "Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`"},
     {"file": "verity_vllm/settings.py", "kind": "SIM905", "symbol": "<module>", "detail": "Consider using a list literal instead of `str.split`", "count": 2},
     {"file": "verity_vllm/target_family.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"}
   ]
 }
