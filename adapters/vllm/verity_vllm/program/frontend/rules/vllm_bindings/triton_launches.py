@@ -47,6 +47,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 
+__all__ = ["QKV_ARGS", "TRITON_DIVISIBILITY", "qkv_rms_launch"]
+
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
 
 

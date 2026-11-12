@@ -74,7 +74,7 @@ def end(S: dict = TOY, boolean: bool = False) -> str:
 
 F8, B16, E = block(8), block(), end()
 TMPLS = [F8, B16, E]
-CAPS = {F8: 2, B16: 3, E: 4}
+PER_CHUNK = {F8: 2, B16: 3, E: 4}
 
 
 class Served:
@@ -110,15 +110,15 @@ class Served:
         return self.y[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
-    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK) -> list[CS.Member]:
+    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
-    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
-    ms = members(s, tmpls, caps)
+def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = None) -> CS.Binding:
+    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
+    ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -327,10 +327,10 @@ def test_a_whole_block_s_boolean_body_is_staged_in_the_form_verify_zk_takes(tmp_
     part = descriptor_id(bind(BX.SparseMlaSplitPartV2, T=NARROW["BN"], **{x: NARROW[x] for x in ("DR", "DV", "BN", "SCALE")},
                               DOT=BOOL["DOT"], INV=BOOL["INV"]))
     rng = np.random.default_rng(5)
-    drawn = {q: ((rng.standard_normal((2, bits // 16)).astype(np.float32) * np.float32(0.5)).view(np.uint32) >> 16).astype(np.uint16)
-             for q, _schema, bits, _ps in CR.unit_rows(SRW.template(part))[0]}
+    part_rows = {q: ((rng.standard_normal((2, bits // 16)).astype(np.float32) * np.float32(0.5)).view(np.uint32) >> 16).astype(np.uint16)
+                 for q, _schema, bits, _ps in CR.unit_rows(SRW.template(part))[0]}
     for name, t, rows, units, want in (("block", tmpls[1], g["rows"], range(m.base, m.base + m.n), g["outs"]),
-                                       ("part", part, drawn, range(2), {})):
+                                       ("part", part, part_rows, range(2), {})):
         st = composed(t, tmp_path / name)
         assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), name
         got = st.stage(rows, tmp_path / name, bytes(32), indices=units)

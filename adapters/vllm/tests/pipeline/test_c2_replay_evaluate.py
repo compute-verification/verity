@@ -186,8 +186,10 @@ class Steps:
         self.calls: list[tuple[Any, ...]] = []
         self.replays: list[Record] = []
         self.reader = SimpleNamespace(record=lambda: dict(OPENED))
-        self.loaded: Record = {"r0": {"instances": {"rows": ["p0"]}, "dir": "/programs/r0", "result": {"T": 3}},
-                               "r1": {"instances": {"rows": ["p1"]}, "dir": "/programs/r1", "result": {"T": 3}}}
+        # each Program's one row is of a family with no row kernel and no delegate: a row as `evaluate` may read it, which the
+        # replay evaluates nothing of
+        self.loaded: Record = {"r0": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=0}"}]}, "dir": "/programs/r0", "result": {"T": 3}},
+                               "r1": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=1}"}]}, "dir": "/programs/r1", "result": {"T": 3}}}
         self.progs: Record = {k: v["instances"] for k, v in self.loaded.items()}
         monkeypatch.setattr(C2, "programs_of_record", self.programs_of_record)
         monkeypatch.setattr(C2.SR, "ProgramIndex", self.index)
@@ -231,7 +233,7 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
     arr = {"r0": 0, "r1": 1}
     assert [c[0] for c in steps.calls] == ["programs", "index", "readers", "linkage", "replay", "replay"]
     assert steps.calls[0] == ("programs", LABELS, True)
-    assert steps.calls[1] == ("index", {"rows": ["p0"]}, "/programs/r0")
+    assert steps.calls[1] == ("index", {"rows": [{"spec": "NotReplayed_v1{request=0}"}]}, "/programs/r0")
     assert steps.calls[2] == ("readers", None, "stub", Weights("model."), steps.progs, {"entries": 5}, arr, steps.loaded,
                               {"manifest_digest": "m" * 8}, "row", {"r0": "d" * 8, "r1": "e" * 8})
     linked = steps.calls[3]

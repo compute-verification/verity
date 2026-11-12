@@ -70,9 +70,9 @@ print('the session verifier:', [(x['accepted'], x['verdict'].get('why', '')[:160
 sys.exit(0 if v and all(x['accepted'] and x['verdict']['reps'] and all(r['ok'] for r in x['verdict']['reps']) for x in v) else 1)" "$O/prove.out" \
   | tee -a "$OUT/job.log"
 live=${PIPESTATUS[0]}
-VARGS=(verify --zk --circuit "$D/circuit.txt" --statement verity/flock-circuit --public "$D/pub.bin" --session "$S")
+VARGS=(--zk --circuit "$D/circuit.txt" --statement verity/flock-circuit --public "$D/pub.bin" --session "$S")
 [ -e "$D/partition.json" ] && VARGS+=(--partition "$D/partition.json")
-"$LEAN" "${VARGS[@]}" > "$O/lean-verify.out" 2> "$O/lean-verify.err"
+$(verifier_env) "$LEAN" verify "${VARGS[@]}" > "$O/lean-verify.out" 2> "$O/lean-verify.err"
 # a hidden_zk tile is no Program's, so the Lean verifier refuses its session for want of one (ProvedScope.NO_PROGRAM) once
 # every check has passed: that refusal alone passes here, as agree.py compares it
 "$PY" -c "import json, sys; v = [json.loads(l[8:]) for l in open(sys.argv[1]) if l.startswith('VERDICT ')]; \
