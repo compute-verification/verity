@@ -243,7 +243,6 @@
     {"file": "tests/lint/test_ruff.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`", "count": 2},
     {"file": "tests/lint/test_silent_excepts.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`"},
     {"file": "tests/lint/test_typed_records.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`"},
-    {"file": "tests/observe/test_chunked_attribution.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/observe/test_m1_log.py", "kind": "SIM222", "symbol": "test_every_view_alloc_has_a_preceding_storage_alloc", "detail": "Use `True` instead of `... or True`"},
     {"file": "tests/pipeline/served_rope.py", "kind": "E741", "symbol": "commit", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/pipeline/served_tp.py", "kind": "E741", "symbol": "commit", "detail": "Ambiguous variable name: `I`"},
