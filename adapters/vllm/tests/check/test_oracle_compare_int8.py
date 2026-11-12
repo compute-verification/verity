@@ -52,8 +52,18 @@ def test_a_views_byte_range_is_its_storage_span_and_none_where_it_has_no_storage
     for no_storage in (None, {}, {**_view(3, 2, [K], "int8"), "alloc": None}, {k: v for k, v in _view(3, 2, [K], "int8").items() if k != "offset"},
                        _view(3, 2, [K], "a dtype of no itemsize")):
         assert rng(no_storage) is None
-    with pytest.raises(ValueError, match="third"):                                                # no allocation id: an error, never a skipped view
-        rng(_view("third", 2, [K], "int8"))
+
+
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+@pytest.mark.parametrize("stated", ["", [], {}, "third", [1], {"a": 1}, "2.5"])
+def test_a_view_whose_allocation_or_offset_is_no_number_is_skipped(field, stated):
+    assert OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), field: stated}) is None
+
+
+@pytest.mark.parametrize("field", ["shape", "strides"])
+@pytest.mark.parametrize("stated", [1, 2.5, True, -1])
+def test_a_view_whose_shape_or_strides_is_a_number_is_skipped(field, stated):
+    assert OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), "strides": [1], field: stated}) is None
 
 
 def test_a_call_boundary_member_is_read_at_its_modules_producer_instances():
