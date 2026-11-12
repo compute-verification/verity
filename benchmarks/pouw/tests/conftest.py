@@ -41,11 +41,18 @@ def script_dirs() -> list[Path]:
     return [*ahead, *sorted({p.parent for p in scripts()}.difference(ahead))]
 
 
+def load_name(file: str | Path) -> str:
+    """The module name `load` gives ``benchmarks/pouw/FILE``: its directory and its file (``gpu_kit/sass_gate.py`` is
+    ``gpu_kit_sass_gate``), and ``pouw_NAME`` for a file directly under ``benchmarks/pouw/``."""
+    parts = Path(file).with_suffix("").parts
+    return "_".join(parts if len(parts) > 1 else ("pouw", *parts))
+
+
 def load(file: str) -> ModuleType:
-    """``benchmarks/pouw/FILE`` as a module named for its directory and its file (``gpu_kit/sass_gate.py`` is
-    ``gpu_kit_sass_gate``), run once however many tests ask. For a module whose name another directory holds and `AHEAD`
-    gives to that one, and for one its own directory's scripts load from its file under this name."""
-    name = "_".join(Path(file).with_suffix("").parts)
+    """``benchmarks/pouw/FILE`` as a module named `load_name` of it, run once however many tests ask. For a module whose
+    name another directory holds and `AHEAD` gives to that one, and for one its own directory's scripts load from its
+    file under this name."""
+    name = load_name(file)
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, POUW / file)
         sys.modules[name] = module = importlib.util.module_from_spec(spec)
