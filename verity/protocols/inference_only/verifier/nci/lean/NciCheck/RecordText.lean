@@ -305,7 +305,8 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
   parameter no table lies in, the schema `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the width 16 or 32, not the
   default (`hm96-sha512/row/v2` at 16), and the parameter's 16-bit leaves whole leaves of the width. The width is the
   parameter's b(p) (`widthOf`, 16 without a format), which the check holds to the registration log. The schema's name
-  is read and held to the set of those two names, to nothing registered: no registration entry states it;
+  is read and held to the set of those two names, to nothing registered: no registration entry states it, and
+  Flock's verifier holds a row's schema where it opens the row (`Flock.Registered.checkPort`);
 * `registered.reads` (`readOf`): of an input row or an output of the reader, its cut as a wire's, its reader units
   among the reader's, every source with its row's words within the parameter, and its row's words whole leaves of
   the parameter's width;

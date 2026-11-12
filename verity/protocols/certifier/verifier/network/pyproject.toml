@@ -10,6 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_lean_audit.py",
+    "tests/test_nci_record_check.py",
     "tests/test_network_check_protocol.py",
     "tests/test_network_period_protocol.py",
     "tests/test_network_records_protocol.py",
@@ -33,5 +34,5 @@ tests = [
 paths = ["verity"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_nci_record_difftest.py"]
+tests = ["tests/test_nci_record_check.py", "tests/test_nci_record_difftest.py"]
 paths = ["verity"]

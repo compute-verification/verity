@@ -171,7 +171,9 @@ b(p) bits hold the record's 16-bit leaves for the parameter. Each parameter with
 not register is θ, at its width. So a format the log does not state for its value, a 32-bit value the record declares
 no format for, and a format on a weight registered in 16-bit leaves are each refused. A format's row schema is read
 and held to the set of its two names (`RecordText.formatsOk`), to nothing registered: no registration entry states
-it.
+it. The schema is held where a row is opened: Flock's verifier holds a registered port's schema to the circuit's
+port (`Flock.Registered.checkPort`) and climbs to the registered root from a leaf framed under it
+(`Flock.Registered.opensLeaf`). The form counts no row by its schema.
 
 ## The layout
 
@@ -587,7 +589,7 @@ registers (its last entry named `p`): the entry's root is the one the run's reco
 `window.registered_roots`), its `word_bits` (16 where it has none) is `p`'s width b(p) (`RecordText.widthOf`), and its
 leaves of `words` words of b(p) bits hold `p`'s 16-bit leaves. And each parameter with a format that the run's record
 does not register is θ (`isTheta`, at its width). The format's row schema is held to nothing here (`RecordText.formatsOk`
-holds its name to the two it may be). -/
+holds its name to the two it may be; Flock's verifier holds a row's schema where it opens it). -/
 def formatsHeld (T : Baseline.Trusted) (doc : Json) (params : List (String × Nat)) : Bool :=
   let run := T.log[T.run]!
   let roots := Baseline.getD (Baseline.getD run "window") "registered_roots"
