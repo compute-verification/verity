@@ -353,17 +353,16 @@ def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them()
     assert r["value"] == pytest.approx(0.005) and r["each"] == pytest.approx([0.004, 0.005, 0.006])
     assert r["between"] == pytest.approx(0.001) and r["within"] == pytest.approx(0.001 * math.sqrt(2))
     half = 4.303 * 0.001 / math.sqrt(3)
-    assert S.T95[:3] == (12.706, 4.303, 3.182) and r["ci95"] == pytest.approx([0.005 - half, 0.005 + half])
+    assert S.T95[2] == 4.303 and r["ci95"] == pytest.approx([0.005 - half, 0.005 + half])
     # one pair has a cost and no interval, and one pass a pair no spread within
     one = S.over_lifetimes(pairs[:1])
     assert one["value"] == pytest.approx(0.004) and "ci95" not in one and "between" not in one and "within" in one
     assert "within" not in S.over_lifetimes([p[:1] for p in pairs])
     # no pair, a pair with no pass, or a pass a side has no rate in: no value
     assert S.over_lifetimes([]) == S.over_lifetimes([[]]) == S.over_lifetimes([[(1.0, 0.0)]]) == {"value": None}
-    # past the table's end its last entry stands
-    many = S.over_lifetimes([[(1 + 0.001 * (k % 2), 1.0)] for k in range(40)])
-    assert many["ci95"][1] - many["value"] == pytest.approx(S.T95[-1] * many["between"] / math.sqrt(40))
-    assert len(S.T95) == 30 and all(a > b for a, b in zip(S.T95, S.T95[1:], strict=False))
+    # degrees of freedom the table lacks read the entry below them, a little wide, as the table's means do
+    eight = S.over_lifetimes([[(1 + 0.001 * (k % 2), 1.0)] for k in range(8)])
+    assert eight["ci95"][1] - eight["value"] == pytest.approx(S.T95[6] * eight["between"] / math.sqrt(8)) and 7 not in S.T95
 
 
 def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work():

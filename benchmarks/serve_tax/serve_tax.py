@@ -2420,11 +2420,6 @@ SESSION_TARGET = 1.0
 SESSION_COST = "session_cost"
 
 
-#: Student's t at a two-sided 95%, by degrees of freedom from 1; past its end the last entry stands, a little wide
-T95 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
-       2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042)
-
-
 def over_lifetimes(pairs: Sequence[Sequence[tuple[float, float]]]) -> dict:
     """A cost whose unit is a server lifetime, a fraction. ``pairs`` holds, for each pair of lifetimes (one of the
     reference's and one of the arm's), the two sides' rates of work in each pass both counted. A pair's cost is the
@@ -2441,7 +2436,7 @@ def over_lifetimes(pairs: Sequence[Sequence[tuple[float, float]]]) -> dict:
     out: dict = {"value": statistics.fmean(each), "each": each}
     if len(each) > 1:
         out["between"] = statistics.stdev(each)
-        half = T95[min(len(each) - 1, len(T95)) - 1] * out["between"] / math.sqrt(len(each))
+        half = T95[max(k for k in T95 if k <= len(each) - 1)] * out["between"] / math.sqrt(len(each))
         out["ci95"] = [out["value"] - half, out["value"] + half]
     free = sum(len(c) - 1 for c in costs)
     if free:
