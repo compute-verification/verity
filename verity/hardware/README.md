@@ -21,7 +21,8 @@ Every card of a kind has the same sections. A GPU card's are `sm` (`count`, the 
 resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory` device memory's),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds),
-`rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor
+`rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
+fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
 units a MAC of each format uses), `price` (what an operation costs in tensor units in a timed loop: `fp32_loop`, an FP32
 add in a loop of 64 adds and 3 loop instructions, at or above the add's price at the card's ceilings, `rate.tensor` over
 32 lanes of `rate.issue`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the

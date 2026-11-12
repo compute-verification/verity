@@ -74,10 +74,11 @@ def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
 
 @pytest.mark.parametrize("sku", skus("gpu"))
 def test_derived_gpu_numbers(sku: str) -> None:
-    """Device memory's bandwidth is its clock's transfers over the bus."""
+    """Device memory's bandwidth is its clock's transfers over the bus, which bound its read."""
     card = load(sku)
     assert value(card, "memory.bandwidth") == (value(card, "clock.memory") * 10 ** 6 * value(card, "memory.transfers")
                                                * value(card, "memory.bus") / 8)
+    assert 0 < value(card, "memory.read") <= value(card, "memory.bandwidth")
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
@@ -132,8 +133,9 @@ def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
 
 
 def test_the_quoted_numbers() -> None:
-    """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
-    one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card states."""
+    """The firmware ceilings, host peaks, bandwidths and measured reads already quoted outside this package, pinned so
+    that a change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host
+    card states, and its GPU's measured read, which the RTX PRO 6000's card states."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
     clocks = ("clock.sm", "clock.tensor", "clock.memory")
     assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
@@ -141,6 +143,7 @@ def test_the_quoted_numbers() -> None:
     assert [value(b200, k) for k in clocks] == [1965, 1965, 3996]
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
+    assert [float(value(card, "memory.read")) for card in (server, h200)] == [1.539e12, 4.26e12]
     granite, sapphire = load("xeon-6776p-2s"), load("xeon-platinum-8468-2s")
     assert round(float(value(granite, "rate.ops")), -11) == 1.0453e15
     assert round(float(value(sapphire, "rate.ops")), -11) == 7.471e14
