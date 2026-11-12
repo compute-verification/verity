@@ -6,16 +6,21 @@
 #   verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM|none] [--ours ARM] [--load burst]
 #     [--rate 1000] [--requests 800 | --span-s S] [--reps 3] [--replay PASS|none] [--max-model-len N] [--target 1]
 #   verity bench prod_repro --client vllm-bench --load NAME[=RUNG+RUNG...] [--reps 6] [--replay NAME@RUNG]
-#     [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--lifetimes L] [--leave-out N] [--model ...] [--stock ...] ...
+#     [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--lifetimes L] [--leave-out N] [--arms "ARM ARM ..."]
+#     [--model ...] [--stock ...] ...
 #   verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
-#     [--target 1]
+#     [--arms "ARM ARM ..."] [--target 1]
 #   verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 # The serve, the load and the replay are the serving cost benchmark's (benchmarks/serve_tax/run.sh, whose header says
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
 # settings (prod, prod-again, prod-record) for a model whose recipe the benchmark holds, else stock compiled vLLM,
 # stock again and the step record (prod_repro.py arms), each a server lifetime of its own; --again none serves stock
-# once, and the cost then has no noise floor; --stock none serves ours alone, and there is then no cost. The context
+# once, and the cost then has no noise floor; --stock none serves ours alone, and there is then no cost. --arms names
+# every arm the job serves, in the order it serves them: ours and, unless --stock none, stock are among them; stock
+# again is served only where it is among them; any other is served beside them, an arm that differs from stock or
+# from ours in one thing (the benchmark's prod-seeded and prod-trace), and is in no line of the three: the report
+# says how far it got and lists its passes with every arm's. The context
 # limit is --max-model-len's for every arm, by default the benchmark's for the arm (at the recipe's settings, the
 # recipe's for the cards); limits.json holds what is known of leaving it to vLLM, which the report's first line says.
 # By default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
@@ -59,8 +64,8 @@ while [ $# -gt 0 ]; do
     --rate) RATE=$1 ;; --requests) REQUESTS=$1 ;; --span-s) SPAN_S=$1 ;; --reps) REPS=$1 ;;
     --max-model-len) MAX_MODEL_LEN=$1 ;; --target) TARGET=$1 ;; --client) CLIENT=$1 ;; --report) REPORT=$1 ;;
     --replay) REPLAYED=$1 ;; --pass-prompts) PASS_PROMPTS=$1 ;; --stop-at) STOP_AT=$1 ;; --replay-of) REPLAY_OF=$1 ;;
-    --lifetimes) LIFETIMES=$1 ;; --leave-out) LEAVE_OUT=$1 ;;
-    *) echo "prod_repro: unknown flag $flag (--model, --stock, --again, --ours, --load, --rate, --requests, --span-s," \
+    --lifetimes) LIFETIMES=$1 ;; --leave-out) LEAVE_OUT=$1 ;; --arms) SERVE=$1 ;;
+    *) echo "prod_repro: unknown flag $flag (--model, --stock, --again, --ours, --arms, --load, --rate, --requests, --span-s," \
             "--reps, --replay PASS|none, --pass-prompts NAME=N, --sampled, --stop-at TIME, --lifetimes L, --leave-out N," \
             "--max-model-len, --target, --client corpus|vllm-bench, --report OUT, --replay-of OUT)"; exit 2 ;;
   esac
@@ -78,6 +83,19 @@ alone=0; [ "${STOCK-}" != none ] || { alone=1; AGAIN=none; }
 if [ $alone = 1 ]; then STOCK=; else STOCK=${STOCK:-${arms[0]}}; fi
 AGAIN=${AGAIN-${arms[1]}}; OURS=${OURS:-${arms[2]}}
 served="${STOCK:+$STOCK }${AGAIN:+$AGAIN }$OURS"
+# --arms: every arm served, in its order; the ones that are none of the three are served beside them
+BESIDE=()
+if [ -n "${SERVE:-}" ]; then
+  [ -z "$REPLAY_OF" ] || { echo "prod_repro: --replay-of serves nothing: --arms is of a job that serves its arms"; exit 2; }
+  for a in $OURS $STOCK; do
+    case " $SERVE " in *" $a "*) ;; *) echo "prod_repro: --arms \"$SERVE\" holds no $a: it names every arm served, ours and stock among them (--stock, --ours; --stock none for ours alone)"; exit 2 ;; esac
+  done
+  [ -z "$AGAIN" ] || case " $SERVE " in *" $AGAIN "*) ;; *) AGAIN= ;; esac
+  for a in $SERVE; do
+    case " $STOCK $AGAIN $OURS " in *" $a "*) ;; *) BESIDE+=("$a") ;; esac
+  done
+  served=$SERVE
+fi
 REPLAY_MODES=${REPLAY_MODES:-compiled}
 # the report of a job's out/: with a replayed pass named, the job asked for a replay, and one that did not end fails;
 # the job's own report also reads what its processes kept in PRIVATE
@@ -85,6 +103,7 @@ report() {
   local more=()
   [ "${2:-}" != job ] || [ -z "${PRIVATE:-}" ] || more+=(--private "$PRIVATE")
   [ -z "$REPLAYED" ] || [ "$REPLAYED" = none ] || more+=(--replayed "$REPLAYED" --expect-replay)
+  [ ${#BESIDE[@]} = 0 ] || more+=(--beside "${BESIDE[@]}")
   "$PY" "$here/prod_repro.py" report "$1" --stock "$STOCK" --again "$AGAIN" --ours "$OURS" --load "${LOAD%%=*}" \
     --replay "$1/replay-${REPLAY_MODES%% *}" --target "${TARGET:-1}" ${more[@]+"${more[@]}"}
 }
@@ -122,7 +141,8 @@ if [ -n "$REPLAY_OF" ]; then
   fi
   # the canonical top-k's counters of the arm's serving are the earlier job's; its replay's are not this replay's
   [ ! -f "$REPLAY_OF/topk_counters.json" ] || "$PY" -c 'import json, sys
-json.dump({"replay": None, "served": json.load(open(sys.argv[1])).get("served")}, open(sys.argv[2], "w"), indent=1)' \
+was = json.load(open(sys.argv[1]))
+json.dump({"replay": None, "served": was.get("served")} | {k: was[k] for k in ("dirs",) if k in was}, open(sys.argv[2], "w"), indent=1)' \
     "$REPLAY_OF/topk_counters.json" "$OUT/topk_counters.json" || { echo "prod_repro: could not read $REPLAY_OF/topk_counters.json"; exit 2; }
   STOCK=; AGAIN=; alone=0
   ( unset ARMS LOADS; export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES; bash "$tax/run.sh" ); rc=$?
