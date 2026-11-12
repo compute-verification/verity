@@ -247,24 +247,34 @@ def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let run ← Spot.Run.run (inputOf p c ξ ξ₂ e received₂ vs)
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
-/-- **The last step** (check, 6): the interior audit's verdict where it doesn't accept; where it does, the run of
-record must accept, and then the form is refused while the switch is off. -/
-def finish (two : Core.Outcome OneStage.Public Core.Integrity) (run : Json) :
+/-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
+does, the run of record must accept, and then the form is refused while `form` is off. -/
+def finishWith (form : Bool) (two : Core.Outcome OneStage.Public Core.Integrity) (run : Json) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match two with
   | .reject why => .reject s!"two-stage: the interior's audit: {why}"
   | .undecided why => .undecided s!"two-stage: the interior's audit: {why}"
   | .accept pub prof =>
     if !jeq (getD run "symbol") (Json.str "accept") then .reject s!"two-stage: the run of record: {run.compress}"
-    else if FORM then .accept pub prof
+    else if form then .accept pub prof
     else .reject s!"two-stage: {SecondStage.FORM_WHY}"
 
-/-- **The check at the first stage's bytes `ξ`** (module docstring, **check**). -/
-def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
-    Core.Outcome OneStage.Public Core.Integrity :=
+/-- The last step at the switch (`FORM`). -/
+def finish : Core.Outcome OneStage.Public Core.Integrity → Json → Core.Outcome OneStage.Public Core.Integrity :=
+  finishWith FORM
+
+/-- **The check at the first stage's bytes `ξ`, at the switch `form`** (module docstring, **check**). The proofs about
+an accepted two-stage audit read it at `form = true`, so that nothing they prove rests on the switch being off. -/
+def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
+    (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
   match prepare p c ξ e bs with
   | .error err => .reject s!"two-stage: {err}"
-  | .ok (two, run) => finish two run
+  | .ok (two, run) => finishWith form two run
+
+/-- **The check at the first stage's bytes `ξ`**, at the switch (`FORM`). -/
+def checkBlobsAt : Params → OneStage.Commitment → ByteArray → Evidence → Core.Blobs →
+    Core.Outcome OneStage.Public Core.Integrity :=
+  checkBlobsAtWith FORM
 
 /-- The check at the bytes the evidence says the first stage read, which the run of record holds to the
 challenger's coins (`Run.coinsHold`). -/
@@ -274,7 +284,7 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
 
 theorem finish_refuses (hF : FORM = false) (two : Core.Outcome OneStage.Public Core.Integrity) (run : Json)
     (pub : OneStage.Public) (prof : Core.Integrity) : finish two run ≠ .accept pub prof := by
-  unfold finish
+  unfold finish finishWith
   split
   · simp
   · simp
@@ -287,7 +297,7 @@ bytes, the evidence and the blobs. -/
 theorem checkBlobsAt_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray)
     (e : Evidence) (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) :
     checkBlobsAt p c ξ e bs ≠ .accept pub prof := by
-  unfold checkBlobsAt
+  unfold checkBlobsAt checkBlobsAtWith
   split
   · simp
   · exact finish_refuses hF _ _ _ _
