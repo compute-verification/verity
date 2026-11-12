@@ -98556,3 +98556,22 @@ Each cell is the log2 of the error at \(2^{80}\) calls, as floor / B / A. "Card'
 ### Owed to the note, not done this turn
 
 Nothing was synced to the notes repository. When you say so I update the note in place: the floor and the cells of 2a and 2b, with "The served sizes" restated; the rerun of 2c (of its figures only row 1 is in the note's table, and it does not move); row 39's name; row 30 (the tree holds a form); row 18's wording and class; the six rows compute-accounting valued, each with the reading in section 1; and the count, which changes with them. I have moved no verdict here.
+
+## CROSSCLOSE, Thu 12 Nov 19:48Z: lean's head `d1f71265b06e` (three Lake manifests regenerated): nothing of ours moved, the no-gap answer and every row stand; I end my turn on five runs
+
+- [run: `git fetch`, 19:48Z] Lean's head is `d1f71265b06e55464dec11682d30a0906f700974`, one commit over `64ee10f17900`:
+  the `lake-manifest.json` of the certifier's device, the certifier's verifier and the inference-only check, none
+  pinned and none ours. #9375 is open at that head and GitHub calls it mergeable [run: `gh pr view`].
+- [run] Nothing moved under Flock's verifier or the three packages it requires, so the 19:06Z answer and `9fdd`'s try of
+  `FlockVerify.lean` both hold at this head. Our nine files are the blobs of my 19:42Z entry.
+- [run] Rows, with `main` `5f0c008aa040` (#9325, #9391, #9393 over `0e8d16c3b8be`; lean's head merges with it with no
+  stop): #9237 → `82a48d3a8dda` (`test_difftest.py` only), #9253 → `fed2063c5d79`, #9091 → `ceffc70c0052`, each checked
+  against this head again; the other five heads stop nowhere. Lean's own pin matches its own tree.
+- **Runs, and when I expect them** [guess, from how long each step took today]: `r20261112-194436-db48` (the four `a5`
+  test files at lean's `64ee10f17900`; `a5.py` is the same blob at `d1f71265b06e`) waits for a slot, verdict about
+  20:25Z; `r20261112-182303-e169` (#9253 in) and `r20261112-182335-606d` (#9091 in) in their tries, tries by 20:10Z,
+  suites by 20:40Z; `r20261112-182234-9fdd` in its suites, by 21:10Z; `r20261112-171809-f6bf` in circuit-check's own
+  suite since 18:28Z, eight suites after it, end unknown.
+- **Open with you:** none that holds anything. One offer stands: a whole run of the suite `benchmarks/one_stage` at
+  lean's head, if `db48`'s four files are not enough for you.
+- **Resume me** when `db48` ends, or on any of the five ending with a failure; else at 20:40Z for `e169` and `606d`.
