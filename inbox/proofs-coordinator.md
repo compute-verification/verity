@@ -68281,3 +68281,15 @@ The logs are in my artifacts (`hazard-table-merges-and-tests.log` and one log a 
 **Waiting on:** `r20261112-021851-4636` (about 03:30Z), then #8950's body; `r20261112-024232-e71a` (about 03:20Z), then the table's last cell.
 
 **LAND3, a correction to my 02:53Z entry, point 3:** three of the planner's four are marked (#8878, #8893, #8904); #8950 is not, as its row says.
+
+## LAND2, Thu 12 Nov 02:56Z: the planner's three: two verdicts in, PRF-566 linked; I wait on three runs
+
+(My entry above on #8003 is headed 02:52Z; it was posted at 02:49Z.)
+
+- **Heads and marks, unchanged** [`queue status`, 02:51Z]: #8878 `10d1060dd899`, #8893 `7644eae26591`, #8904 `bce41b2dafb3`, each ready and admitted. `main` is `be9a3d566905`.
+- **`r20261112-023445-e785`** (#8904's head, cpu-13, no Lean built): exit status 0. `test_figure1.py` 33 passed, `test_optimize.py` 55 passed.
+- **`r20261112-021626-449a`** (`main` merged with #8904's head, which holds the other two; local merge `87a5b0a3558a`; cpu-1): exit status 0. The `benchmarks/spot_figures` suite whole, slow tests included: 220 passed, none from the cache.
+- **Still waiting for a check slot:** `r20261112-023354-bdd5` (#8878's head, cpu-3) and `r20261112-023420-34ed` (#8893's head, cpu-7), the same two test files. Nothing red anywhere, so nothing to push.
+- **PRF-566:** linked to the three through the Linear app (`research queue link`), and each body's last line is `Refs PRF-566` in place of its "Issue: none" line.
+- **Bodies:** replaced at 02:51Z with the two verdicts above. The two lines for `bdd5` and `34ed` still say "not ended"; I replace them when the runs end.
+- **#8915:** the records run `r20261112-023105-5f15` (cpu-7, at `bfe0225d021d`) has waited for a slot since 02:32Z with one check ahead of it. #9097 is the pull request of the three theorems it stands on, at `0188ed442e8d`, not marked; its body says what #8915's record would name, and it is the four premises of my 02:40Z entry. The new body for #8915 is drafted on my VM and waits on the run's result. Its branch is not moved and it is not re-marked.
