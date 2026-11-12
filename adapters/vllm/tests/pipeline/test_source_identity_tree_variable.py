@@ -1,13 +1,15 @@
 """`verity_vllm.pipeline.source_identity`'s two reads of ``VERITY_TREE``, in this process: the requested tree is checked against the variable, and the
 manifest's record carries the variable as the environment holds it.  The command's own tests (`test_source_identity`) run it in a
-child process, with the packages it resolves and the commits git names; here both are stood in, so no test starts a program."""
+child process, with the packages it resolves, the commits git names and the run store's generic half; here all three are stood in,
+so no test starts a program or needs the run store, which the public release leaves out."""
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
-from research.telemetry import source_identity as gsid
 
 from verity_vllm.pipeline import source_identity as sid
 
@@ -24,12 +26,39 @@ def _hold(monkeypatch: pytest.MonkeyPatch, value: str | None) -> None:
         monkeypatch.setenv("VERITY_TREE", value)
 
 
+class Refused(Exception):
+    """Stands in for the generic half's refusal, and keeps what the module raises it with."""
+
+    def __init__(self, mismatches: list[dict[str, Any]], requested_root: str) -> None:
+        super().__init__(f"{len(mismatches)} mismatch(es) against {requested_root}")
+        self.mismatches, self.requested_root = mismatches, requested_root
+
+
+FAIL_CLASS = "the stand-in's fail class"
+
+
 @pytest.fixture
-def no_packages(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A manifest of no package, whose requested tree's commit is not asked of git: what is left is what `manifest` itself does."""
+def generic(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """The run store's generic half (`sid.GENERIC`), stood in where the module loads it by name: no commit is asked of git, no
+    package is checked, and the document is the root and the mismatches the module hands it."""
+    half = SimpleNamespace(
+        FAIL_CLASS=FAIL_CLASS, SourceIdentityError=Refused,
+        tree_identity=lambda root: {"git_sha": None, "git_sha_source": "not asked", "dirty_patch_sha256": None, "branch": None},
+        check=lambda ids, root, *, requested_sha=None: [],
+        document=lambda ids, root, mm: {"requested_root": root, "ok": not mm, "fail_class": FAIL_CLASS if mm else None, "mismatches": mm})
+
+    def run_store(module: str, entry: str) -> SimpleNamespace:
+        assert module == sid.GENERIC, f"{entry} loads {module}, which this test does not stand in"
+        return half
+
+    monkeypatch.setattr(sid, "run_store", run_store)
+    return half
+
+
+@pytest.fixture
+def no_packages(monkeypatch: pytest.MonkeyPatch, generic: SimpleNamespace) -> None:
+    """A manifest of no package: what is left is what `manifest` itself does."""
     monkeypatch.setattr(sid, "resolve", lambda root, *, sha=None: {})
-    monkeypatch.setattr(gsid, "tree_identity", lambda root: {"git_sha": None, "git_sha_source": "not asked", "dirty_patch_sha256": None,
-                                                             "branch": None})
 
 
 @pytest.mark.parametrize("case", sorted(HELD))
@@ -39,9 +68,9 @@ def test_the_requested_tree_is_this_files_where_the_variable_is_unset_empty_or_n
     assert sid.requested_tree(str(INTEGRATION)) == str(REPO)
 
 
-def test_a_variable_that_names_another_tree_is_refused_by_name(monkeypatch, tmp_path):
+def test_a_variable_that_names_another_tree_is_refused_by_name(monkeypatch, generic, tmp_path):
     _hold(monkeypatch, str(tmp_path))
-    with pytest.raises(gsid.SourceIdentityError, match="PRECHECK_FAIL_SOURCE_IDENTITY") as refusal:
+    with pytest.raises(generic.SourceIdentityError) as refusal:
         sid.requested_tree()
     (mismatch,) = refusal.value.mismatches
     other = os.path.realpath(tmp_path)
@@ -62,6 +91,6 @@ def test_the_manifest_of_a_variable_that_names_another_tree_fails_and_records_it
     _hold(monkeypatch, str(tmp_path))
     doc = sid.manifest()
     assert doc["VERITY_TREE"] == str(tmp_path) and doc["requested_root"] == str(REPO)
-    assert doc["ok"] is False and doc["fail_class"] == gsid.FAIL_CLASS and [m["package"] for m in doc["mismatches"]] == ["VERITY_TREE"]
+    assert doc["ok"] is False and doc["fail_class"] == FAIL_CLASS and [m["package"] for m in doc["mismatches"]] == ["VERITY_TREE"]
     unchecked = sid.manifest(strict_env=False)
     assert unchecked["VERITY_TREE"] == str(tmp_path) and unchecked["ok"] is True
