@@ -558,3 +558,45 @@ def test_a_stage_under_a_research_run_declares_its_outputs_and_keeps_its_run_wha
     assert Path(tmp_path, "guard", "kept").read_text() == "r1\n"
     assert staged("match", None) == (7, []) and ran[-1] == "match"
     assert Path(tmp_path, "guard", "kept").read_text() == "r1\n"
+
+
+def test_a_chains_stage_is_the_rows_stage_under_a_research_run_that_cites_the_stages_before_it(tmp_path, monkeypatch):
+    """`chain` runs each stage as ``research run --tool vllm.<stage> -- verity-vllm row stage <stage> ...`` under a run id of its
+    own, citing the Build's artifact to the stages after it and the Match's to the Commit, and records each Attempt in row.json.
+    A stage that fails, or publishes no account artifact (exit 20), ends the chain; a stage cited by its run is not run again,
+    and a chain told to run it as well is refused."""
+    arts = {"build": "art:b", "match": "art:m", "verdict": "art:v"}
+    d = tmp_path / ROW
+
+    def chained(stages: str, shown: dict[str, Any], rc: int = 0, build_run: str | None = None,
+                campaign: str | None = None) -> tuple[int, list[list[str]], list[str]]:
+        _, asked = _shows(monkeypatch, shown, rc=rc)
+        o = SimpleNamespace(env=SimpleNamespace(environ={}), row=ROW, stages=stages, publish=False, research_bin="research",
+                            research_py="python3", project=None, campaign=campaign, role="single", repo="org/model", rev="abc",
+                            flags=["--sweep-dir", str(tmp_path)], build_run=build_run, match_run=None)
+        return RS.chain(o, str(tmp_path)), asked, [a[a.index("--id") + 1] for a in asked if a[1] == "run"]
+
+    def stage_run(st: str, run_id: str, *cited: str) -> list[str]:
+        return ["research", "run", "--id", run_id, "--tool", f"vllm.{st}", "--project", "verity", "--cwd", RS.REPO_ROOT, *cited, "--",
+                sys.executable, "-m", "verity_vllm.pipeline.cli", "row", "stage", st, ROW, "single", "org/model", "abc", "--sweep-dir", str(tmp_path)]
+
+    rc, asked, ids = chained("build,match,commit", {"outputs": arts})
+    assert rc == 0 and len(ids) == 3 and all(re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", i) for i in ids)
+    built, matched = ["--input", "build=art:b"], ["--input", "match=art:m"]
+    assert asked == [stage_run("build", ids[0]), ["research", "data", "show", ids[0], "--json"],
+                     stage_run("match", ids[1], *built), ["research", "data", "show", ids[1], "--json"],
+                     stage_run("commit", ids[2], *built, *matched), ["research", "data", "show", ids[2], "--json"]]
+    assert json.loads((d / "row.json").read_text())["stages"] == {
+        st: {"run_id": i, "artifact": arts[RS.ACCOUNT[st]], "rc": 0} for st, i in zip(RS.OF_RECORD, ids)}
+    rc, asked, ids = chained("build,match", {"outputs": arts}, rc=5)
+    assert rc == 5 and asked == [stage_run("build", ids[0]), ["research", "data", "show", ids[0], "--json"]]
+    assert (d / "row.log").read_text().splitlines()[-1].endswith(f"[row {ROW}] v2 row: stopping at build (rc=5, artifact=art:b)")
+    rc, asked, ids = chained("build,match", {"outputs": {}})
+    assert rc == 20 and len(asked) == 2 and (d / "row.log").read_text().splitlines()[-1].endswith("stopping at build (rc=0, artifact=none)")
+    a_build = {"tool": {"name": "vllm.build"}, "status": {"rc": 0}, "outputs": arts}
+    rc, asked, ids = chained("match", a_build, build_run="r0", campaign="c1")
+    assert rc == 0 and asked == [["research", "data", "show", "r0", "--json"], stage_run("match", ids[0], "--campaign", "c1", *built),
+                                 ["research", "data", "show", ids[0], "--json"]]
+    assert json.loads((d / "row.json").read_text())["stages"]["build"] == {"run_id": "r0", "artifact": "art:b", "rc": 0}
+    with pytest.raises(UsageError, match=re.escape("--build-run r0 is the chain's Build: --stages without build")):
+        chained("build,match", a_build, build_run="r0")
