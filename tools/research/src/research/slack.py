@@ -2002,19 +2002,17 @@ def render_audit(found: list[dict], counts: dict[str, dict[str, int]]) -> str:
 def render_asks(rows: list[dict], now: float) -> str:
     """People's asks (`Linear.asks`) by lane: each one not delivered, with its state, due date, slips and restatements, then
     the counts.  Delivered means Done; an ask canceled with its asker's yes (`asker-ok`) or as a duplicate is closed."""
-    from .linear import ASK_SLIPS, ASKER_OK, OPEN_TYPES
+    from .linear import ASK_SLIPS, ASKER_OK, ask_open
 
-    def live(a: dict) -> bool:
-        return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]
     lines = []
     for lane in sorted({a["lane"] for a in rows}):
         mine = [a for a in rows if a["lane"] == lane]
-        todo = [a for a in mine if live(a)]
+        todo = [a for a in mine if ask_open(a)]
         lines.append(f"@{lane}: {len(todo)} not delivered, {sum(a['type'] == 'completed' for a in mine)} delivered")
         lines += [f"  {a['issue']:<9} {a['state']:<12} due {a['due'] or '-':<10} {a['slips']} slip(s), asked again {a['again']}, "
                   f"{(now - a['created']) / 3600:.0f} h old: {a['title']}" for a in todo]
     askers = ", ".join(sorted({a["asker"] for a in rows})) or "anyone"
-    todo = [a for a in rows if live(a)]
+    todo = [a for a in rows if ask_open(a)]
     lines.append(f"{len(rows)} ask(s) of {askers} open or closed recently: {sum(a['type'] == 'completed' for a in rows)} delivered, "
                  f"{len(todo)} not ({sum(a['type'] in ('backlog', 'canceled') and not a['ok'] for a in todo)} parked without `{ASKER_OK}`, "
                  f"{sum(a['type'] in ('triage', 'unstarted') for a in todo)} with no worker, "

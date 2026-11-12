@@ -41,6 +41,20 @@ PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "pr
 AUDITOR_PIN = ("c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252")
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
+ROOT = Path(__file__).resolve().parents[3]
+#: the Lean judge's package, `wipe-protocol`'s
+JUDGE = "verity/protocols/pous/device/lean"
+LAKE = """#!/usr/bin/env bash
+echo "$PWD $*" >> "$FAKE_LAKE_LOG"
+python3 - << 'EOF' || exit 1
+import json, pathlib, sys
+for p in json.loads(pathlib.Path("lake-manifest.json").read_text())["packages"]:
+    if not pathlib.Path(p["dir"]).is_dir():
+        sys.exit(f"error: {p['name']}: package directory not found: {pathlib.Path.cwd() / p['dir']}")
+EOF
+mkdir -p .lake/build/bin && printf '#!/bin/sh\\nexit 9\\n' > ".lake/build/bin/$2" && chmod +x ".lake/build/bin/$2"
+"""
+"""A stand-in `lake build EXE` that, like lake, fails where a package the manifest in its directory requires is absent."""
 
 SMI = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_SMI_LOG"
@@ -185,6 +199,28 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     demo = json.loads((d / "demo-argv.json").read_text())
     assert demo["lease"] == "GPU-own0" and demo["argv"][-2:] == ["--wipe-protocol", str(judge)]
     assert not (d / "lake-build.log").exists()
+
+
+def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
+    """With no judge built already the wrapper builds `wipe-protocol` before it asks for a card: `lake build` in the
+    judge's package of a copy of ``verity/`` outside the tree, removed when the piece ends, and the built judge goes to
+    demo.sh. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
+    one is a path requirement inside ``verity/``, so the copy needs no network and nothing else of the tree."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    (built,) = (tmp_path / "lake.log").read_text().splitlines()
+    package, command = built.split(" ", 1)
+    assert command == "build wipe-protocol" and package.endswith("/" + JUDGE) and ROOT not in Path(package).parents
+    demo = json.loads((d / "demo-argv.json").read_text())
+    assert demo["argv"][-2:] == ["--wipe-protocol", f"{package}/.lake/build/bin/wipe-protocol"]
+    assert len((tmp_path / "lease.log").read_text().splitlines()) == 1
+    assert not Path(package).exists() and (d / "lake-build.log").exists()
+    for p in json.loads((ROOT / JUDGE / "lake-manifest.json").read_text())["packages"]:
+        assert p["type"] == "path", f"the judge requires {p['name']} from {p.get('url')}, which no copy holds"
+        assert ROOT / "verity" in (ROOT / JUDGE / p["dir"]).resolve().parents, (p["name"], p["dir"])
 
 
 @pytest.mark.parametrize("apps, used", [("4242, 70212 MiB", "70300"), ("", "2048")])
