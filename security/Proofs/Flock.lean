@@ -77,6 +77,9 @@ public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.SpotFlock.WiredAt
 public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.SpotFlock.WireMapRewires
+public import Proofs.Flock.SpotFlock.WiredKS
+public import Proofs.Flock.SpotFlock.WiredRegX
+public import Proofs.Flock.SpotFlock.FanRewires
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
