@@ -15,7 +15,6 @@
  "MhcPreBroadcast_v2{HC=2,H=64,NS=1,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": 7.9,
  "NetworkHidingRead_v1{N_BITS=1584,D=2}": 6.48,
  "PouwH1Window_v3{TILES=((64,PouwH1WindowTile_v1{UNIT=PouwH1TileZy_v1{TILE=PouwH1Tile_v1{EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2},R=4,C=8,PAIRS=((0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(2,0),(2,1),(2,2),(2,3),(2,4),(2,5),(2,6),(2,7),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7))}},K=64})),LINEARS=(('q_proj',64,16),('k_proj',64,8)),CALLS=(('q_proj',0),('k_proj',0),('q_proj',1),('k_proj',1)),M=4,PREFIX=''}": 5.62,
- "verity.definitions.registry.dsa_topk_reads.circuit-check#_model_roots:DsaPositionsMerge_v1-served": 30.96,
  "verity.definitions.registry.boolean_sigma.circuit-check#_boolean_roots": 23.85,
  "verity.definitions.ops.boolean.rmsnorm.circuit-check#_boolean_roots": 23.37,
  "verity.definitions.ops.boolean.rmsnorm.circuit-check#_chunk_sums_roots": 21.03,

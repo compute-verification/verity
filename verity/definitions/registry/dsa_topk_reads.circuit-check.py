@@ -21,8 +21,10 @@ RANGES = {
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The index units at small statics (a first block and one from AT, the merge of one list and of three, chunks of two of
     four slots and of five, a slot of four and of five), the long row of 12 keys (its mask whole, so one block), two reads of
-    a 16-row table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 32, N 2^17): the
-    merge and the chunk over `targets.MAX_GATES`, each held to its digest pin."""
+    a 16-row table, and the chunk and slot the longest row calls (2,048 slots in chunks of 32, N 2^17): the chunk over
+    `targets.MAX_GATES`, held to its digest pin.  The merge it calls (8 blocks of 2,048 slots) is one traced circuit, every gate
+    built and described, so it is checked at its spot in `RANGES` (``--ranges``) and not in ``--all``, which checks
+    `DsaPositionsMerge_v2` at those statics (`_merge_calls_roots`)."""
     from verity.circuits.defs import bind
     from verity.commitments.gates.embedding import read
     from verity.definitions.registry import dsa_topk_reads as R
@@ -32,7 +34,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaMaskPositions_v1-at", lambda: bind(R.DsaMaskPositions, N=6, AT=8, K=4)),
         ("DsaPositionsMerge_v1", lambda: bind(R.DsaPositionsMerge, M=1, K=4)),
         ("DsaPositionsMerge_v1-blocks", lambda: bind(R.DsaPositionsMerge, M=3, K=4)),
-        ("DsaPositionsMerge_v1-served", lambda: bind(R.DsaPositionsMerge, M=8, K=2048)),
         ("DsaPositionsChunk_v1", lambda: bind(R.DsaPositionsChunk, K=4, W=2)),
         ("DsaPositionsChunk_v1-odd", lambda: bind(R.DsaPositionsChunk, K=5, W=2)),
         ("DsaPositionsChunk_v1-served", lambda: bind(R.DsaPositionsChunk, K=2048, W=R.CHUNK)),
