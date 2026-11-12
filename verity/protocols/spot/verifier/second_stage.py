@@ -647,6 +647,31 @@ def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
     return None if links is None else tuple(Link(x.template, x.port, _port_of(named, key, x.value)) for x in links)
 
 
+def _words(t: Any) -> int:
+    """`Spot.Bits.wordsOf`: the 16-bit words of a value of type `t`, its bits packed sixteen to a word."""
+    return (sum(t.leaf_widths()) + 15) // 16
+
+
+def returned_bits(defs: Mapping[str, Any], key: str) -> int | None:
+    """`SecondStage.returnedBits`: the bits one replay block of ``defs[key]`` returns to the boundary: each part of its
+    return (`_return_links`) is one output field of a template's units, and gives its units times sixteen bits for each
+    word of the field (`_words`). The second stage's files lay a returned field on words of its own, every bit of them
+    a computed gate (`Spot.Bits.retWords`, `Spot.Bits.check`), so these are the gates a replay block's request is
+    served; a served cap below them charges it fewer bits than it returns (`plancheck.two`'s `returned`). None when
+    the design's links can't be derived (`link_runs`)."""
+    if link_runs(defs, key) is None:
+        return None
+    fn = defs[key]
+    return sum(s.run.count * 16 * _words(_fields(defs[s.fn].signature()[1])[int(s.edge.port[1:])])
+               for s in _return_links(_callers_of(defs, fn), fn) or ())
+
+
+def replay_returned(program: Any, key: str) -> int | None:
+    """`SecondStage.replayReturned`: the bits one replay block returns (`returned_bits`), the replay block the one
+    `program` defines under descriptor id `key`."""
+    return returned_bits(definitions(program), key)
+
+
 def _link_of(own: Own, t: str, port: str) -> Link | None:
     return next((x for x in own.links or () if x.template == t and x.port == port), None)
 
