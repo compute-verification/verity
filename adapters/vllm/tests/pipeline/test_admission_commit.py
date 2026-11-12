@@ -101,6 +101,13 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
     assert r3["admitted"] is True and "no container memory limit" in r3["why"] and r3["would_exceed_by_bytes"] is None
 
 
+def test_the_admission_record_and_its_scheduled_steps_carry_the_bounds_schema_id():
+    sizing, wl, _ = _fixture("b16")
+    rec = ADM.admission(sizing, wl["requests"], None, retain="host", max_num_batched_tokens=5348, lag=1)
+    assert ADM.SCHEMA == "verity-sweep/admission/f-da-15/v1"
+    assert rec["schema"] == ADM.SCHEMA and rec["scheduled"]["schema"] == ADM.SCHEMA
+
+
 def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     """the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
     is (raw - hidden M1) + the levels over every leaf; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
