@@ -10,6 +10,7 @@ import hashlib
 import numpy as np
 import pytest
 
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.tp.negatives import parse_serve_shard_from
 from verity_vllm.check import weights_of_record as WR
 from tests.check.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
@@ -27,7 +28,7 @@ def test_parse_serve_shard_from_names_rank_param_and_another_rank():
     swap = parse_serve_shard_from(["0:X.weight:1", "1:X.weight:0"], 2)
     assert swap == {"0": [{"param": "X.weight", "from_rank": 1}], "1": [{"param": "X.weight", "from_rank": 0}]}
     for bad in (["1:X.weight"], ["1::0"], ["1:X.weight:1"], ["2:X.weight:0"], ["1:X.weight:5"]):
-        with pytest.raises(SystemExit):
+        with pytest.raises(Refused):
             parse_serve_shard_from(bad, 2)
 
 
@@ -80,8 +81,8 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     """The import path of record is written from the RUNNING process (sys.modules), not a static closure."""
-    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
+    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     r = repo_modules_loaded()
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
     assert "verity_vllm/pipeline/tp/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]

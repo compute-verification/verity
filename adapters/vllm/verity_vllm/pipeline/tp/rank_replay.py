@@ -107,7 +107,7 @@ def _load(cfg: dict[str, Any], rank: int, world: Any, definitions: bool) -> Load
     # the export wrapper's prefix is DETERMINED from the Program's attention rows vs the implementation paths result.json observed
     # (`attention_impls_observed`) -- the same source the manifest used, so the replay addresses the map's op_paths (a rank Program
     # names `inner.model.model.layers.*`, the map `model.layers.*`; without the observed paths the heuristic strips nothing)
-    attn_paths = sorted({a for v in loaded.values() for a in ((v.get("result") or {}).get("attention_impls_observed") or {}).keys()})
+    attn_paths = sorted({a for v in loaded.values() for a in ((v.get("result") or {}).get("attention_impls_observed") or {})})
     # the rank Programs' TP context (result.json `tp` = {"world", "rank"}): their row-parallel Gemm / EmbeddingShard rows
     # produce this rank's PARTIAL members, the collective rows the module's output -- every loaded Program must be THIS rank's
     tps = {k: ((v.get("result") or {}).get("tp") or {}) for k, v in loaded.items()}

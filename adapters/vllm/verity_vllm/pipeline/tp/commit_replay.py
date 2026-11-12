@@ -32,15 +32,28 @@ import resource
 import socket
 import sys
 import time
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.replay.driver import PoolDoesNotFit
+from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
+from verity_vllm.log import init_logger
+from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
+from verity_vllm.pipeline.tp import config_run as TPC
+from verity_vllm.pipeline.tp import rank_replay as RR
+from verity_vllm.pipeline.tp import run_root as RT
+from verity_vllm.program.compiled_relations import warm_vml
+
+logger = init_logger(__name__)
 
 RESULT_SCHEMA = "verity-vllm/tp-rank-replay/v1"
 
@@ -79,9 +92,6 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     """(the run's row, the rank's commit block, store, run, binding map) once the bundle is shown to be the record's; else Refused.
     ``awaiting=False`` (a reader of the committed values, `tp.serving_rows.from_bundle`): the rank's replay was deferred to this
     bundle and is pending or passed; a rank whose replay failed is refused."""
-    from verity_vllm.commit import store_dump as SD
-    from verity_vllm.pipeline.tp import run_root as RT
-
     ctx, bdir = b["context"], Path(b["path"])
     ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
@@ -90,7 +100,7 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
         raise Refused(f"{bdir}: its context is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {dd['world']}")
     row = next((r for r in _rows(out) if r["pair"] == pair and r["arm"] != "control"), None)
     c = ((row or {}).get("commit") or {}).get("per_rank", {}).get(str(rank))
-    if c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
+    if row is None or c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
         raise Refused(f"pair {pair} rank {rank}: no rank " + ("awaiting its deferred replay" if awaiting else "whose deferred replay is pending or passed")
                       + f" in {out / 'runs.jsonl'}")
     vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in row["commit"].get("commitment_vector") or []}
@@ -126,15 +136,11 @@ def _manifest(o: Options, ctx: dict[str, Any]) -> dict | None:
 
 
 def checkpoint_index(o: Options) -> Any:
-    from verity_vllm.check import weights_of_record as WR
-
     return WR.CheckpointIndex(o.checkpoint_dir, checkpoints_manifest=o.checkpoints_manifest, model=o.model, revision=o.revision)
 
 
 def registered_roles(p: Any) -> dict[str, dict[str, Any]]:
     """The rank's Build `weight_roles` by registered name (`cpu_replay.registered_roles` of its request Programs' dirs, less its index's prefix)."""
-    from verity_vllm.pipeline import cpu_replay as CPU
-
     return CPU.registered_roles((v.get("dir") for v in p.loaded.values()), getattr(p.index, "prefix", "") or "")
 
 
@@ -145,13 +151,6 @@ def _peak_rss() -> int:
 def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int, ck: Callable[[], Any] | None = None) -> dict[str, Any]:
     """The rank's C2 from its bundle (module docstring), its record written to `sampled_replay_p<pair>_rank<r>.json`.  ``ck``: the
     checkpoint's index, shared by the ranks one process replays, since building it reads every shard whole for its sha256."""
-    import traceback
-
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.pipeline import cpu_replay as CPU
-    from verity_vllm.pipeline.tp import rank_replay as RR
-
     t0 = time.perf_counter()
     try:
         b = RB.open_bundle(RB.path(out, pair, rank=rank))
@@ -175,9 +174,9 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
         # the bytes the relations consume are the checkpoint's, opened against the run's committed weights root: self-consistency
         # with the run as in the rank's process, from the checkpoint's bytes; the pin of record stays the Commit's weights pin
         wc.update(self_consistent=wc["equal"], pin_of_record=None, pinned=None)
-        print(f"[tp-replay] WEIGHTS (pair {pair}, rank {rank}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered shards "
-              f"against the committed weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
-              + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
+        logger.info("[tp-replay] WEIGHTS (pair %s, rank %s): %s %s/%s registered shards against the committed weights root %s (%s; unopened %s) "
+                    "in %s s%s", pair, rank, "OPENED" if wc["equal"] else "FAIL", wc["opened"], wc["servable"], str(wc["committed_root"])[:16],
+                    wc["opened_by_source"], wc["unopened_n"], wc["wall_s"], f" -- {wc['why']}" if wc["why"] else "")
         consumed: set[str] = set()
         sr, lk = RR.evaluate(p, cfg, bmap=bmap, committed=OC.OpenedReader(store, run), weights_of=lambda prefix: CPU.provider(words, prefix, consumed),
                              weights_check=wc, run_root=run.run_root, manifest_doc=man, worker_peak=CPU.worker_peak(o))
@@ -192,9 +191,10 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
            "wall_s": round(time.perf_counter() - t0, 3), "peak_rss_bytes": _peak_rss(), "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     C2.write_atomic(result_path(out, pair, rank), json.dumps(doc, indent=1, default=str) + "\n")
     smp = sr.get("sample") or {}
-    print(f"[tp-replay] SAMPLED REPLAY (pair {pair}, rank {rank}): result {sr.get('result')} grade {sr.get('grade')} picked {smp.get('picked')} "
-          f"evaluated {smp.get('evaluated')} equal {smp.get('equal')} mismatch {smp.get('mismatch_n')}; boundary linkage {lk.get('result')} "
-          f"{lk.get('linked')}/{lk.get('pairs')}; {doc['wall_s']} s, peak RSS {doc['peak_rss_bytes'] >> 20} MiB; {sr.get('why') or ''}", flush=True)
+    logger.info("[tp-replay] SAMPLED REPLAY (pair %s, rank %s): result %s grade %s picked %s evaluated %s equal %s mismatch %s; boundary linkage %s "
+                "%s/%s; %s s, peak RSS %s MiB; %s", pair, rank, sr.get("result"), sr.get("grade"), smp.get("picked"), smp.get("evaluated"),
+                smp.get("equal"), smp.get("mismatch_n"), lk.get("result"), lk.get("linked"), lk.get("pairs"), doc["wall_s"],
+                doc["peak_rss_bytes"] >> 20, sr.get("why") or "")
     return doc
 
 
@@ -203,7 +203,6 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
 def fold(out: Path) -> bool | None:
     """The Commit decided from every rank's replay on the record (None, nothing written, while a rank's is missing): each rank's
     gates after its pre-replay verdict, then everything the in-process Commit derives from them."""
-    from verity_vllm.pipeline.tp import config_run as TPC
 
     dd = json.loads((out / C2.DEFERRED).read_text())
     results: dict[tuple[int, int], dict] = {}
@@ -292,16 +291,13 @@ def fold(out: Path) -> bool | None:
 
 
 def main(o: Options) -> int:
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
-    from verity_vllm.program.compiled_relations import warm_vml
-
     out = Path(o.commit_out)
     try:
         if not (out / C2.DEFERRED).is_file():
             raise Refused(f"{out / C2.DEFERRED}: not a deferred TP Commit (tp-commit --replay-deferred) or decided in the Commit")
         dd = json.loads((out / C2.DEFERRED).read_text())
         if dd.get("decided"):
-            print(f"[tp-replay] already decided: pass {dd['decided'].get('pass')} ({dd['decided'].get('utc')})", flush=True)
+            logger.info("[tp-replay] already decided: pass %s (%s)", dd["decided"].get("pass"), dd["decided"].get("utc"))
             return 0 if dd["decided"].get("pass") else 3
         want = {int(x) for x in o.ranks.split(",")} if o.ranks else None
         todo = [(int(b["pair"]), int(b["rank"])) for b in dd["bundles"]
@@ -313,11 +309,11 @@ def main(o: Options) -> int:
                 replay_rank(o, out, dd, pair, rank, ck)
         ok = fold(out)
     except (Refused, PoolDoesNotFit) as e:
-        print(f"[tp-replay] REFUSED: {e}", flush=True)
+        logger.error("[tp-replay] REFUSED: %s", e)
         return 2
     sys.stdout.flush()
     if ok is None:
         left = [(int(b["pair"]), int(b["rank"])) for b in dd["bundles"] if not result_path(out, b["pair"], b["rank"]).is_file()]
-        print(f"[tp-replay] PENDING: (pair, rank) {left} have no replay on the record yet", flush=True)
+        logger.info("[tp-replay] PENDING: (pair, rank) %s have no replay on the record yet", left)
         return 4
     return 0 if ok else 3

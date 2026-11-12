@@ -2,6 +2,8 @@
 negative was injected on its target rank (`tp-commit` reports one that was not as an error run)."""
 from __future__ import annotations
 
+from verity_vllm.errors import Refused
+
 
 def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_partial_site: str | None, xrank_pairs: list[dict], made: list[dict]) -> dict[str, dict]:
     """Per requested negative: did the target rank actually inject it?  flip_partial -> the rank's flipped_collective_inputs over the pairs (from
@@ -32,9 +34,9 @@ def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, lis
     for spec in specs:
         parts_ = str(spec).split(":")
         if len(parts_) != 3 or not parts_[1]:
-            raise SystemExit(f"--serve-shard-from <rank>:<served param name>:<from_rank> (got {spec!r})")
+            raise Refused(f"--serve-shard-from <rank>:<served param name>:<from_rank> (got {spec!r})")
         rank, frm = int(parts_[0]), int(parts_[2])
         if not (0 <= rank < world) or not (0 <= frm < world) or frm == rank:
-            raise SystemExit(f"--serve-shard-from {spec!r}: rank {rank} must serve ANOTHER rank's shard of a world of {world}")
+            raise Refused(f"--serve-shard-from {spec!r}: rank {rank} must serve ANOTHER rank's shard of a world of {world}")
         out.setdefault(str(rank), []).append({"param": parts_[1], "from_rank": frm})
     return out

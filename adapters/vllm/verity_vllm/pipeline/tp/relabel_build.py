@@ -83,7 +83,8 @@ def _where(d: dict) -> Any:
 
 def _compare_file(name: str, a: str, b: str) -> dict | None:
     if name in TELEMETRY:
-        x, y = json.load(open(a)), json.load(open(b))
+        with open(a) as fa, open(b) as fb:
+            x, y = json.load(fa), json.load(fb)
         for p in TELEMETRY[name]:
             _drop(x, p)
             _drop(y, p)
@@ -285,7 +286,8 @@ def _place(row, chk: str, by_shape: dict, doc: dict, t: int, jobs: int) -> None:
 
 
 def _write(chk: str, doc: dict) -> None:
-    json.dump(doc, open(f"{chk}/guard.json", "w"), indent=1, default=str)
+    with open(f"{chk}/guard.json", "w") as f:
+        json.dump(doc, f, indent=1, default=str)
 
 
 __all__ = ["PARSE_MAX_BYTES", "SCHEMA", "SKIPPED", "SUMMARIES", "TELEMETRY", "compare_dirs", "derive", "step_guard", "template_rank"]
