@@ -284,7 +284,7 @@ def weights_extra(com: Any, rc: Any, extra_names: set[str] | None = None) -> tup
         if name not in want:
             continue
         t = reg[name].detach().contiguous().reshape(-1)
-        raw = SD._as_bytes(t.view(torch.uint8) if t.dtype != torch.uint8 else t)
+        raw = SD.as_bytes(t.view(torch.uint8) if t.dtype != torch.uint8 else t)
         if len(raw) != int(nb):
             raise ValueError(f"replay bundle: {name} holds {len(raw)} B, registered {nb} B")
         extra.append((i, name, raw))
