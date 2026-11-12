@@ -270,7 +270,7 @@ def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: 
     return pin_gate(cblock, wp_, ok, why, rank=rank, required=required)
 
 
-def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
+def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: frozenset[str] | set[str] | list[str]) -> None:
     """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them
     (`collective_kinds.evaluated_cross_rank`: the world's cross-rank families and every routed all-reduce) and its site coverage of each."""
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
