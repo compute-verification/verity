@@ -5028,9 +5028,22 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
          B.call(DUO, x[0]), B.call(DUO, x[1]))),
     ("Uneven", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
      lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])))]
+ID18 = PrimitiveDefinition("CoreSpotId18", 1, (("a", Value(8)),), Value(18), lambda a: a, register=False)
+WIDE = bind(CompositeDefinition("CoreSpotWide", 0, (), lambda S: ((("x", Value(8)),), Value(18)),
+                                lambda B, S, x: B.call(ID18, x), register=False))
+PACK = bind(CompositeDefinition("CoreSpotPack", 0, (), lambda S: ((("x", Array(8, Value(8))),), Array(8, Value(18))),
+                                lambda B, S, x: array_of([B.call(ID18, x[i]) for i in range(8)]), register=False))
+#: Replay blocks whose units return fields wider than a word, to count what a replay block returns
+#: (`second_stage.returned_bits`): four units of one 18-bit value each, and two of eight such values as one field.
+WIDE_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
+                for name, sig, body in (
+    ("Wides", lambda S: ((("x", Array(4, Value(8))),), Array(4, Value(18))),
+     lambda B, S, x: B.batch(WIDE, x, axes=(0,))),
+    ("Packs", lambda S: ((("x", Array(2, Array(8, Value(8)))),), Array(2, Array(8, Value(18)))),
+     lambda B, S, x: B.batch(PACK, x, axes=(0,))))]
 REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
-    (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS]
+    (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS + WIDE_REPLAYS]
 PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
 
 
@@ -5113,6 +5126,25 @@ def replay_rows(j):
 #: The replay_rows piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
 REPLAY_ROWS = D.Port(PIECES, "replay_rows", replay_rows,
                      st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
+
+
+def replay_returned(j):
+    """`Pieces.replayReturned`: the bits a replay block returns (`second_stage.replay_returned`), the replay block of
+    descriptor id `replay` in `program`; null for none."""
+    desc = _obj(j.get("program") if isinstance(j, dict) else None, "program")
+    if not isinstance(j.get("replay"), str):
+        raise D.Reject("replay is not a string")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    return SS.replay_returned(PROGRAMS[sha], j["replay"])
+
+
+#: The replay_returned piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
+REPLAY_RETURNED = D.Port(PIECES, "replay_returned", replay_returned,
+                         st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
 
 
 def replay_returns(j):
@@ -5563,8 +5595,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
-              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNS, 200), (SECOND_SCHEDULE, 300), (FITS, 400),
-              (TEMPLATE_CIRCUITS, 300)]
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNED, 300), (REPLAY_RETURNS, 200),
+              (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -7256,6 +7288,26 @@ def test_the_designs_rows_place_each_callers_units(pieces):
                                        (REPLAY_ROWS, replay_rows, want)):
             got = mirror(copy.deepcopy(c))
             assert got == expected and D.replay(port, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
+
+
+def test_a_replay_block_returns_its_units_fields_on_words_of_their_own(pieces):
+    """The bits a replay block returns, Lean's the Python's whole, counted from its Definition's return: each unit's
+    returned field on 16-bit words of its own. `BLOCK` returns three PAIR outputs of 8 bits, a word each; ID8 over DUO's
+    second output one word; DUO over each of two rows two words where one field of each is returned and four where
+    both are; four units of an 18-bit value two words each, twice their 72 bits; and two units of eight such values in
+    one field nine words each, the 144 bits they hold. A replay block whose links can't be derived returns none, as do
+    a key naming one of its templates and a key naming no Definition."""
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
+    wides, packs = WIDE_REPLAYS
+    cases = [(BLOCK, None, 3 * 16), (pairs, None, 2 * 16), (fan, None, 3 * 16), (field, None, 16), (heads, None, 2 * 16),
+             (halves, None, 4 * 16), (wides, None, 4 * 32), (packs, None, 2 * 144), (apart, None, None),
+             (uneven, None, None), (REPLAYS[3], None, None), (BLOCK, codec.descriptor_id(PAIR), None),
+             (BLOCK, "Other_v0", None)]
+    for r, key, want in cases:
+        c = {"program": _json(codec.encode_program(P.population_program(r, 2))),
+             "replay": key or codec.descriptor_id(r), "boundary": None}
+        got = replay_returned(copy.deepcopy(c))
+        assert got == want and D.replay(REPLAY_RETURNED, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
 
 
 def test_the_names_of_what_a_replay_block_returns_lean_the_pythons_whole(pieces):
