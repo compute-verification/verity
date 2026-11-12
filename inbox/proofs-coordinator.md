@@ -88008,3 +88008,73 @@ Tags: [run] a command I ran, [read] read now at the place given, [relayed], [der
 **Not run**: `lean-agreement` (needs the pinned upstream build); the kernel replay (a candidate's check runs it); `circuit-check` and Flock's Rust build and tests (the change holds no circuit and no Rust); the slow tests of suites other than the prover's `-k test_lean` and the spot verifier's two files; nothing at a tree with `main` `1885cf1fe08c` merged in, only the merge-tree and the ratchet gate.
 
 **CIR-245**: your 12:15Z section read; nothing more from me on it. Mailbox read 12:43Z: last section 12:15Z.
+
+## COUNT, Thu 12 Nov 12:44Z: Row A and the three rows C price 70 block types under card entries measured on parts, but 68 of them at kernels' steady rows of the census's Definitions, and the other two are 0.003% of a design's proving seconds or less; what the entries still set is a table's size and the fixed split, and replanned at the census's sizes Row A does not move and the rows C read 935.3, 710.8 and 683.5 GB (from 933.8, 710.8, 683.5) (modeled; run `r20261112-123831-25c9`)
+
+Tags: [run] `r20261112-123831-25c9` unless another id is given (record `art:0f3cf23750ee6447e0c0f38488a779f863d640c56e360ce11eea0fbb4736a14b`, tree `c8b46edd10e4`, 30 designs, the 12 rows as quoted reproduced, 0 differ); [read] a place I read now; [relayed] a statement I did not check; [derived] my arithmetic; [local] a command of mine on this machine at `main` `b5fec34665c6`, not a run; [guess] mine. Times from `date -u`. Mailbox read 12:43Z: 37 sections; this answers yours of 12:15Z, and the 11:57Z section and yours of 12:40Z (the advice's length term) go in my next entry. Everything is modeled: the cost model's arithmetic, each GB a design of the planner. Nothing ran on the served engine. No branch moved, nothing marked, no card.
+
+**Which rows.** Row A and the three rows C are designs on the cells of the pricing run `r20261111-163515-2cd7` (tree `a5e4e56a1171`), not on `main`'s cards as `total_cost.py` reads them [read: the kit's `count_fixed.configs`]. Row A: every session a fresh verifier process, the program's read at 609.3 to 692.0 core-seconds, the head statement at 287.5: 9,060.1 to 9,757.0 GB on the partition `main` defines and 3,720.7 to 4,016.0 GB on the best designed configuration. The rows C: the best designed configuration with a kept verifier process, 933.8, 710.8 and 683.5 GB. All at a datacenter's 600 s, one table a session.
+
+**1. Which block types, and what they carry.**
+
+- [run] In both configurations 70 block types have one of those entries as their price under the planner's rule (`total_cost.priced`: by name, else by Definition and K). By name: entry 7 `RMSNormFusedCudaVector8_v1{N=6144,…,BLOCK=256}`, 8 `DsaMqaLogits_v3{N=1,…}`, 11 `DsaIndexerQ_v1`, 12 `SiluMul_v2{I=256}`, 13 `RoPEHeadGptJ_v2{D=64}`, 14 `DsaIndexerKRow_v1`, 15 `RMSNormCudaVector8_v1{N=6144,…,BLOCK=256}`, 16 `SiluMul_v2{I=1536}`, 43 `DsaTopKShortRow_v1{TOPK=2048}`, and 17 to 42 and 44 to 76, the 59 types `DsaMqaLogits_v3{N=2..60}`. By Definition: 9 for `MoeSum_v1{TOPK=8,H=96}` and 15 for `RMSNormCudaVector8_v1{…,BLOCK=768}`.
+- [read: the card] Entries 17 to 42 and 44 to 76 are not in your list and belong in it: each repeats entry 8's seconds and statement (2,048 blocks at `k_log` 24) under another name.
+- [run] Entries 0, 1, 4, 5, 10, 77, 78 and 102 price no block type of these rows: the MoE blocks there are the fused read-GEMMs, on steady rows, and the router is `MoeRouterSigmoidBiasSlots_v2`, entry 79, a whole Definition.
+- **[read: `headline_mix_succ.py` and `bench_prices.json` in the pricing run's inputs; each type's `priced_by`] The seconds of 68 of the 70 are not the entry's.** The pricing run replaced the planner's seconds a block at a full statement with a row of benchmarks': 8 types by their own steady row, staged from the census's Definition name at full statements (7, 8, 9, 11, 12, 13, 14, 43), and 60 by their Definition's steady row at 2^(the `k_log` difference) (the 59 `N=2..60` and `SiluMul_v2{I=1536}`). Only the two `RMSNormCudaVector8_v1{N=6144}` types keep entry 15's own seconds.
+- [run] What the 70 carry in each design, fixed and per-block seconds together:
+
+| row | GB | sessions of these types, of all | of the prover's seconds | of the verifier's | of the phase's budget |
+|---|---|---|---|---|---|
+| A, the partition `main` defines | 9,060.1 to 9,757.0 | 8,457 of 209,109; 7,856 of 194,186 | 2.09% | 2.9% to 3.0% | 2.6% to 2.7% |
+| A, the best designed configuration | 3,720.7 to 4,016.0 | 20,470 of 219,450; 18,968 of 203,296 | 7.6% | 7.2% to 7.4% | 6.3% to 6.5% |
+| C | 933.8 | 91,391 of 980,563 | 7.60% | 0.77% | 4.67% |
+| C | 710.8 | 120,228 of 1,290,145 | 7.60% | 1.52% | 6.03% |
+| C | 683.5 | 125,036 of 1,341,762 | 7.60% | 1.80% | 6.27% |
+
+- [run] In the 710.8 GB row the prover's share is `DsaMqaLogits_v3{N=1}` 4.46%, `RMSNormFusedCudaVector8_v1` 1.81%, the 59 `N=2..60` 0.63%, `DsaIndexerQ_v1` 0.57%, `MoeSum_v1` 0.08%, the rest 0.05%; the two types at entry 15's own seconds are 0.003% of it (31 sessions), and 0.003% or less in every row above.
+- [run] Over every block of the phase rather than the sample (the cells' n × seconds a block, no fixed seconds) the 70 are 18.99% and 18.91% of the proving, almost all `DsaMqaLogits_v3{N=1}` [derived]; the two types at the entry's own seconds are 2.6e-7 of it. A sample takes far fewer of that type than its share of the phase.
+
+**2. Part or whole, and the factor.** What each entry's statement holds is [relayed: your section's reading], checked only against the names in `benchmarks/served_units/stage.py`'s `PARTS` [read]. The two seconds columns are a block's at a full statement: the planner's from the entry as it stands at `main` [local], and kernels' steady row for the census's Definition [read: `bench_prices.json`]. Factor = kernels' ÷ the planner's.
+
+| entry | prices | its statement holds | `k_log`, entry / census | planner, s | kernels, s | factor |
+|---|---|---|---|---|---|---|
+| 7 | `RMSNormFusedCudaVector8_v1` | a part of an activation of another Definition (`RMSNormFusedCuda_v2`) | 25 / 27 | 0.030211 | 0.009125 | 0.30 |
+| 8 | `DsaMqaLogits_v3{N=1}` | a whole activation of an inner Definition (`DsaMqaLogit_v1`) | 24 / 23 | 0.003053 | 0.000357 | 0.117 |
+| 17 to 76 | `DsaMqaLogits_v3{N=2..60}` | entry 8's, unscaled | 24 / 24 to 27 | 0.003053 | 0.000714 to 0.005710 (by Definition) | 0.23 to 1.87 |
+| 9 | `MoeSum_v1{TOPK=8,H=96}` | a whole activation of an inner Definition (`MoeSumCoordinate_v1`) | 22 / 22 | 0.000123 | 0.000102 | 0.83 |
+| 11 | `DsaIndexerQ_v1` | a part of an activation | 22 / 26 | 0.000488 | 0.008743 | 17.9 |
+| 12 | `SiluMul_v2{I=256}` | a primitive (`SiluMulBf16_v2`) | 22 / 22 | 0.000224 | 0.0000835 | 0.37 |
+| 16 | `SiluMul_v2{I=1536}` | entry 12's, unscaled | 22 / 24 | 0.000224 | 0.000334 (by Definition) | 1.49 |
+| 13 | `RoPEHeadGptJ_v2{D=64}` | a primitive (`RopeOut_v1`) | 22 / 21 | 0.000486 | 0.0000868 | 0.18 |
+| 14 | `DsaIndexerKRow_v1` | a part of an activation | 22 / 23 | 0.000492 | 0.000411 | 0.84 |
+| 43 | `DsaTopKShortRow_v1` | a part of an activation | 22 / 23 | 0.000128 | 0.000173 | 1.35 |
+| 15 | `RMSNormCudaVector8_v1{N=6144}`, two types | [derived] a part: 2,048 blocks at `k_log` 24 where the census's Definition is `k_log` 27 | 24 / 27 | 0.008688 | no row | 8 by witness bits [derived] |
+
+- [local] How to read the factor: for the card's 10 entries measured on whole Definitions that have a steady row of their own, the factor is 0.026 to 0.28, median 0.068, because kernels' prover is faster than the card's. So a factor above about 0.3 says the entry's seconds are low for the whole Definition: 11 by far, then the larger `N=2..60`, 16, 43, 14 and 9, with 12 and 7 at the edge; 13 and 8 read as a whole Definition's entry does [derived].
+- So, as the card stands, none of these entries holds the seconds of the census's Definition: 7, 11, 14, 15 and 43 hold a part's, 12, 13 and 16 a primitive's, 8, 9 and 17 to 76 an inner Definition's. Entries 0, 1, 4, 5 and 102 hold a whole Definition's [relayed] and price nothing here.
+
+**3. Replanned.** The planner already reads kernels' steady rows for 68 of the 70, so their seconds stand. What an entry still set in these rows is two things [read: `count_common.staged`, `headline_mix_succ.py`]: how many blocks one table of the type holds, sized by the entry's `k_log` (`DsaIndexerQ_v1` 8,192 where the census's Definition fits 512; `RMSNormFusedCudaVector8_v1` 1,024 where 256; `DsaMqaLogits_v3{N=1}` 2,048 where 4,096), and how kernels' seconds split between a session's fixed seconds and a block's, taken at the entry's ratio and the entry's statement size. The run replans each row with these 70 types' tables at the census's `k_log`, and then also with the prover's fixed seconds a session scaled so that a full table costs kernels' seconds a block (and the two entry-15 types at 8 times their seconds a block):
+
+| row | as quoted, GB | tables at the census's size | and the fixed seconds to match |
+|---|---|---|---|
+| A, the partition `main` defines, read at 609.3 | 9,060.1 | 9,060.1 | 9,060.1 |
+| A, the same, read at 692.0 | 9,757.0 | 9,757.0 | 9,757.0 |
+| A, the best designed configuration, 609.3 | 3,720.7 | 3,720.7 | 3,720.7 |
+| A, the same, 692.0 | 4,016.0 | 4,016.0 | 4,016.0 |
+| C | 933.8 | 935.3 | **935.3** |
+| C | 710.8 | 710.8 | **710.8** |
+| C | 683.5 | 710.8 | **683.5** |
+
+- [run] The last column is the consistent reading; the middle one overcharges (it keeps fixed seconds sized for the entry's larger statement). The moves are single steps of the design: the 933.8 GB row had 0.21% of its budget unspent, and these types take about 0.8 point more of it [derived]. Sessions in the 710.8 GB row go from 1,290,145 to 1,274,265 and the budget spent from 96.58% to 97.37%.
+- [run] Two rows outside your list, for completeness: the earlier kept-process row at 807.8 GB reads 844.9, and the partition `main` defines with a kept process stays 2,749.0.
+
+**Established.** Which block types the entries price in Row A and the rows C, and that 68 of the 70 take kernels' seconds [run, read]; their share of each design [run]; that replanning at the census's sizes moves Row A by nothing and the rows C by at most one step [run].
+
+**Not established.**
+
+- The split of kernels' seconds between a session's fixed part and a block's. Kernels' rows give seconds a block at a full statement only; a partly filled table is priced by the entry's ratio [read].
+- The census's `k_log` is the estimator's upper bound. Four of the card's 10 whole-Definition entries are staged one below it, so a table at the census's size may hold half the blocks the built Definition allows; the replanned rows err high there [local, derived].
+- The Lean verifier's seconds for these types. The `verifier_cost` card times `RMSNormFusedCudaVector8_v1{N=6144` at 153.2 core-seconds on a statement `m1_unit.py` staged at one block from `serving_rows.PARTS`, and gives the other types the measured types' median [read]; whether that statement is the census's Definition I did not read.
+- Kernels' rows themselves: I read their labels and record ids, not the records. Your section quotes 11.2 ms a block for `DsaIndexerQ_v1`; the pricing run used 8.743 ms (`art:3d8725d323d6`, measured in `r20261110-211936-07b0`). Not reconciled.
+- The plan of record's case was not replanned. Its cells hold the same count, seconds a block and cap as the pricing run's for all 70 types [read: `plan_inputs.json` against the pricing run's dump], so its seconds are kernels' too; as it stands the 70 carry 2.08% of its prover's seconds and 1.85% of its budget at 2,372.3 GB [run]. My script's header says that case is priced from the card: that sentence is wrong.
+- Rows that read the card as it stands. [local] At `main`, `total_cost.py`'s lines take no steady row: on its token-partition lines 73 strata under these entries carry 94.90% of the marginal proving seconds, 94.88% of it `MoeExpertFp8GemmW_v1` under entry 1, whose statement is the whole Definition [relayed]; on its per-expert lines 70 strata carry 0.21%. The driver's three rows (`breakeven/headline.py`) I have not read for this.
