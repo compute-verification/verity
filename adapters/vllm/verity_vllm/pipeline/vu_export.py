@@ -30,7 +30,7 @@ relation before it is written (a decomposition that does not reproduce the row's
 `Embedding_v1` is not exported (a commitment opening of the table, not a subcircuit).
 
 Layout of a set `<out>/sets/<name>/`: flat little-endian arrays `<port>.<u8|u16|u32|u64>`, instance-major (the
-`fixtures/bench-instances/v1` convention); a port whose width varies across inputs has `<port>.offsets.u64` (n + 1 word
+`benchmarks/numerical/bench-instances/v1` convention); a port whose width varies across inputs has `<port>.offsets.u64` (n + 1 word
 offsets).  `manifest.json` holds the relation, the ports, the sha256 of every file, the content digest (relation + ports + file
 digests, provenance excluded) and the provenance (row, model, run, commitment root, Program and manifest digests).  `index.json`
 has one row per instance (the VU it came from and the sub-index inside it).  `<out>/export.json` summarises the export and

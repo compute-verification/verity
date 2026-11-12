@@ -123,7 +123,7 @@ INSTANCES_HW = Tool(
     command=["python", "benchmarks/tc_probe/instances_hw.py"],
     closure=["benchmarks/tc_probe/**", *package_paths(TREE, "verity.definitions", "silicon/**", "circuits/targets/target.py"),
              "benchmarks/numerical/python/verity_numerical/bench/instances.py", "benchmarks/numerical/python/verity_numerical/bench/instances_gen.py",
-             "fixtures/bench-instances/v1/manifest.json"],
+             "benchmarks/numerical/bench-instances/v1/manifest.json"],
     key_params=["instances", "instruction", "arch", "root", "manifest", "range", "only_ids", "repeat", "sass_check"],
     key_conditions=["hw.family"],
     param_artifacts=["root", "manifest"],

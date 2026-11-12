@@ -2193,6 +2193,11 @@
       "paths": {
         "verity/configuration/config/": "tools/config/"
       }
+    },
+    {
+      "paths": {
+        "fixtures/bench-instances/": "benchmarks/numerical/bench-instances/"
+      }
     }
   ]
 }
