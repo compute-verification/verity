@@ -49,9 +49,12 @@ words = { "s.rho" = "s.value" }
 files = ["verity/protocols/inference_only/slowdown/slowdown/scenario.py"]
 words = { "self.overhead.rho" = "self.parts.value", "overhead: Overhead" = "parts: Slowdown", "least, overhead" = "least, slowdown", "overhead(" = "slowdown(" }
 
+# the README's names: once the bare rows have run, the JSON's two keys are one, and no name says overhead
 [[words_in]]
 files = ["verity/protocols/inference_only/slowdown/README.md"]
-words = { "overhead(" = "slowdown(" }
+[words_in.words]
+"overhead(" = "slowdown("
+"and the JSON's `rho` and `slowdown` all name the slowdown (the training cost once called the overhead; `Overhead` and `theorem.overhead` keep that name);" = "and a bound's or an attack's `slowdown` in the JSON all name the slowdown, once called the overhead; a result's or a family's `slowdown` and"
 
 # an estimate's `Slowdown` is its `parts`
 [[words_in]]
