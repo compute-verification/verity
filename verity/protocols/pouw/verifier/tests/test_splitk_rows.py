@@ -8,8 +8,8 @@ import json
 import pytest
 
 import splitk_rows_vectors as V
-from verity.protocols.pouw.verifier import weights as Wt
 from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.pouw.verifier import weights as Wt
 
 
 def test_the_pinned_vectors_are_the_chunk_rows():

@@ -30,7 +30,7 @@ verity_vllm/ops/pod_gate.sh
 # --- Python entry points
 verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
-verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by tools/train_step_census.py and benchmarks/training_slowdown/grader
+verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by benchmarks/training_slowdown/grader
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
 verity_vllm/pipeline/advice_code/      # advice v1, the network certifier's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps

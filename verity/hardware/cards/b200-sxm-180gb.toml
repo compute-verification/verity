@@ -49,6 +49,7 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 bus = { value = 8192, unit = "bit", mark = "ceiling", source = "eight HBM3e stacks of 1024 bits (Technical Brief V2.1 Table 3: 'Up to 192 GB HBM3e', eight 24 GB stacks); no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3996 MHz nvidia-smi reports" }
 bandwidth = { value = 8.183808e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above NVIDIA's 'Up to 8TB/s' (HGX AI Factory reference architecture, Table 1, B200 SXM) and the Lenovo Product Guide's 'GPU Memory Bandwidth 7.7 TB/s' (Table 2); not measured on the B200" }
+read = { value = 8.183808e12, unit = "B/s", mark = "placeholder", source = "no read measured on the B200: memory.bandwidth until a measured read (the H200's streaming loads, or an encoded store's bare read as on the RTX PRO 6000) replaces it" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]
