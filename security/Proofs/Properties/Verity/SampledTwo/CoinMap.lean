@@ -299,11 +299,20 @@ def elemOfBits (g : ℕ → Bool) : Flock.F128 :=
   ⟨UInt64.ofNat (natOfBits 64 g), UInt64.ofNat (natOfBits 64 fun j => g (64 + j))⟩
 
 /-- **The device's release for round `i` in a log** (`Reading.dev`): the coin whose element `j` is the bits
-`128 j` to `128 j + 127` the releases the locator puts on round `i` carry, padded with zeros; none where it puts none, or
-more than a coin's 65536 elements. -/
+`128 j` to `128 j + 127` the releases the locator puts on round `i` carry, padded with zeros, and past a coin's 65536
+elements cut off; none where it puts none. -/
 def dev (L : Locate) (log : List Verity.Release) (i : ℕ) : Option FlockDeploy.Coin :=
-  if usedOf L i [] log = 0 ∨ 65536 < usedOf L i [] log then none
+  if usedOf L i [] log = 0 then none
   else some fun j => elemOfBits fun b => (devBits L i [] log).getD (128 * j.val + b) false
+
+/-- **The elements of the releases the log `log` gives round `i` that fit in its coin**, after the releases `pre`: the
+widths of the frames the locator puts on round `i` whose elements end within the coin's 65536. Once one does not fit,
+none after it does, so they are the round's first. -/
+def fitOf (L : Locate) (i : ℕ) : List Verity.Release → List Verity.Release → ℕ
+  | _, [] => 0
+  | pre, rl :: log =>
+    (if locAt L pre rl.frame rl.answers = some i ∧ usedOf L i [] pre + widthOf rl.frame ≤ 65536 then
+      widthOf rl.frame else 0) + fitOf L i (pre ++ [rl]) log
 
 /-! ## The hiding term -/
 
@@ -420,17 +429,17 @@ def Agrees (A : Live₂) (x : Msg) (Rd : Reading A) (o : Verity.Exchange) (r : C
 
 /-- **The releases carry the run's coins' elements** (the coin map's agreement): at the play `o` and the run's coins `r`,
 the coin `dev L` reads for each read round has the run's coin's elements below what the locator's releases for the round
-carry. -/
+that fit carry (`fitOf`). -/
 def ElemAgrees (L : Locate) (A : Live₂) (x : Msg) (reads : ℕ → Prop) (o : Verity.Exchange) (r : Coins A x) : Prop :=
   ∀ i : Fin (A.L.V.k x), reads i.val → ∀ c, dev L o.log i.val = some c →
-    ∀ j : Fin 65536, j.val < usedOf L i.val [] o.log → c j = r i j
+    ∀ j : Fin 65536, j.val < fitOf L i.val [] o.log → c j = r i j
 
 /-- **The parse's agreement covers the released elements on the plays `Q`** (the form's parse's, at `Q` the plays it
 accepts whose log it read is the device's): there, a coin read at round `i` agrees with a run's coin wherever the two
-have the same elements below what the locator's releases for round `i` carry. -/
+have the same elements below what the locator's releases for round `i` that fit carry (`fitOf`). -/
 def AgreeCovers (L : Locate) {A : Live₂} (Rd : Reading A) (Q : Verity.Exchange → Prop) : Prop :=
   ∀ o, Q o → ∀ (i : ℕ) (c c' : FlockDeploy.Coin),
-    (∀ j : Fin 65536, j.val < usedOf L i [] o.log → c j = c' j) → Rd.agree o i c c'
+    (∀ j : Fin 65536, j.val < fitOf L i [] o.log → c j = c' j) → Rd.agree o i c c'
 
 /-- **The coin map's law holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
 `CoinMapLaw` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written

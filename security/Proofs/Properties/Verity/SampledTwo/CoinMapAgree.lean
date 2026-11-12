@@ -477,47 +477,57 @@ theorem law_placeKA {β : Type} (lg : β → List Verity.Release) : ∀ (k : ℕ
 
 /-! ## To the device's release -/
 
+/-- **Once a round is past its coin, no release after fits.** -/
+theorem fitOf_zero (i : ℕ) : ∀ (log q : List Verity.Release), 65536 < usedOf L i [] q → fitOf L i q log = 0
+  | [], _, _ => rfl
+  | rl :: log, q, h => by
+    have hs := usedOf_snoc L i q rl
+    have h1 : ¬ (locAt L q rl.frame rl.answers = some i ∧ usedOf L i [] q + widthOf rl.frame ≤ 65536) :=
+      fun ⟨_, hw⟩ => by omega
+    have h2 := fitOf_zero i log (q ++ [rl]) (by rw [hs]; split_ifs <;> omega)
+    simp only [fitOf, if_neg h1, h2, Nat.add_zero]
+
 /-- **Where every release agrees, the bits collected for round `i` are its coin's**: bit `t` of what the releases of
-`log` after `q` carry for round `i` is the run's coin's bit past the `usedOf … q` elements `q` gave it, where all fit. -/
+`log` after `q` carry for round `i`, below what those that fit carry, is the run's coin's bit past the `usedOf … q`
+elements `q` gave it. -/
 theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
-    ∀ (log q : List Verity.Release), LogGood L r q log → usedOf L i.val [] (q ++ log) ≤ 65536 →
-      ∀ t, t < 128 * usedOf L i.val q log →
-        (devBits L i.val q log).getD t false = coinBit (r i) (128 * usedOf L i.val [] q + t)
-  | [], q, _, _, t, ht => by simp [usedOf] at ht
-  | rl :: log, q, ⟨hg, hgs⟩, hfit, t, ht => by
-    have hfit' : usedOf L i.val [] ((q ++ [rl]) ++ log) ≤ 65536 := by simpa using hfit
+    ∀ (log q : List Verity.Release), LogGood L r q log → ∀ t, t < 128 * fitOf L i.val q log →
+      (devBits L i.val q log).getD t false = coinBit (r i) (128 * usedOf L i.val [] q + t)
+  | [], q, _, t, ht => by simp [fitOf] at ht
+  | rl :: log, q, ⟨hg, hgs⟩, t, ht => by
     have hsnoc := usedOf_snoc L i.val q rl
-    have hmono : usedOf L i.val [] (q ++ [rl]) ≤ usedOf L i.val [] ((q ++ [rl]) ++ log) := by
-      rw [usedOf_append L i.val [] (q ++ [rl]) log]
-      exact Nat.le_add_right _ _
     simp only [devBits]
-    simp only [usedOf] at ht
+    simp only [fitOf] at ht
     by_cases hloc : locAt L q rl.frame rl.answers = some i.val
-    · rw [if_pos hloc] at ht hsnoc
-      rw [if_pos hloc]
-      have hfitw : usedOf L i.val [] q + widthOf rl.frame ≤ 65536 := by omega
-      have hslot : slot L K q rl.frame rl.answers (widthOf rl.frame) = some (i, usedOf L i.val [] q) := by
-        unfold slot
-        rw [hloc]
-        show (if h : i.val < K then
-          (if usedOf L i.val [] q + widthOf rl.frame ≤ 65536 then some (⟨i.val, h⟩, usedOf L i.val [] q) else none)
-          else none) = _
-        rw [dif_pos i.isLt, if_pos hfitw]
-      have hc := hg i _ hslot
-      have hlen : rl.coins.length = 128 * widthOf rl.frame := by
-        rw [hc]
-        unfold openBits
-        exact List.length_ofFn
-      by_cases htw : t < 128 * widthOf rl.frame
-      · rw [List.getD_append _ _ _ _ (by rw [hlen]; exact htw), hc]
-        unfold openBits
-        rw [List.getD_eq_getElem _ _ (by rw [List.length_ofFn]; exact htw), List.getElem_ofFn]
-      · rw [List.getD_append_right _ _ _ _ (by rw [hlen]; omega), hlen,
-          devBits_getD log (q ++ [rl]) hgs hfit' (t - 128 * widthOf rl.frame) (by omega), hsnoc]
-        congr 1
+    · rw [if_pos hloc]
+      rw [if_pos hloc] at hsnoc
+      by_cases hfitw : usedOf L i.val [] q + widthOf rl.frame ≤ 65536
+      · rw [if_pos ⟨hloc, hfitw⟩] at ht
+        have hslot : slot L K q rl.frame rl.answers (widthOf rl.frame) = some (i, usedOf L i.val [] q) := by
+          unfold slot
+          rw [hloc]
+          show (if h : i.val < K then
+            (if usedOf L i.val [] q + widthOf rl.frame ≤ 65536 then some (⟨i.val, h⟩, usedOf L i.val [] q) else none)
+            else none) = _
+          rw [dif_pos i.isLt, if_pos hfitw]
+        have hc := hg i _ hslot
+        have hlen : rl.coins.length = 128 * widthOf rl.frame := by
+          rw [hc]
+          unfold openBits
+          exact List.length_ofFn
+        by_cases htw : t < 128 * widthOf rl.frame
+        · rw [List.getD_append _ _ _ _ (by rw [hlen]; exact htw), hc]
+          unfold openBits
+          rw [List.getD_eq_getElem _ _ (by rw [List.length_ofFn]; exact htw), List.getElem_ofFn]
+        · rw [List.getD_append_right _ _ _ _ (by rw [hlen]; omega), hlen,
+            devBits_getD log (q ++ [rl]) hgs (t - 128 * widthOf rl.frame) (by omega), hsnoc]
+          congr 1
+          omega
+      · rw [if_neg (fun h => hfitw h.2), fitOf_zero L i.val log (q ++ [rl]) (by rw [hsnoc]; omega)] at ht
         omega
-    · rw [if_neg hloc] at ht hsnoc
-      rw [if_neg hloc, List.nil_append, devBits_getD log (q ++ [rl]) hgs hfit' t (by omega), hsnoc, Nat.add_zero]
+    · rw [if_neg hloc] at hsnoc
+      rw [if_neg (fun h => hloc h.1)] at ht
+      rw [if_neg hloc, List.nil_append, devBits_getD log (q ++ [rl]) hgs t (by omega), hsnoc, Nat.add_zero]
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -526,17 +536,16 @@ theorem elemAgrees_of_logGood {A : Live₂} {x : Msg} (reads : ℕ → Prop) {o 
     (h : LogGood L r [] o.log) : ElemAgrees L A x reads o r := by
   intro i _ c hc j hj
   unfold dev at hc
-  by_cases h0 : usedOf L i.val [] o.log = 0 ∨ 65536 < usedOf L i.val [] o.log
+  by_cases h0 : usedOf L i.val [] o.log = 0
   · rw [if_pos h0] at hc
     cases hc
   · rw [if_neg h0] at hc
     cases hc
-    have hfit : usedOf L i.val [] o.log ≤ 65536 := by omega
     refine eq_of_bit fun b hb => ?_
     dsimp only
     rw [bit_elemOfBits _ hb]
     have hj' := j.isLt
-    rw [devBits_getD L r i o.log [] h (by simpa using hfit) (128 * j.val + b) (by omega)]
+    rw [devBits_getD L r i o.log [] h (128 * j.val + b) (by omega)]
     unfold coinBit FlockDeploy.Coin.at
     have e₁ : (128 * usedOf L i.val [] [] + (128 * j.val + b)) / 128 = j.val := by
       simp only [usedOf]
