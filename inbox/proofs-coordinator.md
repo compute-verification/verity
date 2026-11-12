@@ -80432,3 +80432,30 @@ relayed].
 - #9116 `9d26ebc07702` and #9173 `b58c5f59ae01` have not moved [run: fetched 09:11Z].
 
 **Runs:** `1243` running (suites); `aaf2` (#9112's new head on the new tips) running; `684b` (#9091's new head: four Lean tries, the pin's tests) running; `d64d` (#9190: suites) running.
+
+## TABLEEXT, Thu 12 Nov 09:18Z: with the one-wait finder, one table and one wait is a statement that elaborates, on the first try: at each table of a session, what the extractor finds its one-wait form finds at half the rate, at the deployed masked record with no premise; `1 + k_j` reruns is stated at a statement's shape and not at a compiled verifier, because none over the table proof system exists
+
+Sources: [run] a command I ran, with the run id where it ran on a project machine; [read] a place I read; [relayed] another's entry; [derived] my argument from what is read or run; [guess]. Times from `date -u`. Mailbox read 09:18Z: your 09:06Z section is the last [run]. Nothing here ran on the served engine [derived].
+
+**Where it is.** Branch `cursor/proofs-tableext-finder-7c3e`, head `937691542642`, pushed. It is one commit on a merge (`95eb944b3414`) of my `5972af2daf80` and the one-wait finder's `93937aab616d`; the merge had no stop [run: `git merge-tree`, exit 0; `git ls-remote`]. The commit adds one file, `security/Proofs/Flock/SamplingGeneric/OneWaitTableAt.lean`, 306 lines, and changes no other [run: `git diff --stat`].
+
+**The try.** `verity lean try security/Proofs/Flock/SamplingGeneric/OneWaitTableAt.lean --siblings`, run `r20261112-081953-a4a6`, rc 0, with no fix after the first launch: "lean exit 0 in 747 s"; "siblings: no built module of its package that doesn't import Proofs.Flock.SamplingGeneric.OneWaitTableAt declares a name it does (3858 imported in 26 s, peak 4790 MB); 50 unchecked"; "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run: `a4a6`].
+
+**What it states**, each in the file named [read: the file at `937691542642`; run: `a4a6` for "elaborates"]:
+
+1. `Claims.Flock.EAt₁ D N decode j`: the extractor at table `j` with one wait in place of its `m′`. Same `k_j = ⌈4·N_j/e⌉` accepted reruns a wait, same truncation `K`, decoder and check.
+2. `Claims.Flock.wait_at_assembles`: the `hwait` you named. One wait's bound at table `j`, as `ks_at_of_oneWait` reads it (on the event that the wait's accepted runs fail to extract table `j`), bounds the event `ERep_finds` reads (they fail to assemble a witness the table's check accepts).
+3. `Claims.Flock.finds_at_of_oneWait`: that bound fed to the finder's `ERep_finds`. At one statement and prover, for every property `G` of the run's coins and a witness: the run accepts and `EAt` returns a witness with `G` with probability at most twice that at `EAt₁`, plus `4·ε_j + 2·k_j/K + 2·e^(−k_j/8) + √(γ·Pr[B])`.
+4. `Claims.Flock.OneWaitFindsAt H D N ε`, and `oneWaitFindsAt_of_tableBoundAtR`: the finder's claim `Claims.Finds` at `EAt` and `EAt₁`, at every table `j`, at the table's knowledge error and the session's `γ`, under the hypotheses of `KSAt_of_tableBoundAtR`.
+5. `FlockDeploy.KS.zk_oneWaitFindsAt_untrim : Claims.Flock.OneWaitFindsAt sha512 (deployZk Readable.relation) (wordLenJ true) (tableErrAt true)`: at the deployed masked record, with no premise, at each table's own error. It is `zk_KSAt_untrim`'s chain with the finder in place of the knowledge-soundness step.
+6. At the compiled layer: `Claims.SamplingGeneric.oneWaitFindsAt` (the table proof system `Arg.ofFlockAt` meets the finder's `Arg.OneWaitFinds`), `oneWaitFindsAt_masked` (at the deployed masked record, no premise), and `sessionFindsAt_masked` (a compiled verifier over it meets the finder's `SessionFinds`, where its sessions' runs are fixed by their coins, `L.RunsFixed`).
+7. `Claims.SamplingGeneric.oneWait_rerunsAt`: at every statement `y`, the one-wait table proof system's `1 + waits·k` at `y`'s shape is `1 + k_j`, `j` the table `y` names. This is the `1 + k_j` you asked to be a statement.
+
+**Where it stops.**
+
+- **`1 + k_j` is at a statement's shape, not at a compiled verifier's `es`.** `oneWait_rerunsAt` reads `Arg.oneWait.waits` and `Arg.oneWait.k` at `shape y`. The step to `Compiled.es` of a one-wait compiled verifier is the one my first branch now has for `m′` waits (`Compiled.es_ofFlockAt`, under the hypothesis that each proof block's shape is a statement's); its one-wait form is not written [read; derived].
+- **No compiled verifier over the table proof system exists**, so `sessionFindsAt_masked` has no verifier to be read at, and `L.RunsFixed` stays its hypothesis. This is the same lack of an instance as on the first branch [run: `rg`; derived].
+- **Nothing ties it to the finder's two-stage statement.** `Flock.SecurityProofs.SpotOneWaitTwo` is about the two-stage verifier over `Arg.ofFlock`, whose sessions have one table. So the two changes, one wait and one table, are composed here at Flock's layer and at the compiler's proof system, by statement; at SPOT[Flock]'s two-stage code they are not [read: the finder's files at `93937aab616d`; derived].
+- **Of the four checks behind "proved"**: it elaborates; its axiom probe is clean. No full check has replayed it, and nobody but me has read it. The file is not imported by `Proofs/Flock.lean` on that branch, so no package build includes it; the siblings check read 3858 modules beside it [run: `a4a6`].
+- **It rests on a commit that is not on `main`** (`93937aab616d`, an open pull request's head) [relayed: your 07:48Z message]. If that head moves, this branch is re-merged and re-tried.
+- **Numbers.** None is new here: no figure for an execution phase is computed from this file [derived].
