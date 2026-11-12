@@ -527,14 +527,15 @@ theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA 
   simp only [NciCheck.Desc.walkable, Bool.and_eq_true] at hw
   exact ⟨by rw [hdefs]; exact hinv.1, ⟨hr, hp⟩, (Walk.bodiesLaidOut_spec P hw.1.2).2.1, hw.1.1⟩
 
-/-- **`Fits`' first part**: before the window's `T` steps, every egress gate is one the flattened Program returns, and
-no input. Egress leaf `t · L + x` is in the root's return (one run over all `T` instances' leaves), and resolves down
-the egress template's member, whose leaves it computes (`ownReturns`), to a gate of the egress node, below the root,
-where no input is. -/
-theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
+/-- **An egress gate is one the egress node computes**: before the window's `T` steps, every egress gate is one the
+flattened Program returns, no input, and a gate of the egress template's root node. Egress leaf `t · L + x` is in the
+root's return (one run over all `T` instances' leaves), and resolves down the egress template's member, whose leaves it
+computes (`ownReturns`), to a gate of the egress node, below the root, where no input is. -/
+theorem egress_gates {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
     (hF : Flattens P C) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
-      g ∈ C.outs ∧ C.gates[g]? ≠ some .input := by
+      g ∈ C.outs ∧ C.gates[g]? ≠ some .input ∧ (P.defs[P.root]!).body.offsets[egressNode P]! ≤ g ∧
+        g < (P.defs[P.root]!).body.offsets[egressNode P + 1]! := by
   obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
   obtain ⟨hke, hkc⟩ := templateNodes_mem P hA.egress_mem
   have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
@@ -548,7 +549,11 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
   have hleaf : ∀ t < s.window, ∀ x < (callee P (egressNode P)).outLeaves,
       gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩ ∈ C.outs ∧
         C.gates[gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩]? ≠
-          some .input := by
+          some .input ∧
+        (P.defs[P.root]!).body.offsets[egressNode P]! ≤
+          gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩ ∧
+        gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩ <
+          (P.defs[P.root]!).body.offsets[egressNode P + 1]! := by
     intro t ht x hx
     have htx : t * (callee P (egressNode P)).outLeaves + x < s.window * (callee P (egressNode P)).outLeaves :=
       BodiesOk.lt_mul_of _ _ _ _ ht hx
@@ -585,7 +590,7 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
       omega
     obtain ⟨p, ops, sc, hgate, hiff, -⟩ := hF.2.1 a hlt
     have hni := gate_not_input P hroot hL hA.laid.2.1 hke hkc hlo hhi hgate
-    refine ⟨(hF.2.2 a).2 ⟨_, hidx, by rw [hget]; exact hres⟩, fun h => ?_⟩
+    refine ⟨(hF.2.2 a).2 ⟨_, hidx, by rw [hget]; exact hres⟩, fun h => ?_, hlo, hhi⟩
     exact Bool.false_ne_true (hni.symm.trans (hiff.1 h))
   intro t ht ℓ σ g hg
   simp only [scanLayout, NetTiming.slotGates, List.mem_cons, List.mem_map, List.mem_range] at hg
@@ -594,6 +599,15 @@ theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P
   · exact hleaf t ht 0 (by omega)
   · have := BodiesOk.lt_mul_of _ _ _ _ σ.isLt hb
     exact hleaf t ht _ (by omega)
+
+/-- **`Fits`' first part**: before the window's `T` steps, every egress gate is one the flattened Program returns, and
+no input (`egress_gates`). -/
+theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
+    (hF : Flattens P C) :
+    ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
+      g ∈ C.outs ∧ C.gates[g]? ≠ some .input :=
+  fun t ht ℓ σ g hg =>
+    ⟨(egress_gates hd hA hF t ht ℓ σ g hg).1, (egress_gates hd hA hF t ht ℓ σ g hg).2.1⟩
 
 /-- **`Fits`' second part**: before the window's `T` steps, every ingress gate is an input. Step `t`'s ingress is its
 bucket's `row` parameter, which resolves up through the bucket's template node to its argument, one root input node's

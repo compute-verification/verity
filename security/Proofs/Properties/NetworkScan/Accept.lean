@@ -49,6 +49,8 @@ import Std.Tactic.BVDecide.Normalize.Prop
 egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
 returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
 its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
+The scan's cut reads two more of the egress template: its parameters are the egress names, one `state`, and each of its
+node's arguments is one input node's leaves.
 -/
 
 @[expose] public section
@@ -93,6 +95,8 @@ structure Accepted (P : Prog) (s : Schedule) : Prop where
     s.window * (callee P (egressNode P)).outLeaves ≤ c
   ingress : ∀ t < s.window, Ingress P s (bucket P t)
   topo : P.orderViolation = none
+  egress_params : (callee P (egressNode P)).params.map (·.1) = egressParams
+  egress_args : ∀ b ∈ (node P (egressNode P)).args, (inputArg P b).isSome = true
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β} (h : (x >>= f) = .ok y) :
     ∃ a, x = .ok a ∧ f a = .ok y := by
@@ -172,7 +176,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, h10, h⟩ := bind_ok h
   obtain ⟨_, h11, h⟩ := bind_ok h
   obtain ⟨_, h12, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, h13, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
@@ -189,6 +193,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   replace h10 := need_ok h10
   replace h11 := need_ok h11
   replace h12 := need_ok h12
+  replace h13 := need_ok h13
   clear h2
   have hxe : xe = node P (egressNode P) ∧ de = callee P (egressNode P) ∧ egressNode P ∈ templateNodes P := by
     rw [Array.back?_map, List.back?_toArray, Option.map_eq_some_iff] at hback
@@ -229,14 +234,20 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
     rw [Array.all_eq_true_iff_forall_mem] at h12
     exact h12 _ (Array.mem_map.2 ⟨x, hx, rfl⟩)
   simp only [Bool.and_eq_true, beq_iff_eq] at h3 h4 h5 h9
-  obtain ⟨⟨hn1, hnl⟩, -⟩ := h3
+  obtain ⟨⟨hn1, hnl⟩, hne⟩ := h3
+  simp only [Bool.and_eq_true, Array.all_eq_true] at h13
+  obtain ⟨-, hae⟩ := h13
+  have heargs : ∀ b ∈ (node P (egressNode P)).args, (inputArg P b).isSome = true := fun b hb => by
+    obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hb
+    exact hae i hi
   obtain ⟨⟨⟨⟨hxf, hxn⟩, hln⟩, hxeb⟩, hxen⟩ := h4
   obtain ⟨hr0, hrl⟩ := h5
   have hdf : 0 < df.params.size := by
     have := congrArg Array.size hn1
     rw [Array.size_map] at this
     rw [this]; simp [firstParams]
-  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15⟩
+  refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15, hne,
+    heargs⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa
