@@ -53,8 +53,16 @@ def _load() -> None:
     if _cache:
         return
     from verity_vllm.program.frontend.rules.family import DEFAULT_FAMILIES
-    from verity_vllm.program.frontend.rules.padding import PADDING_RULES, PADDING_TORCH_RULES, PADDING_VLLM_RULES
-    from verity_vllm.program.frontend.rules.profile import PROFILE_RULES, PROFILE_TORCH_RULES, PROFILE_VLLM_RULES
+    from verity_vllm.program.frontend.rules.padding import (
+        PADDING_RULES,
+        PADDING_TORCH_RULES,
+        PADDING_VLLM_RULES,
+    )
+    from verity_vllm.program.frontend.rules.profile import (
+        PROFILE_RULES,
+        PROFILE_TORCH_RULES,
+        PROFILE_VLLM_RULES,
+    )
     from verity_vllm.program.frontend.rules.reference import REFERENCE_RULES
     from verity_vllm.program.frontend.rules.views import VIEW_RULES
     _cache.update(VIEW_RULES=VIEW_RULES, REFERENCE_RULES=REFERENCE_RULES, PROFILE_RULES=PROFILE_RULES, PADDING_RULES=PADDING_RULES,
