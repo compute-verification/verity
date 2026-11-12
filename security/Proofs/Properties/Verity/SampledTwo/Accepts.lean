@@ -25,7 +25,7 @@ public import Proofs.Core.Game.Tape
   statements and the sessions' provers is that prover. Its premises, each a named `Prop`:
   * `PlayAccepts`: at an accepted play, on every round-0 coin and second-stage coins that start with the bytes the run
     read and every sessions' coins that agree with what the check read, `SpotFlock.V` accepts `proverSeq`, and each
-    session statement has its template's rounds. RUNCOINS's `SpotRunAcceptsPlay` with its premises (the held copies
+    session statement has its template's rounds. `SpotRunAcceptsPlay` with its premises (the held copies
     matching the run, round 2, the sessions) gives it;
   * `SessionMsgs`: the messages `proverSeq` sends in each session's rounds are those the check read;
   * `SourcesFit`: an accepted run read at most one coin's bytes in the first stage and `stage` coins' in the second;
@@ -65,18 +65,24 @@ theorem frame_commitment {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArra
     (Fr.out ω r).commitment = c :=
   (Verity.Sampled.Binding.play_reaches (Verity.Game.Tape.reaches_out (V.game θ F c) σ (Fr.place ω r))).2.2
 
-/-- **An accepted case's run of record**: the case's commitment decodes, the check handed `Spot.Run.run` an input, and
-that input's record is the commitment's. -/
+/-- **An accepted case's run of record**: the case's commitment decodes, the check handed `Spot.Run.run` an input, that
+input's record is the commitment's, and it has an interior whose record has a canonical form. -/
 theorem input_of_accepts {k : Case} (h : AcceptsOn k) :
-    ∃ cm i, Spot.OneStage.commitmentOf k.commitment = .ok cm ∧ inputOfCase k = some i ∧ i.record = cm.record := by
+    ∃ cm i, Spot.OneStage.commitmentOf k.commitment = .ok cm ∧ inputOfCase k = some i ∧ i.record = cm.record ∧
+      ∃ it m₁, i.interior = some it ∧ recordMsg it.record = some m₁ := by
   obtain ⟨p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := h
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
-  obtain ⟨-, -, -, -, vs, rc, -, hieq⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
-  refine ⟨cm, i, h2, ?_, by rw [hieq]; rfl⟩
-  unfold inputOfCase
-  rw [h1, h2, h3]
-  simp only [bind, Except.bind, hi]
-  rfl
+  obtain ⟨⟨s, hs, -⟩, -, -, -, vs, rc, -, hieq⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
+  refine ⟨cm, i, h2, ?_, by rw [hieq]; rfl, ?_⟩
+  · unfold inputOfCase
+    rw [h1, h2, h3]
+    simp only [bind, Except.bind, hi]
+    rfl
+  · subst hieq
+    refine ⟨_, s.toUTF8.data.toList, rfl, ?_⟩
+    show recordMsg e.record = _
+    simp only [recordMsg, hs]
+    rfl
 
 /-- **The frame's statement is the one the check reads** (`StmtAt` at the form): on every play of the frame the form's
 check accepts, the run's statement it reads is the boundary registration's record the commitment `c` carries, where
@@ -87,7 +93,7 @@ theorem stmtAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Ar
     StmtAt V A x θ F c σ Fr (formReading A C S dev) (FormAccepts C) := by
   intro ω r hacc
   obtain ⟨k, hk, hA⟩ := hacc
-  obtain ⟨cm, i, hcm, hi, hrec⟩ := input_of_accepts hA
+  obtain ⟨cm, i, hcm, hi, hrec, -⟩ := input_of_accepts hA
   have hkc : k.commitment = c := (hC _ k hk).trans (frame_commitment Fr ω r)
   rw [hkc] at hcm
   show (inputOn C (Fr.out ω r)).bind (fun i => recordMsg i.record) = some x
@@ -223,17 +229,17 @@ noncomputable def seqRun (A : Live₂) (P' : Verity.Exchange → ℕ → Claims.
   Claims.run FlockDeploy.sha512 (SpotFlock.proverSeq A.h [] m₁ m₂ (P' o)) (SpotFlock.V A.h) x (fun _ => ())
     (SpotFlock.seqCoins A.h (x := x) c₀ c₁ r')
 
-/-- **An accepted play's run of record is a play SPOT[Flock] accepts** (RUNCOINS's `SpotRunAcceptsPlay` with its
+/-- **An accepted play's run of record is a play SPOT[Flock] accepts** (`SpotRunAcceptsPlay` with its
 premises, at the form's records): at a play the form's check accepts, with the run of record's input `i`, its interior
-`it`, the records' bytes `x` and `m₁` and the session statements' message `m₂`, each session statement has its
-template's rounds, and on every coins `SeqCoinsRead` describes `SpotFlock.V` accepts `proverSeq` with the sessions'
-provers `P' o`. -/
+`it` and the records' bytes `x` and `m₁`, the check read a session statements' message `m₂`, each session statement
+has its template's rounds, and on every coins `SeqCoinsRead` describes `SpotFlock.V` accepts `proverSeq` with the
+sessions' provers `P' o`. -/
 def PlayAccepts (A : Live₂) (C : CaseOf) (S : SessionReading) (P' : Verity.Exchange → ℕ → Claims.Prover Unit) :
     Prop :=
-  ∀ o i it x m₁ m₂, FormAccepts C o → inputOn C o = some i → i.interior = some it → recordMsg i.record = some x →
-    recordMsg it.record = some m₁ → S.stmts o = some m₂ →
-    (∀ t < A.h.ms.length, (FlockDeploy.V true).k (SpotFlock.stmtAt A.h m₂ t) = SpotFlock.k₀ A.h t) ∧
-    ∀ c₀ c₁ r', SeqCoinsRead A S o i it m₂ c₀ c₁ r' → (seqRun A P' o x m₁ m₂ c₀ c₁ r').out = .acc
+  ∀ o i it x m₁, FormAccepts C o → inputOn C o = some i → i.interior = some it → recordMsg i.record = some x →
+    recordMsg it.record = some m₁ → ∃ m₂, S.stmts o = some m₂ ∧
+      (∀ t < A.h.ms.length, (FlockDeploy.V true).k (SpotFlock.stmtAt A.h m₂ t) = SpotFlock.k₀ A.h t) ∧
+      ∀ c₀ c₁ r', SeqCoinsRead A S o i it m₂ c₀ c₁ r' → (seqRun A P' o x m₁ m₂ c₀ c₁ r').out = .acc
 
 /-- **The sessions' messages are the ones the check read**: at a play the form's check accepts, on the coins
 `SeqCoinsRead` describes, `proverSeq`'s message at round `j` of template `t`'s session is the session's message there as
