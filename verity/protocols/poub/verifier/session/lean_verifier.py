@@ -221,8 +221,8 @@ def summary_json(rec: audit.Record) -> dict:
 
 def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Record:
     """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
-    registration its digest names, the coin commitment's root `coins`, each window's openings law at `delta` over
-    the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's samples
+    registration its digest names, the coin commitment's root `coins`, each window's sampling design at `delta` over
+    the Lean's lengths and samples (`audit.window_profile`), and the session's `samples`, which each window's samples
     must be min(samples, U_t) at (`audit.Record`)."""
     if j["registration"] != registration.digest.hex():
         raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
