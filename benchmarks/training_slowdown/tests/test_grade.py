@@ -657,33 +657,86 @@ def test_a_record_with_an_op_in_a_dtype_no_definition_prices_is_refused_with_its
     assert graded([named(job([UNDER]), "float64")], [named(job([UNDER]))], as_if_assumed=True)["p"]["any"]["p"] == 1
 
 
-def stating(run: dict, allow: bool = False, precision: str = "highest") -> dict:
-    """`run` with its record stating torch's TF32 switch as `run.tf32` writes it."""
-    return run | {"record": run["record"] | {"tf32": {"cuda_matmul_allow_tf32": allow,
-                                                      "float32_matmul_precision": precision}}}
+def stating(run: dict, switch: dict | None = None) -> dict:
+    """`run` with its record stating torch's TF32 switch as `run.tf32` writes it: off unless `switch` is given."""
+    return run | {"record": run["record"] | {"tf32": switch or {"cuda_matmul_fp32_precision": "ieee"}}}
 
 
-@pytest.mark.parametrize("on", [{"allow": True, "precision": "high"}, {"allow": True}, {"precision": "medium"}])
-def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_both_ways_out(on):
-    """A dtype of torch's doesn't say a product ran in TF32, so a record that states the switch on, by either of its
-    two readings, while its op log names a GEMM float32 has its products at a price that isn't its job's: the grade
-    stops, and says which record, which ops and the two ways out. With those rows named `tf32` the same record
-    grades, at the TF32 GEMM's price; one that states the switch off grades at the exact one; and counted as if its
-    log named no dtype it is one that names none."""
-    ref = [stating(named(job([UNDER])))]
-    with pytest.raises(ValueError, match=r"^grade: the record at seed 0, final states torch's TF32 switch on, and its "
-                                         r"op log names GEMM ops float32, the exact product \(fwd mm\): ") as e:
-        graded([stating(named(job([UNDER])), **on)], ref)
-    assert str(e.value).endswith(f"Either {G.TF32_FIX}") and "name those rows `tf32`" in G.TF32_FIX
-    assert "torch.backends.cuda.matmul.allow_tf32 = False" in G.TF32_FIX
-    exact, tf32 = graded(ref, ref), graded([stating(named(job([UNDER]), "tf32"), **on)], ref)
-    assert exact["H"]["honest"]["C"]["mean"] == pytest.approx(80 * gates.per_mac("gemm/f32"))
-    assert tf32["attack"]["splits"]["final"]["C"]["mean"] == pytest.approx(80 * gates.per_mac("gemm/tf32"))
-    assert [x["tf32"] for x in tf32["records"]] == [True, False]
-    assert "attack 0/final: version 0, TF32 on, counted in" in G.text(tf32)
-    assert "reference 0/final: version 0, TF32 off, counted in" in G.text(tf32)
-    as_if = graded([stating(named(job([UNDER])), **on)], ref, as_if_assumed=True)
-    assert as_if["p"]["any"]["p"] == 1 and [x["tf32"] for x in as_if["records"]] == [True, False]
+#: the switch on, as a record states it from a torch with `fp32_precision` and by the older two readings
+ON = [{"cuda_matmul_fp32_precision": "tf32"}, {"cuda_matmul_allow_tf32": True, "float32_matmul_precision": "high"},
+      {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "medium"}]
+
+
+def as_tf32(run: dict) -> dict:
+    """`run` with the rows of its op log that name a GEMM float32 naming it `tf32`."""
+    def row(r: list) -> list:
+        exact = gates.row_dtype(r) == "float32" and gates.kind_of(*r[:3], "float32")[0] == "gemm/f32"
+        return [*r[:6], "tf32"] if exact else r
+
+    rec = run["record"]
+    return run | {"record": rec | {"structures": {k: s | {"log": [row(r) for r in s["log"]]} if "log" in s else s
+                                                  for k, s in rec["structures"].items()}}}
+
+
+@pytest.fixture(scope="module")
+def preconditioned(tmp_path_factory):
+    """One search job of the tiny start under Shampoo, whose preconditioners' products are float32 GEMMs of the
+    optimizer's step, which M doesn't hold."""
+    return synthetic.run_job(tmp_path_factory.mktemp("shampoo"), **synthetic.JOBS["shampoo"])[0]
+
+
+@pytest.mark.parametrize("on", ON)
+def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_the_way_out(on, preconditioned):
+    """A dtype of torch's doesn't say a product ran in TF32, so a record that states the switch on, by any reading
+    of it a record states, while its op log names a GEMM float32 has its products at a price that isn't its job's:
+    the grade stops, and says which record, which ops and the way out, the job run again with the switch off.
+
+    A Shampoo job's float32 GEMMs are its optimizer's, outside M. With those rows named `tf32` the same record
+    grades, its ρ too, at the TF32 GEMM's price; with the switch off it grades at the exact one; and counted as if
+    its log named no dtype it is one that names none."""
+    config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
+    starts = registry("tiny", synthetic.SHAPE)
+    run = {"seed": 0, "split": "search", "record": preconditioned}
+    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["other mm"]
+    assert not [r for r in preconditioned["trace"]["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
+    with pytest.raises(ValueError, match=r"^grade: the record at seed 0, search states torch's TF32 switch on, and "
+                                         r"its op log names GEMM ops float32, the exact product \(other mm\): ") as e:
+        G.grade(config, starts, [stating(run, on)], [run])
+    assert str(e.value).endswith(f"at another price. {G.TF32_FIX}") and "`tf32`" not in str(e.value)
+    assert "fp32_precision = 'ieee'" in G.TF32_FIX and "allow_tf32 = False" in G.TF32_FIX
+
+    exact, tf32 = stating(run), stating(as_tf32(run), on)
+    a, b = (G.grade(config, starts, [r], [run]) for r in (exact, tf32))
+    assert a["rho"]["rho"] is not None and b["rho"]["rho"] is not None
+    assert [x["tf32"] for x in a["records"]] == [False, False] and [x["tf32"] for x in b["records"]] == [True, False]
+    assert "TF32 on, counted" in G.text(b) and "TF32 off, counted" in G.text(a)
+    rows = [G.rows_of(r["record"])[-1] for r in (exact, tf32)]
+    macs = sum(m for k, (_, m) in rows[0]["macs_log"]["ops"].items()
+               if gates.split_key(k)[4] == "float32" and gates.kind_of(*gates.split_key(k)[:3], "float32")[0] == "gemm/f32")
+    assert macs > 0 and G.counted(rows[0]) - G.counted(rows[1]) == pytest.approx(
+        macs * (gates.per_mac("gemm/f32") - gates.per_mac("gemm/tf32")))
+    as_if = G.grade(config, starts, [stating(run, on)], [run], as_if_assumed=True)
+    assert as_if["schema"] == G.SCHEMA_AS_IF and [x["tf32"] for x in as_if["records"]] == [True, False]
+
+
+def test_a_product_of_m_named_tf32_is_priced_apart_from_its_trace(adapted):
+    """A trace names no TF32, so naming `tf32` the rows of a float32 GEMM that M holds is no way out: a LoRA job's
+    builds of B·A, float32 GEMMs of M, named so are priced in float32 in the trace and as TF32 in the count, and
+    the record has no ρ and no S. The refusal of the record that states the switch on names the one way out, the
+    job run again with the switch off."""
+    config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
+    starts = registry("tiny", synthetic.SHAPE)
+    run = {"seed": 0, "split": "search", "record": adapted}
+    with pytest.raises(ValueError, match=r"states torch's TF32 switch on, and its op log names GEMM ops float32, "
+                                         r"the exact product \(other mm\)") as e:
+        G.grade(config, starts, [stating(run, ON[0])], [run])
+    assert str(e.value).endswith(G.TF32_FIX)
+    renamed = stating(as_tf32(run), ON[0])
+    apart = G.priced_apart(adapted["trace"], G.rows_of(renamed["record"])[-1]["macs_log"])
+    assert apart and {(x["priced"], *x["named"]) for x in apart} == {("float32", "tf32")}
+    out = G.grade(config, starts, [renamed], [run])
+    assert out["rho"]["rho"] is None and "priced in float32 where the record names tf32" in out["rho"]["why"]
+    assert out["S"]["why"] == out["rho"]["why"] and (out["S"]["honest"], out["S"]["any"]) == (None, None)
 
 
 def test_a_record_that_states_no_tf32_switch_is_read_as_before_and_its_line_says_so():

@@ -20,7 +20,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
-| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`. The counter writes torch's dtype, so a float32 GEMM is priced as the exact one; a row whose dtype reads `tf32` is priced as the TF32 one, and whoever reads a record of a run that set `cuda.matmul.allow_tf32` names its rows so |
+| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`. The counter writes torch's dtype, so a float32 GEMM is priced as the exact one; a row whose dtype reads `tf32` is priced as the TF32 one, which holds only for a GEMM outside the term's M, since a trace names no TF32 (`grade.priced_apart`); a record of a run with the TF32 switch on that names a GEMM float32 is refused |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut |
 | `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_steps` a step among the steps before and after it, with its step circuit): |C|, the update's dependence and the cuts (`capture.circuit`) and the step's matrix products as rows (`capture.products`) |
 | `work.py` | the work a step's record states for the theorem of record: M, the products whose two operands both depend on the update, from a trace's product rows (`priced`, `products_of_trace`, `he_of_rows`), and each reason a record states none. It computes no slowdown |
@@ -396,12 +396,14 @@ record states. torch's autocast casts `mv`, `addmv` and `addr` on a card and not
 holds one is refused so when it is traced again on a CPU: it is traced again on a card. A record whose log names no
 dtype has none to differ from.
 
-A record states torch's switch for TF32 matrix products as it stands when the record is written, by both of torch's
-readings of it (`tf32`: `torch.backends.cuda.matmul.allow_tf32` and `torch.get_float32_matmul_precision()`), and the
-block says of each record whether it was on, off or not stated (a record written before one stated it, which is read
-as before). No dtype of torch's says a product ran in TF32, so a record that states the switch on while its op log
-names a GEMM float32 is refused: the reason names the ops and the two ways out, those rows named `tf32` (the TF32
-GEMM's price) or the job run again with the switch off.
+A record states torch's switch for TF32 matrix products as it stands when the record is written (`run.tf32`):
+`torch.backends.cuda.matmul.fp32_precision`, which reads it however a job set it, or, from a torch without it,
+`torch.backends.cuda.matmul.allow_tf32` and `torch.get_float32_matmul_precision()`. The block says of each record
+whether it was on, off or not stated (a record written before one stated it, which is read as before). No dtype of
+torch's says a product ran in TF32, so a record that states the switch on while its op log names a GEMM float32 is
+refused: the reason names the ops and the way out, the job run again with the switch off. Those rows named `tf32`
+would be priced as the TF32 GEMM, but only a GEMM outside the term's M can be: a trace names no TF32, so a product
+of M named `tf32` is priced apart from its trace, and ρ is refused.
 
 ## Limits of the count
 

@@ -32,8 +32,10 @@ no job writes): the grade never reads it and passes it on, beside each record it
   and writes `OUT/slowdown.as-if.json` (`SCHEMA_AS_IF`), never `slowdown.json`;
 - **the TF32 switch**: a record states torch's switch for TF32 matrix products (`gates.tf32_on`), which the block
   says of each record (`TF32`; a record written before one stated it says nothing, and is read as before). One that
-  states it on while its op log names a GEMM float32 is refused, with the two ways out (`TF32_FIX`): no dtype of
-  torch's says a product ran in TF32, and the exact product's price is not that job's;
+  states it on while its op log names a GEMM float32 is refused, with the way out (`TF32_FIX`): no dtype of
+  torch's says a product ran in TF32, and the exact product's price is not that job's. Those rows named `tf32` are
+  priced as the TF32 GEMM, which holds only where the term's M holds none of them: a trace names no TF32, so a
+  product of M named so is priced apart from its trace and ρ is refused (`priced_apart`);
 - **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
   record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
@@ -82,9 +84,9 @@ PRICED = {True: "in the dtype its op log names for each op",
           None: "with no op row to price"}
 #: what a record states of torch's switch for TF32 matrix products (`gates.tf32_on`), which the block says of each
 TF32 = {True: "TF32 on", False: "TF32 off", None: "TF32 switch not stated"}
-#: the two ways out for a record that states the switch on and names a GEMM float32, which its refusal names
-TF32_FIX = ("name those rows `tf32`, the dtype training_slowdown.gates prices a float32 GEMM under TF32 by, or run "
-            "the job again with the switch off (torch.backends.cuda.matmul.allow_tf32 = False and "
+#: the way out for a record that states the switch on and names a GEMM float32, which its refusal names
+TF32_FIX = ("Run the job again with the switch off (torch.backends.cuda.matmul.fp32_precision = 'ieee'; on a torch "
+            "without it, torch.backends.cuda.matmul.allow_tf32 = False and "
             "torch.set_float32_matmul_precision('highest'))")
 #: what `--as-if-assumed` does, which every block it prints says first
 AS_IF = ("every record's ops are counted by the assumed dtypes (`gates.ASSUMED`: "
@@ -300,7 +302,7 @@ def checkpoints(run: dict, start: str) -> list[dict]:
         raise ValueError(f"grade: the record at {where} states torch's TF32 switch on, and its op log names GEMM ops "
                          f"float32, the exact product ({', '.join(exact[:4])}"
                          f"{f' and {len(exact) - 4} more' if len(exact) > 4 else ''}): under the switch a GPU "
-                         f"computes a float32 GEMM in TF32, at another price. Either {TF32_FIX}")
+                         f"computes a float32 GEMM in TF32, at another price. {TF32_FIX}")
     try:
         rows = rows_of(run["record"])
     except gates.Unpriced as e:
