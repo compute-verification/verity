@@ -275,13 +275,19 @@ def test_a_seed_the_kernels_consumed_that_is_not_the_declared_one_fails_though_t
     assert rep["reasons"] == [f"step {k} row 0 (a): the sampler kernels consumed seed=8 but the manifest declares seed=7" for k in range(MAX_TOKENS)]
 
 
-def test_a_fact_the_kernels_consumed_that_was_not_snapshotted_is_not_tied_to_the_execution(tmp_path):
-    run, manifest = _capture(tmp_path, without_arg="pos_ptr")
+@pytest.mark.parametrize("arg, missing, checked", [
+    ("pos_ptr", ["pos"], ["seed", "temperature", "top_p"]),
+    ("P", ["top_p"], ["seed", "pos", "temperature"]),            # the mask kernel's buffer, under neither of its names (`P`, `p_ptr`)
+    ("temp_ptr", ["temperature"], ["seed", "pos", "top_p"]),
+    ("expanded_idx_mapping_ptr", ["seed", "temperature"], ["pos", "top_p"]),    # both are read through the row mapping
+])
+def test_a_fact_the_kernels_consumed_that_was_not_snapshotted_is_not_tied_to_the_execution(tmp_path, arg, missing, checked):
+    run, manifest = _capture(tmp_path, without_arg=arg)
     rep = _recompute(run, manifest)
     assert (rep["summary"]["verdict"], rep["summary"]["device_facts_rows"]) == ("FAIL", 0)
-    assert rep["rows"][0]["device_facts_not_snapshotted"] == ["pos"] and rep["rows"][0]["device_facts_checked"] == ["seed", "temperature", "top_p"]
-    assert rep["reasons"][0] == ("step 0 row 0 (a): the kernel-consumed pos not snapshotted -- the declared value cannot be tied to the "
-                                 "execution at this step")
+    assert rep["rows"][0]["device_facts_not_snapshotted"] == missing and rep["rows"][0]["device_facts_checked"] == checked
+    assert rep["reasons"][0] == (f"step 0 row 0 (a): the kernel-consumed {', '.join(missing)} not snapshotted -- the declared value cannot be "
+                                 "tied to the execution at this step")
 
 
 def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the_declared_fact(tmp_path):
