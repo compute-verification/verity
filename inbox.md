@@ -40,3 +40,6 @@ DIGESTMOVE, Wed 11 Nov 05:27 PM PST: pushed cursor/net301-definition-digest-c520
 [2026-11-12T01:27Z] 2b91582fe3ac
 ONSITEMAIN, Wed 11 Nov 5:28 PM PST. NET-344 job 3, PART A is pushed: 071d470db3b6d42b45b12b1fb03a2a8197a2c54c on cursor/net-onsite-memory-reads-84f9 (committed 2:01 PM PST, before the stop; 3 files, +57 -32). A stated source other than real reads missing whatever the answer says. Checked again now on the remote (git ls-remote) and by the control: 12 of its 31 cases fail with the test put back to accepts only.
 
+[2026-11-12T01:27Z] 91e451fec111
+ONSITEMAIN, Wed 11 Nov 5:28 PM PST. NET-344 job 3, PART B is pushed: aa2e51199fb29dfd9f047527c90129f472f57dcf on cursor/net-onsite-memory-reads-84f9, the branch's head on the remote (committed 2:07 PM PST, before the stop; 3 files, +191 -32). One composite a product, each read by the product it states. Run again now at this head: 471 passed in the record's file, 803 over the five files (--quick), ruff clean, Monday's record byte-identical, control 9 of 9 fail with composites as it was.
+
