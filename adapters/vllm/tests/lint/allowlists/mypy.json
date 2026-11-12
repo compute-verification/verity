@@ -971,8 +971,6 @@
     {"file": "verity_vllm/pipeline/tick_plugin.py", "kind": "arg-type", "symbol": "TickFeed.write", "detail": ""},
     {"file": "verity_vllm/pipeline/tick_plugin.py", "kind": "arg-type", "symbol": "tick_config", "detail": "", "count": 3},
     {"file": "verity_vllm/pipeline/tick_plugin.py", "kind": "assignment", "symbol": "FeedReader.__call__", "detail": ""},
-    {"file": "verity_vllm/pipeline/topp_pin_check.py", "kind": "assignment", "symbol": "kernel", "detail": ""},
-    {"file": "verity_vllm/pipeline/topp_pin_check.py", "kind": "index", "symbol": "kernel", "detail": "", "count": 4},
     {"file": "verity_vllm/pipeline/topp_pin_check.py", "kind": "union-attr", "symbol": "main", "detail": ""},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 4},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "arg-type", "symbol": "produce", "detail": ""},
