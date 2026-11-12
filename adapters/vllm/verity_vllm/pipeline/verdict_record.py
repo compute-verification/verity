@@ -10,6 +10,8 @@ from pathlib import Path
 from verity_vllm.check.verdict import from_record
 from verity_vllm.config import option
 
+__all__ = ["COMMANDS", "main"]
+
 
 @dataclass(frozen=True, kw_only=True)
 class FromRecordOptions:

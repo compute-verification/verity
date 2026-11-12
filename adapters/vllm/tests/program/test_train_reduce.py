@@ -10,10 +10,17 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
-
-from tests.program.test_train_step import _bits, _data, _f32_of, _outputs, _program, _same_bits
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.registry import cublas_bf16 as CB
+
+from tests.program.test_train_step import (
+    _bits,
+    _data,
+    _f32_of,
+    _outputs,
+    _program,
+    _same_bits,
+)
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
@@ -46,7 +53,7 @@ def _check(L: int) -> None:
     assert got == _models(xb, xf), (L, TK.reduce_config(L), [hex(w) for w in got], [hex(w) for w in _models(xb, xf)])
 
 
-@pytest.mark.parametrize("L", [2, 3, 5, 64, 127, 128, 131, 1000, 4099, 130561])
+@pytest.mark.parametrize("L", [2, 3, 5, 64, 127, 128, 131, 1000, 4099, pytest.param(130561, marks=pytest.mark.slow)])
 def test_full_reduce_is_reduce_kernels_order(L: int) -> None:
     """The scalar path (2 to 127 elements), the vectorized path with and without its tail, and 16 CTAs past 130,560."""
     _check(L)
