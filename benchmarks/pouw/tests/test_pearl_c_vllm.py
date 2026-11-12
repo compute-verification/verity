@@ -2221,7 +2221,7 @@ def record_size_passes(tmp_path: Path, seed: int = 614) -> list[Path]:
                           "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real)}}
                    for u in work.matmuls]
         count = sum(len(s.tiles(u.shape)) for u in work.matmuls)
-        head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{s.name}", "scheme": s.name,
+        head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{s.name}", "scheme": s.name,
                 "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
                 "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
                 "commitment": {"root": rng.bytes(64).hex(), "count": count},
