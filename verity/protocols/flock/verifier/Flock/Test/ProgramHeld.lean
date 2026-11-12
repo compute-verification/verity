@@ -17,7 +17,8 @@ What the setup compares at a `verity/partition/v1` binding: the partition object
 query on it (`HmRow.deriveTemplateUnits` here); for a query it does not evaluate, `HmRow.qwordFinding` returns the
 finding as it stands, whatever program it was handed. `ProvedScope.programBound` refuses a handed program whose digest
 is not META's for every query, in `ProvedScope.programWhyP`'s words, and refuses nothing under the provisional unit
-cover. It takes no mode: `verify` runs it on every session, `--zk` or plain.
+cover. It takes no mode: `verify` runs it on every session, `--zk` or plain. It and the verdict's fields read the
+program's digest (`handed`), which `verify` computes once a call from its one read of the program.
 
 What the verdict says (`ProvedScope.programFields`): `program_sha512` only for a program whose digest is META's; for any
 other, its digest under `program_handed_sha512` and a `program_note`, neither of which a reader looking for
@@ -38,6 +39,10 @@ def mine : ByteArray := desc "Mine_v1"
 def other : ByteArray := desc "Other_v1"
 
 def sha (b : ByteArray) : String := (ProvedScope.programDigest b).getD ""
+
+/-- The digest `verify` hands `ProvedScope.programBound` and `ProvedScope.programFields`: none without a program,
+`some none` for bytes that are not a JSON descriptor. -/
+def handed (program : Option ByteArray) : Option (Option String) := program.map ProvedScope.programDigest
 
 /-- A `verity/partition/v1` object over the program of digest `program`, asking the query `name` v`version`. -/
 def object (program name : String) (version : Nat) (params : Json := Json.mkObj []) : Json :=
@@ -109,7 +114,7 @@ def why : Except String Unit → String
 def refused (parsed : V Circuit) (program : Option ByteArray) : String :=
   why (do
     ProvedScope.programHeld program
-    ProvedScope.programBound parsed program)
+    ProvedScope.programBound parsed (handed program))
 
 def NOT_THE_CIRCUITS : String :=
   s!"refused: the verifier's program (--program, program_sha512 {sha other}) is not the circuit's (META program_sha512 {sha mine})"
@@ -138,17 +143,17 @@ def NOT_THE_CIRCUITS : String :=
 -- under verity/partition/v1 a session of any mode is held as a `--plain-tables` one is: the same programs refused, in
 -- the same words
 #guard [mine, other, "not json".toUTF8].all fun p =>
-  why (ProvedScope.programBound (.ok (bound unread)) (some p)) ==
+  why (ProvedScope.programBound (.ok (bound unread)) (handed (some p))) ==
     why (ProvedScope.programP (.ok (bound unread)) (some p))
 -- under the provisional unit cover only `--plain-tables` refuses another program; any other mode's verdict says it was
 -- not held
 #guard why (ProvedScope.programP (.ok (cover (some (sha mine)))) (some other)) == NOT_THE_CIRCUITS
-#guard why (ProvedScope.programBound (.ok (cover (some (sha mine)))) (some other)) == ""
+#guard why (ProvedScope.programBound (.ok (cover (some (sha mine)))) (handed (some other))) == ""
 
 /-! The verdict's program fields. -/
 
 def fields (parsed : V Circuit) (program : Option ByteArray) : List (String × String) :=
-  (ProvedScope.programFields parsed program).map fun (k, v) => (k, (v.getStr?.toOption).getD "")
+  (ProvedScope.programFields parsed (handed program)).map fun (k, v) => (k, (v.getStr?.toOption).getD "")
 
 def note (why : String) : String :=
   s!"the Program was handed and not held to the circuit: {why}; the registered-read refusals (Registered.checkProgram, Registered.checkCover) read the handed Program only"

@@ -1149,7 +1149,11 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programFields := ProvedScope.programFields parsed program
+  -- the program's digest from that one parse, once a call: none without a program, `some none` for bytes that are no
+  -- JSON descriptor; from it what a verdict says of the program, and the refusal of one META does not bind
+  let handed := program.map fun b => ProvedScope.programDigestOf (read.jsonAt b)
+  let programFields := ProvedScope.programFields parsed handed
+  let programBound := ProvedScope.programBound parsed handed
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
@@ -1212,7 +1216,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       RecSetup.denseOnly recInner
       RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
-      ProvedScope.programBound parsed program
+      programBound
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
