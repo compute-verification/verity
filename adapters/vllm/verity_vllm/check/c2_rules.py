@@ -269,7 +269,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
         return None, None
     n = sum(gaps.values())
     cls = sorted({cls_of(k) for k in gaps})
-    tags = sorted({t for k in gaps for t in codes[k].get("tags") or ()})       # a gap is a reason whose code names its class
+    tags = sorted({t for k in gaps for t in _table(codes, k).get("tags") or ()})
     reasons = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(gaps.items(), key=lambda kv: -kv[1]))
     missing = _form_b_complete_over_values(oc)
     # plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
