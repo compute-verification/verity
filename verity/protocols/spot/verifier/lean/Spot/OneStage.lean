@@ -69,8 +69,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
-  and each template's own under a stratified or work sampling design), and the **profile** is `audit.profile`'s `IntegrityProfile`:
-  one level `unit`, the partition's units, sampled by the verifier's law.
+  and each template's own under a stratified or work sampling design) and `complete`, whether every verdict ran
+  (`Record.allRan`, the audit record's own `complete`): an accept waits on the verdicts of record and on no other, so
+  one that is not of record may not have run, and a reader for which every one must have reads accept and `complete`,
+  an answer without the field as not complete; and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
+  `unit`, the partition's units, sampled by the verifier's law.
 -/
 module
 
@@ -119,6 +122,8 @@ structure Public where
   proved : Array Nat
   bound : Nat
   perTemplate : Option (Array (String × Nat))
+  /-- every verdict ran (`Record.allRan`); false when one that is not of record has not -/
+  complete : Bool
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -533,7 +538,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := Bound.boundOf population draw p.delta, perTemplate }
+        bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -563,7 +568,8 @@ def publicJson (x : Public) : Json :=
     ("bound", Lean.toJson x.bound),
     ("per_template", match x.perTemplate with
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
-      | none => Json.null)]
+      | none => Json.null),
+    ("complete", Json.bool x.complete)]
 
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL

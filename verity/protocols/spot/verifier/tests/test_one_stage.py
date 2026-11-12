@@ -436,6 +436,58 @@ def test_audit_record_needs_every_check_and_verdict():
         assert not r["accepted"] and r["profile"] is None and r["integrity_profile"] is None
 
 
+def _accepted(verdicts: dict) -> dict:
+    """An accepted audit record of the six-block registration over the sample [1, 4], on `verdicts`."""
+    _, _, rec = _registration(6)
+    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, verdicts,
+                           0.25)
+    assert r["accepted"]
+    return r
+
+
+def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
+    """`audit.answer` is one-stage's accept of the record's registration, its public outputs the sample, the proved
+    units, the bound and the record's own ``complete``: true when every verdict ran, false beside one that is not of
+    record and did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    whole = _accepted({"lean": lean, "m0": {"accepted": True}})
+    a = audit.answer(whole, Fraction(1, 4))
+    assert whole["complete"] is True and a["public"] == {"bound": whole["wrong_units"]["bound"], "complete": True,
+                                                         "drawn": [1, 4], "per_template": None, "proved": [1, 4]}
+    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, R.PROTOCOL)
+    assert a["commitment"] == R.digest(whole["registration"]) and a["profile"]["delta"] == "1/4"
+    assert a["profile"]["levels"][0]["draw"] == {"subset": 2}
+    for other in ({"accepted": None}, {"accepted": None, "premise": "a check nothing ran"}, {}):
+        part = _accepted({"lean": lean, "other": other})
+        assert part["complete"] is False
+        assert audit.answer(part, Fraction(1, 4))["public"] == {**a["public"], "complete": False}
+    refused = audit.audit_record(whole["registration"], whole["receipt"], whole["draw"], whole["law"], [1, 4], 2, {},
+                                 {"lean": {**lean, "accepted": False}}, 0.25)
+    with pytest.raises(ValueError, match="only an accepted audit record"):
+        audit.answer(refused, Fraction(1, 4))
+
+
+def test_an_answer_is_complete_only_as_an_accept_that_says_so():
+    """`audit.answer_complete`: an accept whose public ``complete`` is true. An answer without the field reads as not
+    complete, as one written before the field was; so do a field that is not the boolean true, a reject and an
+    undecided, which have no public outputs, and anything that is no answer."""
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    a = audit.answer(_accepted({"lean": lean}), Fraction(1, 4))
+    assert audit.answer_complete(a)
+    part = audit.answer(_accepted({"lean": lean, "other": {"accepted": None}}), Fraction(1, 4))
+    assert part["verdict"] == "accept" and not audit.answer_complete(part)
+    before = {**a, "public": {k: v for k, v in a["public"].items() if k != "complete"}}
+    assert not audit.answer_complete(before)
+    for said in (False, None, 1, "true", [True]):
+        assert not audit.answer_complete({**a, "public": {**a["public"], "complete": said}}), said
+    for verdict in ("reject", "undecided"):
+        assert not audit.answer_complete({**a, "verdict": verdict, "reason": "r", "public": None, "profile": None})
+        assert not audit.answer_complete({**a, "verdict": verdict})
+    for no_answer in (None, [], "accept", {}, {"verdict": "accept"}, {"verdict": "accept", "public": [True]}):
+        assert not audit.answer_complete(no_answer), no_answer
+
+
 def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
     """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)

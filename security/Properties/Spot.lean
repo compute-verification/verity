@@ -27,7 +27,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
 
-and it then publishes the sampled and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
+and it then publishes the sampled and proved units with the exact bounds at δ and whether every verdict ran, those not
+of record too (`publicOf`), and the profile of one level
 `unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
 evidence is completeness, `Properties.Spot.acceptMeans_complete`.
 
@@ -399,13 +400,15 @@ def drawnNats (draw : Json) : Array Nat :=
 
 /-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
-for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
+for a Bernoulli sample), for a stratified or work sampling design each template's own (`Bound.stratumBound`), and
+whether every verdict ran (`Record.allRan`), which `VerdictsAccept` asks only of the verdicts of record. -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
-      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
+    complete := Record.allRan e.verdicts }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/
