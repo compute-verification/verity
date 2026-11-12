@@ -3,17 +3,28 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
 /-!
-# The two-stage leg's coin map: the lemmas its law is proved from
+# The two-stage leg's coin map: its law (`lawAt`)
 
-`CoinMapLaw`'s first clause at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one
-coin node at a time. At a written node the node's value is a function of a block of the run's coins, and everything
-the map writes after it reads only coins past that block; so the block is uniform and independent of the rest, and the
-write costs only its shortfall below uniform. This module holds those pieces.
+`LawAt` at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one coin node at a
+time. At a written node the node's value is a function of a chunk of the run's coins, and everything the map writes
+after it reads only coins past that chunk; so the chunk is uniform and independent of the rest, and the write costs only
+its shortfall below uniform.
 
 * **An element's bits** (`natOfBits_lt`, `testBit_natOfBits`, `bit_elemOfBits`, `eq_of_bit`, `bitsEquiv`): an element of
   GF(2^128) is its 128 bits, `F128.bit` one way and `elemOfBits` the other.
-* **Averages over blocks** (`avg_split`, `avg_restrict`, `avg_indep`): uniform coins restricted along an injective map
-  are uniform, and a function of a block of uniform coordinates is independent of what reads only the others.
+* **Averages over blocks** (`avg_split`, `avg_restrict`, `avg_indep`, `avg_coord`, `avg_le_write1`): uniform coins
+  restricted along an injective map are uniform, and a function of a block of uniform coordinates is independent of
+  what reads only the others.
+* **The law at a node** (`LawHolds`, `law_opt`, `law_ite`, `law_keep`, `law_set`, `law_write`, `law_send`): a bounded
+  function of the play is on average at most its average at the mapped tape and uniform coins, plus a term; a kept coin
+  node's term is the average of the terms after it, a node written with a value independent of what the map reads after
+  it (`Splits`) costs nothing more, and a node written through `W` costs `W`'s shortfall.
+* **The chunks** (`OffChunk`, `splits_chunk`, `splits_fresh`, `splits_open`): a round's chunk of elements, a fresh coin's
+  512 bits and an opening's elements split from the coins off the chunk.
+* **Along the releases** (`AgreeFrom`, `placeK_congr`, `law_fresh`, `law_hello`, `law_round`, `law_open`,
+  `law_placeK`): the coin map reads the run's coins only from what the releases before it gave each round, and its law
+  holds along `relK` at `gapK`.
+* **The first clause** (`law_place`, `lawAt`).
 -/
 
 @[expose] public section
@@ -704,5 +715,46 @@ theorem law_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts :
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f i sn n b s')
 
 end Along
+
+theorem law_along {g g' : Game β} (h : g = g') {Pl : R → (s : Strategy g') → Tape g' s → Tape g' s}
+    {G : Strategy g' → ℝ≥0∞} (hl : ∀ s, LawHolds g' s (fun r => Pl r s) (G s)) (s : Strategy g) :
+    LawHolds g s (fun r => along h (Pl r) s) (alongVal h G s) := by
+  subst h
+  exact hl s
+
+/-! ## The first clause -/
+
+variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+
+/-- **The coin map is uniform up to the hiding term at the period's game.** -/
+theorem law_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c))
+    (L : Locate) (K : ℕ) :
+    LawHolds (R := Fin K → FlockDeploy.Coin) (V.game θ F c) σ (fun r t => place V θ F c σ L r t)
+      (gapOf V θ F c σ L K) :=
+  law_along (game_eq V θ F c)
+    (Pl := fun r s t => placeK L r (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2 t)
+    (G := fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2)
+    (fun s => law_send _ s.1 s.2 (law_placeK L _ _ _ _ _ s.2)) σ
+
+/-- **`LawAt`**: the period's play is at most as likely, at every event, as the frame's play at a uniform tape and
+uniform run coins, plus the hiding term. -/
+theorem lawAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) : LawAt V A x θ F c σ L P := by
+  classical
+  intro E
+  have h := law_place V θ F c σ L (A.L.V.k x) (fun b => if E b then 1 else 0) fun b => by
+    by_cases hb : E b <;> simp [hb]
+  calc Verity.Game.prob E (V.game θ F c) σ
+      = prCoin fun t : Tape (V.game θ F c) σ => E (Tape.out _ σ t) := prob_eq_prCoin _ _ _
+    _ ≤ (avg fun r : Coins A x => avg fun t : Tape (V.game θ F c) σ =>
+          if E (Tape.out _ σ (place V θ F c σ L r t)) then 1 else 0) + gapOf V θ F c σ L (A.L.V.k x) := h
+    _ = prCoin (fun s : TapeOf V θ F c σ × Coins A x => E ((frame V A x θ F c σ L P).out s.1 s.2)) +
+          gapOf V θ F c σ L (A.L.V.k x) := by
+        unfold prCoin
+        rw [avg_prod, avg_swap]
+        rfl
+    _ = ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x => E ((frame V A x θ F c σ L P).out s.1 s.2)) +
+          gapOf V θ F c σ L (A.L.V.k x) := by
+        rw [prCoin_eq_ofReal_pr]
 
 end Verity.SampledTwo.CoinMap
