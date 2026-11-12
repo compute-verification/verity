@@ -3,8 +3,9 @@
 Each row is one number with its unit, over three windows: now, the last hour, and the last 24 hours. What is read:
 
   the loop's decision log   `decisions.jsonl` beside the verified queue's loop on the control pod (`vqueue_loop`): each
-                            candidate's build, its verdict as the loop judged it, its drop and why, each move of `main`, and
-                            each head it left out of a build for a conflict; and the loop's own log for the time each tick ended
+                            candidate's build, its verdict as the loop judged it, its drop and why, each move of `main`, each
+                            head it left out of a build for a conflict, and each marked head it left out of every candidate
+                            and why (`leave`); and the loop's own log for the time each tick ended
   the labels                `ready` and `reviewed` on `pr:N@HEAD` in the evidence store: a PR's mark and its land verdict
   the run directories       on every node, each run's `job.json` (its command and commit), `slot.json` (when it took a check
                             slot), `status.json` (when it ended), and for a check's shard `check-live.json`, `steps.jsonl`,
@@ -34,6 +35,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -85,10 +87,10 @@ for line in open(live + "/decisions.jsonl", errors="replace"):
     except ValueError:
         continue
     if r.get("at", "") < since or r.get("action") not in ("build", "advance", "drop", "slim", "compare", "retry", "eject",
-                                                           "conflict", "skip"):
+                                                           "conflict", "skip", "leave"):
         continue
     keep = {k: r.get(k) for k in ("action", "at", "sha", "base", "members", "heads", "why", "shadow", "done", "cancel", "check",
-                                  "graph2", "voided_why", "number")}
+                                  "graph2", "voided_why", "number", "cause")}
     if r["action"] == "conflict":      # a head that doesn't merge onto `main`: its line gives the files and no reason
         keep["why"] = "conflicts with `main` in " + ", ".join(map(str, r.get("files") or []))
     keep["why"] = (keep["why"] or "")[:400]
@@ -832,7 +834,37 @@ def parts(doc: dict) -> list[dict]:
             ready = min(v, first)
             j = min(max(judged.get(r["sha"], landed), last), landed)
             out.append({"pr": pr, "landed": landed, "total": _m(landed - mark), "review": _m(ready - mark), "to_build": _m(first - ready),
-                        "rework": _m(last - first), "check": _m(j - last), "to_main": _m(landed - j)})
+                        "rework": _m(last - first), "check": _m(j - last), "to_main": _m(landed - j),
+                        "heads": chain(restacked, head), "mark_at": mark, "ready_at": ready, "built_at": first})
+    return out
+
+
+#: the cause of a ready PR's minutes before the loop logged any line leaving its head out (`ready_causes`)
+UNLOGGED = "none logged"
+
+
+def ready_causes(decisions: list[dict], ps: list[dict]) -> Counter:
+    """The minutes of ``ps`` (`parts`) from ready to built by the cause of the loop's newest line leaving the PR's head, or a
+    head a restack made it from, out since its mark: a `leave` line's cause, or a build's `conflict` or `skip`, each held until
+    the next such line or the first candidate; `UNLOGGED` before the first."""
+    said: dict[tuple[str, str], list[tuple[float, str]]] = defaultdict(list)
+    for r in decisions:
+        if r.get("shadow") or r["action"] not in ("leave", "conflict", "skip"):
+            continue
+        cause = r.get("cause") or "" if r["action"] == "leave" else (
+            "conflict with `main`" if with_main(r) else "conflict with a PR built before it")
+        for head in r.get("heads") or []:
+            said[(str(r.get("number")), head)].append((ts(r["at"]), cause))
+    out: Counter = Counter()
+    for p in ps:
+        lines = sorted(x for h in p["heads"] for x in said.get((p["pr"], h), ()) if x[0] >= p["mark_at"])
+        at, end = p["ready_at"], p["built_at"]
+        cause = next((c for when, c in reversed(lines) if when <= at), UNLOGGED)
+        for when, c in lines:
+            if at < when < end:
+                out[cause] += _m(when - at)
+                cause, at = c, when
+        out[cause] += _m(max(end - at, 0))
     return out
 
 
@@ -1240,6 +1272,20 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
                            ("rework", "First candidate to the one it landed in", "the build of the first candidate holding the PR to "
                             "the build of the candidate `main` moved to: the rounds lost")):
         add("8", name, "", _dist([p[key] for p in ps if p["landed"] >= hour]), _dist([p[key] for p in ps]), "", how + "; PRs landed in the window")
+
+    def by_cause(since: float) -> str:
+        got = [p for p in ps if p["landed"] >= since]
+        mins = ready_causes(decisions, got)
+        total = sum(mins.values())
+        if not got or total <= 0:
+            return "none"
+        return f"{total:.0f} PR-min over {len(got)} PRs: " + ", ".join(
+            f"{c} {m:.0f} ({m / total:.0%})" for c, m in sorted(mins.items(), key=lambda kv: -kv[1]))
+
+    add("8", "Ready to built, by the loop's reason", "", by_cause(hour), by_cause(day), "",
+        "the minutes of `Ready to built` by the cause of the loop's newest line leaving the PR's head out since its mark (`leave`, "
+        f"or a build's `conflict` or `skip`), each until the next such line or the first candidate; `{UNLOGGED}` before the "
+        "first; PRs landed in the window")
     ticks = sorted(ts(t) for t in doc["control"].get("ticks") or [])
     gaps = [(b, _m(b - a)) for a, b in zip(ticks, ticks[1:])]
     v2l = [(c["landed"], _m(c["landed"] - c["verdict"])) for c in cands if c.get("landed") and c.get("verdict")]
