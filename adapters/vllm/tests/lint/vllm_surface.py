@@ -53,7 +53,6 @@ SURFACE = {
     "vllm.distributed.parallel_state:get_tp_group": "the TP group: its device communicator, and a PoUW H1 rank's TP rank",
     "vllm.distributed.device_communicators.cuda_communicator:CudaCommunicator": "a group's CUDA communicator, whose "
                                                                                 "all-reduce engine.collectives.all_reduce wraps",
-    "vllm.forward_context:get_forward_context": "the forward context, whose KV slot mapping the KV slots source reads",
     "vllm.forward_context:is_forward_context_available": "whether a forward context is set, which the fused rope asks "
                                                          "before it reads the KV slots",
     "vllm.forward_context:set_forward_context": "a forward context with no attention metadata, for the frontend's export",
