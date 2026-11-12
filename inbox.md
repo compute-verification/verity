@@ -468,3 +468,112 @@ Two gaps between the statements and the binders, both small and both for step 2 
 - `git merge-tree` against `origin/next`: not run; nothing here is offered for landing.
 - The neither-tie exponent at the deployed parameters (finding 4).
 
+[2026-11-12T19:50Z] b17108a82da2
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 11:49 AM PST, to your 11:30 AM PST line. **Tonight's timeline: the try takes 23 min 14 s from its launch to its exit, the abort job 2 min 55 s, the six tries 8 to 11 min. 20 minutes is enough for vllm's wait at any stop hour up to 10:55 PM PST. The six tries still start at 11:00 PM PST.** Nothing was run on a node for this. Marks: [read] a run's own files or code, [ran] on my VM, [derived] arithmetic on those, [argued].
+
+**Three things first**
+
+- **Only the six tries launch from `main` at `d7a5af15c9dc`.** The try and the abort job are `certside/launch.sh`, which is not on `main`: they launch from `9d477477a175`, the commit you named to vllm on NET-351 (Wed 9:15 PM PST) [read: the ref's head; `git ls-tree` of `d7a5af15c9dc` has no `certside/`].
+- **The abort job has never run as a job of its own.** Its line below is the patch's abort phase written out (`certside/job.sh` 428 to 433 at `9d477477a175`) [read]. Its exit is 1 by design, since the certifier refuses that try, and its files land in `out/`, not `out/aborts/`. Say the word and I dry-run that line once against the fake endpoint (3 minutes, no server).
+- **The six tries' line gains `--model glm-5.3` after `--`,** which my dry run's line did not have. Without it each rehearsal asks the front for `/v1/models` through the deviating relay, which speaks only the id form [read: `warden_serve.py` `rehearse`, `args.model or cs.served_model(url)`].
+
+**Sources**
+
+- W: `r20261111-160319-6d24`, Wednesday's real certifier job at `d6fef0385ece`, done, exit 0. Its try 2 is tonight's load without the prefixes (2,000 at 1.67, 64 lanes, seed 3) [read: `out/job.log`, `out/summary.json`, both tries' `deployment.json` and `warden.json`, the record's start and end].
+- V: `r20261112-023209-6ca0`, vllm's dry run of the patch at `9d477477a175` against the fake endpoint: 40 requests, then 20 aborts, done, exit 0 [read: the same files].
+- D: `r20261112-100351-b4d2`, my dry run of the six tries against the stand-in at `33faab2be81c`, done, exit 0 [read: `out/job.log`].
+- G: the traffic generator at `9d477477a175` on my VM [ran].
+
+**1. The try** (2,000 at 1.67, 64 lanes, seed 3, `MODEL` set, `ABORTS` unset, shared prefixes)
+
+| Step | Seconds | From |
+|---|---|---|
+| launch command to the job's start | 6 | W [read]: the run's id is stamped 16:03:19Z, its start is 16:03:25Z. Not in it: `launch.sh`'s read of the serving node's ssh endpoint before the id, which no record times |
+| job's start to its first connection on the server's port | 1 | W [read, argued]: the reach check began in the start's second and ended 7 s in. Two connects held 3 s each, nothing sent |
+| job's start to its first byte on the port | 11.7 | W [derived]: the watermark stream opens 5 s before the certifier's origin [read: `serve`, `Warden.run`], and the origin came 16.7 s after the start |
+| origin to the last request's end | 1,252.8 | W try 2 [read]: same arrivals tonight, the prefixes change no arrival [read: `prefixed.py`] |
+| origin to the last connection's end | 1,350 | W try 2 [read] and G [ran]: 9 windows of 150 s. The watermark stream ends at the last bucket |
+| last connection's end to the job's exit | 21.5 | W try 2 [read]: 11 s until the rehearsal returned, 10 s of check. The forward stays up, with ssh keepalives every 15 s, until the exit |
+
+- So: launch to first connection 7 s; first connection to the last connection's end 1,366 s (22 min 46 s); from there to the exit 21.5 s. Launch to exit 1,394 s (23 min 14 s) [derived].
+- Not timed anywhere: the prefix count the job prints after the rehearsal at 2,000 requests (under 1 s at 40 in V).
+
+**2. The abort job** (40 at 2 a second, seed 4, D = 1, tail 30 s, everything else as the try)
+
+| Step | Seconds | From |
+|---|---|---|
+| launch to the job's start, to the first connection, to the first byte | 6, 7, 17.7 | W [read, derived]: the same steps of the same job |
+| origin to the last request's arrival | 21.8 | G [ran]. Each connection fails one bucket after its admission [read] |
+| origin to the last connection's end | 150 | G [ran]: one window. V [read]: its abort phase had one window |
+| last connection's end to the job's exit | 2 | V [read]: about 1 s until the rehearsal returned, 1 s of check, with 20 aborts |
+
+- So: launch to first connection 7 s; first connection to the last connection's end 166 s; from there to the exit 2 s. Launch to exit 175 s (2 min 55 s) [derived].
+
+**3. The two cases**, the try launched 60 s after READY [argued: I read READY's post by polling] [all derived]
+
+| | READY 10:18:00 PM | READY 10:25:00 PM |
+|---|---|---|
+| the try's launch | 10:19:00 | 10:26:00 |
+| first connection on the server's port (no bytes) | 10:19:07 | 10:26:07 |
+| first byte (the watermark's head) | 10:19:18 | 10:26:18 |
+| first request, at the origin | 10:19:23 | 10:26:23 |
+| last request's end | 10:40:16 | 10:47:16 |
+| last byte on the server's port (the watermark's end) | 10:41:53 | 10:48:53 |
+| the job's exit; the forward's ssh flow ends on the certifier's node | 10:42:14 | 10:49:14 |
+| earliest minute a capture may stop | 10:43 PM | 10:50 PM |
+| abort job launched that minute: first connection, then first byte | 10:43:07, 10:43:18 | 10:50:07, 10:50:18 |
+
+- **For the two fixed hours:** a stop at 10:52 PM PST covers READY at 10:25:00 with 2 min 46 s after the exit I derive. A start hour of 10:20 PM (capture on from 10:15 PM, vllm's `START`) means no READY can come before the capture.
+- If READY is late past 10:25, each minute moves the try's exit one minute. A try launched after 10:28:46 PM has not exited by 10:52.
+
+**4. Is 20 minutes enough: yes.**
+
+- From the try's last byte to the abort job's first byte is the stop hour less READY less 23 min 35 s [derived]. The longest it gets is with an early READY and a late stop.
+- READY at 10:17:38 PM (Wednesday's 2 min 38 s after `START`): 10 min 47 s at a 10:52 PM stop, 13 min 47 s at 10:55 PM.
+- Add up to 5 minutes if the abort job waits for its 4 GB (`--mem-wait 300`) [read]. Wednesday's job waited 6 s in all. The worst I can name is then 15 min 47 s at 10:52 PM and 18 min 47 s at 10:55 PM.
+- So no longer wait to ask vllm for, with the stop at 10:52 PM. I would not name a stop past 10:55 PM.
+- [argued, vllm's code not read] I count vllm's silence from the try's watermark's end to the abort job's watermark's head. The reach check's connects send nothing, so I do not count them as the feed.
+
+**5. The six tries: 11:00 PM PST stands.**
+
+- With the stop at 10:52 PM the abort job exits at 10:54:55 PM and vllm's record closes 20 s after it, 10:55:15 PM [derived; the 20 s is vllm's word]. The rule tonight: launch at 11:00 PM if the record's close is posted, else when it is.
+- Their length: 478 s for the six [D, read: 69.3, 69.9, 69.0, 69.3, 70.5 and 129.4]. A try's length is its windows, one of 60 s and two for the bucket try, so the real server does not change it [argued].
+- Before the first try the job makes its python environment at the tree's lock. That took 0 s in D. I noted 2 min 41 s once on a pool node [my note of an earlier run, not re-read], and it has never run on the certifier's node [argued].
+- **Latest launch that ends by 12:10 AM PST: 11:59 PM** counting those 2 min 41 s (6 + 161 + 4 + 478 + 2 = 651 s) [derived]. I would hold to 11:55 PM.
+
+**6. The three lines.** `CERTIFIER-NODE` is the certifier's node, `USER@HOST:SSH_PORT` the serving node as ssh reaches it, `LOOPBACK` the serving node's loopback address, `KEYFILE` the tunnel key's file. None is a value.
+
+The try, from a clean checkout of `9d477477a175`:
+
+    ON=CERTIFIER-NODE PORT=18746 MODEL=glm-5.3 TRIES=1 PREFIXED=1 PREFIX_BLOCK=64 LANES=64 RATE=1.67 REQUESTS=2000 SEED=3 bash certside/launch.sh
+
+The abort job, same checkout, once the capture has stopped:
+
+    ON=CERTIFIER-NODE PORT=18746 MODEL=glm-5.3 TRIES=1 PREFIXED=1 PREFIX_BLOCK=64 LANES=64 RATE=2 REQUESTS=40 SEED=4 DELAY=1 TAIL=30 TIMEOUT=10m bash certside/launch.sh
+
+The six tries, from a clean checkout of `main` at `d7a5af15c9dc`:
+
+    research run --on CERTIFIER-NODE --project verity --source "$PWD" --cwd source \
+      --mem-gb 4 --mem-wait 300 --timeout 40m --custody-ttl 6h \
+      --env PEER_AUTHORITY=USER@HOST:SSH_PORT --env FRONT_AUTHORITY=LOOPBACK:18746 --env 'TUNNEL_KEY=~/.ssh/KEYFILE' \
+      -- bash benchmarks/network_traces/deviations.sh \
+         --requests 8 --bucket-requests 64 --rate 1.67 --max-tokens 16 --tail 30 --cell-bytes 4096 --hold-ms 500 \
+         -- --model glm-5.3 --watermark --slots 1 --bucket-ms 250 --delay 60 --lanes 64 --queue 64 --window 240 \
+            --ingress-cells 4 --ingress-buckets 16 --egress-cells 4096 --max-tokens-cap 256 --prompt-max 1024
+
+- `launch.sh` reads the serving node's ssh endpoint itself and prints no address, but its one line names both machines by their short names, so its output goes through the mask [read]. Its `ON` and `MACHINE` default to Wednesday's two machines, so `ON` is needed only if the certifier's node is another.
+- `DELAY`, `TAIL`, `RATE`, `REQUESTS` and `SEED` pass through `launch.sh` to the job [read: its list of names].
+
+**For the capture's reader**
+
+- Each certifier job opens connections on the server's port that send nothing: the reach check's, two a `certside` job on Wednesday and one for the six tries' job [read]. They are a SYN and a FIN each, in no record of the try.
+- Each job's forward is one ssh flow from the certifier's node, up from the job's start to its exit, with keepalives.
+
+**A slip of mine:** I printed one run's telemetry events in my own shell without the mask, and a line named an instance. Nothing was sent or written anywhere.
+
+**Not looked at:** vllm's server code (what it counts as a run's end or as a connection); infra's capture; the certifier's node as it is tonight (its memory, its uv cache); Wednesday's server record; how long `launch.sh`'s read of the ssh endpoint takes.
+
+NET-396 beside this: the both-paths test and the suites have waited in the research pool's line since 11:18 AM PST; your yes on the run's tree is read, and the G = 1 run launches when the both-paths test has passed.
+
+TIMER: none
+
