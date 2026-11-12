@@ -18,21 +18,29 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   record's rows a forward, so a step has the config's own forwards. `updated` must be equal as its `(MACs a token,
   upstream)` pairs, and `log` by phase, kind, op, shapes, count and MACs. The start and the steps must be the
   record's too.
+- **Attention's kernel.** The counter writes a fused attention kernel as the ops the math kernel computes attention
+  by (`flops.Counter._attention`), so a config's step holds those. A record that holds the kernel as one row is
+  rewritten the same way before it is compared (`as_math.rewrite`, on its modal structure). The row does not say
+  which gradients a backward call asked for: that is read from the record's trace where it holds one, and is
+  otherwise the entry's `partial` in `of_record.toml` (`none`, every call asks for q's, k's and v's, or
+  SUBSET:CALLS), a stated value and never a default: an entry whose record needs one and has none is refused, with
+  `as_math`'s words for what to state, and so is a record `as_math` cannot rewrite. The output says whose word the
+  ask is. A stated ask the record cannot confirm is still held: a wrong one writes products the config's step does
+  not have, or leaves out ones it has, so the comparison shows it as a difference. A `partial` whose record has no
+  fused backward row to read it for is a difference too.
 - **Why a count stands for the run.** θ here is the model's own initialisation and the rows are random tokens, on a
   CPU. The counter reads operand shapes and which weights have left θ, never a value, so it counts the step a job of
   the config takes on the start's θ and data whenever that step is one fixed graph. The capture decides that: the
   step is traced (`run.trace_step`), and an entry whose trace the capture refuses, or whose step reads a value back
   that decides what it computes, is refused here. No route says of itself that it branches on values.
-- **Expected differences.** A CPU count differs from a CUDA record in ways that are the device's (`width`,
-  `attention`, `norm`) and in AdamW's kernel, the fused one that the record's program asks torch for where a route
-  takes torch's default (`adamw`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`);
-  the output names each one that fired with the MACs on both sides. Anything else is printed as a difference, and
-  the command exits 1.
-- **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
-  model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
-  `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
-  harness did, and that count is the one compared; the output says how many products and uses that moves and that
-  the step's MACs are the same on both counts.
+- **Expected differences.** A route's CPU count differs from a program's CUDA record in ways that are the device's
+  (`width`, `norm`) and in ways that are the program's own arrangement of a computation the route
+  takes too: the loss as the rows' means over the rows kept where a route means over the tokens (`loss`), and the
+  average of the weights as one op over every tensor of the model where a route averages each tensor it trains
+  (`average`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output names
+  each one that fired with the MACs on both sides. Anything else is printed as a difference, and the command exits
+  1: a route that steps AdamW otherwise than the record's program did, in torch's default step where the program
+  asked for the fused kernel, differs, and its entry sets the route's dial for the kernel.
 - **A line of the record's own program.** A product the record's program computes and a route rightly doesn't (a
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
   count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
@@ -41,8 +49,7 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
 
-`--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted records: the harness's own count
-(`DIR/ENTRY/run.json`) and the count compared (`DIR/ENTRY/tables/run.json`).
+`--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
 """
 from __future__ import annotations
 
@@ -51,6 +58,7 @@ import collections
 import hashlib
 import json
 import math
+import re
 import sys
 import tempfile
 import tomllib
@@ -59,7 +67,7 @@ from pathlib import Path
 
 import torch
 
-from . import config, library, run, starts
+from . import as_math, config, library, run, starts
 from .model import LM
 
 HELD = Path(__file__).with_name("of_record.toml")
@@ -78,20 +86,21 @@ FAIR = ("Each config's step was counted at the model's own initialisation on ran
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
         "traced the step as one fixed graph that reads no value back, so it is the step a job of the config takes on "
         "the start's weights and data. An expected difference is named by a rule that fires on its exact case "
-        "alone: the device's, the harness's, and the fused AdamW kernel that the record's program asks torch for. "
+        "alone: the device's, and the record's program's own arrangement of a computation the route takes too. "
         "Not held: the weights, E's bytes and the loss, which only a run has.")
-#: CUDA's attention kernels beside the CPU's, which the counter prices alike (`flops.FLOP_FORMULAS`)
-ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_attention_for_cpu",
-             "_scaled_dot_product_flash_attention_backward": "_scaled_dot_product_flash_attention_for_cpu_backward"}
-#: the operands CUDA's attention backward takes after the CPU's: its dropout's seed and offset
-CUDA_ONLY_OPERANDS = [[2], []]
-#: the products of torch's unfused AdamW step on one parameter with no weight decay, each with its tensor operands
-UNFUSED_ADAMW = (("lerp_", 2), ("mul_", 1), ("addcmul_", 3), ("div", 1), ("addcdiv_", 3))
+#: the argument by which the records' programs drop rows from a step's loss: that share of a forward's rows, the ones
+#: of the highest loss, get no gradient
+DROPS_ROWS = "--trunc"
+#: the argument by which the records' programs keep an average of the weights: its horizon, a share of the steps so far
+AVERAGES = "--ema-frac"
+#: a number as a program's arguments write one
+NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
 
 
 def held(path: Path = HELD) -> dict:
-    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`, and where its record's program
-    computes lines the route rightly doesn't, `"record_only"`, those lines (`named`)."""
+    """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`; where its record holds fused
+    attention backward rows and no trace, `"partial"`, the gradients those calls asked for (`as_math.parse`); and
+    where its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`)."""
     return tomllib.loads(Path(path).read_text())["held"]
 
 
@@ -123,34 +132,66 @@ def rows_a_forward(struct: dict, ctx: int) -> int:
     return tokens.pop() // ctx
 
 
+def as_counted(struct: dict, rec: dict, said: str | None) -> tuple[dict, str | None, list[str]]:
+    """A record's step structure with each fused attention kernel's row as the ops the counter writes the kernel as
+    (`as_math.rewrite`); what the output says of that, None where the structure holds no such row; and the
+    differences. The gradients a backward row's calls asked for are the record's trace's where it holds one and
+    otherwise `said`, the entry's `partial`: a ValueError in `as_math`'s words where neither says, where the two
+    disagree and where a row can't be rewritten. A `partial` that no backward row was read for is a difference."""
+    trace = (rec.get("trace") or {}).get("rows") or []
+    log, moved, asks = as_math.rewrite(struct["log"], trace, as_math.parse(None if said is None else str(said)))
+    unread = [] if said is None or asks else [
+        f"{HELD.name} states `partial = {json.dumps(said)}` and the record's step has no fused attention backward "
+        "row to read it for"]
+    if not (moved["by"] or moved["macs"]):
+        return struct, None, unread
+    stated = f"{HELD.name}'s word (`partial`) and not the record's, which holds no trace to read it from"
+    asked = "; ".join(f"`{a['asked']}` at {at}, " + (stated if a["from"] == "--partial" else "read from its trace")
+                      for at, a in sorted(asks.items()))
+    return struct | {"log": log}, (
+        "the record holds a fused kernel as one row: compared as the ops the math kernel computes attention by, as "
+        "the counter writes the config's (`as_math`). The gradients its backward calls asked for (`none`: every "
+        f"call q's, k's and v's; SUBSET:CALLS: that many calls a step SUBSET's alone): {asked or 'it has no backward'}"
+    ), unread
+
+
 def _whole(x: Fraction):
     return int(x) if x.denominator == 1 else float(x)
 
 
-def per_row(struct: dict, ctx: int) -> dict:
-    """A step structure per row a forward: `rows`, its rows a forward; `updated`, each use's `(MACs a token, upstream,
-    bits)`; `log`, `{(phase, kind, op, shapes): [count, MACs]}` with the rows divided out of every token shape (a
-    dimension of rows x context becomes the context, a leading dimension of rows before a context becomes 1) and out
-    of the MACs of each entry whose shapes that changed. An optimizer's entries have no such shape and stay whole. A
-    `_foreach_` op's operands are sorted: their order is the order a program lists its parameters in, which is no
-    part of the step."""
+def per_row(struct: dict, shape: dict) -> dict:
+    """A step structure of a model of `shape` per row a forward: `rows`, its rows a forward; `updated`, each use's
+    `(MACs a token, upstream, bits)`; `log`, `{(phase, kind, op, shapes): [count, MACs]}` with the rows divided out of
+    every token shape and out of the MACs of each entry whose shapes that changed. A dimension of rows x context
+    becomes the context, and a leading dimension of rows before a context becomes 1. A product of attention's is
+    batched over rows x heads: a `bmm` whose every operand leads with rows x heads over a context and nothing but
+    contexts and a head's width, and that leading dimension becomes the heads. An optimizer's entries have no such
+    shape and stay whole. A `_foreach_` op's operands are sorted: their order is the order a program lists its
+    parameters in, which is no part of the step."""
+    ctx, heads = shape["ctx"], shape["n_head"]
     r = rows_a_forward(struct, ctx)
+    a_head = {ctx, shape["d_model"] // heads}
 
-    def shape(s: list) -> list:
+    def of_tokens(s: list) -> list:
         s = [ctx if d == r * ctx else d for d in s]
         return [1, *s[1:]] if len(s) > 1 and s[0] == r and ctx in s[1:] else s
+
+    def over_heads(s: list) -> bool:
+        return len(s) == 3 and s[0] == r * heads and ctx in s[1:] and set(s[1:]) <= a_head
 
     log: dict[tuple, list] = {}
     for phase, kind, op, shapes, count, macs in struct["log"]:
         was = json.loads(shapes)
-        now = [shape(s) for s in was]
+        now = ([[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
+               [of_tokens(s) for s in was])
         e = log.setdefault((phase, kind, op, json.dumps(sorted(now) if op.startswith("_foreach_") else now)), [0, 0])
         e[0] += count
         e[1] += _whole(Fraction(macs, r)) if now != was else macs
     return {"rows": r, "updated": sorted((u[0], u[1], u[4]) for u in struct["updated"]), "log": log}
 
 
-# -- the expected differences: each rule takes what it covers out of the two sides' unequal entries
+# -- the expected differences: each rule takes what it covers out of the two sides' unequal entries, `cfg` and `rec`,
+# given the start's `shape` and the record's program's arguments `args`
 
 
 def width(mine: list, theirs: list) -> tuple[dict | None, list[str]]:
@@ -174,30 +215,7 @@ def width(mine: list, theirs: list) -> tuple[dict | None, list[str]]:
         for who, only in (("config", wide), ("record", narrow)))]
 
 
-def attention(cfg: dict, rec: dict, shape: dict) -> dict | None:
-    """Attention's kernel: a CPU runs `ATTENTION`'s second names where CUDA runs its first. Fires on an entry of the
-    record's under CUDA's name beside one of the config's under the CPU's with its phase, kind, count, MACs and
-    operand shapes (`CUDA_ONLY_OPERANDS` aside)."""
-    pairs = []
-    for key in rec:
-        phase, kind, op, shapes = key
-        s = json.loads(shapes)
-        for n in (len(s), len(s) - len(CUDA_ONLY_OPERANDS)) if op in ATTENTION else ():
-            mine = (phase, kind, ATTENTION[op], json.dumps(s[:n]))
-            if n >= 0 and s[n:] in ([], CUDA_ONLY_OPERANDS) and cfg.get(mine) == rec[key]:
-                pairs.append((key, mine))
-                break
-    if not pairs:
-        return None
-    macs = sum(rec[key][1] for key, _ in pairs)
-    for key, mine in pairs:
-        del rec[key], cfg[mine]
-    return {"rule": "attention", "record_macs": macs, "config_macs": macs,
-            "what": f"the CPU's attention kernels for CUDA's, {_plural(len(pairs), 'entry', 'entries')} of the same "
-                    "phase, kind, count, shapes and MACs"}
-
-
-def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
+def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     """The norm: CUDA runs it as one fused kernel, which the counter has no price for and counts only where its gain
     is an updated weight, one MAC an element; a CPU runs it as elementwise ops, each counted. Fires on the record's
     `fwd/updated _fused_rms_norm` over a row's residual stream and a gain beside the config's `fwd/updated mul` over
@@ -233,40 +251,96 @@ def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
     return found
 
 
-def adamw(cfg: dict, rec: dict, shape: dict) -> dict | None:
-    """AdamW's kernel: the record's program asks torch for its fused kernel, one op over every parameter, which the
-    counter prices at eight multiplications a parameter element; a route takes torch's default, which is never the
-    fused kernel and on a CPU is the unfused step, whose five in-place products a parameter the counter counts as
-    they run (`UNFUSED_ADAMW`). This one is the program's choice and not the device's: a route that asked for the
-    fused kernel would step it on a CPU too. Fires on the record's one `_fused_adamw_`
-    over its parameters, their gradients and their two moments beside the config's five products once for each of
-    the same parameter shapes."""
-    key = next((k for k in rec if k[:3] == ("other", "param", "_fused_adamw_")), None)
-    if key is None:
+def stated(args: list, flag: str) -> str | None:
+    """What a program's arguments state for `flag`: the argument after it or after its `=`, None where they have no
+    such flag."""
+    for i, a in enumerate(args):
+        if a == flag:
+            return args[i + 1] if i + 1 < len(args) else ""
+        if a.startswith(flag + "="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def number(args: list, flag: str) -> float | None:
+    """The number a program's arguments state for `flag`: 0 where they have no such flag, and None where what they
+    state is no number, which no rule takes for its case."""
+    said = stated(args, flag)
+    if said is None:
+        return 0.0
+    return float(said) if NUMBER.fullmatch(said) else None
+
+
+def loss(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
+    """The loss's arrangement: a record's program may mean each row's loss over its tokens, sum the rows and divide
+    by the rows the step keeps, where a route means over a forward's tokens and scales by the forward's share of the
+    batch. Where the step drops no row the two are one value and one gradient, so this is the program's choice and
+    no other loss. Fires on the record's backward quotient over a row's tokens with its scalar quotient, forward and
+    backward, beside the config's scalar product, forward and backward: all five of one count, and neither side with
+    a line of the other's. What is checked for a dropped row: the record's program's arguments (`script_args`),
+    where the record keeps them, state no `DROPS_ROWS` but 0; with one, or with one that is no number, the rule does
+    not fire, and of a record that keeps none the output says that nothing was checked."""
+    scalar, a_row = "[[]]", json.dumps([[1, shape["ctx"]]])
+    theirs = (("bwd", "grad", "div", a_row), ("fwd", "theta", "div", scalar), ("bwd", "grad", "div", scalar))
+    mine = (("fwd", "theta", "mul", scalar), ("bwd", "grad", "mul", scalar))
+    n = rec.get(theirs[0], [0])[0]
+    if (not n or [rec.get(k) for k in theirs] != [[n, n * shape["ctx"]], [n, n], [n, n]]
+            or [cfg.get(k) for k in mine] != [[n, n]] * 2 or any(k in cfg for k in theirs)
+            or any(k in rec for k in mine)):
         return None
-    tensors = [s for s in json.loads(key[3]) if s]
-    params = tensors[:len(tensors) // 4]
-    if tensors != params * 4 or rec[key] != [1, 8 * sum(math.prod(p) for p in params)]:
+    if number(args, DROPS_ROWS) != 0:
         return None
-    want: dict[tuple, list] = {}
-    for p in params:
-        for op, operands in UNFUSED_ADAMW:
-            e = want.setdefault(("other", "param", op, json.dumps([p] * operands)), [0, 0])
-            e[0] += 1
-            e[1] += math.prod(p)
-    if any(cfg.get(k) != v for k, v in want.items()):
-        return None
-    found = {"rule": "adamw", "record_macs": rec[key][1], "config_macs": sum(v[1] for v in want.values()),
-             "what": "torch's unfused AdamW, its default on a CPU, for the fused kernel the record's program asks for, "
-                     f"over the same {_plural(len(params), 'parameter')}: {len(UNFUSED_ADAMW)} products a parameter "
-                     "element counted as they run, where the kernel is priced at 8"}
-    del rec[key]
-    for k in want:
+    checked = (f"the record's program's arguments state no {DROPS_ROWS}" if args else
+               "the record keeps no arguments of its program, so that was not checked")
+    found = {"rule": "loss", "record_macs": sum(rec[k][1] for k in theirs), "config_macs": sum(cfg[k][1] for k in mine),
+             "what": "the loss as the route's mean over a forward's tokens times the forward's share of the batch for "
+                     "the record's program's mean of each row, the rows' sum over the rows kept, "
+                     f"{_plural(n, 'time')} a step: one value and one gradient where the run drops no row ({checked})"}
+    for k in theirs:
+        del rec[k]
+    for k in mine:
         del cfg[k]
     return found
 
 
-RULES = (attention, norm, adamw)
+def average(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
+    """The average of the weights: a record's program may keep one of every tensor of the model, those it never
+    trains too, in one `_foreach_lerp_` a step, where route `ema` keeps one of each tensor it trains, a `lerp_` a
+    tensor. Fires where the record's program's arguments state an average (`AVERAGES`, a number other than 0), on the
+    record's one `_foreach_lerp_`, once a step, over tensors each beside its average and priced at one MAC an
+    element, beside the config's `lerp_` of a tensor with one of its shape, priced alike, for some of the record's
+    tensors and no other.
+    Neither side may have another `lerp_` or `_foreach_lerp_`, and the config's unequal entries no `addcmul_` or
+    `addcdiv_`: an unfused AdamW step has those and a `lerp_` of its own, which one of these could then be. The
+    record's tensors the config has none of are those the route does not train: the output counts them."""
+    name = ("other", "param")
+    theirs = [k for k in rec if k[:3] == (*name, "_foreach_lerp_")]
+    mine = {k: json.loads(k[3]) for k in cfg if k[:3] == (*name, "lerp_")}
+    if (not number(args, AVERAGES) or len(theirs) != 1 or not mine or any(k[:3] == (*name, "lerp_") for k in rec)
+            or any(k[:2] == name and k[2] in ("_foreach_lerp_", "addcmul_", "addcdiv_") for k in cfg)):
+        return None
+    left = collections.Counter(tuple(t) for t in json.loads(theirs[0][3]))
+    if any(n % 2 for n in left.values()) or rec[theirs[0]] != [1, sum(math.prod(t) * n // 2 for t, n in left.items())]:
+        return None
+    for k, operands in mine.items():
+        n, t = cfg[k][0], tuple(operands[0])
+        if len(operands) != 2 or operands[0] != operands[1] or cfg[k] != [n, n * math.prod(t)] or 2 * n > left[t]:
+            return None
+        left[t] -= 2 * n
+    trained, more = sum(cfg[k][0] for k in mine), sum(left.values()) // 2
+    untrained = (f"those {trained} and {more} more that the route does not train "
+                 f"({sum(math.prod(t) * n // 2 for t, n in left.items()):,} MACs a step): the program averages every "
+                 "tensor of the model, those it never trains too" if more else f"the same {trained}")
+    found = {"rule": "average", "record_macs": rec[theirs[0]][1], "config_macs": sum(cfg[k][1] for k in mine),
+             "what": f"the route's average of each tensor it trains, {trained} of them, an op a tensor, for the "
+                     f"record's program's in one op: {untrained}"}
+    del rec[theirs[0]]
+    for k in mine:
+        del cfg[k]
+    return found
+
+
+RULES = (norm, loss, average)
 
 
 def _plural(n: int, one: str, many: str = "") -> str:
@@ -310,18 +384,19 @@ def named(lines: list[dict], cfg: dict, rec: dict) -> tuple[list[dict], list[str
     return found, differences
 
 
-def compare(mine: dict, theirs: dict, shape: dict, lines=()) -> dict:
+def compare(mine: dict, theirs: dict, shape: dict, lines=(), args=()) -> dict:
     """The config's step (`mine`) beside the record's (`theirs`), each `per_row`'s: how many `uses` of an updated
     weight and `products` of the log are equal, the `expected` differences (`width`, `RULES`: each with what it
     covers and the MACs on each side), the `named` lines of the record's own program (`lines`: the entry's
-    `record_only`) and the `differences`, everything else."""
+    `record_only`) and the `differences`, everything else. `args` are the record's program's arguments, where the
+    record keeps them."""
     wide, differences = width(mine["updated"], theirs["updated"])
     cfg, rec = dict(mine["log"]), dict(theirs["log"])
     same = [k for k in cfg if rec.get(k) == cfg[k]]
     for k in same:
         del cfg[k], rec[k]
     expected = [wide] if wide else []
-    expected += [found for rule in RULES if (found := rule(cfg, rec, shape))]
+    expected += [found for rule in RULES if (found := rule(cfg, rec, shape, list(args)))]
     only, unnamed = named(lines, cfg, rec)
     differences += unnamed
     for k in sorted(set(cfg) | set(rec)):
@@ -350,80 +425,18 @@ class Tokens:
         return torch.randint(0, self.vocab, (n // self.rows, self.ctx + 1), generator=self.generator)
 
 
-class AsRecorded(run.Harness):
-    """The harness as the records' was (`tables`): a buffer of the model that θ doesn't hold is checked like θ's
-    weights, so a product with one is θ's."""
-
-    def register(self, model: torch.nn.Module) -> torch.nn.Module:
-        tables = {k: b for k, b in model.named_buffers() if k not in self.theta}
-        self.counter.theta_cpu = self.theta | {k: b.detach().clone() for k, b in tables.items()}
-        self.counter.register(model.state_dict(keep_vars=True) | tables)
-        self.model = model
-        self._measure(model)
-        return model
-
-
-def counted(cfg: config.Config, rows: int, out: Path, harness=run.Harness, trace: dict | None = None) -> dict:
-    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train` under `harness`, with the job's
-    trace, taken here unless `trace` is given), θ the model's own initialisation and the stream `Tokens` at the
-    record's `rows` a forward. Written to `out/run.json`."""
+def counted(cfg: config.Config, rows: int, out: Path) -> dict:
+    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train` under `run.Harness`, with the
+    job's trace), θ the model's own initialisation and the stream `Tokens` at the record's `rows` a forward.
+    Written to `out/run.json`."""
     route, shape = config.route(cfg.route), cfg.start.shape
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(shape).state_dict().items()}
-    te = harness(theta, out, start={"shape": dict(shape)}, digests=False)
+    te = run.Harness(theta, out, start={"shape": dict(shape)}, digests=False)
     with te.counter:
         model, optimizers = route.build(shape, cfg.dials)
         run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=STEPS)
-    return te.finish({"trace": trace or run.trace_step(cfg, route, model, optimizers, "cpu")})
-
-
-def _log(rec: dict, weights_as_one: bool = False) -> dict:
-    """The log of a counted record's compared step as it was counted, no rows divided out: `{(phase, kind, op,
-    shapes): [count, MACs]}`, with the forward's products of an updated weight and of θ's as one kind if asked."""
-    out: dict[tuple, list] = {}
-    for phase, kind, op, shapes, count, macs in rec["structures"][rec["steps"][STEPS - 1]["struct"]]["log"]:
-        if weights_as_one and (phase, kind) in (("fwd", "updated"), ("fwd", "theta")):
-            kind = "weight"
-        e = out.setdefault((phase, kind, op, shapes), [0, 0])
-        e[0] += count
-        e[1] += macs
-    return out
-
-
-def tables(cfg: config.Config, rows: int, out: Path, own: dict) -> tuple[dict, dict | None, list[str]]:
-    """The position tables. `run.Harness` names θ's weights alone, so its counter takes a buffer of the model that θ
-    doesn't hold for a weight the route made, and a product with one for an updated weight's; the records' harness
-    checked such a buffer like θ's weights, so in a record that product is θ's. Counts the step again as the records'
-    harness did (`AsRecorded`, into `out/tables`): the count the comparison then reads, the expected difference if it
-    fired, and the differences. Fires when the two counts differ. Its exact case: they differ in the forward's
-    products alone, some an updated weight's in the harness's own count (`own`) that are θ's in the other, the same
-    op, shapes, count and MACs over the two kinds together, so the step's MACs are equal. The two counts are set side
-    by side as counted, both at the same rows a forward: a table is no token's, so the harness's own count of its
-    uses has no one number of rows to divide out."""
-    again = counted(cfg, rows, out / "tables", AsRecorded, own["trace"])
-    a, b = _log(own), _log(again)
-    uses = [c["structures"][c["steps"][STEPS - 1]["struct"]]["updated"] for c in (own, again)]
-    if a == b and uses[0] == uses[1]:
-        return again, None, []
-    macs = [c["steps"][STEPS - 1]["macs"] for c in (own, again)]
-    if _log(own, True) != _log(again, True) or macs[0] != macs[1]:
-        return again, None, [
-            "the position tables: the harness's own count and the count with them checked like θ's weights differ "
-            f"in more than which of the forward's products are an updated weight's (the step's MACs: {macs[0]:,} "
-            f"and {macs[1]:,})"]
-    moved = [(v[0] - b.get(k, [0, 0])[0], v[1] - b.get(k, [0, 0])[1])
-             for k, v in a.items() if k[:2] == ("fwd", "updated") and b.get(k) != v]
-    return again, {"rule": "tables", "what": (
-        "the model's position tables checked like θ's weights, as the records' harness checked them, where the "
-        f"harness takes them for weights the route made: {sum(n for n, _ in moved):,} of the forward's products "
-        f"({sum(m for _, m in moved):,} MACs a step at one row a forward) are an updated weight's in the harness's own "
-        f"count and θ's here, and its own count has {len(uses[0])} uses of an updated weight for these "
-        f"{len(uses[1])}; the step's MACs are {macs[0]:,} on both counts")}, []
-
-
-#: what `run.Harness` counts otherwise than the records' harness did. Each entry counts the config's step again as
-#: theirs did, and the comparison reads that count; an entry goes when `run.Harness` counts its case as the records do
-HARNESS = (tables,)
+    return te.finish({"trace": run.trace_step(cfg, route, model, optimizers, "cpu")})
 
 
 def refusal(rec: dict) -> str | None:
@@ -442,25 +455,26 @@ def refusal(rec: dict) -> str | None:
 
 def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     """An entry beside its run of record `rec`: `facts` (what was read, as printed), the `expected` differences, the
-    `named` lines of the record's own program, the `differences`, and `refused`, why the entry's count stands for no
-    run, in which case nothing else was compared."""
+    `named` lines of the record's own program, the `differences`, and `refused`, why nothing else was compared: the
+    record's fused attention rows can't be written as the counter writes them (`as_counted`), or the entry's count
+    stands for no run (`refusal`)."""
     route, shape = config.route(cfg.route), cfg.start.shape
     r = {"entry": cfg.name, "run": h["run"], "record": h["path"], "expected": [], "named": [], "differences": [],
          "refused": None}
     struct, n = modal(rec)
-    theirs = per_row(struct, shape["ctx"])
+    try:
+        struct, attention, unread = as_counted(struct, rec, h.get("partial"))
+    except ValueError as e:
+        return r | {"refused": f"its record's fused attention rows can't be compared as the math kernel's ops: {e} "
+                               f"(what `--partial` would say is the entry's `partial` in {HELD.name})"}
+    r["differences"] += unread
+    theirs = per_row(struct, shape)
     batch, rows = cfg.budget["batch"], theirs["rows"]
     if batch % rows:
         r["differences"].append(f"the batch: the config's {batch} rows are no whole number of the record's {rows} "
                                 "rows a forward")
         return r
     mine = counted(cfg, rows, out)
-    for rule in HARNESS:
-        if refusal(mine):
-            break
-        mine, found, differences = rule(cfg, rows, out, mine)
-        r["expected"] += [found] if found else []
-        r["differences"] += differences
     if why := refusal(mine):
         return r | {"refused": why, "expected": [], "differences": []}
     start, cp, last = rec.get("start_record") or rec["start"], mine["checkpoints"][-1], rec["checkpoints"][-1]
@@ -469,8 +483,8 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                                 f"record's {start['name']} ({start['digest'][:12]})")
     if len(rec["steps"]) != cfg.budget["steps"]:
         r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {len(rec['steps'])}")
-    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape["ctx"]), theirs, shape,
-                    h.get("record_only", []))
+    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape), theirs, shape,
+                    h.get("record_only", []), rec.get("script_args") or [])
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
     found["differences"] += e_kind(kinds, last["format"])
     r["expected"] += found["expected"]
@@ -484,6 +498,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                  f"{_plural(rows, 'row')} a forward divided out"),
         ("updated", f"{found['uses']} of the record's {len(theirs['updated'])} uses of an updated weight, by MACs a "
                     "token and updated MACs upstream"),
+        *([("attention", attention)] if attention else []),
         ("log", f"{found['products']} of the record's {len(theirs['log'])} products, by phase, kind, op, operand "
                 "shapes, count and MACs"),
         ("E", e_sizes(kinds, cp["e_bytes"], last, len(rec["steps"])))]

@@ -2,7 +2,7 @@ import pytest
 from synthetic import tiny_registry, write_config
 
 from training_slowdown import calculator, config, starts
-from training_slowdown.routes import subset
+from training_slowdown.routes import ema, subset
 
 
 @pytest.fixture(scope="module")
@@ -50,6 +50,11 @@ def test_a_later_dial_left_at_its_default_is_out_of_the_digest(tmp_path, reg):
     assert written.digest == base.digest
     cosine = config.load(write_config(tmp_path / "cosine.toml", dials=dials | {"schedule": "cosine"}), reg)
     assert cosine.digest != base.digest and cosine.run()["dials"] == base.run()["dials"] | {"schedule": "cosine"}
+    unfused = config.load(write_config(tmp_path / "unfused.toml", dials=dials | {"fused": False}), reg)
+    fused = config.load(write_config(tmp_path / "fused.toml", dials=dials | {"fused": True}), reg)
+    assert unfused.digest == base.digest != fused.digest, (
+        "a job continues a kept state of its own config digest alone, so one kept without `fused` is never loaded "
+        "into the groups of a job with it")
     average = config.load(write_config(tmp_path / "average.toml", route="ema", dials=dials), reg)
     assert sorted(set(average.run()["dials"]) - set(base.run()["dials"])) == ["ema_decay"], (
         "ema's configs digest subset's nine dials and ema_decay: a dial added to it goes in its LATER")
@@ -70,7 +75,9 @@ def test_a_later_dial_left_at_its_default_is_out_of_the_digest(tmp_path, reg):
     ({"dials": {"embed": "muon"}}, "embed is adamw or opt"),
     ({"dials": {"gain_lr": -1e-3}}, "gain_lr and embed_lr are rates, or 0 for lr"),
     ({"route": "ema", "dials": {"ema_horizon": 2.0}}, r"ema_horizon is a share of the steps so far, in \[0, 1\]"),
-    ({"route": "ema", "dials": {"ema_horizon": 0.1, "ema_decay": 0.9}}, "leave ema_decay out"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.1, "ema_decay": 0.9}}, "dials ema_decay and ema_horizon say one thing"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.1, "ema_decay": ema.DIALS["ema_decay"]}}, "route ema reads one of them"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.0, "ema_decay": 0.9}}, r"its EITHER\): write one"),
     ({"budget": {"steps": 3}}, "budget has no batch"),
     ({"budget": {"steps": 0, "batch": 2}}, "isn't positive"),
     ({"target": {"gain": 1.0}}, "a gain over the start's own compute"),
@@ -112,4 +119,5 @@ def test_every_route_passes_the_screen_and_states_the_contract():
             continue
         mod = config.route(p.stem)
         assert isinstance(mod.VERSION, int) and mod.DIALS and set(getattr(mod, "LATER", ())) <= set(mod.DIALS)
+        assert all(len(set(group)) > 1 and set(group) <= set(mod.DIALS) for group in getattr(mod, "EITHER", ())), p.stem
         assert all(callable(getattr(mod, f, None)) for f in ("build", "step", "plan")), p.stem

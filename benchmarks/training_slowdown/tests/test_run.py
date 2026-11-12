@@ -1,21 +1,28 @@
+import copy
 import hashlib
 import json
+import os
+import signal
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import VERSION, config, formalism, policy, run, starts
+from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
 from training_slowdown.evaluate import Evaluator
+from training_slowdown.flops import gather_macs
 from training_slowdown.model import LM
+from training_slowdown.opnames import gemm_like
+from training_slowdown.traced import TRACED_STEPS, trace_step, traced_step
 
 V, D = 32, 16
 
@@ -139,6 +146,26 @@ def test_tokens_outside_a_step_make_the_run_invalid(tmp_path, theta):
             pass
     rec = counted(tmp_path, theta, outside)
     assert any("outside a step" in p for p in rec["invalid"])
+
+
+def test_an_output_that_computes_on_tokens_with_an_updated_weight_makes_the_unbroken_job_invalid(tmp_path, theta):
+    """A route's `output` at a job's last checkpoint is counted after the last step, in the tail. So an output that
+    takes a forward product of token data with an updated weight puts updated MACs outside a step in every job of
+    its route, stopped or not: a job continued after a stop, which holds its stopped checkpoint's output outside its
+    steps too (`run.joined`), is not invalid for that where the unbroken job is valid."""
+    def train(te):
+        m = te.load(Small())
+        te.plan(2)
+        opt = torch.optim.SGD(m.parameters(), lr=0.1)
+        te.output(lambda: m.state_dict() | {"w1.weight": m.w1.weight + 0 * m(batch(0)).sum()})
+        for t in range(2):
+            with te.step():
+                loss_of(m, batch(t)).backward()
+                opt.step()
+                opt.zero_grad()
+    rec = counted(tmp_path, theta, train)
+    assert len(rec["steps"]) == 2 and rec["tail"]["by"]["fwd/updated"] > 0
+    assert rec["invalid"] == ["tokens or updated MACs outside a step (tail)"]
 
 
 def one_step(plan):
@@ -266,6 +293,8 @@ def test_the_route_loop_trains_scores_and_encodes_from_the_config(ran):
     assert rec["invalid"] == [] and rec["sandbox"] == {"interfaces": {"lo": False}, "final_sets": {final: "empty"}}
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
+    # a config that doesn't ask for fresh windows is served every window, and its record says nothing of them
+    assert "windows" not in rec and "windows" not in rec["config"]["run"]
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]
@@ -333,7 +362,7 @@ def test_the_job_traces_its_routes_step(ran):
     assert set(tr) == {"capture", "capture_code", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k",
                        "p_match", "at", "elementwise_products", "data_dependent", "carried_scalars", "circuit"}
     assert (tr["capture"], tr["capture_code"], tr["torch"]) == (products.CAPTURE, VERSION, torch.__version__)
-    assert tr["step"] == 1 and len(rec["steps"]) == run.TRACED_STEPS
+    assert tr["step"] == 1 and len(rec["steps"]) == TRACED_STEPS
     assert tr["axes"] == {"batch": 2, "seq": 1024} and {s["tokens"] for s in rec["steps"]} == {tr["tokens"]} == {2048}
     assert tr["data_dependent"] == tr["carried_scalars"] == [] and tr["k"] == policy.CONSOLE[1]
     assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
@@ -359,6 +388,43 @@ def test_the_job_traces_its_routes_step(ran):
     assert 0 < c["affected_share"] < c["sigma"] < 1
 
 
+def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_traces(ran):
+    """The start's model rotates its queries and keys by position tables, buffers outside its state dict. They are
+    θ's to the counter as they are constants to the capture. Of the traced step's forward products of a token row
+    with a weight, the counter calls updated the ones whose weight the trace says an update reaches, and θ's the
+    rest: the same products by op and dimensions, as many, at the same MACs. A rotation by a table is θ's product, so
+    the counter's updated MACs are those products' and nothing else's, the first step, which reads θ alone, has none,
+    and no step lists a table as a weight the route made."""
+    rec, cfg = ran[0], ran[1]
+    tr, shape = rec["trace"], cfg.start.shape
+    step = rec["steps"][tr["step"]]
+    log = [row for row in rec["structures"][step["struct"]]["log"] if row[0] == "fwd"]
+    counted, traced = ({"theta": {}, "updated": {}} for _ in range(2))
+
+    def add(side: dict, kind: str, key: tuple, count: int, macs: int) -> None:
+        was = side[kind].get(key, (0, 0))
+        side[kind][key] = (was[0] + count, was[1] + macs)
+
+    for _, kind, op, shapes, count, macs in log:
+        if kind in counted and op in ("mm", "addmm"):
+            (m, k), (_, n) = json.loads(shapes)[-2:]
+            add(counted, kind, (op, m, k, n), count, macs)
+    for r in tr["rows"]:
+        if r["phase"] == "forward" and r["token_dims"] == ["m"]:
+            d = r["dims"]
+            add(traced, "updated" if r["affected"][1] else "theta", (r["op"], d["m"], d["k"], d["n"]), r["count"],
+                r["count"] * products.priced(r)["macs"])
+    assert counted == traced and counted["updated"] and counted["theta"]
+    assert step["by"]["fwd/updated"] == sum(macs for _, macs in counted["updated"].values())
+    assert {row[1] for row in log if row[2] != "mm"} <= {"theta", "act"}
+
+    table = [shape["ctx"], shape["d_model"] // shape["n_head"] // 2]
+    rotations = [row for row in log if json.loads(row[3])[-1] == table]
+    assert rotations and {(row[1], row[2]) for row in rotations} == {("theta", "mul")}
+    assert "fwd/updated" not in rec["steps"][0]["by"] and rec["steps"][0]["weights"] == {}
+    assert not [key for s in rec["steps"] for key in s["weights"] if key.startswith("new/")]
+
+
 @pytest.mark.parametrize("steps, traced", [(1, 0), (2, 1), (5, 3)])
 def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, steps, traced):
     """The traced step is the middle one of the run's last three, the second of a run of two, and the only step of a
@@ -366,7 +432,7 @@ def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, st
     cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": steps, "batch": 2}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)
-    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     assert tr["step"] == traced
     assert (tr["circuit"]["affected_share"] > 0) == (tr["circuit"]["u1_bits"] > 0) == (steps > 1)
 
@@ -384,7 +450,7 @@ def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_p
         return model.state_dict() | {"blocks.0.wo.weight": b.w_gate.weight.T @ b.w_up.weight}
 
     def trace(r):
-        tr = run.trace_step(cfg, r, *route.build(cfg.start.shape, cfg.dials), "cpu")
+        tr = trace_step(cfg, r, *route.build(cfg.start.shape, cfg.dials), "cpu")
         return tr, [x for x in tr["rows"] if x["phase"] == "forward" and not x["token_dims"]]
 
     (bare, no_rows), (traced, rows) = trace(route), trace(SimpleNamespace(step=route.step, output=output))
@@ -405,9 +471,104 @@ def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps
                                    dials={"trainable": "blocks.0.w_*", "lr": 1e-2, "opt": "muon"}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)
-    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
     assert read and all(w == [32, width] for w in read)
+
+
+COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
+
+
+def counted_and_traced(root: Path, steps: int, **over):
+    """A job's steps as it runs them (`job_counted`), and then its trace as the job takes it: the counter's record, the
+    trace, the capture's graph the trace was read from, and the model."""
+    rec, (cfg, route, model, optimizers) = job_counted(root, steps, **over)
+    return rec, *traced_step(cfg, route, model, optimizers, "cpu"), model
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
+def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
+    """What a job's trace says of a step (`traced.traced_step`: the capture's graph of it, from shapes alone) against
+    what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
+    MACs and all its MACs are equal; the trace's rows, which the slowdown's products are read from, hold exactly the
+    GEMMs' MACs; the forward's GEMMs are equal apart; and every shape the rows run is one the counter's op log ran
+    (`formalism.other_program`). At a step that reads the step before's update, and for the whole model at a run's
+    only step, which reads none: there the trained embedding is θ's and its lookup counts nothing, and from the next
+    step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
+    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
+
+    As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
+    attention by (`flops.Counter._attention`), the ones the trace holds.
+
+    The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
+    cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
+    rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
+    assert rec["invalid"] == [] and tr["step"] == min(1, steps - 1)
+    step = rec["steps"][tr["step"]]
+    assert [step[k] for k in COUNTS] == [g.tokens, g.macs, g.elementwise_macs, g.c_macs]
+    rows = work.priced(tr)["rows"]
+    assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
+    log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
+    forward = sum(r["count"] * r["macs"] for r in rows if r["phase"] == "forward" and r["token_dims"])
+    assert sum(r[5] for r in log if gemm_like(r[2])) == forward > 0
+    lookup = gather_macs("embedding", tuple(model.embed.shape), None, step["tokens"] * model.embed.shape[1])
+    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if job == "whole" and tr["step"] else [])
+    assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
+        r[5] for r in log if not gemm_like(r[2]))
+    assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
+
+
+@pytest.mark.parametrize("job", JOBS)
+def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job):
+    """A job's steps under the fused attention kernel it runs against the same job's under the math kernel, the one
+    its trace is taken under: every step's counts, its op log, its updated nodes and the weights it read, the setup's
+    and the tail's too. The fused kernel does run: the model's attention reaches the counter as one op."""
+    seen = []
+    inner = flops.Counter._attention
+
+    def spy(self, func, *rest):
+        seen.append(str(func.overloadpacket))
+        return inner(self, func, *rest)
+
+    def steps_of(rec):
+        keep = ("step", "tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "shapes", "device_macs")
+        return [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
+                for s in (rec["setup"], *rec["steps"], rec["tail"])]
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(flops.Counter, "_attention", spy)
+        fused = steps_of(job_counted(tmp_path / "fused", 3, **JOBS[job])[0])
+        kernels, seen[:] = set(seen), []
+        math = steps_of(job_counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
+    assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
+                       "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
+    assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+
+
+def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(tmp_path):
+    """The one place the two differ. A route's `output` (LoRA's: each adapted matrix with its
+    B·A merged in) is traced as the end of the measured step and counted where the harness calls it, after the
+    step's checkpoint: in the step after it, or in the tail after the last. So a run of one step traces the merge in
+    its step and counts it in its tail, and the step's counts differ by exactly the tail's; a longer run's traced
+    step holds the merge of the checkpoint before it, and the two agree (the test above)."""
+    rec, _, g, _ = counted_and_traced(tmp_path, 1, **JOBS["lora"])
+    step, tail = rec["steps"][0], rec["tail"]
+    assert tail["matmul_macs"] > 0 and tail["elementwise_macs"] > 0
+    assert [a - step[k] for a, k in zip((g.tokens, g.macs, g.elementwise_macs, g.c_macs), COUNTS)] == [
+        tail[k] for k in COUNTS]
+
+
+def test_a_trace_at_another_rank_is_not_of_the_jobs_program(tmp_path):
+    """`formalism.other_program` on a job's op log and a trace the job didn't take: LoRA at rank 3 runs shapes the
+    rank-2 job never ran (each adapter's factors and their gradients), so the grade doesn't price its rows as that
+    job's, where the job's own trace it does (the test above)."""
+    rec, *_ = counted_and_traced(tmp_path, 3, **JOBS["lora"])
+    cfg = config.load(write_config(tmp_path / "b.toml", budget={"steps": 3, "batch": 4}, route="lora",
+                                   dials=LORA | {"rank": 3}), starts.registry(tmp_path / "reg" / "starts.toml"))
+    route = config.route(cfg.route)
+    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    o = formalism.other_program(work.priced(tr)["rows"], grade.macs_log(rec, None))
+    assert o is not None and o["unmatched"] > 0 and all(3 in s for s in o["largest"]), o
 
 
 def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
@@ -454,9 +615,180 @@ def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):
             if float(model(rows[:, :-1]).sum()) > 0:
                 route.step(model, rows, optimizers, dials, t, n)
 
-    tr = run.trace_step(cfg, Branching, model, optimizers, "cpu")
+    tr = trace_step(cfg, Branching, model, optimizers, "cpu")
     assert set(tr) == {"refused"} and set(tr["refused"]) == {"reason", "op", "message"}
     assert tr["refused"]["reason"] == "dynamic_control_flow" and "reads a tensor's value" in tr["refused"]["message"]
+
+
+def test_a_step_that_deep_copies_the_model_is_recorded_as_refused_with_what_to_write_instead(tmp_path):
+    """A route's step that deep-copies its model can't be traced, and the copy would end the process that tried:
+    the trace says so before any tensor is copied, with the line and the state dict's copy the step is to take."""
+    cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+
+    class Copying:
+        @staticmethod
+        def step(model, rows, optimizers, dials, t, n):
+            was = copy.deepcopy(model)
+            route.step(model, rows, optimizers, dials, t, n)
+            return was
+
+    tr = trace_step(cfg, Copying, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    assert set(tr) == {"refused"} and (tr["refused"]["reason"], tr["refused"]["op"]) == ("deep_copy", None)
+    assert "copy the state dict instead, {k: v.detach().clone() for k, v in model.state_dict().items()}" in \
+        tr["refused"]["message"] and "in step: was = copy.deepcopy(model)" in tr["refused"]["message"]
+
+
+def test_a_processs_status_says_how_it_ended():
+    assert run.ended(-signal.SIGKILL) == "was ended by SIGKILL" and run.ended(-signal.SIGSEGV) == "was ended by SIGSEGV"
+    assert run.ended(245) == "exited with status 245" and run.ended(-200) == "was ended by signal 200"
+
+
+#: what a job's record holds of clocks: no two runs of one job agree on them
+CLOCKS = {"cpu_s", "wall_s", "gpu_s", "process_cpu_s", "process_wall_s", "children_cpu_s", "self_cpu_s"}
+
+
+def unclocked(x):
+    if isinstance(x, dict):
+        return {k: unclocked(v) for k, v in x.items() if k not in CLOCKS}
+    return [unclocked(v) for v in x] if isinstance(x, list) else x
+
+
+def test_the_routes_process_writes_its_record_before_it_traces_and_a_trace_that_raises_is_the_traces_reason(
+        tmp_path, monkeypatch):
+    """The route's process has its record on disk, whole, when the trace begins, with why there is no trace where
+    the trace goes; a trace that raises leaves that record with its error as the reason, and the process ends well.
+    A module the trace imported is still screened as the job's. In this process, the sandbox's check stood in for."""
+    reg, scratch, sneaky = tiny_registry(tmp_path / "reg"), tmp_path / "scratch", tmp_path / "written_as_it_ran.py"
+    scratch.mkdir()
+    argv = ["--config", write_config(tmp_path / "a.toml"), "--seed", 0, "--split", "search", "--out",
+            tmp_path / "out", "--starts", reg, "--device", "cpu", "--inside", scratch]
+    monkeypatch.setattr(run.sandbox, "refusals", lambda hidden: [])
+    monkeypatch.syspath_prepend(tmp_path)
+    seen = []
+
+    def trace(*a):
+        seen.append(json.loads((scratch / "run.json").read_text()))
+        sneaky.write_text("")
+        import written_as_it_ran   # noqa: F401
+        raise RuntimeError("no trace today")
+
+    monkeypatch.setattr(run, "trace_step", trace)
+    assert run.main(argv) == 0 and [p.name for p in scratch.iterdir()] == ["run.json"]
+    rec = json.loads((scratch / "run.json").read_text())
+    (before,), screened = seen, rec.pop("invalid")
+    assert before.pop("trace") == {"failed": run.UNTRACED} and rec.pop("trace") == {"failed": "RuntimeError: no trace today"}
+    assert before.pop("invalid") == [] and len(screened) == 1 and screened[0].startswith(
+        "modules the job imported break the route contract: ['written_as_it_ran (") and "written during the run" in screened[0]
+    assert unclocked(before) == unclocked(rec) and len(rec["steps"]) == 3 and rec["totals"]["macs"] > 0
+    assert [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2] and all(cp["output_sha256"] for cp in rec["checkpoints"])
+
+
+STANDIN = """#!{python}
+import os, signal, sys
+if sys.argv[1:3] != ["-m", "training_slowdown.run"]:
+    os.execv({python!r}, [{python!r}, *sys.argv[1:]])
+import training_slowdown.capture as capture
+from training_slowdown import run
+
+def ends(*a, **k):
+    {how}
+
+capture.capture_steps = ends
+sys.exit(run.main(sys.argv[3:]))
+"""
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("how, ended", [("os.kill(os.getpid(), signal.SIGKILL)", "was ended by SIGKILL"),
+                                        ("os._exit(245)", "exited with status 245")])
+def test_a_job_whose_routes_process_ends_as_it_takes_the_trace_writes_its_record_without_one(
+        ran, tmp_path, monkeypatch, capfd, how, ended):
+    """A route's process that is killed while it takes the trace, or leaves there with a status, leaves a job with
+    its record: the count, the outputs' digests and the scores of the job whose trace was taken, valid, with how the
+    process ended where the trace would be, and the job says so and exits as that job does. The route's process is
+    the job's own but for the capture, which ends the process it runs in. Slow: a job as a node runs it, and only
+    that shows the job's own process reading its child's end."""
+    standin = tmp_path / "bin" / "python"
+    standin.parent.mkdir()
+    standin.write_text(STANDIN.format(python=sys.executable, how=how))
+    standin.chmod(0o755)
+    monkeypatch.setattr(run.sys, "executable", str(standin))
+    rec, _, _, out = run_job(tmp_path / "job")
+    why = f"the route's process {ended} after it wrote the job's record"
+    assert rec["trace"] == {"failed": why} and rec["invalid"] == [] and "stopped" not in rec
+    assert f"training_slowdown: {why}: the record stands, without a trace" in capfd.readouterr().err
+    whole = ran[0]
+    assert "capture" in whole["trace"] and rec["training_slowdown"] == whole["training_slowdown"] == VERSION
+
+    def count(r):
+        return (r["totals"]["macs"], r["theta_sha256"], r["config"], r["c"], [(s["step"], s["tokens"], s["macs"], s["by"])
+                                                                             for s in r["steps"]])
+
+    def outputs(r):
+        return [(cp["step"], cp["macs"], cp["output_sha256"], cp["bpb"], cp["e_bytes"], cp.get("e_sha256"))
+                for cp in r["checkpoints"]]
+
+    assert count(rec) == count(whole) and outputs(rec) == outputs(whole) and all(cp["bpb"] for cp in rec["checkpoints"])
+    assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"]
+
+
+def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_inside_or_outside_is_entered(
+        ran, tmp_path, monkeypatch):
+    """The record of a job on a CPU names the limit its route's process set. Each of the job's processes sets it
+    itself, over whatever it was started with, before `inside` or `outside` is entered, and changes nothing else of
+    its environment; on a GPU neither changes anything, and the record's field is null."""
+    name, limit = run.CPU_ISA
+    assert (name, limit) == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16") and ran[0]["cpu_isa"] == {name: limit}
+    entered = []
+    monkeypatch.setattr(run, "inside", lambda a: entered.append((a.cpu_isa, dict(os.environ))) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: entered.append((a.cpu_isa, dict(os.environ))) or 0)
+    job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
+    for device, started_with in [("cpu", None), ("cpu", "ALL"), ("cuda", None), ("cuda:1", "ALL")]:
+        for process in ([], ["--inside", tmp_path]):
+            if started_with is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, started_with)
+            before = dict(os.environ)
+            assert run.main([*job, "--device", device, *process]) == 0
+            said, held = entered.pop()
+            assert (said, held) == (({name: limit}, before | {name: limit}) if device == "cpu" else (None, before))
+
+
+#: the route's process's interpreter: the job's own, started without the limit and with oneDNN's log on
+LOGGED = """#!{python}
+import os, sys
+if sys.argv[1:3] != ["-m", "training_slowdown.run"]:
+    os.execv({python!r}, [{python!r}, *sys.argv[1:]])
+os.environ.pop("ONEDNN_MAX_CPU_ISA", None)
+os.environ["ONEDNN_VERBOSE"] = "1"
+from training_slowdown import run
+
+sys.exit(run.main(sys.argv[3:]))
+"""
+
+
+@pytest.mark.slow
+def test_no_product_of_a_jobs_route_on_a_cpu_is_computed_by_an_amx_kernel(tmp_path, monkeypatch, capfd):
+    """A job with Muon, whose Newton-Schulz multiplies in bf16, on a CPU: oneDNN's own log of the route's process,
+    which is started without the limit, names no AMX, in the instruction set it says it uses or in a product's
+    kernel, and the record names the limit that process set. On a CPU with AMX the products are oneDNN's at the
+    limit, so it was set before the first of them. Slow: a job as a node runs it, and only oneDNN's log of that
+    process shows the limit was read in time."""
+    standin = tmp_path / "bin" / "python"
+    standin.parent.mkdir()
+    standin.write_text(LOGGED.format(python=sys.executable))
+    standin.chmod(0o755)
+    monkeypatch.setattr(run.sys, "executable", str(standin))
+    dials = {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "weight_decay": 0.05}
+    rec, _, _, _ = run_job(tmp_path / "job", dials=dials)
+    log = [line for line in capfd.readouterr().out.splitlines() if line.startswith("onednn_verbose")]
+    assert rec["invalid"] == [] and rec["cpu_isa"] == {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
+    assert not [line for line in log if "amx" in line.lower()]
+    if "amx_bf16" in Path("/proc/cpuinfo").read_text():
+        bf16 = [line.split(",")[6] for line in log if ",exec,cpu,matmul," in line and "src:bf16" in line]
+        assert bf16 and set(bf16) == {"brg_matmul:avx512_core_bf16"}
 
 
 def test_each_checkpoint_of_a_registered_start_is_scored_on_the_jobs_split(tmp_path):

@@ -47,9 +47,9 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `checked`
-                                                 # fast-forwarded to its reviewed prefix, `main` to what passed the gated steps (research/queue.py)
-  research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page, written with this agent's Cursor identity
+  research queue status|ready|judge|review|eject|vqueue|... [--shadow]  # the verified queue: candidates of ready PRs merged on `main`,
+                                                 # `main` fast-forwarded only to one with no new failure (research/queue.py, vqueue.py)
+  research goals show|set|confirm|done|remove|replace|priority|audit ...   # the Goals page, written with this agent's Cursor identity
                                                  # (research/goals.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
@@ -82,6 +82,8 @@
                                                  # each run that waited over 10 min with what it waited behind (research/run_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
+  research pods procs TARGET --comm NAME|--pid N ... [--json]   # whose a process on a machine is: each one's run, what names
+                                                 # it (cgroup, runner, session scope), the run's state and who sent it (research/scopemem.py)
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
   research notes bind LANE --branch B --worktree DIR --pod NAME   # where the lane works (successors naming a predecessor's)
   research notes status [--pods] [--stale-min 30] [--json]  # per lane: freshest of report/checkpoint/commit/uncommitted edit/pod; STALE (exit 1)
@@ -393,6 +395,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s)
+            if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
+                from . import suite_size  # noqa: PLC0415
+
+                command[(at := command.index("--")):at] = [suite_size.BUDGET_OPT, f"{budget:g}"]
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
@@ -410,7 +416,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             # mem= and this (a 450 GB run in a 193 GB slot reserves 450)
             ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
             print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
-                  "its own mem= and that", file=sys.stderr)
+                  "its own mem= and that" + (f", and gives the run {budget:g} GB to plan its processes on" if budget else ""),
+                  file=sys.stderr)
             ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
@@ -1155,7 +1162,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
-    mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if gpu and (closed := auto.closed(auto.read(Path(ns.source), cpus, node_only=True).get(auto.AUTO_NODE))):
@@ -1192,6 +1200,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
     ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
+    ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     print(f"research run --on auto: {told}", file=sys.stderr)
@@ -1201,7 +1210,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
     """`--on auto` as AUTO_KIND, of a suites.py run (named suites, `--changed REV`'s or all): the memory and time their
     `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or
-    --max-min."""
+    --max-min. A run of many suites reserves less than that memory in a pool's slot (`reserve_gb`, which `_auto_spill` hands
+    the slot); on the queue the memory is the job's cap, whole."""
     timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
     if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
         return
@@ -1211,8 +1221,8 @@ def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[st
         return
     said = []
     if ns.mem_gb is None and "mem_gb" in shape:
-        ns.mem_gb = shape["mem_gb"]
-        said.append(f"{ns.mem_gb} GB")
+        ns.mem_gb, ns.reserve_gb = shape["mem_gb"], shape.get("reserve_gb")
+        said.append(f"{ns.mem_gb} GB" + (f" ({ns.reserve_gb} of it reserved in a pool's slot)" if ns.reserve_gb else ""))
     if not timed and "max_s" in shape:
         ns.max_min = math.ceil(shape["max_s"] / 60)
         said.append(f"{ns.max_min} min")

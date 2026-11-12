@@ -258,10 +258,19 @@ EPS, ROUNDINGS = torch.finfo(torch.float32).eps, 4
 #: comes to it
 REFERENCES = {
     "l16-t20-1.1x-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-fullmuon-fe-wsd-5383": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-fullmuon-fe-wsd-5383-ema": (averaged, CLOSE),
     "l16-t20-1.1x-fullmuon-fe-wsd-ema": (averaged, CLOSE),
+    "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-ref-optim-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
     "m-t20-1.1x-fullmuon-wsd-ema": (averaged, CLOSE),
+    "m-t20-1.1x-ref-optim-1372": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-ref-optim-fullmuon": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
+    "m-t20-1.1x-shallow-depthshare-8": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
@@ -279,6 +288,8 @@ REFERENCES = {
     "s-t20-1.1x-qat-top3": (qat, CLOSE),
     "s-t20-1.1x-qat-top4": (qat, CLOSE),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-1027": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-ref-optim-747": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-961": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-fullmuon-758": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-fullmuon-841": (under(muon), CLOSE_BF16),
@@ -289,6 +300,7 @@ REFERENCES = {
     "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
     "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
 }
 
 

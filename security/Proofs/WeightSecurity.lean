@@ -5,6 +5,9 @@ public import Proofs.WeightSecurity.Deployed
 public import Proofs.WeightSecurity.Faulted
 public import Proofs.WeightSecurity.FaultedTwo
 public import Proofs.WeightSecurity.Pressure
+public import Proofs.WeightSecurity.Reg
+public import Proofs.WeightSecurity.RegPeriod
+public import Proofs.WeightSecurity.RegWitnesses
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
@@ -16,6 +19,11 @@ public import Proofs.WeightSecurity.TwoRegWitnesses
 
 /-!
 # Model weight security's proofs
+
+`Reg`: a period of one-stage windows at the committed traces, the statement `PeriodReg` in `period_undetected`'s form.
+`RegPeriod`: `PeriodReg` from each window's committed form and miss bound (`periodReg_of`), so **`CompilerPeriodReg` is
+proved** (`compilerPeriodReg`). `RegWitnesses`: its premises hold together at `twoL` (`periodReg_honest`), and
+`PeriodReg` fails at `sksL` (`periodReg_nontrivial`).
 
 `Theft`: the leakage lemma, `WeightSecurity.Guarantees.Theft`, with its witnesses at the toy instance. `Served`: the
 leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`, with its witnesses at the toy

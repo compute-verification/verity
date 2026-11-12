@@ -11,6 +11,10 @@ fnmatch, `blocks.5.*,norm`), the rest frozen.
   the optimizer itself, the embedding one of its matrices.
 - `lr`: the rate, times the schedule. `gain_lr` is the gains' own rate and `embed_lr` the embedding's (0: `lr`),
   under whichever optimizer trains them.
+- `fused`: AdamW, the model's own or the one beside `muon` or `shampoo`, steps in torch's fused kernel, one op a
+  group over every tensor of the group; false leaves the step to torch's default, which is never that kernel. Its
+  groups are then one a kind of tensor (the embedding, another matrix, a gain), so the kernel runs once a kind
+  whatever the rates; without it a group is a rate. The same update either way, in another order of rounding.
 - `schedule`: a ramp over the first `warmup` steps (a share of the steps when below 1; 0: none), times `linear`, 1
   until the last `decay` share of the steps, where it falls linearly to 0 (1: from the first step); `cosine`, half a
   cosine from 1 at the first step to 0 after the last; or `constant`, 1.
@@ -35,15 +39,25 @@ from ._optimizers import Adafactor, Lion, Muon, Shampoo
 
 VERSION = 2
 DIALS = {"trainable": "*", "opt": "adamw", "lr": 3e-4, "weight_decay": 0.0, "warmup": 0.0, "decay": 1.0, "clip": 1.0,
-         "micro_batches": 1, "store": "full", "gain_lr": 0.0, "embed_lr": 0.0, "embed": "adamw", "schedule": "linear"}
+         "micro_batches": 1, "store": "full", "gain_lr": 0.0, "embed_lr": 0.0, "embed": "adamw", "schedule": "linear",
+         "fused": False}
 #: the dials whose default is the step without them (the route contract): a config that sets none digests without them
-LATER = ("gain_lr", "embed_lr", "embed", "schedule")
+LATER = ("gain_lr", "embed_lr", "embed", "schedule", "fused")
 SCHEDULES = ("linear", "cosine", "constant")
+
+
+def adamw(groups: list[dict], dials: dict, weight_decay: float) -> torch.optim.AdamW:
+    """AdamW over `groups`, in torch's fused kernel where `fused` says so. Torch takes a stated false as a choice
+    too, and then steps a tensor at a time where its default would not, so a false dial states nothing."""
+    return torch.optim.AdamW(groups, lr=dials["lr"], betas=(0.9, 0.95), weight_decay=weight_decay,
+                             fused=True if dials["fused"] else None)
+
+
 #: `opt`'s values that train every trained tensor, the embedding included
-WHOLE = {"adamw": lambda p, lr, wd: torch.optim.AdamW(p, lr=lr, betas=(0.9, 0.95), weight_decay=wd),
-         "sgd": lambda p, lr, wd: torch.optim.SGD(p, lr=lr, momentum=0.9, nesterov=True, weight_decay=wd),
-         "lion": lambda p, lr, wd: Lion(p, lr=lr, weight_decay=wd),
-         "adafactor": lambda p, lr, wd: Adafactor(p, lr=lr, weight_decay=wd)}
+WHOLE = {"adamw": adamw,
+         "sgd": lambda p, d, wd: torch.optim.SGD(p, lr=d["lr"], momentum=0.9, nesterov=True, weight_decay=wd),
+         "lion": lambda p, d, wd: Lion(p, lr=d["lr"], weight_decay=wd),
+         "adafactor": lambda p, d, wd: Adafactor(p, lr=d["lr"], weight_decay=wd)}
 #: and those that train the matrices, beside AdamW, undecayed, on the gains (and the embedding, unless `embed` is `opt`)
 MATRICES = {"muon": Muon, "shampoo": Shampoo}
 
@@ -67,6 +81,8 @@ def plan(dials: dict) -> Plan:
         raise ValueError(f"subset: schedule is one of {', '.join(SCHEDULES)} and embed is adamw or opt")
     if dials["gain_lr"] < 0 or dials["embed_lr"] < 0:
         raise ValueError("subset: gain_lr and embed_lr are rates, or 0 for lr")
+    if dials["fused"] and dials["opt"] != "adamw" and dials["opt"] not in MATRICES:
+        raise ValueError(f"subset: fused is AdamW's kernel, and opt {dials['opt']!r} steps no AdamW")
     return Plan([(p.strip(), codec(dials)) for p in dials["trainable"].split(",") if p.strip()])
 
 
@@ -78,15 +94,17 @@ def trained(model: torch.nn.Module, dials: dict) -> list[str]:
     return names
 
 
-def groups(named: list, dials: dict) -> list[dict]:
-    """One optimizer's tensors as its groups, one group a rate and each in the model's order: the embedding at
-    `embed_lr`, another matrix at `lr`, a gain at `gain_lr`. A group states its rate twice: `lr`, which `step` scales,
-    and `initial_lr`, where torch's schedulers keep a group's own rate, which nothing writes after this."""
-    rates: dict[float, list] = {}
+def groups(named: list, dials: dict, kinds: bool = False) -> list[dict]:
+    """One optimizer's tensors as its groups, each in the model's order: the embedding at `embed_lr`, another matrix
+    at `lr`, a gain at `gain_lr`. One group a rate, or with `kinds` one a kind of those three, two kinds at one rate
+    then two groups. A group states its rate twice: `lr`, which `step` scales, and `initial_lr`, where torch's
+    schedulers keep a group's own rate, which nothing writes after this."""
+    out: dict = {}
     for n, p in named:
-        rate = dials["embed_lr" if n == "embed" else "lr" if p.ndim == 2 else "gain_lr"] or dials["lr"]
-        rates.setdefault(rate, []).append(p)
-    return [{"params": params, "lr": rate, "initial_lr": rate} for rate, params in rates.items()]
+        kind = "embed_lr" if n == "embed" else "lr" if p.ndim == 2 else "gain_lr"
+        rate = dials[kind] or dials["lr"]
+        out.setdefault(kind if kinds else rate, (rate, []))[1].append(p)
+    return [{"params": params, "lr": rate, "initial_lr": rate} for rate, params in out.values()]
 
 
 def build(shape: dict, dials: dict):
@@ -98,11 +116,11 @@ def build(shape: dict, dials: dict):
     named = [(n, p) for n, p in model.named_parameters() if n in names]
     lr, wd = dials["lr"], dials["weight_decay"]
     if dials["opt"] in WHOLE:
-        return model, [WHOLE[dials["opt"]](groups(named, dials), lr, wd)]
+        return model, [WHOLE[dials["opt"]](groups(named, dials, dials["fused"]), dials, wd)]
     under_opt = {n for n, p in named if p.ndim == 2 and (n != "embed" or dials["embed"] == "opt")}
     matrices, beside = [x for x in named if x[0] in under_opt], [x for x in named if x[0] not in under_opt]
     return model, ([MATRICES[dials["opt"]](groups(matrices, dials), lr=lr, weight_decay=wd)] if matrices else []) + (
-        [torch.optim.AdamW(groups(beside, dials), lr=lr, betas=(0.9, 0.95), weight_decay=0.0)] if beside else [])
+        [adamw(groups(beside, dials, dials["fused"]), dials, 0.0)] if beside else [])
 
 
 def schedule(dials: dict, t: int, n: int) -> float:

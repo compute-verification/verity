@@ -3,6 +3,10 @@ the model reads, each with the vendor document that states it (`sheet`, `grade`,
 measured run (`measured`, `runs`), or the run that would measure it (`gap`); the card's exact paths; its FP8 atoms'
 semantics; and the units that write registers (`[[writer]]`, with the census's joint issue rows, `[[joint]]`).
 
+A ceiling the device's card file holds (`model.card`) is read from it: its table says `card = "EXPR"`, card entries
+and numbers joined by ` * ` and ` / ` (`rate.tensor / weight.f16`), in place of its value, grade and source, and the
+SM count is the card's `sm.count`. An entry written `host:PATH` is of the host's card (`model.host`).
+
 Each derivation is read twice: on the data sheet (every rate its `sheet` value) and measured (every rate its measured
 value, and the sheet's where no run has one, which the result lists as filled).
 
@@ -42,11 +46,13 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass, field
+from fractions import Fraction
 from pathlib import Path
 
 from scipy.optimize import linprog
 
 from verity_machine_model import eps as E
+from verity_machine_model.model import card as card_of
 
 THETA = "theta.toml"
 LANES = 32
@@ -191,21 +197,70 @@ def has(data: Path) -> bool:
     return (data / THETA).is_file()
 
 
+def _reader(p: Path, cards: dict):
+    """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of its card:
+    `cards[""]` for `PATH`, `cards["host"]` for `host:PATH`) or its own `key`, `grade` and `source`."""
+    from verity.hardware.cards import number   # here: only a reader of the card needs verity
+
+    def entry(tok: str) -> tuple[str, str, dict]:
+        which, _, path = tok.rpartition(":")
+        if which not in cards:
+            raise SystemExit(f"{p}: {tok} names no card; an entry is PATH, of the device's card, or host:PATH")
+        e = cards[which]
+        file = f"verity/hardware/cards/{e['sku']}.toml"
+        for k in path.split("."):
+            e = e.get(k) if isinstance(e, dict) else None
+        if not isinstance(e, dict) or "value" not in e:
+            raise SystemExit(f"{p}: {file} has no entry {path}")
+        if e["mark"] != "ceiling":
+            raise SystemExit(f"{p}: {file} marks {path} a {e['mark']}, not a ceiling; give the number its own value, "
+                             f"grade and source here until the card file holds its ceiling")
+        return file, path, e
+
+    def read(v: dict, key: str):
+        if "card" not in v:
+            return v.get(key), v["grade"], v["source"]
+        if clash := [k for k in (key, "grade", "source") if k in v]:
+            raise SystemExit(f"{p}: {v.get('key', key)} reads the card file ({v['card']}) and also gives "
+                             f"{', '.join(clash)}; delete one")
+        x, op, sources, last = Fraction(1), "*", [], None
+        for tok in v["card"].split():
+            if tok in ("*", "/"):
+                op = tok
+                continue
+            if tok[0].isdigit():
+                y = Fraction(tok)
+            else:
+                file, path, e = entry(tok)
+                y = number(e)
+                sources.append(f"{'' if file == last else f'{file}, '}{path}: {e['source']}")
+                last = file
+            x = x * y if op == "*" else x / y
+        return (int(x) if x.denominator == 1 else float(x)), "card file", "; ".join(sources)
+
+    return read
+
+
 def theta(data: Path) -> Theta:
     p = data / THETA
     if not p.is_file():
         raise SystemExit(f"{data}: no {THETA}; the devices with one are sm_120 (data/) and sm_90")
     t = tomllib.loads(p.read_text())
-    clocks = {c: Clock(c, v["mhz"], v["grade"], v["source"], v.get("measured", ""), v.get("measured_mhz"))
+    read = _reader(p, {"": card_of(data), "host": card_of(data, "host")})
+    clocks = {c: Clock(c, *read(v, "mhz"), v.get("measured", ""), v.get("measured_mhz"))
               for c, v in t["clocks"].items()}
     rates: dict[str, Rate] = {}
     for v in t["rate"]:
         if v["key"] in rates:
             raise SystemExit(f"{p}: two rates {v['key']}")
-        rates[v["key"]] = Rate(v["key"], v["what"], v["unit"], v.get("sheet"), v.get("clock"), v.get("figure"),
-                               v["grade"], v["source"], v.get("measured"), v.get("runs", ""), v.get("gap", ""))
-    caps = {v["key"]: Capacity(v["key"], v["what"], v["value"], v["unit"], v["grade"], v["source"],
-                               v.get("measured", ""), v.get("gap", "")) for v in t["capacity"]}
+        sheet, grade, source = read(v, "sheet")
+        rates[v["key"]] = Rate(v["key"], v["what"], v["unit"], sheet, v.get("clock"), v.get("figure"),
+                               grade, source, v.get("measured"), v.get("runs", ""), v.get("gap", ""))
+    caps = {}
+    for v in t["capacity"]:
+        value, grade, source = read(v, "value")
+        caps[v["key"]] = Capacity(v["key"], v["what"], value, v["unit"], grade, source, v.get("measured", ""),
+                                  v.get("gap", ""))
     writers = tuple(Writer(v["name"], v["rate"], v["per"], v["words"], v["pipe"], dict(v.get("joint", {})))
                     for v in t.get("writer", ()))
     joints = {v["name"]: Joint(v["name"], v["other"], v["source"]) for v in t.get("joint", ())}
@@ -217,7 +272,8 @@ def theta(data: Path) -> Theta:
                                v.get("against"), v["why"], v.get("gap", ""))
     public = tuple(Public(v["impl"], v["form"], v["gps"], v["card"], v["sms"], v["mhz"], v["source"])
                    for v in t.get("public", ()))
-    th = Theta(gpu=t["gpu"], sms=t["sms"], sms_source=t["sms_source"], honest=tuple(t["honest"]),
+    sms, _, sms_source = read({"card": "sm.count"}, "sms")
+    th = Theta(gpu=t["gpu"], sms=sms, sms_source=sms_source, honest=tuple(t["honest"]),
                documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=caps,
                paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints,
                units=units, public=public, sha_mix=t.get("sha512_mix"))

@@ -513,6 +513,25 @@ def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_a
     assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
 
 
+def test_a_head_below_a_move_main_landed_is_left_out_until_it_is_crossed(env):
+    """A merge of a head based below a layout move leaves its own lines naming the paths the move retired, however clean: the
+    loop takes only a head that holds every move `main` landed, and tells the rest to cross."""
+    base = env.main()
+    renamed = env.o.change({"c.txt": None, "moved/c.txt": "c\n"})
+    tree = _git(env.o.dev, "rev-parse", f"{renamed}^{{tree}}")
+    move = _git(env.o.dev, "commit-tree", tree, "-p", base, "-m", "move c\n\nLayout-move: tools/move/x_map.toml")
+    _git(env.o.dev, "push", "-q", "origin", f"{move}:refs/dev/{move}")
+    _git(env.o.origin, "update-ref", "refs/heads/main", move)
+    env.listed(move, {})
+    below = env.o.change({"b.txt": "below\n"}, base=base)
+    env.o.gh.put(1, below)
+    crossed = env.put(2, {"d.txt": "crossed\n"})
+    loop = env.loop(policy)
+    builds = [r for r in loop.tick() if r["action"] == "build"]
+    assert [(r["members"], r["heads"]) for r in builds] == [([2], [crossed])], builds
+    assert loop.world.left[1][0] == below and loop.world.left[1][1].startswith(f"it lacks the move {move[:12]} "), loop.world.left
+
+
 @pytest.mark.parametrize("lowrisk", [False, True])
 def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_rule_builds_another_on_its_mark(env, lowrisk):
     if lowrisk:
@@ -1622,14 +1641,18 @@ def test_a_merge_of_the_old_path_s_checked_carries_a_land_as_drive_trusts_checke
     assert [r["members"] for r in recs if r["action"] == "build"] == [[1]]
 
 
-def test_wide_file_names_the_file_the_world_reads_each_tick_by_default_the_live_loop_s(monkeypatch, tmp_path):
+@pytest.mark.parametrize(("flag", "default"), [("--wide-file", Path("/data/vqueue/live/wide")),
+                                               ("--pins-file", Path("/data/drive/pins"))])
+def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_default_the_live_loop_s(monkeypatch, tmp_path,
+                                                                                                      flag, default):
     seen: list[Path | None] = []
+    attr = flag.removeprefix("--").replace("-", "_")
 
     class Built(Exception):
         pass
 
     def loop(world, *args, **kw):
-        seen.append(world.wide_file)
+        seen.append(getattr(world, attr))
         raise Built
 
     monkeypatch.setattr(L, "Loop", loop)
@@ -1638,10 +1661,10 @@ def test_wide_file_names_the_file_the_world_reads_each_tick_by_default_the_live_
     monkeypatch.setattr(Q, "GitHub", lambda slug: None)
     common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
               "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
-    for extra in ([], ["--wide-file", str(tmp_path / "wide")]):
+    for extra in ([], [flag, str(tmp_path / "file")]):
         with pytest.raises(Built):
             L.main([*common, *extra])
-    assert seen == [L.WIDE, tmp_path / "wide"] and L.WIDE == Path("/data/vqueue/live/wide")
+    assert seen == [default, tmp_path / "file"]
 
 
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
@@ -1716,7 +1739,7 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
     (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
     batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is fixed.
-    A wide PR fills its batch's cap."""
+    A wide PR fills its batch's cap, once the PR with no Lean change has gone in a batch of its own."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"security/Definitions/D.lean": "-- d\n"})
@@ -1729,15 +1752,82 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     loop.tick()
     assert [s.wide for s in seen] == [frozenset(), frozenset()]
     assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (2, True), (3, False)]
-    assert vqueue.decide(seen[-1]) == [Build((1, 2, 3), seen[-1].main, L.DEPTH)]
+    assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
+    leans = replace(seen[-1], ready=seen[-1].ready[:2])
+    assert vqueue.decide(leans) == [Build((1, 2), seen[-1].main, L.DEPTH)]
     wide.write_text("1\n\n1\n")
     loop.tick()
-    assert seen[-1].wide == {1} and vqueue.decide(seen[-1]) == [Build((1, 3), seen[-1].main, L.DEPTH)]
+    assert seen[-1].wide == {1} and vqueue.decide(replace(leans, wide=seen[-1].wide)) == [Build((1,), leans.main, L.DEPTH)]
     wide.write_text("1\n#2\n")
     with pytest.raises(Q.QueueError) as e:
         loop.tick()
     assert str(e.value) == (f"--wide-file {wide} holds '#2', which is not a PR number: write PR numbers separated by spaces "
                             "or commas") and len(seen) == 3
+
+
+def test_the_pins_file_is_read_each_tick_with_its_comments_and_a_word_that_isnt_a_pr_number_fails_the_tick(env):
+    """`--pins-file` (`World.pinned`) is read into `Snapshot.pinned` each tick as the wide file is, a `#` starting a comment
+    and blank lines skipped: none while it is missing or empty, and a word that isn't a PR number is refused, naming the
+    file, so the tick fails until it is fixed."""
+    env.put(1, {"a.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or [])
+    loop.world.pins_file = pins = env.tmp / "pins"
+    loop.tick()
+    pins.write_text("")
+    loop.tick()
+    pins.write_text("# tonight's Lean PRs\n\n12  # its goal's\n#7\n1\n")
+    loop.tick()
+    assert [s.pinned for s in seen] == [frozenset(), frozenset(), frozenset({1, 12})]
+    pins.write_text("1\n12a\n")
+    with pytest.raises(Q.QueueError) as e:
+        loop.tick()
+    assert str(e.value) == (f"--pins-file {pins} holds '12a', which is not a PR number: write PR numbers separated by spaces "
+                            "or commas") and len(seen) == 3
+
+
+@pytest.mark.parametrize("priority", [None, "", "99\n", "1\n"], ids=["none", "empty", "stale", "lean first"])
+def test_a_lean_pr_ranked_first_by_mark_time_or_the_priority_file_opens_no_batch_until_the_pins_file_names_it(env, priority):
+    """Rank is the priority file, then mark time: with none, an empty one, a stale one naming only PRs gone, or one listing
+    the Lean PR first, the Lean PR marked longest ago ranks first, and still goes in no batch while a PR with no Lean change
+    waits.  Once the pins file names it, it goes in a batch of its own, leaving that PR for the next."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
+    env.put(1, {"pkg/A.lean": "-- b\n"})
+    env.put(3, {"a.txt": "3\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or [], lean=3)
+    if priority is not None:
+        (prio := env.tmp / "priority").write_text(priority)
+        loop.world.priority_file = prio
+    loop.tick()
+    assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (3, False)]
+    assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
+    (pins := env.tmp / "pins").write_text("1\n")
+    loop.world.pins_file = pins
+    loop.tick()
+    assert vqueue.decide(seen[-1]) == [Build((1,), seen[-1].main, L.DEPTH)]
+
+
+def test_a_pinned_lean_pr_waits_for_a_candidate_with_no_lean_change_and_a_tick_building_nothing_logs_why_once(env):
+    """End to end, at most every second build is pinned: the pinned #1 goes alone on `main` (`--batch` 1); #2, pinned too,
+    waits on #1's candidate, which holds a Lean change, and with no PR with no Lean change to take, the tick builds nothing
+    and logs why (`wait`), once while that why holds; #3, with none, goes on #1's candidate, and #2 on #3's."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n", "pkg/B.lean": "-- a\n"})
+    env.put(1, {"pkg/A.lean": "-- b\n"})
+    env.put(2, {"pkg/B.lean": "-- b\n"})
+    (pins := env.tmp / "pins").write_text("1\n2\n")
+    loop = env.loop(vqueue.decide, batch=1)
+    loop.world.pins_file = pins
+    for _ in range(3):
+        loop.tick()
+    env.put(3, {"a.txt": "3\n"})
+    loop.tick()
+    loop.tick()
+    lines = [r for r in env.lines() if r["action"] in ("build", "wait")]
+    assert [(r["action"], r["members"]) for r in lines] == [("build", [1]), ("wait", []), ("build", [3]), ("build", [2])]
+    assert lines[1]["why"] == (f"nothing built: pinned with a Lean change, #2 waits while the newest candidate, "
+                               f"{lines[0]['sha'][:12]}, holds #1's Lean change, and no PR with no Lean change is ready to take")
+    assert [r["base"] for r in lines[2:]] == [lines[0]["sha"], lines[2]["sha"]]
 
 
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
@@ -3045,11 +3135,11 @@ def test_the_run_beside_a_lean_candidate_s_check_starts_with_its_check_not_with_
 
 def test_a_records_run_that_failed_drops_its_candidate_and_ejects_its_lean_member(env):
     """A records run that failed refuses its records: no records commit and no check; the candidate is dropped, its Lean
-    member ejected with the reason and out of the next batch, whose other member is built and checked at once, and nobody but
-    the ejected member's owner is told.  A push brings the Lean member back."""
-    two = env.put(2, {"b.txt": "2\n"})
+    member ejected with the reason and out of the next batch, which takes the PR with no Lean change that waited behind it
+    and is checked at once, and nobody but the ejected member's owner is told.  A push brings the Lean member back."""
     loop, records, sha, one, (built, _) = _records_loop(env)
-    assert sorted(built["members"]) == [1, 2] and built["records_first"]
+    assert built["members"] == [1] and built["records_first"]
+    two = env.put(2, {"b.txt": "2\n"})
     why = "it failed: regen-1 failed rc=1"
     records.verdicts["regen-1"] = RecordsRun(FAIL, why)
     judged, eject, drop, rebuilt = loop.tick()
@@ -3355,7 +3445,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("a lock's alone", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("take no cap (--pins-file)", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
@@ -3707,6 +3797,306 @@ def test_under_gate_check_a_red_above_a_running_candidate_drops_the_stack_above_
     assert (failed["sha"], failed["outcome"]["state"], failed["beside_cancelled"]) == (three, FAIL, ["c-10", "c-11", "c-12"])
     assert (above["sha"], above["why"], above["beside_cancelled"]) == (four, "its base failed", ["c-13", "c-14", "c-15"])
     assert (rebuilt["base"], rebuilt["members"]) == (two, [4]) and "early_red" in failed and "early_red" not in above
+
+
+#: `PLAN`'s shards of a check that takes lean-audit from its base's: every step but lean-audit
+FREE = tuple(tuple(s for s in p if s != "lean-audit") for p in PLAN)
+#: lean-audit's log of a package that failed its build: the error its culprit's Lean file names
+AUDIT = ("AUDIT /w/lean-audit-scratch-1-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+         "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n")
+
+
+def _steps(runs: Runs, sha: str) -> list[str]:
+    """The steps each launch of a shard of ``sha``'s checks was sent, in launch order."""
+    return [steps for c, _, steps, _ in runs.launches if c == sha]
+
+
+def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_from_its_base_s_check(env, monkeypatch):
+    """Three candidates stacked, one PR each.  The lowest, on `main`, runs every step.  The middle one's member changes a
+    README under security/, a Lean input of the conservative set, so it runs lean-audit too, though its base's check does.
+    The top one's changes no Lean input: its check runs every step but lean-audit, its record saying whose verdict on it it
+    takes (``lean_audit_from``)."""
+    from research.landing import AFTER_LANDING
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    readme = env.put(2, {"security/README.md": "# the Lean tree\n"})
+    env.put(3, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3)
+    _, built, _ = loop.tick()
+    one, (two, three) = built["sha"], (loop.tick()[0]["sha"] for _ in range(2))
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, c) for c in (main, one, two, three)] == [[every] * 3] * 3 + [[free] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert [started[c]["record"].get("lean_audit_from") for c in (one, two, three)] == [None, None, two]
+    assert loop.world._changed(main, readme) == {"security/README.md"}
+
+
+def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):
+    """The task graph's contract is in every audit's key (`lean_audit.CONTRACT`): the candidate on a Lean one in flight
+    whose member changes only it runs lean-audit itself, its record naming no check whose verdict it takes."""
+    from research.landing import AFTER_LANDING
+
+    env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
+    env.put(2, {"tools/verity/graph/verity_graph/contract.py": "CONTRACT = 2\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lean, top = built["sha"], loop.tick()[0]["sha"]
+    assert [_steps(runs, c) for c in (lean, top)] == [[",".join(AFTER_LANDING)] * 3] * 2
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") is None
+
+
+@pytest.mark.parametrize("path, takes", [("verity/protocols/pouw/verifier/lean/check/models.json", False),
+                                         ("verity/protocols/pouw/verifier/lean/models.json", True)])
+def test_under_gate_check_a_candidate_changing_only_a_lean_package_s_file_audits_itself_and_one_beside_it_does_not(
+        env, monkeypatch, path, takes):
+    """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
+    pouw's `check/models.json`: the candidate on a Lean one in flight, which adds that package, whose member changes only
+    such a file runs lean-audit itself, its record naming no check whose verdict it takes; one whose member changes only a
+    file beside the package's directory takes its base's."""
+    from research.landing import AFTER_LANDING
+
+    pkg = "verity/protocols/pouw/verifier/lean/check"
+    env.put(1, {f"{pkg}/lakefile.toml": 'name = "PouwCheck"\n', f"{pkg}/PouwCheck/Credit.lean": "-- a\n"})
+    env.put(2, {path: "{}\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lean, top = built["sha"], loop.tick()[0]["sha"]
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, c) for c in (lean, top)] == [[every] * 3, [free if takes else every] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert started[top]["base"] == lean and started[top]["record"].get("lean_audit_from") == (lean if takes else None)
+
+
+@pytest.mark.parametrize("first", ["its base's check", "its own"])
+def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_passes_only_on_its_base_s_verdict_on_it(
+        env, monkeypatch, first):
+    """The top candidate's check runs every step but lean-audit.  Its own check passed while its base's runs: pending, though
+    every step it ran passed.  Its base's check passed: the base advances, the top one still pending in that tick, and then
+    the top one, judged on the base's verdict on lean-audit once its base is `main`, as recorded, whichever check ended
+    first; its record keeps lean-audit as passed, so the run beside `main`, which it is now, answers for it."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lower, upper = built["sha"], loop.tick()[0]["sha"]
+    runs.end(main)
+    if first == "its own":
+        runs.end(upper, plan=FREE)
+        assert loop.tick() and env.main() == main
+        assert {c.sha: c.verdict.state for c in seen[-1].candidates} == {lower: PENDING, upper: PENDING}
+    runs.end(lower)
+    assert "advance" in _acts(loop.tick()) and env.main() == lower
+    assert {c.sha: c.verdict.state for c in seen[-1].candidates}[upper] == PENDING
+    if first != "its own":
+        runs.end(upper, plan=FREE)
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and env.main() == upper
+    rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == upper][-1]["record"]
+    assert rec["lean_audit_from"] == lower and "lean-audit" in rec["verdict"]["passed"]
+    assert loop.tick() == [] and len(runs.launches) == 9                # `main`'s check is the top candidate's
+
+
+@pytest.mark.parametrize("red", ["lean-audit", "pytest"])
+def test_under_gate_check_a_candidate_that_took_lean_audit_from_its_base_drops_with_it(env, monkeypatch, red):
+    """The top candidate's own check passed; its base's failed, on lean-audit, which the top one took from it, or on
+    pytest.  Either way the top one reads lean-audit as pending while its base is in flight, nothing taken into its record,
+    and drops as its base failed, with no outcome, so nobody of its own is blamed or capped; its member, built again on
+    `main`, runs lean-audit itself."""
+    from research.landing import AFTER_LANDING
+
+    main = env.main()
+    head = env.put(1, {"Security/Proofs/A.lean": "-- a\n"} if red == "lean-audit" else
+                   {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=2)
+    _, built, _ = loop.tick()
+    lower, upper = built["sha"], loop.tick()[0]["sha"]
+    runs.end(main)
+    runs.end(upper, plan=FREE)
+    if red == "lean-audit":
+        runs.end(lower, 1, "lean-audit", log=AUDIT)
+    else:
+        runs.end(lower, 3, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    assert {c.sha: c.verdict for c in seen[-1].candidates}[upper] == Verdict(PENDING)
+    assert not any(vqueue_slim.answers(r["record"]) for r in env.lines() if r["action"] == "slim" and r["sha"] == upper)
+    dropped = {r["sha"]: r for r in logged if r["action"] == "drop"}
+    assert (dropped[upper]["why"], dropped[upper]["outcome"], dropped[upper]["failed"]) == ("its base failed", None, [])
+    assert lower in dropped and env.withdrawn == [(1, head)]
+    rebuilt = next(r for r in logged if r["action"] == "build")
+    assert (rebuilt["base"], rebuilt["members"]) == (main, [2])
+    assert _steps(runs, upper) == [",".join(s for s in AFTER_LANDING if s != "lean-audit")] * 3
+    assert _steps(runs, rebuilt["sha"]) == [",".join(AFTER_LANDING)] * 3
+
+
+def test_under_gate_check_lean_audit_is_taken_from_the_candidate_that_ran_it_through_candidates_that_took_it(
+        env, monkeypatch):
+    """Four candidates stacked, one PR each.  The lowest one's member changes a Lean file, so its check runs lean-audit; the
+    second's and the third's change no Lean input.  The second takes lean-audit from the lowest, and so does the third,
+    built on the second, which ran none: its record and its launch's line name the lowest, whose check ran it, not its
+    base.  The fourth's member changes a Lean file, so it runs lean-audit itself, though its base took it."""
+    from research.landing import AFTER_LANDING
+
+    env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"c.txt": "1\n"})
+    env.put(4, {"Security/Proofs/B.lean": "-- b\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=4)
+    _, built, _ = loop.tick()
+    lean, (a, b, top) = built["sha"], (loop.tick()[0]["sha"] for _ in range(3))
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, c) for c in (lean, a, b, top)] == [[every] * 3, [free] * 3, [free] * 3, [every] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert [started[c]["record"].get("lean_audit_from") for c in (lean, a, b, top)] == [None, lean, lean, None]
+    assert any(f"as candidate {b[:12]}'s check, lean-audit {lean[:12]}'s: " in x for x in env.out), env.out
+
+
+@pytest.mark.parametrize("says", ["passed", "failed"])
+def test_under_gate_check_a_candidate_that_took_lean_audit_through_its_base_follows_the_check_that_ran_it(
+        env, monkeypatch, says):
+    """Three candidates stacked, one PR each: the lowest one's member changes a Lean file, the other two's none, so the top
+    one takes lean-audit from the lowest one's check, as its base did.  While that check runs, the top one is pending,
+    though every step its own check ran passed, and so is its base.  Where that check passes lean-audit, the three land in
+    turn, the top one's record keeping lean-audit as passed.  Where it fails it, the lowest one is ejected, and the two
+    above, still pending, nothing taken into their records, drop as their base failed, with no outcome, so nobody of theirs
+    is blamed or capped."""
+    main = env.main()
+    head = env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"c.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=3)
+    _, built, _ = loop.tick()
+    lean, (a, b) = built["sha"], (loop.tick()[0]["sha"] for _ in range(2))
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert [started[c]["record"].get("lean_audit_from") for c in (a, b)] == [lean, lean]
+    runs.end(main)
+    runs.end(a, plan=FREE)
+    runs.end(b, plan=FREE)
+    assert "advance" not in _acts(loop.tick()) and env.main() == main
+    assert {c.sha: c.verdict.state for c in seen[-1].candidates} == {lean: PENDING, a: PENDING, b: PENDING}
+    if says == "passed":
+        runs.end(lean)
+        for landed in (lean, a, b):
+            assert "advance" in _acts(loop.tick()) and env.main() == landed
+        rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == b][-1]["record"]
+        assert rec["lean_audit_from"] == lean and "lean-audit" in rec["verdict"]["passed"]
+        return
+    runs.end(lean, 1, "lean-audit", log=AUDIT)
+    logged = loop.tick()
+    assert {c.sha: c.verdict.state for c in seen[-1].candidates} == {lean: FAIL, a: PENDING, b: PENDING}
+    assert not any(vqueue_slim.answers(r["record"]) for r in env.lines() if r["action"] == "slim" and r["sha"] in (a, b))
+    dropped = {r["sha"]: r for r in logged if r["action"] == "drop"}
+    assert [(dropped[x]["why"], dropped[x]["outcome"], dropped[x]["failed"]) for x in (a, b)] == [
+        ("its base failed", None, [])] * 2
+    assert "eject" in _acts(logged) and lean in dropped and env.withdrawn == [(1, head)]
+
+
+def test_under_gate_check_a_candidate_takes_lean_audit_from_a_landed_one_by_the_run_beside_main_and_else_audits(
+        env, monkeypatch):
+    """The lowest candidate's member changes a Lean file, and the one on it, changing no Lean input, takes lean-audit from
+    it; the lowest lands while that one's check runs.  The candidate built next, on that one, changing no Lean input
+    either, takes lean-audit from the landed one too, whose verdict on it the run beside `main` keeps.  Once the log keeps
+    no record of that run, as a loop that lost it, the run beside `main` starts again, and a candidate built then audits:
+    nothing beside `main` keeps a verdict on lean-audit to take.  The two that took it are pending while that run runs,
+    though their own checks passed, and land on its verdict, the one that audited after them."""
+    from research.landing import AFTER_LANDING
+
+    main = env.main()
+    env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
+    env.put(2, {"b.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3)
+    _, built, _ = loop.tick()
+    lean, a = built["sha"], loop.tick()[0]["sha"]
+    runs.end(main)
+    runs.end(lean)
+    assert "advance" in _acts(loop.tick()) and env.main() == lean
+    env.put(3, {"c.txt": "1\n"})
+    b = next(r for r in loop.tick() if r["action"] == "build")["sha"]
+    env.log.write_text("".join(json.dumps(r) + "\n" for r in env.lines() if not (r["action"] == "slim" and r["sha"] == lean)))
+    env.put(4, {"d.txt": "1\n"})
+    c = next(r for r in loop.tick() if r["action"] == "build")["sha"]
+    every, free = ",".join(AFTER_LANDING), ",".join(s for s in AFTER_LANDING if s != "lean-audit")
+    assert [_steps(runs, x) for x in (lean, a, b, c)] == [[every] * 6, [free] * 3, [free] * 3, [every] * 3]
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
+    assert [started[x]["record"].get("lean_audit_from") for x in (a, b, c)] == [lean, lean, None]
+    runs.end(a, plan=FREE)
+    runs.end(b, plan=FREE)
+    runs.end(c)
+    assert "advance" not in _acts(loop.tick()) and env.main() == lean
+    runs.end(lean)
+    for landed in (a, b, c):
+        assert "advance" in _acts(loop.tick()) and env.main() == landed
+
+
+def test_under_gate_check_a_candidate_that_took_lean_audit_is_pending_while_the_check_that_ran_it_is_rerun(env, monkeypatch):
+    """The lowest candidate's member changes a Lean file, and the batch of two on it, changing no Lean input, takes
+    lean-audit from it.  The lowest one's check fails lean-audit on an error in a file its member doesn't change, as a flaky
+    audit might, so it runs again alone.  The batch's own check passed, and it reads lean-audit as pending throughout,
+    nothing taken into its record, so that failure is never its own: the rerun passes, the lowest one lands, and the batch
+    lands after it, nobody dropped, split or ejected."""
+    main = env.main()
+    env.put(1, {"Security/Proofs/B.lean": "-- b\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=2, depth=2)
+    _, built, _ = loop.tick()
+    lean = built["sha"]
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"c.txt": "1\n"})
+    built = next(r for r in loop.tick() if r["action"] == "build")
+    top = built["sha"]
+    assert built["members"] == [2, 3] and built["base"] == lean
+    runs.end(main)
+    runs.end(top, plan=FREE)
+    runs.end(lean, 1, "lean-audit", log=AUDIT)
+    logged = loop.tick()
+    assert any(r["sha"] == lean and r.get("why") == "started again: its failure is rerun" for r in logged), logged
+    assert {c.sha: c.verdict.state for c in seen[-1].candidates} == {lean: FAIL, top: PENDING}
+    runs.end(lean)
+    logged += loop.tick()
+    assert env.main() == lean and {c.sha: c.verdict.state for c in seen[-1].candidates}[top] == PENDING
+    assert not any(vqueue_slim.answers(r["record"]) for r in env.lines() if r["action"] == "slim" and r["sha"] == top)
+    logged += loop.tick()
+    rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == top][-1]["record"]
+    assert env.main() == top and "lean-audit" in rec["verdict"]["passed"]
+    assert [(r["action"], r["why"]) for r in logged if r["action"] in ("drop", "eject", "build")] == [("drop", "on main")] * 2
+    assert env.withdrawn == []
+
+
+def test_under_gate_check_on_main_red_on_lean_audit_a_candidate_that_took_it_keeps_its_failure_once_its_source_landed(
+        env, monkeypatch):
+    """`main`'s check fails lean-audit, and the lowest candidate's, whose member changes a Lean file, fails it the same way,
+    inherited: it lands.  The one on it, changing no Lean input, took lean-audit from it: pending while the lowest is in
+    flight, nothing taken into its record, then failed on the run beside `main`'s failure of it once the lowest has landed,
+    inherited too, so it lands, its record keeping that failure.  The candidate on it, whose member changes a Lean file,
+    fails lean-audit the same way: read against that record, the run beside `main` now, its failure is inherited, not its
+    own, and it lands with no rerun or ejection."""
+    main = env.main()
+    env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
+    env.put(2, {"b.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop, runs = _check(env, monkeypatch, lambda s: seen.append(s) or vqueue.decide(s), batch=1, depth=3)
+    _, built, _ = loop.tick()
+    lean, a = built["sha"], loop.tick()[0]["sha"]
+    env.put(3, {"Security/Proofs/C.lean": "-- c\n"})
+    c = next(r for r in loop.tick() if r["action"] == "build")["sha"]
+    for x in (main, lean, c):
+        runs.end(x, 1, "lean-audit", log=AUDIT)
+    runs.end(a, plan=FREE)
+    logged = loop.tick()
+    assert env.main() == lean and {x.sha: x.verdict.state for x in seen[-1].candidates}[a] == PENDING
+    assert not any(vqueue_slim.answers(r["record"]) for r in env.lines() if r["action"] == "slim" and r["sha"] == a)
+    logged += loop.tick()
+    recs = {x: [r for r in env.lines() if r["action"] == "slim" and r["sha"] == x][-1]["record"] for x in (lean, a)}
+    assert env.main() == a and recs[a]["lean_audit_from"] == lean
+    assert recs[a]["verdict"]["failed"] == recs[lean]["verdict"]["failed"] and vqueue_slim.answers(recs[a])
+    logged += loop.tick()
+    assert env.main() == c and not {"rerun", "eject"} & set(_acts(logged)) and env.withdrawn == []
 
 
 def test_under_gate_check_a_red_while_the_shards_run_with_several_suspects_is_bisected(env, monkeypatch):
@@ -4294,3 +4684,24 @@ def test_the_closure_of_what_tasks_read_is_the_walks_per_task(seed):
         assert closure.fails(i, failed) == tuple(j for j in walked if j in failed)
         assert closure.meets(i, erred) == bool(set(walked) & erred)
         assert closure.inputs(i) == _reach(tasks, envs, i, memo)
+
+
+def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypatch):
+    """A first shard's Lean audit writes its node's module index only when it ends, so a drop's cancel leaves the runs
+    `KEEP_RUNS` names running, and cancels the rest; without the file it cancels them all, and with one it can't read it
+    cancels none, refusing with the fix."""
+    cancelled = []
+    monkeypatch.setattr(L, "cancel_runs", lambda repo, ids, why: cancelled.append(list(ids)) or {})
+    keep = tmp_path / "keep-runs"
+    keep.write_text("# first shards\nr-2  # cpu-2's audit\n\n")
+    w = World(type("Q", (), {"workdir": tmp_path})(), None, None, keep_file=keep)
+    assert w.cancel_runs(["r-1", "r-2", "r-3"], "dropped") == {"r-2": f"left running: {keep} names it"}
+    assert cancelled == [["r-1", "r-3"]]
+    assert w.cancel_runs(["r-2"], "dropped") == {"r-2": f"left running: {keep} names it"} and cancelled == [["r-1", "r-3"]]
+    keep.unlink()
+    assert w.cancel_runs(["r-2"], "dropped") == {} and cancelled[-1] == ["r-2"]
+    assert L.kept_runs(None) == frozenset()
+    keep.mkdir()
+    with pytest.raises(L.QueueError, match="can't be read.*or remove it"):
+        w.cancel_runs(["r-4"], "dropped")
+    assert cancelled[-1] == ["r-2"]
