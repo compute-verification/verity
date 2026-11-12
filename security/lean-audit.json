@@ -3912,6 +3912,14 @@
      "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
     ]
    },
+   "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX": {
     "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails",
     "meets": [
@@ -12132,6 +12140,9 @@
     "reads": []
    },
    "type_hash": "196e6f2701cbab3465fe7f07ad01cc4bb6f385d3d01b8dfa60ab2a8d643eeef0"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX_fails": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.CompiledTwo.Exfil_fails": {
    "owner": "@proofs",
