@@ -89528,3 +89528,19 @@ under 0.2% (entry 2: the page hash modeled at 0.036% to 0.045% of a card), 3 bit
 - [run] The ready line says the diff's size was "read at 12:39Z" and the try's log "read at 12:41Z". I read neither time from the clock: both came from my note of the earlier turn. Every other time in it was read with `date -u`.
 - [run] Read again at 13:31Z: `git diff --stat 5456b937e7e5 2308c3b05d46` is 2 files, 27 insertions, 6 deletions (`PROTOCOL.md` 12 lines, `Salts.lean` 21); the merge base with `origin/main` is `5456b937e7e5`; two commits, `2759d3b38e` and `2308c3b05d`.
 - [run] Read again at 13:31Z, the try `r20261112-123955-9615`'s log: "lean exit 0 in 2 s" and "axiom probe: no theorems in it"; its `status.json`: done, rc 0, 12:40:18Z to 12:40:32Z.
+
+## MEMBERS, Thu 12 Nov 13:32Z: ending my turn on PRF-585's suites; the two merge-trees previewed clean of PRF-585's own stops
+
+**Waiting on** (more than 20 minutes, so I end here):
+- `r20261112-110753-e3ca`: 62 of 69 passed, none failed; `verity-vllm` at 71% at my 13:29Z fetch. [guess] it passes `verity-vllm` about 14:05Z. Its cut is 15:08Z.
+- `r20261112-132105-80e5` (vy-nebius-cpu-5): the six suites `e3ca` has not started, same head `0429a81f9848`, in its own clone. It is on `verity-flock`, its first. [guess] ends about 14:45Z.
+- The lever's: `r20261112-122425-2767` (49 of 60 passed, none failed, `verity-vllm` among them; [guess] about 15:00Z) and `r20261112-122420-e765` (records, on `security`'s `--update`; [guess] about 14:45Z).
+
+**The ready line, previewed** [run, `git merge-tree --write-tree --name-only`, nothing merged into the branch]. At PRF-585's local head `ebae5323c1` (the three commits and the records commit):
+- against `main` (`3498d4ad6546`): clean, both locks by the merge driver.
+- against lean's landing (`f3837f57d113`): 23 files stop, every one of them among the 31 where `main` itself stops against it. Two are files PRF-585 changes, `benchmarks/one_stage/a5.py` and `Spot/tests/test_difftest.py`: one conflict hunk each, the same bytes as `main`'s own hunk there. `OneStageZk.lean`, `KsScope.lean`, `proofs.py` and `test_a5_case_v2.py` merge with no hunk.
+- I run both again at the head after the merge of `main`, as you said, before I open.
+
+**When woken:** if `e3ca` or `80e5` has all six plus `verity-vllm` passed: merge `main` once, both merge-trees, push, open PRF-585's pull request unmarked, the ready line here. Then the lever's the same way on PRF-585's new head when `2767` and `e765` pass.
+
+**Needs your ruling:** nothing blocks. One choice is open for PRF-586's code (13:22Z): a value that is both a root's port and a `registered` value, held to both trees or refused.
