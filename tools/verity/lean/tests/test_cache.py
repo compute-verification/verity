@@ -1703,7 +1703,7 @@ def test_a_dependency_whose_name_lean_escapes_counts_as_fetched(tmp_path):
     (tmp_path / "lake-manifest.json").write_text(json.dumps({"packages": [
         {"name": "«doc-gen4»", "type": "git"}, {"name": "Arklib", "type": "git"}, {"name": "security", "type": "path"}]}))
     (tmp_path / ".lake" / "packages" / "Arklib").mkdir(parents=True)
-    assert not C.fetched_deps(tmp_path)
+    assert not C.fetched_deps(tmp_path) and C.unfetched(tmp_path) == ["doc-gen4"], "named as its directory is"
     (tmp_path / ".lake" / "packages" / "doc-gen4").mkdir()
-    assert C.fetched_deps(tmp_path)
+    assert C.fetched_deps(tmp_path) and C.unfetched(tmp_path) == []
     assert C.unescape("«doc-gen4»") == "doc-gen4" and C.unescape("Arklib") == "Arklib"
