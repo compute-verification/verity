@@ -1091,6 +1091,70 @@ def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_p
     assert run(out)[0] == 1 and json.loads((tmp_path / "result.json").read_text())["validation"]["status"] == "failed"
 
 
+def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: str = "prod", ours: str = "prod-record") -> list[dict]:
+    """The measurements of the run's result.json once the report of a job with the cost line ``c`` is declared in it,
+    where the benchmark's cost step wrote its own and an earlier report one under the metric's id."""
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
+    (tmp_path / "out").mkdir(exist_ok=True)
+    (tmp_path / "result.json").write_text(json.dumps({
+        "schema": P.RESULT, "run_id": "r-1", "validation": {"status": "passed"},
+        "measurements": [{"name": S.AGENTIC, "value": 0.5}, {"name": "vllm/prod-serving-cost-glm53", "value": 9.0}]}))
+    r = {"cost": c, "tokens": P.not_measured("no replay ran"), "load": S.AGENTIC, "commit": "c" * 40, "run": "r-1",
+         "arms": {"stock": stock, "again": None, "ours": ours}}
+    assert P.declare(tmp_path / "out", r, tmp_path / "out" / "replay-compiled") == tmp_path / "result.json"
+    return json.loads((tmp_path / "result.json").read_text())["measurements"]
+
+
+def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_where_it_stands(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/metrics.toml names, the
+    figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
+    and the arms are at the same settings. Where it does not, the result holds no entry under the id."""
+    theirs = {"name": S.AGENTIC, "value": 0.5}
+    # three lifetimes an arm whose costs agree: the cost stands and is under the target
+    c, own = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
+    assert (c["stands"], c["metric"], c["verdict"]) == (True, "vllm/prod-serving-cost-glm53", "under")
+    got = declared(tmp_path, monkeypatch, c)
+    assert got == [theirs, {
+        "name": "vllm/prod-serving-cost-glm53", "value": own["value"], "unit": "percent of stock's serving time",
+        "better": "lower", "target": 1.0, "ci95": own["ci95"], "verdict": "under", "load": S.AGENTIC, "stock": "prod",
+        "ours": "prod-record", "lifetimes": 3, "commit": "c" * 40, "run": "r-1"}]
+    assert P._pct(c["value"]) == f"{got[1]['value']:+.2f}%" == "+0.52%"
+    # one lifetime an arm: the benchmark's own cost stands as a value with no interval, and so does the line's
+    ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
+    by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-record": sessions_arm("prod-record", ours)}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    got = declared(tmp_path, monkeypatch, c)
+    assert [(x["name"], x["value"]) for x in got] == [(S.AGENTIC, 0.5), ("vllm/prod-serving-cost-glm53", 0.5)]
+    assert (got[1]["ci95"], got[1]["verdict"], got[1]["lifetimes"]) == (None, "not shown", 1)
+    # the arms at other settings: the figure is not our changes' cost, and the entry an earlier report wrote is dropped
+    assert declared(tmp_path, monkeypatch, c | {"settings_differ": ["the context limit"]}) == [theirs]
+    # the arms did not do the same work: the benchmark's own cost does not stand, nor does the line
+    by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["measured"] and not c["stands"] and declared(tmp_path, monkeypatch, c) == [theirs]
+    # another model, or arms other than the recipe's: no metric of this benchmark's
+    by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.94
+    other = {n: a | {"model_id": "moonlight"} for n, a in by.items()}
+    c = P.cost(tmp_path, other, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] is None and declared(tmp_path, monkeypatch, c) == [theirs]
+    by["prod-again"] = sessions_arm("prod-again", [2.0] * 6)
+    c = P.cost(tmp_path, by, "prod-again", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] is None
+    assert declared(tmp_path, monkeypatch, c, stock="prod-again") == [theirs]
+    # a load that is not a sessions load: its figure is none of the benchmark's measurements
+    stock = [300.0, 301.0, 299.0, 300.5, 299.5, 300.0]
+    bench_arm(tmp_path / "chat", "prod", {"chat@16": stock})
+    bench_arm(tmp_path / "chat", "prod-record", {"chat@16": [x / 1.004 for x in stock]})
+    c = P.cost(tmp_path / "chat", {a: S.arm_metrics(tmp_path / "chat" / a) for a in ("prod", "prod-record")}, "prod",
+               "prod-record", None, "chat", 1.0)
+    assert c["measured"] and c["metric"] == "vllm/prod-serving-cost-glm53" and not c["stands"]
+    assert declared(tmp_path, monkeypatch, c) == [theirs]
+    # nor is a cost that was not measured
+    assert declared(tmp_path, monkeypatch, P.not_measured("prod did not serve load agentic")) == [theirs]
+
+
 def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
     assert all(a in S.ARMS for a in P.PROD + P.TODAY) and all(S.ARMS[a].published for a in P.PROD)

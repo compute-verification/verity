@@ -52,7 +52,8 @@ was served, naming each differing request and its first position, and where a re
 failure, and the last line counts the lines that are measured.
 
 Under research run, where OUT is the run's own out/, the run's result.json names what the report rests on among its
-artifacts (`declare`: the report's two files and the replay's record).
+artifacts (`declare`: the report's two files and the replay's record), and holds the cost of ours over stock at vLLM's
+published settings under the model's metric id where it stands as a measurement (`measurement`, `METRICS`).
 
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
@@ -88,6 +89,10 @@ PROD = ("prod", "prod-again", "prod-record")
 TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
 TARGET = 1.0
+#: by model, as the benchmark names it: the id its cost at vLLM's published settings (`PROD`'s ours over its stock) is
+#: recorded under in a run's result.json (`measurement`; benchmarks/metrics.toml), and that measurement's unit
+METRICS = {"glm53": "vllm/prod-serving-cost-glm53"}
+UNIT = "percent of stock's serving time"
 #: the keys of a checkpoint's config.json that bound its context, the smallest of which is the model's own limit
 CONTEXT_KEYS = ("max_position_embeddings", "n_positions", "max_seq_len", "seq_length", "max_sequence_length",
                 "max_seq_length", "seq_len")
@@ -620,9 +625,13 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     pair its unit too: stock again over stock where a twin of stock was served, else stock's own lifetimes, each
     second one over the one before it. On another load the cost is the one over the passes taken as independent, the
     noise floor is ``again`` over ``stock`` measured the same way, and there is no verdict. ``leaves_out_zero`` says
-    whether the floor's own interval leaves out 0: stock then differs from stock. Not measured where an arm did not
-    serve the load, where an arm left requests unserved (the arms then served different tokens), where the
-    benchmark's own cost refuses the arms, or where the corpus client's arrivals did not saturate stock."""
+    whether the floor's own interval leaves out 0: stock then differs from stock. ``stands`` says whether the cost
+    stands as a measurement, as the benchmark says it of its own (`serve_tax.result_of`): on a sessions load alone,
+    whose cost is the benchmark's own; on another the figure is none of the benchmark's measurements. ``metric`` is
+    the id it is recorded under (`METRICS`), for ours and stock at vLLM's published settings; None for other arms.
+    Not measured where an arm did not serve the load, where an arm left requests unserved (the arms then served
+    different tokens), where the benchmark's own cost refuses the arms, or where the corpus client's arrivals did not
+    saturate stock."""
     missing = [a for a in (stock, ours) if a not in by or not reps_of(by[a], load)]
     if missing:
         return not_measured(f"{', '.join(missing)} did not serve load {load}")
@@ -633,7 +642,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             f"{a} left {n} requests unserved" for a, n in unserved.items() if n))
     served = max(len(a.get("lifetimes") or [1]) for a in (ref, mine))
     lives = {"pairs": len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1])), "served": served, "ci95": None}
-    verdict = NOT_SHOWN
+    verdict, stands = NOT_SHOWN, False
     if load in S.bench_loads(ref):
         c = S.serving_cost(ref, mine, load)
         if c is None:
@@ -653,6 +662,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
                 return not_measured(f"the benchmark's own cost on a sessions load is of {own['load'] if own else 'none'}, "
                                     f"not of {load}: a job serves one sessions load", how=how)
             same, value, verdict, n = own["same_work"], _frac(own["value"]), VERDICTS[own["verdict"]], own["noise_floor"]
+            stands = S.result_of(own)[0]
             both = dict(zip((stock, ours), (own["sides"]["reference"], own["sides"]["arm"])))
             lives = {"pairs": own["lifetimes"], "served": served, "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
                      "each": own["by_lifetime"] and [{**x, "value": _frac(x["value"])} for x in own["by_lifetime"]],
@@ -686,7 +696,8 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     return {"measured": value is not None, "value": value, "passes": {"value": c["value"], "ci95": c.get("ci95")},
             "how": how, **({} if value is not None else {"why": "an arm served no token in some rep"}),
             "lifetimes": lives, "noise_floor": noise or None, "target": target, "same_work": same,
-            "verdict": NOT_SHOWN if same is False else verdict}
+            "verdict": NOT_SHOWN if same is False else verdict, "stands": stands,
+            "metric": METRICS.get(mine.get("model_id")) if (stock, ours) == (PROD[0], PROD[2]) else None}
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -840,11 +851,26 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
     return [str(f.relative_to(out.parent)) for f in files if f.is_file()]
 
 
+def measurement(r: dict) -> dict | None:
+    """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
+    cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
+    cost (`UNLIKE`). None otherwise."""
+    c = r["cost"]
+    if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
+        return None
+    life = c["lifetimes"]
+    return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "better": "lower", "target": c["target"],
+            "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
+            "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
+            "run": r["run"]}
+
+
 def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     """Under research run, where ``out`` is the run's own out/: the run's result.json names `outputs` among its
-    artifacts, so a reader finds them as the run's files without listing its record. A result the benchmark's cost
-    wrote stays as it is with them added; a job that has none, one that served ours alone, gets one whose validation
-    is the tokens line's. None for an out/ that is not the run's, which is another job's read again."""
+    artifacts, so a reader finds them as the run's files without listing its record, and holds the cost under its
+    metric id where it stands (`measurement`), and no entry under that id where it does not. A result the benchmark's
+    cost wrote stays as it is with them added; a job that has none, one that served ours alone, gets one whose
+    validation is the tokens line's. None for an out/ that is not the run's, which is another job's read again."""
     run_dir = SHARED.RESEARCH_RUN_DIR
     if not run_dir or out.resolve() != (Path(run_dir) / "out").resolve():
         return None
@@ -857,6 +883,9 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
                        "detail": next(x for x in text(r).splitlines() if x.startswith("tokens:"))},
         "measurements": [], "measurement_files": [], "artifacts": []}
     doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, replay_dir)})
+    m = measurement(r)
+    doc["measurements"] = [*(x for x in doc.get("measurements") or () if x.get("name") not in METRICS.values()),
+                           *([m] if m else [])]
     tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
     os.replace(tmp, f)

@@ -29,3 +29,14 @@ better = "lower"
 command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
 every = "7d"
 goal = "network/period-bound-checked"
+
+[[metric]]
+id = "vllm/prod-serving-cost-glm53"
+title = "GLM-5.3 served at vLLM's production settings: its serving cost over stock vLLM"
+owner = "vllm"
+unit = "percent of stock's serving time"
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 4 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+floor = 1
+goal = "vllm/production-vllm-reproducible"
