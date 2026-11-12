@@ -44,9 +44,10 @@ own and changes with it.
 - **`verity_machine_model.lean_headline`**, sm_120's headline instances as exact data, which `lean-headline` writes as
   Lean: `instance()` and `measured()`, with `stars`, `load`, `mload`, `price`, `coef`, `branches` and the constants
   its `__all__` lists. `benchmarks/pouw/lean_headline.py` gives the same names to the files that load that path.
-- **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data, which
-  `benchmarks/pouw/lean_headline_dc.py` writes as Lean: `reading(family, vector, full, q)` with `FAMILIES` and `SM90`,
-  and the constants its `__all__` lists.
+- **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data:
+  `reading(family, vector, full, q)` with `FAMILIES` and `SM90`, and the constants its `__all__` lists; and
+  **`verity_machine_model.lean_headline_dc`**, which `lean-headline` writes them as Lean with: `render_measured`,
+  `write` and `main`. `benchmarks/pouw/lean_headline_dc.py` gives both modules' names to the files that load that path.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -83,7 +84,7 @@ uv run machine-model eps --table          # every design, one line each
 uv run machine-model eps --table --credit floor --operands floor --lookups
 uv run machine-model eps --device sm_89 --table --credit floor --operands floor
 uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
-uv run machine-model lean-headline [--check]   # write sm_120's headline instances as Lean, or check the committed ones
+uv run machine-model lean-headline [--check]   # write every family's headline instances as Lean, or check them
 uv run machine-model redteam [DESIGN]     # the binding and near-binding rows, and how far each can move
 uv run machine-model margin [DESIGN]      # the worst core with every near measured row moved 2% at once
 uv run machine-model --device sm_90 sheet [--eps]   # the data sheet's lines against the census
@@ -99,8 +100,10 @@ the vector fails its check or doesn't reproduce a published number.
 
 Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
 two exceptions: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
-`rows.csv` ("Adopt a probe's census"), and `lean-headline` without `--check` writes the Lean files of sm_120's
-headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and `Sm120Measured.lean`.
+`rows.csv` ("Adopt a probe's census"), and `lean-headline` with neither `--check` nor `--numbers` writes the Lean
+files of the families' headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and
+`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Accounting/HeadlineDc/`; `--json F` writes the
+data-centre families' readings to `F`.
 
 ## Layout
 
@@ -173,6 +176,8 @@ headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and `S
   `write(check)`.
 - `dc_reading`: the H200's and B200's headline instances, exact: `reading(family, vector, full, q) -> Reading` on a
   family's data sheet and on its measured vector, whose certificate an LP over the Lean menu finds (`certificate`).
+- `lean_headline_dc`: those readings' Lean files: `render_sheet`, `render_measured` and `render_twin`, and
+  `write(check, numbers, json_to)`.
 - `redteam`: from a device's census alone, how much room an adversary has to beat a row: `audit`, `margin_audit`,
   `least_filler`, `uniform_gap`.
 - `theta`: the card table: `theta(data) -> Theta`, `check`, and what it derives on the data sheet and measured
