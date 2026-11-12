@@ -62,7 +62,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+# Importing any module of this package runs this file first, so it loads only what each of them loads already; the
+# verifier's modules, the commitment trees and this package's own modules load when a method below needs them.
+from verity.circuits.codec import decode_program, program_digest
+from verity.circuits.defs import REGISTRY
+from verity.circuits.program import Program
+
+if TYPE_CHECKING:
+    from verity.commitments import CommitmentDomain, Opening, VerificationLimits
+
+    from .anchors import Anchors, Ledger
+    from .plan import Layout, Plan
 
 #: the schemes that have a circuit here, each with the permutation P it pins (as `ncp-v1` and `ncp-v1-shift24` do)
 SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
@@ -88,22 +100,16 @@ class Traced:
 
     def digest(self) -> str:
         """The call Program's digest, as the verifier builds it."""
-        from verity.circuits.codec import program_digest
-        from verity.circuits.program import Program
-
         return program_digest(Program(self.definition))
 
     def check_descriptor(self, descriptor: dict) -> None:
         """Refuse a descriptor that is not the verifier's own call Program."""
-        from verity.circuits.codec import decode_program, program_digest
-        from verity.circuits.defs import REGISTRY
-
         from verity.protocols.pouw.verifier.protocol import DomainError
 
         if program_digest(decode_program(descriptor, REGISTRY)) != self.digest():
             raise DomainError(f"{self.scheme}: the descriptor is not the verifier's Program for {self.shape}")
 
-    def call_args(self, anchors, a: Sequence[int], s: Sequence[int], ys: Sequence[int], c0s: Sequence[int],
+    def call_args(self, anchors: Anchors, a: Sequence[int], s: Sequence[int], ys: Sequence[int], c0s: Sequence[int],
                   t: Sequence[int], bias: Sequence[int]) -> list:
         """The call's flat inputs, its anchored ones built from the verifier's ``anchors`` (`anchors.Anchors`)."""
         anchors.check(self.shape)
@@ -111,12 +117,12 @@ class Traced:
         return [list(a), list(s), list(ys), list(c0s), list(t), list(bias), an["salt"], an["forward"], an["position"],
                 an["weight"], an["rowids"]]
 
-    def weight_args(self, anchors, b: Sequence[int]) -> list:
+    def weight_args(self, anchors: Anchors, b: Sequence[int]) -> list:
         anchors.check(self.shape)
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
-    def draw(self, law, anchors, ledger):
+    def draw(self, law, anchors: Anchors, ledger: Ledger) -> Plan:
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
         ``ledger``, the execution phase's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
@@ -134,7 +140,8 @@ class Traced:
         index = anchors.call_index
         return plan.draw(ledger.key, self.layout(), law, index if isinstance(index, tuple) else (index,))
 
-    def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
+    def check_openings(self, plan: Plan, anchors: Anchors, ledger: Ledger, domain: CommitmentDomain,
+                       openings: Sequence[Opening], limits: VerificationLimits | None = None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
         the call's commitment as the execution phase's receipt lists it (`Ledger.commitment`, by call index), never one supplied
         with the openings. ``domain`` is the verifier's row domain for the call (`audit.rows_domain`)."""
@@ -150,7 +157,7 @@ class Traced:
         if not all(verify_opening(domain, commitment, o, ROW_SCHEMA, limits) for o in openings):
             raise DomainError("an A row does not open under the call's commitment on the window's receipt")
 
-    def check_link(self, plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
+    def check_link(self, plan: Plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
         """Refuse a call whose weight-side inputs differ from the weight Program's outputs at a column strip the plan opens
         (its ("y", strip) leaves, the sampled tiles' column strips): the call's committed inputs opened against the weight
         Program's output commitment. The inputs are the call's parameters the weight Program returns, in its
@@ -169,7 +176,7 @@ class Traced:
                     raise DomainError(f"{self.scheme}: the call's {names[i]} at column strip {cs} is not the weight Program's")
             at += t.n * per
 
-    def check_layout(self, offered) -> None:
+    def check_layout(self, offered: Layout) -> None:
         """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
         and its closure are the partition's, never a prover's, since the Layout theorems hold only for the execution phase's own."""
         from verity.protocols.pouw.verifier.protocol import DomainError
@@ -177,7 +184,7 @@ class Traced:
         if offered != self.layout():
             raise DomainError(f"{self.scheme}: the layout is not the verifier's for {self.shape}")
 
-    def layout(self):
+    def layout(self) -> Layout:
         """The closure samples' layout (`plan.layout`), from the shape alone."""
         from . import plan
 
