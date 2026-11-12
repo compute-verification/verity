@@ -9,6 +9,7 @@ from __future__ import annotations
 import errno
 import fcntl
 import functools
+import logging
 import multiprocessing
 import os
 import signal
@@ -58,6 +59,17 @@ def _held(build_dir: str) -> bool:
     finally:
         os.close(fd)
     return False
+
+
+class _Logged(logging.Handler):
+    """Each record the package logs while this handler is on its logger, as `LEVEL logger: message`."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lines: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(f"{record.levelname} {record.name}: {record.getMessage()}")
 
 
 def _loader(**kw):
@@ -210,8 +222,15 @@ def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp
         seen["held"] = _held(kw["build_directory"])      # flock is per open file: a second descriptor sees the loader's hold
         return None
 
+    logged = _Logged()
+    logging.getLogger("verity_vllm").addHandler(logged)
     nj.jit_load("ext", src, parent=parent, loader=loader, **VERSIONS)
     assert seen == {"lock_present": False, "held": True}
+    removed = (f"WARNING verity_vllm.commit.committer.native_jit: [jit] removing {bd}/lock: no live build holds "
+               f"{bd}.build-lock, so a killed build left it")
+    assert logged.lines == [removed]
+    nj.jit_load("ext", src, parent=parent, loader=loader, **VERSIONS)
+    assert len(logged.lines) == 1, "a load that finds no torch lock logs nothing"
 
 
 @_isolated
@@ -247,7 +266,7 @@ def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
     p.start()
     with open(started) as f:
         assert f.readline().strip() == "held"
-    assert _held(bd)
+    assert _held(bd) and p.pid is not None
     os.kill(p.pid, signal.SIGKILL)
     p.join()
     assert p.exitcode == -signal.SIGKILL and not _held(bd), "the kernel drops the lock with its holder"

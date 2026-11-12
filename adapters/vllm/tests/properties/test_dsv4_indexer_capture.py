@@ -8,20 +8,24 @@ from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
+import contextlib
 import copy
+import hashlib
 import json
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import dsv4_indexer_capture_gpu as D4
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_indexer_twin as T
 from verity.definitions.registry import dsa
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import dsv4_indexer_capture_gpu as D4
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 IDX, X = D4.I, D4.X
 SPECIAL = (0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x3F800000, 0xBF800000, 0x3F000000, 0x7F7FFFFF,
@@ -454,8 +458,6 @@ def test_the_ptx_scan_wants_one_specialization_per_kernel(tmp_path) -> None:
 
 
 def test_the_sources_must_be_the_ones_read(tmp_path, monkeypatch) -> None:
-    import hashlib
-
     assert len(D4.SOURCES) == 7 and all(len(h) == 64 for h in D4.SOURCES.values())
     (tmp_path / "models").mkdir()
     for name, text in (("a.py", "read\n"), ("b.py", "read too\n")):
@@ -541,10 +543,6 @@ def test_each_case_has_its_own_verdict() -> None:
 
 def _stub_vllm(monkeypatch, gate: dict) -> None:
     """vLLM's config module, the device gate and the environment stood in for; the env `run` sets restored after the test."""
-    import contextlib
-    import sys
-    import types
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -599,7 +597,5 @@ def test_the_gate_failure_stops_the_run(tmp_path, monkeypatch, capsys) -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), D4._verdict(_doc()))
     assert REGISTRY["dsv4_indexer_capture"].schema == D4.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

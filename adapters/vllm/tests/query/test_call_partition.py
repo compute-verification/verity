@@ -15,14 +15,17 @@ returned computing gate (`cut.CallGates.last` = n), and the rule is held to Call
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
-
 from verity.circuits import partition_object as PO
 from verity.circuits.cut import call_scope
 from verity.circuits.layout import resolve
+
+from tests.program.predict.test_naming import TRACES, phi_of
+from tests.program.predict.test_steps import TINY
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict.naming import named_program, write_build
@@ -30,9 +33,6 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.query.program_view import ProgramView, from_instances
 from verity_vllm.query.required import population
 from verity_vllm.query.units import Policy, ValueRef, partition_by, required_values
-
-from tests.program.predict.test_naming import TRACES, phi_of
-from tests.program.predict.test_steps import TINY
 
 SERVED = next(c for c in TRACES["cases"] if c["trace"] == "int8-LP3_T2_greedy")
 

@@ -22,6 +22,7 @@ inputs = [
     "verity/settings.py",
     "adapters/vllm/verity_vllm/__init__.py",
     "adapters/vllm/verity_vllm/engine/__init__.py",
+    "adapters/vllm/verity_vllm/engine/handle.py",
     "adapters/vllm/verity_vllm/engine/hooks.py",
     "adapters/vllm/verity_vllm/engine/step_trace.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",

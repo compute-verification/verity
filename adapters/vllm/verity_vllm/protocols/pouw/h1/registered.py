@@ -41,15 +41,19 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
+from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch
 from verity.commitments.merkle import merkle_depth
-from verity.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
-                                           sha512_row_seg_segments, sha512_row_v2_prefix)
-from verity.commitments.crypto import chacha20
+from verity.commitments.rowleaf import (
+    ROW_SEG_BYTES,
+    sha512_row_seg_prefix,
+    sha512_row_seg_segment_prefix,
+    sha512_row_seg_segments,
+    sha512_row_v2_prefix,
+)
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
@@ -306,7 +310,8 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     public = row_salts if isinstance(row_salts, PublicSalts) else None
     given = None if row_salts is None or public is not None else bytes(row_salts)
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
-    if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n) or public is not None and len(public) != n:
+    if (given is not None and len(given) != 192 * n or fixed is not None and len(set(fixed)) != n
+            or public is not None and len(public) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
     if rows is not None and len(rows) != n:
         raise ValueError(f"{len(rows)} rows held for a value of {n}")

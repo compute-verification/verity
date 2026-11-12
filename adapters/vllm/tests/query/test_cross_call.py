@@ -7,14 +7,13 @@ import copy
 
 import numpy as np
 import pytest
-
 from verity.circuits.cut import separable
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import prims as P
 from verity.definitions import cross_call as X
 from verity.definitions import word as W
+from verity.definitions.registry import prims as P
 
 F32 = P.F32
 
@@ -121,6 +120,7 @@ def test_the_hierarchical_analysis_is_the_gate_by_gate_one(fam, statics):
 def test_the_manifest_build_runs_the_check(tmp_path):
     import gzip
     import json
+
     from verity_vllm.pipeline import manifest as M
     inst = _honest()
     (tmp_path / "instances.json.gz").write_bytes(gzip.compress(json.dumps(inst).encode()))

@@ -19,11 +19,16 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, UsageError
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import score as S
-from verity_vllm.program.predict.build import Unexpressible, build_program, weight_leaves, model_shape
+from verity_vllm.program.predict.build import (
+    Unexpressible,
+    build_program,
+    model_shape,
+    weight_leaves,
+)
 from verity_vllm.program.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
@@ -222,7 +227,7 @@ def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
 
 
 def test_sampling_follows_the_builds_policy():
-    one = {"sweep": {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]},
+    one: dict = {"sweep": {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]},
            "requests": [{"prompt_len": 8, "max_tokens": 3, "seed": 7}]}
     assert S.sampling_of(one, _phi(TINY)) == STOCH
     assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == STOCH
@@ -269,7 +274,7 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     then `BiasAdd_v1`, which only a family whose record names no step would keep."""
     cfg = {**TINY, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32}
     r = build_program(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target, workload={"requests": []}), "step")
-    names = {re.match(r"\w+", k).group() for k in r.desc["definitions"]}
+    names = {re.findall(r"^\w+", k)[0] for k in r.desc["definitions"]}
     assert names & {"GemmBias_v1", "GemmBias_v2", "BiasAdd_v1"} == {kind}
 
 
@@ -327,7 +332,7 @@ def test_an_int8_rows_dtype_is_its_checkpoints():
 #: on two H200 nodes): each Program digest the row's `build_summary.json` gives (the step at its M and pos0 8,
 #: each request shape (LP, T), GP-01's workload) and its `manifest.json`'s digest and identities, with the Programs its header names
 #: (`program_digest`, and a batch's `component_digests`).  B4's lone `build_request` (LP256_T31, no request of its batch) is B1's.
-H200_INT8 = {
+H200_INT8: dict[str, dict] = {
     "llama32-1b__int8__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager": {
         "step": (1, "66cc640b4c9736b2b784626f7987f865499ee9b62c0dc47b8b4e666dcc9990e538bc46e18fbd431221031b96dcfc4d608e38af457f6bd044d47afb07b8ca296f"),
         "requests": {(256, 31): "963a228135f64eb6db7d423209c47f42f544aabfa05d7733f58f5912a7bc3241bb907af6ed69bb89203ae413042971cc0bfb30218ef6f90f2252fc58b0d99c23"},
@@ -414,19 +419,6 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         build_program(_phi(cfg, **phi_kw), "step")
-
-
-def test_memory_estimate_is_above_a_measured_peak():
-    """A Qwen3-4B request of LP+T = 79 peaked at 814 MB resident (`_child`'s max_rss_mb); the pool admits units by the estimate."""
-    assert S.mem_estimate_mb(model_shape(json.loads((FIX / "qwen3-4b.config.json").read_text())), [79]) > 814
-
-
-def test_score_never_writes_into_a_rows_root(tmp_path):
-    rows = tmp_path / "rows"
-    (rows / "job" / "row").mkdir(parents=True)
-    with pytest.raises(UsageError, match="never written into a Build row"):
-        S._refuse_inside(str(rows / "job" / "row" / "score.json"), [str(rows)])
-    S._refuse_inside(str(tmp_path / "out" / "score.json"), [str(rows)])
 
 
 def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():

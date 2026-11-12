@@ -61,11 +61,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.verifier.audit import Workload, rows_domain
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
-from verity.protocols.pouw.prover.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
+from verity.protocols.pouw.prover.schemes.pearl_c_device import (
+    H100,
+    SM120,
+    SM120_UNPROMOTED,
+)
+from verity.protocols.pouw.verifier.audit import Workload, rows_domain
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.verifier.serving import (
     SERIAL,
     Schedule,
@@ -73,19 +77,12 @@ from verity.protocols.pouw.verifier.serving import (
     hash_format,
 )
 
-from verity_vllm.protocols.pouw.pearl_c.passes import EpochCalls, call_index, pass_dir, room
-from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
-from verity_vllm.protocols.pouw.pearl_c.lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
-    SCHEDULES,
-    SIDE_GROUPS,
-    SIDE_IO,
-    STEP_GROUPS,
-    LaneCalls,
-    admitted,
-    rotated,
-    schedule_of,
-    splits,
-    whole_options,
+from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+from verity_vllm.protocols.pouw.pearl_c.graphs import (
+    GRAPH_ROWS,
+    SLOT_BYTES,
+    GraphCalls,
+    _Graph,
 )
 from verity_vllm.protocols.pouw.pearl_c.host import (
     SaltCoins,
@@ -111,12 +108,29 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import (
     Kernel,
     source_digest,  # noqa: F401 - kept importable here, as callers read it
 )
+from verity_vllm.protocols.pouw.pearl_c.lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
+    SCHEDULES,
+    SIDE_GROUPS,
+    SIDE_IO,
+    STEP_GROUPS,
+    LaneCalls,
+    admitted,
+    rotated,
+    schedule_of,
+    splits,
+    whole_options,
+)
 from verity_vllm.protocols.pouw.pearl_c.manifest import (  # noqa: F401 - the manifest's readers, kept importable here, as callers read them
     manifest_epoch,
     manifest_schema,
     session_head,
 )
-from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+from verity_vllm.protocols.pouw.pearl_c.passes import (
+    EpochCalls,
+    call_index,
+    pass_dir,
+    room,
+)
 from verity_vllm.protocols.pouw.pearl_c.screen import (
     excluded,
     screen,
@@ -272,6 +286,11 @@ def _steps(pipe: Any, names: tuple[str, ...]) -> list[Any]:
     return [by[x] for x in names if x in by]
 
 
+def _leading(names: list[str], group: str) -> int:
+    """How many of ``names``, from the first, are steps of ``group`` (`STEP_GROUPS`)."""
+    return len(list(itertools.takewhile(lambda x: STEP_GROUPS[x] == group, names)))
+
+
 def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None:
     kernel.dev.stream = stream
     try:
@@ -309,7 +328,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
-        self.time_gemm, self.events, self.omit = time_gemm, [], frozenset()
+        self.time_gemm, self.omit = time_gemm, frozenset()
+        self.events: list[tuple[Any, Any]] = []      # each timed GEMM's start and end events (`_timed`)
         self.torch_stream = _TorchStream()
         self.roots, self.coins, self.opening = dict(roots), coins, opening
         self.epoch = epoch_of(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
@@ -349,7 +369,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             self._slots_copied: Any = None     # the event after the last whole-forward slot upload
             self._predicted: dict[int, tuple] = {}
         self.shapes: dict[tuple[int, int, int], _Shape] = {}
-        self.pipes: dict[tuple[int, int, frozenset, bool], tuple[Any, list[Any]]] = {}
+        self.pipes: dict[tuple, tuple[Any, list[Any], list[Any]]] = {}
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "coins": coins.to_json(), "salt_opening": opening.to_json(),
@@ -374,7 +394,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
-        self.cur: _Pass | None = None
+        self.cur = _Pass(None)              # no pass yet: `begin` reads it for the epoch's calls so far (`pass_base`)
         self.begin()
 
     # ---- the schedule -----------------------------------------------------------------------------------------------
@@ -391,9 +411,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             self.main = _Lane(self.device, "greatest", 2)
         while schedule.side and len(self.sides) < schedule.ring:    # stand-ins 1, then 3, 4, … past the main lane's 2
             self.sides.append(_Lane(self.device, schedule.side_priority, 1 if not self.sides else 2 + len(self.sides)))
+        main = self.main if schedule.main_priority == "greatest" else None
         self.details["schedule"] = {
             "name": schedule.name, "side": sorted(schedule.side), "ring": schedule.ring,
-            "main": self.main.priority if schedule.main_priority == "greatest" else "the caller's",
+            "main": main.priority if main is not None else "the caller's",
             "side_lane": self.sides[0].priority if schedule.side else None}
 
     def join_sides(self, stream: Any = None) -> None:
@@ -526,12 +547,11 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                 steps[at] = self._timed(steps[at])
             lane = {x: "side" if STEP_GROUPS[x] in side_groups else "main" for x in present}
             main = [f for x, f in zip(present, steps, strict=True) if lane[x] == "main"]
-            aside = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
-            pipe.lane_cuts = tuple(len(list(itertools.takewhile(lambda x, g=g: STEP_GROUPS[x] == g, [x for x in present
-                                                                                                     if lane[x] == ln])))
+            side = [f for x, f in zip(present, steps, strict=True) if lane[x] == "side"]
+            pipe.lane_cuts = tuple(_leading([x for x in present if lane[x] == ln], g)
                                    for ln, g in (("main", "row_seeds"), ("side", "a_tree")))
             pipe.main_names = tuple(x for x in present if lane[x] == "main")
-            self.pipes[key] = (pipe, main, aside)
+            self.pipes[key] = (pipe, main, side)
         return self.pipes[key]
 
     def _timed(self, f):
@@ -605,7 +625,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         if self.hashing:
             size = pipe.size["tree_a"]
             if not scattered:
-                self.copy(self.roots_buf.data_ptr() + self.nb * (index - cur.base), sh.buf("tree_a").data_ptr() + size - self.nb,
+                self.copy(self.roots_buf.data_ptr() + self.nb * (index - cur.first), sh.buf("tree_a").data_ptr() + size - self.nb,
                           self.nb, self.stream())
             flags = self.flag_buf[cur.flag_rows:cur.flag_rows + m]
             if not screened:

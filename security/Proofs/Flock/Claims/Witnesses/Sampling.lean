@@ -317,13 +317,13 @@ theorem exp_neg_le_inv {y : ℝ} (hy : 0 ≤ y) : Real.exp (-y) ≤ (y + 1)⁻¹
 theorem sksD_outer (x : Msg) :
     2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) ≤ 1 / 50 := by
   have hk : ((sksD Coin).k x : ℝ) = 2 ^ 10 * 3 := by rw [sksD_k]; push_cast; ring
-  have hc : ((sksD Coin).cap x : ℝ) = 2 ^ 128 * (2 ^ 10 * 3) := by
+  have hc : ((sksD Coin).cap x : ℝ) = 2 ^ 192 * (2 ^ 10 * 3) := by
     simp only [Deploy.cap, sksD_k]; push_cast; ring
   rw [hk, hc, neg_div]
   have he := exp_neg_le_inv (show (0 : ℝ) ≤ 2 ^ 10 * 3 / 8 by positivity)
   have h1 : (2 ^ 10 * 3 / 8 + 1 : ℝ)⁻¹ ≤ 1 / 100 := by
     rw [inv_le_comm₀ (by positivity) (by norm_num)]; norm_num
-  have h2 : 2 * (2 ^ 10 * 3 : ℝ) / (2 ^ 128 * (2 ^ 10 * 3)) ≤ 1 / 100 := by
+  have h2 : 2 * (2 ^ 10 * 3 : ℝ) / (2 ^ 192 * (2 ^ 10 * 3)) ≤ 1 / 100 := by
     rw [div_le_iff₀ (by positivity)]; norm_num
   linarith
 

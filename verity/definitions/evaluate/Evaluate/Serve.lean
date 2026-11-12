@@ -1,8 +1,8 @@
 module
 
 public import Evaluate.Walk
-public import Flock.Gate
-public import Flock.Evaluated
+public import Circuits.Gate
+public import Circuits.Evaluated
 
 /-!
 # The difftest function

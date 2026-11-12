@@ -14,16 +14,19 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from verity.circuits.defs import bind
+from verity.definitions.registry import dead_free, sampling_vocab, topp_words
+from verity.definitions.registry import sampling as SM
+
 from verity_vllm.check.match import split_selects
-from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, TokenSelectGumbelTopP, with_sampler_construction
+from verity_vllm.observe.fold.patterns.sampling import (
+    SCRATCH_TOPP_SELECT,
+    TokenSelectGumbelTopP,
+    with_sampler_construction,
+)
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import sampling_vocab
-from verity.definitions.registry import dead_free, topp_words
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 PLAIN, SHARED = "greedy-check-per-stage", "shared-greedy"
@@ -62,13 +65,14 @@ def test_a_programs_selects_declare_one_construction(tmp_path):
 def _program_dir(tmp_path: Path, V: int, S: int) -> tuple[Path, str]:
     """A stand-in request Program (`StochasticServe` through the vLLM sampler rule) at the split count `S`; its dir holds the
     `result.json` spec histogram the Build writes.  -> (dir, select)."""
+    from verity.definitions.registry import b1
+
     from verity_vllm.pipeline.build import _spec_histogram
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.base import RuleSet
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-    from verity.definitions.registry import b1
     LP, STEPS = 3, 1
     C = dict(b1.B0_CONFIG, NL=1, V=V, MAX_POS=64)
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
@@ -88,7 +92,12 @@ def _program_dir(tmp_path: Path, V: int, S: int) -> tuple[Path, str]:
 def _fold_select(V: int, pattern: TokenSelectGumbelTopP, target: TargetProfile | None = None) -> str:
     """The spec the fold's top-p select binds at its gather (`TokenSelectGumbelTopP._stage3`) under a capture header declaring `target`
     (None: a header with no declared target, as workload 101's capture folds under the default)."""
-    from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
+    from verity_vllm.observe.events import (
+        DispatchEnter,
+        DispatchExit,
+        RunHeader,
+        ViewDesc,
+    )
     from verity_vllm.observe.fold.resolver import StepContext
     from verity_vllm.observe.fold.tree import TreeNode
     logits = ViewDesc(1, 0, (1, V), (V, 1), "bfloat16", "cuda:0")

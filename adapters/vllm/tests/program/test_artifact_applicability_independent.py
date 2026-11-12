@@ -193,8 +193,8 @@ def _can_build() -> tuple[bool, str]:
     if os.environ.get("CBTEST_SKIP_BUILDS") == "1":
         return False, "CBTEST_SKIP_BUILDS=1"
     try:
-        import vllm  # noqa: F401
         import torch  # noqa: F401
+        import vllm  # noqa: F401
     except Exception as e:  # noqa: BLE001
         return False, f"vllm/torch not importable here ({type(e).__name__}); run on the pod venv"
     if not _hf_snapshot_present():
@@ -1078,7 +1078,7 @@ def test_vii_construction_on_a_mismatched_host_never_mislabels(builds):
 # host != target is acceptable iff (c) construction on an L40S (142 SMs, GPU visible) with the 128-SM/8.9 profile yields the SAME
 # Program digest AND the same artifact identity as the baseline constructions (no GPU; a 4090)
 # ---------------------------------------------------------------------------------------------------------------------------------
-def _wrapper_doc(b: "Build") -> dict | None:
+def _wrapper_doc(b: Build) -> dict | None:
     for g in ADAPTER["identity_file_globs"]:
         for p in sorted(b.out.glob(g)):
             try:

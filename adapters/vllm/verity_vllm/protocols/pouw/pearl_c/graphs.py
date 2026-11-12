@@ -71,6 +71,7 @@ from typing import Any
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
 
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
@@ -153,7 +154,7 @@ class _Slots:
     after: tuple[int, int, int]
 
 
-class GraphCalls:
+class GraphCalls(_RunState):
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
     trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
     ``_graphs``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
@@ -247,7 +248,7 @@ class GraphCalls:
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
-        key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        key: tuple = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
         key = (*key, "a_tree") if self._defers_a() else key
         key = (*key, "tree_sm") if self._defers_a() and self.whole_tree_sm else key
         key = (*key, "stats") if self._forks_stats() else key
@@ -340,7 +341,7 @@ class GraphCalls:
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
-        base = self.cur.base
+        base = self.cur.first
         index, tiles_at, flags_at = base + at[0], at[1], at[2]
         offs, predicted = np.empty((len(calls), 3), np.int64), {}
         for i, c in enumerate(calls):
@@ -362,7 +363,7 @@ class GraphCalls:
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
         staged = s is not None and s.calls is calls and s.at == at and s.base == cur.base
-        if not staged:
+        if s is None or not staged:
             s = self._slots(calls, at)
         if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
@@ -383,7 +384,7 @@ class GraphCalls:
         rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
         files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
         cur = self.cur
-        index = cur.base + len(cur.matmuls)
+        index = cur.first + len(cur.matmuls)
         cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
         if not self.hashing or not calls:
             return
@@ -469,6 +470,7 @@ class GraphCalls:
         if self.fork is None:
             self.fork = _Lane(self.device, "greatest", -2)
         D, dev, fork = self.driver, self.kernel.dev, self.fork
+        assert D is not None
         start, first, end = _event(), _event(), _event()
 
         def go():
@@ -519,7 +521,7 @@ class GraphCalls:
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (at its position in the pass,
         the index past the pass's base)."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.first)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every

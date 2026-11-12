@@ -58,8 +58,9 @@ CUTS = ("tokens", "kv", "layer_of_token", "every_block")
 CONFIGURATIONS = ("tokens", "tokens_bi", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 ART = re.compile(r"art:[0-9a-f]{64}")
-#: what holds a serving rate where it is: the GPUs' compute, the KV pool's size, or not known
-BOUNDS = ("compute", "kv-pool", "unknown")
+#: what holds a serving rate where it is: the GPUs' compute; the engine's step, where requests waited with room in the
+#: KV pool and the record does not tell the GPUs' arithmetic from a step's token budget; the KV pool's size; or not known
+BOUNDS = ("compute", "engine-step", "kv-pool", "unknown")
 NUM = (int, float)
 
 

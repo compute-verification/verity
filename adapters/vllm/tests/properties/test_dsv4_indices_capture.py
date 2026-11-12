@@ -15,10 +15,12 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import dsv4_indices_twin as T
 
 from tests.properties import dsv4_indices_capture_gpu as X
-from verity.definitions.numerics import dsv4_indices_twin as T
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 #: the cases simulated here (ratio 128's widest rows are left to the H200)
 SIM = ["c4", "c128-256"]
@@ -123,9 +125,6 @@ def test_ratio_4s_selection_is_ids_below_the_count_and_junk_past_it() -> None:
 def test_short_rows_are_the_reference_at_every_special_position(case: str) -> None:
     """`short_rows` against `Dsv4ShortContextTopK_v1{K,128}` on the c128a builder's special positions (the int64 ends, around
     0 and K * 128) and a few served ones; the served positions come first, as the combine reads their rows."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     c = X.CASES_L[case]
     served = X.requests(case, "served", 1)["pos"]
     pos = X.c128a_positions(case, served, 1)
@@ -384,7 +383,5 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_indices_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
