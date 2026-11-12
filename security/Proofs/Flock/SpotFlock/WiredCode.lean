@@ -23,9 +23,10 @@ and the frame are `code h`'s.
 * `rewires_of_two`: where the design evaluates and each wire's writer's part is before its reader's, the code's
   wiring map rewires the members' programs (`Prog.Rewires`).
 
-The verifier is `V h` itself, and its check of the session statements (`stmtOk`) reads no wire: no run is refused
-for its wiring here. So the three conditions are premises of each statement about the connected code, and such a
-statement says nothing at a held code that fails one.
+The verifier is `V h` itself. Its check of the session statements (`stmtOk`) holds each session's reads to the
+links and wires the verifier holds (`readsOk`), and does not run round 2's check of the design itself
+(`SecondStage.designOk`): no run is refused for a design that fails one of the three conditions. So they are
+premises of each statement about the connected code, and such a statement says nothing at a held code that fails one.
 -/
 
 @[expose] public section
