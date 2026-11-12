@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The build sandbox, run as
 #   unshare --user --map-root-user --mount --net --pid --fork --kill-child -- \
-#     bash sandbox.sh [--ro RO_DIR]... [--overlay DIR TOP]... RW_DIR... -- CMD...
+#     bash sandbox.sh [--ro RO_DIR]... [--overlay DIR TOP]... [--at FIXED TREE] RW_DIR... -- CMD...
 # Inside new user, mount, network and PID namespaces: every mount read-only except the RW_DIRs (the build's .lake
 # directories), a private /tmp, /dev/shm and /var/tmp unless an RW_DIR, an RO_DIR (read, never written: Lake's artifact
 # cache) or an overlay's DIR lives under one, no network, and a fresh /proc. TMPDIR, TEMP and TMP name a writable
@@ -10,15 +10,23 @@
 # An overlay mounts an overlayfs over DIR whose upper layer is TOP/upper (TOP/work its work directory, TOP writable):
 # CMD sees DIR and may change it, and every change lands in TOP/upper, a deletion as a whiteout, while DIR itself, which
 # other processes read, is never written (the sampled recompile, check.py's `sampled_recompile`).
+# With --at, TREE is also bound at FIXED, with every RW_DIR and overlay under it, and CMD starts in FIXED's copy of the
+# directory it was started in (one under TREE). Lean writes a source's absolute path into what it compiles, so a build
+# that reads its sources under FIXED gives the same bytes wherever TREE is. FIXED is a name in /var/tmp, made in this
+# sandbox's private tmpfs there and gone with it: nothing is made on the host, and two sandboxes at once each have
+# their own. Where /var/tmp got no private tmpfs, --at refuses: a tree bound elsewhere would compile to other bytes.
 # CMD is PID 1, so every process a build starts (compile-time code included) ends with it.
 set -euo pipefail
 rw=()
 ro=()
 ovl=()
+at=
+tree=
 while [ "$1" != "--" ]; do
   case "$1" in
     --ro) ro+=("$2"); shift 2;;
     --overlay) ovl+=("$2" "$3"); shift 3;;
+    --at) at="$2"; tree=$(realpath "$3"); shift 3;;
     *) rw+=("$1"); shift;;
   esac
 done
@@ -48,13 +56,37 @@ for ((i = 0; i < ${#ovl[@]}; i += 2)); do
   mount -t overlay overlay -o "lowerdir=${ovl[i]},upperdir=$top/upper,workdir=$top/work,userxattr" "${ovl[i]}"
 done
 private_tmp=
+private_var_tmp=
 for t in /tmp /dev/shm /var/tmp; do
   [ -d "$t" ] || continue
   case "$seen" in *" $t/"*) continue;; esac
   mount -t tmpfs -o mode=1777 tmpfs "$t"
   [ "$t" != /tmp ] || private_tmp=1
+  [ "$t" != /var/tmp ] || private_var_tmp=1
 done
 mount -t proc proc /proc
+if [ -n "$at" ]; then
+  case "$at" in
+    /var/tmp/*/*|/var/tmp/.|/var/tmp/..) echo "sandbox.sh: --at $at: the fixed path is one name in /var/tmp" >&2; exit 2;;
+    /var/tmp/?*) ;;
+    *) echo "sandbox.sh: --at $at: the fixed path is one name in /var/tmp" >&2; exit 2;;
+  esac
+  if [ -z "$private_var_tmp" ]; then
+    if [ -d /var/tmp ]; then why="an RW_DIR, an RO_DIR or an overlay's DIR lies under /var/tmp, so it stays the host's"
+    else why="/var/tmp is no directory here"; fi
+    echo "sandbox.sh: --at $at: $why, and a tree bound anywhere else would compile to other bytes than every other" \
+      "build's. Keep the tree, its builds and the artifact cache out of /var/tmp, on a host that has that directory." >&2
+    exit 2
+  fi
+  here=$(realpath "$PWD")
+  case "$here/" in
+    "$tree"/*) ;;
+    *) echo "sandbox.sh: --at $at $tree: started in $here, which is not under that tree" >&2; exit 2;;
+  esac
+  mkdir "$at"
+  mount --rbind "$tree" "$at"
+  cd "$at${here#"$tree"}"
+fi
 # a compiler writes its temporary files under TMPDIR, which a job sets outside the RW_DIRs (a node's /workspace/tmp)
 tmp=
 if [ -n "${TMPDIR:-}" ]; then
