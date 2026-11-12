@@ -107409,3 +107409,119 @@ TWOLEG said a witness at the cap opens nearly every boundary position. That hold
 **To post.** Nothing.
 
 **Not established.** Nothing here has compiled. Every proof above is [derived] until a run ends with only propext, Classical.choice and Quot.sound. Whether `Target.lean`'s statements stay word for word in the lock needs a records run, which I will launch after the tries pass. Two premises are not discharged: `ReadsBind` (binding) and `hX`, which ties the vocabulary's `extract` to the two-stage majority. An earlier period's genuine challenger signature in the evidence still makes the strategy's error ⊤ at the deployed theorems. The new file's docstring says so; nothing here works around it, and the hole stays open until the key pins close it. Sizes: 3 files, about 674 new lines, 0 theorems left unproved in the text. [guess] All compiled by about 03:00Z Fri if the slots open within the hour.
+
+## PROVED, Thu 12 Nov 23:00Z: THE LIST, whole, with owner, state and date, and the goal's date: on the owners' own dates the one-statement accept is fully proved no earlier than Tue 17 Nov; the goal as its fifth clause reads has no day yet, because the registered request and the two-round proof have none
+
+**In plain words, for Daniel.** This is the whole list again: every item between today's accepts and an audit of a served GLM-5.3 request whose accept is fully proved, with who holds it, where it stands and the day its holder gave. Then the date I would put on the goal. I did not estimate anyone's work. I took the latest day an owner has given on each path. For an audit with one statement, that day is Tue 17 Nov: soundness lists the theorem then, and closes the gap about earlier signatures then. The goal asks more than that: the block replayed must be the registered request, not the stand-in. That needs the two-round form and its proof, and the request's computation as a registered Definition. Neither has a day yet. So I would not write a day on the whole goal tonight; I would write Tue 17 Nov on its first half and name what the second half waits on.
+
+Clock: `date -u` read 23:00Z before the push. Mailbox read at `82a4d7df7e`. Every owner, state and date below is [relayed] from the owner's newest entry in the inbox or from your messages of 22:05Z, 22:25Z and 22:42Z, unless it carries another mark; pull requests are [run: `gh pr view`, 22:54Z]. The rows changed since 21:40Z are explained in my 22:55Z entry; this entry is the table as it stands. No file of the tree changed; no run of mine is out.
+
+### The goal's date
+
+**What I would write.** Tue 17 Nov on "a one-statement audit whose accept is fully proved". No day on the whole goal until two rows have one: B15 and B12.
+
+**How I got it** [derived]. For each path, the latest day an owner gave; a row with no day is named, not guessed.
+
+- **The one-statement path** (clauses 1 to 4 and 6): rows A1, A2, A4, A5, A7 to A12, A14 to A17, A19 to A25, A40, A41.
+  - Latest days given: Tue 17 Nov for A7 (the theorem listed, the day #9268 lands, after #9375) and for A40 (the challenger's model with its whole history), which A24 waits on.
+  - On this path with no day: the accept of record itself (A1: a new run, after Daniel's yes to one change of the check); soundness's three premises (A8 to A10); A14's refusal being built; A17 (no worker yet, and a notice to Daniel); A20; A21; A25 (a real serve under the deployed key); A41 (not buildable by Fri 20:00Z); and #9375's landing, which five rows wait on (A7, A19, A22, A31, B2).
+  - So Tue 17 Nov holds only if each of those lands by then. The two I would watch are A25 and A17: neither has a holder at work.
+- **The goal as clause 5 reads** (the replay block is the registered request): everything above, and Part B.
+  - B15: the request's computation as a registered Definition. Of 254 block types, 232 have no statement the Lean verifier has accepted, and the node's Program is not in registered form. Circuits owes its date at 02:00Z.
+  - B12, with B11: the two-round part of the one theorem. It is cut in eight pieces. Its brief says what of each compiles by Fri 18:00Z, and for seven of the eight that is a part (the first clause, one session's log, the first stage, one session's coins, one message) [relayed: TWOLEG 22:27Z]. Nobody has given a day for the whole.
+  - B13, B14: a whole request does not fit the proved verifier's size class. The fix changes the form of a statement, so it reopens the verifier's reading and one lemma. No day.
+  - A38 goes with B15: the stop record's audit waits on circuits' stop block.
+- **If the period's check needs a sample that spans several kinds of block** (A26's note): rows A26 to A37 join the path. Soundness dates A34 and A35 three working days after the several-member accept lands, and that not before Fri 27 Nov. That gives Wed 2 Dec at the earliest [derived]. Whether the period's check needs it at the two-round form is not established.
+
+### Part A. The one-stage form
+
+| # | the item | owner | state | date, or what it waits on |
+|---|---|---|---|---|
+| A1 | No run shows the Lean program that checks a whole audit answering "accept". Its last refusal on a real case is one function; a scratch build with that one change accepts two small cases. | FIRSTACCEPT | started | the change's run (`7cc7`); Daniel's yes; the accept of record is a new run, no day |
+| A2 | A run's record names the commit the verifier was built from and the verifier's digest. Built. | FIRSTACCEPT | compiled (built on a branch) | with A1 |
+| A3 | The kept window's case names no challenger. | — | dropped: the accept of record is a new run | — |
+| A4 | The published record does not say whether every check ran. | STOPDRIVER | on a pull request (#9458) | its landing; no day |
+| A5 | That the entries the verifier holds are the network certifier's is checked by Python. The Lean refusal compiles. | RELAX | compiled | ready line by Fri 06:00Z |
+| A6 | The stream's records, budget, "no retries" and history are kept in Python. Scoped: the goal needs nothing of it. | proofs | scoped; I propose it leaves this list | your word |
+| A7 | The theorem this goal cites, soundness of sampled proofs on their own, is not written. | soundness | not started | Tue 17 Nov, after #9375 and #9268 |
+| A8 | Premise 1 of 4: the record the check reads holds every round of coins the device opened. Proved. | soundness | on a pull request (#9475) | its landing; no day |
+| A9 | Premise 2 of 4: every session passed the check of its ports and roots. | soundness | started | no day |
+| A10 | Premise 3 of 4: the files in the model are the ones the parameters name. | soundness | not started | no day |
+| A11 | Premise 4 of 4: the session in the model is the one the verifier runs on those files. Statement and accept-side lemmas written. | SESSIONOF; soundness for the instance's shape | started | both files compiled by Fri 01:00Z [its guess]; two hypotheses left, one of them A14 |
+| A12 | A session's tables' error rate is below 1. Proved. | SESSIONOF | compiled | A11's pull request |
+| A13 | The circuit names no public input port. | SESSIONOF | folded into A11 | — |
+| A14 | The theorem covers only a plain random subset; the check also takes samples by strata and by work. Ruled: refuse them. | PROVED for the text; the file is MEMBERS's | not started: the line is written in my entries | the file's holder; no day |
+| A15 | The theorem is only shown to hold of a model whose device has no coins and signs nothing, where no audit is accepted. | soundness | started | a pull request by Fri 18:00Z |
+| A16 | Nothing says an accepted audit has a session in the model. | soundness | started | with A15 |
+| A17 | A statement that reads a registered value is accepted and not covered: the claim never says the read is the registered value's. | proofs, a new worker when a slot frees | not started | Daniel's answer to the notice (drafted 22:46Z); whether Friday's audit has such a read |
+| A18 | The theorem reads the assumption that the device's signatures cannot be forged. | soundness | ruled: approved for remote, and this audit is remote | at onsite, an ask due Fri 17:00Z |
+| A19 | A server can ask for a new sample until it likes one. The fix and its proof are written. | REDRAW | on a pull request (#9237) | #9375; a notice to Daniel for one statement |
+| A20 | That proof has no honest example. | proofs, after A15 | not started | A15 |
+| A21 | The run's check took the challenger's key from the prover's evidence. Statements written, one key a run. | REDRAW | started | no day |
+| A22 | A server can commit one execution phase under several roots and be sampled on each. The check of a whole period compiles in two halves. | PERIODREAD | compiled | paused since 22:41Z; the first half opens as a pull request at its resume |
+| A23 | That the period check's accept means every committed root was audited exactly once. | PERIODREAD | stated | proved in a run by Fri 22:00Z plus the pause; its word by Fri 12:00Z |
+| A24 | That the ledger the period check reads is the device's own. Two forms. | PERIODREAD | stated | A40, Tue 17 Nov; Daniel on one new named premise |
+| A25 | No kept run is a real serve sampled on live coins under the deployed key. Friday's shape runs both stages under a local development challenger [relayed: REDRAW 22:53Z]. | proofs' lead with serving | not started | no day |
+| A26 | The Lean check refuses an audit whose sample spans several kinds of block. | MEMBERS | not started | not before Fri 27 Nov |
+| A27 | The theorem for such a sample. | soundness | on a pull request (#9520) | three hypotheses: A28, A33 |
+| A28 | Two hypotheses of that theorem are not proved of what the check accepts. | WINDOWAT | started | Sat 14 Nov 20:00Z, its guess until Fri 18:00Z |
+| A29 | Four changes those proofs need in soundness's files. | soundness | not started: proposed, not answered | WINDOWAT needs them by Fri 16:00Z |
+| A30 | Fifteen proofs rest on "every accept is the one-statement form's". | MEMBERS | not started | with A26 |
+| A31 | Every member's files held to the registration; the rule for names. | MEMBERS | on a pull request (#9441); the names rule not started | #9375 |
+| A32 | The closing round of coins outside Lean, on a tree with soundness's changed order rule. | CLOSEROUND; soundness | on pull requests (#9230, #9520) | #9520 |
+| A33 | Each member's openings at a window. | WINDOWAT | started | its window half by Sat 02:00Z |
+| A34 | The window's model has no instance. | soundness | not started | three working days after A26 lands |
+| A35 | The theorem for sampled proofs alone, at a window, is on no list. | soundness | not started | with A34 |
+| A36 | Nothing refused a statement of a member the sample missed. Ruled: refuse it. Written on a branch. | WINDOWAT | started | run `3d6c`; #9441 |
+| A37 | The Python twin of the several-member run. | MEMBERS | not started | A32 |
+| A38 | The audit of the stop record has two entries that never run and one that reads a record held to nothing. | STOPDRIVER | not started | circuits' stop block |
+| A39 | The stop record's sessions' guarantee is not deployed. | — | folded into A17 | — |
+| A40 | The theorem's model of the challenger holds one audit, so it speaks only of a key and ledger made for that audit. The check itself does exclude an earlier session. | soundness | not started | Tue 17 Nov |
+| A41 | The certified read takes each unit's row from the file's own list; a file that reverses rows is accepted. | RELAX | not started | a design entry Fri 16:00Z; not buildable by Fri 20:00Z |
+
+### Part B. The two-round form
+
+| # | the item | owner | state | date, or what it waits on |
+|---|---|---|---|---|
+| B1 | Every two-round accept is withheld by one refusal, on purpose, until its proof exists. Lifting it is the last step. | FRAME | on `main` (the refusal) | B2 to B21; Daniel ruled it waits for B12 |
+| B2 | Five changes in review, in series; one changes what two listed guarantees say. | FRAME; #9357 another's | on pull requests (#9176, #9212, #9229, #9080, #9357) | #9375 |
+| B3 | The proved model of the verifier does not make the checks the open premise needs. Two more checks are now in the model. | FRAME | started | compiled by the 03:00Z board if a slot comes [its word] |
+| B4 | The guarantee's open premise: each value a sampled block reads is opened at one place, fixed before the coins. The five facts are statements; the address map is defined. | FRAME | started | B5, B6, B7, B20 |
+| B5 | Two of the five facts: the width and the copy. The width compiles. | ADDRWC | compiled in part | the copy's run (`8986`); B17 |
+| B6 | One of the five: the row. Today's checks decide it at every port but one that reads a registered value. | ADDRROW | started | all compiled by Fri 20:00Z [its guess]; one check FRAME adds |
+| B7 | The server gives a replay block's inputs after the first sample; the premise needs them committed before it. Serving agreed. | vllm | started | a joined branch by Fri 06:00Z; past Fri 08:30Z, a third run Sat 14 Nov |
+| B8 | The guarantee has no honest example. The registration is written with four of five design premises proved at it. | HONEST2 | started | run `d4a5`; the accepted run and the address premise at it are not promised by Sat 02:00Z |
+| B9 | No theorem says the verifier that runs is the one that was proved. First half: round 2's check. Written, twenty proofs. | RUNSAS | started | a slot (run `04fc`); B21 |
+| B10 | Second half: the whole run, and its coins being the challenger's. The whole chain is written. | RUNCOINS | started | its tries; A21; B18 |
+| B11 | No Lean check of a whole two-round audit exists; round 2 and the outcome are joined by the Python driver. Cut in eight pieces, all with a worker or a brief. | TWOLEG and eight workers | started | each piece says what compiles by Fri 18:00Z; no day for the whole |
+| B12 | The theorem a fully proved audit cites has no two-round part. | TWOLEG's split; soundness for the instance's five files | started | soundness's restatement Fri 18:00Z; what the claim counts, to Daniel; no day for the whole |
+| B13 | A kind of block is staged whole before the sample, past the prover's size bound. The fix is a statement of the sampled rows only; a probe of it passed on all 20 members. | STOPS | started | its whole plan by Fri 03:00Z |
+| B14 | A whole request does not fit the proved verifier's size class. | STOPS, through B13 | not started | B13 |
+| B15 | The served request's computation is not a registered Definition; the block replayed is a stand-in. 14 of 254 block types have a statement the Lean verifier accepted, 73.4% of the blocks; 232 have none. | circuits | started | circuits' date, due 02:00Z |
+| B16 | Two entries of the lock for the two-round guarantee are stale. | FRAME | not started | no day |
+| B17 | Nothing refuses a wired reader port whose width differs from its writer's. | none named | not started | an owner |
+| B18 | The run's coin check never fixes which coin family a stage reads. | none named | not started | an owner; A21 changes the same function |
+| B19 | Five clauses of the model's statement check have no source in round 2; each is a named premise of B9. | none named for the five | not started | an owner for each |
+| B20 | One fact under all five address facts: a gate a checked block needs is one of its own input or returned bits. | NEEDEDBITS | started | signatures in a try by Fri 00:45Z |
+| B21 | A clause the model gained refuses every value round 1's record registers, and the running round 2 accepts such a value. | FRAME's model, or a premise of B9 | not started | FRAME's answer |
+
+### The count, unchanged since 22:55Z
+
+62 rows: 46 open, 5 compiled or built on a branch (A2, A5, A12, A22, B5), 7 on a pull request (A4, A8, A19, A27, A31, A32, B2), none closed on `main`, 4 dropped, folded or ruled (A3, A13, A18, A39). No owner: B17, B18, B19.
+
+### Outside this goal, for the remote configuration's goal
+
+`PouwSound` and `InferenceOnlySound` are open premises of the remote theorem and not items here [relayed: your 20:50Z]. The stream's rules over a whole stream (my 22:53Z entry, section 4) belong with a statement over a monitoring period.
+
+### Not established
+
+- Every [relayed] state and date: I read entries and messages, not the branches or runs.
+- That the one-statement path's list of rows is complete. I built it from the six clauses; a row I never found is not on it.
+- Whether the period's check needs the several-member form when the audits it reads are two-round ones.
+- Any day for B11, B12, B13, B14 and B15. I gave none, and I did not estimate one.
+
+### To post
+
+- The table above, as it stands.
+- On the goal: "Tue 17 Nov for a one-statement audit whose accept is fully proved, on soundness's two dates; the whole goal waits for a day from circuits (the registered request) and from the two-round proof."
+- Days needed from owners: A8 to A10 (soundness), A21 (REDRAW), A25 (the lead with serving), the whole of B11 and B12 (TWOLEG), B13 and B14 (STOPS).
