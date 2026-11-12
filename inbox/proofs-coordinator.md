@@ -83465,3 +83465,46 @@ K=1 prover(s) on the card
   argued, not timed.
 - One job on one card for about an hour settles it: the head at a quarter of a statement beside the full one, at one
   prover and at four. It is written and waits for card time. Nothing here runs on the served engine.
+
+## REFUSE, Thu 12 Nov 10:27Z: #9091 is NOT ready: the records run `6346` failed on this change (its root was missing from the lock's `roots`), and `07a8` has one failed suite, also this change's (an input); both are fixed and pushed, head now `6227b8397518`; three runs of the fixes are out (`e39d` records, `4d1b` and `8e14` suites) and `07a8` still runs; the evaluation `a4c0` and the try on lean's merge `9eb8` are exit 0; a correction: the change does touch a lock
+
+**1. `r20261112-084251-6346`, the records run at `d8afb6b2724c`: exit 1, this change's.**
+
+- [run `6346`: `lean-audit/audit-Proofs/report.json`, `failure_codes`] Three findings, all `orphan.file`: `Properties/Spot/SecondFormed.lean`, `SecondRefused.lean` and `SecondSample.lean` are "not imported by the roots (...) nor under `exempt`: nothing builds or audits it". Nothing else failed.
+- [run `6346`: stdout lines 6, 597, 1212] `security/Proofs` built (195,455 declarations in 3,880 modules; axioms `propext`, `Classical.choice`, `Quot.sound`) and its audit says FAIL; the audits of `security` (1,103 guarantees) and `security/Properties` (465) say PASS, and the run marks both failed only because they require `security/Proofs`.
+- [read: `security/Proofs/lakefile.toml`, `security/Proofs/lean-audit.json` at `d8afb6b2724c`; `check.py:1470-1475`] Cause: I put the root `Proofs.Properties.Spot.SecondRefused` in the Lake file and not in the lock's `roots`, which is the list the audit imports. Not `main`'s: the three files are not on `main`. Not a known flake.
+- [read: `git log`] Fix `29f65ec21e58`: that one root in `security/Proofs/lean-audit.json`, beside the other roots of `Proofs.Properties.Spot`. [read: local] `tests/test_lean_packages.py` and `tests/test_public_boundary.py`: 85 passed.
+- **Correction to my 08:56Z entry and to the body's lock line.** I wrote that the change adds no lock record and that the locks are `main`'s. [read] It now adds one root to `security/Proofs/lean-audit.json`'s `roots`; it still lists no guarantee, and no record or cap has moved. The body's line says this now. If you relayed the old line as the notice, it needs this.
+
+**2. `r20261112-084251-07a8`, the suites at `d8afb6b2724c`: still running; one failure so far, this change's.**
+
+- [run `07a8`: stdout, fetched 10:26Z] `--changed 19fb19a21e40` touches 58 suites; 53 have reported: 51 passed, 1 cached, 1 failed. Not yet: `verity-numerical`, `research`, `verity/commitments`, `verity/definitions/ops`, `verity-flock`.
+- [run `07a8`: stdout lines 75-77] Failed: `verity-network-traces`, 540 passed, then the read guard: "its tests read 1 files outside its inputs, for example benchmarks/spot_figures/second_stage.py (read by benchmarks/network_traces/tests/test_certifier_term.py)".
+- [read: the test, `total_cost.py`] That test came with `main`; it builds the break-even planner's case, which imports `total_cost.py`, which imports my `second_stage.py`. On `main` the import does not exist, so it is mine. Not `test_nebius`, not `test_pous_wipe_monitoring.py`: [run `07a8`] `verity/protocols/pous/verifier` passed (547 passed, 12 skipped).
+- [read: `git log`] Fix `6227b8397518`: the file among `benchmarks/network_traces/pyproject.toml`'s inputs, as `a1fecc4626` did for the harness. [read: `rg` over every `pyproject.toml`] No third suite lists `total_cost.py` without it. [read: local] `test_certifier_term.py`: 20 passed.
+
+**3. The two that ended exit 0.**
+
+- [run `r20261112-084251-a4c0`: `out/second_stage.json`, 180 points, against run `b35f`'s file] The evaluation at `d8afb6b2724c`: no point's design or bound differs from the evaluation at `979ebf0a18`; only the count one layout holds moved, with `main`'s `MAX_COINS`. [derived: recomputed from the file] Every figure in the body stands: 121 of 180 points at 2^24 coins (54 at 2^20), per verification phase 2^-55.2 to 2^-38.7, largest pooled 6.8e-4, 59 points the layout does not hold, 44 of them on one replay block alone. The body now names `a4c0` as their source.
+- [run `r20261112-091325-9eb8`: stdout's last two lines] The try on lean's merge (scratch `7f4de5fc7679`): "lean exit 0 in 2022 s" on `Properties/Spot/SecondRefused.lean`; "axiom probe: none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The imports' build passed, the four files git joined from both sides among them. For CROSSCLOSE's row 8: the three modules elaborate on lean's `f3837f57d113` with #9091 in.
+
+**4. The head moved: `d8afb6b2724c` to `6227b8397518`, two commits, pushed, no force.**
+
+- [read: the pin's file list, `git diff --stat d8afb6b2724c HEAD`] The two commits touch `security/Proofs/lean-audit.json` and `benchmarks/network_traces/pyproject.toml`; the pin hashes neither.
+- [read: a trial merge of lean's tip `f3837f57d113` with `6227b8397518`, not pushed] With the file at `01dea4d2566f` in place `pins.py --stale` prints nothing; the merged Lake file hashes to `3de2975ff7d3…`; the merged lock parses and holds my root. So the close holds on lean's tip. I did not check it on CROSSCLOSE's closed merge (`f58b4a3ef6e9`); that is theirs to redo.
+- [derived] The try `9eb8` and the evaluation `a4c0` ran at `d8afb6b2724c`; neither commit changes a Lean source or `benchmarks/spot_figures`, so both verdicts carry.
+
+**5. Both merge-trees at `6227b8397518`** [read: after `git fetch`, 10:23Z, drivers installed].
+
+- Against `main` (`33faab2be81c`): `git merge-tree --write-tree --name-only origin/main HEAD` exits 0 and names no file. No second merge. [read: `git diff --name-only 19fb19a21e40 origin/main`] `main` changed none of this change's 19 files since.
+- Against `origin/cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`) less `main`'s own stops: one file, `verity/protocols/pous/lean/TRUSTED.sha256` (head 13 stops; `main` now 23).
+
+**6. What is missing, with the runs out.**
+
+- `r20261112-101858-e39d`, the records run at `29f65ec21e58` (vy-nebius-cpu-1): [read: `research inspect`, 10:26Z] running since 10:20Z. [guess: the three audits took 30 min in `6346`] Ends about 11:00Z. It is the first audit that reads the three modules, so it can still find something; it also says whether any record moves.
+- `r20261112-101920-4d1b`, `suites.py --changed d8afb6b2724c --quick` at `29f65ec21e58` (vy-nebius-cpu-1): [read] waiting, 1 check ahead. [guess] Ends about 11:00Z.
+- `r20261112-102306-8e14`, `suites.py --changed 29f65ec21e58 --quick` at `6227b8397518` (vy-nebius-cpu-7): [read] waiting, 1 check ahead. [guess: the suite took 181 s] Ends about 10:50Z.
+- `r20261112-084251-07a8`: [read] running since 09:31Z, five suites left. [guess] Ends by about 11:15Z; its slot ends it at 12:31Z at the latest. [derived] Its five suites ran at `d8afb6b2724c`; `4d1b` and `8e14` rerun what the fixes touch.
+- Not run: the grader README's `bash check.sh`; the Lean check with the kernel replay (the queue's).
+
+Nothing is marked. I give the ready line when `e39d`, `4d1b`, `8e14` and `07a8` have ended.
