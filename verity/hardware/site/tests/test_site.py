@@ -11,7 +11,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity.hardware.site import (OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
+from verity.hardware.site import (CERTIFIER, CHALLENGED, COMPOSITE_IDS, COMPOSITES, OPERAND_CLASSES, OUTSIDE, REFUSALS,
+                              Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
                               Refused, Registration, Sheet, Site, check, check_registration, genesis, refusal)
 from verity.configuration.wire import canonical
 
@@ -128,6 +129,27 @@ def test_the_first_check_failed_names_the_refusal(entry: Entry, name: str) -> No
     log = first("onsite")
     entry = entry if entry.previous else replace(entry, previous=log.head)
     assert refusal(log, entry, AUDITOR["onsite"]) == name
+
+
+def test_a_list_with_the_certifier_and_a_challenged_check_registers_as_onsite_does() -> None:
+    """A log's composite is named by its ids when it is neither onsite nor remote, and the two clauses read those ids:
+    each smaller list has the certifier's check and the wipe, so its site's ways out are split and its memory reached,
+    as onsite's are, under a genesis of its own."""
+    lists = [c for c in COMPOSITES if c not in ("onsite", "remote")]
+    assert len(lists) == 2 and all(c == ",".join(COMPOSITE_IDS[c]) for c in lists)
+    assert all(CERTIFIER in COMPOSITE_IDS[c] and set(CHALLENGED) & set(COMPOSITE_IDS[c]) for c in ("onsite", *lists))
+    assert CERTIFIER not in COMPOSITE_IDS["remote"] and not set(CHALLENGED) & set(COMPOSITE_IDS["remote"])
+    assert all(list(ids) == sorted(ids) for ids in COMPOSITE_IDS.values())
+    assert len({genesis(c) for c in COMPOSITES}) == 4
+    for c in lists:
+        log = Registration(c)
+        assert refusal(log, replace(FIRST["remote"], previous=log.head), AUDITOR["onsite"]) == "uncertified"
+        log = check_registration(log, replace(FIRST["onsite"], previous=log.head), AUDITOR["onsite"])
+        assert Registration.of_json(log.to_json()) == log and log.to_json()["composite"] == c
+        for case, want in (("accepted", None), ("bare-uplink", "uncertified"), ("unreached-host", "challenger-reach")):
+            assert refusal(log, replace(ENTRIES[case][1], previous=log.head), AUDITOR["onsite"]) == want
+        onsite = replace(FIRST["onsite"], previous=genesis(c))
+        assert refusal(Registration("onsite"), onsite, AUDITOR["onsite"]) == "previous"
 
 
 def test_the_first_entry_is_checked_too() -> None:

@@ -22,9 +22,9 @@ that reuses the window's registration of its tables (`reusing`) is one made case
 `oneSession` too, before R1-R7 read the record; `CoreRemote`'s `#guard`s check what v2 decides on that record with a
 session's proofs granted (R7's domains and outputs, R6's previous) and that remote credits the one window on it and
 finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
-composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite for
-their subprotocols and refuses every other set: the same two composites a configuration may list
-(`verity.configuration.deploy.config.COMPOSITES`)."""
+composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote, onsite and
+onsite's two smaller lists (`R.NETWORK`, `R.COMPUTE`) for their subprotocols and refuses every other set: the same
+composites a configuration may list (`verity.configuration.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ from verity_difftest import canonical
 from verity_difftest import settings as opt
 
 from verity.configuration.deploy import config as K
+from verity.hardware import site as S
 from verity.protocols.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 
@@ -449,16 +450,18 @@ def ids(product: R.Product) -> str:
     return ",".join(C.id for C in product.components)
 
 
-SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
+SEEN = {n: collections.Counter() for n in ("onsite", "remote", "network", "compute")}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
 #: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
 PRODUCT = {p.id: port("product", p, SEEN[n], ONSITE_PACKAGE, serve=(ids(p), "serve"))
-           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
+           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE), ("network", R.NETWORK), ("compute", R.COMPUTE))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
 product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
+product_network_server = D.server_fixture(PRODUCT[R.NETWORK.id])
+product_compute_server = D.server_fixture(PRODUCT[R.COMPUTE.id])
 
 
 @pytest.fixture(scope="module")
@@ -711,27 +714,31 @@ def test_onsite_agrees(onsite_server, recorded):
     assert SEEN["onsite"]["generic bandwidth"] > 0, dict(SEEN["onsite"])
 
 
-def test_product_names_only_the_two_composites():
-    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.configuration.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
-    and refuses every other set of their subprotocols and the wipe (exit 64)."""
+def test_product_names_only_the_composites():
+    """`product IDS id` is remote over remote's subprotocols, onsite over onsite's and each smaller list's composite
+    over that list, in any order, exactly the configuration's composites
+    (`verity.configuration.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names) and the composites a
+    site's log is registered for (`verity.hardware.site.COMPOSITE_IDS`), and refuses every other set of their
+    subprotocols (exit 64)."""
     exe = D.build(ONSITE_PACKAGE, "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
+    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE, R.NETWORK, R.COMPUTE)}
+    assert all(p.id == "verity/composite/v0:" + ",".join(want[p.id]) for p in (R.NETWORK, R.COMPUTE))
     assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
+    assert sorted(map(list, S.COMPOSITE_IDS.values())) == sorted(want.values())
     for cid, ids in want.items():
         assert named(ids) == (0, cid)
         assert named(ids[::-1]) == (0, cid)
     every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
     others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
               if sorted(s) not in want.values()]
-    assert len(others) == 2 ** len(every) - 2
+    assert len(others) == 2 ** len(every) - 4
     for s in others:
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
@@ -747,6 +754,22 @@ def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
 @pytest.mark.slow
 def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
     _agree(PRODUCT[R.ONSITE.id], product_onsite_server, SEEN["onsite"], 200, (R.REJECT, "reject, a component undecided"))
+
+
+@pytest.mark.slow
+def test_product_over_the_network_list_is_its_composite(product_network_server, recorded):
+    """The Lean's composite of network certification, sampled proofs and the wipe is the reference's (`R.NETWORK`): the
+    three subprotocols alone, no tie. `product IDS id` shows only that the list is taken; this shows which
+    subprotocols, tied how, the composite it names runs."""
+    _agree(PRODUCT[R.NETWORK.id], product_network_server, SEEN["network"], 100)
+
+
+@pytest.mark.slow
+def test_product_over_the_compute_list_is_its_composite(product_compute_server, recorded):
+    """The Lean's composite of the network list's three, the inference-only policy and PoUW's period is the reference's
+    (`R.COMPUTE`): the policy and sampled proofs on one registration record and every window of the period on it, and
+    no store's tie. `product IDS id` shows only that the list is taken."""
+    _agree(PRODUCT[R.COMPUTE.id], product_compute_server, SEEN["compute"], 100, (R.REJECT, "one record", "two records"))
 
 
 def test_onsites_bandwidth_is_p2():

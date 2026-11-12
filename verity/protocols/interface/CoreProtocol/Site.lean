@@ -295,6 +295,19 @@ def Composite.onsite : Composite :=
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"]
 
+/-- **Network certification, sampled proofs and the wipe**: onsite's without PoUW's period, the inference-only policy,
+PoUS and the remote bandwidth audit. -/
+def Composite.network : Composite := ["verity/certifier/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
+
+/-- **`network`'s, the inference-only policy and PoUW over the period**: onsite's without PoUS and the remote bandwidth
+audit. -/
+def Composite.compute : Composite :=
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1",
+    "verity/wipe/v0"]
+
+/-- The composites a log is registered for: the ones `Core.Composites.ofIds` builds. -/
+def Composite.all : List Composite := [.onsite, .remote, .network, .compute]
+
 /-- The network certifier's check of a period, by its protocol id, the spec's `Verity.Registration.CERTIFIER`. A
 composite that lists it holds every boundary link to a certifier (`Site.Entry.Covered`). -/
 def CERTIFIER : String := "verity/certifier/v0"
@@ -563,9 +576,9 @@ def Tier.name : Tier → String
 def Owner.name : Owner → String
   | .prover => "prover" | .auditor => "auditor"
 
-/-- A composite's name in `verity.core.site` (`COMPOSITES`): onsite's and remote's. No other list has a name there, so
-it is named by its ids, comma-separated, and no log read from JSON is registered for it (`Registration.Composite.ofJson`
-reads the two names). -/
+/-- A composite's name in `verity.hardware.site` (`COMPOSITES`): onsite's and remote's, and of every other list its ids,
+comma-separated. A log read from JSON is registered for one of `Registration.Composite.all`
+(`Registration.Composite.ofJson`). -/
 def Registration.Composite.name (c : Registration.Composite) : String :=
   if c = .onsite then "onsite" else if c = .remote then "remote" else ",".intercalate c
 
@@ -699,7 +712,7 @@ def ofJson (j : Json) : V Site := do
   pure ⟨sheets, locs, links⟩
 
 def Registration.Composite.ofJson (j : Json) : V Registration.Composite :=
-  byName [.onsite, .remote] Registration.Composite.name j "the log's composite"
+  byName Registration.Composite.all Registration.Composite.name j "the log's composite"
 
 /-- A log as `Registration.to_json` writes it: its composite and its entries. -/
 def Registration.ofJson (j : Json) : V (Registration.Composite × Registration) := do

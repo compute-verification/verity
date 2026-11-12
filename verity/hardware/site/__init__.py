@@ -30,8 +30,8 @@ it fails (`REFUSALS`, the spec's `Registration.Refusal` in kebab case):
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
-| `uncertified` | onsite: every boundary link is certified |
-| `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+| `uncertified` | a composite that lists the network certifier's check (`CERTIFIER`): every boundary link is certified |
+| `challenger-reach` | a composite that lists a check a memory challenger takes part in (`CHALLENGED`): the host of every memory leaf is at an end of a memory challenger's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `boundary`, `units`, `registered`) are functions of
 the site alone, but `device`, which reads the auditor's sheet too. Digests are SHA-512 over canonical JSON
@@ -57,7 +57,22 @@ SHEET = "verity/registration/sheet/v1"
 GENESIS = "verity/registration/genesis/v1"
 OUTSIDE = "outside"
 """The rest of the world: an end every site has, whose id no location may take."""
-COMPOSITES = ("onsite", "remote")
+COMPOSITE_IDS: dict[str, tuple[str, ...]] = {
+    "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
+               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
+    "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
+    **{",".join(ids): ids for ids in (
+        ("verity/certifier/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
+        ("verity/certifier/v0", "verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1",
+         "verity/wipe/v0"))}}
+"""The composites a log is registered for (`Registration.Composite.all`), by name: the ids of the protocols each
+composes, in the order of their ids. Onsite and remote have a name; every other is named by its ids, comma-separated."""
+COMPOSITES = tuple(COMPOSITE_IDS)
+CERTIFIER = "verity/certifier/v0"
+"""The network certifier's check of a period: a composite that lists it holds every boundary link to a certifier."""
+CHALLENGED = ("verity/pous/p2/v4/run", "verity/wipe/v0")
+"""The checks a memory challenger takes part in, PoUS's of a run and the wipe: a composite that lists one holds every
+memory leaf's host to a memory challenger's link."""
 KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "outside")
 TIERS = ("hbm", "dram", "disk")
 OWNERS = ("prover", "auditor")
@@ -786,9 +801,10 @@ def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tu
             return "owner", f"{x.kind} {x.id} isn't one of the auditor's own devices"
         if x.kind not in AUDITOR_KINDS and x.owner != "prover":
             return "owner", f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s"
-    if composite == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)]):
+    ids = COMPOSITE_IDS[_one_of(composite, COMPOSITES, "the log's composite")]
+    if CERTIFIER in ids and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)]):
         return "uncertified", f"boundary links {bare} have no certifier splitting them"
-    if composite == "onsite":
+    if any(i in CHALLENGED for i in ids):
         reached = t.reached()
         if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):
             return "challenger-reach", f"hosts {far} hold the prover's memory, and no memory challenger links to them"

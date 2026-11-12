@@ -6,9 +6,11 @@ order. A composite is its list of ids in the order of the ids, so one set of sub
 These four are the only composites a verifier runs, so `ofIds` refuses any other set by name (an id none composes, one
 listed twice, none, or a set that is none of the four).
 
-A list that `ofIds` comes to accept beyond these needs three things in the same change: registration's clauses read the
-list (`Core.Site.Entry.Covered`, `Core.Site.Entry.Reached`: which checks hold a Site to its certifiers and its memory
-challengers), the list is in the order of its ids, and this header and the refusal's text name it.
+A site's log is registered for exactly these lists (`Core.Site.Registration.Composite.all`, which the guards below hold
+the table to), and registration's two clauses read the list: a list with the network certifier's check holds the Site's
+ways out to a certifier, and one with a check a memory challenger takes part in holds its memory to a challenger's link
+(`Core.Site.Entry.Covered`, `Core.Site.Entry.Reached`). A list `ofIds` comes to accept beyond these is added to both in
+the order of its ids.
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
 
@@ -49,12 +51,10 @@ def over (k : List String) : BlobProtocol :=
     (Core.Onsite.components.filter (·.id ∈ k))
 
 /-- Network certification, sampled proofs and the wipe. -/
-def network : List String := ["verity/certifier/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
+def network : List String := Core.Site.Registration.Composite.network
 
 /-- `network`'s, the inference-only policy and PoUW over the period. -/
-def compute : List String :=
-  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1",
-    "verity/wipe/v0"]
+def compute : List String := Core.Site.Registration.Composite.compute
 
 /-- The composites, each with its subprotocols' ids. -/
 def composites : List (BlobProtocol × List String) :=
@@ -123,6 +123,10 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 #guard !remoteIds.contains Core.Site.Registration.CERTIFIER &&
   !remoteIds.any Core.Site.Registration.CHALLENGED.contains
 #guard onsiteIds == Core.Site.Registration.Composite.onsite && remoteIds == Core.Site.Registration.Composite.remote
+-- a log is registered for exactly the composites the table builds, each named by its own ids
+#guard composites.map (·.2) == Core.Site.Registration.Composite.all
+#guard Core.Site.Registration.Composite.all.map Core.Site.Registration.Composite.name ==
+  ["onsite", "remote", ",".intercalate network, ",".intercalate compute]
 #guard onsiteIds.all known.contains && remoteIds.all known.contains
 #guard known.length == (onsiteIds ++ remoteIds).eraseDups.length
 

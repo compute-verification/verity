@@ -39,7 +39,10 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 `Verity.component`), and the composite's verifier (`Verity.verifier k`) composes the listed ones under the code's one
 rule, with each tie between two it lists (`Verity.ties`). At onsite's and remote's lists it is the verifier the code
 builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
-`security/Proofs/Properties/Verity/Soundness/Composite.lean`); the code builds no other (`Core.Composites.ofIds`).
+`security/Proofs/Properties/Verity/Soundness/Composite.lean`). The code builds two more, from two smaller lists of
+onsite's subprotocols (`Core.Composites.network`, `Core.Composites.compute`), each under `verity/composite/v0:` and its
+list's ids, comma-separated; no lemma here says yet that those two are `Verity.verifier` at their lists. The code
+builds no other (`Core.Composites.ofIds`).
 
 | Subprotocol | Target | Compiled check | Remote | Onsite |
 |---|---|---|---|---|

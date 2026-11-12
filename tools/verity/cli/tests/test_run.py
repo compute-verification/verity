@@ -116,9 +116,19 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert e.value.name in ("composite", "requires")
 
 
-def test_the_composites_are_remote_and_onsite():
+def test_the_composites_are_remote_onsite_and_onsites_two_smaller_lists():
     assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v0"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
+    network = ("wipe", "certifier", "sampled-proofs")
+    compute = ("pouw", "wipe", "certifier", "inference-only", "sampled-proofs")
+    assert K.composite(network, REG.components) == (
+        "verity/composite/v0:verity/certifier/v0,verity/sampled-proofs/v1,verity/wipe/v0")
+    assert K.composite(compute, REG.components) == (
+        "verity/composite/v0:verity/certifier/v0,verity/inference-only/v0,verity/pouw/period/v1,"
+        "verity/sampled-proofs/v1,verity/wipe/v0")
+    lists = {cid: subs for cid, subs in SP.SUBPROTOCOLS.items() if cid.startswith("verity/composite/")}
+    assert len(K.COMPOSITES) == 4 and len(lists) == 2
+    assert all(cid == "verity/composite/v0:" + ",".join(sorted(subs.values())) for cid, subs in lists.items())
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"inference-only": "verity/inference-only/v0",

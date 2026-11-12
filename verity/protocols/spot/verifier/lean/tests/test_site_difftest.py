@@ -108,6 +108,9 @@ FIRST = {
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
     "remote": replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),)),
 }
+# a list that is neither onsite nor remote has the certifier's check and the wipe: onsite's site and auditor
+FIRST |= {c: FIRST["onsite"] for c in COMPOSITES if c not in FIRST}
+AUDITOR |= {c: AUDITOR["onsite"] for c in COMPOSITES if c not in AUDITOR}
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
                         Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
 UPLINK9 = (Link("u9", ("node0", "cert9"), 1, 1), Link("u9-out", ("cert9", OUTSIDE), 1, 0))

@@ -21,7 +21,7 @@ An entry is one of three kinds:
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
 genesis        the Site's: SHA-512("verity/registration/genesis/v1" ‖ 0 ‖ canon({"composite": NAME}))
-the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   committed; its digest is its head
+the log        {"composite": NAME, "entries": [ENTRY, ...]}                  committed; its digest is its head
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it

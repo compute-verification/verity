@@ -583,3 +583,18 @@ REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROO
                   (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
                   (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (WINDOWS, STORE))
+
+
+def over(*components) -> TiedSame:
+    """`Core.Composites.over`: the composite of the listed subprotocols of onsite's, in the order of their ids, under
+    `verity/composite/v0:` and those ids, comma-separated, with those of onsite's tied subprotocols and of its ties
+    that it lists."""
+    ids = [C.id for C in components]
+    return TiedSame("verity/composite/v0:" + ",".join(ids), components, tuple(i for i in ONSITE.same if i in ids),
+                    tuple(t for t in ONSITE.ties if all(s in ids for s, _ in t.names)))
+
+
+#: `Core.Composites.network` and `compute`, onsite's two smaller lists: network certification, sampled proofs and the
+#: wipe; and those with the inference-only policy and PoUW's period, which brings the windows' tie.
+NETWORK = over(CERTIFIER, SAMPLED_PROOFS, WIPE)
+COMPUTE = over(CERTIFIER, INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS, WIPE)

@@ -9,7 +9,7 @@ id):
 - **SPOT[Flock] in two stages** (`SPOT_TWO_ID`: `SPOT_TWO_MANIFEST`, `SPOT_TWO_PROTOCOL`), the same three roles under a
   two-stage sampling design. The draw samples replay blocks; the proof server replays them and registers their interiors
   (the interior registration), and the verifier then draws the second stage on fresh coins and audits both stages.
-- **The core deployment** (`ID`: `MANIFEST`, `PROTOCOL`), which wraps SPOT[Flock] for both composites (remote and onsite).
+- **The core deployment** (`ID`: `MANIFEST`, `PROTOCOL`), which wraps SPOT[Flock] for each composite (`SUBPROTOCOLS`).
   Its workers are the inference server and the proof server on one machine, proving behind the ZK server, whose pin the
   verifier holds. Its verifier composes each block's audit with the composite's other subprotocols.
 
@@ -68,7 +68,7 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
     sampled on that challenger's coins, its answer and its case for the product (`COMPOSED`'s, in its one-stage form), or
     None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
     digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
-    remote or onsite).
+    one of `SUBPROTOCOLS`).
 
 A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
@@ -140,16 +140,26 @@ SPOT_ID = "verity/sampled-proofs/spot/v1"
 SPOT_TWO_ID = "verity/sampled-proofs/spot/two-stage/v1"
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
-#: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
-#: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
-#: and both compose sampled proofs as `COMPOSED`
+#: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Composites.composites`):
+#: each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store, and all compose sampled
+#: proofs as `COMPOSED`. A smaller list of onsite's has onsite's ids for its subprotocols, and for its own id
+#: `verity/composite/v0:` and those ids in order, comma-separated (`Core.Composites.idOver`)
+_ONSITE = {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
+           "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
+           "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED, "wipe": "verity/wipe/v0"}
+
+
+def _over(*names: str) -> tuple[str, dict[str, str]]:
+    subs = {n: _ONSITE[n] for n in sorted(names)}
+    return "verity/composite/v0:" + ",".join(sorted(subs.values())), subs
+
+
 SUBPROTOCOLS = {
-    "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
-                         "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
-                         "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED,
-                         "wipe": "verity/wipe/v0"},
+    "verity/onsite/v0": _ONSITE,
     "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/period/v1",
                          "sampled-proofs": COMPOSED},
+    **dict([_over("certifier", "sampled-proofs", "wipe"),
+            _over("certifier", "inference-only", "pouw", "sampled-proofs", "wipe")]),
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
 IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0",

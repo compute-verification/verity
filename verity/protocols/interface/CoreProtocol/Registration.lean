@@ -451,13 +451,29 @@ def at_ (n : Nat) (d : Nat := 1) : Auditor := { auditor with tolerance := fig n 
 -- a log chained for remote is not onsite's
 #guard (match check auditor .onsite (chain .remote entries) with | .error r => some r | .ok _ => none) ==
   some (0, .site .previous)
--- onsite: an uplink no certifier splits; remote takes it
+-- a composite that lists the certifier's check: an uplink no certifier splits; remote, which lists none, takes it
 private def bare : List (String → Entry) :=
   [site ⟨[sheet], locs.take 4, [{ id := "up0", ends := ("node0", outside), β := 100, latency := 1 }]⟩]
 #guard refusal .onsite bare == some (0, .site .uncertified)
+#guard refusal .network bare == some (0, .site .uncertified)
+#guard refusal .compute bare == some (0, .site .uncertified)
 #guard refusal .remote bare == none
--- onsite: memory no challenger reaches
+-- a composite that lists a check a memory challenger takes part in: memory no challenger reaches
 #guard refusal .onsite [site ⟨[sheet], locs.take 5, links.take 2⟩] == some (0, .site .challengerReach)
+#guard refusal .network [site ⟨[sheet], locs.take 5, links.take 2⟩] == some (0, .site .challengerReach)
+#guard refusal .compute [site ⟨[sheet], locs.take 5, links.take 2⟩] == some (0, .site .challengerReach)
+#guard refusal .remote [site ⟨[sheet], locs.take 5, links.take 2⟩] == none
+-- the example's site is registered for each smaller list as it is for onsite, under that list's own genesis, and a
+-- log's composite is read by the name it is written under
+#guard refusal .network entries == none && refusal .compute entries == none
+#guard [genesis .onsite, genesis .remote, genesis .network, genesis .compute].eraseDups.length == 4
+#guard Site.Registration.Composite.all.all fun c =>
+  (Site.Registration.Composite.ofJson (.str c.name)).toOption == some c
+#guard (Site.Registration.Composite.ofJson (.str "verity/certifier/v0,verity/wipe/v0")).toOption == none
+#guard (Site.Registration.Composite.ofJson
+  (.str "verity/wipe/v0,verity/sampled-proofs/v1,verity/certifier/v0")).toOption == none
+#guard (match check auditor .onsite (chain .network entries) with | .error r => some r | .ok _ => none) ==
+  some (0, .site .previous)
 -- a sheet with no data sheet, a device's memory over its sheet's, a certifier without its key
 #guard refusal .remote (stating { sheet with figures := { sheet.figures with sku := "sim-b" } }) ==
   some (0, .site .sheetDigest)

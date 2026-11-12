@@ -6,8 +6,8 @@
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, refusing any set of subprotocols that is neither remote's nor onsite's
-(``composite``, `verity.configuration.deploy.config.COMPOSITES`: protocol soundness covers only those two composites), then runs
+`verity run` checks the configuration, refusing any set of subprotocols that is no composite's (``composite``,
+`verity.configuration.deploy.config.COMPOSITES`: protocol soundness covers only those composites), then runs
 the parties it places on this machine (``--on``, default ``local``), or only the ``--party`` ones, for ``--periods``
 periods (default 1), in the shared state ``--state`` (default a new directory under the system's temporary one). The
 parties are those of the static table `REGISTRY` names: the served window's (`demos/onsite_served/served_table.py`);
