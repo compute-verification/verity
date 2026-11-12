@@ -858,6 +858,24 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
 
 
+def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
+    """A node deploy.toml gives /etc/sysctl.d/61-vy-userns.conf has it from its first boot, from the same source, so a check
+    or a training job sandboxed there doesn't fail before the first install; a node it doesn't name gets none."""
+    manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
+    entry = next(f for f in manifest["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
+    src = (NEBIUS / "../../../../../.." / entry["src"]).read_bytes()
+    for name in ("vy-nebius-cpu-14", "vy-nebius-2", "vy-nebius-1", "vy-auditor-1"):
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name)
+        assert r.returncode == 0, r.stderr
+        ud = r.stdout.split("# instance create request (ids are placeholders)\n")[0]
+        assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, name
+        embedded = {m[0]: gzip.decompress(base64.b64decode(m[1]))
+                    for m in re.findall(r"  - path: (\S+)\n    permissions: '0644'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
+        assert embedded.get(entry["path"]) == (src if name in entry["nodes"] else None), name
+    assert name not in entry["nodes"] and "vy-nebius-cpu-14" in entry["nodes"]
+    assert "sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf" in (NEBIUS / "vm_setup.sh").read_text()
+
+
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     """n1's replacement may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",
@@ -867,6 +885,19 @@ def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     assert json.loads(r.stdout.split("(ids are placeholders)\n")[1])["metadata"]["name"] == "vy-nebius-cpu-4"
     for script in ("launch.sh", "teardown.sh"):
         assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
+
+
+def test_a_data_disk_of_a_type_that_comes_in_93_gib_units_is_refused_at_another_size_before_anything_is_created():
+    """Nebius refuses such a data disk only after launch.sh has created the boot disk, which then stays behind, billed."""
+    cpu = {"NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy", "NEBIUS_VM_NAME": "vy-nebius-cpu-14", "NEBIUS_PLATFORM_PREFIX": "cpu-d3",
+           "NEBIUS_PRESET": "192vcpu-768gb"}
+    for kind in ("network_ssd_io_m3", "network_ssd_non_replicated"):
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1280", **cpu)
+        assert r.returncode == 1 and f"not a multiple of 93, the unit {kind} disks come in: 1209 is the next size down" in r.stderr
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1209", **cpu)
+        assert r.returncode == 0 and f"else created (1209 GiB {kind})" in r.stdout, r.stderr
+    r = launch("--dry-run", NEBIUS_DATA_TYPE="network_ssd", NEBIUS_DATA_GIB="1280", **cpu)
+    assert r.returncode == 0 and "else created (1280 GiB network_ssd)" in r.stdout, r.stderr
 
 
 @pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
