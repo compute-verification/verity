@@ -3,7 +3,6 @@ module
 public import Proofs.Pouw.PearlC.DeviceChainCapGap
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCapKernel
 public import Proofs.Pouw.PearlC.KernelWrefGap
-public import Definitions.Pouw.PearlC.DevicePricesLoop
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap

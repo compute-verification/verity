@@ -27,9 +27,9 @@ are H100 W1 prices. A device record makes each of them a parameter, as the schem
   is `devH100` (`devAt_hopper`, `DeviceGap.lean`).
 - `devSm120v1 pr`: `pearl-c-sm120` v1, the RTX PRO 6000's E4M3 step `⟨[32], 26, −133⟩` (`sm120E4m3`) promoted every 4
   atoms, at prices `pr`. Its named assumption takes `sem.fc = FormingP.atomMixP sm120E4m3`, the sm_120 atom-mix.
-- `devSm120v2 pr` (`Proofs.Pouw.PearlC.Records`): `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its flags are `SkipP.unitFlagsAt`'s
-  at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not `SkipP.unitFlagsP · 0`, which would judge one group
-  over all of k.
+- `devSm120v2 pr` (`Proofs.Pouw.PearlC.Records`): `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its
+  flags are `SkipP.unitFlagsAt`'s at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not
+  `SkipP.unitFlagsP · 0`, which would judge one group over all of k.
 -/
 
 @[expose] public section
@@ -69,10 +69,9 @@ def devAt (p : Pipeline) (G : ℕ) (pr : Prices) : PearlCDevice where
   saltDead := FormingP.saltDeadP p
 
 /-- **`pearl-c-sm120` v1's record**: the RTX PRO 6000's E4M3 `mma.sync` step `sm120E4m3 = ⟨[32], 26, −133⟩`, promoted
-every 4 atoms, at prices `pr`; the served record takes `Prices.sm120Loop` (`DevicePricesLoop`, generated from the card file). A
-tensor-core instruction is priced
-by its whole fragment: an E4M3 `m16n8k32` costs 4,096 units and a BF16 `m16n8k16` 2,048 MACs at 2, however few of its
-outputs a program uses (`w1-complete/sm120`). -/
+every 4 atoms, at prices `pr`; the served record takes `Prices.sm120Loop` (`Proofs.Pouw.PearlC.Records`). A tensor-core
+instruction is priced by its whole fragment: an E4M3 `m16n8k32` costs 4,096 units and a BF16 `m16n8k16` 2,048 MACs at 2,
+however few of its outputs a program uses (`w1-complete/sm120`). -/
 def devSm120v1 (pr : Prices) : PearlCDevice := devAt sm120E4m3 4 pr
 
 /-- The credited work of one unit at a device: the chain `m·k·n`, its promotion adds (`m·k·n/(32·G)` FP32 adds at the

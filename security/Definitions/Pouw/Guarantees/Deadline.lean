@@ -9,7 +9,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.DeviceWithin
 public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.PearlC.Game
@@ -28,11 +28,12 @@ timed run and verifier's rule, and time meets the cost model through one named a
   (`Adversary.BoundedBy`), and the clock.
 * `SpareCapacityAtDeadline`: remote's exhaustion. A declared fleet that can spend `C·(td − ts)` in the window has at most
   `C·(td − ts) − (1 − g)(1 − ε_s)·W` of it to spare for undeclared work, except with the same probability.
-* `PearlCSampledByDeadline` and its instances: the same in Pearl-C's game, from `GGapSampled`, and at v1 under rev1 on
-  sm_120 at the cap 1/1,000 (FP32 at 8.376, the honest cast at 8.72) on the four layouts its sampled g is pinned at.
-  The instances are stated at W1: their cost model is `W1.w1Priced (W1Device.sm120Loop sha fetch) salt`, and their
-  hypotheses are TT_OUT rev1 per audit tile at 1/1,000 at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that
-  cost model. `sha`, `fetch`, the salt's bytes `salt` and `sem` are parameters.
+* `PearlCSampledByDeadline`: the same in Pearl-C's game, from `GGapSampled`.
+* `PearlC.SampledDevRev1KByDeadline`: `PearlCSampledByDeadline` at the served form over every device record, from
+  `PearlC.SampledDevRev1K`. It is stated at W1: its cost model is `W1.w1Priced dv salt`, and its hypotheses are the record's
+  `KernelWithin`, TT_OUT rev1 per audit tile at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that cost model.
+  Its instances at the served record's numbers, on the four layouts the sampled g is pinned at, are lemmas
+  (`Proofs.Pouw.Lemmas.Deadline`).
 -/
 
 @[expose] public section
@@ -106,106 +107,26 @@ def PearlCSampledByDeadline : Prop :=
           T < (1 - g) * (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
-/-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 8192³**: `PearlCSampledByDeadline` at
-`pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_8192`'s record, FP32 at 8.376 and the honest cast at 8.72, at
-`g = 1648180439/446072750000` (0.36949%), at W1: the cost model is `W1.w1Priced dv salt`, with `dv` the record's W1
-setting `W1Device.sm120Loop sha fetch`. Its hypotheses are TT_OUT rev1 per audit tile at 1/1,000 at W1 and the honest
-clock at that cost model; `sha`, `fetch`, `salt` and `sem` are parameters. -/
-def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : PearlC.PearlCSem Q R S),
-    let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
-    let dv := PearlC.W1.W1Device.sm120Loop sha fetch
-    let CM : PearlC.CostModel Q R S := PearlC.W1.w1Priced dv salt
-    let P := PearlC.pearlCProtocolDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
-    ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevAt d PearlC.sh8192) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    Assumptions.HonestClock (CM.adversaries U) A run td →
-    ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - ((1648180439 / 446072750000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
-
-/-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 16384³**: `PearlCSampledByDeadline` at
-`pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_16384`'s record, at `g = 1058166877/294158650000` (0.35973%), with the
-hypotheses of `PearlCSm120Rev1Cap1000ByDeadline_8192`. -/
-def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : PearlC.PearlCSem Q R S),
-    let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
-    let dv := PearlC.W1.W1Device.sm120Loop sha fetch
-    let CM : PearlC.CostModel Q R S := PearlC.W1.w1Priced dv salt
-    let P := PearlC.pearlCProtocolDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
-    ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevAt d PearlC.sh16384) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    Assumptions.HonestClock (CM.adversaries U) A run td →
-    ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - ((1058166877 / 294158650000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
-
-/-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Qwen3-8B's served layout**:
-`PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b`'s record, at
-`g = 74663501/19190030000` (0.38907%), with the hypotheses of `PearlCSm120Rev1Cap1000ByDeadline_8192`. -/
-def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : PearlC.PearlCSem Q R S),
-    let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
-    let dv := PearlC.W1.W1Device.sm120Loop sha fetch
-    let CM : PearlC.CostModel Q R S := PearlC.W1.w1Priced dv salt
-    let P := PearlC.pearlCProtocolDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
-    ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevShapes d PearlC.qwen3_8bLinears) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    Assumptions.HonestClock (CM.adversaries U) A run td →
-    ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - ((74663501 / 19190030000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
-
-/-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Llama-3.1-8B's served layout**:
-`PearlCSampledByDeadline` at `pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b`'s record, at
-`g = 3045273083/782596025000` (0.38912%), with the hypotheses of `PearlCSm120Rev1Cap1000ByDeadline_8192`. -/
-def PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : PearlC.PearlCSem Q R S),
-    let d := PearlC.devSm120v1 PearlC.Prices.sm120Loop
-    let dv := PearlC.W1.W1Device.sm120Loop sha fetch
-    let CM : PearlC.CostModel Q R S := PearlC.W1.w1Priced dv salt
-    let P := PearlC.pearlCProtocolDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    let TR := PearlC.pearlCTilesDevRev1K d sem (1 / 1000) (218 / 25 - 8953 / 1000)
-    PearlC.Assumptions.TTOutTilePearlCDevRev1W1 dv salt d sem (1 / 1000) →
-    ∀ U : PearlC.Workload, U.InDomain P (PearlC.pearlCDomainDevShapes d PearlC.llama31_8bLinears) →
-    ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
-    Assumptions.HonestClock (CM.adversaries U) A run td →
-    ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - ((3045273083 / 782596025000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
-
 end Pouw.Guarantees
+
+namespace Pouw.Guarantees.PearlC
+
+open Pouw.PearlC Pouw.PearlC.Assumptions
+
+/-- **The served form's sampled audit by the deadline, at every device record**: `PearlCSampledByDeadline` at
+`SampledDevRev1K`'s instance. For every W1 setting `dv`, salt bytes `salt`, device record `d`, semantics `sem`, inert-work
+share `ρ`, kernel forming `c` and shapes `Ss`: if the honest kernel's `W_ref` is within `ω` of the credit left after the
+inert-work share on `Ss` (`KernelWithin`), TT_OUT rev1 per audit tile at W1 and the honest clock at
+`W1.w1Priced dv salt` give the sampled audit by the deadline (`SampledByDeadline`) on the domain restricted to `Ss`, at
+`g = 1 − (1 − 1/400)/ω`. -/
+def SampledDevRev1KByDeadline : Prop :=
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
+    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Pouw.PearlC.Shape → Prop) (ω : ℚ),
+    KernelWithin d ρ c Ss ω → TTOutTilePearlCDevRev1W1 dv salt d sem ρ →
+    ∀ U : Pouw.PearlC.Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) →
+    ∀ (A : Pouw.PearlC.Adversary (Pouw.PearlC.W1.w1Priced dv salt)) (run : TimedRun Q R S) (td : ℝ),
+    Pouw.Assumptions.HonestClock ((Pouw.PearlC.W1.w1Priced dv salt).adversaries U) A run td →
+    SampledByDeadline (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c) U A run td
+      ((1 - (1 - 1 / 400) / ω : ℚ) : ℝ) δPearlC
+
+end Pouw.Guarantees.PearlC

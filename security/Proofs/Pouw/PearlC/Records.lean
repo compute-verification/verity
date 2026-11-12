@@ -6,15 +6,18 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 
 /-!
-# Pearl-C's device records other than the served one
+# Pearl-C's device records
 
-The H100's record (`devH100`, `Prices.h100`), `pearl-c-sm120` v2's (`devSm120v2`), the RTX PRO 6000's issue-bound prices
-(`Prices.sm120`), Pearl-C4's record on sm_120 (`devFp4Sm120`, `Fp4Prices.sm120`, `Fp4Prices.sm120Issue`), their W1
-settings (`W1Device.h100`, `.sm120`, `.fp4Sm120`, the S8 settings `.s8Sm120` and `.s8H100`, and their fragment lists),
-and the TT_OUT conjectures stated at them. No listed statement reads one: the listed forms are stated over every device
-record (`Definitions.Pouw.Guarantees.PearlCDev`), and these are the numbers the lemmas at device records
-(`Proofs.Pouw.Lemmas.PearlCRecords`) and their proofs instantiate them at. The served record, `devSm120v1` at
-`Prices.sm120Loop` on `W1Device.sm120Loop`, stays in `Definitions.Pouw.PearlC`, its prices generated from the card file.
+The served record's prices (`Prices.sm120Loop`) and W1 setting (`W1Device.sm120Loop`, `W1Prices.sm120Loop`), the H100's
+record (`devH100`, `Prices.h100`), `pearl-c-sm120` v2's (`devSm120v2`), the RTX PRO 6000's issue-bound prices
+(`Prices.sm120`, `W1Prices.sm120`), Pearl-C4's issue-bound prices (`Fp4Prices.sm120Issue`), the other W1 settings
+(`W1Device.h100`, `.sm120`, `.fp4Sm120`, the S8 settings `.s8Sm120` and `.s8H100`, and their fragment lists), and the
+TT_OUT conjectures stated at them. No listed statement reads one: the listed forms are stated over every device record
+(`Definitions.Pouw.Guarantees.PearlCDev`, `PearlC.SampledDevRev1KByDeadline`), and these are the numbers the lemmas at
+device records (`Proofs.Pouw.Lemmas.PearlCRecords`, `Proofs.Pouw.Lemmas.Deadline`) and their proofs instantiate them at.
+`benchmarks/pouw/tests/test_price_twins_accounting.py` holds the served prices to the RTX PRO 6000's card file.
+Pearl-C4's record on sm_120 (`devFp4Sm120`, `Fp4Prices.sm120`) stays in `Definitions.Pouw.PearlC.DeviceFp4`, since
+`Pouw.Guarantees.PearlC.TileCheck4WordsCore` reads it.
 -/
 
 @[expose] public section
@@ -43,40 +46,18 @@ def devSm120v2 (pr : Prices) : PearlCDevice := devAt sm120E4m3 0 pr
 /-- sm_120's W1 prices, issue-bound: an FP32 add 8, a BF16 MAC 2, credited forming 40 and A-only forming 1 per element. -/
 def Prices.sm120 : Prices := ⟨8, 2, ⟨40, 1⟩⟩
 
+/-- **sm_120's W1 prices in the measured loop**, the served record's (node 2 at locked 2,100 MHz): an FP32 add
+`1047/125 = 8.376` per word (3 loop instructions per 64), a BF16 MAC 2, the credited forming 40 per element (the k32 noise
+atom, 32, and the E4M3 cast at its cheapest implementation, 8.0, at both FP32 prices) and the A-only forming 2 per element
+(one FFMA on every 8th element at 8.376, 1.047, rounded up). `Costs` counts the forming in whole units, and rounding `qa`
+up raises `W_ref` and not the credit, so g here is above g at the measured 1.047 (0.37349% against 0.36218% for v2 at
+the cap 1/1,000, 8192³). The add is exact. The gap's price rule computes g at this record and at the issue-bound
+`Prices.sm120`, and publishes the larger. -/
+def Prices.sm120Loop : Prices := ⟨1047 / 125, 2, ⟨40, 2⟩⟩
+
 end Pouw.PearlC
 
 namespace Pouw.PearlC
-
-open Finset Pouw.Fp8Atom Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Dev
-
-/-- **sm_120's prices in FP4 units** (theory §2–§4, node 2 at locked 2,100 MHz), with an FP8 unit worth 2 FP4 units,
-the block scale on `lut256` (§6.6) and FADD at the measured `1047/125`
-= 8.376, as `Prices.sm120Loop`. It is `Fp4Prices.sm120At (1047/125) Fp4ScalePath.lut256`:
-- a BF16 MAC is 4 (2.000 FP8 units);
-- `fs = 105299/1000 = 105.299`: the noise atom 64 (a dense k64 NVFP4 `mma.sync`, 64 lanes, at full shape); the block
-  scale on `lut256` at its W1 issue prices, `7.5 + FADD/8 = 8.547` (half an `F2FP`, 1.25 `PRMT` and one `LDS` per block
-  of 16, and the FMUL `amax·1/6`); and the cast, FMUL plus the E2M1 cvt's F2FP alone, at `2·8.376 + 2·8.0 = 32.752`;
-- `qa = 9423/500 = 18.846`: the noisy amax (one FMNMX, `2·8.376`) and ρ's squared accumulate on every 8th element
-  (`2·8.376/8`), both reading the row alone.
-
-The price rule publishes the larger g, and g rises with the FADD price, so the record is at the in-loop 8.376, not the
-issue-bound 8.00 (`fs = 104.5`, `qa = 18`). `creditFp4` and `wrefFp4` read this one `fs`. It was `2444/25 = 97.76`, with
-the block scale at 1 and FADD at 8.38. -/
-def Fp4Prices.sm120 : Fp4Prices := ⟨4, 105299 / 1000, 9423 / 500⟩
-
-/-- **`devFp4Sm120`**, Pearl-C4 on sm_120 (`BLACKWELL_SM120_NVF4`, `Fp4.sm120Nvf4`: 4 groups of 16, UE4M3 per 16, 27
-fraction bits, a 36-bit window, round toward zero, floor −174): NVFP4's forming, `C̃ = cTilde`, U by `peelFp4`,
-`Fp4Skip`'s lone-skip flags, the sub-grid flags and `saltDead4`, at `Fp4Prices.sm120`. -/
-def devFp4Sm120 : Fp4Device where
-  prices := Fp4Prices.sm120
-  form := fun α β x e F => formRow α β x e F
-  ticket := fun A B => ticket4 sm120Nvf4 A B
-  useful := fun A B FA FB beA beB i j => (peelFp4 sm120Nvf4 A B FA FB beA beB i j).bind wordQ
-  flags := fun A B i j t => match A i, B j with
-    | some a, some b => Fp4Skip.fp4PureFlags sm120Nvf4 0 a.1 b.1 a.2 b.2 t
-    | _, _ => false
-  subgrid := fun A B => subgridFlags4 sm120Nvf4 A B
-  saltDead := saltDead4
 
 /-- **sm_120's prices in FP4 units at the issue-bound FP32 price**: every FP32 operation at 8.00. -/
 def Fp4Prices.sm120Issue : Fp4Prices := ⟨4, 5429 / 50, 18⟩
@@ -86,6 +67,27 @@ end Pouw.PearlC
 namespace Pouw.PearlC.W1
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Pouw.PearlC.Fp4 Pouw.PearlC.Fp4Dev
+
+/-- **sm_120's W1 prices**, issue-bound (node 2, locked 2,100 MHz):
+E4M3 1, BF16 2 and NVFP4 0.5 per MAC; FP32 8; a cast 16 per instruction (8 per code); INT32 16.
+
+S8 is 1 per MAC, from the data sheet; those runs did not measure it. NVIDIA's RTX PRO Blackwell GPU Architecture
+whitepaper v1.1, Appendix A, Table 4 (the RTX PRO 6000 Blackwell Workstation Edition, the same 188-SM GB202; the source
+`benchmarks/census/hardware.json` cites for `rtx-pro-6000-server/e4m3`) gives "Peak INT8 Tensor TOPS" 1007.6 dense,
+equal to "Peak FP8 Tensor TFLOPS with FP32 Accumulate" 1007.6. The Server Edition's product page and data sheet give no
+INT8 figure. The census measured the wrapping form (`m16n8k32.row.col.s32.s8.s8.s32`) at
+1,023.7 MACs per SM per clock at 16 warps, against E4M3's 1,023.8 (`f32.e4m3.e4m3.f32`, 16 warps); the `.satfinite`
+form's rate is not measured. `Pouw.TileBound.price` has int8 at 1 from locked-clock runs. -/
+def W1Prices.sm120 (sha fetch : ℚ) : W1Prices where
+  mac := fun | .e4m3 => 1 | .bf16 => 2 | .e2m1 => 1 / 2 | .s8 => 1
+  fp32 := 8
+  cvt := 16
+  int32 := 16
+  sha512 := sha
+  fetch := fetch
+
+/-- sm_120's W1 prices with FP32 at the measured loop's `1047/125 = 8.376`. -/
+def W1Prices.sm120Loop (sha fetch : ℚ) : W1Prices := { W1Prices.sm120 sha fetch with fp32 := 1047 / 125 }
 
 /-- **The H100's W1 prices** (`Dimension.H100.h100Nominal`, the datasheet): E4M3 1, BF16 2 and S8 1 per MAC (the H100
 has no E2M1 fragment, so that price is never read); FP32 32; a cast 64 per instruction (32 per code); INT32 64.
@@ -125,6 +127,10 @@ def W1Device.h100 (sha fetch : ℚ) : W1Device := W1Device.h100At (W1Prices.h100
 program's choice, not the machine's). It omits the card's integer tensor core (`W1Device.s8Sm120` has it), pending
 the restatement of its readers on an S8 setting. -/
 def W1Device.sm120 (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120 sha fetch)
+
+/-- `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop`'s setting. It omits the card's integer tensor
+core (`W1Device.s8Sm120` has it), pending the restatement of its readers on an S8 setting. -/
+def W1Device.sm120Loop (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120Loop sha fetch)
 
 /-- `devFp4Sm120`'s setting, in FP4 units. It omits the card's integer tensor core (`W1Device.s8Sm120` has it),
 pending the restatement of its readers on an S8 setting. -/

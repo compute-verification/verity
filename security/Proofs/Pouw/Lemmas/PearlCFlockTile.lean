@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.PearlC.FlockTile.Audit

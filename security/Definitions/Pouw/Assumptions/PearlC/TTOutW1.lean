@@ -29,8 +29,8 @@ variants) uses one cost model on both sides.
 
 **The device.** `dv` is the W1 setting of the record `d`: `W1Device.sm120` for `devSm120v1/v2 Prices.sm120`,
 `W1Device.sm120Loop` for `… Prices.sm120Loop`, and `W1Device.h100` for `devH100` (`W1Checks.toPrices_*`: the coarse
-prices agree). The settings but `W1Device.sm120Loop`, and their records, are `Proofs.Pouw.PearlC.Records`'. `sha` and `fetch` are parameters; each assumption is believed at the measured ones, and it only gets
-weaker as they grow.
+prices agree). The settings and their records are `Proofs.Pouw.PearlC.Records`'. `sha` and `fetch` are parameters;
+each assumption is believed at the measured ones, and it only gets weaker as they grow.
 
 **The noise.** W1 runs no oracle, so at a `sem` whose noise reads `H` a W1 program cannot evaluate the noise and these
 assumptions say nothing about the deployment. They speak at `NoiseSha512.sha512Sem base salt rootB` with the same `salt`,

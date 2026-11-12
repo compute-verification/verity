@@ -11,7 +11,6 @@ public import Proofs.Pouw.Prob
 import Definitions.Accounting.TS
 import Definitions.Claims
 import Proofs.Pouw.PearlC.Records
-import Definitions.Pouw.PearlC.DevicePricesLoop
 import Base.Sizes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
