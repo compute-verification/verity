@@ -156,10 +156,10 @@ def ledger_error(doc: Mapping[str, Any]) -> Mapping[str, Any] | None:
     """The session's error in a ledger document: `ledger.Declared.to_json`'s, or an object that carries one under
     `declared` (a `verifier.json` session's `ledger`), at the specification's rate; the rate is not in the error, so
     the measured reading's is the same. None where the document holds none."""
-    try:
-        return doc.get("declared", doc)["gamma"]["spec"]["error"]
-    except (KeyError, TypeError, AttributeError):
-        return None
+    at = doc.get("declared", doc) if isinstance(doc, Mapping) else None
+    for key in ("gamma", "spec", "error"):
+        at = at.get(key) if isinstance(at, Mapping) else None
+    return at
 
 
 def main(argv: Sequence[str] | None = None) -> int:

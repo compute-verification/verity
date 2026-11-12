@@ -18,10 +18,10 @@ from verity.protocols.poub.verifier import audit, codec, coins, ledger, monitori
 
 D0 = Fraction(1, 2 ** 40)
 EPS = Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64)
-ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
+ALL_SAMPLED = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
              "profile": {"delta": str(D0), "gaps": [], "receipts": 34, "windows": [[17, 17], [17, 17]],
                          "wrong": "0"}}
-"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one drawn, at the eps `certify`
+"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one sampled, at the eps `certify`
 publishes for it, its two openings coins at `samples` each."""
 
 
@@ -29,18 +29,18 @@ def ledger_error(eps: Fraction = EPS, *, passes: int = 2, sketch: float = 0.0, b
     """The error a verifier's ledger gives a session whose answer publishes `eps` (`ledger.Gamma.to_json`'s `error`):
     the horizon's, δ₀ and AuditRO's slack over `passes` passes, with the sketch's term and the sample's two; its
     per-window total is unread here."""
-    draw = ledger.SamplingTerms(float(eps - D0), binding)
-    horizon = float(D0) + passes * 2.0 ** -audit.SLACK_LOG2 + sketch + draw.total
-    return {"draw": draw.to_json(), "horizon": horizon, "sketch": sketch, "windows": None}
+    terms = ledger.SamplingTerms(float(eps - D0), binding)
+    horizon = float(D0) + passes * 2.0 ** -audit.SLACK_LOG2 + sketch + terms.total
+    return {"draw": terms.to_json(), "horizon": horizon, "sketch": sketch, "windows": None}
 
 
 NO_SKETCH = ledger_error()
-"""`ALL_DRAWN`'s error under a receipt that is no sketch: its `eps` and two passes' slack."""
+"""`ALL_SAMPLED`'s error under a receipt that is no sketch: its `eps` and two passes' slack."""
 P = Fraction(NO_SKETCH["horizon"])
 
 
-def partly_drawn() -> dict:
-    """A session whose two windows of 100,000 receipts drew 33,273 each, its outputs as `certify` makes them."""
+def partly_sampled() -> dict:
+    """A session whose two windows of 100,000 receipts sampled 33,273 each, its outputs as `certify` makes them."""
     windows = [(100_000, 33_273), (100_000, 33_273)]
     b = pooled.bound(windows, D0)
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
@@ -71,7 +71,7 @@ def test_one_short_session_is_ruled_out_exactly_when_the_union_is():
 def test_the_reference_year_at_one_in_a_million_leaves_one_session_uncovered():
     """12,500 machines with a session every 600 s: the row's error T·p ≈ 6·10⁻⁴ is within 1% but not 10⁻⁶, where the
     count still certifies all but one session."""
-    year = monitoring.table(ALL_DRAWN, NO_SKETCH, 12_500, 600)["periods"]["year"]
+    year = monitoring.table(ALL_SAMPLED, NO_SKETCH, 12_500, 600)["periods"]["year"]
     t = 12_500 * (365 * 86400 // 600)
     assert year["sessions"] == t
     assert year["error"] == float(t * P) and year["q_bytes"] == t * 34 * codec.BLOCK_BYTES and "no_bound" not in year
@@ -83,7 +83,7 @@ def test_the_reference_year_at_one_in_a_million_leaves_one_session_uncovered():
 
 
 def test_a_week_of_one_machine_certifies_every_session():
-    week = monitoring.table(ALL_DRAWN, NO_SKETCH, 1, 600)["periods"]["week"]
+    week = monitoring.table(ALL_SAMPLED, NO_SKETCH, 1, 600)["periods"]["week"]
     assert week["sessions"] == 1008
     for d in ("1/100", "1/1000000"):
         assert week[d]["pooled"]["q_bytes_at_least"] == 1008 * 34 * codec.BLOCK_BYTES
@@ -91,7 +91,7 @@ def test_a_week_of_one_machine_certifies_every_session():
 
 
 def test_the_per_window_figure_is_the_openings_bound_at_delta_over_t():
-    a = partly_drawn()
+    a = partly_sampled()
     r = monitoring.table(a, ledger_error(Fraction(a["public"]["eps"])), 12_500, 600)
     for row in r["periods"].values():
         t = row["sessions"]
@@ -106,10 +106,10 @@ def test_the_per_window_figure_is_the_openings_bound_at_delta_over_t():
 
 
 def test_the_per_window_error_charges_each_sessions_terms_beyond_its_own_delta():
-    """`ALL_DRAWN` drew 34 receipts, but its error charges its two openings coins at `samples` each, and the per-window
-    figure's error charges every term beyond δ₀ once a session, not the draws made (2.4·10⁻⁶ over the year, not
-    1.2·10⁻⁹)."""
-    year = monitoring.table(ALL_DRAWN, NO_SKETCH, 12_500, 600)["periods"]["year"]
+    """`ALL_SAMPLED` sampled 34 receipts, but its error charges its two openings coins at `samples` each, and the
+    per-window figure's error charges every term beyond δ₀ once a session, not the receipts sampled (2.4·10⁻⁶ over the
+    year, not 1.2·10⁻⁹)."""
+    year = monitoring.table(ALL_SAMPLED, NO_SKETCH, 12_500, 600)["periods"]["year"]
     t = year["sessions"]
     for d in monitoring.DELTAS:
         want = d + t * (P - D0)
@@ -139,15 +139,15 @@ def shaped() -> tuple[dict, dict]:
     sketch = float(timing.sketch_failure(c, SHAPE["passes"], SHAPE["rows"], blocks=SHAPE["blocks"],
                                          outside=node.sketch_outside))
     every = ledger.window_receipts(audit.Pace(SHAPE["pace_k"], 60 * 10 ** 9), SHAPE["blocks"], 0, 0)
-    draw = ledger.SamplingTerms(coins.openings_coins(w, 1) * s * 2.0 ** -ledger.REJECTION_LOG2,
+    terms = ledger.SamplingTerms(coins.openings_coins(w, 1) * s * 2.0 ** -ledger.REJECTION_LOG2,
                                 ledger.binding_over(coins.openings_coins(w, 1), every, s, node.sketch_outside * c))
-    horizon = float(D0) + SHAPE["passes"] * 2.0 ** -audit.SLACK_LOG2 + sketch + draw.total
+    horizon = float(D0) + SHAPE["passes"] * 2.0 ** -audit.SLACK_LOG2 + sketch + terms.total
     windows = [(SHAPE["receipts"], s)] * w
     b = pooled.bound(windows, D0)
     q = (w * SHAPE["receipts"] - -(-b.wrong.numerator // b.wrong.denominator)) * codec.BLOCK_BYTES
     return ({"verdict": "accept", "reason": None, "public": {"eps": str(period.eps(w, 1, s)), "q_bytes": q},
              "profile": {"delta": str(D0), "gaps": [], "windows": [list(x) for x in windows]}},
-            {"draw": draw.to_json(), "horizon": horizon, "sketch": sketch, "windows": None})
+            {"draw": terms.to_json(), "horizon": horizon, "sketch": sketch, "windows": None})
 
 
 def test_a_sketch_sessions_whole_error_is_the_ledgers_and_is_hundreds_of_times_its_eps():
@@ -193,7 +193,7 @@ def test_the_per_window_figure_has_no_amount_where_its_own_error_is_1_or_more():
     """A week of one machine whose sessions sum to 0.995: the row keeps its total, and the per-window figure, whose
     error adds its δ, keeps its amount at 10⁻⁶ and has none at 1/100, where it sums to 1.005."""
     sketch = float(Fraction(995, 1000) / 1008 - P)
-    week = monitoring.table(ALL_DRAWN, ledger_error(sketch=sketch), 1, 600)["periods"]["week"]
+    week = monitoring.table(ALL_SAMPLED, ledger_error(sketch=sketch), 1, 600)["periods"]["week"]
     assert week["error"] == pytest.approx(0.995) and week["q_bytes"] == 1008 * 34 * codec.BLOCK_BYTES
     small, large = week["1/1000000"]["per_window"], week["1/100"]["per_window"]
     assert small["q_bytes"] == week["q_bytes"] and "no_bound" not in small
@@ -203,17 +203,17 @@ def test_the_per_window_figure_has_no_amount_where_its_own_error_is_1_or_more():
 
 def test_an_error_that_is_not_the_sessions_ledgers_is_refused():
     with pytest.raises(ValueError, match="reads the session's whole error from its verifier's ledger"):
-        monitoring.table(ALL_DRAWN, None, 1, 600)
+        monitoring.table(ALL_SAMPLED, None, 1, 600)
     with pytest.raises(ValueError, match="reads the session's whole error from its verifier's ledger"):
-        monitoring.table(ALL_DRAWN, {"horizon": float(EPS)}, 1, 600)
+        monitoring.table(ALL_SAMPLED, {"horizon": float(EPS)}, 1, 600)
     below = ledger_error() | {"horizon": float(D0)}
     with pytest.raises(ValueError, match="is below the answer's eps, .*: it is not this session's"):
-        monitoring.table(ALL_DRAWN, below, 1, 600)
+        monitoring.table(ALL_SAMPLED, below, 1, 600)
 
 
 def test_the_cli_reads_a_legs_bandwidth_json_and_the_sessions_ledger(tmp_path, capsys):
     f, g = tmp_path / "bandwidth.json", tmp_path / "ledger.json"
-    f.write_text(json.dumps({"answer": ALL_DRAWN, "q_bytes": ALL_DRAWN["public"]["q_bytes"]}))
+    f.write_text(json.dumps({"answer": ALL_SAMPLED, "q_bytes": ALL_SAMPLED["public"]["q_bytes"]}))
     g.write_text(json.dumps({"declared": {"gamma": {"spec": {"error": NO_SKETCH}, "measured": {"error": NO_SKETCH}}}}))
     args = [str(f), "--machines", "1", "--window-s", "600", "--out", str(tmp_path / "m.json")]
     assert monitoring.main([*args, "--ledger", str(g)]) == 0
@@ -230,7 +230,7 @@ def test_the_cli_reads_a_legs_bandwidth_json_and_the_sessions_ledger(tmp_path, c
 def test_each_period_is_labelled_as_one_session_scaled_up():
     """No period is measured: each row says it is the one session scaled to the period's sessions, and the statement
     is named by its Lean declaration and file alone."""
-    r = monitoring.table(ALL_DRAWN, NO_SKETCH, 12_500, 600)
+    r = monitoring.table(ALL_SAMPLED, NO_SKETCH, 12_500, 600)
     for name, row in r["periods"].items():
         assert row["basis"] == f"one session scaled up to {row['sessions']} sessions, not a measured {name}"
     assert set(r["statement"]) == {"name", "file"}
