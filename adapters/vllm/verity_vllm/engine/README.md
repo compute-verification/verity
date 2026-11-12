@@ -26,8 +26,7 @@ what it holds.
   `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
   `profiles.admission_calibration`). Each of these lists in `__all__` the names that other packages, the
   benchmarks and the command line read from it. Three more modules that other packages or the benchmarks read
-  state no `__all__` yet: `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `step_trace`'s
-  does not yet list `SERVED` and `scheduler_config`, which other packages read; and
+  state no `__all__` yet: `int8_fused`, `int8_vllm` and `profiles.layer_classes`; and
   `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
   `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`

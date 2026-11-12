@@ -41,7 +41,7 @@ from verity_vllm.engine import handle
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.records.schema_ids import STEP_TRACE_SCHEMA
 
-__all__ = ["SCHEMA", "StepTrace", "load", "step_geometry", "steps"]
+__all__ = ["SCHEMA", "SERVED", "StepTrace", "load", "scheduler_config", "step_geometry", "steps"]
 
 SCHEMA = STEP_TRACE_SCHEMA
 #: the trace's file in a `verity-vllm serve-openai` run, beside the committer's step_trace.jsonl
