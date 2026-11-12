@@ -11,9 +11,14 @@ import sys
 
 import pytest
 
-from verity_vllm.query.manifest import format as RM
 from verity_vllm.acquire import plan as P
-from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, ArgSlot, ReturnSlot, runtime_tree_from_paths
+from verity_vllm.correspondence.reader_for_acquire import (
+    AnnotationCorrespondence,
+    ArgSlot,
+    ReturnSlot,
+    runtime_tree_from_paths,
+)
+from verity_vllm.query.manifest import format as RM
 
 PD = hashlib.sha256(b"program").hexdigest()
 
@@ -142,6 +147,17 @@ def test_promoted_value_consumer_input_only():
     assert {v.value_id: v for v in p2.values}["body/out"].chosen.lifetime == "unmutated"
     # one promoted-consumer pre-hook, whatever the consumer's class
     assert ("body.blocks.0.norm_in", "consumer_input", "in[0]") in [h.key() for h in plan.hooks()]
+
+
+def test_promoted_value_with_two_consumers_takes_the_first_consumer_input():
+    """POLICY over several legal sites of a promoted Value: each consumer's input is one, and the first by module is chosen."""
+    rows = base_rows() + [row("instance_outputs", "body", RM.PROMOTED_MEMBER, **RM.promoted_annotations(
+        {"rows": 3, "width": 8, "dtype": "bf16", "spec": "Scale_v1", "consumers": ["body.blocks.0.norm_out", "body.blocks.0.norm_in"]}))]
+    plan, _, _ = make_plan(rows)
+    v = {v.value_id: v for v in plan.values}["body/out"]
+    assert v.promoted and [(s.kind, s.module) for s in v.sites] == [("consumer_input", "body.blocks.0.norm_out"), ("consumer_input", "body.blocks.0.norm_in")]
+    assert v.chosen.key() == ("body.blocks.0.norm_in", "consumer_input", "in[0]")
+    assert v.why == "several legal sites (consumer_input, consumer_input): policy chose consumer_input"
 
 
 def test_zero_sites_is_unsupported_and_fails_closed():
@@ -276,7 +292,8 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
         P.load_plan(path)
     # the digest is over the plan's CONTENT: the runtime tree's provenance string is not part of it -- the meta-instantiated model and the
     # live engine of the same row give the same sites (they did, Value for Value, on the reference row) and so the same digest
-    rt = tree(); rt.source = "other"
+    rt = tree()
+    rt.source = "other"
     p4, _, _ = make_plan(rows, rt=rt)
     assert p4.digest == p1.digest and p4.body()["runtime_source"] == "other" != p1.body()["runtime_source"]
     assert P.plan_digest(p1.to_json()) == p1.digest                     # the saved document re-digests to itself (load_plan's check)
