@@ -9,7 +9,8 @@ derives one training step as a Program. Each module's docstring says what it hol
 ## What other packages import
 
 A module of this directory that another package of the adapter, a benchmark or a tool imports from declares those
-names in its `__all__`; a name outside that list is the translator's own. From the rest of the adapter:
+names in its `__all__`; a name outside that list is the translator's own. The package itself gives no name: each is
+imported from its module, and importing a module loads only what that module imports. From the rest of the adapter:
 `derive.derive_report`, the entry point (`pipeline`); `target_profile`'s `TargetProfile`, `DEFAULT_TARGET`,
 `ArtifactIdentity`, `parse_target_arg` and `profile_mismatches` (`engine`, `observe`, `pipeline`, `program`, `query`);
 the specs, launch contexts and tensor-core steps of `targets` (`program`, `observe`, `acquire`, `pipeline`);
