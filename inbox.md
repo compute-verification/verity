@@ -30,3 +30,31 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov 11:22 AM PST, to your 1
 
 TIMER: none
 
+[2026-11-12T19:23Z] ec1d208f2c60
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 11:25 AM PST. **The first run failed on two things of mine, now closed in one commit, and it shows the lock at lean's head is stale on lean's own account. I have committed no regenerated record and will not before lean's lock commit, unless you say otherwise. A second run is waiting for a slot.**
+
+**The run** `r20261112-174612-20cb` at `fcdb33673b07`: still running its suites [run: `research status`, 11:20 AM PST]. Its records step ended with exit 1 (`RECORDS rc 1`, outcome `failed`) [read: its `stdout.log` and four `report.json`].
+
+- **All the Lean builds.** `security/Proofs` passed: 201,586 declarations in 3,972 modules, only `propext`, `Classical.choice`, `Quot.sound`. `verity/commitments/identity` passed. No kernel replay: this is the fast kind.
+- **Mine, closed in `4be378c712b9`** (pushed): the certifier verifier's lock did not name `NetworkCheck.ScanOk`.
+  - `layers`: `NetworkCheck.Period` imports `NetworkCheck.ScanOk`, outside its layer.
+  - `reads`: 31 guarantees read `NetworkCheck.ScanOk`'s definitions, outside the spec.
+  - The commit gives `NetworkCheck.ScanOk` a layer of its own (`Flock.RegKnown`, `Identity.Domains`, `Identity.Tagged`) and lists it in the period check's. A hand-written lock entry, no record. `--try` never ran this rule, so the old branch had the same gap.
+- **Not mine: the lock at `ca2e80f1edf7` does not match its own Lean** [read: the audit's failures; `git show ca2e80f1edf7:`]. An `--update` at this head moves them all:
+  - `Commitments.FV3` read where `Flock.FV3` was: 175 guarantees in `security/Properties`, 121 in `security`.
+  - `Circuits.Program` read where `Flock.Program` was: 64 guarantees.
+  - `NciCheck.Baseline.digest` changed, `FORMAT` and `FORMAT_V2` new: 31 guarantees and 1.
+  - In `NetworkCheck.Period`: `Public`, `Public.maxTokensCap`, `auditOf`, `publicJson`, `rowsOf`, `rowsTerms`, `terms`. And `rowsCapPublished_nontrivial`'s signature: the terms gained `entries := 0`. The Lean at `ca2e80f1edf7` has that field and its lock does not.
+- **Mine, and more than your ruling lists. A change of `check` moves every guarantee whose statement reads `check`:**
+  - **23 of soundness's `Verity.*` records**, `Verity.remote_soundness_of_subprotocols` among them, which is deployed: `coins_couple`, `remote_soundness_of_subprotocols`, `soundness_at_of_componentBounds`, `soundness_at_of_targets`, `soundness_of_subprotocols`, `soundness_of_upFront`, `target_of_periods` (each with its two witnesses) and `wipe_target` with one.
+  - **1 of proofs': `Flock.SecurityProofs.RecursiveAuditC3`.**
+  - 8 of ours: `rowsCapPublished`, `rowsCapPublished_honest`, `rowsProgWired`, `rowsStateTied`, `rowsTiedCharged` and the three `rowsOkHeld` records, which are new.
+  - Each now reads `NetworkCheck.Period.check` as changed, the new `okCheck`, `okChecks`, `okChecksAt`, `okRefusal`, `NetworkCheck.ScanOk` and `Identity.Domains`. They cannot be put back without dropping the rule.
+  - As you ruled: `cappedSchedule` and `cappedPeriod` changed, read by our 11 `Properties.NetworkPeriod` records.
+
+**What I do unless you say otherwise:** commit no regenerated record now. Mine and lean's cannot be split inside one record, and a record I commit now meets lean's lock commit at the merge. At lean's ready line I merge lean's branch once and run `--update` on a lock that matches its Lean, so only mine move, and I send you that list.
+
+**The second run** `r20261112-192107-f9f9` at `4be378c712b9`, launched once at 11:21 AM PST: the same `--update`, to show the two failures of mine are gone and nothing was hidden behind them, then the suites the lock's change reaches. **It waits for a slot: about 31 minutes, 4 ahead of it** [read: its launch line]. I do not relaunch.
+
+The body's path and the rest stand as in my 10:55 AM line. The head is now `4be378c712b9`.
+
