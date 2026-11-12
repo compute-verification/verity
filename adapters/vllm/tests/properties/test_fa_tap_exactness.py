@@ -3,7 +3,11 @@ every geometry the hidden sources declare (the GPU run is `tests/properties/fa_t
 from __future__ import annotations
 
 import copy
+import functools
 import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -17,6 +21,41 @@ from verity_vllm.acquire.sources.hidden_source import fa3_tile
 from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.properties import fa_tap_exactness as X
 from verity_vllm.properties.record import digest_of
+
+ADAPTER = Path(__file__).parents[2]
+
+#: argv[1], the property's module, is imported alone, then `ir_guard` is called: the modules of the reference evaluator and of the
+#: Definitions that are loaded after each, and the Definitions the call brings to the table
+CHILD = ("import importlib, json, sys\n"
+         "from verity.circuits.defs import REGISTRY\n"
+         "def loaded():\n"
+         "    return sorted(m for m in sys.modules if m.startswith(('verity.circuits.evaluation', 'verity.definitions')))\n"
+         "X = importlib.import_module(sys.argv[1])\n"
+         "at_import, held = loaded(), set(REGISTRY.defs)\n"
+         "X.ir_guard(0x3F800000)\n"
+         "print(json.dumps({'at_import': at_import, 'after_a_call': loaded(), 'entered_with_a_call': sorted(set(REGISTRY.defs) - held)}))\n")
+
+
+@functools.cache
+def _loaded() -> dict[str, Any]:
+    """A process of its own that imports the property's module and then calls `ir_guard`: what is loaded after each, and the
+    Definitions that enter the table with the call."""
+    child = subprocess.run([sys.executable, "-c", CHILD, X.__name__], capture_output=True, text=True, check=True, cwd=ADAPTER)
+    return json.loads(child.stdout.splitlines()[-1])
+
+
+def test_importing_the_property_loads_no_definition_and_no_evaluator():
+    """A Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
+    (`verity.commitments.windows.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
+    at the module's head they are in the table from the import on, in a process that has checked no word.  The import runs in a
+    process of its own: this one has loaded the Definitions for its other tests."""
+    assert _loaded()["at_import"] == []
+
+
+def test_the_definitions_enter_the_table_with_the_first_ir_call():
+    """`ir_guard` is what loads them, so the test above holds something."""
+    got = _loaded()
+    assert "verity.definitions.registry.prims" in got["after_a_call"] and got["entered_with_a_call"]
 
 
 def _record(**fields):
