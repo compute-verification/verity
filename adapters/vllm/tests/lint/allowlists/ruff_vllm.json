@@ -219,7 +219,6 @@
     {"file": "tests/query/test_boundary_oracle.py", "kind": "E741", "symbol": "test_two_dimensional_strided_member_reads", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "I001", "symbol": "test_partial_reads_shared_argument_and_scan_xs", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/test_settings_records.py", "kind": "I001", "symbol": "engine", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tools/migrate/superseded_quarantine.py", "kind": "ISC004", "symbol": "<module>", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "tools/migrate/superseded_quarantine.py", "kind": "ISC004", "symbol": "promote_edits", "detail": "Unparenthesized implicit string concatenation in collection", "count": 13},
     {"file": "tools/ratchet_gate.py", "kind": "B023", "symbol": "growth.in_pool", "detail": "Function definition does not bind loop variable `kinds`"},

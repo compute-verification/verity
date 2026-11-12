@@ -279,8 +279,6 @@
     {"file": "tests/protocols/test_protocol_options.py", "kind": "func-returns-value", "symbol": "test_every_option_commits_to_the_weights_before_any_installs.adapter", "detail": ""},
     {"file": "tests/protocols/test_protocol_options.py", "kind": "var-annotated", "symbol": "test_a_commit_with_pous_records_its_options_and_its_verdict_stands", "detail": ""},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "var-annotated", "symbol": "test_serve_v4_tiny_program", "detail": ""},
-    {"file": "tests/test_settings_records.py", "kind": "attr-defined", "symbol": "test_a_builds_target_facts_take_the_environment_as_before", "detail": "", "count": 2},
-    {"file": "tests/test_settings_records.py", "kind": "attr-defined", "symbol": "test_an_engine_record_takes_the_environment_as_before", "detail": "", "count": 2},
     {"file": "verity_vllm/acquire/compiled.py", "kind": "assignment", "symbol": "parse_wrapper", "detail": ""},
     {"file": "verity_vllm/acquire/compiled.py", "kind": "attr-defined", "symbol": "parse_wrapper", "detail": ""},
     {"file": "verity_vllm/acquire/compiled.py", "kind": "union-attr", "symbol": "split_graph_wiring", "detail": "", "count": 2},
