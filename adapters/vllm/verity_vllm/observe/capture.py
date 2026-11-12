@@ -550,7 +550,7 @@ class Capture:
                 tables: dict[str, list[int]] = {rid: [] for rid in req_ids}
                 key = f"block_tables_g{g}"
                 if max(nb_g, default=0) and key in self._pin_cache:
-                    host = self._pin_cache[key][: n * max(nb_g)].view(n, max(nb_g)).tolist()
+                    host: Any = self._pin_cache[key][: n * max(nb_g)].view(n, max(nb_g)).tolist()   # a list here, a tensor for the sampled ids
                     for i in range(n):
                         tables[req_ids[i]] = [int(b) for b in host[i][: nb_g[i]]]
                 skey = f"slots_g{g}"
