@@ -52,7 +52,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -436,7 +436,14 @@ def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)
 
 
-def worker_peak(o: Options) -> int:
+class WorkerPeakOption(Protocol):
+    """What `worker_peak` reads of a replay command's options: its `--worker-peak-gb`."""
+
+    @property
+    def worker_peak_gb(self) -> float | None: ...
+
+
+def worker_peak(o: WorkerPeakOption) -> int:
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 
 
