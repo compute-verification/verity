@@ -242,9 +242,10 @@ def test_a_worker_the_watch_cant_place_rings_infra_once_and_what_follows_rings_n
          "runs": [run], "quiet": True}]) + "\n"
     relay.once()
     assert relay.posts[0] == (
-        f"{infra} *Agent watch:* worker review-9 ({link}) is under no lane: the watch saw no Task call for it by an agent a "
-        "handle owns, and no workers.d entry or note names its launcher or a lane. The Task call it saw came from "
-        f"<https://cursor.com/agents/{p}|bc-99999999>, which no handle owns. @infra is rung this once, to find its launcher: "
+        f"{infra} *Agent watch:* worker review-9 ({link}) is under no lane: no Task call the watch saw, workers.d entry or "
+        "brief gives it a launcher that a handle owns, however many workers up, and no workers.d entry or note gives it a "
+        f"lane. The launcher the watch has for it is <https://cursor.com/agents/{p}|bc-99999999>, which no handle owns. "
+        "@infra is rung this once, to find its launcher: "
         "until a Task call the watch sees, a workers.d entry or a note places it (or, at the end of a run it sent, its "
         "name), its alerts are posted and ring no one.")
     assert relay.posts[1] == (
@@ -277,6 +278,33 @@ def test_a_silent_coordinator_rings_top(relay):
     rec = {"kind": "silent", "agent": co, "name": "verity: proofs", "run": "run-r", "handle": "proofs", "lane": "proofs",
            "minutes": 60, "active_minutes": 300, "window": 1, "since": "2026-10-26T02:00:00Z", "owner": "top"}
     assert relay.rung(rec) == "top" and relay.rung({**rec, "owner": None}) == "proofs"
+
+
+def test_a_silent_coordinators_words_count_its_turn_and_its_text_and_a_workers_its_active_spell(relay):
+    """A lead was told to top as "ACTIVE 83 min" a quarter of an hour after its turn ended. A coordinator's `active_minutes`
+    are the turn it is in and its `minutes` count its assistant text too, so its sentence says so; a worker's, and a record
+    with no `role`, read as before."""
+    top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
+    proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
+    co, w = PROOFS_INBOX["holder"], "bc-22222222-2222-2222-2222-222222222222"
+    rec = {"kind": "silent", "agent": co, "name": "verity: proofs", "run": "run-r", "handle": "proofs", "lane": "proofs",
+           "minutes": 61, "active_minutes": 83, "window": 1, "since": "2026-10-26T02:00:00Z", "owner": "top",
+           "role": "coordinator"}
+    worker = {**rec, "agent": w, "name": "ZKS10", "run": "", "minutes": 90, "active_minutes": 95, "role": "worker",
+              "owner": None}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        rec, {**rec, "window": 2, "minutes": 125, "active_minutes": 147, "unread_minutes": 62}, worker,
+        {k: v for k, v in rec.items() if k != "role"}]) + "\n"
+    relay.once()
+    lead = f"{top} *Agent watch:* agent verity: proofs (<https://cursor.com/agents/{co}|{co}>)"
+    assert relay.posts == [
+        f"{lead} has been in one turn for 83 min, with no note, no push and no assistant text for 61 min; check on it.",
+        f"{lead} has been in one turn for 147 min, with no note and no push for 125 min; the API wouldn't read its "
+        "conversation for 62 min, so its assistant text is unchecked; check on it. Second window: the last ring until it "
+        "shows activity.",
+        f"{proofs} *Agent watch:* agent ZKS10 (<https://cursor.com/agents/{w}|{w}>) has been ACTIVE 95 min with no note and "
+        "no push for 90 min; check on it.",
+        f"{lead} has been ACTIVE 83 min with no note and no push for 61 min; check on it."]
 
 
 def test_a_workers_no_step_names_it_a_worker_of_its_lane_and_still_rings_top(relay):
