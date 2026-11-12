@@ -105717,3 +105717,46 @@ imports them.
 
 **Not established**: anything in SessionOf or AcceptedChecks compiling. Whether `hdesc` and `hsub` can be dropped,
 which needs a fact about the registration that no play reads.
+
+## RELAX, Thu 12 Nov 22:30Z: I would build soundness's form, the mark in the registered Program, with the one refusal in the record check. It cannot be compiled and tested by Fri 20:00Z. The rows held through the certified entries can, but they add no trust, since the same driver writes the entries and the file: I recommend not calling that the refusal. Yes, it changes what an accept means once more
+
+Your 22:20Z word came by the shell hook; I take it as yours. Everything below is read on `cursor/proofs-r7-certified-b6a0` at `8b4ce503e1a7` (lean's merge head beneath it); no Lean or test ran for this entry.
+
+**1. What the head refuses today, of network's four cases** [derived from the code; network runs them]
+- A certified port named under a value the record does not list: refused by name (`certified`, `unread`) when no other session of record reads the value; accepted when one does.
+- The reversed `reads`, and `o1` with unit k at row k + 1: **accepted**. The session reports `{port: {value, root}}` and no row (`Flock.Registered.finding`, `Flock/Registered.lean:228`), so the record check has nothing to compare. Network's finding stands as they wrote it: `checkPort` holds each instance to `reg.readAt u`, the file's own `reads` (`checkPort` `:270` to `:296`, `badInstance` `:262`). [read]
+
+**2. Why the entries alone are not the refusal** [derived]
+- The `--registered` file is the verifier's own, written by the driver (`scan_zk.py:893`, `registered_file`; its certified ports' `reads` are `rows = [b - w*T ...]`, `:917`, `:968`). The certified entries are the same driver's input to `V.check`. A row map carried in the entries and compared with the rows a session held would catch a file that disagrees with the entries, and nothing else: a driver that reverses one reverses both. It meets soundness's (a) no better than today.
+- So both forms need the same new thing: Lean that derives, from the verifier's registered Program, the row each unit reads or writes at a port. None exists. The one derivation is Python's `registered.reads` (`one_stage/registered.py:384`), which walks every unit's input gates, a walk the verifier-cost rule keeps out of Lean. [read]
+- The two forms then differ only in where "this port binds this value" comes from: the Program (the mark) or the entries (the driver again). That is why I would build the mark.
+
+**3. The form I would build**
+- **The mark is wiring the Program already has, where it can be.** For an input: the certified table is a registered-input root node (`RegisteredInput<w>_v1`, the mark `Flock.Registered.regParams` already reads, `:424`), and unit u's row is read off its template node's argument, a reference sequence into that node (`Circuits.Program.Part`: affine, strided or explicit, `Circuits/Program.lean:195`). `Spot.Partition` already reads arguments as runs in O(description) (`runs`, `sharedInputs`, `:461`, `:505`), so the reader is a function of the description, no walk. For an output (`o1`): the row is the position of the unit's output in the root's return (`Body.ret`, also a reference sequence). What the Program lacks is a name for the value a root input node or a slice of the return binds; that is the one new datum, and the place for it is the Program, by your item 5. [read for what exists; guess for the encoding]
+- **The one refusal sits in the record check, not in `checkPort`.** The session's verdict reports, for each registered port, the row each of its units was held to (three sites write it: `FlockVerify.lean:1213`, `:1418`, `Spot/OneStageZk.lean:577`). The record check derives each marked port's value, root and row map from the verifier's Program and refuses a reported read under another name, at another root or at another row, in one check that names the port and the unit. `checkPort` and `Registered.check` stay as they are: eighteen proof files under `security/Proofs/Flock` name them (`Verifier/Registered.lean`, nine under `Soundness/Discharge`, three under `C3`, three under `VBridge`, one each under `Claims` and `Recursive`) [run: grep], and a change there moves Flock's guarantees.
+- Both verifiers of a session (`flock-verify` and the one-stage `verifyCmd`) report the same rows, so the record check reads them the same way.
+
+**4. Files and size** [guess, by reading; lines are rough]
+- Flock, the verdict only: `Flock/Registered.lean` (`finding` takes the session's units), `FlockVerify.lean` two sites, `Spot/OneStageZk.lean` one site (MEMBERS's file; one line): about 40 lines. It rebuilds everything above Flock in every slot tree.
+- The reader: a new module in the SPOT verifier's Lean (Program and partition in, for each marked port its value and row map out), with a Python twin kept as the difftest's reference: about 250 Lean, 100 Python. This is the part I have read least; its size is the least sure.
+- The record check: `Spot/Record.lean` (`sessionRegistered` keeps the rows; the check `certified` compares them), `OneStage.lean`, `Run.lean`, `audit.py`, `verifier.py`: about 150 Lean, 80 Python.
+- The statement and its proof: `security/Properties/Spot.lean`, `security/Proofs/Properties/Spot.lean`: about 80 and 150.
+- Tests: difftest vectors on Programs with a marked input and a marked output, the record piece, the stream: about 250.
+- Network's, not mine: the scan's Program builder (the certified tables as marked nodes, the egress return named; the Program's digest and every scan registration move), `scanOf` replaced by the reader, their four cases.
+- If the value's name needs a new field of the Program format (`verity/circuits/`, `PROTOCOL.md`, the decoder in the base Lean package every package requires): add that, and every Lean package rebuilds.
+
+**5. The hour**
+- **By Fri 20:00Z: no.** The reader is new Lean over reference sequences I read for the first time tonight, the mark's encoding needs network's and soundness's read before I write it, network's builder has to change before any scan test can pass, and R7's pull request and its runs hold me until about 06:00Z.
+- **What I can keep:** by Fri 16:00Z, an entry with the mark's encoding, the reader's Lean signature, the clause as Lean and the list of Programs the difftest uses, for network and soundness to read. The build's hour I give in that entry, once two things I have not established are: that `Spot.Partition`'s runs give a unit's row for the scan's parts (affine and strided), and how the Program names an output's value. LEAN-238's step 1 is also mine for Mon 16 Nov 5 PM PST; the two cannot both hold that date, and you choose the order.
+- **What can be compiled and tested by Fri 20:00Z, if you want it anyway:** the verdict's rows and the record check's comparison, with the row map taken from the certified entries. It makes network's four cases refusals by name on Friday and is the half the reader later plugs into (only the map's source changes). It must be printed as what it is: the file held to the entries, both the driver's. I would rather the pull request say "rows: not established" than have this read as the refusal.
+
+**6. What an accept means**
+- Yes, one more change beyond `CertifiedRead`. The clause becomes: every read of a certified port that an accepting verdict of record reports is under the record's name for the port, at the value's registered root, each unit at the row the verifier's Program gives it. It implies today's `CertifiedRead` only together with it, so both stay.
+- A session's verdict gains the rows it held: the verdict's format changes, no check of the session's does, and no guarantee of Flock's moves [derived; the records run would show it].
+- No named assumption in either form. The Program's mark is a registration change, as you say.
+
+**7. For R7's pull request, unless you say otherwise:** it goes on as it stands at `8b4ce503e1a7`, and its body states under "not established": the rows (the reversed file and the shifted `o1` are accepted), and the member with no unit drawn. Records `d08f`, suites `de56`, tries `9b45` are out; ready line by Fri 06:00Z.
+
+**Not established:** the mark's encoding; whether the reader is O(description) for every part the scan uses; whether reporting rows moves any lock record of Flock's; the size of the reader beyond a guess.
+
+For the table: certified rows | form: the Program's mark, one refusal in the record check | not by Fri 20:00Z | design entry by Fri 16:00Z | needs: your choice on the entries-first half (my advice: no), and the order against LEAN-238 step 1.
