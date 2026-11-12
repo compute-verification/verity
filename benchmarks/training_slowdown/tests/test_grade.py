@@ -699,6 +699,66 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
     assert s["rho"]["rho"] is None and here in s["rho"]["why"] and s["S"]["why"] == s["rho"]["why"]
 
 
+def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an_earlier_captures(ran):
+    """Where the two rules of one price meet, on a record whose op log names dtypes. `two_pricings` is about records
+    among themselves, C over H. `work.repriced` is about a slowdown over a trace's own circuit, which the grade never
+    takes: it divides the trace's products by the record's count, so their one price is that each product the trace
+    prices is priced in the dtype the record names for it.
+
+    With the trace its job took, of this capture: neither rule speaks. Every traced product with fewer than two
+    token dims, which M's all are, is priced in the dtype it was traced in, the one the record's log names for it.
+    The products the two sides differ on are attention's, float32 in the trace and bf16 in the rows the counter
+    writes for a fused kernel, and M leaves them out for their two token dims.
+
+    With the same rows under an earlier capture, whose rule prices those float32 products at bf16: `work.repriced`
+    lists them and nothing else, so over the trace's own circuit there is no slowdown, with that reason, and the
+    grade's ρ and bound of record are what they are with the job's own trace, since nothing M holds moved."""
+    tr = ran["trace"]
+    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    names: dict = {}
+    for _, _, op, shapes, _, _, dtype in ran["structures"][ran["steps"][tr["step"]]["struct"]]["log"]:
+        if op in (*F.PLAIN_PRODUCTS, "bmm"):
+            for _, m, k, n in F.log_products(op, json.loads(shapes)):
+                names.setdefault((m, k, n), set()).add(dtype)
+
+    def named_for(r: dict) -> set:
+        shape = (r["dims"]["m"], r["dims"]["k"], r["dims"]["n"])
+        return names.get(shape) or names[shape[::-1]]
+
+    attentions = [r for r in tr["rows"] if sum(x in r["token_dims"] for x in "mkn") >= 2]
+    others = [r for r in tr["rows"] if r not in attentions]
+    assert others and all(named_for(r) == {products.traced_dtype(r)} == {"bfloat16"} for r in others)
+    assert attentions and all((r["op"], products.traced_dtype(r), named_for(r)) == ("bmm", "float32", {"bfloat16"})
+                              for r in attentions)
+
+    earlier = products.READS[0]
+    old = tr | {"capture": earlier}
+    moved = work.repriced(old)
+    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in attentions for r in moved)
+    pol = policy.named(CONFIG["policy"], synthetic.SHAPE)
+    alone = calculator.slowdown(pol, old)
+    assert calculator.slowdown(pol, tr)["slowdown"] is not None and alone["slowdown"] is None
+    assert alone["why"] == work.repriced_reason(old, moved) and "one slowdown has one price" in alone["why"]
+
+    row = G.rows_of(ran)[-1]
+    now, then = (G.traced(ran | {"trace": t}, row)["formalism"] for t in (tr, old))
+    assert then["products"]["he"] == now["products"]["he"] and now["products"]["he"]["groups"]
+    prices = [(x["op"], x["gates_per_mac"], y["gates_per_mac"])
+              for x, y in zip(now["trace"]["products"]["rows"], then["trace"]["products"]["rows"]) if x != y]
+    assert prices == [("bmm", gates.per_mac("gemm/f32"), PER_MAC)] * len(attentions)
+
+    config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
+    runs = [{"seed": 0, "split": "search", "record": ran}]
+    a = G.grade(config, registry("tiny", synthetic.SHAPE), runs, runs)
+    b = G.grade(config, registry("tiny", synthetic.SHAPE), [runs[0] | {"record": ran | {"trace": old}}], runs)
+    assert (a["rests_on"]["capture"], b["rests_on"]["capture"]) == (products.CAPTURE, earlier)
+    same = ("rho", "terms", "C_gates", "work", "checkpoint_step")
+    assert {k: b["rho"][k] for k in same} == {k: a["rho"][k] for k in same} and a["rho"]["rho"] is not None
+    assert b["bound_of_record"] == a["bound_of_record"] and b["p"] == a["p"] and b["S"] == a["S"]
+    assert "priced" not in (a["S"]["why"] or "") and {x["priced"] for x in a["records"] + b["records"]} == {
+        G.PRICED[True]}
+
+
 def test_a_jobs_own_trace_gives_both_sensitivities_back(ran):
     """The tiny start traced through the job, graded at a block a step's token work fills four of: the two steps
     after the first update are one part with the trace's own circuit, the gradient's cut and a token group's partial
