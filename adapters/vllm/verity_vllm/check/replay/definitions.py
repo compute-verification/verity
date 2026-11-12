@@ -24,9 +24,9 @@ names, the link the Build wrote the row through.  `kernel_refusal` then holds th
 own sample: at each of the kernel's check specialisations, the Boolean Definition this tree names for it
 (`verity.definitions.boolean.boolean_version`), refused unless it is of the row's ``bits`` family, gives the kernel's rows on the
 self-check's inputs, bit-sliced (`_gates_differ`).  At those small statics the Boolean Definition's function-valued statics are
-this tree's newest Boolean versions, refused where the Build binds that function at another version, and its body may reach
-Definitions the served one does not.  Nothing holds the kernel to the gates at a served binding, and the replay's record says
-so (`premises`).
+this tree's newest Boolean versions, refused where the Build binds that function at another version and otherwise left to this
+tree, and its body may reach Definitions the served one does not.  Nothing holds the kernel to the gates at a served binding,
+and the replay's record says so (`premises`).
 """
 from __future__ import annotations
 
@@ -45,9 +45,9 @@ SHOWN = 5
 SAMPLES = 6
 #: what a replay that evaluates a Boolean Definition's row holds of its kernel and what it does not, on its record (`premises`)
 BOOLEAN_PREMISE = (f"the replay holds a Boolean row's kernel to the gates of the Boolean Definition its Build bound by sample only: "
-                   f"{SAMPLES} inputs at each of the kernel check's small statics, where that Definition's function-valued statics "
-                   f"are this tree's newest Boolean versions and its body may reach Definitions the served one does not; nothing "
-                   f"holds the kernel to the gates at a served binding")
+                   f"{SAMPLES} inputs at each of the kernel check's small statics, where a function-valued static the Build binds "
+                   f"nowhere is this tree's newest Boolean version and the body may reach Definitions the served one does not; "
+                   f"nothing holds the kernel to the gates at a served binding")
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
 _KERNEL_CHECKS: dict[str, list[str]] = {}
 #: (word family, Boolean family) -> why the word family's row kernel is not that Boolean family's gates ([] when it is) and the
