@@ -3,8 +3,9 @@
 A stale path in one of these doesn't fail anything by itself: a `merge_requires` prefix or a queue grant that matches no file
 stops requiring its step or its grant, a Tool's closure glob that matches nothing leaves its identity weaker, and the queue
 skips a Lean build whose package isn't there. So a directory move that misses one fails here instead. Nor does a file a Lean
-key holds (`lean_audit.inputs`, `lean_changed.closure_inputs`) that the queue's loop doesn't count as a Lean input
-(`vqueue_slim.lean_inputs`): a candidate changing only it takes its base's verdict on lean-audit, so that fails here too.
+key holds (`lean_audit.inputs`, `lean_changed.closure_inputs`), or a program check's lean-audit step runs, that the queue's
+loop doesn't count as a Lean input (`vqueue_slim.lean_inputs`): a candidate changing only it takes its base's verdict on
+lean-audit, so that fails here too.
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
 (build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
@@ -161,9 +162,11 @@ def test_the_lean_inputs_of_the_queues_loop_are_the_files_a_lean_key_holds_or_a_
     changes a Lean input of its tree (`vqueue_slim.lean_inputs`), so a change to a file an audit reads that they miss would
     land on a verdict that never read it.  Every file an audit's key (`lean_audit.inputs`) or a records key
     (`lean_changed.closure_inputs`) declares here is one, and every file a lock run's commit writes (each package's lock,
-    `merge.REPAIRED`).  The loop counts nothing else but what `lean_inputs` names beside the keys: the unread ratchet, its
-    caps and the caps a lock run repairs, and a Lean source no key holds."""
+    `merge.REPAIRED`).  The loop counts nothing else but what `lean_inputs` names beside the keys: the code that runs the
+    lean-audit step (check's, `LEAN_AUDIT_STEP`, and the unread ratchet), the caps a lock run repairs, and a Lean source no
+    key holds."""
     from research.merge import REPAIRED
+    from research.vqueue_slim import LEAN_AUDIT_STEP
 
     audit, changed = _lean_keys()
     files = sorted(tracked())
@@ -174,10 +177,28 @@ def test_the_lean_inputs_of_the_queues_loop_are_the_files_a_lean_key_holds_or_a_
     assert pkgs and written <= tracked() and not (out := sorted((keyed | written) - lean)), (
         f"files a Lean key holds or a lock run writes that the queue's loop counts as no Lean input, so a change to one "
         f"would take a verdict or carry records that never read it (`vqueue_slim.lean_inputs` must name them): {out}")
-    beside = {audit.UNREAD, audit.UNREAD_CAPS, audit.CAPS_TEST}
+    beside = {*LEAN_AUDIT_STEP, audit.UNREAD, audit.UNREAD_CAPS, audit.CAPS_TEST}
     assert not (more := sorted(f for f in lean - keyed - beside if not f.endswith(".lean"))), (
         f"Lean inputs of the queue's loop that no audit's key and no records key holds: a Lake package no audit reads "
         f"(`tests/test_lean_packages.py` has every one audited), or a file `vqueue_slim.lean_inputs` should not name: {more}")
+
+
+def test_the_programs_check_s_lean_audit_step_runs_are_lean_inputs_of_the_queues_loop(tmp_path):
+    """A candidate that takes its base's verdict on lean-audit never runs the step, so a change to a program the step runs
+    that is no Lean input would land unrun and fail in the next candidate that audits, on that one's members.  The programs
+    are the ones `check.py` itself names: those of the step's command (`lean_steps`: its own `--lean-slot` entry around
+    `lean_audit.py`) and of the wrapper that entry runs an audit in (`LEAN_SLOT_WRAP`).  Each is a Lean input, and the ones
+    no key holds are `vqueue_slim.LEAN_AUDIT_STEP`, so a wrapper that moves to another file fails here until it is named."""
+    from research.vqueue_slim import LEAN_AUDIT_STEP
+
+    check = _module("gate_paths_check", ROOT / "tools" / "verity" / "check" / "check.py")
+    audit, _ = _lean_keys()
+    files = sorted(tracked())
+    step = next(argv for name, argv, _ in check.lean_steps(tmp_path) if name == "lean-audit")
+    words = [Path(w) for w in (*step, *check.LEAN_SLOT_WRAP)]
+    programs = {str(w.relative_to(ROOT)) for w in words if w.is_absolute() and w.is_relative_to(ROOT)} & tracked()
+    assert programs - set(audit.tool_files(files)) == set(LEAN_AUDIT_STEP), programs
+    assert programs <= _lean_inputs(files) and len(programs) > len(LEAN_AUDIT_STEP), programs
 
 
 @pytest.mark.slow

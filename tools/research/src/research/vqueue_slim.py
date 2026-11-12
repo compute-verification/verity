@@ -139,6 +139,12 @@ SCRATCH_RE = re.compile(r"\S*?/lean-audit-scratch-[^/\s]+/")
 OWN_AUDIT = Path(__file__).resolve().parents[4] / "tools" / "verity" / "lean" / "lean_audit.py"
 #: every Lean source is a Lean input, in a Lean package or outside every one
 LEAN_FILES = "**/*.lean"
+#: the code that runs check's lean-audit step and that no key holds: `check.py`, which builds the step's command and is its
+#: `--lean-slot` entry, and the wrapper that entry runs an audit in (`check.LEAN_SLOT_WRAP`).  Only a candidate that audits
+#: runs them as the step does, so a change to one that took the verdict of the candidate below would land unrun and fail in
+#: the next candidate that audits, on that one's members.  What they load that every candidate's check runs (`settings.py`,
+#: `slot.py`) is no Lean input.  `tests/test_gate_paths.py` holds these to the step `check.py` declares
+LEAN_AUDIT_STEP = ("tools/verity/check/check.py", "tools/verity/check/lean_slot.py")
 #: the files whose directory is a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
 
@@ -159,19 +165,25 @@ def _declaration():
 def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
     """The Lean inputs of the tree whose tracked files are ``files``, as `vqueue.meets` reads them: a candidate one of whose
     members changes any of them runs lean-audit itself rather than take its base's verdict on it (`start`'s ``audit_from``).
-    They are the files the audit's own declaration (`_declaration`) says an audit or a records run can read there, each by its
-    path and none listed here, so a file the audit starts or stops reading joins or leaves them with it: every Lean package's
-    own files (`lean_audit.own_files` of each directory holding one of `LEAN_PACKAGE_FILES`, the auditor's fixtures aside: its
-    sources, Lake files and lock, a file a module reads with `include_str`, its scripts and vectors, and not its prose, its
-    pytest files or their settings), the auditor's (`lean_audit.tool_files`: of check's code `common.py` alone) and the
-    records key's own program (`queue.KEY_COMMAND`).  An audit's key (`lean_audit.inputs`) and a records key
-    (`lean_changed.closure_inputs`) hold files of those alone, whichever packages one requires (`tests/test_gate_paths.py`
-    holds that on the tree).  Beside them, in no key: the unread ratchet, which lean-audit runs after the audits, and its caps
-    (`lean_audit.UNREAD`, `UNREAD_CAPS`), the caps a lock run repairs with them (`CAPS_TEST`), and every Lean source wherever
-    it is (`LEAN_FILES`).  A root that is a Lean package is the tree whole (``**``).  The declaration says of a path what it
-    says of a file there, so a change is judged in a list holding the paths it deletes too.  The declaration read is the
-    loop's own, not ``files``' tree's: a loop deployed before the audit began reading a file doesn't count that file.  It
-    leaves out what the unread ratchet reads outside Lean after the audits
+    They are what the audit's and the records' keys read, what a lock run writes, and the code that runs the lean-audit
+    step, each file by its path:
+
+    - What a key reads (`lean_audit.inputs`, `lean_changed.closure_inputs`), from the audit's own declaration
+      (`_declaration`) and none of it listed here, so a file the audit starts or stops reading joins or leaves with it:
+      every Lean package's own files (`lean_audit.own_files` of each directory holding one of `LEAN_PACKAGE_FILES`, the
+      auditor's fixtures aside: its sources, Lake files and lock, a file a module reads with `include_str`, its scripts and
+      vectors, and not its prose, its pytest files or their settings), the auditor's (`lean_audit.tool_files`: of check's
+      code `common.py` alone) and the records key's own program (`queue.KEY_COMMAND`).  A key holds files of those alone,
+      whichever packages one requires (`tests/test_gate_paths.py` holds that on the tree).
+    - What a lock run writes: each package's lock, one of its own files, and the caps it repairs (`lean_audit.UNREAD_CAPS`,
+      `CAPS_TEST`), which no key holds.
+    - The code that runs the step and that no key holds: check's (`LEAN_AUDIT_STEP`) and the unread ratchet
+      (`lean_audit.UNREAD`), which lean-audit runs after the audits.
+
+    Beside the three, every Lean source wherever it is (`LEAN_FILES`).  A root that is a Lean package is the tree whole
+    (``**``).  The declaration says of a path what it says of a file there, so a change is judged in a list holding the
+    paths it deletes too.  The declaration read is the loop's own, not ``files``' tree's: a loop deployed before the audit
+    began reading a file doesn't count that file.  It leaves out what the unread ratchet reads outside Lean
     (`lean_audit.unread_ratchet`: code and pyproject.toml naming an analysis declaration or module, the docs a lock names),
     which no audit's key holds: a change touching only those takes its base's verdict on lean-audit.  Raises `QueueError`
     when the declaration can't be loaded."""
@@ -186,8 +198,8 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
             if (d := d.rpartition("/")[0]) in under:
                 under[d].append(f)
     own = (f for d, inside in under.items() for f in audit.own_files(d, inside))
-    return (LEAN_FILES, *sorted({*own, *audit.tool_files(files), KEY_COMMAND, audit.UNREAD, audit.UNREAD_CAPS,
-                                   audit.CAPS_TEST}))
+    return (LEAN_FILES, *sorted({*own, *audit.tool_files(files), KEY_COMMAND, audit.UNREAD_CAPS, audit.CAPS_TEST,
+                                   *LEAN_AUDIT_STEP, audit.UNREAD}))
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:

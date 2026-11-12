@@ -20,7 +20,7 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, Read, _json, _text, abandon, audit_built,
+from research.vqueue_slim import (BUILD, CHECK, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read, _json, _text, abandon, audit_built,
                                   audit_failures, audited, audits, based, combine, failures, judge, key, lean_inputs, lean_reads,
                                   read_step, read_suite, reads, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
@@ -1002,15 +1002,21 @@ def _lean(files, paths):
     return [p for p in paths if meets((p,), inputs)]
 
 
-def test_of_check_s_own_code_only_common_py_is_a_lean_input():
-    """Every audit's key holds check's `common.py`, which the auditor imports (`lean_audit.tool_files`), and no other file of
-    `tools/verity/check`: a change to `slot.py`, to check.py or its settings, to the policy or to a test of them is no Lean
-    input, and a candidate changing only those takes its base's verdict on lean-audit."""
+def test_of_check_s_own_code_a_lean_input_is_common_py_and_the_code_that_runs_the_lean_audit_step():
+    """Of `tools/verity/check`: `common.py`, which every audit's key holds (the auditor imports it: `lean_audit.tool_files`),
+    and the code that runs the lean-audit step, which no key holds (`LEAN_AUDIT_STEP`): `check.py` and the wrapper it runs
+    an audit in.  A change to check.py alone is a Lean input, so its candidate audits itself: on the verdict of the candidate
+    below, a step it broke would land unrun and fail in the next candidate that audits.  What every candidate's check runs
+    is none: `slot.py`, check's settings, its policy, or a test of any of them."""
     check = "tools/verity/check"
-    other = [f"{check}/slot.py", f"{check}/check.py", f"{check}/settings.py", f"{check}/policy.toml", f"{check}/drive.toml",
-             f"{check}/lean_slot.py", f"{check}/tests/test_slot.py", f"{check}/tests/test_verdicts.py"]
-    assert _lean([f"{check}/common.py", *other], [f"{check}/common.py", *other]) == [f"{check}/common.py"]
-    assert f"{check}/common.py" in lean_inputs(other), "the auditor's helper is one in a tree that doesn't hold it yet"
+    lean = [f"{check}/check.py", f"{check}/common.py", f"{check}/lean_slot.py"]
+    other = [f"{check}/slot.py", f"{check}/settings.py", f"{check}/policy.toml", f"{check}/drive.toml",
+             f"{check}/tests/test_slot.py", f"{check}/tests/test_check.py", f"{check}/tests/test_verdicts.py"]
+    assert tuple(lean[::2]) == LEAN_AUDIT_STEP
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+    assert _lean([*lean, *other], [f"{check}/check.py"]) == [f"{check}/check.py"]
+    assert _lean([*lean, *other], [f"{check}/slot.py", f"{check}/settings.py"]) == []
+    assert set(lean) <= set(lean_inputs(other)), "each is one in a tree that doesn't hold it yet"
 
 
 def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_caps():
