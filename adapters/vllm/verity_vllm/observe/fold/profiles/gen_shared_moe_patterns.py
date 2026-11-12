@@ -391,7 +391,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
     def _gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
         """The router gate: the in-scope `aten.mm.dtype` (cuBLAS), or, with no mm, the cuteDSL kernel bound by the empty it fills."""
         C, ra = self.config, bound_args(sc.router)
-        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, ra.get("bias")), hidden, hint,
+        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, ra["bias"]), hidden, hint,
                           C["NUM_EXPERTS"], C["H"], self.gate_spec, self.name)
 
     def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:
