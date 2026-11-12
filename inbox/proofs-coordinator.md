@@ -68804,3 +68804,56 @@ indices' links [derived]. The list by suite and test follows the run.
 - `r20261112-012913-9301`: exit 0. `RevealsWired.lean` at that head: 33 theorems.
 - Pull requests [read gh 02:58Z]: #9080 a draft at `601df7cb4bb5`, its body says it stays one; #9084 open and
   unmarked at `6e87dff94fc7`; nothing opened for section 5.
+
+## STOPDRIVER, Thu 12 Nov 03:04Z: `across` now answers `complete`; an accept that is not complete is case 4, "accepted, not complete"; #9081's head is `0b6bdb0352e1`, its three checks at that head are out; NET-297: a different check, R7's held root, not a link of the list
+
+**Mailbox** [run] read at `9d0ea80c7a` (03:03Z): the sections of 02:25Z and 02:32Z are the last two.
+
+### 1. The change, in #9081 (head `0b6bdb0352e1`, open, unmarked, on #9028's head `eabb2d72de2e`, `main` at `be9a3d566905` merged in)
+
+- [run] `Record.across`'s `audit` verdict is now `{"accepted", "complete", "why"?}` (`AuditVerdict`, `auditVerdict`, `verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean:108-154`). Both are the audit record's own fields, each true only where the field is `true`.
+- [run] **The cases of one read** (`acrossCase`, `RecordAcross.lean:166-172`): 1, the log and the order hold and the earlier stream's audit record accepted and is complete; 2, the log or the order fails; 3, they hold and the audit record is missing or did not accept; **4 (new), "accepted, not complete": they hold and the audit record accepted with entries that did not run**. Its reason: "the earlier stream's audit record accepted with entries that did not run: it is not complete, and is no audit of those entries".
+- [run] **The list's case** (`acrossAllCase`): 2 when a read does not reach the boundary record or is case 2, else 3 when a read is case 3, else 4 when a read is case 4, else 1.
+- [run] **Case 1 before and now.** Before (up to `e90900dc4ed3`): logged, received in order, and the earlier audit record accepted, whether or not every one of its entries ran. Now: that, and the audit record is complete. The body of #9081 says this in a section of its own, "Case 1, before and now".
+- [run] **Your chain.** The stop stream's audit record has two entries with no verdict (`request-row`, `stop-rule`), so it accepts and is not complete. The read whose earlier record is the stop record is case 4, and the list (boundary record, stop record, a third registration) is case 4 in either order. With that audit record's `complete` set true by the test, the read and the list are case 1. The difftest holds both, on twelve lists, beside the four refusals (`benchmarks/one_stage/tests/test_stop_audit.py:296-377`).
+- [run] **One choice of mine for the second reader.** On case 4 the driver's `boundary-audit` entry has no verdict (`accepted: null`, `complete: false`, and the reason), so the stop stream's audit record can accept and is not complete (`benchmarks/one_stage/stop_audit.py`, `boundary_entry`). The other choice is to refuse. I took no verdict because a refusal would say the boundary stream failed its audit, which it did not, and an entry with no verdict is what the audit record's `complete` carries. [guess] If you or the second reader want a refusal, it is one line there and one expectation in the rehearsal and the tests.
+- [read] **What it still does not hold.** `complete` is read from the record's field, as `accepted` is; Lean does not recompute either from the record's entries, and nothing verifies that the audit record handed is the one the earlier stream's verifier wrote. That is the `boundary-audit` premise, unchanged.
+- [run] The rehearsal has a fifth audit (a boundary stream whose audit record accepted and is not complete), and the one-read difftest a twelfth case.
+
+### 2. Runs
+
+At `0b6bdb0352e1`, done:
+
+- [run] `r20261112-024412-2cb4`, exit 0: `benchmarks/one_stage -- -k 'stop_audit or two_stage_driver'`, 19 passed in 560 s.
+- [run] `r20261112-024412-f616`, exit 0: `verity lean try Spot/RecordAcross.lean --siblings` (41 modules checked for a name clash, 7 not).
+- [run] `r20261112-024412-01a4`, exit 0: `verity lean try Spot/Pieces.lean --siblings` (45 checked, 4 not).
+
+At `0b6bdb0352e1`, launched once, together, at 03:00Z on `vy-nebius-cpu-5`:
+
+- [run] `r20261112-030020-70e6`: the Lean records run of `verity/protocols/spot/verifier/lean`. Waiting for a slot at 03:04Z. [guess] Ends by 04:15Z (the one at the old head took 2713 s once it ran).
+- [run] `r20261112-030020-e203`: `suites.py --changed origin/main --quick`. Running at 03:04Z. [guess] Ends by 03:55Z (2777 s at the old head).
+- [run] `r20261112-030020-df45`: the rehearsal, five audits. Waiting at 03:04Z. [guess] Ends by 03:40Z (961 s at the old head).
+
+At the old head `e90900dc4ed3`, all three ended and passed; they are superseded and say only that nothing else was red before this change:
+
+- [run] `r20261112-015524-6e90`, exit 0: the Lean records run; the package's Lean check passes, and `regenerated` in its `audit.json` is `{}`: no lock record moved.
+- [run] `r20261112-015704-349a`, exit 0: 67 suites, 67 passed.
+- [run] `r20261112-015716-f5a3`, exit 0: the rehearsal's four audits as `expect` holds them.
+
+### 3. NET-297, network accounting's question: a different check, and not a link `acrossAll`'s list can hold
+
+- [read] **What a link of the list is.** `across` reads three things of the earlier record, and each is a SPOT stream's: the later registration's one `previous` (`verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean:194`), found in the earlier stream's log by the registration's digest, SHA-512(format ‖ 0 ‖ canon(record)) of a `verity/registration/v1` or `v2` record (`verity/protocols/flock/verifier/Flock/WindowRecord.lean:29-42`, `RecordAcross.lean:64`); the challenger's signed order of the two receipts; and an audit record of format `verity/one-stage/audit/v0` that names that digest (`RecordAcross.lean:126`).
+- [read] **Why the certifier's end row is not one.** A registration has one `previous`, its own stream's last record (R6, `Spot/Registration.lean:576`), and for a no-stop class's replay that is already the class's boundary record: that one link the list holds, as they say. The certifier's end row is in no prover's log, is no registration, and has no audit record, since it is the auditor's device's and trusted (`trusted-host`), not audited. Forced into the list, the read's digest would have to be over a registration-format record the certifier logs, the replay could not name it as `previous`, and with no audit record the read would be case 2 or case 3, never case 1.
+- [read] **The check it is, and whose.** It is the registration check's held root, which SPOT has and runs on every registration: the replay registers the end rows as a value by root, the verifier holds that value at the root the network certifier signed for the window, and any other root is refused as `R7-held` (`verity/protocols/spot/verifier/one_stage/registration.py:124-126` and `:820`; Lean `Spot/Registration.lean:405`). It needs no order across streams: the root is the device's and not the prover's choice, and the registration naming it is received before its own coins. Their own docstring already describes it so: a statement "registers it as a read of that row" and "opens the signed root" (`verity/protocols/certifier/prover/response_tie.py:12-14` at #9053's head `af46e21ac6c3`).
+- [read] **What the certifier's record must carry, and what is missing.** For each window, the root of the end rows (u16 class ‖ u16 `at` a connection) signed by the device, in the commitment scheme and with the leaves, words, word bits and domain the registration names the value by (`registration.py:812-818`), and a public layout from connection to leaf. That side is network accounting's and is not built: at `af46e21ac6c3` `content_rows` "has their formats alone" (`response_tie.py:3-4`), and no device writes or signs an end row. [guess] Handing the signed root to the verifier's `held` belongs above both protocols, since SPOT reads a certified input and never imports the certifier.
+
+### 4. Acknowledged, and one correction
+
+- [read] NET-347: the partial rows are dropped; I write none.
+- [read] Correction to my 02:01Z entry: the "not complete" assertion I cited is in the test file's third test, not its second, and the file has seven tests.
+
+### 5. Next, and what stops the ready line
+
+- [read] The ready line for #9081 waits on the three runs of section 2 at `0b6bdb0352e1`. [guess] The records that move: none; nothing under `security/` changes and the old head's records run regenerated none.
+- [read] #9081 takes no mark until #9028 is on `main`, and I do not mark it: it adds two pieces to the Lean verifier's executable.
+- [read] A fresh worker: `research status` and `research fetch --all` on the three run ids; if all exit 0, rewrite the body's Runs section (the rehearsal's five results from `df45`'s `out/`), commit any record the records run kept under `lean-audit/record/`, and write the ready line.
