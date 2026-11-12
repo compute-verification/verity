@@ -104,9 +104,18 @@ import tarfile
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from multiprocessing.pool import Pool
+
+    import torch
+
+    from verity.protocols.spot.device.challenger import LiveCommitment
+    from verity_vllm.protocols.pouw.h1.receipts import Cubin
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -143,7 +152,7 @@ class Record:
 
 # -- timing -------------------------------------------------------------------------------------------------------------
 
-def timing(cubin, reps: int = 10) -> dict:
+def timing(cubin: Cubin, reps: int = 10) -> dict:
     """Per-unit noise on the GPU against the int8 GEMM of the same M x N x K call, both from CUDA events."""
     import torch
     from verity_vllm.protocols.pouw.h1 import receipts as RC
@@ -229,7 +238,7 @@ def wrap_counts(mods: dict) -> dict:
             "layers": {str(k): v for k, v in sorted(per_layer.items())}}
 
 
-def padded(t, rows: int):
+def padded(t: torch.Tensor, rows: int) -> torch.Tensor:
     """`t` [m, k] with zero rows appended up to `rows`."""
     import torch
     if t.shape[0] == rows:
@@ -279,7 +288,7 @@ def receipts_root(window: str, calls: list[dict]) -> bytes:
                         [bytes.fromhex(c["receipt_root"]) for c in calls])
 
 
-def gate_rng(commitment, coin: bytes, after: bytes) -> random.Random:
+def gate_rng(commitment: LiveCommitment, coin: bytes, after: bytes) -> random.Random:
     """The gate's picks from the sampling coin `coin` opened after `after` (`receipts_root`): the harness's self-check of the
     receipts, not the window's sample of record."""
     from verity.commitments.randomness import derive
@@ -303,7 +312,7 @@ def coins_expect(manifest: dict) -> dict:
             "draw_after": receipts_root(window, calls) if manifest.get("coins", {}).get("draw_coin") else None}
 
 
-def schedule_tap(runner) -> tuple[list, dict, Any]:
+def schedule_tap(runner: Any) -> tuple[list, dict, Any]:
     """(spans, info, restore): each engine step's (request id, rows) in batch order, the order its token rows take in every
     linear, read once the runner's `execute_model` returns, from the step's batch (the new runner's `gather_batch_req_state`
     rows, else `execute_model_state.input_batch`, else the persistent `input_batch`) and its scheduled tokens.  ``info``
@@ -372,7 +381,7 @@ def commit_queue(window: str, key: bytes, queue: dict) -> dict:
             "slot_leaves": len(slots), "request_leaves": len(reqs), "s_levels": s_lv, "r_levels": r_lv}
 
 
-def b_rows(layer) -> np.ndarray:
+def b_rows(layer: torch.nn.Module) -> np.ndarray:
     """A linear's B table rows (`commit.s8_rows`): each weight row's N s8 bytes, then its f32 weight scale."""
     w = layer.weight.detach().cpu().numpy()
     s = layer.weight_scale.detach().float().reshape(-1).cpu().numpy()
@@ -387,7 +396,7 @@ def b_fields(model: dict, w: int, module: str, n: int, k: int) -> dict:
     return {"model": model, "layer": w, "module": module, "rows": n, "k": k, "schema": CM.SCHEMA}
 
 
-def b_tables(pool, model: dict, layers: list, names: dict, key: bytes, chunk: int = 2048) -> dict:
+def b_tables(pool: Pool, model: dict, layers: list, names: dict, key: bytes, chunk: int = 2048) -> dict:
     """Each linear's B table root (AROW's row-table format over `b_rows`, domain 'b-table', labels b/<w>), built in pool
     tasks, and the weights' root, the tree over them in linear order ('weights')."""
     roots = []
@@ -861,8 +870,9 @@ def tile_admit(c: dict, d: dict, key: bytes, ri: int, words: list[int] | None = 
     return CR.bits_of([ws[q] for q in CR.tile_words(ri)])
 
 
-def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, model: dict, names: dict, queue: dict,
-         weights: dict, key: bytes, E, t_max: int, done: int, rng: random.Random) -> dict:
+def gate(a: argparse.Namespace, calls: list[dict], data: list[dict], levels: list, layers: list, model: dict,
+         names: dict, queue: dict, weights: dict, key: bytes, E: ModuleType, t_max: int, done: int,
+         rng: random.Random) -> dict:
     """Units picked on `rng` (`gate_rng`'s, from the sampling coin, when live) against the gated `h1tile.reference`, and the
     controls: per site a live and a dead unit of real steps' calls, then units of empty steps (dead)."""
     import torch
@@ -1021,7 +1031,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
     return {"ok": bool(ok and units), "units": units}
 
 
-def prover(a, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dict:
+def prover(a: argparse.Namespace, out: Path, key: bytes, calls: list[dict], data: list[dict]) -> dict:
     """The prover's data: the table key, each call's real rows (the rest of its slots are empty), scales, admit words, live
     units and their receipts (a dead unit's is zero words), as SCRATCH/prover.tar for `serve.sh` to put in the store after
     the lease (OUT/prover with no --scratch)."""
@@ -1083,6 +1093,9 @@ def main(argv: list[str] | None = None) -> int:
                          "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
+
+__all__ = ["b_fields", "b_rows", "b_tables", "coins_expect", "commit_queue", "gate_rng", "main", "receipts_root",
+           "schedule_tap", "static_layout", "step_roots", "tile_admit"]
 
 if __name__ == "__main__":
     try:
