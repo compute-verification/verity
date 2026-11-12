@@ -13,8 +13,15 @@ The risk: a change that alters the served merge only at large K would pass `chec
 The change:
 - One line out of `_model_roots` in `verity/definitions/registry/dsa_topk_reads.circuit-check.py`, with its docstring.
 - The binding's weight out of `circuit_check/heavy.json`.
-- In its own commit, `verity/settings.py`'s description of `VERITY_ML_DEFINITIONS_SLOW` names the served merge's port test, which #9281 puts under it. It reads true once #9281 lands.
+- In its own commit, `verity/settings.py`'s description of `VERITY_ML_DEFINITIONS_SLOW` names the served merge's port test, which #9281 put under it; #9281 has merged, so it is true now.
 
-Runs: [RUNS]
+Runs, all on vy-nebius-cpu-1's research pool:
+- `r20261112-142212-2090`: `circuit-check --no-cache --ranges DsaPositionsMerge_v1` on this branch holds at M 1, 3 and 8. At M 8 it runs what `--all` ran: six vectors evaluated, the digest pin, dead gates and the block. The definitions suite passes here (950 passed, 2 skipped).
+- `r20261112-153542-f1f9` and `r20261112-163018-4cf7`: the circuit_check suite `--fresh`, with the cut reverted and then on this branch, each half with an empty `HOME` so that no records count and the session builds the catalog apart. Both pass (428 passed, 5 skipped).
+
+| Workers | Build wait, base | Build wait, this branch | Suite, base | Suite, this branch |
+|---|---|---|---|---|
+| 12 | 1,004 s | 901 s | 1,346 s | 1,307 s |
+| 5 (as ci's circuit-check shard) | 1,910 s | 1,615 s | 2,313 s | 2,037 s |
 
 Issue: CIR-255. Unmarked: circuits' coordinator decides.
