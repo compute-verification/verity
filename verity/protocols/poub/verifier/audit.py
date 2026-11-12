@@ -1878,7 +1878,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
         raise ValueError(f"the rebuild model is of {rebuild.codec.name} {rebuild.codec.to_json()}, the record's codec "
                          f"{record.codec.name} {record.codec.to_json()}")
     if link and not record.bind:
-        raise ValueError("the link term is a registration's that binds z: this record's receipts are of blocks alone")
+        raise ValueError("μ_link is a registration's that binds z: this record's receipts are of blocks alone")
     mu_rebuild = rebuild.fraction(capacity_bytes_per_s)
     whole = capacity_bytes_per_s * record.span_ns / 1e9
     b = record.block_bytes
