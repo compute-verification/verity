@@ -278,11 +278,11 @@ def test_digests_are_taken_once_the_steps_bytes_are_in_place():
 
 
 @pytest.mark.parametrize("lifetime", [0, -1, True, 2.0, None])
-def test_a_lifetime_cap_that_is_not_a_positive_count_of_windows_is_refused(lifetime):
-    """A map is recorded under a cap of one or more whole windows: zero, a negative count, a bool, a float and None
-    are each refused, and the store then records no map."""
+def test_a_lifetime_that_is_not_a_positive_count_of_windows_is_refused(lifetime):
+    """A map is recorded under a lifetime of one or more whole windows: zero, a negative count, a bool, a float and
+    None are each refused, and the store then records no map."""
     s, _ = store()
-    with pytest.raises(ValueError, match="the lifetime cap is a positive number of windows"):
+    with pytest.raises(ValueError, match="is a positive number of windows"):
         s.record_memory_map(registration=registration(s).digest, lifetime=lifetime)
     assert s.memory_map is None
 
