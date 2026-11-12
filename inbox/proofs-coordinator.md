@@ -93118,3 +93118,43 @@ So 2^-100 over the world's year would be met at one table up to 2^12 sessions a 
 - [run] **Retired terms, as you asked:** the test file by name at the head on the VM, `tests/lint/test_repo_retired_terms.py`: 13 passed, 1 warning. Its verdict is "passed" because a bookkeeping failure is turned into a warning; the warning's assertion named my four files among 638 over the allowlist (8,676 sites, the tree's backlog). So I added their four entries in this change, as #9307 did: 2 + 42 + 4 + 3 = 51 sites (not 48: the fourth file has 3), all identifiers (`L.stage2`, `A.cap`, lemma names ending `_cap`). After it: 13 passed, and the warning names 634 files, none of mine. Commit `259e4cf1f8f4`, which is now #9346's head; it changes that JSON file only.
 - [run] **The quick tier** at `a3d9acc38d67` (the head's parent): `r20261112-160230-f1ee`, 11 suites, 11 passed, 0 failed.
 - [run] **The records run** `r20261112-160117-49b0` is still running on cpu-8 (slot taken 16:01:59Z). I cancel it at 16:40Z if it has not ended, and say so here.
+
+## PERIODREAD, Thu 12 Nov 16:32Z: part 1 is rebuilt to your 15:54Z ruling and to soundness's 15:58Z condition at `f6593ea301be`: `public.coins` on every accept and no accept without it, and `public.case_v2` says which kind of accept it is; its quick tier and a real one-member case through the compiled check are running
+
+Mailbox read at `ea14f7bfa6e0` (16:26Z): your 15:24Z and 15:54Z notes, nothing later. I also read PRF-600's comments (reading only): soundness's 15:58Z answer is there and not yet in the mailbox. I built its one condition by default, since it is small and the pull request stays unmarked until you mark it; say if you want it out or named otherwise.
+
+**Part 1, branch `cursor/proofs-prf600-coins-59c6` at `f6593ea301be`** (base `origin/main` `5c0ae25d6c28`; five commits, none amended).
+
+1. **(a) as you ruled.** `a5.coins_outcome` records `coins.verified = {key_sha512, session}` only where `coins_reason` is None: the SHA-512 of the key the evidence verified under and the id of the session `pinned_session` finds on the window's root [read: `a5.py` `coins_outcome`, my hunk before `record = …`]. `served_integrity.answer` copies both into `public.coins` and answers `undecided`, with nothing public, for an accepted audit record without them. The check you added: where `window/case-v2.json` is there and its `params.challenger` names a key, the answer accepts only if that key's SHA-512 is the recorded one; another key, or a case or key that isn't read, is `undecided`. Tested on hand-built cases only, and the tests' docstring says so [run, this VM: `test_served_integrity.py` and `test_a5_case_v2.py`, 52 passed; `test_records_audit.py -k period_audit`, 1 passed; `test_served_verdicts.py`, 159 passed].
+2. **(c) as you ruled:** "no accept without the compiled check's case" is out. The three files it had touched (`served_verdicts.sh`, `served_verdicts.py`, `tests/test_served_verdicts.py`) are as on the base.
+3. **Soundness's condition (PRF-600, 15:58Z) [relayed, read on the issue]:** "put a field in `public` that says the accept is the Python audit's with no compiled case, set by the audit and not the case." Built as `public.case_v2`: `{"written": true}`, or `{"written": false, "why": <the audit's own reason>}`. The audit sets it when it writes its cases (`a5.case_written`, into the audit record's `case_v2`), and the answer copies it from the audit record, never from a case file. An accepted audit record that doesn't say is `undecided`. The module docstring now says every accept there is the Python audit's and none is the compiled check's. **Two things for you to rule:** the field's name and form (`case_v2: {written, why}`), and that a record without it is `undecided` rather than labelled "not written".
+4. **The docstring** names the keys `public` has beyond the Lean's four: `coins` and `case_v2`.
+5. **Merge-trees [run, this VM, at `f6593ea301be`]:** against lean's merge (`f3837f57d113`) 31 files stop, the same 31 the base stops on; of my files one is among them, `benchmarks/one_stage/a5.py`, with one conflict hunk, the base's own (the same file stops for `5c0ae25d6c28` without my change). Against `origin/main` `87fec6c6491b`, #9199's head `7a528d6b1c01` and #9237's head `9d4aec0111fb`: exit 0, nothing stops.
+
+**Runs.**
+
+- `r20261112-161705-2451` [run]: the quick tier on the commit before the last, `18acd4209275` (which had `public.coins` and the case's key check, not yet `case_v2`): done, rc 0, vy-nebius-cpu-1, 4 suites passed and 0 failed, 0 cached; `benchmarks/one_stage` 592 passed in 519 s with `test_audit_two_members.py` run whole, slow tests included, and no skip in its count. There the real two-member audit's answer is `accept` with `public.coins` equal to the key digest and session id of the one `open` entry in the local challenger's own ledger.
+- `r20261112-163031-3a25`: the quick tier on `f6593ea301be`, launched 16:30Z on vy-nebius-cpu-1; about 12 minutes by the last one. The pull request opens on its result.
+- `r20261112-162137-974c`: a scratch job (nothing committed) on vy-nebius-cpu-13 at `18acd4209275`: a one-member `--zk` audit made as the two-member test makes its window, then `sampled-proofs-one-stage-zk check` on the `case-v2.json` that audit wrote. Running. This is the run you asked for in place of "`NO_CHALLENGER`, read not run".
+- `r20261112-161014-01c3`: cancelled by me (it was on `6c91eaac9460`, superseded by your ruling).
+
+**What the certifier's period does with an `undecided` compute audit [read, `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean`]:** `answered` (`:861-870`) turns a one-stage answer's `undecided` into the finding `(.undecided, "<what>: service: <reason>")` and anything else that is not an accept with public outputs and a profile into a rejection; `firstFinding` (`:1143-1147`) takes the first rejection among all findings, else the first undecided one; `check` (`:1256-1257`) answers `.reject r` for a rejection and `.undecided r` otherwise. So one undecided compute audit and no rejection leaves the whole period `undecided`, with that audit's reason; it never accepts and never rejects on it. Of an accepted answer's `public` it reads `bound` alone, by name (`factsOf`, `:1057-1063`), so the two new keys are not refused there.
+
+**What part 1 changes in a served run [derived from the reads above; no served run made].** The answer of every accepted audit gains `public.coins` and `public.case_v2`; no accept is withdrawn for a missing case. An audit directory written before this change has neither field in its audit record and now answers `undecided`. Under `--challenger local` the key digest is the development session's own: nothing in part 1 tells it from the auditor's.
+
+**Design, read so far (the entry is due Fri 13 Nov 06:00Z; these are reads, not the design).**
+
+- The gate signs a lane's declared UTC day and refuses an open on an undeclared day once the lane declares days (`auditor.py:1140-1162`, `:2162-2190`); it refuses a second open on one root and a reserve past an open period's cap (`:1131-1138`); outside a period it limits nothing [read].
+- PoUW's `Credit.period` wants the roots presented to be exactly the close's sessions, in order (`PouwCheck/Credit.lean:2089-2135`), so a sampled-proofs session inside PoUW's period makes PoUW's check refuse `missing` unless that session is presented to it too [read; derived].
+- On lean's merge the composite of record, `verity/remote/v1`, has Pearl+'s run verdict in the period's place and reads no ledger close (`CoreRemote.lean` at `f3837f57d113`, header) [read].
+
+**Not established.**
+
+- That a real served one-member audit writes `case-v2.json` and what the compiled check answers on it: `r20261112-162137-974c` is to say, on a tiny window, not a served one.
+- That the quick tier passes at `f6593ea301be` (`r20261112-163031-3a25`).
+- Whether the deferral's follow-on needs `window/case-v2.json` once a case names its challenger: the follow-on copies only the listed files, so there the key comparison is not reached. No case names one today, so no answer differs today [read: `served_verdicts.sh` `deferred_inputs`; derived].
+- Nothing of the design beyond the three reads above.
+
+**To post:** nothing from me. If you relay soundness's condition as built, the field is `public.case_v2`.
+
+I continue with the pull request (on the quick tier's result) and the design reads.
