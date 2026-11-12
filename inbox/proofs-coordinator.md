@@ -96369,3 +96369,109 @@ Still out at 19:09Z [run]:
 4. **The mend and the return port collide in three lines of `two_stage.py`** (the hand-off's `family` on `First.sample`), still so at your head `6790bdab003d`. The resolution is at `64dc9e6158bb`, where the whole sequence ran to the last withheld accept on CPU (`r20261112-182756-1126`).
 5. **A record made before the mend is refused at the mend in the last step, after every proof** (Lean's run, `coins`: the hand-off names no family). Nothing is gained by running `second` at the mended verifier on Wednesday's record or on this morning's.
 6. **Labels for Friday's run, whatever its verdict:** a development run until VLLM-375 lands; a rehearsal's verdict until PRF-583 lands; and its last line is `two-stage-form` by design.
+
+## ACCOUNTS, Thu 12 Nov 19:10Z: item 2 is yes (the Lean compiles today on #9268's head; on `main` Mon 16 Nov if #9268 is there by Fri 13 Nov 4 PM PST, else the working day after it); item 3 stands, with three things v2 must gain to hold it
+
+**Item 2, the answer you carry: yes.** The two lists can be on a branch before Mon 16 Nov noon PST, and I can write
+it; it is not part of v2's pull request and needs no other worker. [derived, from the rows below]
+
+| Asked | Answer | Tag |
+|---|---|---|
+| On a branch by Mon 16 Nov noon PST? | Yes. The Lean is written and compiles today as a scratch on #9268's head `e055e90b66f9`: five files, 111 lines added, 16 removed. The log's wire, the Python and the tests are not written. The whole change on a branch of mine: Fri 13 Nov, if you tell me to go today. | [run] `r20261112-184658-6c2e`, `r20261112-184659-e524`, both exit 0; [derived] |
+| The day on `main` | Mon 16 Nov, if #9268 is on `main` by Fri 13 Nov 4 PM PST and you mark it. Otherwise the working day after #9268 lands. It cannot open as a pull request before #9268 is on `main` (we stack only on our own). | [derived]; [run] `gh pr view` 18:50Z: #9268 OPEN at `e055e90b66f9`, #9375 OPEN at `e209a56847d4` |
+| Runs it needs once it is merged onto `main` | Three tries (128 s and 269 s of Lean today, after 2 to 30 min waiting for a slot), one records run (about 25 min today), one quick tier (57 to 65 min today). | [run] today's runs |
+| Mine with v2, or another worker? | Mine, in a pull request of its own from `main`. Not with v2: PR (3) waits on #9375, the spec's Site and the Python mirror, and is far larger. The two meet in one line, `Covered`, where v2 adds a second case; I merge that. Cost: PR (2), the period, and the auditor's host in v2 wait behind it. | [derived] |
+| What it waits on | #9268 on `main`, which soundness marks after #9375. Nothing else. | [relayed] your message; [read] PRF-592 |
+
+**What the scratch does** [read, all at local commit `1913cb7611af` on `e055e90b66f9`, pushed nowhere; the diff is
+`/opt/cursor/artifacts/composites-two-lists-scratch.diff`, 255 lines]:
+
+- `verity/protocols/onsite/verifier/CoreComposites.lean:38–63`: the table holds four composites. `network` is the
+  certifier, sampled proofs and the wipe; `compute` is those, the inference-only policy and PoUW's period. Each is
+  onsite's subprotocols filtered to the list, in the order of their ids, under the rule onsite and remote compose by.
+  `ofIds` is unchanged: it already takes a set in any order and returns the table's one protocol, so one set has one
+  id. Guards hold that each list is in id order with no id twice, and that either order of a list gives the same id.
+- `verity/protocols/interface/CoreProtocol/Site.lean:300–305, 389–395` and `security/Definitions/Core/Site.lean:368–372,
+  489–495`: `Covered` reads "the list names the certifier's check" and `Reached` reads "the list names a check a
+  memory challenger takes part in", in place of `= .onsite`. At onsite both are as before, at remote both are still off.
+- `security/Proofs/Properties/Core/Site.lean`: two lines say the code's two constants are the spec's. The agreement's
+  109 theorems pass unchanged otherwise. [run] `r20261112-184658-6c2e`
+- `security/Proofs/Properties/Verity/Soundness/Composite.lean:125–129` (soundness's file): `ofIds network` and
+  `ofIds compute` each equal the theorem's `verifier` at that list, by `rfl`. [run] `r20261112-184659-e524`, 26 theorems
+
+**What is still to write, all in the same pull request** [read at `e055e90b66f9`; none of it written]:
+
+- The log's wire. `Registration.Composite.ofJson` reads the two names `onsite` and `remote`
+  (`CoreProtocol/Site.lean:693–694`), so no log can be registered under a smaller list. It needs the two lists as
+  constants in both Site files and two more names.
+- Python: `verity/configuration/deploy/config.py:57` (`COMPOSITES`), `verity/protocols/spot/verifier/parties.py:146`
+  (`SUBPROTOCOLS`), `verity/hardware/site/__init__.py:58, 691, 693` (the names and the two clauses),
+  `verity/hardware/registration.py:226, 316` (the two readers).
+- Tests: `test_composition_difftest.py:714–737` runs the Lean binary on every subset of the ids and wants exit 64 for
+  all but two, so the Lean cannot land without the Python. Also `composition/tests/reference.py:582–584` (two more
+  reference composites), `tools/verity/cli/tests/test_run.py:119–128`, and the Site's two difftests.
+- Two READMEs that say "two composites", and one line of onsite's lock: `layers/CoreComposites/imports` gains
+  `CoreProtocol.Site`, which the guards on the two constants import.
+
+**Lock** [read `security/Properties/lean-audit.json` at `e055e90b66f9`; a records run on the scratch,
+`r20261112-190320-3867`, is running, about 25 min]: four definitions change their hash under `reads`
+(`Core.Site.Entry.Covered`, `Core.Site.Entry.Reached`, `Verity.Site.Entry.Covered`, `Verity.Site.Entry.Reached`). No
+guarantee is added, no statement's text changes, nothing in `deployed` or `trust_gap` moves, no premise is added.
+`security/lean-audit.json` names none of the four. [derived] until the run says so
+
+**Three choices in it that are yours, each with what I did in the scratch:**
+
+1. **Which checks are "the challenger's".** Scratch: PoUS's run and the wipe. PoUB-P2 is the open one: its verifier is
+   no device of the Site today. Neither smaller list has PoUS or PoUB, so both lists read the same either way. [derived]
+2. **The two composites' ids.** Scratch: `verity/composite/v0:` and the ids, comma-separated, which is what #9268's
+   `Verity.compositeId` gives a list that is neither onsite nor remote, so the two `rfl` lines need nothing of
+   soundness's changed. A named id each (compute-research's draft asks "its own id") costs two lines in soundness's
+   `Game.lean`. [read `security/Properties/Verity/Game.lean:206–214` at `e055e90b66f9`]
+3. **The log's name for each list**: `onsite_network` and `onsite_compute`, or the ids comma-separated, which
+   `Composite.name` already writes. [read `CoreProtocol/Site.lean:565–569`]
+
+**One thing soundness should confirm** [read `security/Properties/Verity/Soundness.lean:46, 73–74` at `e055e90b66f9`]:
+`SoundnessOf` is stated at every list, so the code gains the two lists with a statement that covers them. The two
+theorems "from the subprotocols' targets" are onsite's and remote's only. I add the two `rfl` lines to their file
+only on their word.
+
+**A consequence for the demos' dates** [read `verity/hardware/site/__init__.py:473–476` on `main` `0582899c4392`;
+derived]: a node's entry from `node_entry` holds its ways out as boundary links no certifier splits, and "`onsite`
+refuses it by `uncertified`". Once the clause reads the list, the same entry is refused under `onsite_network` and
+`onsite_compute`, since both list the certifier. So a demo that registers its node that way passes registration only
+when v2's reason on a link is on `main` (PR (3)), or with a certifier splitting each way out. Today's `= .onsite`
+would let it through unchecked, which is what PRF-592 names. I did not establish how the two demos register their Site.
+
+**Item 3: stands.** Nothing in v2 at `a5b556456c32` contradicts compute-research's default. Line by line:
+
+| Their line | v2 | Tag |
+|---|---|---|
+| The clock is the card; `drift.max` is a premise | A drift taken on a premise enters `rows` as `Premised` and the row lists it; a row that names a premise is no figure of record. | [read] `Account.lean:493–494, 510, 516–519` |
+| A row of record needs `mark != "premise"`, our `premises == []` | Holds on one condition: the builder never writes a number marked `premise` into the auditor's figure (`Auditor.drift`). Lean sees no mark; a drift registered there prints `premises: []`. Both rows print `status: certified`. | [read] `Site.lean:359, 451–456`; `Account.lean:714–717` |
+| No node file for an auditor's host | The inventory reads the auditor's figures only for locations of kind `host`, so a host of another kind has no line there. | [read] `Site.lean:514–521` |
+| The builder returns `ClockRateWithin(<host>, <drift.max>)` | The premise's name is a string `rows` does not read. | [read] `Account.lean:519` |
+| The H200's `eth0`: a link with `unmediated`, no rate, from `ways_out`'s two fields | A link's capacity is optional, and a link without one must say why no certifier splits it. The auditor's figures list each way with its rate or none, and each must be a link. Every link's row of a Site that is not mediated prints "egress not mediated: no bound". | [read] `Site.lean:205, 216, 403–406, 521`; `Account.lean:489` |
+
+Three things v2 lacks before it can hold the default, none in the branch, none built until you say:
+
+1. **No kind for an auditor's host.** The kinds are site, host, device, memory, certifier, challenger, outside, and a
+   certifier's or challenger's parent is the site (`Site.lean:38–55`). The three hosts fit none.
+2. **No place for the time base's sku.** A location's `sheet` is a GPU sheet's digest, checked for devices only
+   (`Site.lean:178`). A location gains a key.
+3. **The premise is keyed by device, and `rows` checks no host.** `Premised.device` (`Account.lean:517`) becomes the
+   host's id, `rows` refuses a premise whose host is not an auditor's host of the Site, and the drift is read from
+   the device's parent (`Account.lean:714–717`). This is memory's answer of 17:07Z. [relayed]
+
+**Correction to my 18:36Z entry.** I listed a location's JSON keys as safe to write against. They are not final: a
+location gains one key (the time base's sku), `Kind` gains one constructor, and `Premised.device` will name a host. A
+link's five keys are final. CARDS's builder can branch from `a5b556456c32` and should expect those three to move.
+
+**Tries at the v2 head `a5b556456c32`** [run]: `r20261112-183715-d968` (`security/Properties/Core/Site.lean`) lean exit
+1 in 66 s, six errors where the spec's file builds the code's `Link`, `Loc` and `Auditor` and names each refusal (it lacks `inventory`). That is
+the file PR (3) moves, and it is why nothing that imports the agreement builds on the branch. The other three
+(`r20261112-183707-eb95` the root, `-183708-c7e5` `RegistrationMain`, `-183709-d650` spot's difftest) were still waiting
+for a slot at 19:08Z, as was `r20261112-184658-8cc8` (`CoreComposites.lean` on its own; it built with its guards as an
+import of `e524`). I add one line with their verdicts and the records run's.
+
+Not established: any Python or test for the two lists; the composition's difftest on them; the whole `check`; how the
+two demos register their Site.
