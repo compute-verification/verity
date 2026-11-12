@@ -1,6 +1,6 @@
 """`same_sass.py`: a kernel is the same when its listing is, whatever its name and however wide cuobjdump made the
 encodings' column; a kernel whose instructions changed is named, with its listing beside the new build's, and the
-comparison exits 1, so `host_read.sh` runs nothing on that build. cuobjdump is a stub that prints each library's canned
+comparison exits 1, so `host_read.sh` runs nothing on that build. A kernel only the new build has leaves its listing. cuobjdump is a stub that prints each library's canned
 listing. A cuobjdump that fails is said on one line, with what it said. With nvcc's log of the new build, a kernel
 only the new build has is recorded with its registers and spilled bytes, and one that spills is refused."""
 from __future__ import annotations
@@ -43,7 +43,10 @@ def test_a_wider_encoding_column_and_a_new_name_leave_a_kernel_the_same(tmp_path
     assert doc["same"] == doc["base_kernels"] == 2 and doc["changed"] == []
     assert doc["renamed"] == {"_ZN2rb14signs16_kernelEv": "_ZN2rb12signs_kernelILi16EEEvv"}
     assert doc["only_new"] == ["_ZN2rb12signs_kernelILi64EEEvv"]
-    assert said.startswith("2 of BASE's 2 kernels") and "changed: none" in said and not (tmp_path / "sass").exists()
+    assert said.startswith("2 of BASE's 2 kernels") and "changed: none" in said
+    assert [(f.name, f.read_text()) for f in (tmp_path / "sass").iterdir()] == [
+        ("signs_kernel-64.only-new.sass",
+         '.headerflags @"EF_CUDA_SM90"\n/*0000*/ MOV R2, R4 ; /* 0x00 */\n/*0010*/ EXIT ; /* 0x00 */\n')]
 
 
 def test_a_changed_kernel_exits_1_and_is_named_with_its_listing_beside_its_16_row_instance(tmp_path, monkeypatch,

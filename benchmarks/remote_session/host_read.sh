@@ -6,7 +6,7 @@
 # Holding no card, it builds session.cu and kv.cu (p1024, masked) for ARCH, and BASE_REV's session.cu beside them
 # (default: the commit this one's branch left `origin/main` at), and writes which of the base's kernels the new build
 # holds instruction for instruction and what the kernels only the new build has were built to (`same_sass.py`,
-# out/same_sass.json): the run ends there (exit 5) unless the build holds every kernel of the base's as it was and
+# out/same_sass.json, their listings in out/sass): the run ends there (exit 5) unless the build holds every kernel of the base's as it was and
 # none of its own spills, and also when there is no base, the base does not compile or cuobjdump fails. BUILD_ONLY=1
 # ends after the build, so a machine with no GPU checks that it compiles (TOOLKIT=1 assembles CUDA 12.9's nvcc first,
 # `benchmarks/pouw/harness/jobs/toolkit.sh`).

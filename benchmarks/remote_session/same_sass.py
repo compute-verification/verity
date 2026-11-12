@@ -7,7 +7,7 @@ each library, split at its `Function :` lines. A kernel is the lines under its o
 Prints how many of BASE's kernels NEW holds and names the ones it does not; FILE gets those, the kernels NEW holds
 under another name, and NEW's kernels BASE has none equal to. DIR gets, for each of BASE's kernels NEW does not hold
 (the --listings-max shortest), its listing beside NEW's kernel of that name (a template's instance at 16 rows first)
-and their diff. With LOG, what nvcc said building NEW (`-Xptxas -v`), FILE also gets the registers and the spilled
+and their diff, and the listing of each kernel BASE has none equal to. With LOG, what nvcc said building NEW (`-Xptxas -v`), FILE also gets the registers and the spilled
 bytes of each kernel BASE has none equal to, and a line names them. Exits 0 only when NEW holds every kernel of
 BASE's, 1 when it does not or, with LOG, when a kernel only NEW has spills or is not in LOG, 2 if cuobjdump fails on a
 library (with what it said, on one line) or a library lists no kernel: the job that built them (`host_read.sh`)
@@ -122,6 +122,11 @@ def main() -> int:
             at.with_suffix(".new.sass").write_text("\n".join(now) + "\n")
             at.with_suffix(".diff").write_text(
                 "\n".join(difflib.unified_diff(was, now, name, twins[0] if twins else "(none)", lineterm="")) + "\n")
+    if a.listings and doc["only_new"]:
+        a.listings.mkdir(parents=True, exist_ok=True)
+        for name in doc["only_new"]:
+            (a.listings / (shown(name).replace("<", "-").replace(">", "") + ".only-new.sass")).write_text(
+                "\n".join(new_text[name]) + "\n")
     print(f"{len(same)} of BASE's {len(base)} kernels are in NEW as they were ({len(doc['renamed'])} under a new name); "
           f"changed: {', '.join(doc['changed']) or 'none'}")
     if a.ptxas:
