@@ -137,6 +137,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, np.ndarray, float]:
     """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
+    # the core `verity`'s, which importing this module does not load
     from verity.definitions.registry import sampling_rows
 
     V, S, words = job
@@ -264,6 +265,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than the cap, or an EOS before the cap
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
+    # continuation loads the core `verity`, which importing this module does not
     from verity_vllm.program.lifting import continuation
 
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
@@ -308,6 +310,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
     (when it was not, the record half of 'RNG advances iff r_t' stays 'stated, not measured on this record', said so)."""
+    # continuation loads the core `verity`, which importing this module does not
     from verity_vllm.program.lifting import continuation
 
     out: dict = {"convention": "draw k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
@@ -614,6 +617,7 @@ def _evaluate_pending(pending: list, rows: list[dict], reasons: list[str], tally
     ref_check: dict = {"evaluator": evaluator, "reference_evaluator": None, "rows_requested": 0, "rows_checked": 0, "disagreements": [],
                        "seconds": 0.0}
     if evaluator != "lane" and reference_rows and pending:
+        # commit.challenge loads the core `verity`, which importing this module does not
         from verity_vllm.commit import challenge
 
         stream = challenge.stream(challenge.reference_rows_seed(sampled_rows_total, len(pending)))
