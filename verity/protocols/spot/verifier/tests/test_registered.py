@@ -1277,6 +1277,48 @@ def test_r7_takes_the_verifiers_certified_entries():
             R.check(both, prog, Q, **kw, **named, certified=CERTIFIED)
 
 
+def test_the_audit_record_holds_a_certified_value_to_a_reported_read():
+    """A value the verifier holds a certified entry for needs a read the accepting verdicts of record report. The record
+    accepts when they report one at the registered root. It fails `certified`, naming the value, when they report none:
+    no read at all, or the value's port named under a value the record does not list and at another root, which is
+    none of the record's own values, so the registered roots' check never sees it. A read at another root fails
+    `registered` as any registered value's does. Without the certified names the record asks no read of the value, and
+    each of the unread records is accepted."""
+    _, check, _, _ = _seeded_case()
+    design = {k: x for k, x in check.items() if k not in ("program", "query", "ports", "registered", "supplied")}
+    lone = _program(w=16)
+    served, ports = _record(lone, _registered(_program()))
+    (value, mine), = CERTIFIED.items()
+    rec = {**served, "registered": [{"value": value, **mine}]}
+    assert R.check(rec, lone, Q, **design, ports=ports, certified=CERTIFIED).ok
+    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    base = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    read = {**base, "registered": {"rows.0": {"value": value, "root": mine["root"]}}}
+    renamed = {**base, "registered": {"rows.0": {"value": "unlisted", "root": "ab" * 64}}}
+
+    def decide(verdicts, certified=CERTIFIED):
+        return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {},
+                                  verdicts, 0.25, session_registered=audit.session_registered(verdicts, rec),
+                                  certified=sorted(certified))
+
+    ok = decide({"lean": read})
+    assert ok["accepted"] and "certified" not in ok["checks"] and "registered" not in ok["checks"]
+    assert audit.session_registered({"lean": renamed}, rec) == {}, "the record lists no such value: the read is dropped"
+    for verdicts in ({"lean": base}, {"lean": {**base, "registered": {}}}, {"lean": renamed}):
+        r = decide(verdicts)
+        assert not r["accepted"] and r["integrity_profile"] is None and "registered" not in r["checks"], verdicts
+        assert r["checks"]["certified"] == {"ok": False, "codes": ["certified"],
+                                            "detail": {"certified": [value], "unread": [value]}}, verdicts
+        assert decide(verdicts, certified={})["accepted"], "without the certified names nothing asks the read"
+    assert decide({"lean": read, "lean-2": renamed})["accepted"], "another session's read of the value itself"
+    moved = decide({"lean": {**base, "registered": {"rows.0": {"value": value, "root": "ab" * 64}}}})
+    assert not moved["accepted"] and moved["checks"]["registered"]["detail"]["wrong"] == [value]
+    assert "certified" not in moved["checks"]
+    two = decide({"lean": renamed}, certified=[value, "other", value])
+    names = sorted([value, "other", value])
+    assert two["checks"]["certified"]["detail"] == {"certified": names, "unread": names}
+
+
 def test_r7_holds_a_windows_history_to_the_previous_records_port():
     """A window's history (`outputs: {value: {"port": P}}`, the earlier windows' outputs it reads) is port P of the log's
     last record, the one R6 holds `previous` to, whose digest the verifier takes from the log (`last_digest`): the entry

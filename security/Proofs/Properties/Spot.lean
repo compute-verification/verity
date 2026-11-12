@@ -113,6 +113,24 @@ theorem none_fail_base (d p : Check) :
 theorem subDict_iff (a b : Array (String × Json)) : Record.subDict a b = true ↔ OpenedRegistered a b := by
   simp only [Record.subDict, OpenedRegistered, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
 
+theorem none_fail_append (xs ys : Array (String × Check)) :
+    (∀ x ∈ xs ++ ys, Fails x = false) ↔ (∀ x ∈ xs, Fails x = false) ∧ ∀ x ∈ ys, Fails x = false := by
+  simp only [Array.mem_append, or_imp, forall_and]
+
+theorem none_fail_ite_nil (b : Bool) (y : String × Check) :
+    (∀ x ∈ (if b = true then (#[] : Array (String × Check)) else #[y]), Fails x = false) ↔
+      (b = false → Fails y = false) := by
+  cases b <;> simp
+
+/-- The check `certified` holds exactly when each certified value has a reported read. -/
+theorem certifiedCheck_ok (certified : Array String) (opened : Option (Array (String × Json))) :
+    (∀ x ∈ Record.certifiedCheck certified opened, Fails x = false) ↔ CertifiedRead certified (opened.getD #[]) := by
+  unfold Record.certifiedCheck
+  rw [none_fail_ite_nil, fails_of_codes "certified" _ (by decide) rfl]
+  simp only [CertifiedRead, Bool.true_eq_false, imp_false, Bool.not_eq_false, Array.all_eq_true', Array.any_eq_true',
+    beq_iff_eq]
+  all_goals exact Iff.rfl
+
 theorem qsort_eq_empty {α : Type} (xs : Array α) (lt : α → α → Bool) : xs.qsort lt = #[] ↔ xs = #[] := by
   rw [← Array.size_eq_zero_iff, Verity.QSort.size_qsort, Array.size_eq_zero_iff]
 
@@ -169,14 +187,15 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
       simp only [hr, hj, ↓reduceIte]
   all_goals exact Iff.rfl
 
-theorem recordChecks_nil (c : Commitment) (e : Evidence) :
-    OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[] ↔ UnitsProved c e := by
+theorem recordChecks_nil (p : Params) (c : Commitment) (e : Evidence) :
+    OneStage.recordChecks c.record (Flock.hexOf c.digest) e (p.verifier.certified.map (·.1.value)) = #[] ↔
+      UnitsProved p c e := by
   unfold OneStage.recordChecks
   simp only [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
   have hf : ∀ cs : Array (String × Check),
       (∀ x ∈ cs, ¬(match x with | (n, c) => n != "draw" && !c.codes.isEmpty) = true) ↔ ∀ x ∈ cs, Fails x = false := by
     intro cs; simp [Fails]
-  rw [hf, checks_ok, checkProved_nil]
+  rw [hf, none_fail_append, checks_ok, certifiedCheck_ok, checkProved_nil]
   unfold UnitsProved Receipt openedRoots
   simp only [Option.map_eq_some_iff, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, and_assoc]
   exact Iff.rfl
@@ -1276,7 +1295,7 @@ theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registe
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     OneStage.check p c e = .accept pub prof ↔
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
@@ -1291,9 +1310,10 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     simp only [h1, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hd]
     by_cases h2 : Draw.checkDraw e.draw (getD c.record "population") law = #[]
     · simp only [h2, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[]
+      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e
+          (p.verifier.certified.map (·.1.value)) = #[]
       · simp only [h3, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-        have hu := (recordChecks_nil c e).1 h3
+        have hu := (recordChecks_nil p c e).1 h3
         have hdr := (checkDraw_nil _ _ _).1 h2
         rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
         · have hva := (verdictOf_accept _).1 hv
@@ -1326,11 +1346,12 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           rintro ⟨law', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
           rw [hv] at this; cases this
-      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e).isEmpty = false := by
+      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e
+            (p.verifier.certified.map (·.1.value))).isEmpty = false := by
           simpa [Array.isEmpty_iff] using h3
         simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
         rintro ⟨law', d', n', -, -, hu, -⟩
-        exact h3 ((recordChecks_nil c e).2 hu)
+        exact h3 ((recordChecks_nil p c e).2 hu)
     · have : (Draw.checkDraw e.draw (getD c.record "population") law).isEmpty = false := by
         simpa [Array.isEmpty_iff] using h2
       simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
@@ -1350,7 +1371,7 @@ registered population, its units proved and served as sampled, and verdicts that
 `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
-    (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hu : UnitsProved p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩

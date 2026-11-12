@@ -744,7 +744,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
-                             audit.session_registered(e["verdicts"], rec))
+                             audit.session_registered(e["verdicts"], rec), sorted(p.get("certified") or ()))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
             return "reject", "checks"
@@ -1427,12 +1427,14 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 def _record_input(j) -> Fraction:
     """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `own_reads` a boolean
-    when given; δ."""
+    and `certified` a list of strings when given; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
-    _exactly(j, RECORD_INPUT_KEYS | ({"own_reads"} if isinstance(j, dict) and "own_reads" in j else set()),
+    _exactly(j, RECORD_INPUT_KEYS | ({"certified", "own_reads"} & set(j) if isinstance(j, dict) else set()),
              "the record's input")
     if not isinstance(j.get("own_reads", False), bool):
         raise D.Reject("own_reads is not a boolean")
+    if not (isinstance(j.get("certified", []), list) and all(isinstance(v, str) for v in j.get("certified", []))):
+        raise D.Reject("certified is not a list of strings")
     reg, draw_ = j["registration"], j["draw"]
     if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
             and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
@@ -1460,7 +1462,7 @@ def _record_input(j) -> Fraction:
 def audit_record_of(j) -> dict:
     """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
     roots the verdicts' own for the registration's values, with `own_reads` less those of its own ports at their own
-    roots (`Record.lessOwnReads`)."""
+    roots (`Record.lessOwnReads`), and with `certified` each of those values held to have a reported read."""
     delta = _record_input(j)
     opened = audit.session_registered(j["verdicts"], j["registration"])
     if j.get("own_reads") and opened is not None:
@@ -1468,7 +1470,7 @@ def audit_record_of(j) -> dict:
         opened = {v: r for v, r in opened.items() if not (v in roots and SS._jeq(roots[v], r))}
     return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
                               j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
-                              opened)
+                              opened, j.get("certified", ()))
 
 
 def record(j):
@@ -1596,7 +1598,8 @@ def run(j):
     out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
                            "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
                            "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
-                           "verdicts": verdicts, "own_reads": inner is not None})
+                           "verdicts": verdicts, "own_reads": inner is not None,
+                           "certified": sorted(p.get("certified") or ())})
     accepted = out["accepted"] is True
     staged = {}
     if inner is not None:
@@ -3970,6 +3973,19 @@ def _own_reads_case(a: dict, x: int) -> dict:
     return {**c, "own_reads": [True, True, False, 1, None][x % 5]}
 
 
+def _certified_case(a: dict, x: int) -> dict:
+    """`_record_case` with `certified` (or one not a list of strings): names among the registration's registered
+    values, the values its verdicts report reads of and one neither names, some twice."""
+    c = _record_case(a, "1/4")
+    reg, vs = c["registration"], c["verdicts"]
+    listed = reg.get("registered") if isinstance(reg, dict) and isinstance(reg.get("registered"), list) else []
+    read = [e for v in (vs.values() if isinstance(vs, dict) else ()) if isinstance(v, dict)
+            and isinstance(v.get("registered"), dict) for e in v["registered"].values()]
+    names = ["unlisted"] + [e["value"] for e in listed + read if isinstance(e, dict) and isinstance(e.get("value"), str)]
+    pick = [names[(x // 9 + i) % len(names)] for i in range(x % 4)]
+    return {**c, "certified": [pick, pick, pick + pick[:1], pick, pick, "unlisted", [1], None, {"unlisted": 1}][x % 9]}
+
+
 #: δ as the exact ratio of a double (`str(Fraction(delta))`), as the switch passes it.
 EXACT_DELTA = st.floats(2 ** -40, 1 - 2 ** -40).map(lambda f: str(Fraction(f))) | st.sampled_from(
     [str(Fraction(f)) for f in (0.5, 0.25, 0.1, 0.05, 0.01, 1e-6, 2 ** -20, 0.999)])
@@ -3977,6 +3993,8 @@ RECORD_PORT = D.Port(PIECES, "record", record, st.one_of(
     st.builds(_record_case, changed_audits(most=0), EXACT_DELTA),
     st.builds(_own_reads_case, changed_audits(most=0), st.integers(0, 63)),
     st.builds(_own_reads_case, changed_audits([REGISTERED_EVIDENCE], 1, 0, REGISTERED_SETUPS), st.integers(0, 63)),
+    st.builds(_certified_case, changed_audits(most=0), st.integers(0, 63)),
+    st.builds(_certified_case, changed_audits([REGISTERED_EVIDENCE], 1, 0, REGISTERED_SETUPS), st.integers(0, 63)),
     st.builds(_record_case, changed_audits([EVIDENCE, DRAW_CHANGES, VERDICTS_OF, REGISTERED_EVIDENCE], 1, 1), EXACT_DELTA),
     st.builds(_record_case, changed_audits([RECORD, ENTRIES, REGISTERED_EVIDENCE], 1, 1, REGISTERED_SETUPS), EXACT_DELTA),
     st.builds(_record_case, changed_audits(most=2, least=2), EXACT_DELTA),
@@ -6638,6 +6656,33 @@ def test_the_record_fails_a_read_not_of_a_registered_root_and_no_missing_read(pi
             assert rec["checks"].get("registered") == (None if wrong is None else {
                 "ok": False, "codes": ["registered"],
                 "detail": {"registered": named, "opened": opened, "wrong": wrong}}), (s.program.fn.id, name)
+
+
+def test_the_record_holds_a_certified_value_to_a_reported_read(pieces):
+    """The record of a v2 audit of each program whose verifier holds a certified entry for one of its registered values,
+    Lean's and Python's the same: accepted when the verdict of record reports a read of the value at its root; failing
+    `certified`, naming the value, when it reports none: its reads missing, none reported, or its ports reported under a
+    value the registration does not list and at another root, a read the registration's own names drop. The same
+    records without the certified names are accepted: a registered value needs no reported read."""
+    for s in REGISTERED_SETUPS:
+        a = _v2_audit(s, s.values[1])
+        v = sorted(e["value"] for e in a["record"]["registered"])[0]
+        got = _reported(a, v)
+        renamed = {k: {"root": "12" * 64, "value": "unlisted"} if e["value"] == v else e for k, e in got["all"].items()}
+        for name, reads, unread in (("all", got["all"], None), ("unread", got["unread"], [v]), ("empty", {}, [v]),
+                                    ("none", None, [v]), ("renamed", renamed, [v])):
+            bare = _record_case(_reporting(a, reads), str(Fraction(0.1)))
+            for case in ({**bare, "certified": [v]}, bare):
+                kind, line = D.replay(RECORD_PORT, case, pieces)
+                assert kind == "output", line
+                rec = json.loads(json.loads(line))
+                assert codec.canonical_json(rec["checks"]) == codec.canonical_json(
+                    audit_record_of(copy.deepcopy(case))["checks"])
+                failed = "certified" in case and unread is not None
+                assert rec["accepted"] is not failed, (s.program.fn.id, name)
+                assert rec["checks"].get("certified") == ({
+                    "ok": False, "codes": ["certified"], "detail": {"certified": [v], "unread": unread}}
+                    if failed else None), (s.program.fn.id, name)
 
 
 def _accepted_record_case(kind: str, delta: float) -> dict:

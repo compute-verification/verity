@@ -136,12 +136,15 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
-                 session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 session_registered: Mapping[str, str] | None = None, certified: Sequence[str] = ()) -> dict[str, Any]:
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
     record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); each read it
-    reports must be of a registered value, at that value's registered root, and a registered value needs no reported read."""
+    reports must be of a registered value, at that value's registered root, and a registered value needs no reported read.
+    `certified`: the names of the values the verifier holds certified entries for; each of them does need a reported
+    read (the check `certified` names the ones that have none), so a read reported under another value's name does not
+    stand in for it."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -159,6 +162,10 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     if wrong:
         checks["registered"] = {"ok": False, "codes": ["registered"],
                                 "detail": {"registered": sorted(want), "opened": sorted(opened), "wrong": wrong}}
+    unread = sorted(v for v in certified if v not in opened)
+    if unread:
+        checks["certified"] = {"ok": False, "codes": ["certified"],
+                               "detail": {"certified": sorted(certified), "unread": unread}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)

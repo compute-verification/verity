@@ -24,7 +24,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
   one of the record's own values is of a registered value, opened against its registered root (`UnitsProved`; a
-  registered value needs no reported read), and the receipt names the commitment's digest (`Receipt`);
+  registered value needs no reported read, except each value the verifier holds a certified entry for, which has one:
+  `CertifiedRead`), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -389,21 +390,29 @@ value and root in `registered`. It asks nothing of a registered value that `open
 def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
   ∀ x ∈ opened, ∃ y ∈ registered, x.1 = y.1 ∧ jeq x.2 y.2
 
+/-- Each value `certified` names has a read among `opened`, a `{value: root}`: an entry of `opened` is of that value. A
+read reported under another value's name is no read of it. -/
+def CertifiedRead (certified : Array String) (opened : Array (String × Json)) : Prop :=
+  ∀ v ∈ certified, ∃ y ∈ opened, y.1 = v
+
 /-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
 each port); and each of the record's own values the verifiers report a read of is a value the record registers, the read
 opened against the record's root for it (`Record.registeredRoots`, each value's last entry). A registered value no
-verifier reports a read of is not required to have one. -/
-def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
+verifier reports a read of is not required to have one, except the values the verifier holds certified entries for
+(`Registration.Verifier.certified`): the verifiers report a read of each of them (`CertifiedRead`), which, being one of
+the record's own values, is then opened against the record's root for it. -/
+def UnitsProved (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
+  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record) ∧
+  CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots c.record e.verdicts).getD #[])
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
@@ -440,14 +449,14 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDes
 
 /-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed law as derived, the sample is a
 sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
-values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
-(`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
-the profile `profileOf`. -/
+values, each certified value read, with the receipt naming the commitment's digest, and the verdicts accept; `law` has
+a profile's sample `d` (`Record.profileDraw`) and the registered population is a natural number `n`, and the check
+publishes `publicOf` and the profile `profileOf`. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 
