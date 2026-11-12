@@ -6,7 +6,7 @@
 * the digest changes with every option but ``protocols_config``, which `LLM` never hashes;
 * `LLM.from_spec` records it as ``engine_record["spec_digest"]``.
 
-That every pinned benchmark preset resolves as an engine spec is benchmarks/specs' own suite (`test_engine_spec_presets.py`).
+That every pinned benchmark preset resolves as an engine spec is benchmarks/harness/specs' own suite (`test_engine_spec_presets.py`).
 """
 from __future__ import annotations
 

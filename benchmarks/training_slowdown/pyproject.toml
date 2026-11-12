@@ -19,12 +19,14 @@ untraced = ["tests/test_command.py", "tests/test_grade.py", "tests/test_job_shel
 # The command's and the config's: of that registry too, the [policy.*] tables, whose names are the policies a config
 # may give (`config.py`); and `verity/configuration/config/verity_config`, the command's $OUT through its SHARED settings
 # `benchmarks/training_slowdown/grader`: the suite nested here, whose sources tests/test_one_calculator.py holds to the
-# one module that reaches the calculator with the rest of this directory
-inputs = ["verity", "adapters/vllm/tests/program/train_step_lf.py",
+# one module that reaches the calculator with the rest of this directory. `adapters/vllm/verity_vllm`: the
+# training-step frontend whose step test_program_reading reads as a Program, and
+# `benchmarks/circuit_properties/circuit_properties`, the reading of a Program's work it holds beside a trace's
+inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
           "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
           "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config",
-          "benchmarks/training_slowdown/grader"]
+          "benchmarks/training_slowdown/grader", "benchmarks/circuit_properties/circuit_properties"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

@@ -677,8 +677,9 @@ into its own witness's mask slot (`z`, `a` and `b`, whose circuit is the identit
 commits the codeword the loop did; the loop's root is the root of record. A worker that keeps words of its own in the slot
 commits another codeword, and the session stops at its `Finish` (`zk_worker_level0`'s `own-mask`).
 
-**The value commitments' salts are the ZK server's.** A statement's hm96 trees (its public file's `frame_v3` roots under
-a hiding commitment's schema) are committed by the ZK server's value service (`core-firewall values --state DIR --salt-key FILE`,
+**The value commitments' salts are the ZK server's.** A statement's hm96 trees that commit a value (its public file's
+`frame_v3` roots under a hiding commitment's schema, but a row's at known content, below) are committed by the ZK
+server's value service (`core-firewall values --state DIR --salt-key FILE`,
 `Flock.Firewall.Values` on the ZK server's record in `DIR`), which holds the server's 64-byte salt key `k` and derives
 each leaf's salt from it: leaf `i` of
 table `j` of the commit session `s` takes `y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for `ctr` 0, 1 and 2
@@ -747,6 +748,13 @@ read: across a stream of `r` registrations with at most `b` passed over, at most
 `log₂ Σ_{i≤b} C(r, i) + Σ_i log₂ m_i` bits, `m_i` registration `i`'s count, 1 on the service of record, so at most
 `log₂ Σ_{i≤b} C(r, i)` (`Verity.Guarantees.RegisteredStreamLeakage`), counted in the stream's bound beside its stops
 (§10.5).
+
+**Known content.** A row the verifier registers itself at known content (`Flock.RegKnown`) commits no value and is none
+of the service's. Its words and its salt are a function, fixed by the protocol under a tag of its own, of what is public
+before the row is made, and the verifier computes that function itself and takes the row from no file of the stack's
+(`Salts`'s header has the rule). The release side knows no known content: given the key it refuses a statement that has
+such a row, as it does every statement one of whose trees no registration holds, so that statement passes only a loop
+run without `--salt-key`.
 
 Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
 yet requires the key of a deployment's loop. The ZK server numbers one sequence of registrations for all its

@@ -112,9 +112,12 @@ untraced = [
     "tests/test_store_prov.py",
     "tests/test_store_vllm_tools.py",
     "tests/test_telemetry.py",
+    "tests/test_tool_rules.py",
+    "tests/test_treelock.py",
     "tests/test_undeclared_derivation.py",
     "tests/test_vqueue_compare.py",
     "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_moves.py",
     "tests/test_vqueue_records.py",
     "tests/test_vqueue_slim.py",
 ]

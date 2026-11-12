@@ -537,12 +537,14 @@ class ProofServer:
                     if k[1] == p.key and any(self._sessions[x].served is None for x in v.sessions):
                         del self._verifiers[k]
                         stale.append(v)
-        for s in left:
-            s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
+        # a thread is started before it is listed, and listed before any session fails: a caller may close the server as
+        # soon as a session fails, and `close` joins every thread it finds listed
         for v in stale:
             t = threading.Thread(target=self._retire, args=(v,), name=f"retire-{v.name}", daemon=True)
-            self._retiring.append(t)
             t.start()
+            self._retiring.append(t)
+        for s in left:
+            s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
 
     def _retire(self, v: _Process) -> None:
         """Ends verifier ``v`` once it has filed the sessions its prover finished: the rest of its queue never comes."""
