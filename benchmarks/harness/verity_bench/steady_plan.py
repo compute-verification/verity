@@ -370,47 +370,24 @@ def make_plan(source: str | Path, *, root: Path | None = None, lookup: Lookup | 
 def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str) -> list[str]:
     """The point as a `research run --on NODE` through one of the node's GPU slots, which gives it its cores. The node
     side takes the card itself, in one lease, so that the lease has ended and left its usage line among the run's
-    files before the run's verdict is computed."""
+    files before the run's verdict is computed. A point whose row names its statement in the store runs with a
+    read-only key to it."""
 
     spec = plan.spec
-    minutes = jobs.direct_minutes(spec, node)
-    return [
-        "research", "run",
-        "--on", node,
-        "--project", "verity",
-        "--campaign", "steady-point",
-        "--source", str(root),
-        "--cwd", "source",
-        "--timeout", f"{minutes:g}m",
-        "--require-result",
-        "--tool", "verity_bench.tool:STEADY_POINT",
-        *[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
-        "--",
-        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
-        "--run-max", f"{minutes * 60:g}",
-        "--",
-        "bash", "benchmarks/harness/steady_point.sh",
-        "--spec", jobs._relative_spec(source, root),
-        "--point", item.point.id,
-        "--identity", item.identity,
-    ]
+    return jobs.slot_run(
+        spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
+        store_read=item.point.row.stored is not None,
+        env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
+        job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
+             "--point", item.point.id, "--identity", item.identity])
 
 
 def dispatch(plan: jobs.Plan, source: str | Path, *, root: Path | None = None, execute: jobs.Executor = jobs._execute,
              direct: str | None = None) -> int:
-    """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots, in the spec's order, as
-    `jobs.dispatch` launches a vLLM spec's direct points: each launch returns once its run has started on the node, where
-    the runs take the slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
+    """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots: the harness's one
+    dispatch (`jobs.dispatch`), with a steady-state point's command. A steady-state spec has no queued form."""
 
-    root = root or jobs.repository_root()
     if direct is None:
         raise ValueError(f"spec {plan.spec.id!r} is a steady-state spec: its points run on a node's own card, through a "
                          "GPU slot of it: `verity-bench run SPEC --direct NODE`")
-    jobs.direct_minutes(plan.spec, direct)
-    for item in plan.points:
-        if item.passing_run is not None:
-            continue
-        rc = execute(direct_command(plan, source, item, root, direct), root)
-        if rc:
-            return rc
-    return 0
+    return jobs.dispatch(plan, source, root=root, execute=execute, direct=direct, command=direct_command)

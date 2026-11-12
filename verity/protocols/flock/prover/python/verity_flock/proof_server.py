@@ -283,7 +283,9 @@ class ProofServer:
     logs and the verifiers' own records under ``out``. ``devices``: the GPUs to prove on (None: the CPU). ``provers``: the
     provers a device (or on the CPU). ``route``: a type's device by pin, for types the caller places itself. ``env``: added
     to every process's environment (a None value removes the variable). ``zk``: the masked protocol (`--zk`), SPOT's; off,
-    the plain one. ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+    the plain one. ``wide_leaf``: the wide level-0 leaf's statement version (`--wide-leaf`), which a session's two sides
+    both carry, so every prover and verifier of the server does; off, fast100's.
+    ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
     ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
     ``challenger``.
 
@@ -295,7 +297,7 @@ class ProofServer:
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  provers: int = 1, verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
                  env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False,
-                 tree_from: Sequence[str] | None = None):
+                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None):
         if provers < 1:
             raise ValueError(f"provers must be at least 1, not {provers}")
         if challenger and tree_from:
@@ -306,6 +308,8 @@ class ProofServer:
         self.out.mkdir(parents=True, exist_ok=True)
         self.devices: list[int | None] = list(devices) if devices else [None]
         self.provers, self.verify_ahead, self.zk, self.challenger = provers, verify_ahead, zk, challenger
+        #: the protocol and statement version every process of the server runs: one list, so the two sides can't differ
+        self._version = [*(["--zk"] if zk else []), *(["--wide-leaf"] if wide_leaf else [])]
         self.challengers: dict[str, dict] = {}
         self._env = {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
         self._cpus = _placement(self._env)
@@ -471,7 +475,7 @@ class ProofServer:
                 except RuntimeError as e:
                     raise ProofServerError(f"{name}'s challenger: {e}") from e
                 ch = (d, p)
-            cmd = [self.binary, "serve", *(["--zk"] if self.zk else []), "--queue", "-", "--listen", "127.0.0.1:0",
+            cmd = [self.binary, "serve", *self._version, "--queue", "-", "--listen", "127.0.0.1:0",
                    "--out", str(self.out / base), "--circuit", str(st.circuit),
                    *([] if st.tmpl_unit is None else ["--tmpl-unit", str(st.tmpl_unit)]), "--tables", str(st.tables), "--pin", st.pin,
                    "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1),
@@ -488,7 +492,7 @@ class ProofServer:
             env = {**self._env, "FC_VERIFY_AHEAD": str(self.verify_ahead), **self._share}
             if dev is not None:
                 env["CUDA_VISIBLE_DEVICES"] = str(dev)
-            cmd = [self.binary, "prove", *(["--zk"] if self.zk else []), *([] if dev is None else ["--gpu"]), "--stream", "-"]
+            cmd = [self.binary, "prove", *self._version, *([] if dev is None else ["--gpu"]), "--stream", "-"]
             base = ("prover-cpu" if dev is None else f"prover-gpu{dev}") + (f"-{key[1]}" if self.provers > 1 else "")
             p = self._provers[key] = self._start(self._name(base, "prover", key), "prover", key, cmd, env)
         return p
