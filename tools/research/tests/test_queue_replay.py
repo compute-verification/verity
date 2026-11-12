@@ -174,6 +174,15 @@ def test_the_places_held_at_once_are_counted_over_time():
     assert got["over"] == pytest.approx(1 / 20)
 
 
+def test_a_quantile_past_the_last_change_landed_is_infinite():
+    never = float("inf")
+    assert qr.quantile([1.0, 3.0, 5.0, never], .5) == 4.0
+    assert qr.quantile([1.0, 3.0, never], .5) == 3.0
+    assert qr.quantile([never, 1.0, never, 3.0], .5) == never
+    assert qr.quantile([never, never], .9) == never and qr.quantile([], .5) is None
+    assert qr.quantile([1.0, 2.0, 4.0], .75) == qt.pct([1.0, 2.0, 4.0], .75) == 3.0
+
+
 def test_the_loops_flags_are_read_as_its_parser_reads_them():
     assert qr._flags("--batch 16\n# --depth 9\n--depth 3 --lean=2\n--batch 32\n") == {"batch": 32, "depth": 3, "lean": 2}
     assert qr._flags("--no-records\n")["records"] is False

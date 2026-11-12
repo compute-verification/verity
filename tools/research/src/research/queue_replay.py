@@ -1265,6 +1265,17 @@ def peak(places: list[tuple[float, float, int]], start: float, end: float) -> di
     return {"peak": most, "p90_places": p90, "over": sum(v for n, v in held.items() if n > PLACES) / total}
 
 
+def quantile(waits: list[float], q: float) -> float | None:
+    """`qt.pct` of waits of which one that never ended is infinite: infinite where the quantile falls past the last that
+    ended, where `qt.pct` would interpolate between infinities and give no number."""
+    if not waits:
+        return None
+    at, last = q * (len(waits) - 1), sum(1 for w in waits if w != float("inf")) - 1
+    if at >= last:
+        return float("inf") if at > last else sorted(waits)[last]
+    return qt.pct(waits, q)
+
+
 def measure(tr: History, run: Replay) -> dict:
     """One run's numbers, over the changes that really landed in the window: minutes from the mark to `main` (a change
     the run did not land by the window's end has none)."""
@@ -1282,7 +1293,7 @@ def measure(tr: History, run: Replay) -> dict:
         else:
             merged.append([a, min(b, tr.end)])
     return {"n": len(minutes), "within": sum(1 for m in minutes if m <= qt.TARGET_MIN) / len(minutes) if minutes else 0.0,
-            "p50": qt.pct(minutes, .5), "p90": qt.pct(minutes, .9), "unlanded": sum(1 for m in minutes if m == float("inf")),
+            "p50": quantile(minutes, .5), "p90": quantile(minutes, .9), "unlanded": sum(1 for m in minutes if m == float("inf")),
             "lost": sum(run.lost.values()), "by_cause": dict(run.lost), **run.counts, **peak(run.places, tr.start, tr.end),
             "within_lean": sum(lean) / len(lean) if lean else 0.0, "within_other": sum(other) / len(other) if other else 0.0,
             "within_new": sum(new) / len(new) if new else 0.0,
@@ -1461,7 +1472,7 @@ def render(tr: History, rows: list[dict], extra: dict, held: list[dict]) -> str:
         found[f.how] = found.get(f.how, 0) + 1
 
     def fmt(x):
-        return "not by the window's end" if x != x or x == float("inf") else f"{x:.0f}"
+        return "not by the window's end" if x == float("inf") else f"{x:.0f}"
 
     out = [f"Window: {span:.0f} hours, {len(tr.ticks)} ticks of the loop, {m['n']} changes landed with a mark, {m['n_new']} of "
            f"them marked in the window or less than two hours before it, {m['n_lean']} of them Lean changes (a Lean source that "
