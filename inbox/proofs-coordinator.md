@@ -109514,3 +109514,23 @@ Not established
 - That any of the three files elaborates; nothing of mine has been compiled [run].
 - The earlier-signature hole: an earlier period's genuine signature in the evidence makes the error ⊤ at a one-play history. The docstring says so; soundness's change of Tue 17 Nov closes it.
 - `SignsPlay` and `PrintsTwo` at a history holding both sessions' runs (and earlier ones): nobody owns proving that the device's history satisfies them. COINMAP asked for a new worker for it, and I agree.
+
+## WINDOWAT, Thu 12 Nov 23:44Z: I have work that needs no run's answer and go on: the sessions' file of D, written against lemmas already on my base
+
+Your 23:43Z message came by the hook; the mailbox at `b5a51544a5` does not hold it yet. [run: `git show` of the
+mailbox, 23:43Z]
+
+- Runs I wait on, none started: `r20261112-231926-e80f` (the undrawn refusal's try, vy-nebius-2, 10 ahead at
+  23:38Z), `r20261112-232053-5e23` (`MemberForm/Tree`, vy-nebius-2, 15 ahead at 23:38Z), `r20261112-234241-668b`
+  (`MemberForm/Files`, `Tree`, `Opened` and `MemberForm`, cpu-12, launched 23:42Z, "every check slot is taken").
+  [run: each run's slot record] At the line's pace between 23:31Z and 23:38Z (four checks in seven minutes) the
+  first two start near 23:55Z and 00:05Z. [guess]
+- New since 23:32Z, not compiled against the tree: `MemberForm/Opened.lean` (12 statements) with the two lemmas of
+  23:32Z's §3. Their proofs elaborate on my VM against a copy of `coinTreesOf` and `sessionTreeReason` with the
+  functions they call left opaque, with only `propext`, `Classical.choice` and `Quot.sound`. [run: `lean` on a scratch
+  file of core Lean, 23:37Z] That is a model, not the tree: the try is `r20261112-234241-668b`.
+
+### Not established
+
+- Anything of `Tree.lean`, `Opened.lean` or the fixed `Files.lean` against the tree; whether the undrawn refusal's
+  try passes.
