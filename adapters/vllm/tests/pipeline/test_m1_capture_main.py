@@ -386,6 +386,20 @@ def test_a_request_stopped_early_executes_the_lag_s_steps_past_what_it_served(wo
     assert len(said()) == 11
 
 
+def test_a_request_that_stops_on_its_last_allowed_token_executes_no_step_past_it(world: World) -> None:
+    """A stop on the last token the request may have is the limit reached, with nothing run past what was served."""
+    world.runs[1] = (copy.deepcopy(SERVED), timing(2.0, steps=STEPS | {"r0": STEPS["r0"] | {"finish_reason": "stop"}}))
+    M1.main(options(world))
+    assert read(world, "tokens.json")["requests"] == [ROW0 | {"finish_reason": "stop"}, ROW1]
+
+
+def test_one_request_s_unequal_tokens_make_the_run_s_unequal(world: World) -> None:
+    world.runs[1] = ({"r0": [7, 8, 9, 10], "r1": [5, 3]}, timing(2.0))
+    M1.main(options(world))
+    tokens = read(world, "tokens.json")
+    assert [r["equals_accepted"] for r in tokens["requests"]] == [True, False] and tokens["all_equal_accepted"] is False
+
+
 def test_tokens_that_differ_from_the_accepted_ones_are_recorded_as_unequal(world: World, said: Lines) -> None:
     world.runs[1] = ({"r0": [7, 8, 9, 10], "r1": [5, 3, 2], "1_r1": [5, 4]}, timing(2.0))
     world.workload["accepted"].pop("r0")
