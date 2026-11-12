@@ -27,7 +27,8 @@
                     Shipped as git objects (`ship_source`), the tree is a checkout: a clone of <root>/git/verity.git sharing its objects,
                     detached at the commit, so what asks git there gets a checkout's answers.  The archive stream ships no .git;
                     every launch that finds such a tree (its own fallback, an earlier launch's, another launcher's that won the race)
-                    gives it .git in place once the commit can be pushed to the machine.
+                    gives it .git in place once the commit can be pushed to the machine.  Where it can't, a command that needs git
+                    (NEEDS_GIT: suites.py, check.py, lean_changed.py) is refused at launch, before it waits for any slot.
                     The ship is VERIFIED before it may execute (r20 incident: a stalled transfer left a half-tree that later runs used):
                     the archive lands in <root>/src/<identity>.partial-<nonce>/, is sha256'd on the machine and compared with the
                     launcher's, its extracted file set is compared with the archive's manifest, and only then is the directory
@@ -964,6 +965,16 @@ SHIP_ENV = "RESEARCH_SHIP"                     # `stream` forces the archive str
 POD_GIT_REPO = "git/verity.git"                # <root>/git/verity.git: the machine's bare repository, fed by `git push`
 _RC_NO_GIT = 69                                # the machine has no git: the archive stream ships instead
 _RC_TREE = 76                                  # the pushed commit's tree on the machine is not the launcher's
+#: the programs of a shipped tree that refuse a tree without .git (suites are keyed from git's view of the tree, check runs them,
+#: lean_changed.py reads its commits): a command naming one is refused at launch from a tree git can't reach (`needs_git`), not
+#: after it has waited for a slot.  A list of the known ones, not a test of what a command does
+NEEDS_GIT = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/lean/lean_changed.py", "verity check")
+
+
+def needs_git(command: list[str]) -> str | None:
+    """The NEEDS_GIT program `command` names (inside a `bash -c` string or a slot.py wrapper too), or None."""
+    words = " ".join(command)
+    return next((p for p in NEEDS_GIT if p in words), None)
 
 
 def _ext_escape(arg: str) -> str:
@@ -1169,7 +1180,8 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
          launcher's stream ship that won the rename into place) is made one in place (`_add_git`) whenever the commit can reach the
          machine's bare repo, so later runs of the commit never find the shared tree without .git: a run already in it keeps every
          file where it was and gains .git whole by one rename.  Where git can't reach the machine (no git there, a push that failed,
-         which this launch doesn't try again, `RESEARCH_SHIP=stream`) the tree stays without .git, after one line saying why.
+         which this launch doesn't try again, `RESEARCH_SHIP=stream`) the tree stays without .git, after one line saying why, and
+         `launch` refuses a command that needs git (`needs_git`).
     Any failure (transport rc != 0, the launcher's timeout, digest or manifest mismatch) removes the partial directory and raises
     SourceNotReady; `<identity>/` is never created by a failed ship.  The machine side (`launch_request`) enforces `require_ready_source`."""
     st = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=git_dir, capture_output=True, text=True)
@@ -2091,6 +2103,12 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         remote_cwd = cwd
         if source is not None:
             tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            if not ready.get("checkout") and (prog := needs_git(command)):
+                why = f"{SHIP_ENV}=stream" if os.environ.get(SHIP_ENV, "").strip().lower() == "stream" else "the line above says why"
+                raise Refused(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
+                              f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
+                              f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
+                              f"clone needs too")
             if cwd_clone and not ready.get("checkout"):
                 raise Refused(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
                               f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")

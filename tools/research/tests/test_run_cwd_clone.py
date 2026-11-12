@@ -482,6 +482,26 @@ def test_a_source_run_after_a_stream_ship_of_its_commit_runs_in_a_checkout(tmp_p
     assert Path(second["cwd"]) == shared and second["head"] == sha and second["transport"] == "stream+git"
 
 
+@pytest.mark.parametrize("cause", ["stream", "no-git"])
+def test_a_command_that_needs_git_is_refused_at_launch_from_a_tree_git_cannot_reach(tmp_path, repo, machine, monkeypatch, capsys, cause):
+    """`suites.py` refuses a tree without .git, but only once it runs: in a pool, after waiting in the line for a slot.  The
+    launcher refuses it before anything is claimed, and says what works."""
+    from test_remote_ship_git import _no_git_machine
+
+    if cause == "stream":
+        monkeypatch.setenv("RESEARCH_SHIP", "stream")
+    else:
+        monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: _no_git_machine(tmp_path))
+    rc = main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
+               "--no-sampler", "--cwd", "source", "--", "bash", "-lc", "uv run tools/verity/check/suites.py --changed HEAD --quick"])
+    err = capsys.readouterr().err
+    why = "RESEARCH_SHIP=stream" if cause == "stream" else "the line above says why"
+    assert rc == 3 and f"has no .git, as git couldn't reach m ({why}), and tools/verity/check/suites.py needs a git checkout" in err
+    assert "Relaunch once a git push reaches m (RESEARCH_SHIP unset, git installed there)" in err
+    assert cause == "stream" or "(the machine has no git); shipping the archive stream" in err
+    assert not (machine / "runs").exists() and not (machine / "requests").exists(), "nothing claimed, no line joined"
+
+
 def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(tmp_path, repo, machine, monkeypatch):
     """A `--cwd source` run shipped the commit by the archive stream, and every later `--cwd clone` run of it (the train's
     recorded checks) was refused.  The clone run makes the shared tree a checkout in place and launches; the source run's tree
