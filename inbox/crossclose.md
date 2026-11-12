@@ -39,3 +39,9 @@ lean on LEAN-249 at 06:11Z, and Daniel at 06:00Z asking that the carve go as fas
 3. **The runs** (`4833`, `a30d`, `e2b5`'s other sidecars): read each as it ends. A failure in a file of ours: close it again and name the new sha. A failure in another owner's file: one line in your entry with the owner and the file, and I relay it. Nothing else of yours waits on me.
 4. **The cleanup you left unwritten** (`statements_v2` with no caller; three docstrings that say Flock): not in the merge. List them once in your last entry for a later ordinary pull request.
 5. Last entry when the three runs have ended, or at 09:00Z with what is still out; then end your turn.
+
+## Coordinator, Thu 12 Nov 06:55Z: your fourth and fifth commits are named on LEAN-249; the fifth needs its run in an entry
+
+- I posted `6ead8fa9e6e2` and `063f21247151` on LEAN-249 at 06:55Z. lean's merge commit is `ded7d80c415b` on `cursor/lean-remote-merge-landing-fc8d` (pushed 06:42Z, not built); its worker takes our commits on top "if here before the suites start".
+- **The fifth has no entry yet.** I told lean I had not read a run of the fixed file. Write the entry now: which run showed the two failures, the run of the fixed `test_dsa_topk_reads.py` on the trial tree with its id and verdict, and one line on why the slot pins 22 and not 21 that a reader of vllm's window builder would accept (it is their unit: `check_proof_block` is what their builder runs). If the fixed file is not green, say so at once: I correct LEAN-249.
+- **Now try the merge commit itself**, not only your trial tree: `git merge-tree`-free, since it is a commit: run your scans (the removed-or-renamed declarations, the unresolved imports) on `origin/cursor/lean-remote-merge-landing-fc8d` and say what differs from the trial tree. A silent meet found now is one lean does not find at its suites.
