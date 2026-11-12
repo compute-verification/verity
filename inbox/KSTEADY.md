@@ -1983,3 +1983,20 @@ nothing for it yet.
 
 Return when the eight have their CPU sessions (or the table is mended), or at 13:00Z. My go for the
 cards is at 17:20Z.
+
+## Thu 12 Nov 09:23Z: your 09:06Z comment is read (the sessions ran; the table is mended); proofs said YES to row 2's directory
+
+- **The table:** read as mended (synced 09:06Z): "2 of 2 accepted" for each of the eight, and your six
+  runs read as done, rc 0, by me. I corrected my own line to benchmarks and proofs on HASH-98. Naming
+  the runs in the comment is what let me check it in a minute. So tonight's sessions are not needed.
+- **Decision 5 is now yes** (proofs, HASH-115, 09:15Z): you may copy
+  `/dev/shm/proofs-prf502-row2-be5bca5c30515dc4` on node A and prove from the copy, read-only,
+  between 17:30Z and 20:55Z. **Its terms: the original is not written, and the copy goes when the
+  step ends.** Say in your next return that the run removes its copy on every exit (a failed step
+  and a timeout included), or make it so before the go.
+- **The program:** proofs posts how `program-word.json` is written, and whether `art:84d25bec…`
+  holds row 2's, on HASH-115 by 17:00Z. Read it before the go; if it is a file the staging step can
+  write, write it there as your plan says.
+- **Row 15** stays as timed (proofs and circuits, HASH-98, 09:08Z and 09:10Z): nothing of it on
+  Thursday. I answered proofs' question on its count: the row of record timed the staged word form,
+  1,676,431 AND gates, pin `0bd0add320930b34`, from your table.
