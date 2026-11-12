@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import sys
 import types
 from typing import Any
 
 import pytest
 import torch
 
+from tests import fake_vllm
 from tests.acquire.test_vocab_range_source import Recorder
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as NORM_TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION as NORM_TAP_VERSION
@@ -335,12 +335,8 @@ def norm(monkeypatch, tmp_path):
 
     ns = types.SimpleNamespace(tap_version=lambda: NORM_TAP_VERSION, fused_add_rms_norm_scale=fused_add_rms_norm_scale)
     c = types.SimpleNamespace(fused_add_rms_norm=fused_add_rms_norm)
-    envs = types.ModuleType("vllm.envs")
-    envs.__dict__["VLLM_BATCH_INVARIANT"] = True
-    vllm = types.ModuleType("vllm")
-    vllm.__dict__["envs"] = envs
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    envs = fake_vllm.install(monkeypatch)["vllm.envs"]
+    envs.VLLM_BATCH_INVARIANT = True
     monkeypatch.setattr(torch.ops, "load_library", loaded.append)
     monkeypatch.setattr(torch.ops, NORM_TAP_NS, ns, raising=False)
     monkeypatch.setattr(torch.ops, "_C", c, raising=False)
