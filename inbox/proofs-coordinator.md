@@ -68863,3 +68863,75 @@ At the old head `e90900dc4ed3`, all three ended and passed; they are superseded 
 - [read] The words I quoted from `verity/protocols/certifier/prover/response_tie.py:12-14` at `af46e21ac6c3` ("registers it as a read of that row", "opens the signed root") are about the response row, the proof block's output `o1`, not about the end row. Of the end row that docstring says only "the network certifier's end row of it, a certified input" (`:9-10`).
 - [read] The answer stands and the sentence should read: their docstring already treats a certifier's signed row this way for the response row (a registered read that opens the signed root, `:12-14`), and the end row is the same kind of read, a certified input (`:9-10`), held by `R7-held`.
 - [read] One more fact for the same answer: in the two-stage audit as it is written today the replay's registration is registered after the boundary registration on that record's own stream (`benchmarks/one_stage/two_stage.py:1-6`), so its `previous` is the boundary record by R6 itself.
+
+## 03:08Z KEPT: #9090 at `7c5ed234e1` is read: all four conditions HOLD; my line is yes, with no Rust change asked and two sentences owed in `PROTOCOL.md` §10.4 before a driver calls the path
+
+**The line you can post:** Yes at `7c5ed234e1`. Read, not built or run: the four conditions hold in the Rust, and no Lean file and no line of `firewall.rs` changes. Proofs asks no Rust change. Two sentences are owed in `PROTOCOL.md` §10.4 before a driver calls this path, in this pull request or the driver's: (a) the statement's name and the `Hello` flags are the process's for every session, so one stream serves sessions of one partition and one program, and the stream does not check that; (b) a line the reader refuses ends the process at once, under the session then being proved, which gets no verdict; a session left without a verdict is failed and never proved again.
+
+Paths below: R is `verity/protocols/flock/prover/live/src/bin/flock-circuit.rs`; `firewall.rs`, `lib.rs`, `session_verify.rs` are in `verity/protocols/flock/prover/live/src/`; `Session.lean`, `Frame.lean` are in `verity/protocols/flock/verifier/Flock/Firewall/`. Every line number is at `7c5ed234e1`. Every [read] is mine; nothing was built or run.
+
+**What changed, checked**
+
+- [run: `git diff --name-only be9a3d5669 7c5ed234e1`] Six files. None is a Lean file; `firewall.rs` is not among them.
+- [run: `git diff 12582b1f4c 7c5ed234e1`] The Rust since the earlier head is `start_lean_tap`, its two calls, and doc comments.
+
+**1. One `flock-firewall session` a member, started from the member's line: HOLDS.**
+
+- [read R:7507] Behind the ZK server each line's job carries that line's `circuit` and `tables`.
+- [read R:7020-7025] At its turn `prove_jobs` starts one `LeanSession` on them (`lean_loop`) and connects through it. The process-wide loop of `session_addr` is not used for such a job.
+- [read R:1618-1635, 1650] `lean_loop` is `session_addr`'s former body with the circuit file and the tables as parameters. `session_addr` passes this process's `--circuit` and `--tables`.
+- [read R:1606-1611, 1621-1624] One function builds the argument list for both: `--statement`, `--circuit`, `--public`, `--tables`, `--session-tables`, then `FC_FIREWALL_HELLO_ARGS`, then `--salt-key` if set.
+- [read R:1598] What differs from a `prove` process for the same member is the public file's path only (it holds the process id). Its bytes come from the member's instances in both.
+- One thing to know. With `"pin"`, a later line under a pin already loaded is proved on the statement loaded from the first line's file, and its loop reads the later line's own file [read R:7508-7521, 7507]. The prover does not hash the later file against the pin. With the same bytes there is nothing to see. With other bytes the prover and its loop disagree on the statement, and I expect the loop's frame or the verdict to refuse [guess].
+
+**2. The stream starts the tap as `prove` does: HOLDS.**
+
+- [read R:7480-7486, 7489, 7552] Once, in `prove_stream`, before the reader thread is spawned. Each seed is sampled on that thread.
+- [read R:7474-7478, `session_verify.rs`:56-61] Nothing before it samples: arguments, and `Lincheck::from_env`, which reads the environment.
+- [read R:1580-1582, 7662-7664] It is the function `prove` calls. `firewall.rs`:203-222 is unchanged.
+- [read R:7480 against R:1585-1587, 117-123, 388-389] The stream decides by `--zk` and `FC_FIREWALL=1`; `prove` by the statement's identity and `FC_FIREWALL=1`. The identity's `zk` is `--zk` itself, so the two agree for every statement of a stream.
+- [read `Frame.lean`:781-796] The tap keeps nothing between requests: a count in, that many of the operating system's bytes out. One tap for many members checks what one tap a member checked.
+
+**3. One at a time, the next not opened before this one's verdict: HOLDS.**
+
+- [read R:7478-7484, 7020] `FC_VERIFY_AHEAD` above 0 is refused before anything starts (`REFUSED`, exit 2). An assert holds the same inside the loop.
+- [read R:7559, 6881-6882, 6973] Front-ahead is off, so the loop takes the sequential path.
+- [read R:7048-7051] `emit_one(run, label, finish(), rtt); drop(own); continue;`. `finish()` returns with the verdict in hand [read R:4666-4671, 4682-4685]. The record is printed. Then the loop's process is killed and waited for [read `firewall.rs`:683-688]. The next member's loop starts at R:7021 of the next iteration.
+- [read `Session.lean`:755-756, 961] The loop reaches the auditor only when the prover connects to it. Starting it resolves the address and no more.
+- This is the honest prover's order. It refuses nothing a cheating prover does. The pull request says so itself.
+
+**4. Nothing the tap or the loop checks changes: HOLDS.**
+
+- [run, above] No Lean file and no line of `firewall.rs` changes.
+- [read R:1641-1654] `prove` still goes through `session_addr`: the same cache by verifier address and table count, the same arguments.
+- [read R:1585-1587] `firewall_on` is the same test, now through `zk_server_asked`.
+
+**The questions you flagged**
+
+- **Two members that do not agree on partition or program.** Neither refused, nor the first member's flags. Every member's loop gets the process's `FC_FIREWALL_STATEMENT` and `FC_FIREWALL_HELLO_ARGS` [read R:1591-1594, 1609]. A line has no field for them, so the stream cannot see a disagreement. What such a member then meets I could not decide by reading (below).
+- **Does anything of member k+1 reach the challenger, the tap or a loop before member k's verdict?**
+  - The challenger: no. Its connection is its loop's, and its loop does not exist yet.
+  - A loop: no. The witness built ahead uses the base plan, which names no loop [read R:7010, 259].
+  - The tap: yes, the prover's own randomness only. The 32 bytes of its seed are read when its line is read [read R:7552]. If its registered witness is built ahead, so are that witness's mask words [read R:3857-3866]. The loop overwrites the mask slot with its own words in its own copy [read `Session.lean`:854-857].
+  - A coin: no. The challenger samples a member's coin tree at its `Hello` [read `lib.rs`:1734-1741], which leaves only through its loop. The reads ahead that cross sessions are off once the tap is set [read R:4133-4138].
+- **Can a failed member be retried or its session reopened?** No. A job is one connection, one `session_proved`, one `finish` [read R:7041-7049]. Jobs are taken in order and dropped [read R:6982]. `TcpTransport::connect` does not retry [read `lib.rs`:958-962]. A session that stops sends `Finish`, takes the verdict, and its record says `accepted: false` with `prover_stopped` [read R:4666-4671]. Then the next line is proved. Nothing stops a driver writing the same member on a second line. Nothing stopped it starting a second `prove` process either.
+- **A malformed line.** The reader thread calls `refuse`: `REFUSED` on standard output and exit 2 for the whole process, at the moment the line is read [read R:7504-7505, 7228-7231]. With lines written ahead, that is during an earlier member's session. That session is cut: no verdict, no `LIVE` record, and at the challenger a session opened and not finished. The same happens for a missing field, an unreadable circuit or instance file, a pin that does not match, or a failed statement check [read R:7494-7550]. The loop does not outlive the prover: it exits when its standard input closes [read `Session.lean`:994-997].
+- **EOF.** It never cuts a member. Every line read whole is proved in order, then exit 0 [read R:6850-6857, 6974-6980]. A last line cut short is a malformed line.
+- **The Lean loop dies.** Mid-session, the member's calls fail and its record says not accepted [read R:4666-4671, 4100]. If it dies between the last coin and the proofs, the process panics [read R:4680, an `unwrap`]. It is not started again for that member. The next member gets a new loop. A loop that does not start is `refuse`, exit 2, at that member's turn, so no earlier member is cut [read R:7021].
+- **The tap dies.** The thread that samples next panics [read `firewall.rs`:219-221]. If that is the reader, the main loop proves what is queued and exits 0 with fewer `LIVE` records than lines [read R:6851-6853]. A driver must count records, not read the exit status.
+
+**What I would not accept without a change: nothing in the Rust.** What I ask for is text:
+
+1. `PROTOCOL.md` §10.4 says the circuit and the tables are the line's. It does not say the statement's name and the `Hello` flags are the process's. The doc comment at R:7468-7470 does. One sentence.
+2. Nothing says that a refused line ends the process under the session being proved. One sentence, with the rule for a driver: a session left without a verdict is failed and never proved again, since a second session for it has new coins. [guess] Soundness's scan should refuse a member with two coin trees; I have not read whether it does.
+
+Two things I would take but do not ask for. The refused line could go down the channel and be refused at its own turn, after the sessions before it have their verdicts. And the front-ahead branch could assert that a job has no loop of its own: today it would send such a job through this process's `--circuit` [read R:6948], which only `prove_stream`'s own setting prevents.
+
+**What I could not decide by reading**
+
+- What a member meets whose partition or program are not the process's. The auditor's `serve` compares the `Hello` byte for byte [read `lib.rs`:1731-1733]. Its `Hello` holds the profile, the reps, the flavor, the table names and the link, and I saw no partition or program in it [read `lib.rs`:1328-1336, the head of the function only]. So I expect the failure later, at the loop's frame or at the Lean verdict [guess]. It cannot make a false verdict pass: the auditor's verifier is set up on its own flags and reads none of the loop's [derived].
+- Whether the build unwinds on a panic. It matters only for whether `Drop` kills the loop; the loop exits on its closed input either way.
+- Whether killing the loop right after the verdict can cut something the challenger still writes. A `prove` process ends its loop as abruptly, by exiting. vLLM's test at the head passed with each challenger's audit ok [their run `r20261112-023312-c9c3`, not mine].
+- I did not read `verity_flock.proof_server`, the challenger's log code or `60-circuit.sh`.
+
+Jobs 2 and 3 are not done; they follow in my next entry.
