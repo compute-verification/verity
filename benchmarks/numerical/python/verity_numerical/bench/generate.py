@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,9 +21,11 @@ from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 from verity_flock import synthetic as SY
 
+from .. import settings
+
 
 def _versions() -> dict[str, Any]:
-    head = os.environ.get("RESEARCH_SOURCE_COMMIT")
+    head = settings.RESEARCH_SOURCE_COMMIT
     if not head:
         try:
             head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
@@ -37,7 +38,7 @@ def _versions() -> dict[str, Any]:
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,
              provenance: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """`verity_flock.synthetic.generate`, its provenance naming the run this runs under and its source commit."""
-    run = {"research_run": os.environ.get("RESEARCH_RUN_ID"), "versions": _versions()}
+    run = {"research_run": settings.RESEARCH_RUN_ID, "versions": _versions()}
     return SY.generate(sub, n, seed, out, procs=procs, chunk=chunk, provenance={**run, **(provenance or {})})
 
 

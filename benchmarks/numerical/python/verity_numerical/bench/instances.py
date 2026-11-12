@@ -33,7 +33,6 @@ import argparse
 import hashlib
 import json
 import multiprocessing as mp
-import os
 import platform
 import shutil
 import subprocess
@@ -49,6 +48,7 @@ from verity.definitions.silicon import models as S
 from verity.definitions.silicon.errors import InvalidArtifact
 from verity.definitions.circuits.targets.target import FIRST
 
+from .. import settings
 from . import instances_gen as G
 
 __all__ = [
@@ -536,7 +536,7 @@ def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str 
                        "relation": "y = f32_to_bf16_word(tc_dot_chain(AMPERE_BF16_M16N8K16, c_0 = +0, x, w)); K = 1536 = 96 transitions, ascending k",
                        "domain": FIRST.domain, "d8": "saturation inside the last transition is a valid VU output (+-inf); an intermediate saturation is rejected"},
             "generated": {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "seconds": None, "python": platform.python_version(),
-                          "host": platform.node(), "git_head": _git_head(), "research_run_id": os.environ.get("RESEARCH_RUN_ID"),
+                          "host": platform.node(), "git_head": _git_head(), "research_run_id": settings.RESEARCH_RUN_ID,
                           "source_sha256": _source_digests(), "procs": procs},
             "rng": {"scheme": "SHA-256 counter stream: key = sha256('bench-instances/v1|' + '|'.join(labels)); block n = sha256(key || u64le(n)); "
                               "bits(k) = little-endian of ceil(k/8) bytes masked to k bits; below(n) rejection-samples bits(bitlen(n-1))",
@@ -960,8 +960,8 @@ def import_seeds(src: Path, out: Path, repo_copy: Path | None = None) -> dict:
 
 
 def _research_result(out: Path, ok: bool, detail: str, fingerprint: dict, measurements: list[dict]) -> None:
-    run_id = os.environ.get("RESEARCH_RUN_ID")
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_id = settings.RESEARCH_RUN_ID
+    run_dir = settings.RESEARCH_RUN_DIR
     if not run_id or not run_dir:
         return
     result = {"schema": "research/result/v0.1", "run_id": run_id, "workload_fingerprint": fingerprint,

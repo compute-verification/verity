@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shlex
 import subprocess
@@ -41,6 +40,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from .. import settings
 from . import census as CN
 from . import contract, drivers, interaction, placement as PL
 from verity_flock import input_sets as IS
@@ -332,7 +332,7 @@ def check(cell: Cell, doc: Mapping[str, Any], prover_run: Path | None = None, ve
 # --- register ----------------------------------------------------------------------------------------------------------------
 
 def runs_root() -> Path:
-    return Path(os.environ.get("RESEARCH_RUNS", "~/.research/runs")).expanduser()
+    return Path(settings.RESEARCH_RUNS).expanduser()
 
 
 def run_dir(ref: str) -> Path:
@@ -431,7 +431,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     p.add_argument("--verifier", default=None, help="the verifier pod (vy-*), same datacenter, not the prover's")
     p.add_argument("--verifier-addr", default=None, help="HOST:PORT the prover reaches the verifier's session port at")
     p.add_argument("--rtt-target", default=None, help="HOST:PORT on the verifier pod the RTT probe connects to (its sshd)")
-    p.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"))
+    p.add_argument("--campaign", default=settings.RESEARCH_CAMPAIGN)
     p.add_argument("--lane", default=None)
     p.add_argument("--points", default=DEFAULT_POINTS, help="the sweep's batch sizes (both sides of a remote verifier use them)")
     p.add_argument("--runs", type=int, default=5)
