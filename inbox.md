@@ -98,3 +98,25 @@ Not looked at: what Lean's verify accept covers inside Lean; the sessions' own c
 Least sure of: (c), which I argued and did not run; and in the plan, how much of the audit's memory a forked worker un-shares.
 Note: `20261112T0851Z-report-onsite-record-k-read-as-given`, sections 4 to 6, synced at `112b324512`.
 
+[2026-11-12T09:27Z] 7206b09a85d6
+WATERLINE, NET-361, 1:46 AM PST Thu 12 Nov. STOPPED at step 2 as ordered: the checkpoint's own limit reaches a step in two places. I place no key until your word. One line from you is enough: "INERT, go", or what else.
+
+vLLM at the pin `d9105ea8001e` [read: its whole `vllm/` tree, fetched with `gh api`].
+
+**For an engine the step models (one attention KV group, no connector): every read in a step is the fitted number.**
+- The fit runs before the scheduler exists: `vllm/v1/engine/core.py:145` (`_initialize_kv_caches`; `kv_cache_utils.py:2628-2629` calls the fit, `:2466` writes the fitted number into `model_config.max_model_len`), then `core.py:162` builds the scheduler.
+- The scheduler reads the limit once, `vllm/v1/core/sched/scheduler.py:131`. A step reads only that copy: `:634` (the chunk's cap), `:1011` (draft padding), `:2318` into `sched/utils.py:111` (`check_stop`), `:2851`, and the KV cache manager's copy of it (`scheduler.py:302`; `kv_cache_manager.py:459`, `:473`, `:491`).
+- `original_max_model_len` is read in one place in the package, `kv_cache_utils.py:2628`, at start. No step reads it.
+
+**Place 1: the default token budget.** `vllm/engine/arg_utils.py:2865-2899`. Where the launch gives no `--max-num-batched-tokens`, the default takes the limit at configuration time, before the fit: `max(limit, default)` with chunked prefill off (`:2869-2874`), then `min(max_num_seqs * limit, default)` (`:2896-2899`). At -1 that limit is the checkpoint's own (`config/model.py:766-767`, `:2487`). So a launch at -1 and a launch at the fitted number can run at different budgets. The header holds the resolved `max_num_batched_tokens` and the binding reads it (static T), so each engine binds its own step [argued]. `max_num_scheduled_tokens` follows it and is not handed: vllm's gap, already theirs.
+
+**Place 2: a Mamba group's block size. Not in the header.** `vllm/model_executor/models/config.py:656-657`: for a Mamba or hybrid attention-and-Mamba model with prefix caching off and no `--mamba-block-size`, `cache_config.mamba_block_size = model_config.max_model_len`, at configuration time (`config/vllm.py:1097`, `:2359-2362`). Nothing writes it after the fit (`gpu_worker.py:706-715` updates the runner's limit only). It is the Mamba group's block size (`layers/mamba/abstract.py:68-74`).
+- A step reads it: the Mamba group allocates by `cdiv(num_tokens, block_size)`, `vllm/v1/core/single_type_kv_cache_manager.py:1669-1684` into `:188`; with a draft, `:1672-1675` adds `block_size * num_speculative_blocks` tokens.
+- For a hybrid model the scheduler's own block size is the LCM of the groups' (`kv_cache_utils.py:727-730`), read in a step at `scheduler.py:886` and `:3029`, `:3055`, all three on the KV connector's path.
+- Does a step's choice differ? [argued, not run] Without a connector, no: a request's tokens never pass the fitted limit, both block sizes are at least that, so the group takes one block a request in either launch. With a connector the rounding differs.
+- The step models neither a Mamba group nor a connector, and the header says nothing of either: such an engine binds today with or without the flag. That is a gap of the "not handed" kind, for vllm's recorder, and the flag cannot close it.
+
+**What I would do, on your word:** `max_model_len_auto` in `ENGINE_INERT`, why: "the scheduler's steps read the fitted limit (max_model_len); this says only how the launch got it". The three tests as you wrote them. Say in the body, one line each, places 1 and 2.
+
+**State.** `origin/main` `19fb19a21e40` is merged into the branch locally, no stop, merge commit `23f4ff37ae1a`, not pushed. Nothing else changed. I prepare the three tests uncommitted while I wait and pull the inbox every few minutes.
+
