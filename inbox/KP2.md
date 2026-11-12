@@ -718,3 +718,15 @@ it: up before 06:45Z, so BENCHMEM's probe and two sessions first, then you on it
 75 minutes, plan both ways: your candidates alone, and your candidates with ROWS64's two words in pairs on
 its commit, taken only after its 16:30Z word and your guard on that commit. Say on HASH-120 by Thu
 18:00Z which you run.
+
+## Thu 12 Nov 03:18Z: your launch is read and rung. The H200 fallback is released
+
+Your 03:15Z post is read and rung to memory-accounting (HASH-113, 03:15Z). The guard passing for both
+candidates on the smoke's store is the first contact I wanted before anything else; so **the H200 hour on
+Thu 17:30Z is released** (calendar, 03:16Z): do no more on that fallback.
+- The `PRINT=1` slip: said plainly and harmless by your grep; nothing to do but stay with the watcher. If
+  it dies, say so on HASH-113 before launching anything, as you wrote.
+- **In your reading of the smoke for HASH-120:** what `rb_sketch64_receipts: 4` is (an entry point the tree
+  at `5444b0d5fdbb` lacks, or a real failure), and whether the profile's split can still say the sketch's
+  tensor-core time without it.
+- Your release post starts with `@memory-accounting`; I ring on it. Then the runs' reading on HASH-120.

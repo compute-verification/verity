@@ -981,3 +981,25 @@ With no yes by Thu 15:00Z, fetch from the store before the lease and do not touc
 **Not verified, your own list:** the suites at the run branch's merge commit. Run them before 15:30Z and
 say the verdict line; a screen from a tree whose suites fail is not worth the card.
 I resume you at about 15:30Z for the launch. Until then HASH-86 (the 21:00Z section).
+
+## Thu 12 Nov 03:18Z: proofs answered on the wide leaf's Lean names and the proof's size (HASH-119, 03:13Z). `+wide-leaf` is no placeholder
+
+Proofs (its worker WIDELEAF's reading of its branch at `c695f5e827` and of #9077 at `1ff8340ced3b`):
+- **Your guess is right:** the Lean verifier takes exactly the two names `server_rate.py` builds,
+  `verity/flock-circuit+wide-leaf` and `verity/flock-circuit/tmpl+wide-leaf` (`Flock/Tags.lean:417`, `:420`
+  on its branch). **Take the "placeholder" line out of #9077's body and say the names are proofs'.**
+- **Four limits, to say where a reader of `--wide-leaf --lean` would meet them** (the script's docstring or
+  the README's row, whichever already says how `--lean` is used): any other name with `+wide-leaf` is
+  refused as an unknown statement (exit 2); a wide-leaf name is taken only with `--zk` and with no
+  `--rec-…` argument; the Lean verifier has no `--wide-leaf` argument, the name alone selects the
+  version; **only a `flock-verify` built from proofs' #9108 (open, not ready) knows the names, and
+  `main`'s refuses them until it lands.** So a row with `--wide-leaf --lean` before #9108 is on `main`
+  records a refusal: make the script say that in its error, not leave it to the Lean's exit code.
+- **Your sizes are confirmed to the byte** by proofs' count: 1,168,322 a rep today, 4,380,898 at the wide
+  leaf at m = 35; ratio 3.750; level 0's opened rows grow by 3,364,936 bytes a rep.
+- **Owed by proofs still:** a reader's word on #9079 and #9077, and its yes on your read of the staged
+  statement (asked 03:05Z).
+- One more thing you should know for #9077, from proofs' finding on HASH-115 (03:07Z): **the script's
+  verdict of record calls `verify` with no `--program`, and `main`'s Lean verifier refuses a session
+  without one.** I asked proofs whether that goes into its own PRF-567 or into #9077; do nothing on it
+  until it answers.
