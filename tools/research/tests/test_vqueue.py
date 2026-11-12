@@ -229,6 +229,8 @@ def test_of_two_candidates_on_one_base_the_one_whose_members_come_first_in_rank_
 @pytest.mark.parametrize(("left", "why"), [
     (((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")), "#1 isn't taken now: held by top (no reason)"),
     (((1, "h1", "its ready mark was withdrawn by ci"),), "#1 isn't taken now: its ready mark was withdrawn by ci"),
+    (((1, "h1", "ejected by top at h1, the head it was built at: broke main"),),
+     "#1 isn't taken now: ejected by top at h1, the head it was built at: broke main"),
 ])
 def test_a_chain_candidate_holding_a_member_others_took_from_the_queue_is_rebuilt_without_it_with_everything_above(left, why):
     """A hold or a withdrawal by someone else takes out that PR alone: its candidate and those above it are dropped saying
