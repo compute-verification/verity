@@ -518,10 +518,10 @@ class Reads:
 
     @contextlib.contextmanager
     def tick(self, ids: list[str] = ()):
-        """A tick's reads: ``ids`` read at once first, with `EVIDENCE`, and each run once from then until it ends."""
+        """A tick's reads: the `evidence` of ``ids`` read at once first, and each run once from then until it ends."""
         self._got = {}
         try:
-            self([(r, EVIDENCE) for r in dict.fromkeys(ids)])
+            self.evidence(Path("."), list(dict.fromkeys(ids)))
             yield self
         finally:
             self._got = None
