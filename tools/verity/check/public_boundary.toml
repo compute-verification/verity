@@ -60,7 +60,7 @@ pouw = [
     "verity/protocols/pouw/prover",
     "security/*/Pouw{,.lean}",
     "security/Proofs/Properties/Pouw{,.lean}",
-    "security/Definitions/Assumptions/Pouw.lean",
+    "security/Definitions/Assumptions/{Pouw,PearlC}.lean",
 ]
 # the network certifier: the protocol, its Lean program, the certificate's and the records' checks, its prover's units, the
 # device, and its part of the security analysis
@@ -136,6 +136,8 @@ benchmarks = [
     "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
     # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
     "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
+    # the falsification test the lock names for TT_OUT at the H100 (`shape.conjectures`), with the census it replays
+    "benchmarks/pouw/{pearlc_census.py,run_result.py,tests/test_tt_out_tile_h100_rev1.py}",
 ]
 # public files that no row above covers and no public file needs
 standalone = [
