@@ -1,6 +1,7 @@
 """The harness kit's four calls on CPU: the lease's argv, the host stamp with no GPU and over stand-in nvidia-smi answers,
-the paired ratio and its interval against values worked by hand, and the writer's result, which research's own check takes,
-with what it refuses. No test starts a program: the stamp's queries go through a stand-in."""
+the paired ratio and its interval against values worked by hand, and the writer's result, its measurements and its
+validation, which research's own check takes, with what it refuses. No test starts a program: the stamp's queries go
+through a stand-in."""
 
 from __future__ import annotations
 
@@ -41,6 +42,8 @@ def _host(monkeypatch: pytest.MonkeyPatch, answers: dict[str, tuple[int, str]] |
     monkeypatch.setattr(kit.shutil, "which", lambda name: None if answers is None else f"/usr/bin/{name}")
     monkeypatch.setattr(kit, "_run", run)
     monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
+    # a pytest started inside a research run holds that run's directory, whose result no test may write
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
     if sha is None:
         monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
@@ -215,6 +218,144 @@ def test_the_writer_appends_to_the_result_a_runs_validation_is_in(tmp_path, no_g
     assert {k: doc[k] for k in envelope} == envelope and [m["name"] for m in doc["measurements"]] == ["gamma"]
 
 
+def test_the_writer_writes_the_validation_block_a_benchmarks_own_result_holds(tmp_path, no_gpu):
+    """The block is, key for key, the one a benchmark that writes its run's whole result itself puts under `validation`
+    for the same gates: `passed` beside the evidence's path relative to the run's directory, and `failed` with none."""
+
+    from research import result as research_result
+
+    run_dir = tmp_path / "run"
+    (run_dir / "out").mkdir(parents=True)
+    (run_dir / "out" / "census.json").write_text("{}")
+    detail = "worst in-domain share 0.00120 (threshold 0.0025)"
+    block = kit.writer(run_dir).validation("passed", "pearlc-census", detail, ["out/census.json"])
+    assert block == {"status": "passed", "checker": "pearlc-census", "detail": detail, "evidence": ["out/census.json"]}
+    assert list(block) == ["status", "checker", "detail", "evidence"]
+    assert _result(run_dir) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [], "validation": block}
+    check = research_result.check(run_dir, RUN)
+    assert check.present and check.valid and check.errors == [] and check.validation_status == "passed"
+    assert sorted(run_dir.iterdir()) == [run_dir / "out", run_dir / kit.RESULT]
+    other = tmp_path / "other"
+    assert kit.writer(other).validation("failed", "pearlc-k256-gate", "2 of 4 parts hold", evidence=()) == {
+        "status": "failed", "checker": "pearlc-k256-gate", "detail": "2 of 4 parts hold", "evidence": []}
+    check = research_result.check(other, RUN)
+    assert check.valid and check.validation_status == "failed" and check.doc == _result(other)
+    # the status is the whole guard: a detail says what passed or failed in the gates' own words, and one may say nothing
+    for i, said in enumerate(("", "3/4 gates passed", "every part passes", "failing: the k256 part", "FAIL: gate 3",
+                              "worst accepted fragment share 0.0012", "12 inputs, 0 rejected tiles", "1 failure")):
+        assert kit.writer(tmp_path / str(i)).validation("failed", "", said, ("a/b.json",)) == {
+            "status": "failed", "checker": "", "detail": said, "evidence": ["a/b.json"]}
+
+
+def test_a_validation_and_the_measurements_share_a_result_in_either_order(tmp_path, no_gpu):
+    from research import result as research_result
+
+    first, second = tmp_path / "validation-first", tmp_path / "measurements-first"
+    w = kit.writer(first)
+    block = w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
+    gamma = w.measurement("gamma", 0.5, "ratio", target=1.0, verdict="within target")
+    reps = kit.writer(first).measurement("reps", 20, "")
+    assert _result(first) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [gamma, reps], "validation": block}
+    w = kit.writer(second)
+    w.measurement("gamma", 0.5, "ratio", target=1.0, verdict="within target")
+    kit.writer(second).validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
+    w.measurement("reps", 20, "")
+    assert _result(second) == _result(first)
+    for out in (first, second):
+        check = research_result.check(out, RUN)
+        assert check.valid and check.errors == [] and check.validation_status == "passed"
+    # into a result the run wrote without one, beside what it already holds
+    envelope = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "workload_fingerprint": {"door": "run"},
+                "measurements": [{"name": "wall", "value": 1.5, "unit": "s"}], "measurement_files": []}
+    third = tmp_path / "enveloped"
+    third.mkdir()
+    (third / kit.RESULT).write_text(json.dumps(envelope))
+    kit.writer(third).validation("failed", "a benchmark", "1 of 4 gates hold")
+    assert _result(third) == envelope | {"validation": {"status": "failed", "checker": "a benchmark",
+                                                       "detail": "1 of 4 gates hold", "evidence": []}}
+
+
+def test_under_a_research_run_the_result_is_the_run_directorys_where_research_reads_it(tmp_path, no_gpu, monkeypatch):
+    """`research` reads a run's result from `$RESEARCH_RUN_DIR/result.json` alone, so a result under the run's `out/` is
+    absent to it: every writer of a run, whatever its `out`, appends to the one file in the run's directory."""
+
+    from research import result as research_result
+
+    run_dir, elsewhere = tmp_path / "run", tmp_path / "elsewhere"
+    out = run_dir / "out"
+    out.mkdir(parents=True)
+    # outside a run (the variable unset, or empty) the result is `out`'s, and research finds none in the run's directory
+    kit.writer(out).measurement("wall", 1.5, "s")
+    assert [m["name"] for m in _result(out)["measurements"]] == ["wall"] and list(run_dir.iterdir()) == [out]
+    assert not research_result.check(run_dir, RUN).present
+    monkeypatch.setenv("RESEARCH_RUN_DIR", "")
+    assert kit.writer(elsewhere).out == elsewhere
+    (out / kit.RESULT).unlink()
+    # under one it is the run directory's, whatever `out` is, and the evidence is relative to that directory
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    first, second = kit.writer(out), kit.writer(elsewhere)
+    assert first.out == second.out == run_dir
+    wall = first.measurement("wall", 1.5, "s")
+    block = second.validation("passed", "a benchmark", "4 of 4 gates passed", ["out/gates.json"])
+    gamma = second.measurement("gamma", 0.5, "ratio")
+    reps = kit.writer(run_dir).measurement("reps", 20, "")
+    assert _result(run_dir) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [wall, gamma, reps],
+                                "validation": block}
+    assert sorted(run_dir.iterdir()) == [out, run_dir / kit.RESULT] and list(out.iterdir()) == [] and not elsewhere.exists()
+    check = research_result.check(run_dir, RUN)
+    assert check.present and check.valid and check.errors == [] and check.validation_status == "passed"
+    assert check.doc == _result(run_dir)
+    # one result a run: its writers hold each other to one measurement a name and one validation
+    with pytest.raises(ValueError, match="already holds a measurement named wall"):
+        second.measurement("wall", 2.0, "s")
+    with pytest.raises(ValueError, match="already holds a validation"):
+        first.validation("failed", "another checker", "")
+    assert _result(run_dir) == check.doc
+
+
+def test_the_writer_refuses_a_second_validation_and_one_that_isnt_a_runs_own_gates(tmp_path, no_gpu, monkeypatch):
+    blank = tmp_path / "blank"
+    w = kit.writer(blank)
+    ok = {"status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}
+    for status in ("not_run", "PASS", "Passed", "accepted", "sealed", "ok", "", True, None, 1):
+        with pytest.raises(ValueError, match="status is 'passed' or 'failed', whether the run's own gates held, not .* a "
+                                             "verdict of record or a seal is never a run's validation"):
+            w.validation(**ok | {"status": status})
+    for what in ("checker", "detail"):
+        for text in (None, 3, b"bytes", ["4 of 4 gates hold"]):
+            with pytest.raises(ValueError, match=f"a validation's {what} is a string"):
+                w.validation(**ok | {what: text})
+    for evidence in ("out/gates.json", b"out/gates.json", None, 5, {"out/gates.json"}, iter(["out/gates.json"])):
+        with pytest.raises(ValueError, match="evidence is a list of paths relative to"):
+            w.validation(**ok | {"evidence": evidence})
+    for rel in (3, None, "", "/abs/gates.json", "../gates.json", "out/../../gates.json", Path("out/gates.json")):
+        with pytest.raises(ValueError, match="evidence is a list of paths relative to .* and inside it, each a string"):
+            w.validation(**ok | {"evidence": ["out/gates.json", rel]})
+    assert not blank.exists()
+    # one validation a result, whoever wrote the first
+    w.validation(**ok)
+    w.measurement("gamma", 0.5, "ratio")
+    before = (blank / kit.RESULT).read_bytes()
+    for again in (w, kit.writer(blank)):
+        with pytest.raises(ValueError, match="already holds a validation: a result holds one, the run's own"):
+            again.validation("failed", "another checker", "1 of 4 gates hold")
+    assert (blank / kit.RESULT).read_bytes() == before and list(blank.iterdir()) == [blank / kit.RESULT]
+    for i, held in enumerate(({"status": "failed", "checker": "a benchmark", "detail": "", "evidence": []},
+                              {"status": "not_run", "checker": None, "detail": None, "evidence": []})):
+        enveloped = tmp_path / str(i)
+        enveloped.mkdir()
+        text = json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, "validation": held})
+        (enveloped / kit.RESULT).write_text(text)
+        with pytest.raises(ValueError, match="already holds a validation"):
+            kit.writer(enveloped).validation(**ok)
+        assert (enveloped / kit.RESULT).read_text() == text
+    # and only into this run's result
+    monkeypatch.setenv("RESEARCH_RUN_ID", "run-2")
+    with pytest.raises(ValueError, match="holds run run-1's measurements, and this run is run-2"):
+        kit.writer(blank).validation(**ok)
+    assert (blank / kit.RESULT).read_bytes() == before
+
+
 def test_the_writer_refuses_a_verdict_of_record_and_a_seal(tmp_path, no_gpu):
     w = kit.writer(tmp_path)
     w.measurement("kept", 1.0, "s", target=2.0, verdict="within target")
@@ -274,9 +415,153 @@ def test_a_measurement_with_no_value_says_why_and_only_it_holds_a_why(tmp_path, 
     assert [m.get("why") for m in _result(tmp_path)["measurements"]] == ["the record holds no registered device", None, None]
 
 
+def test_a_measurement_with_no_why_is_written_byte_for_byte_as_it_was_and_one_with_a_why_reads(tmp_path, no_gpu):
+    from research import result as research_result
+
+    w, stamp = kit.writer(tmp_path), kit.host_stamp()
+    w.measurement("served_tok_s", 4120.5, "tok/s", interval=(4100, 4140), target=4000, verdict="within target", inputs="reps")
+    w.measurement("stock_tok_s", None, "tok/s")
+    entries = [{"name": "served_tok_s", "value": 4120.5, "unit": "tok/s", "commit": SHA, "run": RUN, "ci95": [4100, 4140],
+                "target": 4000, "verdict": "within target", "inputs": ["reps"], "host": stamp},
+               {"name": "stock_tok_s", "value": None, "unit": "tok/s", "commit": SHA, "run": RUN, "ci95": None,
+                "target": None, "verdict": None, "inputs": [], "host": stamp}]
+    doc = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": entries}
+    assert (tmp_path / kit.RESULT).read_text() == json.dumps(doc, indent=1) + "\n"
+    said = w.measurement("capacity", None, "MAC", why="the record holds no registered device")
+    assert list(said) == [*entries[1], "why"]
+    doc["measurements"].append(said)
+    assert (tmp_path / kit.RESULT).read_text() == json.dumps(doc, indent=1) + "\n"
+    check = research_result.check_doc(tmp_path, doc, RUN)
+    assert check.valid and check.errors == []
+
+
 def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_the_kit():
     from verity_bench import overhead
 
     arm, stock = [2.0, 2.1, 1.9] * 7, [1.0] * 21
     assert overhead.paired(arm, stock) == kit.paired(arm, stock)
     assert overhead.paired.__module__ == "verity_bench.overhead"
+
+
+# ---- the fingerprint and the files ---------------------------------------------------------------------------------------
+
+#: PoUW's own writer of a run's whole result, whose keys and shapes the kit's three calls write
+RUN_RESULT = Path(__file__).resolve().parents[3] / "benchmarks/pouw/run_result.py"
+
+
+def _run_result():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pouw_run_result", RUN_RESULT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("sha", [SHA, None])
+def test_the_fingerprint_and_the_files_are_the_keys_and_shapes_pouws_own_writer_writes(tmp_path, no_gpu, monkeypatch, sha):
+    """For the same gates, numbers and record, the kit's result holds the keys `run_result.write` writes, each the same
+    value; the kit's measurements hold more than its name, value and unit, and those three are the same. `research` takes
+    both, and reads the same fingerprint and files from each."""
+
+    from research import result as research_result
+
+    if sha is None:
+        monkeypatch.delenv("RESEARCH_SOURCE_SHA")
+    run_dir = tmp_path / "run"
+    out = run_dir / "out"
+    out.mkdir(parents=True)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    _run_result().write(out, True, "a benchmark", "4 of 4 gates hold", [("gamma", 0.5, "ratio"), ("wall", 1.5, "s")])
+    theirs = _result(run_dir)
+    (run_dir / kit.RESULT).unlink()
+    w = kit.writer(out)
+    assert w.fingerprint() == {"source_sha": sha}
+    assert w.measurement_file("out") == "out"
+    w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out"])
+    w.measurement("gamma", 0.5, "ratio")
+    kit.writer(run_dir).measurement("wall", 1.5, "s")
+    ours = _result(run_dir)
+    assert ours.keys() == theirs.keys() and {k: ours[k] for k in ours if k != "measurements"} == {
+        k: theirs[k] for k in theirs if k != "measurements"}
+    assert [{k: m[k] for k in ("name", "value", "unit")} for m in ours["measurements"]] == theirs["measurements"]
+    for doc in (ours, theirs):
+        check = research_result.check_doc(run_dir, doc, RUN)
+        assert check.valid and check.errors == [] and check.artifacts_missing == []
+        assert check.fingerprint == {"source_sha": sha} and check.validation_status == "passed"
+
+
+def test_each_writer_of_a_run_adds_to_its_fingerprint_and_its_files_which_research_takes(tmp_path, no_gpu, monkeypatch):
+    from research import result as research_result
+
+    run_dir = tmp_path / "run"
+    (run_dir / "out" / "proofs").mkdir(parents=True)
+    (run_dir / "out" / "bench.json").write_text("{}")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    first, second = kit.writer(run_dir / "out"), kit.writer(tmp_path / "elsewhere")
+    first.measurement("wall", 1.5, "s")
+    assert first.artifact("./out/proofs/") == "out/proofs"
+    assert second.fingerprint(script="checks.py", args=["--k", "256"]) == {"source_sha": SHA, "script": "checks.py",
+                                                                           "args": ["--k", "256"]}
+    assert first.measurement_file("out/bench.json") == "out/bench.json"
+    assert first.fingerprint(mutations_run=3)["mutations_run"] == 3
+    doc = _result(run_dir)
+    assert list(doc) == ["schema", "run_id", "measurements", "workload_fingerprint", *kit.FILES]
+    assert doc["workload_fingerprint"] == {"source_sha": SHA, "script": "checks.py", "args": ["--k", "256"],
+                                           "mutations_run": 3}
+    assert (doc["measurement_files"], doc["artifacts"]) == (["out/bench.json"], ["out/proofs"])
+    check = research_result.check(run_dir, RUN)
+    assert check.valid and check.errors == [] and check.artifacts_missing == [] and check.doc == doc
+    # into a result the run wrote itself, beside what it already holds
+    envelope = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "workload_fingerprint": {"door": "run"},
+                "measurement_files": ["out/bench.json"]}
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    (tmp_path / kit.RESULT).write_text(json.dumps(envelope))
+    kit.writer(tmp_path).artifact("out/proofs")
+    assert _result(tmp_path) == envelope | {"workload_fingerprint": {"door": "run", "source_sha": SHA},
+                                            "measurements": [], "artifacts": ["out/proofs"]}
+
+
+def test_the_writer_refuses_a_file_outside_the_result_or_named_twice_and_a_fingerprint_it_cant_hold(tmp_path, no_gpu):
+    w = kit.writer(tmp_path)
+    w.measurement_file("out/bench.json")
+    w.fingerprint(script="run.py")
+    before = (tmp_path / kit.RESULT).read_bytes()
+    for name in (w.measurement_file, w.artifact):
+        for rel in (3, None, "", "/abs/bench.json", "../bench.json", "out/../../bench.json", Path("out/x.json"), b"x"):
+            with pytest.raises(ValueError, match="are paths relative to .* and inside it, each a string"):
+                name(rel)
+        for again in ("out/bench.json", "./out/bench.json", "out//bench.json"):
+            with pytest.raises(ValueError, match="already names out/bench.json: a file is named once"):
+                name(again)
+    with pytest.raises(ValueError, match="source_sha is the commit research run shipped"):
+        w.fingerprint(source_sha="d" * 40)
+    with pytest.raises(ValueError, match="already holds script: a fingerprint holds each once"):
+        kit.writer(tmp_path).fingerprint(mode="fast", script="other.py")
+    for value in (object(), math.nan, {1, 2}, b"bytes"):
+        with pytest.raises(ValueError, match="fingerprint's mode is a JSON value"):
+            w.fingerprint(mode=value)
+    assert (tmp_path / kit.RESULT).read_bytes() == before
+    for i, (key, held) in enumerate((("workload_fingerprint", ["run.py"]), ("measurement_files", "out/bench.json"),
+                                     ("artifacts", [3]))):
+        other = tmp_path / str(i)
+        other.mkdir()
+        text = json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, key: held})
+        (other / kit.RESULT).write_text(text)
+        for call in (lambda: kit.writer(other).fingerprint(), lambda: kit.writer(other).artifact("x")):
+            with pytest.raises(ValueError, match=f"{key} (isn't an object|aren't a list of paths)"):
+                call()
+        assert (other / kit.RESULT).read_text() == text
+
+
+def test_a_result_that_names_no_fingerprint_and_no_file_is_written_byte_for_byte_as_it_was(tmp_path, no_gpu):
+    w, stamp = kit.writer(tmp_path), kit.host_stamp()
+    w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
+    w.measurement("wall", 1.5, "s")
+    text = (tmp_path / kit.RESULT).read_text()
+    assert text == json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [
+        {"name": "wall", "value": 1.5, "unit": "s", "commit": SHA, "run": RUN, "ci95": None, "target": None,
+         "verdict": None, "inputs": [], "host": stamp}], "validation": {
+        "status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}},
+        indent=1) + "\n"
+    assert not {"workload_fingerprint", *kit.FILES} & json.loads(text).keys()

@@ -47,6 +47,11 @@ WRAP = bind(CompositeDefinition("TwoStageDriverTestWrap", 0, (),
                                 lambda S_: ((("x", Array(2, Array(2, Bits(8)))),), Array(2, Bits(8))),
                                 lambda B, S_, x: coll_concat(Array(2, Bits(8)), [B.call(PAIR, x[0]), B.call(PAIR, x[1])]),
                                 register=False))
+SAME8 = PrimitiveDefinition("TwoStageDriverTestSame8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(1), lambda a, b: int(a == b),
+                            register=False)
+#: a check template that returns a verdict, one bit
+SAME = bind(CompositeDefinition("TwoStageDriverTestSame", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(1)),
+                                lambda B, S_, x: B.call(SAME8, x[0], x[1]), register=False))
 #: PAIR with its operands the other way round: a second template of PAIR's ports
 SWAP = bind(CompositeDefinition("TwoStageDriverTestSwap", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
                                 lambda B, S_, x: B.call(XOR8, x[1], x[0]), register=False))
@@ -82,6 +87,11 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
     return rec, ports
 
 
+def _samples_q(got: TS.First) -> bool:
+    """The first stage sampled Q of the class's spans, a subset."""
+    return got.sample.draw["law"] == "subset" and len(got.sample.units) == Q
+
+
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     """The first stage samples Q of the class's N spans on the challenger's coins after the boundary registration;
     ``stage1.json`` alone gives the replay side the same registration and sample on the bytes it read; its interior
@@ -90,7 +100,7 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
-    assert got.sample.draw["law"] == "subset" and len(got.sample.units) == Q and got.read
+    assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.stage1()))
     assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
@@ -250,7 +260,33 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
-    assert got.sample.draw["law"] == "subset" and len(got.sample.units) == Q
+    assert _samples_q(got)
+
+
+@pytest.mark.parametrize("layers", [(), (0,)])
+def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
+    """A class that commits its replay block's return (`Layout.verdicts`): its Spec declares the return a served value
+    after ``b.ingress`` and ``b.egress``, named under its replay block and before the tables where the class has history
+    tables; its first stage registers its root, from ``commit.json`` alone, before the coins commit and samples; and the
+    replay side resumes from the first stage's hand-over alone."""
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    layout = BR.Layout(SAME, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=layers, capacity=8, verdicts=True)
+    tables = {}
+    for t in layout.tables:
+        h = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
+        h.append(np.zeros((6, BT.WORDS), dtype=np.uint16))
+        tables[t] = h.root
+    pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables=tables).public()))
+    name = f"{P.template_id(layout.replay)}/{BR.RETURN}" if layers else BR.RETURN
+    got = TS.first(pub, SAME, RULE, FC.Challenger("first"))
+    served = [(v.name, v.schema) for v in got.stream.spec.values if v.phase == "serve"]
+    assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), (name, BR.SCHEMA),
+                      *((t, HT.SCHEMA) for t in layout.tables)]
+    assert [(r["port"], r["leaves"]) for r in got.record["roots"]][:3] == [("b.ingress", N), ("b.egress", N), (name, N * N_RHO)]
+    assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
+    assert _samples_q(got)
+    again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():

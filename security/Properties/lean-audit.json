@@ -125,8 +125,8 @@
   },
   "Properties.Spot.RequestsCover": {
    "owner": "@proofs",
-   "digest": "e20735f9c7c79581fb75505594e7260b7d61d0de7ffff787643bd340bcd963bf",
-   "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
+   "digest": "ab8ecb8ac05884cb194260d54cac5aac201a3afa154ee009249abb6dd3f486c3",
+   "why": "The requests the patterns' point describes: disjoint, and in each replay block as many and as wide as its class says."
   },
   "Properties.Spot.ServedCover": {
    "owner": "@proofs",
@@ -935,6 +935,7 @@
   "NciCheck.Baseline",
   "NciCheck.Desc",
   "NciCheck.Protocol",
+  "NciCheck.DefinitionDigest",
   "Flock",
   "Base",
   "Circuits",
@@ -2301,8 +2302,7 @@
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
-  "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)",
-  "Base": "the bytes, hashes and parsing below C-Flock (`core_base`): its lock declares no spec layer, so its definitions are recorded here as read rather than as a spec, excepted with C-Flock until its spec is extracted; PoUW's check reads its `V`, `canon`, `hexOf` and `Sha512.hash`, and the network check reads its SHA-512, bytes and canonical JSON"
+  "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
@@ -19014,6 +19014,16 @@
     "NciCheck.verdict": "dd027beb082504c84e47e3aa88c64b99634346f31b0f6eea00ae415bf4c50f10"
    }
   },
+  "NciCheck.DefinitionDigest": {
+   "digest": "dc40fe808b881b6d9316a3e46a3f16dedb245dac62fcacda938190a4ea44c5aa",
+   "definitions": {
+    "NciCheck.DefinitionDigest.canonicalEntry": "d8ef087d4ad8d00b75a0c49ecbfa922f650120ab0d39ea9e1ae2b93fb2528a5c",
+    "NciCheck.DefinitionDigest.closureDigest": "b52d92257c74e982721c25b3c6882efd1785f8729cd0bf81e47da43a890a3176",
+    "NciCheck.DefinitionDigest.definitionDigest": "5df3f47c8b9cad5d11406b6f0dc6fabb54bb8ac2df83d1288f822752dd86d399",
+    "NciCheck.DefinitionDigest.flatParts": "bcb38ceab71605e71fdd5fe98735e586b17c2facced6ad7556722344131079d9",
+    "NciCheck.DefinitionDigest.written": "2a2d36dc1a72a9e4691528eb7002e44e6e95d1eb7d11b63cee10af15d6a3efdd"
+   }
+  },
   "NciCheck.Desc": {
    "digest": "0dc68e423623ad6791dc4acc20a51208c22acc6a4f9a20adb802b6e8b81b1775",
    "definitions": {
@@ -19503,7 +19513,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "8d21ab65209f65daee95fac9a9d95ad224ec4caf57e0b642d9bba7440bb58f96",
+   "digest": "0d82bd0d5824ad9e08a63aa2baf84853107a911142c297ac2ee57f82bf49f5d4",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -19626,10 +19636,9 @@
     "NetworkCheck.Period.atMost": "3df31d5d5297b8a4f0576162646c9449346e9ceb4d2d2f5f49f6fc7693514a84",
     "NetworkCheck.Period.auditCheck": "49a5add6075b56213d317b125ea0d99100422b09b24333db9e5944a9badfa641",
     "NetworkCheck.Period.auditChecks": "52014dcfea3476d3f9ac2c6c3863094a72309a9edbd4173f1adb6a50e41ff7c5",
-    "NetworkCheck.Period.auditOf": "0267d6e860ef47ceb6f25787209486258e79910be0b63197b9fa0b1a78bd8f41",
+    "NetworkCheck.Period.auditOf": "b773b5555fc6b9ac3bbe8d7bc692bd62a2f6aa6eeae537d8770573e58a73020d",
     "NetworkCheck.Period.bitsOf": "bfa24d57cf13db4bdb0032e9d460ef313ca29a96afa96396acb0b72642570cd8",
     "NetworkCheck.Period.canonText": "f3f56595df2de44e1a87807d7066086208c80a22fdfffa9044b637fa3f43e82e",
-    "NetworkCheck.Period.canonicalEntry": "421b9034f4339b9d9763c2d7f52cf587b65221ac7b7e3bdec80c53a73a0c6c13",
     "NetworkCheck.Period.capReason": "79d36632afa13638ec2b76495e3a792912cd10f97614c58091af830196c02a14",
     "NetworkCheck.Period.cappedScheduleKeys": "650cd1edc3b9216be9624dff2b47d1500d919d6de0cc7684fc8084485b8578fd",
     "NetworkCheck.Period.capsTerm": "b0344cf3feee99420207429449a56894f1be391186237460231820aa80faf275",
@@ -19643,7 +19652,6 @@
     "NetworkCheck.Period.clog2": "0b4eb09d5ca828e9a24744a2362203d629b3e35103d57bfb916d321bdfbe2dcc",
     "NetworkCheck.Period.commitmentOf": "5d00ba8f9de1190aa45ea23862aa25f5e19e9500354711d68dea94e0f5b49737",
     "NetworkCheck.Period.commitmentTag": "3beab37b10b6aa4c879a13f8df016e198564d03f09fd8693c11ed34139d7e8a4",
-    "NetworkCheck.Period.definitionDigest": "ae40e9da6fd69094665d7e4fe072852db7efadc252654311d52704f395c668b3",
     "NetworkCheck.Period.domainTag": "96482ade324b360c62b47eaa557a5e5541ebd16076ce6dcba0ea42cc95248016",
     "NetworkCheck.Period.egressForm": "6bd720ee76f87c3c06483457b0f4a90770938e540db4fc9737deea5b18baee83",
     "NetworkCheck.Period.egressParams": "ea9cdedc049f493326d92d430445805d9484fe5bc751642907f15063b5138cb6",
@@ -19656,7 +19664,6 @@
     "NetworkCheck.Period.findingOf": "b741c494b5aedde523cd8907f6c15b935bf1458c0ae0cc94e0f28d70dc8d1b73",
     "NetworkCheck.Period.firstFinding": "12d99101ffb4b62140ec080cb2befe2fb893fec15201d5a7aa9f89a1da98e6ab",
     "NetworkCheck.Period.firstParams": "4cba5348252e0f6afd34f7a65d63e75da7fdce6dfdfec950f5c78753ef353225",
-    "NetworkCheck.Period.flatParts": "c08c6d41db830245821d69ff085f7d462295c15e918ed65bb3d0649b2a7b370e",
     "NetworkCheck.Period.headDigest": "b2484035200a5bef6a2c6423bc939b5aabb6fcb5e9ccbcc75594593704f70008",
     "NetworkCheck.Period.holds": "fa08d19be245e09652cf1792365f351a89cba4417ede184e8efdf81c04cb4ebc",
     "NetworkCheck.Period.ingressParams": "68483bb6bb24f46819fbb2716ccaa3e98383d35b957eaf1166c469eb457e1c99",
@@ -19703,7 +19710,6 @@
     "NetworkCheck.Period.scheduleOf": "68ebe8d5e81c02b92f0080395ecd17c09557f1cc7857de464a357b274801f57f",
     "NetworkCheck.Period.scheduleTag": "28084b0aafd10b575d2d436378040a9933e44cad6d04b87bad0c22921c4c69bc",
     "NetworkCheck.Period.served": "ef9ff8d3fa5a13b4aa380c1997a2a551a358ad29367ee26d6ad8cc509ccac401",
-    "NetworkCheck.Period.slotEntryDigest": "797d3586b4b58cffd48ddd0436c8d23ffab5859e519f5c4876adaab84bf95bc0",
     "NetworkCheck.Period.slotEntryId": "9cd4ed22d37dcc794e537408ce5ffe2cf351c6a5ecea47f495429916805274ff",
     "NetworkCheck.Period.slotEntryPins": "c6a2c0219235ee0e2d1b7f0b79cce264c3fa10e900c49591150b2558ad46161c",
     "NetworkCheck.Period.stateCheck": "cc1cdffb73d99e10afac8977ddc91e974d84e3e999aff94d05ae187de66e7806",
@@ -19724,8 +19730,7 @@
     "NetworkCheck.Period.windowOf": "5b1c9512cfc1b4a84804a2f0a30b7c7984292d13a467d018a9369b2411b71346",
     "NetworkCheck.Period.wired": "9b78f6671b42638b3ac1c07c1d03a79acaee0b510ac6b95145d63615df0109b6",
     "NetworkCheck.Period.wiredCheck": "1474526d3bdbda9609a0dd34149bec0f575969553767ed90b7d5cb06378332f9",
-    "NetworkCheck.Period.wiredChecks": "59f78b132c6d397f4e3dcc5fc85397caac15284d723cc4e5c15753df95305d80",
-    "NetworkCheck.Period.written": "67cd6a8796fb7e066c58f82e620ed177629deadb88b830d0cacaeaefac8f760e"
+    "NetworkCheck.Period.wiredChecks": "59f78b132c6d397f4e3dcc5fc85397caac15284d723cc4e5c15753df95305d80"
    }
   },
   "NetworkCheck.Records": {
@@ -22406,11 +22411,11 @@
    }
   },
   "Properties.Spot.TwoStageCheck": {
-   "digest": "eaac374477385b0965fe7c43e1cc3a28b256249c7e25537e3f64a633ec65f3e0",
+   "digest": "77a7e5a769329d1a15ceb87201661b218f49180f2a02572a8112a1719510e62b",
    "definitions": {
     "Properties.Spot.ClassesCover": "a626c0050b97025f8ee1dcdc0e4f0e81e36d77e3e5cf55a2a2d43325a95dd547",
     "Properties.Spot.FirstStageAt": "7e9807db6be85f5b5c565d1a263e0cce46c1495326db1b96b33065aad79bdee5",
-    "Properties.Spot.RequestsCover": "e20735f9c7c79581fb75505594e7260b7d61d0de7ffff787643bd340bcd963bf",
+    "Properties.Spot.RequestsCover": "ab8ecb8ac05884cb194260d54cac5aac201a3afa154ee009249abb6dd3f486c3",
     "Properties.Spot.ServedCover": "989296ea620a9031aaee6272fced0dac71d6df4f44d1ca6a5b0e3af490f80dcd",
     "Properties.Spot.TwoStageCheckPatternsSound": "bc2953c1c0034810ce3f8155f3075dc70ad47f010d41af53d3f23c3231113ccf",
     "Properties.Spot.TwoStageCheckServedSound": "3c2e8babf77097390d538abdf7cbfadbcd58ad0e3db292ea3230524c4dba4607",

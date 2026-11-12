@@ -36,12 +36,42 @@ from verity_vllm.pipeline.boundary_stop import Stop, filed
 
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}
+#: the most instances of the check template the replay blocks one serve keeps hold in all, and the most counts of spans
+#: one of them keeps its programs for (`_built`)
+KEEP, COUNTS = 1 << 12, 64
+#: the parts of a `Layout` that read its replay block and its count of spans alone, and a stop class's more of them
+_PARTS, _STOP_PARTS = ("program", "grain", "partition"), ("stop_program", "stop_query", "stop_partition")
 
 
 def _finish(reason: Any) -> str:
     name = str(getattr(reason, "name", reason)).lower().removeprefix("finished_")
     name = _STATUS.get(name, name)
     return name if name in FINISH else "error"
+
+
+def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int, dict[str, Any]]]]) -> Layout:
+    """``layout`` holding the parts of it that read no run, from ``kept`` where an earlier layout built them: its replay
+    block, which reads its class through ``n_rho`` alone, by ``n_rho``; and its program, grain and partition, and in a
+    stop class its stop population's, by that and its count of spans. So only the run and what binds it (each value's
+    domain) are a window's own. ``kept`` is one serve's, whose layouts differ in class, whether it is a stop class,
+    spans and run alone: its stop rule is one, and so is what its classes commit of their blocks' return. It holds
+    the replay blocks used last whose instances sum to `KEEP` at most, the least recently used leaving first, and for
+    each its programs at the `COUNTS` counts of spans used last; a replay block of more than `KEEP` instances is built
+    for its layout alone."""
+    if layout.n_rho > KEEP:
+        return layout
+    replay, counts = kept.pop(layout.n_rho, None) or (layout.replay, {})
+    kept[layout.n_rho] = replay, counts
+    while sum(kept) > KEEP:
+        del kept[next(iter(kept))]
+    vars(layout)["replay"] = replay
+    names = _PARTS + _STOP_PARTS if layout.stopped else _PARTS
+    parts = counts.pop(layout.spans, None) or {}
+    vars(layout).update({k: parts[k] for k in names if k in parts})
+    counts[layout.spans] = parts | {k: getattr(layout, k) for k in names}
+    while len(counts) > COUNTS:
+        del counts[next(iter(counts))]
+    return layout
 
 
 class BoundaryWindows:
@@ -51,10 +81,10 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` and ``ids`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0), each class's
-    commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``, of
-    ``capacity`` leaves. ``stop``: the serve's registered stop rule, with no tables; the spans it ends as they were served
-    are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
+    ``inline``, ``verdicts`` and ``ids`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel`
+    to rank 0), each class's commitment first assigns its spans their slots and waits for their history tables' roots at
+    ``layers``, of ``capacity`` leaves. ``stop``: the serve's registered stop rule, with no tables; the spans it ends as
+    they were served are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
     ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network certifier, a request's release by its engine
     id, (run, N) or None for a request the certifier didn't release (`serve_admit.release_of`'s, as the serve's admission
     keeps it); each span keeps its own, and one without is in no stop class. Under a rule every line of a window says
@@ -66,14 +96,15 @@ class BoundaryWindows:
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
                  serve: str | None = None, tables: Any = None, layers: Sequence[int] = (),
                  capacity: int = HT.CAPACITY, stop: Stop | None = None,
-                 release: Callable[[str], tuple[str, int] | None] | None = None, ids: bool = False) -> None:
+                 release: Callable[[str], tuple[str, int] | None] | None = None, verdicts: bool = False,
+                 ids: bool = False) -> None:
         if (tables is None) != (not layers):
             raise ValueError("history tables need both rank 0's channel and their layers")
         if stop is not None and layers:
             raise ValueError(TABLES_UNDER_A_RULE)
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
         self.window_s, self.drained, self.inline, self.stop_rule = float(window_s), drained, inline, stop
-        self.ids = ids
+        self.verdicts, self.ids = verdicts, ids
         self.tables, self.layers, self.capacity = tables, tuple(int(x) for x in layers), int(capacity)
         self.sink, self.clock, self.release = sink, clock, release
         self.serve = serve or secrets.token_hex(32)
@@ -88,10 +119,11 @@ class BoundaryWindows:
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None,
            release: Callable[[str], tuple[str, int] | None] | None = None, public: Sequence[Path] = ()) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``ids``; ``tables``, rank 0's history tables
-        (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and ``stop`` (`Stop.of`:
-        the registered model's stop ids and length and T, the most ids a response has). A stop rule the serve can't
-        register (a T the word can't hold, or one beside history tables) is refused here, as the serve starts."""
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``, ``verdicts`` and ``ids``; ``tables``, rank 0's
+        history tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and
+        ``stop`` (`Stop.of`: the registered model's stop ids and length and T, the most ids a response has). A stop rule
+        the serve can't register (a T the word can't hold, or one beside history tables) is refused here, as the serve
+        starts."""
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
         if stop is not None and tc:
             raise ValueError(TABLES_UNDER_A_RULE)
@@ -100,7 +132,8 @@ class BoundaryWindows:
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
                    inline=bool(cfg.get("inline", False)), sink=sink, tables=ch,
                    layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)),
-                   stop=stop, release=release, ids=bool(cfg.get("ids", False)))
+                   stop=stop, release=release, verdicts=bool(cfg.get("verdicts", False)),
+                   ids=bool(cfg.get("ids", False)))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -162,6 +195,7 @@ class BoundaryWindows:
         self.thread.join()
 
     def _run(self) -> None:
+        kept: dict = {}
         while (job := self.jobs.get()) is not None:
             window, opened, closed, carried, spans = job
             rule = self.stop_rule
@@ -171,9 +205,9 @@ class BoundaryWindows:
             for (p, o, held), mine in classes.items():
                 unheld = rule is not None and not held
                 try:
-                    layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline, self.layers, self.capacity, stop=rule,
-                                    held=held, ids=self.ids)
+                    layout = _built(Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
+                                           run_root(self.serve, window), self.inline, self.layers, self.capacity,
+                                           stop=rule, held=held, verdicts=self.verdicts, ids=self.ids), kept)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried,
@@ -197,14 +231,17 @@ class BoundaryWindows:
     def install(self, sched: Any, hooks: Any) -> BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
-        no `atexit` hook (vLLM's engine core is one). Refused while the scheduler caches prefixes: a hit would read
-        another request's rows, across the replay blocks' boundary. Refused under a stop rule whose model length is not
-        the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block at the
-        rule's, so every such response would be filed without a stop block. An honest serve's guard, which no verifier
-        relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
-        if getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
-            raise ValueError("the boundary commitment needs prefix caching off (--no-enable-prefix-caching): a cache hit "
-                             "reads another request's rows")
+        no `atexit` hook (vLLM's engine core is one). A scheduler that caches prefixes commits the same rows: a span's
+        boundary is its own prompt ids and the ids it was served, whichever KV pages its prefill read. With history
+        tables it is refused: a table holds its request's latent rows from position 0 (`boundary_tables.Latents`), and
+        a request served from the cache computes none before its hit's end. Refused under a stop rule whose model
+        length is not the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block
+        at the rule's, so every such response would be filed without a stop block. An honest serve's guard, which no
+        verifier relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
+        if self.tables is not None and getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
+            raise ValueError("the boundary commitment's history tables need prefix caching off "
+                             "(--no-enable-prefix-caching): a table holds its request's latent rows from position 0, "
+                             "and a request served from the cache computes none before its hit's end")
         served = getattr(sched, "max_model_len", None)
         if self.stop_rule is not None and served != self.stop_rule.max_model_len:
             raise ValueError(f"the stop rule's model length is {self.stop_rule.max_model_len} and the scheduler's "
