@@ -3,6 +3,7 @@
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
+//!                          [--known-trees LIST]   (the verifier's list of the statement's known trees, after the draw in Register's answer, `serve_on`)
 //!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256 [--tree-from HOST:PORT]   (a long-lived verifier, `serve_queue`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
@@ -7152,7 +7153,8 @@ fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn(
 /// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
 /// With `--known-trees FILE`, the verifier's list of the statement's known trees (`flock-verify known-trees`), its bytes
 /// follow the draw in each session's answer to `Register`: the ZK server's release side reads the list there and hands
-/// the prover the draw alone, and a prover that reaches this server itself reads the draw and no further.
+/// the prover the draw alone, and a prover that reaches this server itself reads the draw and no further. The list is
+/// one statement's, so `serve --queue`, whose sessions each take their own, refuses the flag.
 fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
                                           listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
@@ -7383,10 +7385,10 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
 /// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
 /// closed when the queue ends. A templated statement's circuit is loaded with its unit (`--tmpl-unit`), as `serve` loads it.
-/// No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
+/// No `--instances`, `--draw*`, `--links`, `--rec-run`, `--known-trees` (a list is one statement's) or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run"]
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--known-trees"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
