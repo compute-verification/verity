@@ -254,7 +254,7 @@ def test_a_one_hot_row_is_thetas():
     assert w.groups == [] and w.left_out["theta"] == T * N * VH
 
 
-def test_a_rank_bottleneck_between_carried_weights_caps_the_downstream_operand_at_beta_eff():
+def test_a_rank_bottleneck_between_carried_weights_bounds_the_downstream_operand_at_beta_eff():
     """u = A·(x ⊙ g), y = B·u, z = C·y, with A R×D, B D×R and C N×D carried: u is paid (D ≥ K*), y is made whole at
     4R²·32·32/k a word, so its β in z is `beta_eff` at rank R."""
     lin = lambda k, n: bind(RP.LinearRef, K=k, N=n, DT="f32", BIAS=False)  # noqa: E731
