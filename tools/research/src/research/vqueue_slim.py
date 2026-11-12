@@ -150,6 +150,9 @@ LEAN_FILES = "**/*.lean"
 LEAN_AUDIT_STEP = ("tools/verity/check/check.py", "tools/verity/check/lean_slot.py")
 #: the files whose directory is a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
+#: the part of a check that replays every module of the security analysis's proofs, which `start`'s ``heavy_on`` sends to its
+#: own machines (`heavy_shards`), and the part that audits it where a plan names it in no shard
+HEAVY_PART, HEAVY_REST = "lean-audit:security/Proofs", "lean-audit:*"
 #: how long after the loop cancelled a run a check that replaces it waits for the run's record (`start`'s ``after``), in
 #: seconds; past it the check launches without that run's passes
 CARRY_WAIT_S = 180
@@ -183,8 +186,8 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
       vectors, and not its prose, its pytest files or their settings), the auditor's (`lean_audit.tool_files`: of check's
       code `common.py` alone) and the records key's own program (`queue.KEY_COMMAND`).  A key holds files of those alone,
       whichever packages one requires (`tests/test_gate_paths.py` holds that on the tree).
-    - What a lock run writes: each package's lock, one of its own files, and the caps it repairs (`lean_audit.UNREAD_CAPS`,
-      `CAPS_TEST`), which no key holds.
+    - What a lock run writes: each package's lock, one of its own files, and the two files beside the locks it repairs
+      (`merge.REPAIRED`: the unread ratchet's limits and the repository suite's), which no key holds.
     - The code that runs the step and that no key holds: check's (`LEAN_AUDIT_STEP`) and the unread ratchet
       (`lean_audit.UNREAD`), which lean-audit runs after the audits.
 
@@ -205,9 +208,9 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
         while "/" in d:
             if (d := d.rpartition("/")[0]) in under:
                 under[d].append(f)
+    from .merge import REPAIRED
     own = (f for d, inside in under.items() for f in audit.own_files(d, inside))
-    return (LEAN_FILES, *sorted({*own, *audit.tool_files(files), KEY_COMMAND, audit.UNREAD_CAPS, audit.CAPS_TEST,
-                                   *LEAN_AUDIT_STEP, audit.UNREAD}))
+    return (LEAN_FILES, *sorted({*own, *audit.tool_files(files), KEY_COMMAND, *REPAIRED, *LEAN_AUDIT_STEP, audit.UNREAD}))
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:
@@ -255,6 +258,23 @@ def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
         driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job "
                      f"{', '.join(gone)}, which check.py refuses: left out of its --deferred")
     return [s for s in steps if s in names]
+
+
+def heavy_shards(driver: Landing, sha: str, n: int, doc: dict | None = None) -> set[int]:
+    """The shards, 1 to ``n``, of candidate ``sha``'s check that audit `HEAVY_PART`: of the auto plan ``doc`` (its shards'
+    parts), else of the plan with ``n`` shards in ``sha``'s own ci.toml (`merge.shard_plans`), those naming it, else those
+    naming `HEAVY_REST`; every shard, logged, where the plan can't be read or names neither."""
+    from .merge import shard_plans
+
+    shards = doc.get("shards") if doc is not None else (shard_plans(driver.repo, sha) or {}).get(n)
+    parts = [s.get("parts") if isinstance(s, dict) else s for s in shards] if isinstance(shards, list) else []
+    if len(parts) == n and all(isinstance(p, list) for p in parts):
+        for part in (HEAVY_PART, HEAVY_REST):
+            if got := {k for k, p in enumerate(parts, 1) if part in p}:
+                return got
+    driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s plan of {n} shards can't be read or names neither {HEAVY_PART} "
+                 f"nor {HEAVY_REST}: every shard goes on the heavy machines")
+    return set(range(1, n + 1))
 
 
 def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[str, float]:
@@ -310,7 +330,7 @@ def _carrying(runs: Iterable[str]):
 
 
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
-          audit_from: str | None = None, after: dict[str, float] | None = None) -> dict | None:
+          audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "") -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -319,7 +339,10 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
     With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
     took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  Each sends only the steps the
-    candidate's own ci.toml declares as jobs (`declared_steps`).
+    candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
+    that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
+    alone, the others to theirs, and its record keeps them (``heavy_on``), so an auto plan's shards launched later do too, as
+    does a launch that waited for the records of the runs it replaces (``after``).
     The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
@@ -346,16 +369,18 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     skip = [s for s in skip if s in every]
     steps = [s for s in every if s not in skip]
     sent = ",".join(every if n else steps)
+    heavy_on = heavy_on if n and LEAN_STEP in every else ""
     what = (f"train.sh {sha[:12]} {driver.on} --deferred {sent}{flags}"
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
             + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
-            + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else ""))
+            + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else "")
+            + (f", {HEAVY_PART}'s shard on {heavy_on}" if heavy_on else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
     rec = {"ids": [], "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
-           **({"carry": sorted(after)} if after else {})}
+           **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {})}
     go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
     awaited, gone = _awaiting(driver, after or {})
     if awaited:
@@ -367,19 +392,22 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
-    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`); ``gone``, the runs it waited for in vain, kept
-    as ``carry_without``.  None, logged, once launched; the tail of a launch that registered no run, logged."""
+    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`), the shard that audits `HEAVY_PART` (the
+    whole run, of one) on ``rec``'s ``heavy_on``; ``gone``, the runs it waited for in vain, kept as ``carry_without``.  None,
+    logged, once launched; the tail of a launch that registered no run, logged."""
     sha, sent, kw, n, carry = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or ()
+    heavy_on = rec.get("heavy_on") or ""
     if go["auto"]:
         got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        got, tail = _launch(driver, sha, sent, kw, n, carry=carry)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on)
         if got is not None and not any("launch" in r for r in got["shards"]):
             _grouped(got)
     else:
         with _carrying(carry):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw, train_from=OWN_TRAIN))
+            got, tail = driver._started(driver.launch_postland(driver.repo, sha, heavy_on or driver.on, sent, **kw,
+                                                               train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
         return tail
@@ -403,15 +431,20 @@ def _waited(driver: Landing, rec: dict) -> Verdict:
 
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
-            carry: Iterable[str] = ()) -> tuple[dict | None, str]:
+            carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
-    plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry`` (`_carrying`).
-    The record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
+    plan, or of the auto plan ``doc`` whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry``
+    (`_carrying`); with ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead.  The
+    record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
     cancelled."""
+    ons = shard_machines(driver.on, n)
+    if heavy_on:
+        heavy = heavy_shards(driver, sha, n, doc)
+        ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
     with _carrying(carry):
         got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
-               for k, on in enumerate(shard_machines(driver.on, n), 1)]
+               for k, on in enumerate(ons, 1)]
     if any(r is None for r, _ in got):
         if ids := [i for r, _ in got if r for i in r["ids"]]:
             driver.cancel(driver.repo, ids, f"vqueue: a shard of candidate {sha[:12]}'s check registered no run")
@@ -461,7 +494,8 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
     elif doc["n"] != plan["n"]:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
-        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or ())
+        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or (),
+        heavy_on=rec.get("heavy_on") or "", doc=doc)
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))

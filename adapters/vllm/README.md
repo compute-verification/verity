@@ -141,7 +141,8 @@ verity_vllm/
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
   properties/        property harnesses: non-interference, kernel census, golden and holdout corpora, tap exactness
   records/           typed stage records, one for each kind one stage writes and another reads
-  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime); each workload's served pin per device
+  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
+                     of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
 tests/               the suite verity-vllm, a directory for each subpackage; lint/ holds the ratchets (lint/README.md)

@@ -96,22 +96,23 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
     rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
-    and serving `served` bits rounded up, so it refuses a `fanout` above 1 (`ValueError`); with `served` alone, the
-    capped sets' form, the requests reading in each replay block serve at most `fanout` (the class's `N`, the replay
-    grain's fan-out) times that many bits together.  With `served`, `fanout` is the registered Program's, as its
-    registration verdict publishes it (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has
-    no default (`ValueError` without it); the sets' form reads none.  So is `returned`, the bits one replay block of the
-    registered Program returns, as its registration publishes them (`WindowCommitmentRecord.returned`,
-    `second_stage.returned_bits`): they are what its request is served, so a cap below them is refused, and so is the
-    patterns' form at any other S, since it reads each request as serving exactly S (`ValueError`, ``served-cover``:
-    `Properties.Spot.ServedCover`, `RequestsCover`).  Lean searches θ from `theta` unless `search` is None."""
+    and serving `served` bits rounded up: the point of a grain whose replay blocks are closed, the only one priced in
+    this form, so it refuses a `fanout` above 1 (`ValueError`); with `served` alone, the capped sets' form, the requests
+    reading in each replay block serve at most `fanout` (the class's `N`, the replay grain's fan-out) times that many
+    bits together.  With `served`, `fanout` is the registered Program's, as its registration verdict publishes it
+    (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has no default (`ValueError` without
+    it); the sets' form reads none.  So is `returned`, the bits one replay block of the registered Program returns, as
+    its registration publishes them (`WindowCommitmentRecord.returned`, `second_stage.returned_bits`): they are what
+    its request is served, so a cap below them is refused, and so is the patterns' form at any other S, since it reads
+    each request as serving exactly S (`ValueError`, ``served-cover``: `Properties.Spot.ServedCover`, `RequestsCover`).
+    Lean searches θ from `theta` unless `search` is None."""
     if served is not None and fanout is None:
         raise ValueError("a served cap is charged at the registered Program's fan-out: pass the one its registration "
                          "verdict publishes (Verdict.fanout, WindowCommitmentRecord.fanout)")
     fanout = 1 if fanout is None else fanout
     if not (isinstance(fanout, int) and fanout >= 1) or (union and fanout > 1):
-        raise ValueError(f"a fan-out is a whole number at least 1, and the patterns' form reads each request in one "
-                         f"replay block, so it needs fan-out 1, not {fanout}")
+        raise ValueError(f"a fan-out is a whole number at least 1, and the patterns' form is priced only where no "
+                         f"replay block reads a value another computed, so it needs fan-out 1, not {fanout}")
     if served is not None:
         if not (type(returned) is int and returned >= 0):
             raise ValueError("a served cap is held to the bits a replay block of the registered Program returns: "

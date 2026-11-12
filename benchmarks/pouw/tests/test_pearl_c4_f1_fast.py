@@ -14,21 +14,21 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c4"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "verifier" / "tests"))
-import f1_fast as Q  # noqa: E402
-import pearl_c4_vectors as V  # noqa: E402
-import test_pouw_pearl_c4 as T  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c_work as W  # noqa: E402
-import clear_work as CW  # noqa: E402
+import f1_fast as Q
+import pearl_c4_vectors as V
+import test_pouw_pearl_c4 as T
+from verity.protocols.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.pouw.prover.schemes import pearl_c_work as W
+import clear_work as CW
 
 
-def test_row_law_is_the_reference_law():
+def test_row_pmf_is_the_reference_distribution():
     for i in range(16):
         e = tuple(F.line(bytes([i]) * 32, F.ROLE_EA, i))
         lo, pmf = F.noise_law(e)
-        lo2, pmf2 = Q.row_law(e)
+        lo2, pmf2 = Q.row_pmf(e)
         assert lo == lo2 and len(pmf) == len(pmf2) and np.abs(np.array(pmf) - pmf2).max() < 1e-15
-    assert Q.row_law((0,) * 32) == (0, pytest.approx(np.ones(1)))
+    assert Q.row_pmf((0,) * 32) == (0, pytest.approx(np.ones(1)))
 
 
 def _side(rows, k=1024):
