@@ -56,7 +56,8 @@ def test_f32_max_ref_on_every_pair_of_edges_neighbours_and_random_pairs() -> Non
     pairs over all words."""
     rng = np.random.default_rng(20261104)
     w = np.array(F32_EDGES + _binades()[::7], dtype=np.uint64)
-    a, b = np.repeat(w, len(w)), np.tile(w, len(w))
+    a: np.ndarray = np.repeat(w, len(w))
+    b = np.tile(w, len(w))
     r = rng.integers(0, 1 << 32, 1 << 14, dtype=np.uint64)
     near = (r + rng.integers(-2, 3, len(r)).astype(np.uint64)) & np.uint64(M32)
     _agree(BR.F32MaxRef, np.concatenate([a, r, r]), np.concatenate([b, near, rng.permutation(r)]))

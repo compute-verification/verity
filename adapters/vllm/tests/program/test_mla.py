@@ -99,7 +99,7 @@ def test_exp_sub_agrees_with_the_model() -> None:
     x, m = _f32_words(rng, 100_000), _f32_words(rng, 100_000)
     gx, gm = (F32_SPECIALS[g] for g in np.array(list(itertools.product(range(len(F32_SPECIALS)), repeat=2))).T)
     x, m = np.concatenate([x, gx]), np.concatenate([m, gm])
-    got = _bits_eval(bind(M.TritonExpSub), x, m).astype(U32)
+    got: np.ndarray = _bits_eval(bind(M.TritonExpSub), x, m).astype(U32)
     want = MK.exp_tl(MK.sub(x, m))
     nan = MK.is_nan(want)
     assert np.array_equal(got[~nan], want[~nan]) and np.all(got[nan] == 0x7FFFFFFF)
@@ -130,11 +130,11 @@ def test_one_split_merge_is_the_gate_and_out() -> None:
     acc[::97] = F32_SPECIALS[np.arange(len(acc[::97])) % len(F32_SPECIALS)]
     tv = MK.div_full(acc, e_sum)
     want = _merge_one_split(e_max, e_sum, tv)
-    gate = _bits_eval(bind(M.TritonMlaGate), e_max, e_sum).reshape(-1).astype(bool)
+    gate: np.ndarray = _bits_eval(bind(M.TritonMlaGate), e_max, e_sum).reshape(-1).astype(bool)
     finite = (MK.add(e_max, MK.logf(e_sum)) & U32(0x7F800000)) != U32(0x7F800000)
     assert np.array_equal(gate, finite)
     rcp = MU.mufu_rcp_words(MU.div_full_divisor_words(e_sum), MU.table("rcp"))
-    got = _bits_eval(bind(M.TritonMlaOut), acc, e_sum, rcp, gate.astype(np.uint8)).astype(U16)
+    got: np.ndarray = _bits_eval(bind(M.TritonMlaOut), acc, e_sum, rcp, gate.astype(np.uint8)).astype(U16)
     assert np.array_equal(got, want)
     assert 0.3 < gate.mean() < 0.9 and np.count_nonzero(want == 0x7FFF) > 1000
 
@@ -142,7 +142,7 @@ def test_one_split_merge_is_the_gate_and_out() -> None:
 def _agree_decode(T: int, kind: str, n: int = 64, H: int = 2, DL: int = 16, DR: int = 16, SCALE: int = G["SCALE"]) -> None:
     rng = np.random.default_rng([T, DL, SCALE, len(kind)])
     q, kv = _bf16_words(rng, (n, H, DL + DR), kind), _bf16_words(rng, (n, T, DL + DR), kind)
-    got = _bits_eval(_decode(T, H, DL, DR, SCALE), q, kv).astype(U16)
+    got: np.ndarray = _bits_eval(_decode(T, H, DL, DR, SCALE), q, kv).astype(U16)
     want = np.stack([MK.decode_rows(q[i], kv[i], 1, SCALE, DL)["o"] for i in range(n)])
     bad = np.argwhere(got != want)
     assert not len(bad), f"T={T} {kind}: {len(bad)} words differ, first {bad[0]}: {got[tuple(bad[0])]:#x} vs {want[tuple(bad[0])]:#x}"
@@ -169,7 +169,7 @@ def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> 
 
 #: captured `o` of one-split requests of `decode-v1` (`mla_capture.case_inputs` rebuilds their inputs
 #: from the case): (case index, request, sha256 of its 20 x 512 output words, little-endian)
-CAPTURED = [
+CAPTURED: list[tuple[dict, int, str]] = [
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 0, "1b7483a67b1bb456"),
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 1, "3dde29d03c6933d1"),
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 4, "d770285380b18149"),
@@ -184,7 +184,7 @@ def test_decode_reproduces_the_captured_hardware_output(case: dict, b: int, dige
     q, kvs = MC.case_inputs(case)
     T = len(kvs[b])
     t = bind(M.TritonMlaDecode, H=MC.H, T=T, DL=G["DL"], DR=G["DR"], BN=32, SPLITS=1, SCALE=G["SCALE"], DOT=G["DOT"])
-    o = _bits_eval(t, q[b:b + 1], kvs[b][None]).astype("<u2")[0]
+    o: np.ndarray = _bits_eval(t, q[b:b + 1], kvs[b][None]).astype("<u2")[0]
     assert hashlib.sha256(o.tobytes()).hexdigest()[:16] == digest
 
 
@@ -196,7 +196,7 @@ def test_bmm_agrees_with_the_model() -> None:
         n = 64
         x = _bf16_words(rng, (n, NH, K), "spread")
         w = _bf16_words(rng, (n, NH, N, K), "special")
-        got = _bits_eval(bind(M.MlaBmm, NHEADS=NH, K=K, N=N, DOT=HOP), x, w).astype(U16)
+        got: np.ndarray = _bits_eval(bind(M.MlaBmm, NHEADS=NH, K=K, N=N, DOT=HOP), x, w).astype(U16)
         want = np.stack([MK.bmm_rows(x[i][:, None, :], np.transpose(w[i], (0, 2, 1)))[:, 0] for i in range(n)])
         assert np.array_equal(got, want)
 
@@ -210,7 +210,7 @@ def test_combine_agrees_with_the_model(rsf: float) -> None:
     routed = np.concatenate([BF16_SPECIALS[g[0]], rng.integers(0, 1 << 16, 1 << 16).astype(U16)])
     shared = np.concatenate([BF16_SPECIALS[g[1]], rng.integers(0, 1 << 16, 1 << 16).astype(U16)])
     RSF = int(np.float32(rsf).view(np.uint32))
-    got = _bits_eval(bind(M.MoeSharedCombine, H=len(routed), RSF=RSF), routed[None], shared[None])[0].astype(U16)
+    got: np.ndarray = _bits_eval(bind(M.MoeSharedCombine, H=len(routed), RSF=RSF), routed[None], shared[None])[0].astype(U16)
     want = MK.combine_rows(routed[None], shared[None], rsf, 0x7FFF)[0]
     assert np.array_equal(got, want)
     if rsf == 1.0:
