@@ -4245,10 +4245,6 @@
    "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
    "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
   },
-  "Pouw.Salt.keyed_leaf_binds": {
-   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
-   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
-  },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": {
    "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest"],
    "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
@@ -5791,7 +5787,7 @@
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Hash", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs", "Definitions.Pouw.Lead.Model", "Definitions.Pouw.Lead.Deployed"],
+   "except": ["Definitions.Pouw.PearlC.Defs"],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)"
   },
   "Definitions.Pouw.Basic": {
@@ -6027,22 +6023,6 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
-  },
-  "Definitions.Pouw.Lead.Model": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Hash.Basic",
-    "Definitions.Pouw.Lead.Layout",
-    "Definitions.Pouw.Dimension.Pointwise",
-    "Definitions.Pouw.Assumptions.Dimension.H100"
-   ],
-   "except": [],
-   "why": "the lead's strategy model, definitions only: a strategy's trace is MH100's instructions and its price MH100's tables (Op100, Prices100, regs100, cost100, from Definitions.Pouw.Assumptions.Dimension.H100, none of its named assumptions), its run the chunk model's (Definitions.Pouw.Dimension.Pointwise), and a commitment's messages and digests the hash area's (Definitions.Hash.Basic)"
-  },
-  "Definitions.Pouw.Lead.Deployed": {
-   "imports": ["Mathlib", "Definitions.Hash.Tree", "Definitions.Hash.Hm96", "Definitions.Pouw.Lead.Gap"],
-   "except": [],
-   "why": "the lead's deployed commitment and coin stream, definitions only: range-indexed frame-v3 trees under hm96 leaves (Definitions.Hash.Tree, Definitions.Hash.Hm96) over the lead's layout, model and chunks (Definitions.Pouw.Lead.Gap)"
   },
   "Definitions.Hash.Assumptions.Prf": {
    "imports": [
@@ -21992,160 +21972,6 @@
    "type_hash": "db701ed287a7e3e3106dab9ae644604bd14a0d7239c570cfeae582ff7ad4a15f",
    "unfolded_hash": "6597197cd72d99a894102682fe0d2bb74e13a8e65d45bb37bb750bec2fc9c17f"
   },
-  "Pouw.Salt.keyed_leaf_binds": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.Salt.keyed_leaf_binds : Pouw.Guarantees.KeyedLeaf.Binds"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Assumptions.SaltDerivation", "Pouw.Assumptions.SubtreeLayout"],
-    "reads": []
-   },
-   "type_hash": "f734dbf1781cd0675eafa3674cda7f5ab1421c60c79c903e57e0c6159ab37f4d",
-   "unfolded_hash": "690ffff36892dafa75a7b72c8472de9034c06d717b87f687acac32736579b059"
-  },
-  "Pouw.Salt.keyed_leaf_binds_honest": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.Salt.keyed_leaf_binds_honest :",
-    "  And",
-    "    (Pouw.Assumptions.SubtreeLayout",
-    "      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (fun x => 3)",
-    "      (fun x => { id := fun x => 4, count := 2, position := fun r => r }) \"row\"",
-    "      (fun x =>",
-    "        Hash.Keyed.digest (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "          (fun x => 1) (fun x => 3)",
-    "          (Hash.Keyed.Top.msg { id := fun x => 4, count := 2, position := fun r => r }",
-    "            (Hash.Keyed.Top.node 0",
-    "              ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                  (List.cons 5 List.nil)))",
-    "              ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                  (List.cons 6 List.nil))))))",
-    "      fun pos rank v ks y sibs =>",
-    "      And (Eq pos 0)",
-    "        (And (Eq ks fun x => 1)",
-    "          (And (Eq y (List.replicate 192 2))",
-    "            (Or",
-    "              (And (Eq rank 0)",
-    "                (And (Eq v (List.cons 5 List.nil))",
-    "                  (Eq sibs",
-    "                    (List.cons",
-    "                      ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                        (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                          (List.cons 6 List.nil)))",
-    "                      List.nil))))",
-    "              (And (Eq rank 1)",
-    "                (And (Eq v (List.cons 6 List.nil))",
-    "                  (Eq sibs",
-    "                    (List.cons",
-    "                      ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                        (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                          (List.cons 5 List.nil)))",
-    "                      List.nil))))))))",
-    "    (And",
-    "      (Pouw.Assumptions.SaltDerivation",
-    "        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (List.replicate 64 0)",
-    "        (Hash.Hm96.leaf (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "          (List.replicate 64 0) (fun x => 1) (List.replicate 192 2))",
-    "        fun pos rank v ks y sibs =>",
-    "        And (Eq pos 0)",
-    "          (And (Eq ks fun x => 1)",
-    "            (And (Eq y (List.replicate 192 2))",
-    "              (Or",
-    "                (And (Eq rank 0)",
-    "                  (And (Eq v (List.cons 5 List.nil))",
-    "                    (Eq sibs",
-    "                      (List.cons",
-    "                        ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                          (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                            (List.cons 6 List.nil)))",
-    "                        List.nil))))",
-    "                (And (Eq rank 1)",
-    "                  (And (Eq v (List.cons 6 List.nil))",
-    "                    (Eq sibs",
-    "                      (List.cons",
-    "                        ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                          (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                            (List.cons 5 List.nil)))",
-    "                        List.nil))))))))",
-    "      (Hash.Keyed.accepts (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "        (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r }",
-    "        ((fun x =>",
-    "            Hash.Keyed.digest (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "              (fun x => 1) (fun x => 3)",
-    "              (Hash.Keyed.Top.msg { id := fun x => 4, count := 2, position := fun r => r }",
-    "                (Hash.Keyed.Top.node 0",
-    "                  ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                    (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                      (List.cons 5 List.nil)))",
-    "                  ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                    (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                      (List.cons 6 List.nil))))))",
-    "          0)",
-    "        0 (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\" (List.cons 5 List.nil))",
-    "        (List.cons",
-    "          ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "            (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\" (List.cons 6 List.nil)))",
-    "          List.nil)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Pouw.Assumptions.SaltDerivation", "Pouw.Assumptions.SubtreeLayout"]
-   },
-   "type_hash": "4f330ccf8e8c5a8f710b588d272a5f6b9c4610aec5049ad4d3255df691316893"
-  },
-  "Pouw.Salt.keyed_leaf_binds_nontrivial": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.Salt.keyed_leaf_binds_nontrivial :",
-    "  Not",
-    "    (Or (Eq (List.cons 0 List.nil) (List.cons 1 List.nil))",
-    "      (Hash.CollisionIn (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "        (instHAppendOfAppend.hAppend",
-    "          (instHAppendOfAppend.hAppend",
-    "            (instHAppendOfAppend.hAppend",
-    "              (Hash.Hm96.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                List.nil (fun x => 1) List.nil)",
-    "              (Hash.Hm96.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                List.nil (fun x => 1) List.nil))",
-    "            (Hash.Keyed.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "              (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r } 0",
-    "              (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                (List.cons 0 List.nil))",
-    "              List.nil))",
-    "          (Hash.Keyed.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "            (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r } 0",
-    "            (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\" (List.cons 1 List.nil))",
-    "            List.nil))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a8787fde9876c5e02b4089181424c8b10f87bf2f68024780c491298e25ba2430"
-  },
-  "Pouw.Salt.keyed_leaf_hides": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.Salt.keyed_leaf_hides : Pouw.Guarantees.KeyedLeaf.Hides"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "7d9ff460b3191531e0e4b5e53a4fabdf12460143d1283a8dafd0ce23ee5eb3ef",
-   "unfolded_hash": "910de22cf4970922814ec7b85865eaa139f726120397f7033ce8337e667815e2"
-  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Dither.FleetSound : Pouw.Guarantees.Dither.FleetSound"],
@@ -25611,176 +25437,6 @@
    },
    "type_hash": "b6da91897e3f8deef6035fd5221672b6df8917857b577437b452ed2637ae566b"
   },
-  "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor : Pouw.Guarantees.Writes.DistinctWritesMH100Floor"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Pouw.Dimension.Embed.fpVal",
-     "Pouw.Dimension.H100.DistinctOn",
-     "Pouw.Dimension.H100.DistinctWritesMH100Floor",
-     "Pouw.Dimension.H100.Floor",
-     "Pouw.Dimension.H100.Op100",
-     "Pouw.Dimension.H100.Op100.WFw",
-     "Pouw.Dimension.H100.Op100.casesOn",
-     "Pouw.Dimension.H100.Op100.ctorIdx",
-     "Pouw.Dimension.H100.Op100.fp32",
-     "Pouw.Dimension.H100.Op100.fp64",
-     "Pouw.Dimension.H100.Op100.int",
-     "Pouw.Dimension.H100.Op100.mma",
-     "Pouw.Dimension.H100.Op100.move",
-     "Pouw.Dimension.H100.Op100.operand",
-     "Pouw.Dimension.H100.Op100.other",
-     "Pouw.Dimension.H100.Op100.outs",
-     "Pouw.Dimension.H100.Op100.price",
-     "Pouw.Dimension.H100.Op100.rec",
-     "Pouw.Dimension.H100.Op100.wgmma",
-     "Pouw.Dimension.H100.OutputsOn",
-     "Pouw.Dimension.H100.Prices100",
-     "Pouw.Dimension.H100.Prices100.ffma",
-     "Pouw.Dimension.H100.Prices100.fp64",
-     "Pouw.Dimension.H100.Prices100.int32",
-     "Pouw.Dimension.H100.Prices100.mac",
-     "Pouw.Dimension.H100.Prices100.mk",
-     "Pouw.Dimension.H100.Prices100.other",
-     "Pouw.Dimension.H100.Prices100.tc",
-     "Pouw.Dimension.H100.Shape100",
-     "Pouw.Dimension.H100.Shape100.bf16F32",
-     "Pouw.Dimension.H100.Shape100.casesOn",
-     "Pouw.Dimension.H100.Shape100.ctorIdx",
-     "Pouw.Dimension.H100.Shape100.e4m3F16",
-     "Pouw.Dimension.H100.Shape100.e4m3F32",
-     "Pouw.Dimension.H100.Shape100.e5m2F16",
-     "Pouw.Dimension.H100.Shape100.e5m2F32",
-     "Pouw.Dimension.H100.Shape100.elems",
-     "Pouw.Dimension.H100.Shape100.f16F16",
-     "Pouw.Dimension.H100.Shape100.f16F32",
-     "Pouw.Dimension.H100.Shape100.k",
-     "Pouw.Dimension.H100.Shape100.rec",
-     "Pouw.Dimension.H100.Shape100.regPrice",
-     "Pouw.Dimension.H100.Shape100.s8",
-     "Pouw.Dimension.H100.Shape100.tf32",
-     "Pouw.Dimension.H100.cost100",
-     "Pouw.Dimension.H100.regs100"
-    ]
-   },
-   "type_hash": "ffbccb36ecf4e42c8d088293f27130db1b54ed6912cc0d37d0668a3beb9303d6",
-   "unfolded_hash": "09027d51934b5dfd91a98c6d23795989612cfbba46370742656db41937178d8e"
-  },
-  "Pouw.SecurityProofs.Writes.RunBall": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Writes.RunBall : Pouw.Guarantees.Writes.RunBall"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Dimension.Pointwise.Apart", "Pouw.Dimension.Pointwise.Far", "Pouw.Dimension.Pointwise.Held"],
-    "reads": []
-   },
-   "type_hash": "68097eca292ce4d1a0878699cbe7f975ced168d812d6f7faa99f66c6eab28e23",
-   "unfolded_hash": "5782309d9938621014e40465348d7074b8cd02fc26bd4076a04efa54cf257574"
-  },
-  "Pouw.SecurityProofs.Writes.RunPairs": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Writes.RunPairs : Pouw.Guarantees.Writes.RunPairs"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Dimension.Pointwise.Held"],
-    "reads": []
-   },
-   "type_hash": "296c1fb8da6eac62858c4e96d6069747b6b7b0f55598a0c0c8c3466c3c982caf",
-   "unfolded_hash": "39729e393a413c572e3dc9933b11b0efb151294c203c78fa93c43278c25c2a02"
-  },
-  "Pouw.SecurityProofs.Writes.SsnServedCharged": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Writes.SsnServedCharged : Pouw.Guarantees.Writes.SsnServedCharged"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Dimension.H100.Op100.WFw", "Pouw.Dimension.H100.OutputsOn", "Pouw.Dimension.Ssn.FreeInputs"],
-    "reads": [
-     "Pouw.Dimension.Embed.fpVal",
-     "Pouw.Dimension.H100.Op100",
-     "Pouw.Dimension.H100.Op100.casesOn",
-     "Pouw.Dimension.H100.Op100.ctorIdx",
-     "Pouw.Dimension.H100.Op100.fp32",
-     "Pouw.Dimension.H100.Op100.fp64",
-     "Pouw.Dimension.H100.Op100.int",
-     "Pouw.Dimension.H100.Op100.mma",
-     "Pouw.Dimension.H100.Op100.move",
-     "Pouw.Dimension.H100.Op100.operand",
-     "Pouw.Dimension.H100.Op100.other",
-     "Pouw.Dimension.H100.Op100.outs",
-     "Pouw.Dimension.H100.Op100.price",
-     "Pouw.Dimension.H100.Op100.rec",
-     "Pouw.Dimension.H100.Op100.wgmma",
-     "Pouw.Dimension.H100.Prices100",
-     "Pouw.Dimension.H100.Prices100.ffma",
-     "Pouw.Dimension.H100.Prices100.fp64",
-     "Pouw.Dimension.H100.Prices100.int32",
-     "Pouw.Dimension.H100.Prices100.mac",
-     "Pouw.Dimension.H100.Prices100.mk",
-     "Pouw.Dimension.H100.Prices100.other",
-     "Pouw.Dimension.H100.Prices100.tc",
-     "Pouw.Dimension.H100.Shape100",
-     "Pouw.Dimension.H100.Shape100.bf16F32",
-     "Pouw.Dimension.H100.Shape100.casesOn",
-     "Pouw.Dimension.H100.Shape100.ctorIdx",
-     "Pouw.Dimension.H100.Shape100.e4m3F16",
-     "Pouw.Dimension.H100.Shape100.e4m3F32",
-     "Pouw.Dimension.H100.Shape100.e5m2F16",
-     "Pouw.Dimension.H100.Shape100.e5m2F32",
-     "Pouw.Dimension.H100.Shape100.elems",
-     "Pouw.Dimension.H100.Shape100.f16F16",
-     "Pouw.Dimension.H100.Shape100.f16F32",
-     "Pouw.Dimension.H100.Shape100.k",
-     "Pouw.Dimension.H100.Shape100.rec",
-     "Pouw.Dimension.H100.Shape100.regPrice",
-     "Pouw.Dimension.H100.Shape100.s8",
-     "Pouw.Dimension.H100.Shape100.tf32",
-     "Pouw.Dimension.H100.cost100",
-     "Pouw.Dimension.H100.h100Floor",
-     "Pouw.Dimension.H100.h100LoopFree",
-     "Pouw.Dimension.H100.nominalMac",
-     "Pouw.Dimension.H100.regs100"
-    ]
-   },
-   "type_hash": "1c538768e14a10d6260904bf4e423be9985c41ddea6d3ab0fa2f065a9cd4e6eb",
-   "unfolded_hash": "649a675cd7ae2d101cb42c9cb7ca0e36a060f4fe9c4ae2f08920d1fcb85ea3be"
-  },
-  "Pouw.SecurityProofs.Writes.SsnServedDistinct": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Writes.SsnServedDistinct : Pouw.Guarantees.Writes.SsnServedDistinct"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Pouw.Dimension.H100.DistinctOn"]
-   },
-   "type_hash": "fbc74786492cbda4c7a5830b2fda966e0d4375f41baf133a165f48d053696d93",
-   "unfolded_hash": "3ad5f3f43a4b72faf7002a22718ffe6d54f85d6970f74c6af0a69b13254503c5"
-  },
-  "Pouw.SecurityProofs.Writes.SsnServedShift": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Writes.SsnServedShift : Pouw.Guarantees.Writes.SsnServedShift"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "868e3369af0857a64e550adc2ebc0bae92b4b4e9d59a7012f2fa750af37ba729",
-   "unfolded_hash": "e77a959192e73ea63b25b07aeee8df74213a642646d4481cbd5eb4aad5796903"
-  },
   "RecDeploy.HonestHalfFixture.honest_half_fixture": {
    "owner": "@proofs",
    "signature": [
@@ -27675,7 +27331,6 @@
    "Proofs.Flock.Soundness.Premises",
    "Definitions.Nci.Assumptions.Fit",
    "Definitions.Core.Assumptions.DeviceFigures",
-   "Definitions.Pouw.Assumptions.LeadCommit",
    "Proofs.Accounting.TS.Session.Group.Premises"
   ],
   "properties": {
@@ -27950,14 +27605,6 @@
    "Hash.SecurityProofs.EmbeddingReadBinding": {
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
-   },
-   "Pouw.Salt.keyed_leaf_hides": {
-    "function": "Hash.Keyed.digest",
-    "outcome": "none"
-   },
-   "Pouw.Salt.keyed_leaf_binds": {
-    "function": "Hash.Keyed.accepts",
-    "outcome": "none"
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
@@ -28496,12 +28143,6 @@
    "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
    "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
-   "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean): every definition it reads matches the hardware or is stricter, none looser, so the bound holds on the H200 a fortiori at any price table meeting Floor c. Floor c is the hypothesis: the H200's table meets it at c = 32 on every priced form, and the census's 26 unpriced forms keep h100Floor's marker (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean) until they are priced.",
-   "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
-   "Pouw.SecurityProofs.Writes.RunPairs": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
-   "Pouw.SecurityProofs.Writes.SsnServedCharged": "frozen (no-function): A cost bound at MH100w's `h100Floor` table for served sparse noise's committed words on the full coin grid, not over a Lean function of the code, so it has no acceptance to take. It is about one program fixed before the coins and right on every coin value: a prover that branches on the coins, or is right only on a success set, is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean); the served layouts (security/Definitions/Pouw/Dimension/Ssn.lean) and h100Floor (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean, until the census's 26 unpriced forms are priced) are draft, pending review, and the review must clear them before the statement says anything about a device.",
-   "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. The served layouts' semantics are draft, pending review (security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
-   "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. The served layouts' semantics are draft, pending review (security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
    "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
    "Pous.SecurityProofs.StreamedWipeMeetsH200": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2906 reads, an H200 of 141 GiB filled whole, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
@@ -28512,18 +28153,6 @@
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (security/Definitions/Accounting/RateAuditHorizon.lean, Causal), not a deployed sampler or verifier.",
    "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
-   "Pouw.Guarantees.Lead.G": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.G; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.G_tail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.G_tail; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapAll": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAll; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAt; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapAtDecode": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAtDecode; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapFixedAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.gapFixedAt; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.Honest": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.honest; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.NetworkFwd": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkFwd; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.NetworkLlama": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkLlama; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.Nontrivial": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.nontrivial; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.NontrivialTail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.nontrivialTail; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.TailAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.tailAt; that guarantee is unlisted and the lead gets no new Lean",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
@@ -60981,8 +60610,6 @@
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
  "four_names_except": {
-  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it",
-  "Pouw.Salt.keyed_leaf_binds": "proves `Pouw.Guarantees.KeyedLeaf.Binds` under another name; `--moved` renames it `Pouw.SecurityProofs.KeyedLeaf.Binds`",
-  "Pouw.Salt.keyed_leaf_hides": "proves `Pouw.Guarantees.KeyedLeaf.Hides` under another name; `--moved` renames it `Pouw.SecurityProofs.KeyedLeaf.Hides`"
+  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
  }
 }
