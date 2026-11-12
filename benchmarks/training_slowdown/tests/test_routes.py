@@ -424,8 +424,8 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
             assert kept == int(layer.plus.sum() + layer.minus.sum()) >= math.ceil(0.5 * v.numel())
         else:
             assert torch.equal(v, theta[k])
-    first, second = (rec["steps"][t]["by"]["fwd/updated"] for t in (0, 1))
-    assert second - first == trace["tokens"] * entries   # the first step's codes are zero: its forward reads θ
+    first, second = (rec["steps"][t]["by"].get("fwd/updated", 0) for t in (0, 1))
+    assert first == 0 and second == trace["tokens"] * entries   # the first step's codes are zero: its forward reads θ
     c = trace["circuit"]
     assert c["update_cut_bits"] == c["u1_bits"] == 2 * entries + 16 * len(targets)
     assert c["state_bits"] == 2 * 32 * entries and c["grad_cut_bits"] == 32 * entries
