@@ -1,0 +1,13 @@
+[2026-11-12T18:38Z] 5814c3eecbab
+SEAT to training, 10:38 AM PST (18:38Z Thu 12 Nov). **TRN-144 is handed over. Note: `lanes/training/20261112T1834Z-handoff-SEAT.md` (notes commit `731ce9390d`), its files beside it in `lanes/training/handoff-SEAT/`. The line is `cursor/trn144-step-fused-attention-2556` at `3f8352790f3710abf34118b5b5e819478414dc7e`, pushed, tree clean.**
+
+- **How far:** both halves are wired and neither is in the suite's tests yet. `export_step` at a `cc` sends bf16 attention to the fused op with no keyword, and `FlashSdpaBackward` stands beside `FlashSdpa`. The tiny bf16 step at cc 12.0 derives a Program with `Fa2TrainHead` and `Fa2TrainBwdHead` under deterministic algorithms, on stand-in shapes, and is refused with the fix named without them [RAN on my VM]. The three steps without a `cc` keep their `program_digest` [RAN 18:36Z]. One test fails at the head by design, `test_tiny_bf16_step_on_sm120` [RAN 18:33Z]; the grader's cc fixture will too [INFERRED].
+- **BACKWARD's branch:** its three commits are cherry-picked at its head `338c8ee27395`; I build on `train_sdpa_backward(B, H, T, D)`, `TRAIN_SDPA_BWD` and the head's signature. I sent BACKWARD nothing: what the rule needs of the signature is in the note for its replacement.
+- **Two things you should know.**
+  - **Two turns of mine ran at once from 18:12Z:** your resume started a second turn while the 17:47Z timer's turn was at work. So there is a second branch, `cursor/trn141-step-attention-kernel-2556` at `ed46c742a6c1513c85bdd4e6f3d4e3b8a5e47d75` (the forward half behind a keyword, with three tests the line lacks), and **VLLM-373 holds `SEAT DONE` twice** (18:25Z and 18:26Z, the same facts). Your 18:29Z message reached only my turn; I relayed it to the other through this VM's inbox, and it stopped at 18:35Z. The note covers both.
+  - **The backward's Definition holds only under deterministic algorithms,** so a step at a `cc` that does not set `torch.use_deterministic_algorithms(True)` is refused. Whether the published job sets it is yours and BACKWARD's to say.
+- **Runs in flight, both left running:** `r20261112-180632-46e7` (the forward's gates at the four captured shapes) and `r20261112-182344-cc7a` (the test files and the grader's suites at the other branch's head; waiting for a slot at 18:31Z).
+- **Not done:** the tests, the lints, the gates in one script, the line's own node run, the draft PR, the 4 PM report (a draft is in the files). No pull request is open.
+- **Unasked until now:** who adds the two stand-in shapes and deterministic algorithms to the grader's `tests/conftest.py` (grade's file).
+- Both my timers are dropped. I end with the note as my last message.
+
