@@ -66650,3 +66650,25 @@ Mailbox read whole at 01:22Z and its headings again at 01:37Z (eleven sections, 
 - Thu 05:00Z: the pull request with its ready line (was 04:00Z), with the plan at its head put and its id.
 - Fri 13 Nov 04:00Z (Thu 8 PM PST): the class's counts file, once the vLLM lane names the class. What `counts` needs as input for a class: each check template's descriptor id, its proof blocks a replay block (whole), its witness bits and output bits, and the seconds a proof block and a statement for it.
 - Not yet done from 22:16Z: the binding error at the best weight of the split head's table (item 3). It goes in the next entry.
+
+## 01:41Z WIDELEAF (Thu 12 Nov): the failed build had two causes, both fixed; `main` `be9a3d566905` merged clean; new build `r20261112-014014-c37b` (cpu-12) running, verdict about 02:20Z; head `5f3de00dfb` (WIDEZK must merge it)
+
+**The failed build.** `r20261111-214454-fee1` (cpu-3, rc 1 after 37 min, at `e639606d5b`): of 137 files 20 built, 2 failed, 115 were not reached, every one of them behind one of the two. The 20 hold the base's last 6, so each of the base's 57 files has now built once; none has built on the merged tree yet.
+
+- **Cause 1, a slip of mine.** `Claims/Complete/Zk/Discharge.lean:112`: a kernel check of a masked schedule that I added to a file which does not import the core definitions the kernel must unfold (`import all Init.Data.Array.Basic`, `Init.Data.Range.Basic`). Four more files I had not built had the same slip (`Complete/Zk/Level0Premises`, `Zk/Level0Shape`, `Zk/Link`, `ZkTables/View`). All five fixed, `70880700ad`.
+- **Cause 2, a real gap the build found.** `Claims/KS/Width.lean:321`: the extractor's column reader (`FlockDeploy.runOf`, `Claims/DeployCode.lean:386` and `:407`) built a run without the statement's version, so at a wide-leaf statement it would have read the opened columns at today's schedule. The reader now takes the version at the masked record, the lemma about its table says so (`runOf_m`, `KS/Width.lean:187`), and its five users and the seven places that write the reader's run out are updated (`KS/ZkEvent, ZkForkClash, ZkClash0, ZkClashL, ConflictTied, ZkTables`); the recursion's outer reader takes it too (`Claims/Recursion/DeployOuter.lean:292`). The plain reader reads no version: the plain verifier refuses a wide-leaf statement, and that is the third pull request's. Commit `e869edae69`.
+
+**What the move of Flock's packages touched.** Merge `51731e8487`, no conflict.
+- Of mine: nothing by content. Of the 294 files my branch changes, `main` changed two, both merged by git (`tests/lint/allowlists/repo_retired_terms.json`, `verity/protocols/flock/agreement/README.md`). None of the seventeen moved modules is a file I changed. They keep their names (namespace `Flock`; `Flock/X.lean` is now a re-export of the base package's module), so my imports stand as written. No file `main` changed uses a name whose arguments I changed (checked by search, not by a build).
+- Of WIDEZK's scratch tree: none of its 17 hand-changed files is a file `main` changed. Its branch (`d94a00f733`) holds my `874ca17ac6`; it must now merge `5f3de00dfb`, which brings `main`, the reader's version and one new lemma in `Claims/ZK/OneTape.lean`.
+- Not known until the build ends: whether anything fails to build on the merged tree.
+
+**Your 22:08Z ruling, done in the tree (unbuilt).**
+1. The premises stay "for every version and every m". The two docstrings say the unproved premise covers both versions (`Complete/Zk.lean:131`, `Complete/ZkTables.lean:108`); the pull request's body gets the line you wrote. I have not looked at whether the split by version is nearly free.
+2. `Claims.ZKMal.Masked.schMax_eq_today : schMax = schMaxToday` (`Claims/ZK/OneTape.lean`), where `schMaxToday` is the old expression under that name. Its one computed step is a kernel check, no `native_decide`: at every m from 25 to 35 the wide-leaf sizes are at most today's at m = 35. On a copy of the schedule's definitions outside the tree the kernel gives 18,174,452 for both and 1,137,078 for the largest wide-leaf schedule, the two numbers I had by hand. So the two are equal and no number a guarantee reads moved. Commit `5f3de00dfb`.
+
+**Running.** `r20261112-014014-c37b` on vy-nebius-cpu-12, started 01:40Z at `5f3de00dfb`, 201 files: the base's 57, the 66 behind the completeness proofs, the 78 under `Claims/Complete/**` and `Claims/ZK/**`. Verdict about 02:20Z. Nothing else launched.
+
+**Hours.** The second pull request, opened unmarked when all 57 build on the merged tree: by Thu 12 Nov 05:00Z. Its ready line stays Fri 13 Nov 22:00Z.
+
+**Also.** The VM was reset during the stop; nothing unpushed was lost. No lock touched. Mailbox read to its 01:19Z section.
