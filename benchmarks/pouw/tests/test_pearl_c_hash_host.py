@@ -164,6 +164,21 @@ def test_a_row_digest_launch_its_kernel_cant_take_never_reaches_the_device():
             R.Dev.launch(None, name, 1, 128, p=(0, 0), i=i)
 
 
+def test_a_fold_count_is_refused_as_the_kernel_would_read_it():
+    """s512_folds' segment counts (`rs_fold_counts`): an int slot is an int32, so a negative count would reach the kernel as
+    its low 32 bits (200 - 2^32 as 200, past RS_MAX_SEGS): refused always.  A zero is refused only where a unit would fold
+    it: the tile leaves pass one for the last row block when every block is full, and that goes through."""
+    wrapped, a = 200 - 2**32, R.Args()
+    a.i[1] = wrapped
+    assert a.i[1] == 200 > R.RS_MAX_SEGS                             # what the kernel would have been given
+    for i in ((4, wrapped, 4, 32), (4, 32, 2, wrapped), (4, 32, 4, wrapped), (4, -1, 0, 32), (4, 0, 4, 32), (4, 0, 1, 32),
+              (4, 32, 2, 0), (4, 32, 0, 0)):
+        with pytest.raises(ValueError, match="^s512_folds takes"):    # before `self` is read: nothing is launched
+            R.Dev.launch(None, "s512_folds", 1, R.RS_FOLD_NT, p=(0, 0), i=i)
+    for i in ((8, 32, 8, 0), (8, 32, 0, 8), (8, 0, 0, 8), (0, 0, 0, 0), (5, 128, 5, 128)):
+        assert R.rs_refusal("s512_folds", i) is None
+
+
 def unit_block(salt: bytes, root_b: bytes, unit: int) -> bytes:
     """-h3's unit block (hash_h3.cuh's `s512_seeds`): salt ‖ root_B (64 B) ‖ the unit index u64 LE."""
     return salt + root_b + unit.to_bytes(8, "little")

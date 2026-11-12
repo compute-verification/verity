@@ -381,13 +381,30 @@ PD_STAMP_BYTES = 16 * PD_SLOTS * (PD_MAX_ROWS + 1)
 PL_VARIANT, PL_ROWS, PL_LEVELS, PL_SEEDS, PL_MAX_ROWS, CHAINS = 851, 16, 7, 32, 1 << 16, ("pl", "h3")
 
 
+def rs_fold_counts(name: str, i) -> str | None:
+    """Why s512_folds' segment counts are not counts, None if they are.  An int slot is an int32: a negative count
+    reaches the kernel as its low 32 bits, so it is refused always.  A zero is refused where a unit would fold it:
+    i1 for the units below i2, i3 for the rest of i0 (a caller passes 0 for a count no unit has: the tile leaves' last
+    row block when every block is full)."""
+    units, s, first, rest = i[:4]
+    if s < 0 or rest < 0:
+        return f"{name} takes counts of 1 KiB segments, not i1 = {s}, i3 = {rest} (an int32 slot keeps a negative's low bits)"
+    if not s and min(units, first) > 0 or not rest and units > first:
+        return (f"{name} takes at least one 1 KiB segment a unit, not {s} for the first {min(units, first)} units and "
+                f"{rest} for the other {max(units - first, 0)}")
+    return None
+
+
 def rs_refusal(name: str, i) -> str | None:
     """Why a launch of one of RS_KERNELS with the ints `i` must not reach the device, None if it may.  s512_rows,
     s512_row_segs and s512_folds hold no bound of their own: past RS_MAX_SEGS segments a row they write shared memory and
     read their header tables out of bounds, and can return a wrong digest with no error; hash_wide.cuh's kernels trap past
-    RS_WIDE_MAX_SEGS.  Each takes rows of whole segments (k a positive multiple of 256), s512_folds a count of them."""
+    RS_WIDE_MAX_SEGS.  Each takes rows of whole segments (k a positive multiple of 256), s512_folds a count of them: never
+    a negative one, whose low 32 bits are what the kernel would read, nor none for units it has (`rs_fold_counts`)."""
     (slot, most), i = RS_KERNELS[name], (*i, 0, 0, 0, 0)
     if slot is None:                                         # s512_folds: i1 segments a unit, i3 the rest's
+        if why := rs_fold_counts(name, i):
+            return why
         segs = max(i[1], i[3])
     else:
         k = i[slot]
