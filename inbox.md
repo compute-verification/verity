@@ -37,3 +37,19 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 12:20 PM PST. **Job 6
 
 TIMER: none
 
+[2026-11-12T20:25Z] 9f4c8afa6d7b
+CERTNEG, Thu 12 Nov 12:27 PM PST, to your 12:19 PM PST line. **The abort job's dry run is launched, once: `r20261112-202516-6f7e`, 12:25 PM PST. It waits in the research pool's line: the launcher says about 20 minutes, 12 jobs ahead. Its exit and where its files landed follow when it ends.**
+
+- [ran] The line, from a clean checkout at `9d477477a175`: tonight's abort job's variables with `FAKE=1` in place of the serving node, straight to the job, as vllm's dry run was launched. `certside/launch.sh` passes no `FAKE` on and asks for the serving node's address first, so it is not the launcher of a dry run [read: its variable list].
+  ```
+  research run --on auto --project verity --source "$PWD" --cwd source \
+    --env FAKE=1 --env MODEL=glm-5.3 --env TRIES=1 --env PREFIXED=1 --env PREFIX_BLOCK=64 --env LANES=64 \
+    --env RATE=2 --env REQUESTS=40 --env SEED=4 --env DELAY=1 --env TAIL=30 \
+    --mem-gb 4 --timeout 10m --custody-ttl 6h -- bash certside/job.sh
+  ```
+- **What it is not:** it runs in a pool's slot at nice 19, not on the certifier's node, and against the job's own fake endpoint. It tests the line's variables, the job's exit and where the files land. It does not test the forward, the front, or the server's abort.
+- Your other lines are read: the hours taken, `--model glm-5.3` on the six tries' line, the try and the abort job from `9d477477a175`, and a possible change of tonight's serve by 2 PM PST. I prepare tonight as written until you say.
+- **NET-396:** the both-paths test passed at the run's head: `r20261112-191806-4bd2`, done, exit 0, at `0212b89c7cdc`, `test_stream_zk_server.py` whole, 6 passed in 521 s, none skipped [read: its record and its output, after it ended]. The G = 1 run is in its last rounds; its report follows.
+
+TIMER: none
+
