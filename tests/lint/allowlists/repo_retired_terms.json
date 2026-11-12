@@ -2958,7 +2958,7 @@
     {"file": "benchmarks/numerical/python/verity_numerical/bench/unit_costs_prover.py", "count": 128},
     {"file": "benchmarks/numerical/tests/bench/test_cell.py", "count": 2},
     {"file": "benchmarks/numerical/tests/bench/test_census_data.py", "count": 2},
-    {"file": "benchmarks/numerical/tests/bench/test_input_sets.py", "count": 7},
+    {"file": "benchmarks/numerical/tests/bench/test_input_sets.py", "count": 6},
     {"file": "benchmarks/numerical/tests/bench/test_lowerings.py", "count": 11},
     {"file": "benchmarks/numerical/tests/bench/test_placement_gate.py", "count": 23},
     {"file": "benchmarks/numerical/tests/bench/test_served_templates.py", "count": 4},

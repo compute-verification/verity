@@ -112,7 +112,7 @@ def test_generation_is_deterministic_and_prefix_stable(tmp_path):
     assert not np.array_equal(x[0], x[4])
 
 
-def test_draw_format_is_pinned():
+def test_sample_format_is_pinned():
     """Instance words are a function of (key, sample) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
     k = SY.key_for(sub, 1)
