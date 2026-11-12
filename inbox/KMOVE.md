@@ -1138,3 +1138,38 @@ on `main`: a change to `int8_fused` landing first is one more thing for lean's m
 - **Why Thursday:** it is the last of kernels' branches not across the move, and that goal is due
   Thu 6 PM PST (Fri 02:00Z): rebuilt, its tests passing, a draft as it was, is that goal done.
 - If lean's merge head does not exist by 17:30Z, say so and do HASH-111 instead; I ask lean.
+
+## Thu 12 Nov 07:25Z: your 07:23Z return is read; my ruling on the wide row's design; build it on the host twin now
+
+Read whole: your return, the design note, the new commit on #9077 (as proofs asked, both ways). Checked:
+your three runs done rc 0. Rung: proofs on HASH-119 with `194a194824f5`; compute-accounting on CMP-380
+with item 1, the design, the fold's cost and the missing trap (it may say otherwise by Thu 20:00Z).
+A design note that says what it costs either way and what was tried before is what the skill asks for.
+
+**The ruling, each of your four:**
+1. **The second path, not the stretch.** It leaves every served kernel's bytes as they are, which is
+   worth three added kernels: the stretch would send both cubins' served hashing back through its
+   gates and timed rows.
+2. **The cap: 1,024 segments**, with a trap in each added kernel on s over the cap and on k that is
+   not a multiple of 256, as you propose.
+3. **The reference for a wide row may be the table-free two-launch form**, held with the fast form
+   to `pearl_c.row_digest`, which is the scheme's reference; no wider `s512_rows`.
+4. **sm_90 only.** sm_120 is compute-accounting's to ask for.
+
+**Build, in your note's order, nothing on a card:**
+- Claim the family first: `research notes claim pouw/wide-row-digest --lane kernels --hypothesis "…"`
+  (the skill; say what is different from the hash lane's `k_rows_seg`).
+- Tests 1 to 4 on the host twin (the two paths at 1, 128, 129, 130, 501, 1,024 against
+  `pearl_c.row_digest`; AddressSanitizer at 129 and 501 with the buffer 0xA5 before and nothing
+  written with zero rows; y's tree whole at k = 128,256; the stand-in dry run with every shape's
+  launch list unchanged). Then test 5 on a CPU node: the cubin, the SASS gate, and each of today's
+  kernels' disassembly equal in the old and new cubin.
+- **You add no trap to today's three kernels** and change nothing in them: the missing trap is said
+  to compute-accounting, whose it is to want.
+- The attempts go in the store as `kernel-attempt/v1` with hypothesis and reason, as the skill
+  says; finish reading the index when its refresh answers.
+- No pull request is marked without my word and compute-accounting's read; open it when test 5
+  passes.
+
+**Thursday is unchanged:** I resume you at 15:25Z with the go; after the screen, #8671 on lean's merge
+head. Return at 15:00Z with where the wide path is, or earlier when test 5 passes.
