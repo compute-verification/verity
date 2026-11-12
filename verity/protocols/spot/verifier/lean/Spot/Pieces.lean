@@ -35,6 +35,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`SecondStage.replayRows`);
 * `replay_returns`: the names the replay block's return has in the boundary registration's record, from its
   Definition in a program (`SecondStage.replayReturns`);
+* `replay_returned`: the bits a replay block returns, from its Definition in a program
+  (`SecondStage.replayReturned`);
 * `second_schedule`: why round 2 refuses the boundary record's schedule, and each replay block's request and positions
   under it (`Schedule.failure`, `Schedule.at?`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
@@ -121,6 +123,7 @@ public import Spot.ChallengerInnerTrees
 public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
+public import Spot.Returned
 public import Spot.WiresDrawn
 public import Spot.OneStageZk
 public import Spot.HistoryTable
@@ -810,6 +813,16 @@ def replayReturns (j : Json) : V Json := do
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   return Json.arr ((SecondStage.replayReturns p.prog key (getD j "boundary")).map Json.str)
 
+/-- `second_stage.replay_returned`'s input to the bits a replay block returns (`SecondStage.replayReturned`): a program
+object and the replay block's descriptor id in it (`replay`); null for none. -/
+def replayReturned (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return match SecondStage.replayReturned p.prog key with
+    | some n => Lean.toJson n
+    | none => .null
+
 /-- `schedule.failure` and `schedule.at`'s input to the boundary record's schedule (`Schedule.failure`, `Schedule.at?`):
 a record and replay blocks (`blocks`), to `{"failure", "at"}`: why round 2 refuses the record's schedule, null for
 none, and each block's `[request, a, b]` under it, null where no run holds the block or the record commits no list of
@@ -866,7 +879,7 @@ def table : List (String × (Json → V Json)) :=
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
    ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_returns", replayReturns),
-   ("second_schedule", secondSchedule),
+   ("replay_returned", replayReturned), ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
