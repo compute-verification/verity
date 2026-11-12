@@ -448,7 +448,8 @@ def done_source_refusal(workload: Mapping[str, Any], *, of_record: bool = False)
     row = sw.get("row_id") if isinstance(sw, Mapping) else None
     if not of_record and row not in rows_of_record():
         return None
-    s = workload.get("sampling") if isinstance(workload.get("sampling"), Mapping) else {}
+    sampling = workload.get("sampling")
+    s: Mapping[str, Any] = sampling if isinstance(sampling, Mapping) else {}
     if done_source(workload) != "public-cap":
         why = (f"its done source is 'eos-token' (sampling.ignore_eos is {s.get('ignore_eos')!r}): declare sampling.ignore_eos: true, "
                f"so every request runs its public max_tokens")

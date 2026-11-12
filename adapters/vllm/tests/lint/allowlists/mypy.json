@@ -298,8 +298,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter._select_modules", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "union-attr", "symbol": "NativeHostCommitter.register_weights", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/row_tables_device.py", "kind": "assignment", "symbol": "device_lib", "detail": ""},
-    {"file": "verity_vllm/config.py", "kind": "index", "symbol": "done_source_refusal", "detail": ""},
-    {"file": "verity_vllm/config.py", "kind": "union-attr", "symbol": "done_source_refusal", "detail": "", "count": 2},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "arg-type", "symbol": "loaded_code_objects", "detail": "", "count": 6},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "assignment", "symbol": "loaded_code_objects", "detail": ""},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "call-overload", "symbol": "loaded_code_objects", "detail": ""},
