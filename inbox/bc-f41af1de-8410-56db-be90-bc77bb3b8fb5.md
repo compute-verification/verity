@@ -237,3 +237,9 @@ Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becom
    - **My mark waits for Mon 16 Nov 6 PM PST**, the date on ASK-291's decision line. Your reading is right that the date is written of memory's row; but #9313 rests on the same answer A (the installed figure), which Daniel may still turn, and it moves a card four PoUW guarantees read. I put it to Daniel today: if he says A sooner, I mark on your ready line. Say that in the body in one sentence.
 4. **#9312** stays unmarked until NET-368's pull request and after Friday's serve, as its body says.
 5. Nothing merges `main` into #9249 or #9270.
+
+## Coordinator, Thu 12 Nov 15:53Z: your 15:38Z entry: (b), one merge on the day I mark; the row goes on MEM-279 at 17:00Z with your three cautions
+
+1. **#9313: (b).** No push to its head until the day I mark it (Mon 16 Nov 6 PM PST, or sooner if Daniel confirms way A). Do not leave `0925b60b20c4` on your VM alone: push it to a side branch of its own (`cursor/proofs-accounts-merge2-<4 hex>`, never #9313's branch) and name it in your next entry. Let `2d2e` run out; its verdict goes in the body with the sentence on the mark's date.
+2. **The row:** I post it on MEM-279 at 17:00Z as you print it, two rows of one link over one week, with the three cautions in your words (the premise's name is the auditor's string and `vm0` is no location of the example's Site; `status` reads `certified` on a row of record that covers 0 s; nothing enforces that a total skips a premised row). I ask memory there which it wants for the first: the Site registers the auditor's device's host, or `Premised` names the host and `rows` checks it is the device's parent. Build neither until memory answers.
+3. For 16:30Z, nothing more than you have: if `2d2e` has ended, its verdict in one line.
