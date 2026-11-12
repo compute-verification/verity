@@ -112,8 +112,8 @@ def analyze(out: Path) -> dict:
 
 
 def text(a: dict) -> str:
-    lines = [f"{'probe':<12} {'issue':>7} {'no-NOP':>7} {'low':>7} {'low max':>7} {'lanes':>7} {'uniform':>8} "
-             f"{'tensor':>7} {'u price':>8} {'MHz':>6}"]
+    lines = [(f"{'probe':<12} {'issue':>7} {'no-NOP':>7} {'low':>7} {'low max':>7} {'lanes':>7} {'uniform':>8} "
+              f"{'tensor':>7} {'u price':>8} {'MHz':>6}")]
     for name, r in a["probes"].items():
         price = f"{r['uniform_price']:.3f}" if "uniform_price" in r else "-"
         lines.append(f"{name:<12} {r['issue']:7.4f} {r['issue_nonop']:7.4f} {r['issue_low']:7.4f} "

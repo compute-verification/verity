@@ -42,9 +42,13 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from arm import GateResult, OperandSet, Shape, Work
 
 HERE = Path(__file__).resolve().parent
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
@@ -105,7 +109,7 @@ def pinned() -> dict:
     return json.loads(PINNED.read_text())["cubin"]
 
 
-def cubin_of(sent: str | None, out_dir: Path, build=None) -> tuple[Path, str]:
+def cubin_of(sent: str | None, out_dir: Path, build: Callable[[Path], Path] | None = None) -> tuple[Path, str]:
     """The cubin the arm loads and how it came: the file `sent` names (``$VERITY_BENCH_CUBIN``'s, ``sent``), else one
     `build` (default `build_dev`) makes in `out_dir` (``development``)."""
     if sent:
@@ -185,7 +189,7 @@ class PearlPlus:
                         "upload), the pass's bookkeeping and B's screen run once, in prepare",
                 "verifier": verifier()}
 
-    def domain(self, shape) -> str | None:
+    def domain(self, shape: Shape) -> str | None:
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         bad = PPD.refusals(SERVED, {0: (shape.n, shape.k)})
@@ -201,7 +205,7 @@ class PearlPlus:
             return f"a pass screens at most {PPD.FLAG_ROWS} rows"
         return None
 
-    def work(self, shape):
+    def work(self, shape: Shape) -> Work:
         """The call's W_ref and credit at its m₁₆ rows (the scheme's `wref` and `credit_of`), the chain's FP8 MACs, A's
         rows (FP32 words), the tile leaves (C̃ and U, FP32 words, over the m₁₆ rows a partial row tile has) and y's m real
         rows (FP32 words) the call hashes, and B's rows its weight side does."""
@@ -216,19 +220,19 @@ class PearlPlus:
                                              "y_rows": 4 * shape.m * shape.n},
                     weight_hashed_bytes={"b_rows": 4 * shape.n * shape.k})
 
-    def prepare(self, dev, shape, flags: frozenset[str], operands) -> _Call:
+    def prepare(self, dev: Any, shape: Shape, flags: frozenset[str], operands: OperandSet) -> _Call:
         key = (operands.b.ptr, shape.m, shape.n, shape.k)
         if key not in self._held:
             self._held[key] = _Held(self, key, operands, shape)
         return _Call(self._held[key], shape, "hash" in flags, operands)
 
-    def gate(self, dev, call: _Call, shape, flags: frozenset[str]):
-        from arm import Gate
+    def gate(self, dev: Any, call: _Call, shape: Shape, flags: frozenset[str]) -> GateResult:
+        from arm import GateResult
 
         dev.sync()
-        return Gate(*call.check())
+        return GateResult(*call.check())
 
-    def dump(self, dev, call: _Call, shape, out: Path) -> None:
+    def dump(self, dev: Any, call: _Call, shape: Shape, out: Path) -> None:
         call.retain(Path(out))
 
     # ---- the device ---------------------------------------------------------------------------------------------------

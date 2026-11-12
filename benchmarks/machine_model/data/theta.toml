@@ -807,7 +807,7 @@ gap = "an OptiX probe of ray-triangle tests a SM-clock with exact barycentrics (
 key = "clocks"
 what = "clock limits: the census's 2,092 MHz lock, fmax 2,430 MHz on the deployed node, the Workstation Edition's 2,617 MHz boost"
 verdict = "scale"
-why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the clock the node runs at; the driver caps it at fmax, and a higher clock speeds the honest kernel too"
+why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the clock the node runs at; the driver limits it to fmax, and a higher clock speeds the honest kernel too"
 
 [[unit]]
 key = "compression"

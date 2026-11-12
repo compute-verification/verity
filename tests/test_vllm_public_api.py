@@ -36,7 +36,7 @@ NOT_SCANNED = {
     "tests/test_module_strings.py": "its exemptions name modules that don't resolve, as data",
 }
 
-#: The public modules: module -> the interface it is (the vision note's I1..I10).
+#: The public modules: module -> the interface it is (I1..I10).
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
