@@ -490,7 +490,7 @@ circuit.
 3. Measurements: the longest cache hit read back this way is 384 tokens; nothing at an agentic load or past
    131,072 context. The design does not limit context; this node's memory stops near 400,000 tokens.
 
-## Addendum, Thu 12 Nov 03:49Z, revised 04:58Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
+## Addendum, Thu 12 Nov 03:49Z, revised 05:00Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
 
 **Row 16 stays the route. For this serve none of it is shown bit for bit: every showing was at a BF16 cache, with no
 draft token, at the pin, and the FP8 cache puts another attention kernel under every layer. What serving commits
@@ -502,21 +502,21 @@ advice for every request, at most 2.585 bits a decoding request a step, until ea
 nothing outside the token's own row, so zero stand-ins stay enough for the write. For the FP8 read, and for
 anything with draft tokens, that is not established.**
 
-**Revised 04:58Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
+**Revised 05:00Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
 at vLLM `main`, `20ad1db3fe90`, which is neither the build Friday serves, the pin `d9105ea8001e` (P), nor the tag
 `v0.34.0rc1` (T).** Section 0 puts each of the 69 cited places at both: at P 34 have the same text, 26 differ and 9
 are not there; at T 66 have the same text and 3 differ. **The conflict, at each build apart: at P a hit under `mtp`
 drops its trailing block; at T it drops none, and a block's key covers the token after it. vllm's reader is right at
 T, and my line was wrong where I read it.** Three more lines of mine are corrected: when a page enters the prefix
 cache; a row's draft count in a step, which is the scheduler's and not only short near a request's end; and vLLM's
-own token replay, which refuses a draft at P and takes one at T. Between the builds the route sees five differences:
-the FP8 write's scale rule, the drawn token's noise, the hit's rule, when a page is published, and vLLM's token
-replay. The accept rule and the scheduler's draft arithmetic are the same at both. **vllm's two questions: (a) yes
-at both builds: the request's block computes the accept test and the kept count is its output, with no draft
-probabilities under the default; its gate count is not read. (b) Registered, in round 1's step record, and charged
-until checked: at most 2.585 bits a decode row a step for the kept count, and 0 for the scheduled count once the
-advice code models the scheduler under drafts. At P as every run of ours has served it, a BF16 cache and no draft
-token, entry 2's row 16 stands as written.**
+own token replay, which refuses a draft at P and takes one at T. Between the builds the route sees six differences:
+the FP8 write's scale rule, the drawn token's noise, the hit's rule, when a page is published, vLLM's token replay,
+and T's skipping of draft passes nothing would verify. The accept rule and the scheduler's arithmetic for a row's
+draft count are the same at both. **vllm's two questions: (a) yes at both builds: the request's block computes the
+accept test and the kept count is its output, with no draft probabilities under the default; its gate count is not
+read. (b) Registered, in round 1's step record, and charged until checked: at most 2.585 bits a decode row a step
+for the kept count, and 0 for the scheduled count once the advice code models the scheduler under drafts. At P as
+entry 2's showings were served, a BF16 cache and no draft token, entry 2's row 16 stands as written.**
 
 **Sources.** P: the pin `d9105ea8001e`, the build Friday's goal serves. T: the tag `v0.34.0rc1` at `52aeb5806585`.
 M: vLLM `main` at `20ad1db3fe90` (12 Nov 03:11Z), where sections 1 to 6 were first read: **a line cited "M" below
@@ -544,8 +544,8 @@ all at M, vLLM `main` at `20ad1db3fe90`, which is neither build:** 287 commits a
 M as the newest I could fetch and did not say it was not the pin's tree; the table below puts every one of those
 lines at P and at T.
 
-**What Friday serves at P.** Every run of ours at P had a BF16 cache and no draft token (entry 2's five showings).
-If Friday's serve keeps those, entry 2's row 16 stands as written and none of this addendum applies to Friday. If it
+**What Friday serves at P.** Each of entry 2's five showings was at P with a BF16 cache and no draft token. If
+Friday's serve keeps those, entry 2's row 16 stands as written and none of this addendum applies to Friday. If it
 turns the published line's flags on at P, the P column below applies. Which of the two it is, is not in what I was
 relayed. The recipe that states the line is not in P's tree [ran: `git ls-tree`, no `recipes/` at P]; its parts are
 code at P: `mtp` is a method (P `config/speculative.py:1859`), and an FP8 cache picks the same backends (P
@@ -582,7 +582,7 @@ read; each one-line cite read by eye]. No letter: the same text. A letter: the n
 | `platforms/cuda.py` | `:136-152` | `:136-152` | same lines |
 | `v1/attention/backends/mla/flashattn_mla_sparse.py` | `:43-46`, `:98` | `:36-39`, `:87` | same lines |
 | `model_executor/layers/attention/mla_attention.py` | `:362-379`, `:538-560` | `:353-370` (b), `:495-517` | `:361-378`, `:537-559` |
-| `v1/attention/backends/mla/flashmla_sparse.py` | `:63-74`, `:77-126`, `:149-153`, `:409-426`, `:440-444`, `:723-726`, `:1228-1232`, `:1289-1294`, `:1322-1332` | `:52-63`, `:66-103` (c), `:112-116`, `:322-339`, `:350` (d), `:587-590`, `:833-837`, `:875-880` (b), `:907-918` (e) | same lines |
+| `v1/attention/backends/mla/flashmla_sparse.py` | `:63-74`, `:77-126`, `:149-153`, `:409-426`, `:440-444`, `:723-726`, `:1228-1232`, `:1289-1294`, `:1322-1332` | `:52-63`, `:66-103` (c), `:112-116`, `:322-339`, `:350` (d), `:587-590`, `:833-837`, `:875-880` (b), `:908-918` (e) | same lines |
 | `v1/attention/ops/flashmla.py` | `:14-45` | `:14-43` (b) | same lines |
 | `v1/attention/backends/mla/flashinfer_mla_sparse_sm90.py` | `:66`, `:148-152` | `:63`, `:69-73` | same lines |
 | `models/deepseek_v32/common/kernels.py` | `:23-27`, `:63-119`, `:204`, `:355-384`, `:368-374`, `:386-408`, `:409-515` | a literal 448 at `:280` (f), `:50-62` (g), `:163`, `:263-291` (f), `:276-280` (f), `:293-314` (h), `:315-415` (g) | same lines |
@@ -669,11 +669,11 @@ line numbers, and 3 differ.** The notes [read, each]:
 **The lead's seven facts of 04:06Z, each checked** [read, at the places in the notes]: 1, the noise: agreed, note n.
 2, the FP8 write's scale: agreed, note f. 3, vLLM's token replay: agreed at P, N and T, note p; `d14f72c7` itself I
 did not read. 4, the block's key under `mtp`: agreed, the conflict above. 5, a row's draft count is the scheduler's:
-agreed, and the same lines are at P (section 3, b, corrected). 6, the accept test's draw carries no state, and "fly"
-is new, lossy and off by default: agreed, note l; `rejection_sample_method` defaults to "standard" (T
-`config/speculative.py:610-617`); the route refuses "fly", "synthetic", "block" and a probabilistic draft, each of
-which changes the test [mine]. 7, our advice code refuses speculative decoding whole: read (V
-`adapters/vllm/verity_vllm/pipeline/advice_code/replay.py:23-25`); the charge is (b) below.
+agreed, and the same arithmetic is at P, with one rule that is T's alone (section 3, b, corrected). 6, the accept
+test's draw carries no state, and "fly" is new, lossy and off by default: agreed, note l; `rejection_sample_method`
+defaults to "standard" (T `config/speculative.py:610-617`); the route refuses "fly", "synthetic", "block" and a
+probabilistic draft, each of which changes the test [mine]. 7, our advice code refuses speculative decoding whole:
+read (V `adapters/vllm/verity_vllm/pipeline/advice_code/replay.py:23-25`); the charge is (b) below.
 
 **vllm's question (a): does the request's block compute the accept test at all K positions, so the kept count is
 derived and not advice? Yes at both builds, as a design; no code does it** [argued].
@@ -866,12 +866,14 @@ since those set the next step's shapes for every batch-mate." The fields are rig
   context limit (T `scheduler.py:855-873`; P `:619-634`), and its drafts are cut to what was scheduled (T
   `:1026-1037`; P `:766-781`); a newly scheduled decode row is padded to 1 + K or left out of the step, "Prefer to
   not schedule than schedule un-padded" (T `:1358-1380`; P `:994-1016`); a request sure to have reached `max_tokens`
-  gets no step (T `:813-830`), and no drafts are proposed in a step where no scheduled request could use them (T
-  `:525-561`). The token budget is what the rows ahead of it in the step left, 2,048 a step by default (T
-  `config/scheduler.py:40`, `:47`; what node A's engine resolves it to, not read), so the count depends on
-  batch-mates. Under sampling the ids depend on it too: a position with a draft emits the draft where the test
-  passes, and a position without one is drawn from the target [argued from T `rejection_sampler_utils.py:598-610`,
-  `:716`]. So the step record holds the scheduled count beside the kept count.
+  gets no step (T `:813-830`; P `:598-605`). **One rule is T's alone:** T proposes no drafts in a step where no
+  scheduled request could use them (T `:525-561`); P has none [ran: `git grep _drafts_unused` at P, no match], so
+  whether a step ran the draft passes is one more thing the step record fixes at T. The token budget is what the
+  rows ahead of it in the step left, 2,048 a step by default (T `config/scheduler.py:40`, `:47`; what node A's
+  engine resolves it to, not read), so the count depends on batch-mates. Under sampling the ids depend on it too: a
+  position with a draft emits the draft where the test passes, and a position without one is drawn from the target
+  [argued from T `rejection_sampler_utils.py:598-610`, `:716`]. So the step record holds the scheduled count beside
+  the kept count.
 - **What a kept count changes** [read M `scheduler.py:2336-2354`: `request.num_computed_tokens -= num_rejected`]:
   its own request's positions in every later step, so that row's key count and the slots it writes; the step its
   request finishes in, so every later step's row count and admissions; and the pages allocated. A row's key count is
