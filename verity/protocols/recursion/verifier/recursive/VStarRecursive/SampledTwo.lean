@@ -132,7 +132,7 @@ def paramsAt (j : Json) : V OneStage.Params := do
 def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
   let .str form := getD j "form" | throw s!"the {what} names no form"
-  if form != TWO_STAGE then throw s!"the {what}' form {form} is not \"{TWO_STAGE}\""
+  if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
   pure (Json.mkObj (without j "form"))
 
 /-- The parameters (module docstring, **params**). -/
@@ -238,7 +238,7 @@ def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : E
     interior := some
       { params := p.interior, replay := p.replay, values := p.interiorValues, record := e.record,
         received := received₂, source := ξ₂, coins := b.coins,
-        provedUnits := some (b.provedUnits.map fun n => (n : Int)), instances := some (b.instances : Int),
+        provedUnits := some (b.provedUnits.map Int.ofNat), instances := some (Int.ofNat b.instances),
         served := Lean.toJson b.served, sessionRoots := iRoots, statements := some e.stmts,
         circuits := p.circuits } }
 
