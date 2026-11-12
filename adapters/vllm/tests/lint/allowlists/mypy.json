@@ -3067,7 +3067,6 @@
     {"file": "verity_vllm/records/commit_binding.py", "kind": "arg-type", "symbol": "RowsPastTheStop.of", "detail": ""},
     {"file": "verity_vllm/records/commit_binding.py", "kind": "arg-type", "symbol": "_by_request", "detail": ""},
     {"file": "verity_vllm/records/global_match.py", "kind": "arg-type", "symbol": "GlobalMatch.of", "detail": ""},
-    {"file": "verity_vllm/records/global_match.py", "kind": "arg-type", "symbol": "MatchCheck.of", "detail": ""},
-    {"file": "verity_vllm/target_family.py", "kind": "return-value", "symbol": "device_cc", "detail": ""}
+    {"file": "verity_vllm/records/global_match.py", "kind": "arg-type", "symbol": "MatchCheck.of", "detail": ""}
   ]
 }
