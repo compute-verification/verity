@@ -1,9 +1,10 @@
-"""warden-serve's connection rows without the wall clock: the schedule's lengths rows and content rows as flags that
-`rehearse` passes to its `serve`, and a run without them what it was; the hand as the publisher queue's items, a slot
-stride each; a run of the network certifier on a `VirtualClock` whose publisher, inline and in `serve`'s process,
-lays, commits and signs each handed execution phase's tables, which the offline check holds to the records' own
-reading of the same cells and refuses when a registration, a salt, a kept line or a record isn't the run's; an
-execution phase that isn't handed has no line; and the cost's load and its measurement at a small schedule."""
+"""A relay run's connection rows (`connection_rows_run`) without the wall clock: the schedule's lengths rows and
+content rows as flags that `rehearse` passes to its `serve`, and a run without them what it was; the hand as the
+publisher queue's items, a slot stride each; a run of the network certifier on a `VirtualClock` whose publisher,
+inline and in `serve`'s process, lays, commits and signs each handed execution phase's tables, which the offline
+check holds to the records' own reading of the same cells and refuses when a registration, a salt, a kept line or a
+record isn't the run's; an execution phase that isn't handed has no line; and the cost's load and its measurement
+at a small schedule."""
 
 from __future__ import annotations
 
@@ -94,9 +95,9 @@ def test_a_run_keeps_each_handed_execution_phases_rows_and_the_check_holds_them_
     blob of salts; the tables are the schedule's, whatever each execution phase held; each release's rows are what it
     sent and was answered; the check accepts the run and counts three of three registered; and no tick is late."""
     out = tmp_path / "run"
-    warden, requests = served(out, tmp_path / "key", process=process)
-    assert len(warden.log) == len(PROMPTS) and all(c["failed"] is None and not c["cut"] for c in warden.log)
-    assert max(warden.lateness) == 0
+    device, requests = served(out, tmp_path / "key", process=process)
+    assert len(device.log) == len(PROMPTS) and all(c["failed"] is None and not c["cut"] for c in device.log)
+    assert max(device.lateness) == 0
     kept = crr.read(out, ROWS)
     assert [doc["registration"]["window"] for doc, _ in kept] == [0, 1, 2]
     listed = CR.tables_of(ROWS)
@@ -109,8 +110,8 @@ def test_a_run_keeps_each_handed_execution_phases_rows_and_the_check_holds_them_
     records = ws.read_records(out, ROWS)
     held = CR.of_records(ROWS, records["requests"], records["responses"])
     releases = [r for w in sorted(held) for stride in held[w] for r in stride]
-    order = sorted(range(len(PROMPTS)), key=lambda j: warden.log[j]["release"])
-    assert [c["ordinal"] for c in warden.log] == list(range(1, len(PROMPTS) + 1))
+    order = sorted(range(len(PROMPTS)), key=lambda j: device.log[j]["release"])
+    assert [c["ordinal"] for c in device.log] == list(range(1, len(PROMPTS) + 1))
     assert [(r.request, CT.ids_of(r.ids), r.failed) for r in releases] == \
         [(requests[j], ANSWERS[j], False) for j in order]
     assert len({w for w in held if any(held[w])}) == 2
@@ -194,8 +195,8 @@ def test_an_execution_phase_that_isnt_handed_has_no_rows(tmp_path, process):
     process. Execution phases 1 and 2 have theirs, and the check, which refuses the run on execution phase 0's
     certificates, counts two of two registered and asks none of execution phase 0."""
     out = tmp_path / "run"
-    warden, _ = served(out, tmp_path / "key", process=process, params=dataclasses.replace(ROWS, queue=5))
-    assert (warden.refused, warden.refused_windows, len(warden.log)) == (1, {0}, 5)
+    device, _ = served(out, tmp_path / "key", process=process, params=dataclasses.replace(ROWS, queue=5))
+    assert (device.refused, device.refused_windows, len(device.log)) == (1, {0}, 5)
     assert [doc["registration"]["window"] for doc, _ in crr.read(out, dataclasses.replace(ROWS, queue=5))] == [1, 2]
     result = ws.check(out)
     s = result["summary"]["connection_rows"]

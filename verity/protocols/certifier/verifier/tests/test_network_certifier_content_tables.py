@@ -58,12 +58,12 @@ def fingerprint(params: WardenParams, directory) -> str:
     every salt fixed: each wire record's certificate, each cells' head and its signature, the `fails` records, and
     each handed execution phase's lengths slots, connection rows' head and certificate."""
     _, arrivals, answers = traffic()
-    warden, _, _ = run(answers, arrivals, params=params, windows=3)
+    device, _, _ = run(answers, arrivals, params=params, windows=3)
     counter = itertools.count()
     issuer = Issuer(signers.signer(directory), signers.SESSION,
                     coins=lambda n: hashlib.sha512(b"coins%d" % next(counter)).digest()[:n])
     h = hashlib.sha512()
-    for record in warden.records:
+    for record in device.records:
         if record.link == "fails":
             h.update(repr((record.link, record.window, record.status.reason, record.grid)).encode())
             continue
@@ -74,7 +74,7 @@ def fingerprint(params: WardenParams, directory) -> str:
                                [salt(record.link, record.window, k) for k in range(params.window)],
                                hashlib.sha512(b"wiring").digest())
         h.update(held.head.digest() + cert.signature)
-    for phase, strides in warden.lengths:
+    for phase, strides in device.lengths:
         salts = {name: [salt(name, phase, k) for k in range(count)] for name, count, _ in CR.tables_of(params)}
         rows, cert = CR.attest(issuer, LINK, phase, strides, params, salts)
         h.update(rows.head.encode() + cert.digest + cert.signature)
@@ -92,8 +92,8 @@ def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_certif
         (tmp_path / name).mkdir()
         assert fingerprint(params, tmp_path / name) == was
     _, arrivals, answers = traffic()
-    warden, _, _ = run(answers, arrivals, params=LEN, windows=3)
-    assert all((r.request, r.ids) == (b"", b"") for _, strides in warden.lengths for stride in strides for r in stride)
+    device, _, _ = run(answers, arrivals, params=LEN, windows=3)
+    assert all((r.request, r.ids) == (b"", b"") for _, strides in device.lengths for stride in strides for r in stride)
     assert [name for name, _, _ in CR.tables_of(LEN)] == ["lengths", "fails"] and CT.tables_of(LEN) == ()
     with pytest.raises(ValueError, match="no content rows"):
         CT.tables(LEN, [], [])
@@ -158,9 +158,9 @@ def leaving(gone: dict[int, int]) -> type[Client]:
     count = itertools.count(1)
 
     class Leaving(Client):
-        def __init__(self, warden, data) -> None:
+        def __init__(self, device, data) -> None:
             self.gone = gone.get(next(count))
-            super().__init__(warden, data)
+            super().__init__(device, data)
 
         def is_closing(self) -> bool:
             return self.closed or (self.gone is not None and self.warden.ticks >= self.gone)
@@ -173,8 +173,8 @@ def ran():
     """`mixed` through the network certifier under the schedule with content rows: its requests, the device, its
     clients and its handed releases by execution phase."""
     reqs, arrivals, answers = mixed()
-    warden, clients, _ = run(answers, arrivals, params=CON, windows=3, client=leaving(GONE))
-    return reqs, warden, clients, dict(warden.lengths)
+    device, clients, _ = run(answers, arrivals, params=CON, windows=3, client=leaving(GONE))
+    return reqs, device, clients, dict(device.lengths)
 
 
 @pytest.fixture(scope="module")
@@ -213,20 +213,20 @@ def test_the_device_hands_each_release_its_request_and_its_ids_as_its_own_record
     `DATA` cell it released: the bytes the client sent and the ids the server sent before its `END` or the `FAIL`.
     They are what the device's own signed records of the same cells hold (`connection_rows.of_records`), release for
     release, and keeping them changes no cell: the records are the ones the schedule without content rows leaves."""
-    reqs, warden, _, handed = ran
+    reqs, device, _, handed = ran
     assert sorted(handed) == [0, 1]
     got = released(handed)
     assert [r.order for r in got] == list(range(7))
     assert [(r.request, CT.ids_of(r.ids), r.failed) for r in got] == list(zip(reqs, SENT, FAILED))
     assert all((r.request_bytes, 4 * r.outputs) == (len(r.request), len(r.ids)) for r in got)
     assert got[0].ids == b"\x0b\0\0\0\x16\0\0\0\x21\0\0\0"
-    ingress, egress, _ = records(warden)
+    ingress, egress, _ = records(device)
     read = CR.of_records(CON, ingress, egress)
     assert sorted(read) == [0, 1, 2] and {w: read[w] for w in handed} == handed
     assert read[2] == ((),) * STRIDES
     _, arrivals, answers = mixed()
     plain, _, _ = run(answers, arrivals, params=LEN, windows=3, client=leaving(GONE))
-    assert [[r.grid for r in link] for link in records(plain)] == [[r.grid for r in link] for link in records(warden)]
+    assert [[r.grid for r in link] for link in records(plain)] == [[r.grid for r in link] for link in records(device)]
     bare = CR.of_records(LEN, *records(plain)[:2])
     assert {w: bare[w] for w in handed} == dict(plain.lengths)
     assert [tuple(r)[:4] for r in released(dict(plain.lengths))] == [tuple(r)[:4] for r in got]
@@ -237,8 +237,8 @@ def test_the_records_reading_takes_a_runs_records_from_its_first_and_leaves_out_
     """N counts from the run's first release, so the reading takes each direction's records from the first execution
     phase on, in order. An execution phase with a release whose connection hasn't ended in the records given has no
     entry: the first's, here, whose last response ends in the second."""
-    _, warden, _, handed = ran
-    ingress, egress, _ = records(warden)
+    _, device, _, handed = ran
+    ingress, egress, _ = records(device)
     assert sorted(CR.of_records(CON, ingress[:1], egress[:1])) == []
     assert CR.of_records(CON, ingress[:2], egress[:2]) == handed
     for bad in ((ingress[1:], egress[1:]), (ingress, egress[:2]), (ingress[::-1], egress[::-1])):
@@ -545,18 +545,18 @@ def test_a_connection_the_client_aborted_ends_as_its_server_does(ran):
     no longer writes are still cut and counted on schedule. The connection ends as its server does: in its `END`,
     an end row (0, n), or in a server's `FAIL`, (1, n). A client cut short before its release is its own failure:
     never released, so it has no lengths slot and no content row."""
-    reqs, warden, clients, handed = ran
+    reqs, device, clients, handed = ran
     _, arrivals, answers = mixed()
     stayed, stayers, _ = run(answers, arrivals, params=CON, windows=3)
     assert dict(stayed.lengths) == handed
-    assert [[r.grid for r in link] for link in records(stayed)] == [[r.grid for r in link] for link in records(warden)]
-    assert sorted(stayed.log, key=lambda e: e["ordinal"]) == sorted(warden.log, key=lambda e: e["ordinal"])
-    log = {e["ordinal"]: e for e in warden.log}
+    assert [[r.grid for r in link] for link in records(stayed)] == [[r.grid for r in link] for link in records(device)]
+    assert sorted(stayed.log, key=lambda e: e["ordinal"]) == sorted(device.log, key=lambda e: e["ordinal"])
+    log = {e["ordinal"]: e for e in device.log}
     for k, at in GONE.items():
         gone, here = clients[k - 1], stayers[k - 1]
         assert log[k]["release"] is not None and log[k]["ingress_end"] < at <= log[k]["ended"]
         assert [t for t, _ in gone.writes] == [t for t, _ in here.writes if t < at] != [t for t, _ in here.writes]
-    assert [(o, why) for _, o, why in reasons(warden)] == [(5, "late"), (6, "late"), (7, "malformed"), (8, "late")]
+    assert [(o, why) for _, o, why in reasons(device)] == [(5, "late"), (6, "late"), (7, "malformed"), (8, "late")]
     tables = {phase: CR.tables(CON, strides) for phase, strides in handed.items()}
     ended, failed = released(handed)[3], released(handed)[6]
     assert (log[4]["release"], log[8]["release"]) == (ended.order, failed.order) == (3, 6)
