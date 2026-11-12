@@ -287,11 +287,13 @@ def test_an_engine_arg_replaces_the_kernel_config_whole(checkpoints: Any) -> Non
     (None, None),
 ])
 def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_model_and_says_each_record(
-        checkpoints: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, rope: Any, producers: Any) -> None:
+        checkpoints: Any, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture,
+        rope: Any, producers: Any) -> None:
     """The real `build_engine` at a world of one, on a stand-in ``vllm.LLM`` whose driver worker holds a model runner: what
     `rope_cache.install` and `int8_producers.install` return for the runner's model is the engine's ``rope_cache`` and
-    ``fused_producers``, and a record that is not None is said once, under its switch's name, the rope's first.  The two
-    modules are stood in (the rope's imports Triton as it is imported): each holds its switch's name and an `install`."""
+    ``fused_producers``, and a record that is not None is logged once at INFO, under its switch's name, the rope's first;
+    nothing goes to stdout.  The two modules are stood in (the rope's imports Triton as it is imported): each holds its
+    switch's name and an `install`."""
     from verity_vllm import engine
     from verity_vllm.engine import moe_align, sparse_mla, topp_pin
     for switch in (moe_align, sparse_mla, topp_pin):
@@ -319,9 +321,11 @@ def test_a_build_in_one_process_installs_the_fused_rope_and_producers_on_its_mod
     fake = fake_vllm.install(monkeypatch)
     fake.set("vllm:LLM", _LLM)
     fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
-    eng = build.build_engine(checkpoints, case="M", execution="eager")
+    with caplog.at_level(logging.INFO, logger="verity_vllm"):
+        eng = build.build_engine(checkpoints, case="M", execution="eager")
     assert eng.model is model and given == [("rope_cache", model), ("int8_producers", model)]
     assert (eng.rope_cache, eng.fused_producers) == (rope, producers)
-    want = [f"[engine] {name}: {json.dumps(record)}" for name, record in (("VERITY_ROPE_CACHE_FUSED", rope),
-                                                                        ("VERITY_INT8_FUSED_PRODUCERS", producers)) if record is not None]
-    assert capsys.readouterr().out.splitlines() == want
+    want = [(logging.INFO, f"{name}: {json.dumps(record)}") for name, record in (("VERITY_ROPE_CACHE_FUSED", rope),
+                                                                               ("VERITY_INT8_FUSED_PRODUCERS", producers)) if record is not None]
+    assert [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.engine.build"] == want
+    assert capsys.readouterr().out == ""

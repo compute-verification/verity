@@ -258,12 +258,12 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         from verity_vllm.engine import rope_cache
         eng.rope_cache = rope_cache.install(model)
         if eng.rope_cache is not None:
-            print(f"[engine] {rope_cache.ENV}: {json.dumps(eng.rope_cache)}", flush=True)
+            logger.info("%s: %s", rope_cache.ENV, json.dumps(eng.rope_cache))
     if model is not None:  # as the fused rope: the producers are patched on the in-process model's layers
         from verity_vllm.engine import int8_producers
         eng.fused_producers = int8_producers.install(model)
         if eng.fused_producers is not None:
-            print(f"[engine] {int8_producers.ENV}: {json.dumps(eng.fused_producers)}", flush=True)
+            logger.info("%s: %s", int8_producers.ENV, json.dumps(eng.fused_producers))
     return eng
 
 

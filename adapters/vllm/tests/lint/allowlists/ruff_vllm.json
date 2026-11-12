@@ -537,7 +537,6 @@
     {"file": "tests/query/test_units_canonical.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/regression/resolver.py", "kind": "UP037", "symbol": "kept_on_the_node", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/commit/lead_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/engine/build.py", "kind": "T201", "symbol": "build_engine", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/engine/int8_fused.py", "kind": "E741", "symbol": "exactlin_silu_mul_quant", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/pipeline/chain_rows.py", "kind": "B023", "symbol": "read.own", "detail": "Function definition does not bind loop variable `at`", "count": 2},
     {"file": "verity_vllm/pipeline/chain_rows.py", "kind": "B023", "symbol": "read.own", "detail": "Function definition does not bind loop variable `kv`", "count": 2},
