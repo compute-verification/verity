@@ -186,8 +186,8 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
       vectors, and not its prose, its pytest files or their settings), the auditor's (`lean_audit.tool_files`: of check's
       code `common.py` alone) and the records key's own program (`queue.KEY_COMMAND`).  A key holds files of those alone,
       whichever packages one requires (`tests/test_gate_paths.py` holds that on the tree).
-    - What a lock run writes: each package's lock, one of its own files, and the caps it repairs (`lean_audit.UNREAD_CAPS`,
-      `CAPS_TEST`), which no key holds.
+    - What a lock run writes: each package's lock, one of its own files, and the two files beside the locks it repairs
+      (`merge.REPAIRED`: the unread ratchet's limits and the repository suite's), which no key holds.
     - The code that runs the step and that no key holds: check's (`LEAN_AUDIT_STEP`) and the unread ratchet
       (`lean_audit.UNREAD`), which lean-audit runs after the audits.
 
@@ -208,9 +208,9 @@ def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
         while "/" in d:
             if (d := d.rpartition("/")[0]) in under:
                 under[d].append(f)
+    from .merge import REPAIRED
     own = (f for d, inside in under.items() for f in audit.own_files(d, inside))
-    return (LEAN_FILES, *sorted({*own, *audit.tool_files(files), KEY_COMMAND, audit.UNREAD_CAPS, audit.CAPS_TEST,
-                                   *LEAN_AUDIT_STEP, audit.UNREAD}))
+    return (LEAN_FILES, *sorted({*own, *audit.tool_files(files), KEY_COMMAND, *REPAIRED, *LEAN_AUDIT_STEP, audit.UNREAD}))
 
 
 def shard_count(shards: int | str) -> tuple[int, bool]:
