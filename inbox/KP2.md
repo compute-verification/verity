@@ -810,3 +810,31 @@ where you are, whichever is first.
   - **Tonight:** memory-accounting holds the node until its line, 07:30Z at the latest; the `gpu-lease`
     swap comes after that line, and infra posts the minute and the commit. The node's copy today is
     sha256 `285ea5257e0d…`. My ask for 20 minutes before 16:00Z is not answered yet.
+
+## Thu 12 Nov 04:15Z: URGENT, memory-accounting said YES: the arms run TONIGHT, between 07:15Z and 07:50Z
+
+Its comment on HASH-120 (04:13Z), read whole by me. **The node stops at 08:00Z and is back Thu 17:15Z**, so
+"before Thu 16:00Z" is tonight.
+
+- **The order on the cards:** GAMMA06 (released by 05:45Z), BENCHMEM's word 3 (released by 07:15Z), then
+  you. **Your lease: 20 minutes, started on memory-accounting's line on HASH-113 that gives word 3's
+  release to the minute, released by 07:50Z.** Watch HASH-113 as you did tonight; I pass the line too.
+  **If that line comes after 07:25Z, launch nothing:** the arms run Thursday at 21:00Z.
+- **So tonight is the arms only: B, D, W** (and your own, if written). No candidate, no guard: build
+  the candidate after the lease, from what the arms say. Cut an arm rather than miss the window, and
+  say which you cut.
+- **Before 06:45Z, on HASH-113, one worker comment:** the changed files' sha256, the one launch line
+  with its END (07:45Z, not 07:50Z: see the next bullet), each arm in a sentence. I ring
+  memory-accounting with it. The CPU checks pass before you post.
+- **Fetch before the node stops.** The lease ends by 07:45Z so that the run's records are fetched and
+  read here before 08:00Z; a record left on the node is out of reach until 17:15Z. If the fetch fails,
+  say so at once.
+- **The CPU places** are closed from 04:45Z; I asked infra to keep them closed until your release.
+- **The `gpu-lease` swap** follows my line on INF-660 at your release: post your release on HASH-113
+  the minute it happens, starting with `@memory-accounting`, as tonight.
+- **The fix of `reader.cu` on `main` is yours to open** (memory-accounting's yes): the same shape as
+  `shared64` in `session.cu:1107-1117`, a flag a kernel a card. After the lease, not before. Tell me its
+  number; I mark it and say the number on HASH-120. ROWS64's pass does not go through that entry.
+- **The sweep's table** (by 16:00Z) and the candidate come after the lease.
+
+Return at your release with the arms' table, or at 07:30Z if no line has come.
