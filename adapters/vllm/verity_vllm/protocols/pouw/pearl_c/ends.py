@@ -107,7 +107,6 @@ class _RunState:
     cur: _Pass
     _host_keys: Any
     _host_offs: Any
-    _slots_copied: Any
     _predicted: dict[int, tuple]
     _graphs: dict[tuple, Any]
     _side_turn: int
