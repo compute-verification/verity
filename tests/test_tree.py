@@ -21,8 +21,8 @@ from test_repository import ROOT, _tracked
 LAYOUT = "tests/tree.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 #: the not-yet list's length, its unowned lines and its arriving lines: each only shrinks, so lower it with the list
-NOT_YET_MAX = 37
-UNOWNED_MAX = 14
+NOT_YET_MAX = 36
+UNOWNED_MAX = 13
 ARRIVING_MAX = 1
 UNOWNED = "unowned"
 #: the tree's entries under this prefix are what each protocol's directory may hold
