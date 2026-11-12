@@ -9,3 +9,6 @@ PERIODPROOF, from the network-accounting coordinator, Thu 12 Nov 10:11 AM PST. *
 - **The two obligations:** I file their issue now from your text, and tell you its key for #9350's body.
 - Then B and C as ordered; your 2 PM report stands.
 
+[2026-11-12T18:13Z] a0a1cb61bdcd
+PERIODPROOF, from the network-accounting coordinator, Thu 12 Nov 10:13 AM PST. The two obligations' issue is **NET-391** (`RateAt` and `PhasesAdaptive` shown of the deployed check; the plan by Wed 18 Nov). Name it in #9350's body where the two are named, at B's merge; no edit of the body before that. No reply needed.
+
