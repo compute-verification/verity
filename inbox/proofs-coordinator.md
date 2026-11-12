@@ -67656,3 +67656,86 @@ Every time is from `date -u`. Tags: [run] a run's result I fetched, [read] a fil
 - Red and off the merge gate [read: the gate run here, each site listed]: the retired-terms gate fails on the lemmas' head with 9 sites and on the second guarantee's with 105. Every site is a use of a name `main` declares: the compiled verifier's field `stage2` (74), the contract's fields `draws`, `replayDraws`, `secondDraws` (3), and the deployment's field `cap`, `SpotFlock.cap`, `FlockDeploy.KS.cap_pos`, three `…_cap` lemmas and the module `TwoCap` (28). No new name and no sentence of mine uses a retired term; both bodies say so.
 
 **7. Next.** The lemmas' ready line when `r20261112-012748-01e4` and `r20261112-012753-b9df` end (about 03:30Z [guess]: neither has started). The second guarantee's body for your mark when `r20261112-020858-4091` and `r20261112-020906-907f` end (about 03:30Z [guess]). Issue to link on the lemmas' pull request: PRF-524. Checkpoint note: `lanes/proofs/20261111T1834Z-report-finder.md`, synced 01:42Z.
+
+## HEADSPLIT, Thu 12 Nov 02:11Z: #9087 is open on CIR-241, not marked, head `b1217c59fd82`; the three suites passed at `65ecd910b07a`; `main` `be9a3d566905` is merged and my adapter commits do not conflict with it; a values unit reads no table, and the end, the combine and a short scores unit carry more read nonzeros than other nonzeros; no line of `stage_rows.py` is mine. Out: the changed suites at `7f95cacd29` (`r20261112-014422-c6d3`, about 03:00Z), the small audit's rerun (`r20261112-014701-f09e`, about 02:40Z) and the figure without Lean's certificate (`r20261112-020854-18e0` and `r20261112-020931-6a7e`, hour not known: waiting for a slot)
+
+**After the stop.** Your 22:10Z and 01:19Z sections are read and nothing newer is in my mailbox [run: `git show origin/cursor/proofs-inbox:…`, 01:50Z]. My VM came back fresh; nothing of mine was unpushed, and my scratch came back from the lane notes [run: `git status`, `research notes sync`, 01:23Z]. The hours as re-dated: this entry by 03:00Z; the figure, or the line that stops it, by 09:00Z Thu 12 Nov [read: your 01:19Z section, my brief].
+
+**1. The three suites at `65ecd910b07a`: all passed.**
+
+| Run | What | Verdict | Exit |
+|---|---|---|---|
+| `r20261111-213824-4de0` | `suites.py repository` | 307 passed in 371 s | 0 [run] |
+| `r20261111-213854-729c` | `suites.py verity-vllm`, whole, slow tests included | 14,692 passed, 497 skipped in 3,425 s on 3 workers | 0 [run] |
+| `r20261111-213926-d0d6` | `suites.py --changed 75ef75838f99 --quick` without those two | 55 suites, 55 passed, 0 failed, none from the cache | 0 [run] |
+
+**2. `main` `be9a3d566905` is merged (`a14fa54c9f`).** Two files conflicted, both proofs': `benchmarks/one_stage/a5_sparse_mla.py` and `a5_tp.sh`, where `main` turned the stand-in into functions that `a5_topp.py` reuses and added the `topp` entries [run: `git merge`]. I resolved on `main`'s structure and kept `--units` as one more argument; both scripts import, `bash -n` passes, and 33 small tests pass on my VM [run]. Because that resolution rewrote the script the accept of `13d3` ran, I launched the small audit again at the new head, with both stand-in entries (`STANDIN="sparse-mla sparse-mla:units"`): `r20261112-014701-f09e` [run].
+
+- **My adapter commits do not conflict with `main` in `chunk_rows.py`:** the file merged by itself [run: `git merge`, 01:25Z].
+- **#8370 is open at `96b36e0e321a`, holds `main`, and merges onto `main` clean; it still conflicts with my head, in `chunk_rows.reads`' docstring alone** [run: `gh pr view 8370`, `git merge-tree`, 01:45Z].
+- **I have not pasted circuits' merged text.** I read "keep the merged docstring text circuits gave" as: keep it for the merge after #8370 lands, as your 22:10Z item 4 says ("4 waits for #8370 on `main`") [read: both sections]. Pasting it now would still conflict when #8370 lands, since both sides would have changed the same lines [guess: git merges by line]. If you meant paste it now, say so and it is one commit.
+
+**3. The counts behind the docstring's two reasons (for CIR-241).** Word Definitions at GLM-5.3's statics (64 score columns, 512 output columns, blocks of 64 keys), values units on 64 columns. Two sources, which agree to within 6% on every count both give for the same layout (the Definitions' count is the larger: it folds no constant):
+
+- *Counted from the Definitions* [run: lane notes `tools/headsplit/reads.py`, my VM, 4 s]: each primitive's circuit is lowered once with its table reads laid out inline and multiplied through the Definition's calls and batches. Not a build of the unit.
+- *Staged* [run: `r20261112-013501-2b20` at `a14fa54c9f`, exit 0, `tools/headsplit/staged_counts.py`]: `UnitStager` builds the unit as `m1_unit.py` does and I read the flat layout's own counts. The two scores units are staged in lookup slots, so their other nonzeros are exact and their inline reads are the number of reads times one staged read.
+
+One inline read is 27,193 rows and 95.0 million nonzeros for EX2, and 27,073 rows and 93.5 million nonzeros for RCP [run: both sources].
+
+| Unit (word form) | Reads | Read nonzeros, inline | Other nonzeros | Reads to rest | Source |
+|---|---|---|---|---|---|
+| scores, 64 keys, a chain's first block | 64 EX2 | 6,080,403,328 (64 times one staged read) | 488,775,505 | 12.4 | staged in slots [run]; the inline reads derived |
+| scores, 64 keys, past the first | 65 EX2 | 6,179,026,685 | 615,672,416 | 10.0 | Definitions [run] |
+| scores, 16 keys, first | 16 EX2 | 1,520,100,832 (16 times one staged read) | 120,152,933 | 12.7 | staged in slots [run]; the inline reads derived |
+| values on 64 columns, 64 keys, first | 0, no table | 0 | 64,139,010 | none | staged inline [run] |
+| values on 64 columns, 16 keys, and 64 keys past the first | 0, no table | 0 | 16,612,096 and 72,472,064 | none | Definitions [run] |
+| a split's end on 64 columns | 1 RCP | 93,528,819 | 6,350,456 | 14.7 | staged inline [run] |
+| the combine of five splits on 64 columns | 6 EX2, 1 RCP | 663,566,631 | 66,977,231 | 9.9 | staged inline [run] |
+
+- **(a) holds.** A whole block's scores unit has 64 or 65 EX2 reads whose nonzeros, read inline, are ten to twelve times the rest of the unit's [run: the table]. In slots, as the tree stages it, the first block's unit and its two lookup stages are 19,300,241 ANDs and 618,162,870 nonzeros, built in 795 s at a peak of 33 GB [run: `2b20`]; inline it would be about 6.57 billion nonzeros [derived].
+- **(b) does not hold as written, in two ways.** A `CHAINS` values unit reads no table at all: its primitives are the FP32 multiply and the dot product's step, and `chunk_rows.slot_tables` gives it none [run: both sources]. And the other units the text lists as reading inline "where its reads are few beside the rest" have more read nonzeros than other nonzeros when read inline: a scores unit of 16 keys 12.7 times, a split's end 14.7 times, the combine 9.9 times [run: the table]. What is small in them is the number of reads (16, 1 and 7, against 64 or 65) [run]. I measured nothing for the RMSNorm rows [read: this entry].
+- **A sentence that says only what was measured,** in place of circuits' "Everything else reads inline, where its reads are few beside the rest: … at their served shapes.":
+
+  > Everything else that reads a table reads it inline, its reads few in number: a key block or scores unit of fewer keys than BN (a read a key), a ``CHAINS`` end and column end (one) and combine (seven for five splits), and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) at their served shapes. A ``CHAINS`` values unit reads no table.
+
+  The rest of circuits' text stands as given [read: your 22:10Z section]. It is circuits' sentence to word; I paste what they return.
+- **Beside the question, for the vLLM lane and circuits to weigh, not in this pull request:** the served partition proves the scores and values units in their Boolean versions, which read no table, so the reads' layout touches the served head only at the split's end and the combine, both word templates read inline today and on `main` [read: `chunk_rows.reads`, the pins]. There one RCP read is 14.7 times the end's other nonzeros [run]. Whether those two belong in lookup slots is a question about the prover's memory that I did not test [guess].
+
+**4. The nit, with its test (`6803fbe8c6`).** `chain_rows.wire` now takes `widths[:2]` [run: the commit]. The test names one row's key blocks at the five widths of a row of 512 output columns (256, 128, 64, 32, 16). Without the fix it fails with Python's `too many values to unpack (expected 2)`; with it the refusal reads "row 5: the partition names its key blocks as values units of 16 columns (…) and as values units of 32 columns (…); a row's key blocks are served one way" [run on my VM: the test with the fix stashed, then with it].
+
+**5. Which lines of `stage_rows.py` are mine: none.** At `65ecd910b07a` my diff from `main` carried `stage_rows.py` (52 lines added, 37 removed) and the `STAGES` and `STAGE_PLANS` lines only through my merge `556965c9fc` of #8426's head `8377bb3a57a7`, circuits' greedy select, which I merged on circuits' terms for the base; the file there is byte for byte #8426's [run: `git diff`, `git rev-parse` of both blobs]. They are #8426's lines, not #9075's [run: `git log`]. #8426 is merged, and with `main` merged my diff holds no line of `stage_rows.py` and no `STAGES` or `STAGE_PLANS` code line [run: `gh pr view 8426`, `git diff origin/main --stat`]. So my pull request was stacked on #8426 and is now free of it.
+
+- **#9075 is not in my branch, and the two meet in one line.** Against its head `c0d7c3ace97f` my head conflicts in `adapters/vllm/tests/pipeline/test_served_unit_rows.py` alone, the statements' pin; `serving_templates.py`, the other file both change, merges by itself [run: `git merge-tree`, 02:01Z]. #9075 also rewrites `benchmarks/sampling_plan/glm53_blocks.json`, which my card commit will rewrite [run: `git diff --name-only`].
+- **Order: #9075 first, then mine,** as your 19:37Z note says; I redo the pins commit and the planner's card once on its head when you give it to me [read: the note].
+
+**6. The ruling's test is on the branch (`7f95cacd29`).** `test_a_values_unit_on_other_keys_than_its_block_s_scores_unit_passes_every_check`: one head's values unit commits the keys' other 32 columns, with its output, its split's end and the combine recomputed from them. The window commits, the wiring check returns nothing, every unit's outputs are its Definition's on its own rows, and the combine's row is not the served one [run on my VM]. Its docstring states the gap as itself, with no issue id [read: the test].
+
+**7. The pull request: #9087, open, not marked, on CIR-241** [run: `research queue open --head cursor/proofs-headsplit-c85e --sha 7f95cacd29… --issue CIR-241 --by proofs`, 01:49Z]. Its first screen is the ruling's paragraph on the key rows, then the queries' [read: the body]. `research queue open` warned twice: CIR-241 has no label naming a goal, so the body's `Goal proofs/exfiltration-under-300gb` matches none [run]. **Ask: label CIR-241 with that goal** (I do not write to Linear).
+
+**8. The figure.** The cost model's line is committed (`b1217c59fd`): a `partition` card `head-scores-values` (art `72823681e10b…`, 142 strata from `146c`'s census) and the lines (A″) in `total_cost.py` [run: `cards.py check`, `research data put`, `cards.py fetch`; three `test_total_cost.py` tests and `test_cards.py` pass on my VM]. The card's label and the configuration's both begin or end with "modeled, key rows not held equal", so each line carries it wherever it prints [read: `total_cost.legend`, the caption's code]. The tree's command is out without Lean's certificate: `r20261112-020854-18e0`, `figures.py --model GLM-5.3 --no-lean` at `b1217c59fd` [run].
+
+- **Line (A) is not the before of this change.** `main`'s `workload` card prices an older partition of these rows (42 types), not the whole key blocks served today [read: `cards/workload.glm-5.3.json`: 32 `SparseMlaSplitPart_v1` types, 9 whole rows and a combine]. So a second run, `r20261112-020931-6a7e`, prices today's partition with the same command, through a scratch card built from `main`'s planner's card (84 types, each head's key block one proof block) put in the same card's file; it is not committed or published [run: `tools/headsplit/figure/whole_card.py`, `whole_job.sh`].
+- **Lean's certificate of the figure's points is not launched, and I ask before spending it.** A whole run with Lean took 4,561 s at 128 workers, 121.2 CPU-hours [relayed: this file's line 18808]; a run's slot is 16 cores, so one pass is about eight hours and more with the four new lines [derived]. My first figure run, `r20261112-015823-03ce`, had two passes with Lean after two without, on a six-hour timeout; I cancelled it after 10 minutes, before its first pass ended, so it would not hold a slot for hours it could not finish in, and launched the two runs above in its place [run: `research cancel`, exit 143 `CANCELLED_MANUAL`]. **Ask: do you want the split's line certified by Lean (about eight hours of one 16-core slot), or is the planner's figure, labelled as such, enough while the line is not a bound?**
+- **The 4,183 and 1,528 GB in the body are not the tree's command's.** They are the lane notes' planner script's, on a planner that is not on `main` [read: my 19:06Z entry]. I replace them in the body with the tree's figures when the run ends, each labelled modeled.
+
+**9. The planner's card is held, and one of its entries is not mine.** `146c`'s rebuild differs from `main`'s `glm53_blocks.json` by my sparse-attention types and by one other: `RmsNormMnnvl_v1{N=6144,…}` (98,304 output bits, a 2^27 block) on `main`'s card against `RmsNormMnnvlSumSq_v1` (2^25) and `RmsNormMnnvlApply_v1{G=192,SHOT=1}` (2^22) in the rebuild [run: a diff of the two cards]. `main`'s adapter has served that norm in those two stages since a commit later than the card's last build, so `main`'s card is behind `main` for that row whatever I do [read: `serving_templates.PARTS`, `git log` of both files]. I hold the card for the one rebuild on #9075's head and name this entry so nobody takes it for the split's [read: this entry].
+
+**Runs since the stop** (six launched; one cancelled and replaced by two, as 8 says; nothing else twice):
+
+| Run | Commit | What | State |
+|---|---|---|---|
+| `r20261112-013501-2b20` | `a14fa54c9f` | staged counts of five word units | done, exit 0 [run] |
+| `r20261112-014422-c6d3` | `7f95cacd29` | `suites.py --changed be9a3d566905 --quick` | running on cpu-3; 46 of 57 suites passed and none failed at 02:10Z; about 03:00Z [guess: the last eleven run one at a time] |
+| `r20261112-014701-f09e` | `7f95cacd29` | the small one-stage audit, whole key blocks and then scores and values units | running on cpu-12, on the first of the two at 02:10Z; about 02:40Z [guess: `13d3` took 25 min for one] |
+| `r20261112-015823-03ce` | `b1217c59fd` | the figure, four passes | cancelled by me at 02:08Z, exit 143 [run] |
+| `r20261112-020854-18e0` | `b1217c59fd` | `figures.py --model GLM-5.3 --no-lean` | waiting for a slot on cpu-9 at 02:10Z; hour not known [guess: under two hours once it starts] |
+| `r20261112-020931-6a7e` | `b1217c59fd` | the same with the scratch card of whole key blocks | waiting for a slot on cpu-9 at 02:10Z; the same |
+
+**What is open, and the line that stops each.**
+- The mark: yours. Before it, the changed suites and circuit-check at the final head [read: the common brief].
+- The statements' pin and the planner's card: redone once on #9075's head, when you give it [read: your 19:37Z note].
+- `chunk_rows.reads`' docstring: #8370 on `main`, and circuits' word on the sentence in 3 [read: your 22:10Z section].
+- The figure and the audit's rerun: the runs above. Lean's certificate of the figure: your word on the ask in 8.
+- The head moved to `b1217c59fd` after `c6d3` started; the one commit since touches `benchmarks/spot_figures/` alone, whose suite I run with the final head's [read: `git diff --stat 7f95cacd29 b1217c59fd`].
+
+**A fresh worker would next:** read the four runs; put the tree's figures (both partitions, labelled) and the audit's verdict in #9087's body with `research queue edit`; on your word merge #9075's head, run `tools/headsplit/repin.py` and the card job (`tools/headsplit/card/`), and commit the pins and the card each alone; after #8370 lands, merge `main` and paste circuits' text with the sentence they choose.
