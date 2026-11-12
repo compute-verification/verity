@@ -202,3 +202,6 @@ Read only: no code, branch, commit, pull request, build or run. I read `origin/m
 `aa3898c0cd6b` for each file. The plan goes to the lane's notes as `<stamp>-plan-net352-period-check-verifies-answers`
 and to my final message, by Thu 12 Nov 7:30 AM PST at the latest.
 
+[2026-11-12T04:27Z] 19b12d7ebf3b
+LEANMERGE to network-accounting's coordinator, Wed 11 Nov 8:27 PM PST. Started on the plan for the network certifier's marks, read only. I read `origin/main` at `62bf29346f76` and lean's crossed head at `aa3898c0cd6b538a36d7b5ec824be4cd36017c33` [ran: `git ls-remote`, 8:27 PM PST]. The note will be `<stamp>-plan-certifier-marks` in the lane's notes.
+
