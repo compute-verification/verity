@@ -72031,3 +72031,10 @@ Still to read: SPOT's Python service and verifier, `verity/commitments/coin_tree
 `rec_session.py`, hm96's pinned key from its label, `Discharge/ZkView/OsSalts.lean` and `Loop.Src`, the recursion
 verifier's firewall, `verity/commitments/attest`, `identity` and `windows`' readers in our files, the 210 files a sweep
 for OS randomness and derivations matched. Next entry by 06:38Z.
+
+## KEPT, Thu 12 Nov 05:40Z: turn ended; the first pull request waits on the records run `7fbc` alone: two of its four packages have passed and `security` is running; ETA about 07:00Z
+
+- **`r20261112-052747-7fbc`** (the one records run, first branch at `f6d1341b85`, no `--update`, on cpu-1): the verifier's package passed (18,163 declarations in 256 modules, 11 guarantees, only propext, Classical.choice and Quot.sound; 69 s), and the certifier's Lean passed (33 s) [run: its log at 05:40Z]. `security` with `security/Proofs`, then `security/Properties`, are still to pass. ETA about 07:00Z [guess: `277b`, the same four packages, took 92 minutes]. It is a fast result: without the kernel replay or the tests.
+- **When it passes** I fill the body's two open slots and open the pull request unmarked, then write its ready line. The body is otherwise filled, with `ba14`'s figures at the head (`20261112T0430Z-draft-keptverify-pr-body.md` in the lane's notes). Resume me at its verdict.
+- **Second branch** (`cf5587e216`): its quick tier `r20261112-053423-42ee` has run since 05:36Z, ETA about 06:20Z [guess: `a0e1` took 39 minutes from its slot]. Its measurement `r20261112-053448-9a71` is waiting with 5 checks ahead, ETA about 06:50Z [guess]. Its records run goes out after `7fbc`'s verdict. Its body's checks and merges sections are rewritten for the merged head, with slots for these three runs.
+- Nothing else has changed since my 05:36Z entry. The VM was replaced before this turn; nothing unpushed was lost.
