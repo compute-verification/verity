@@ -72,9 +72,10 @@ def check(sent: Sequence[Sequence[int]], requests: Sequence[Any], ks: Sequence[S
 def check_admitted(requests: Sequence[Any], order: Sequence[int], admitted: Sequence[int], window_of: Callable[[int], int],
                    T: int, error: Callable[[str], Exception]) -> None:
     """Refuses (`error`) a replay that admits arrival p (request `order[p]`) at step `admitted[p]`, whose window
-    `window_of` gives, before the window its length term is charged to."""
+    `window_of` gives, before the window its terms are charged to: its length term and, under a draft, its kept term
+    (`kept`)."""
     for p, k in enumerate(order):
         q, s = requests[k], admitted[p]
         if window_of(s) < q.end // T:
             raise error(f"request {q.id}: admitted at step {s}, whose window {window_of(s)} precedes window "
-                        f"{q.end // T}, where its length is charged")
+                        f"{q.end // T}, where its terms are charged")

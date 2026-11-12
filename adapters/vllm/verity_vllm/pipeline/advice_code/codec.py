@@ -47,6 +47,11 @@ before the run, never sent: a prover that chose it could declare a bigger pool a
 **Sent, the lengths** (`Registered.send_lengths`, `lengths`): while no proof holds the length rule, each request's
 output_len and finish, as the plain tail of the window its body lands in, held to the certified ids and the stop rule.
 
+**Sent, the drafts each row kept** (`kept`): under a draft (the registered engine's `num_speculative_tokens` > 0) a
+row emits its token and the drafts it kept, and the model says how many. Each request's counts are the second coded
+segment of the window its body lands in, and the replay runs on them. I1 v0's rows emit one output each, so `encode`
+and `decode` refuse a draft: `schedule_code` is this code to and from the replay's schedule.
+
 **Under the certified tick** (`Registered.tick`, an engine served with ``--admit tick``), the engine adds each request
 once a logical clock has passed its release bucket's close, in release order, and the replay runs that rule from the
 record's `end`s and the registered τ (`replay.replay`'s ``tick``). It asks nothing, so there are no decisions, and v1
@@ -80,13 +85,14 @@ recovers from the advice it decodes to, so that each advice has one string.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from typing import Any, NamedTuple, TypeVar
 
 from verity.protocols.certifier.verifier import advice as I1
 from verity_vllm.pipeline.advice_code import arith as C
 from verity_vllm.pipeline.advice_code import derived as D
+from verity_vllm.pipeline.advice_code import kept as KP
 from verity_vllm.pipeline.advice_code import lengths as LN
 from verity_vllm.pipeline.advice_code import pool as P
 from verity_vllm.pipeline.advice_code import replay as R
@@ -94,13 +100,14 @@ from verity_vllm.pipeline.advice_code import schedule as S
 from verity_vllm.pipeline.advice_code import window_code as CV
 
 __all__ = ["advice_of_replay", "AdviceCodeError", "arrival_order", "bits_by_window", "book_of", "CAPS", "charged",
-    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "length_tails", "length_widths",
-    "lengths", "Lookup", "Record", "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS",
-    "streams", "string_of", "TICK_CAPS", "windows"]
+    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "kept_terms", "length_tails",
+    "length_widths", "lengths", "Lookup", "Record", "Registered", "release_order", "replay_record", "Request", "residual",
+    "ROW_ORDERS", "streams", "string_of", "TICK_CAPS", "windows"]
 
 T = TypeVar("T")
 
 ROW_ORDERS = ("batch", "scheduling")
+_NO_I1 = "the registered engine drafts, and I1 v0's rows emit one output each: `schedule_code` is v1's entry for it"
 
 
 class AdviceCodeError(ValueError):
@@ -355,13 +362,15 @@ def check_record(record: Record, reg: Registered, engine: Any) -> Any:
 
 # --- the residual ------------------------------------------------------------------------------------------------------
 
-def _ios(record: Record, engine: Any, order: Sequence[int], stops: frozenset[int]) -> list[Any]:
+def _ios(record: Record, engine: Any, order: Sequence[int], stops: frozenset[int],
+         kept: Sequence[Sequence[int]] | None = None) -> list[Any]:
     out = []
     for k in order:
         q = record.requests[k]
         out.append(S.RequestIO(prompt_len=len(q.prompt), max_tokens=q.max_tokens, output_len=len(q.output),
                                eos=q.output[-1] in stops,
-                               tokens=q.prompt + q.output if engine.enable_prefix_caching else None))
+                               tokens=q.prompt + q.output if engine.enable_prefix_caching else None,
+                               kept=None if kept is None else tuple(kept[k])))
     return out
 
 
@@ -405,13 +414,13 @@ def _recording() -> Iterator[list[tuple[list[Lookup], Any]]]:
         P.BlockPool.hit, R.Scheduler.schedule = hit0, schedule0
 
 
-def replay_record(record: Record, reg: Registered, engine: Any, order: Sequence[int],
-                  bit_of: Callable[[int, int], bool]) -> tuple[Any, list[Decision], list[list[Lookup]]]:
+def replay_record(record: Record, reg: Registered, engine: Any, order: Sequence[int], bit_of: Callable[[int, int], bool],
+                  kept: Sequence[Sequence[int]] | None = None) -> tuple[Any, list[Decision], list[list[Lookup]]]:
     """The replay, each decision `bit_of(request, step)` (under the certified tick, the tick's rule from each request's
     `end`, and no decisions): its steps, its decisions in order, and each executed step's lookups in the order the
     scheduler read them (`would_admit`'s and the waiting loop's own of one request read once; a `schedule()` that
-    scheduled nothing is no step)."""
-    ios = _ios(record, engine, order, reg.config(engine).stops)
+    scheduled nothing is no step). Under a draft it runs on `kept`, the drafts each request's rows kept, by ordinal."""
+    ios = _ios(record, engine, order, reg.config(engine).stops, kept)
     decisions: list[Decision] = []
 
     def decide(i: int, k: int, _o: Any) -> bool:
@@ -431,20 +440,27 @@ def replay_record(record: Record, reg: Registered, engine: Any, order: Sequence[
     return rp, decisions, looks
 
 
-def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
+def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int,
+            emitted: Sequence[dict[int, int]] | None = None) -> tuple[list[int], list[int]]:
     """A5's windows, as I1's `bits_by_window` charges: each step's, the earliest window an output at that step or later
     is released in (the last window where none follows); and each arrival's ingress window, the earliest of its own
-    and every later arrival's last frame's, so that it never decreases where the arrivals deviate from release order."""
+    and every later arrival's last frame's, so that it never decreases where the arrivals deviate from release order.
+    Under a draft a row's outputs are the replay's to say: `emitted`, each step's (`kept.emitting`)."""
     reqs = [record.requests[k] for k in order]
+    if (emitted is None) == bool(reg.engine.num_speculative_tokens) or (emitted is not None and len(emitted) != len(rp.steps)):
+        raise AdviceCodeError("under a draft, and only then, each step's outputs are read off the replay (`kept.emitting`)")
     kept, own = [0] * len(reqs), []
-    for st in rp.steps:
+    for s, st in enumerate(rp.steps):
         w = None
         for i, start, n in st.rows:
-            q = reqs[i]
-            if start + n == len(q.prompt) + kept[i] and kept[i] < len(q.output):
-                b = q.release[kept[i]] // reg.T
+            q, at = reqs[i], None
+            if emitted is not None:
+                at = emitted[s].get(i)
+            elif start + n == len(q.prompt) + kept[i] and kept[i] < len(q.output):
+                at, kept[i] = kept[i], kept[i] + 1
+            if at is not None:
+                b = q.release[at] // reg.T
                 w = b if w is None else min(w, b)
-                kept[i] += 1
         own.append(w)
     earliest, at = [W - 1] * len(own), None
     for s in range(len(own) - 1, -1, -1):
@@ -459,18 +475,18 @@ def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: i
 
 
 def _residual(record: Record, reg: Registered, order: Sequence[int], rp: Any, decisions: Sequence[Decision],
-              looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
+              looks: Sequence[Sequence[Lookup]], W: int, emitted: Sequence[dict[int, int]] | None = None) -> list[Any]:
     """The windows v1 sends (`window_charge.Window`): no hit, resume or lag bit, only decisions and order entries. A
     decision goes to the earlier of its arrival's ingress window and the earliest window that shows its step's rows; an
     order entry to the earlier of its arrival's ingress window and the earliest window that shows the rows of the first
     step that reads that arrival (a lookup, a decision or its admission). Each is nondecreasing in the replay's order,
     so each field's values, window after window, are the replay's."""
-    earliest, win = charged(record, reg, order, rp, W)
+    earliest, win = charged(record, reg, order, rp, W, emitted)
 
     def at(k: int) -> int:
         return earliest[k] if k < len(earliest) else W - 1
 
-    if reg.send_lengths:
+    if reg.send_lengths or emitted is not None:
         LN.check_admitted(record.requests, order, rp.admitted, at, reg.T, AdviceCodeError)
 
     arrived: list[list[bool]] = [[] for _ in range(W)]
@@ -523,45 +539,62 @@ def length_tails(record: Record, reg: Registered) -> list[list[tuple[int, int]]]
     return LN.tails(record.requests, lengths(record, reg), reg.config(reg.engine))
 
 
-def string_of(wins: Sequence[Any], reg: Registered,
-              tails: Sequence[Sequence[tuple[int, int]]] | None = None) -> tuple[list[int], list[int]]:
-    """The string's bits, unpadded, and each window's charge: its segment's bits and its tail's (the length terms)."""
-    enc = CV.encode(wins, book_of(reg), tails)
+def kept_terms(record: Record, reg: Registered) -> list[list[int]]:
+    """Each window's kept terms (`kept`), the requests whose body lands in it, in release order; none without a draft."""
+    if not reg.engine.num_speculative_tokens:
+        return []
+    return LN.terms(record.requests, release_order(record), reg.T, windows(record, reg.T))
+
+
+def string_of(wins: Sequence[Any], reg: Registered, tails: Sequence[Sequence[tuple[int, int]]] | None = None,
+              kept: Sequence[Sequence[Any]] | None = None) -> tuple[list[int], list[int]]:
+    """The string's bits, unpadded, and each window's charge: its segment's bits, its tail's (the length terms) and,
+    under a draft, its second segment's (`kept`: its kept terms as `kept.tails` gives them)."""
+    K = reg.engine.num_speculative_tokens
+    if (kept is None) == bool(K) or (kept is not None and len(kept) != len(wins)):
+        raise AdviceCodeError("under a draft, and only then, the string carries each window's kept terms (`kept.tails`)")
+    coded = None if kept is None else lambda e, w: [KP.put(e, K, n, counts) for n, counts in kept[w]]
+    enc = CV.encode(wins, book_of(reg), tails, coded)
     return enc.bitlist(), list(enc.lens)
 
 
-def _frames(bits: Sequence[int], reg: Registered, widths: Sequence[Sequence[int]], *,
-            padded: bool) -> tuple[list[Any], list[list[int]]]:
-    """The windows `bits` codes and their tails of `widths`, refusing any bits but the code's own and, when `padded`,
-    fewer than 8 zero bits after them. The code is prefix-free, so at most one padding decodes."""
+def _frames(bits: Sequence[int], reg: Registered, record: Record, *,
+            padded: bool) -> tuple[list[Any], list[list[int]], list[tuple[int, ...]] | None]:
+    """The windows `bits` codes, their tails (the record's length terms) and, under a draft, the drafts each request's
+    rows kept, by ordinal; refuses any bits but the code's own and, when `padded`, fewer than 8 zero bits after them.
+    The code is prefix-free, so at most one padding decodes."""
+    widths, terms, K = length_widths(record, reg), kept_terms(record, reg), reg.engine.num_speculative_tokens
+    kept: dict[int, tuple[int, ...]] = {}
+    coded = (lambda d, w: kept.update((k, KP.get(d, K, len(record.requests[k].output))) for k in terms[w])) if K else None
     err: Exception | None = None
     for pad in range(8 if padded else 1):
         if pad > len(bits) or any(bits[len(bits) - pad:]):
             break
         data, n = CV.pack(list(bits[:len(bits) - pad]))
         try:
-            return CV.decode_tailed(data, n, book_of(reg), widths)
+            wins, tails = CV.decode_tailed(data, n, book_of(reg), widths, coded)
+            return wins, tails, [kept[k] for k in range(len(record.requests))] if K else None
         except ValueError as e:
             err = err or e
     raise AdviceCodeError(f"no {len(widths)} windows end the string: {err}")
 
 
-def _parse(data: Any, reg: Registered, record: Record) -> tuple[list[Any], list[list[int]]]:
-    """A byte string's windows and tails; refuses all but those and their padding."""
+def _parse(data: Any, reg: Registered, record: Record) -> tuple[list[Any], list[list[int]], list[tuple[int, ...]] | None]:
+    """A byte string's windows, tails and kept counts (`_frames`); refuses all but those and their padding."""
     if not isinstance(data, (bytes, bytearray)):
         raise AdviceCodeError(f"v1 decodes bytes, not a {type(data).__name__}")
     if 8 * len(data) > reg.cap_bits:
         raise AdviceCodeError(f"{8 * len(data)} bits, over the cap ℓ = {reg.cap_bits}")
-    return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, length_widths(record, reg), padded=True)
+    return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, record, padded=True)
 
 
 def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, int]:
-    """Each window's charge: its segment's bits, a function of the string alone, and its length terms'. They sum to the
-    string's bits less padding."""
+    """Each window's charge: its segment's bits, a function of the string alone, its length terms' and, under a draft,
+    its kept terms'. They sum to the string's bits less padding."""
     def run() -> dict[int, int]:
-        wins, tails = _parse(data, reg, record)
-        widths = length_widths(record, reg)
-        return dict(enumerate(string_of(wins, reg, [list(zip(t, n)) for t, n in zip(tails, widths)])[1]))
+        wins, tails, kept = _parse(data, reg, record)
+        sent = [list(zip(t, n)) for t, n in zip(tails, length_widths(record, reg))]
+        return dict(enumerate(string_of(wins, reg, sent, KP.tails(record.requests, kept_terms(record, reg), kept))[1]))
     return _total(run)
 
 
@@ -640,6 +673,8 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
     if type(advice) is not I1.Advice:
         raise AdviceCodeError(f"v1 encodes an I1 Advice, not a {type(advice).__name__}")
     engine = reg.engine
+    if engine.num_speculative_tokens:
+        raise AdviceCodeError(_NO_I1)
     check_record(record, reg, engine)
     order = arrival_order(advice, record, reg.row_order)
     if reg.tick is not None and order != release_order(record):
@@ -702,7 +737,7 @@ def decode_bits(bits: Sequence[int], record: Record, reg: Registered) -> I1.Advi
             raise AdviceCodeError(f"{len(bits)} bits, over the cap ℓ = {reg.cap_bits}")
         if any(b not in (0, 1) for b in bits):
             raise AdviceCodeError("a bit string holds 0s and 1s")
-        return _decode(*_frames(list(bits), reg, length_widths(record, reg), padded=False), record, reg).advice
+        return _decode(*_frames(list(bits), reg, record, padded=False), record, reg).advice
     return _total(run)
 
 
@@ -715,7 +750,10 @@ def _total(run: Callable[[], T]) -> T:
         raise AdviceCodeError(str(e)) from None
 
 
-def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], record: Record, reg: Registered) -> Decoded:
+def _replayed(wins: Sequence[Any], tails: Sequence[Sequence[int]], kept: Sequence[Sequence[int]] | None, record: Record,
+              reg: Registered) -> tuple[Any, list[int], Any]:
+    """What `_parse` read, held to the record and replayed: the derived config, the arrival order and the replay, of a
+    string whose every window is the one the replay charges."""
     engine = reg.engine
     cfg = check_record(record, reg, engine)
     LN.check(tails, record.requests, lengths(record, reg), cfg, AdviceCodeError)
@@ -738,11 +776,20 @@ def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], record: Record,
         used += 1
         return arrived[used - 1]
 
-    rp, decisions, looks = replay_record(record, reg, engine, order, bit_of)
+    with KP.emitting() if kept is not None else nullcontext() as emitted:
+        rp, decisions, looks = replay_record(record, reg, engine, order, bit_of, kept)
     if used != len(arrived):
         raise AdviceCodeError(f"the replay asks {used} of the string's {len(arrived)} decisions")
-    if _residual(record, reg, order, rp, decisions, looks, len(wins)) != list(wins):
+    if _residual(record, reg, order, rp, decisions, looks, len(wins), emitted) != list(wins):
         raise AdviceCodeError("the windows aren't the replay's residual: a value charged to another window than A5's")
+    return cfg, order, rp
+
+
+def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], kept: Sequence[Sequence[int]] | None, record: Record,
+            reg: Registered) -> Decoded:
+    if kept is not None:
+        raise AdviceCodeError(_NO_I1)
+    cfg, order, rp = _replayed(wins, tails, kept, record, reg)
     advice = advice_of_replay(record, reg, cfg, order, rp)
     if arrival_order(advice, record, reg.row_order) != order:
         raise AdviceCodeError("the order isn't the one the advice's rows give (another arrival order gives the same schedule)")
