@@ -85,12 +85,15 @@ def _norm_site(s: str | None) -> str:
     return (s or "").split(" (")[0].strip()
 
 
-def _same_site(a: str | None, b: str | None) -> bool:
-    """The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
-    by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
-    spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
-    from verity_vllm.pipeline.build import same_module_path
-    return same_module_path(a, b)
+def same_module_path(a: str | None, b: str | None) -> bool:
+    """Two dotted module paths name the same module when equal, or when one is the other's dotted suffix (the same
+    `named_modules()` path read from a wrapper's root vs the model's root).  Structural: no vocabulary prefix is spelled.
+    Here it holds the derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive
+    wrote by object identity) to the fold's / recorder's site; a v1 tp_links without a recorded root spells the traced wrapper's path."""
+    if a is None or b is None:
+        return False
+    a, b = a.split(" (", 1)[0].strip(), b.split(" (", 1)[0].strip()
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
 
 
 def _own_rows(rs: list, c: dict, spec_of: Any) -> list[str]:
@@ -406,7 +409,7 @@ def _check_recorder(folds: _Folds, recorder: dict[int, list[dict]]) -> None:
             (x, col), (kind, shape) = (rows[key], by_key[r][key]), _recorded_as_folded(rows[key])
             if kind != col["kind"]:
                 c.fail(f"rank {r} {key}: recorder kind {x['kind']}{'/' + str(x.get('path')) if x.get('path') else ''} (folds as {kind}) vs fold {col['kind']}")
-            if not _same_site(x.get("module"), col["site"]):
+            if not same_module_path(x.get("module"), col["site"]):
                 c.fail(f"rank {r} {key}: recorder module {x.get('module')!r} vs fold site {col['site']!r}")
             if shape != [int(col["rows"]), int(col["N"])]:
                 c.fail(f"rank {r} {key}: recorder partial shape {x.get('shape')} vs fold [{col['rows']}, {col['N']}]")
@@ -519,7 +522,7 @@ def _check_links(folds: _Folds, links: dict[int, list[dict] | dict[str, list[dic
                 link_shape = ln.get("shape")   # a link without a shape reads as no shape, never the fold's two
                 if (list(link_shape) if link_shape else []) != [rows_q, int(col["N"])]:
                     c.fail(f"{tag} link {k}: shape {ln.get('shape')} vs fold [{rows_q}, {col['N']}]")
-                if not _same_site(ln.get("module", ln.get("module_path")), col["site"]):
+                if not same_module_path(ln.get("module", ln.get("module_path")), col["site"]):
                     c.fail(f"{tag} link {k}: module {ln.get('module', ln.get('module_path'))!r} vs fold site {col['site']!r}")
                 cls = _site_class(ln.get("module_path"))
                 admits = PRODUCER_BY_SITE_CLASS.get(cls or "")
