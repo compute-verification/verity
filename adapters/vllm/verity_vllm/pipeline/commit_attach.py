@@ -36,6 +36,14 @@ def classes_of_record(required_manifest: dict[str, Any] | None, model: Any, fa_v
     return HS.with_hidden_class(required_classes_default(fa_version), hidden_family), hidden_family
 
 
+def families_named(required_manifest: dict[str, Any] | None) -> dict[str, Any]:
+    """How many identities a required-value manifest names of each family (its `populations.by_family`): no family where there is
+    no manifest, or it counts none by family."""
+    populations = None if required_manifest is None else required_manifest.get("populations")
+    by_family = None if populations is None else populations.get("by_family")
+    return {} if by_family is None else by_family
+
+
 def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str, Any] | None, out: Path, *, kind: str,
                      required_classes: tuple[str, ...], required_classes_cli: bool, hidden_family: str | None, fa_version: int | None,
                      cb_plan: Any = None, served: Any = None) -> SimpleNamespace:
@@ -47,7 +55,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over its row's manifest of record.
     Returns the required classes, whether the MoE source attached and whether the manifest requires the hidden class."""
     moe_attached = False
-    families: dict[str, Any] = {} if required_manifest is None else (required_manifest.get("populations") or {}).get("by_family") or {}
+    families = families_named(required_manifest)
     _hidden_required = hidden_classes_required(required_manifest)
     if args.hidden_so and _hidden_required is False:
         # a tap that never fires would fail the identity check and the required classes as an omitted producer
