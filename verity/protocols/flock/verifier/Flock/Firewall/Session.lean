@@ -592,8 +592,10 @@ def ownProofs (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : 
 each request decided and its own frame sent at its place (`State.request`, the prover's `Proof`s dropped and its `Ping`s
 answered by the loop), nothing after a stop, the session ended at its `Finish` whatever its outcome, and with a hold
 the loop's proofs and `Finish` held for `Hold.barrier`. Of the auditor's answer to `Register` the prover receives the
-draw's frame and nothing after it (`drawAnswer`); with a hold, what follows is `Hold.known`'s, and a session it refuses
-has the auditor's connection cut and is answered with the refusal from then on.
+draw's frame and nothing after it (`drawAnswer`); the session's state reads the answer as before (`State.answer`, which
+reads its draw alone). With a hold, what follows the draw is `Hold.known`'s, and a session it refuses ends there as
+where the auditor closed: nothing more of it is read for the auditor or sent, the auditor's connection is cut, and
+the prover is answered with the refusal from then on.
 `phase` is where a held session stands, and `ended` why it ended if the hold has no outcome of it. -/
 def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
     (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
@@ -726,13 +728,10 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           continue
       sendFrame a g
       pl := pl.after k
-      let some whole ← recvFrame a | ended.set "the auditor ended the session"; break
-      let mut r := whole
+      let some r ← recvFrame a | ended.set "the auditor ended the session"; break
       if k == .register then
-        let (draw, list) := drawAnswer whole
-        r := draw
         if let some h := hold then
-          if let some why ← h.known list then
+          if let some why ← h.known (drawAnswer r).2 then
             phase.set .done
             h.leave
             close a
@@ -750,7 +749,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           continue
       if k == .commit && byte? r 0 == some 2 && st.stop.isNone then
         reg.modify (·.link sid (Frame.words out 5 ((out.size - 5) / 16)))
-      sendFrame p out
+      sendFrame p (if k == .register then (drawAnswer out).1 else out)
 
 /-- **One session**, the `sid`-th: the prover's connection `p`, relayed on a connection of its own to the auditor at
 `auditor` until either side closes or the prover has the answer to its `Finish`. Each request is read whole, decided
