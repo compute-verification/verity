@@ -163,11 +163,10 @@ A spec-level reference for network accounting's timing channel:
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
 - the lengths row's proof block (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
-  execution phase and slot stride, which reads the compute side's committed request row and the network certifier's
-  fails row (`connection_rows`), a registered read, and computes the lengths row from them with no witness: its
-  outputs are a verdict, the row's failures and the row, committed as a registered read of the network certifier's
-  lengths row (`connection_rows.port`), which opens only if the computed row is the signed one. It has the reference
-  (`request_bytes`, `refusals`, `outputs`) and the prover's side (`blocks`, `reads`);
+  execution phase and slot stride, which computes the lengths row from the compute side's committed request row and
+  the network certifier's fails row (`connection_rows`) with no witness, as a registered read of the signed row;
+- the response tie's two proof blocks (`response_tie`, beside it) and the content rows' formats (`content_rows`),
+  in no Spec;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -415,7 +414,7 @@ A spec-level reference for network accounting's timing channel:
 The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `response_tie`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 
