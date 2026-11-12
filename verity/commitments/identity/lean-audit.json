@@ -6,9 +6,9 @@
  },
  "layers": {
   "Identity": {
-   "imports": ["Identity", "Flock.Hash", "Flock.Bytes", "Flock.Canon"],
+   "imports": ["Identity", "Base.Hash", "Base.Bytes", "Base.Canon"],
    "except": ["Identity.Difftest"],
-   "why": "the identity hash is code: Lean core and C-Flock's executable primitives only, no Mathlib and nothing of Security"
+   "why": "the identity hash is code: Lean core and the base's executable primitives (`core_base`) only, no Mathlib and nothing of Security"
   },
   "Identity.Difftest": {
    "imports": ["Identity", "Difftest"],

@@ -114,6 +114,14 @@ class FsRemote:
             tmp.unlink(missing_ok=True)
         return res
 
+    def replace(self, key: str, path: Path) -> None:
+        """`S3Remote.replace`'s double: write `key` whatever it holds, by rename, so a reader gets the old file or the new one whole."""
+        dst = self._p(key)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
+        shutil.copyfile(path, tmp)
+        os.replace(tmp, dst)
+
     def get(self, key: str, path: Path) -> None:
         src = self._p(key)
         if not src.is_file():

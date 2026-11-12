@@ -1,14 +1,14 @@
 # Real vLLM V1 scheduler traces under varied traffic (README.md). Not a package: the corpus runs in a node's pinned vLLM venv,
 # and the suite tests the scheduler hook on a stand-in Scheduler, the traffic plan, the summary, the stand-in network
-# certifier's and the network certifier's release headers and watermark against the server's tick feed and `tick.sh` on
-# a stand-in node, stdlib only.
+# certifier's and the network certifier's release headers and watermark against the server's tick feed, `tick.sh` on
+# a stand-in node and `ids.sh` with a stand-in interpreter, stdlib only.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_tick_job.py"]
+untraced = ["tests/test_ids_job.py", "tests/test_tick_job.py"]
 # `corpus.tick_modules` (tests/test_tick_corpus.py): the vLLM integration's `--admit tick` under vLLM's own server
 # (`serve_admit`, `tick_plugin`), whose release headers, watermark and feed the stand-in network certifier speaks, and
 # the modules they import
@@ -16,9 +16,12 @@ inputs = [
     "adapters/vllm/verity_vllm/__init__.py",
     "adapters/vllm/verity_vllm/engine/__init__.py",
     "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/errors.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
     "adapters/vllm/verity_vllm/pipeline/tick_plugin.py",
+    # `CUT`'s traces load the carried pool's cut (tests/test_tick_corpus.py takes each trace's VERITY_CUT through it)
+    "adapters/vllm/verity_vllm/pipeline/cut_plugin.py",
     "adapters/vllm/verity_vllm/settings.py",
     # `verity.protocols.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
     # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
@@ -36,6 +39,7 @@ tests = [
     "tests/test_admit_release.py",
     "tests/test_adversary.py",
     "tests/test_arrival_order.py",
+    "tests/test_ids_job.py",
     "tests/test_plugin_summary.py",
     "tests/test_tick_corpus.py",
     "tests/test_tick_job.py",

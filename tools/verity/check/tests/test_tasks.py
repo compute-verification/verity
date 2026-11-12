@@ -192,7 +192,7 @@ def test_changed_keeps_the_tasks_whose_inputs_the_change_touches(tree):
     ids = {t["id"] for t in doc["tasks"]}
     assert doc["changed"]["files"] == 1
     assert "pytest:b" in ids and "pytest:a" not in ids and "lean-audit:lean/P" not in ids
-    assert "lean-changed" in ids, "a job that declares no inputs reads the whole tree, so every change touches it"
+    assert "ratchet-gate" in ids, "a job that declares no inputs reads the whole tree, so every change touches it"
     every = {t["id"]: t for t in _graph(tree)[0]["tasks"]}
     assert all(set(every[i]["deps"]) <= ids for i in ids), "a kept task's deps are kept"
 

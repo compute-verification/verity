@@ -76,9 +76,9 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-# Security's 279: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
+# security's 233: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 303, "security/Properties": 191, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 231, "security/Properties": 185, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -146,6 +146,17 @@ def test_lean_module_roots_are_disjoint():
                for x, y in itertools.combinations(claims, 2) if clash(x, y)]
     assert len(claims) >= 10
     assert not clashes, clashes
+
+
+def test_every_lock_is_owned():
+    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
+    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
+    lists a guarantee or a premise names who answers for it."""
+    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
+    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
+    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
+                         f"--owner @lane` on each, which owns its entries")
+    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
 
 
 def test_every_record_merges_with_the_driver():
@@ -293,7 +304,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 915, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 890, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -526,7 +537,7 @@ def test_every_definition_a_guarantee_reads_says_what_it_means():
 
 
 #: the theorems the spec (`security`) states: `theorem` and `lemma` declarations in its files
-SPEC_THEOREMS = {"security": 156}
+SPEC_THEOREMS = {"security": 165}
 
 
 def test_the_spec_states_no_new_lemma():

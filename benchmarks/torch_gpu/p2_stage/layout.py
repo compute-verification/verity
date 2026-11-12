@@ -1,19 +1,12 @@
-"""Where a layer's matrices lie in the P2-encoded weights store, where their plaintext comes from, and P2's decode of one
-block on the CPU (the check's reference). No torch.
+"""Where a layer's matrices' plaintext comes from in the P2-encoded weights store, and P2's decode of one block on the CPU
+(the check's reference). No torch.
 
-The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema
-`verity-pous/p2-store-layout/v1`): `store_layout` reads its JSON, the real store's (`store.py layout`, pinned by its
-`LAYOUT_SHA512`) or the toy's (`store-toy/toy.json`'s `layout`), with the key prefix:
-
-- the registered codec `p2-16448/v4` (`verity/protocols/pous/verifier/schemes/p2.py`): 2,056-byte big-endian blocks, block
-  i = blocks_per_segment · s + v being block v of segment s;
-- block i's payload is W bytes [2054 i, 2054 i + 2054), bytes 2 .. 2055 of its decoded row, whose bytes 0 and 1 are zero;
-- each tensor (s8 [N, K] row-major) starts on a block, `first_block`, takes ⌈N K / 2054⌉ blocks, and its last block's
-  payload is zero past the tensor; in its layer's load buffer it starts at `staging_offset`;
-- K and t from counter-mode SHA-512 after `schemes.p2.expand_prefix` of the protocol's 24-byte salt (`registered_prefix`).
-
-A layer's matrices (`MATRICES`) are its four tensors: QKV (the query heads, then K, then V: 16,512 x 16,384 at the frozen
-shape), O, up and down; after the last layer the head (`HEAD`, 256 x 16,384) is layer `layers`. Their scales are not in W.
+The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema `verity-pous/p2-store-layout/v1`), as
+`p2_v1.load` holds it: `StoreLayout` over its `Tensor`s, a layer's `MATRICES`, the codec's `PARAMS` and the sizes of a
+block's row and payload (`ROW`, `PAYLOAD`, `LEAD`). They are defined there and read here by this directory's modules.
+`store_layout` reads the fixture's JSON, the real store's (`store.py layout`, pinned by its `LAYOUT_SHA512`) or the toy's
+(`store-toy/toy.json`'s `layout`), with the key prefix: K and t from counter-mode SHA-512 after `schemes.p2.expand_prefix`
+of the protocol's 24-byte salt (`registered_prefix`).
 
 `Weights` is where the plaintext comes from: the seeded weights stream (`benchmarks.torch_gpu.p2_stage.served_weights manifest`), every tensor
 at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales, and the head the stream's
@@ -39,20 +32,11 @@ from verity.protocols.pous.verifier.schemes import p2 as S
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
+from p2_v1.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW, SPEC, StoreLayout, Tensor,  # noqa: E402, F401
+                        blocks_of, matrix_name)
 
-PARAMS = S.P2Params(*S.POINT)
-SPEC = R.DEPLOYMENT
-ROW = PARAMS.block_bytes          # 2,056
-PAYLOAD = PARAMS.payload_bytes    # 2,054
-LEAD = ROW - PAYLOAD              # a decoded row's zero bytes before its payload
 SCHEMA = "verity-pous/p2-store-layout/v1"
 SCHEME = "p2-16448/v4"
-COLUMNS = ("name", "layer", "n", "k", "offset", "size", "first_block", "blocks", "staging_offset")
-
-MATRICES = {"qkv": "self_attn.qkv_proj", "o": "self_attn.o_proj", "up": "mlp.up_proj", "down": "mlp.down_proj"}
-PARTS = {"qkv": ("wq", "wk", "wv"), "o": ("wo",), "up": ("wup",), "down": ("wdown",)}
-#: the store's last tensor, after the layers (as layer `layers`), and its tensor in the weights stream
-HEAD, STREAM_HEAD = "lm_head.weight", "head"
 
 Read = Callable[[int, int], bytes]
 
@@ -60,107 +44,6 @@ Read = Callable[[int, int], bytes]
 def registered_prefix(salt: bytes) -> bytes:
     """The registered scheme's key prefix for the protocol's 24-byte `salt`: whole 128-byte blocks, one midstate."""
     return S.expand_prefix(PARAMS, salt)
-
-
-def matrix_name(layer: int, matrix: str) -> str:
-    return f"model.layers.{layer}.{MATRICES[matrix]}.weight"
-
-
-def blocks_of(offset: int, size: int) -> range:
-    """The blocks holding W bytes [offset, offset + size)."""
-    if offset < 0 or size < 0:
-        raise ValueError("a byte range has a nonnegative offset and size")
-    return range(offset // PAYLOAD, -(-(offset + size) // PAYLOAD)) if size else range(0)
-
-
-@dataclass(frozen=True)
-class Tensor:
-    """One row of the fixture's tensor table (`COLUMNS`)."""
-
-    name: str
-    layer: int
-    n: int
-    k: int
-    offset: int
-    size: int
-    first_block: int
-    blocks: int
-    staging_offset: int
-
-    @property
-    def block_range(self) -> range:
-        return range(self.first_block, self.first_block + self.blocks)
-
-    @property
-    def matrix(self) -> str | None:
-        """Its key in `MATRICES`, or None (the head)."""
-        return next((m for m in MATRICES if self.name == matrix_name(self.layer, m)), None)
-
-    @property
-    def stream_names(self) -> tuple[str, ...]:
-        """The weights stream's tensors it stacks, in order: a matrix's `PARTS` of its layer, or the head."""
-        if self.matrix is not None:
-            return tuple(f"l{self.layer}.{p}" for p in PARTS[self.matrix])
-        if self.name == HEAD:
-            return (STREAM_HEAD,)
-        raise KeyError(f"{self.name} has no tensor in the weights stream")
-
-
-@dataclass(frozen=True)
-class StoreLayout:
-    """The store's P2 geometry (`params`), its tensors in block order, and the prefix every block's keys follow."""
-
-    params: S.P2Params
-    tensors: tuple[Tensor, ...]
-    prefix: bytes
-
-    def __post_init__(self) -> None:
-        p = self.params
-        if (p.w, p.c0) != S.POINT[:2] or p.block_bytes != ROW:
-            raise ValueError(f"the store is P2 at w = {S.POINT[0]}, c0 = {S.POINT[1]}, the point libp2v1.so is built for")
-        if not self.prefix or len(self.prefix) % 128:
-            raise ValueError("the key prefix is whole 128-byte SHA-512 blocks (p2v1_keys compresses it to one midstate)")
-        at, staged = 0, {}
-        for t in self.tensors:
-            if t.size != t.n * t.k or t.offset != t.first_block * PAYLOAD or t.blocks != -(-t.size // PAYLOAD):
-                raise ValueError(f"{t.name} is not N K bytes from a block boundary over ⌈N K / {PAYLOAD}⌉ blocks")
-            if t.first_block < at:
-                raise ValueError(f"{t.name} shares a block with the tensor before it")
-            at = t.first_block + t.blocks
-            if t.staging_offset < staged.get(t.layer, 0):
-                raise ValueError(f"{t.name} overlaps the tensor before it in layer {t.layer}'s load buffer")
-            staged[t.layer] = t.staging_offset + t.size
-        if at > p.blocks:
-            raise ValueError(f"the tensors run to block {at}, past the store's {p.blocks}")
-
-    @property
-    def spec(self) -> R.Params:
-        return R.Params.of(self.params)
-
-    def layer(self, layer: int) -> tuple[Tensor, ...]:
-        out = tuple(t for t in self.tensors if t.layer == layer)
-        if not out:
-            raise KeyError(f"no layer {layer} in the store")
-        return out
-
-    def tensor(self, layer: int, name: str) -> Tensor:
-        """Layer `layer`'s tensor `name`: a key of `MATRICES` or the fixture's name."""
-        full = matrix_name(layer, name) if name in MATRICES else name
-        for t in self.layer(layer):
-            if t.name == full:
-                return t
-        raise KeyError(f"no tensor {full!r} in layer {layer} of the store")
-
-    def blocks(self, layer: int) -> range:
-        ts = self.layer(layer)
-        return range(ts[0].first_block, ts[-1].first_block + ts[-1].blocks)
-
-    def staging_bytes(self, layer: int) -> int:
-        return max(t.staging_offset + t.size for t in self.layer(layer))
-
-    def manifest(self) -> dict:
-        return {"params": self.params.manifest(), "tensor_columns": list(COLUMNS),
-                "tensors": [[getattr(t, c) for c in COLUMNS] for t in self.tensors], "prefix": self.prefix.hex()}
 
 
 def store_layout(doc: dict, prefix: bytes) -> StoreLayout:

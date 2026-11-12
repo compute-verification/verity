@@ -232,6 +232,33 @@ def test_the_command_refuses_a_new_edge_and_only_shrinks(judged, capsys) -> None
     assert "lean import Priv" in capsys.readouterr().out
 
 
+def test_a_path_anchored_on_a_package_is_an_edge(tmp_path: Path, capsys) -> None:
+    """`resources.files("pkg")` is the directory an import of `pkg` from the file finds (a package's own, the one holding a
+    module, a namespace package's itself), so a chain on it that reaches a directory the export doesn't copy is an edge:
+    refused while the list lacks it, allowed once it is listed."""
+    files = {"verity/pub/pkg/__init__.py": "",
+             "verity/pub/pkg/config.py": ('from importlib import resources\nfrom pathlib import Path\n\n'
+                                          'ROOT = Path(str(resources.files("pkg"))).resolve().parent\n'
+                                          'SESSION = ROOT.parent.parent / "tools" / "priv" / "session"\n'),
+             "tools/priv/session/run.py": ""}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    (tmp_path / "boundary.toml").write_text(BOUNDARY, encoding="utf-8")
+    tree, edge = PB.Tree(tmp_path, files=files), "verity/pub/pkg/config.py:5: path tools/priv/session -> tools/priv/session"
+    assert [tree._package(n, "verity/pub/pkg/config.py") for n in ("pkg", "pkg.config", "tools.priv.session", "pkg.gone",
+                                                                 "json")] == ["verity/pub/pkg", "verity/pub/pkg",
+                                                                              "tools/priv/session", None, None]
+    assert [str(e) for e in PB.judge(tree, PB.Boundary.load(tmp_path / "boundary.toml")).edges] == [edge]
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", *files], cwd=tmp_path, check=True)
+    args = ["--root", str(tmp_path), "--boundary", str(tmp_path / "boundary.toml"), "--allowed", str(tmp_path / "allowed.txt")]
+    assert PB.main(args) == 1
+    assert edge in capsys.readouterr().out
+    (tmp_path / "allowed.txt").write_text("verity/pub/pkg/config.py -> tools/priv/session\n", encoding="utf-8")
+    assert PB.main(args) == 0
+
+
 @pytest.mark.parametrize(("files", "read"), [
     ({"x/lakefile.toml": 'name = "x"\n[[lean_lib]]\nname = "X"\nsrcDir = "y"\n', "x/X.lean": "import Y\n"}, "x/X.lean"),
     ({"x/lakefile.toml": 'name = "x"\n[[lean_lib]]\nname = "X"\n', "x/X.lean": "/- open\nimport Y\n"}, "x/X.lean"),

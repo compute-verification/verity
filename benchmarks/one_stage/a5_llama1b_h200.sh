@@ -11,24 +11,31 @@
 # sm_90 taps under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
 # while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
-# there; $OUT keeps the row's records, the window's public files, a5.sh's out ($OUT/a5) and summary.txt, whose A5 line
-# is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length.
+# there; $OUT, published as the run's record, keeps the row's records that demos/vllm/published.sh lists (each with the
+# reason it holds nothing of a request) and verdicts.txt, the window's public files, a5.sh's out ($OUT/a5) and summary.txt,
+# whose A5 line is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length. Every
+# other file of the row stays on the node and the run names it: match/spec.json holds the prompts, commit/ the token record,
+# the bundle and the slim keep (the committed store with its salts, the weights key, the opened weights, the requests and
+# served tokens), and stages.txt, row.log and the stages' logs can quote a served token on a FAIL. Under KEPT, beside the row
+# dir: each stage's output, the row dir's sizes and what `row run` writes for a research run (result.json, its evidence/
+# copies of the row's records and the Commit's window, which the stages get KEPT for, never the published run dir).
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 ROW=${ROW:-llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
 ROLE=LLAMA32_1B_INT8 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 TREE=$PWD
+. "$TREE/demos/vllm/published.sh" || exit 2
 H=/workspace/research/vllm-composed-h200int8
 FA3=${FA3_SO:-$H/fa2/build/fa3_matReq/verity_fa3_matReq.so} FA3G=${FA3G_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so}
 NT=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
 PART=$TREE/benchmarks/one_stage/llama32_1b_rope_d64_l0.json
 ROOT=${A5_ROOT:-/workspace/research/vllm-sha512-a5}
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
-D=$BASE/$ROW WD=$BASE/serving-rows FW=$ROOT/flock-work
+D=$BASE/$ROW WD=$BASE/serving-rows FW=$ROOT/flock-work KEPT=$BASE/unpublished
 VENV=/workspace/cp/venv312
 CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 for f in "$FA3" "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
-mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW"
+mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 
 # the CPU side's builds, in the background: the tree's venv, Lean's flock-verify, flock-firewall and sampled-proofs-verifier, M0
 ( export PATH=$CLEAN_PATH; unset PYTHONPATH PY PY312 VIRTUAL_ENV; cd "$TREE" || exit 1
@@ -58,27 +65,23 @@ rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
   --why "A5 over a GPU-served rows-sha512 window (Llama-3.2-1B int8 H200): the row dir, its sealed bundle and window" | tail -2
 
-row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in $OUT/NAME.out
+row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in KEPT/NAME.out; prints its stages' verdict words
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
   (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
-     --hidden-so-fa3 "$FA3" --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$OUT/$name.out" 2>&1
+     --research-run-dir "$KEPT" --hidden-so-fa3 "$FA3" --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$KEPT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"
-  tail -5 "$OUT/$name.out"
+  verdicts "$D/stages.txt" "$OUT"
   return $rc
 }
-records() {  # the row's records into $OUT (never the bundle, the store or the capture)
-  for f in stages.txt row.log verdict.json build_summary.json manifest.json config_record.json gpu_lease.json effective_config.json \
-    commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-  mkdir -p "$OUT/commit"
-  find "$D/commit" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/commit/" \; 2>/dev/null
-  [ -d "$D/commit/replay_bundle_p0" ] && mkdir -p "$OUT/commit/replay_bundle_p0" \
-    && cp "$D/commit/replay_bundle_p0/MANIFEST.json" "$D/commit/replay_bundle_p0/context.json" "$OUT/commit/replay_bundle_p0/" 2>/dev/null
-  du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$OUT/sizes.txt"
+records() {  # the row's records into $OUT, which the run publishes: only the files demos/vllm/published.sh lists
+  publish "$D" "$OUT"
+  verdicts "$D/stages.txt" "$OUT" > /dev/null
+  du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$KEPT/sizes.txt"
 }
-window_off() {  # the Commit's window out of the run dir (custody uploads it), its public files and error into $OUT
-  local rd=${RESEARCH_RUN_DIR:-.}/serving-rows/$ROW
+window_off() {  # the Commit's window from KEPT, the stages' run dir, to WD, its public files and error into $OUT
+  local rd=$KEPT/serving-rows/$ROW
   [ -d "$rd" ] && mv "$rd" "$WD"
   [ -d "$WD" ] || return 0
   mkdir -p "$OUT/window"
@@ -135,6 +138,6 @@ print(f"REGISTERED kind={w.get('kind')} commitment={w.get('commitment')} run_roo
 print("WEIGHTS root_bytes=" + ",".join(sorted({str(len(r) // 2) for r in roots}) or ["?"]))
 PY
 grep -a '^A5 ' "$OUT/a5/a5.log" 2>/dev/null | tail -1 | cut -c1-4000 | tee -a "$OUT/summary.txt"
-tail -8 "$OUT/stages.txt" 2>/dev/null | tee -a "$OUT/summary.txt"
+tail -8 "$OUT/verdicts.txt" 2>/dev/null | tee -a "$OUT/summary.txt"
 echo "replay rc=$rr a5 rc=$ar" | tee -a "$OUT/summary.txt"
 exit $(( rr != 0 ? 17 : ar != 0 ? 18 : 0 ))

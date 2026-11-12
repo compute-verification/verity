@@ -44,10 +44,10 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
-    "verity/protocols/flock/verifier/Flock/AnnotExpand.lean":
+    "verity/circuits/lean/Circuits/AnnotExpand.lean":
         "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
         "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
-    "verity/protocols/flock/verifier/Flock/Extract.lean":
+    "verity/circuits/lean/Circuits/Extract.lean":
         "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
         "template queries, which read the root body only)",
@@ -85,7 +85,7 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/flock/verifier/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
-    "verity/protocols/flock/verifier/Flock/Gate.lean":
+    "verity/circuits/lean/Circuits/Gate.lean":
         "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
         "layout.Gate to it; no verifier calls it",
     "security/Proofs/Flock/SpotFlock/Code.lean":

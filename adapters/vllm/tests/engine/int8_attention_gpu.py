@@ -1,8 +1,7 @@
 """The attention half of `int8_exact_gpu.py` (`--int8-exact attention|all`): taps on served attention layers and their checks.
 
 `AttnTaps` wraps the forward of chosen `Int8AttentionImpl`s and keeps, per call and request, the query rows, the request's window
-(k, v gathered from the paged cache after the call, as the step read them; under a credited read, `engine.int8_window`, the
-rows of the step's buffers pg_window decoded it into), the K and V the layer was handed, the layer's K scales and the served
+(k, v gathered from the paged cache after the call, as the step read them), the K and V the layer was handed, the layer's K scales and the served
 output rows, on the CPU.  `compare` judges one kept request, every check bit for bit (the LUT softmax has no device-dependent
 step):
 
@@ -18,8 +17,7 @@ step):
             head, against the served output
 
 `written` judges a decode's window across the kept calls: its rows before the step's own are the K and V the layer was handed
-for this request in the earlier kept calls, and its last rows the step's own (under an encoded credited read, rows written
-earlier come back from the cache's encoding).
+for this request in the earlier kept calls, and its last rows the step's own.
 """
 from __future__ import annotations
 
@@ -91,21 +89,14 @@ class AttnTaps:
             kc, vc = kv_cache.transpose(1, 2).split(impl.head_size, dim=-1)
             ks = impl.k_scales(layer.layer_name, query.device).cpu()
             qsl, lens = attn_metadata.query_start_loc.tolist(), attn_metadata.seq_lens.tolist()
-            read = getattr(impl, "credited", None)
-            st = read.current if read is not None else None
-            if read is not None and (st is None or st.meta is not attn_metadata):
-                raise RuntimeError(f"{name}: a credited read with no window of this step")
             for r, s in enumerate(lens[:len(qsl) - 1]):
                 q0, q1 = qsl[r], qsl[r + 1]
                 if q1 == q0:
                     continue
-                if st is None:
-                    k, v = A.window_of(kc, vc, attn_metadata.block_table[r], s)
-                else:
-                    k, v = st.k[st.offsets[r]:st.offsets[r + 1]], st.v[st.offsets[r]:st.offsets[r + 1]]
+                k, v = A.window_of(kc, vc, attn_metadata.block_table[r], s)
                 rec = {"call": self.calls[(self.phase, name)] - 1, "request": r, "s": s, "n": q1 - q0, "scale": impl.scale,
                        "k_scales": ks, "q": query[q0:q1].cpu(), "k": k.cpu(), "v": v.cpu(), "out": output[q0:q1].cpu(),
-                       "window": "cache" if st is None else "credited", "handed": (key[q0:q1].cpu(), value[q0:q1].cpu())}
+                       "handed": (key[q0:q1].cpu(), value[q0:q1].cpu())}
                 self.got.setdefault((self.phase, name), []).append(rec)
             return out
         return wrapped
@@ -146,7 +137,7 @@ def compare(rec: dict[str, Any]) -> dict[str, Any]:
            "cpu_mismatch": int((_words(cpu) != ow).sum()), "oracle_mismatch": int((_words(oracle) != ow).sum()),
            "kv_mismatch": sum(int((a.cpu().view(torch.uint8) != b.view(torch.uint8)).sum()) for a, b in zip(kv_gpu, kv_cpu)),
            "fattn_ref": fattn_ref_row(q, k, ks, scale), "scale_is_head_dim": scale == q.shape[-1] ** -0.5,
-           "k_clamped": int((k.float().abs() / ks[None, :, None] > 127.5).sum()), "window": rec["window"],
+           "k_clamped": int((k.float().abs() / ks[None, :, None] > 127.5).sum()),
            **defs(q, k, v, ks, scale, out, [t.cpu() for t in kv_gpu])}
     if n == s:
         got["cache_mismatch"] = int(not (torch.equal(rec["handed"][0], k) and torch.equal(rec["handed"][1], v)))

@@ -3,10 +3,10 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "flock_verifier",
+   "name": "core_base",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../flock/verifier",
+   "dir": "../../circuits/base",
    "configFile": "lakefile.toml"}],
  "name": "core_protocol",
  "lakeDir": ".lake",

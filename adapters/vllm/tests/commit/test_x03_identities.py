@@ -119,8 +119,8 @@ def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
 
 
 def test_a_sources_own_names_are_no_modules_tensors():
-    """The KV slots (`kv_slots_source`, commit --memory-map) are named by the engine's KV layer, which need not be a hooked module: the
-    source declares them (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
+    """What a source commits that no hooked module produced (here KV slots, named by the engine's KV layer) the source declares
+    (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
     slots = [f"model.layers.{k}.self_attn.mla_attn/slot_mapping" for k in range(2)]
     com = _com()
     for s in range(2):

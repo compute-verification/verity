@@ -18,28 +18,24 @@ where NB_s = ceil(K_s / kBlockN) and K_s = the longest context any request live 
 record shows: one `fa2.m1/L<k>/s<i>/g<heads>x<prompt_i>x<NB>` stream per arriving prompt, one `g<live x kv_heads>x<g>x<NB>` (GQA swapped
 kernel) or `g<live x heads>x1x<NB>` stream for the decode rows, NB shared step-wide (vLLM passes the batch's max_seqlen_k to every
 launch of the step).  Validated against the per-step `n_bytes` of three Commit records (llama B16 1024/128 mixed-arrivals: 181/181 steps
->= observed, total +5.8 %; llama B4 1024/128: 4 concurrent prefills; phi3 B8 256/32: hd 96, no GQA) in tests/test_admission.py.
+>= observed, total +5.8 %; llama B4 1024/128: 4 concurrent prefills; phi3 B8 256/32: hd 96, no GQA) in
+tests/pipeline/test_admission_commit.py.
 
 Soundness assumptions (named on the record): every request runs to its cap plus `lag` post-EOS rows (an EOS stop before the cap only
 removes bytes; the LAG is declared -- pass the Program's lag); a prompt longer than the step's token budget is chunked by the engine
 (the sum over chunks of rows x NB is <= the unchunked launch; one `per_step` of chunk padding is added per extra chunk); the module
 widths are those `step_bound_bytes` measured (a sizing record that predates the per-layer RoPE count is corrected here by name).
 
-CLI (torch-free, laptop):  verity-vllm admission-bound --workload <manifest.json> --sizing <arena_sizing_*.json>
-                                  [--cap-bytes N] [--lag 1] [--observed <steps.jsonl>]
+The Commit calls `admission` before its engine runs a step (`pipeline.commit`).
 """
 
 from __future__ import annotations
 
-import json
 import math
 import os
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
-from verity_vllm.config import RowEngine, option, workload_arg
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
@@ -176,7 +172,7 @@ def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, 
     the C2 Programs and match oracle, the leaf digests, the binding index, the forked replay workers, the serving base and the margins.
     #23 B64 Llama: pool 183,694 MiB + resident 122,745 MiB; the pool alone fit the 239,372 MiB limit and the run OOM'd at it."""
     from verity_vllm.pipeline.telemetry import admission as plan
-    cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes, stages="commit")
+    cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes)
     cfg.host_cpus = os.cpu_count() or cfg.host_cpus
     commit = plan.predict(cfg)["commit"]
     live = dict(commit["live_at_peak"])
@@ -228,108 +224,3 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
                                       f"{(predicted - pool) >> 20} MiB) fits the container limit "
                                       f"{host_cap_bytes >> 20} MiB with {(host_cap_bytes - predicted) >> 20} MiB to spare ({env_note})")
     return rec
-
-
-def compare_observed(sched: dict[str, Any], observed: dict[int, int]) -> dict[str, Any]:
-    """Soundness check of a prediction against a record's per-step `n_bytes` (commit/steps.jsonl, instrumented arm of one pair)."""
-    pred = {x["step"]: x["bytes"] for x in sched["per_step"]}
-    under = [(s, o, pred.get(s, 0)) for s, o in observed.items() if o > pred.get(s, 0)]
-    common = [s for s in observed if s in pred]
-    tot_o = sum(observed[s] for s in common); tot_p = sum(pred[s] for s in common)
-    worst = max(((observed[s] / pred[s]) if pred[s] else float("inf"), s) for s in common) if common else (0.0, None)
-    return {"steps_observed": len(observed), "steps_predicted": len(pred), "steps_under_predicted": len(under), "under": under[:8],
-            "observed_total_bytes": tot_o, "predicted_total_bytes": tot_p, "ratio_pred_over_obs": (tot_p / tot_o) if tot_o else None,
-            "worst_obs_over_pred": worst[0], "worst_step": worst[1], "sound": not under}
-
-
-def observed_steps(path: str | Path, pair: int = 0, arm: str = "instrumented") -> dict[int, int]:
-    out: dict[int, int] = {}
-    for line in Path(path).read_text().splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
-        if r.get("arm") == arm and int(r.get("pair", 0)) == pair and r.get("n_bytes") is not None:
-            out[int(r["step"])] = int(r["n_bytes"])
-    return out
-
-
-def host_cap() -> tuple[int | None, str | None]:
-    """The host memory bound of this machine and its SOURCE by name: the cgroup limit when one is visible, else the
-    machine's MemTotal (a bare host is still a bound; only an unreadable machine yields None)."""
-    for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
-        try:
-            v = Path(cg).read_text().strip()
-            if v.isdigit() and int(v) < (1 << 60):
-                return int(v), cg
-        except OSError:
-            pass
-    try:
-        for line in Path("/proc/meminfo").read_text().splitlines():
-            if line.startswith("MemTotal:"):
-                return int(line.split()[1]) * 1024, "/proc/meminfo MemTotal (no cgroup limit visible)"
-    except OSError:
-        pass
-    return None, None
-
-
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    workload: str = option("--workload", type=workload_arg,
-                           help="verity-sweep/workload/v1 manifest (requests[] with prompt_len, max_tokens, arrive_step)")
-    sizing: str = option("--sizing", help="arena_sizing_*.json of a Commit on the same model (per-module widths + geometry)")
-    cap_bytes: int | None = option("--cap-bytes", type=int, default=None,
-                                   help="container memory limit (default: this host's cgroup, if any)")
-    lag: int = option("--lag", type=int, default=1,
-                      help="post-EOS rows per request (the declared LAG; default 1 = async scheduling)")
-    retain: str = option("--retain", default="host", choices=["host", "device", "none", "sample"])
-    per_step_blocks: bool = option("--per-step-blocks", default=False, action="store_true",
-                                   help="the collector stages per-step blocks (--window-mb 0); default: windowed (row_pod's 256 MiB ring)")
-    bounded_staging: bool = option("--bounded-staging", default=False, action="store_true",
-                                   help="the run uses --bounded-staging (no hedge copies; retain host keeps the non-excluded families)")
-    retain_exclude: str | None = option("--retain-exclude", default=None,
-                                        help="the run's --retain-exclude families (e.g. hidden_m1 = fa2_hidden_m1,fa3_hidden_m1)")
-    observed: str | None = option("--observed", default=None,
-                                  help="a record's commit/steps.jsonl: report per-step soundness of the prediction")
-    json: bool = option("--json", default=False, action="store_true")
-
-
-def main(a: Options) -> int:
-    wl = json.loads(Path(a.workload).read_text())
-    sizing = json.loads(Path(a.sizing).read_text())
-    mnbt = RowEngine.of(wl).args.get("max_num_batched_tokens") or (sizing.get("envelope") or {}).get("max_num_batched_tokens")
-    cap, cap_src = (a.cap_bytes, "--cap-bytes") if a.cap_bytes is not None else host_cap()
-    # the sizing record's envelope bound describes ITS row: carry it only when the record was sized for this workload's envelope
-    env = sizing.get("envelope") or {}
-    sw = wl.get("sweep") or {}
-    same_row = (int(env.get("batch") or 0) == int(sw.get("batch") or len(wl["requests"])) and int(env.get("max_prompt") or 0) == max(int(r.get("prompt_len") or 0) for r in wl["requests"])
-                and int(env.get("max_new") or 0) == max(int(r.get("max_tokens") or 0) for r in wl["requests"]))
-    excl: set[str] = set()
-    for f in (a.retain_exclude or "").split(","):
-        f = f.strip().removesuffix("_stream")
-        if f:
-            excl |= set(HIDDEN_FAMILIES) if f in ("hidden_m1", "hidden") else {f}
-    rec = admission(sizing, wl["requests"], cap, retain=a.retain, max_num_batched_tokens=mnbt, lag=a.lag,
-                    envelope_bound_bytes=(sizing.get("retained_bytes_bound") if same_row else None),
-                    windowed=not a.per_step_blocks, bounded=a.bounded_staging, retain_exclude=excl)
-    rec["sizing_record_is_this_row"] = same_row
-    rec["host_cap_source"] = cap_src
-    if a.observed:
-        sched = scheduled_step_bytes(sizing, wl["requests"], max_num_batched_tokens=mnbt, lag=a.lag)
-        rec["observed_check"] = compare_observed(sched, observed_steps(a.observed))
-    if a.json:
-        print(json.dumps(rec, indent=1))
-        return 0 if rec["admitted"] else 3
-    s = rec["scheduled"]
-    print(f"{(wl.get('sweep') or {}).get('row_id') or Path(a.workload).stem}: {s['requests']} requests, {s['steps']} scheduled steps, "
-          f"{s['prompt_tokens']} prompt tokens + {s['decode_rows']} decode rows (lag {s['lag']})")
-    c = s["composition"]
-    print(f"  scheduled raw {rec['scheduled_raw_bytes'] / 2**30:.1f} GiB = tokens {c['token_bytes'] / 2**30:.1f} + logits {c['seq_bytes'] / 2**30:.2f} + "
-          f"hidden M1 {c['hidden_bytes'] / 2**30:.1f} + padding {c['step_bytes'] / 2**20:.1f} MiB; peak step {s['peak_step']} = {s['peak_step_bytes'] / 2**30:.2f} GiB")
-    envs = f"{rec['envelope_predicted_host_bytes'] >> 20} MiB" if rec.get("envelope_predicted_host_bytes") else "n/a (sizing record is another row's)"
-    print(f"  predicted host {rec['predicted_host_bytes'] >> 20} MiB (x{rec['levels_factor']}) vs cap {(cap or 0) >> 20} MiB; envelope bound said "
-          f"{envs} -> {'ADMITTED' if rec['admitted'] else 'REFUSED'}: {rec['why']}")
-    if a.observed:
-        o = rec["observed_check"]
-        print(f"  observed check: {o['steps_observed']} steps, under-predicted {o['steps_under_predicted']}, pred/obs total {o['ratio_pred_over_obs']:.3f}, "
-              f"worst obs/pred {o['worst_obs_over_pred']:.3f} at step {o['worst_step']} -> {'SOUND' if o['sound'] else 'UNSOUND'}")
-    return 0 if rec["admitted"] else 3

@@ -300,9 +300,11 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
 
 
 def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str, dict[str, Any]]:
-    """Each warm request's cached rows and the label of the request that computed each cached block (`load_workload`: `cached`,
-    `cached_from`): what the replay resolves its `prefix` reads to (`driver.populate`)."""
-    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()]}
+    """Each warm request's cached rows, the label of the request that computed each cached block and its certified prompt
+    (`load_workload`: `cached`, `cached_from`, `prompt_token_ids`): what the replay resolves its `prefix` reads to, or, where its
+    Program recomputes the hit, what the replay recomputes it from (`driver.populate`)."""
+    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()],
+                                           "prompt": [int(t) for t in r.get("prompt_token_ids") or ()]}
             for r in reqs if int(r.get("cached") or 0)}
 
 
@@ -373,6 +375,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
     from verity_vllm.commit import executed_prefix as EPX
+    from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
@@ -392,13 +395,6 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     from verity_vllm.pipeline import serving_rows as SRW
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
                                   _loaded, s.manifest, args.label, _digs)
-    if not plan and getattr(args, "memory_map", None):
-        from verity_vllm.acquire.sources.kv_slots_source import caches_of
-        from verity_vllm.check.oracle_compare import OpenedReader
-        from verity_vllm import protocols
-        CM = protocols.driver("remote-bandwidth", "commit_map")
-        CM.after_commit(args.memory_map, loaded=_loaded, bmap=_bm, committed=OpenedReader(s.com, rc), manifest=s.manifest, arrivals=_arr,
-                        caches=caches_of(s.com), session=s.out / CM.SESSION, cached_prefixes=cached_prefixes(reqs, _rl))
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -445,6 +441,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         s.reads.update(SR.sampled_replay(_progs, _bm, _rd, _wp, plan=True, **_kw))
     sr["sample"]["seed_form"] = _seed_form            # replay_codes.SEED_FORMS: the verdict reads the form, never the source text
     sr["programs"] = {k: {"dir": _loaded[k].get("dir"), "program_digest": _digs[k]} for k in _loaded}
+    if _premises := DF.premises(r for v in _progs.values() for r in v["rows"]):
+        sr["premises"] = _premises                    # what an equal row leaves unshown, read beside the verdict (`c2_rules`)
     sr["executed_prefix_of_record"] = {k: {kk: vv for kk, vv in v.items() if kk in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted", "eos_stop")}
                                        for k, v in _epr_r["requests"].items()} | {"lag": _epr_r["lag"], "ok": _epr_r["ok"], "problems": _epr_r["problems"][:3],
                                                                                   "facts_of_record": _ep_facts, "mechanism": ("population.not_executed_by_rule" if "executed_prefix" in _sr_kw else "none in this tree (rows past the stop sampled as ordinary strata)")}

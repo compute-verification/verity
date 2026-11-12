@@ -1,0 +1,180 @@
+# The envelope ISA the coverage table (rows.toml) dominates every instruction by: `Accel.Op`
+# (security/Definitions/Core/Accel/, as drafted when the table was built), its pipes and formats,
+# plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
+# gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
+# instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no fewer units
+# than the envelope charges.
+
+source = "MODEL-MIN's Accel.Op (security/Definitions/Core/Accel/), as drafted when the table was built"
+
+[[op]]
+key = "mma"
+resource = "tensor"
+unit = "a tile's m·n·k products at its format's weight, one issue slot, each operand word's read at its store"
+semantics = """an m × n × k tile of the card's MMA opcode: output (i, j) is the opcode's dot of accumulator (i, j) with \
+row i of A and column j of B (P2: a function of the accumulator, the pairs' products and the rows' block scales)"""
+
+[[op]]
+key = "mmaSp"
+resource = "tensor"
+unit = "a 2:4 tile's m·n·(k/2) kept products at its format's weight, one issue slot, reads"
+semantics = "as mma, over k/2 kept pairs a row that 2-bit selectors choose"
+
+[[op]]
+key = "lane"
+resource = "pipe"
+unit = "1/32 of an issue slot and one lane of its pipe's resource (fma has none: issue-bound)"
+semantics = "one of the card's lane opcodes on its pipe: at most the pipe's n_in register words of any lane in, 2 out"
+n_out = 2
+
+[[op]]
+key = "move"
+resource = "store"
+unit = """max(k, 1)/32 of an issue slot; each word's read at its source and each copy's write at its target; a \
+register-to-register copy an alu lane a word"""
+semantics = "n words of one store, read once, to k copies in another, unchanged"
+
+[[op]]
+key = "atom"
+resource = "store"
+unit = "1/32 of an issue slot and the word's access at its store (an alu lane if the store is the registers)"
+semantics = "one of the card's functions of a word of a store and two register words to its new value and a returned word"
+
+[[op]]
+key = "red"
+resource = "store"
+unit = "1/32 of an issue slot, an access at each end a word, an alu lane a word written to registers"
+semantics = "n words of one store into n words of another, by one of the card's functions"
+
+[[op]]
+key = "branch"
+resource = "issue"
+unit = "1/32 of an issue slot"
+semantics = "a predicate bit to the program counter: a fixed, register or immediate target, optionally the return index"
+
+[[op]]
+key = "none"
+resource = "none"
+unit = "none"
+semantics = "no instruction of the model: no data effect, the schedule orders the threads (the model has no latency)"
+
+[[op]]
+key = "collective"
+resource = "pipe"
+unit = "one issue slot and its unit's charge: a unit of `collective` (2 for a .U64 MATCH), or 16 alu lanes (VOTE)"
+semantics = """one of the card's warp collectives: a word (two for .U64) or a predicate of each of the 32 lanes to a word \
+or a predicate a lane, or a uniform register"""
+n_in = 64
+n_out = 1
+proposed = """MODEL-MIN item 1 (MATCH.ANY), its reply (REDUX on MATCH.ANY's unit) and RM7: no fold of `lane`s
+dominates them"""
+
+[[op]]
+key = "tex"
+resource = "tex"
+unit = "one filtered fetch a lane, a unit of `tex`"
+semantics = """a function of ≤ 4 texels (8 trilinear, at half rate) of ≤ 4 channels at a texture's coordinates, weighed by \
+9-bit fixed-point weights, each channel converted from the texture's format"""
+proposed = "MODEL-MIN item 3 and its correction (RM4: a rate, not an exclusion)"
+
+[[op]]
+key = "-"
+resource = "none"
+unit = "none"
+semantics = "no envelope op: an absent unit (the card has none) or a hole"
+
+# A lane opcode's pipe: the resource it uses a lane of (`lanes` lanes a unit: fma's lanes are the issue slot's 32), and
+# the register words a lane reads (`Pipe.nIn`). A collective's pipe gives its resource only: its words are the op's.
+[[pipe]]
+key = "alu"
+resource = "alu"
+n_in = 4
+
+[[pipe]]
+key = "imad"
+resource = "imad"
+n_in = 4
+
+[[pipe]]
+key = "fma"
+resource = "issue"
+lanes = 32
+n_in = 4
+
+[[pipe]]
+key = "shfl"
+resource = "shfl"
+n_in = 4
+
+[[pipe]]
+key = "f64"
+resource = "f64"
+n_in = 6
+
+[[pipe]]
+key = "sfu"
+resource = "sfu"
+n_in = 4
+
+[[pipe]]
+key = "collective"
+resource = "collective"
+proposed = "the `collective` op's unit"
+
+# `Accel`'s `Fmt`, and the formats the card's MMAs read that it lacks.
+[[fmt]]
+key = "s8"
+[[fmt]]
+key = "u8"
+[[fmt]]
+key = "b1"
+[[fmt]]
+key = "e4m3"
+[[fmt]]
+key = "e5m2"
+[[fmt]]
+key = "e2m1"
+[[fmt]]
+key = "f16"
+[[fmt]]
+key = "bf16"
+[[fmt]]
+key = "tf32"
+[[fmt]]
+key = "nvf4"
+[[fmt]]
+key = "mxf4"
+[[fmt]]
+key = "f64"
+
+[[fmt]]
+key = "e3m2"
+proposed = "MODEL-MIN item 1, corrected: FP6 (QMMA.16832.F32.E3M2.E2M3, native on both cards)"
+
+[[fmt]]
+key = "e2m3"
+proposed = "MODEL-MIN item 1, corrected: FP6"
+
+[[fmt]]
+key = "mxf8"
+proposed = "MODEL-MIN item 1, corrected: block-scaled E4M3/E5M2, UE8M0 a 32 (QMMA.SF, kind::mxf8f6f4, sm_120)"
+
+[[fmt]]
+key = "mxf6"
+proposed = "MODEL-MIN item 1, corrected: block-scaled E3M2/E2M3, UE8M0 a 32 (QMMA.SF, sm_120)"
+
+# Each card's numbers are its card file's (verity/hardware/cards/, the SKU its model.toml names; `cover.load` reads
+# them): the SMs, clock.sm, every rate a SM-clock (tensor in s8 MACs, issue in warp instructions, the pipes in lanes,
+# smem and l2 in words), memory.bandwidth in words a second, and the formats' weights. Here are the proposed
+# resources' rates and the proposed formats' weights alone, which no card file holds.
+[device.sm_120]
+proposed_rho = { collective = 0.5, tex = 4 }
+proposed_source = """collective: MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each \
+beside the other; tex: θ tex, 4 texture units a SM, one filtered fetch a unit a clock"""
+proposed_weight = { e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
+
+[device.sm_90]
+proposed_rho = { collective = 0.5, tex = 4 }
+proposed_source = """collective: MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other \
+(an H200 at 1980 MHz); tex: θ tex"""
+proposed_weight = { e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }

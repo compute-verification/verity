@@ -1,17 +1,20 @@
-"""A ``STAGES`` row's units (`serving_rows`' ``stage`` layout, `serving_templates.STAGES`): a ``GumbelTopPTokenSelect_v1{V}`` or
-``GumbelTopPTokenSelectSharedGreedy_v1{V}`` row is the units `topp_stages.plan` lists for V, the cut `sampling.CUTS` names: every
-split count's top-p pipeline (stats blocks and their parts, the probabilities, each round's step blocks and combines) and the
-select's chunks.  A template's units go row by row, then in the plan's order (`positions`).
+"""A ``STAGES`` row's units (`serving_rows`' ``stage`` layout, `serving_templates.STAGES`): a row is the units the ``plan`` of its
+family's module (`serving_templates.STAGE_PLANS`) lists for V, the cut its own module's ``CUTS`` names.  A
+``GumbelTopPTokenSelect_v1{V}`` or ``GumbelTopPTokenSelectSharedGreedy_v1{V}`` row's are `topp_stages.plan`'s (`sampling.CUTS`):
+every split count's top-p pipeline (stats blocks and their parts, the probabilities, each round's step blocks and combines) and
+the select's chunks.  A greedy ``TokenSelect_v1{V}`` row's are `greedy_stages.plan`'s (`b1.CUTS`): its chunks' partial argmaxes
+and their combine.  A template's units go row by row, then in the plan's order (`positions`).
 
-A unit reads its parameters in its Definition's order: the row's operands it takes (``logits``, its lanes of the row's, and
-``temp``, ``top_p``, ``seed``, ``pos`` and ``splits``, read as the replay reads them: the Program's constants, the split count
-S among them, and the sampler's committed seed at the row's step, `_operand`), and for each parameter the plan wires
-(`topp_stages.Unit.wires`) the output of the unit that writes it, words serving never stores: the reader computes every unit's
-outputs with the twin (`topp_stage_twins.stage_rows`), whose token it holds to the row's served one.  The window wires each such
-row to its writer's output row (`wire`, `commit.wiring`), so a sampled unit's carried words are the committed output of the unit
-that wrote them."""
+A unit reads its parameters in its Definition's order: the row's operands it takes (``OPERANDS``: ``logits``, its lanes of the
+row's, and a top-p row's ``temp``, ``top_p``, ``seed``, ``pos`` and ``splits``, read as the replay reads them: the Program's
+constants, the split count S among them, and the sampler's committed seed at the row's step, `_operand`), and for each
+parameter the plan wires (its ``Unit.wires``) the output of the unit that writes it, words serving never stores: the reader
+computes every unit's outputs with the row family's twin (`topp_stage_twins.stage_rows`, `greedy_stages.twin`), whose token it
+holds to the row's served one.  The window wires each such row to its writer's output row (`wire`, `commit.wiring`), so a
+sampled proof block's carried words are the committed output of the unit that wrote them."""
 from __future__ import annotations
 
+import importlib
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -23,30 +26,38 @@ import numpy as np
 from verity.commitments.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, const_word
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import Template, template
+from verity_vllm.pipeline.serving_templates import STAGE_OF, STAGE_PLANS, Template, template
 from verity_vllm.program.compact import runs_from_file_items
+from verity_vllm.query.program_view import spec_base
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
-#: the row's operands in its Definition's order, and each scalar's bits
-OPERANDS = ("logits", "top_p", "seed", "pos", "temp", "splits")
+_TOPP_OPERANDS = ("logits", "top_p", "seed", "pos", "temp", "splits")
+#: a ``STAGES`` row family's operands in its Definition's order
+OPERANDS = {"GumbelTopPTokenSelect_v1": _TOPP_OPERANDS, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_OPERANDS,
+            "TokenSelect_v1": ("logits",)}
+#: each scalar operand's bits
 BITS = {"top_p": 32, "seed": 64, "pos": 64, "temp": 32, "splits": 32}
 
 
+def _plan(family: str) -> Callable:
+    """The ``plan`` of the module a ``STAGES`` row family's units, or a stage family's, are (`serving_templates.STAGE_PLANS`)."""
+    return importlib.import_module(STAGE_PLANS[STAGE_OF.get(family, (family,))[0]]).plan
+
+
 @cache
-def _places(V: int) -> dict[str, tuple[int, ...]]:
+def _places(family: str, V: int) -> dict[str, tuple[int, ...]]:
     from verity.circuits.codec import descriptor_id
-    from verity.definitions.registry.topp_stages import plan
 
     out: dict[str, list[int]] = {}
-    for k, u in enumerate(plan(V)):
+    for k, u in enumerate(_plan(family)(V)):
         out.setdefault(descriptor_id(u.defn), []).append(k)
     return {t: tuple(ks) for t, ks in out.items()}
 
 
 def positions(tp: Template, statics: dict[str, Any]) -> tuple[int, ...]:
-    """The places k in `topp_stages.plan` of a row of ``statics`` whose unit is template ``tp``."""
-    return _places(int(statics["V"])).get(tp.word, ())
+    """The places k in its module's ``plan`` of a row of ``statics`` whose unit is template ``tp``."""
+    return _places(spec_base(tp.word), int(statics["V"])).get(tp.word, ())
 
 
 def units(tp: Template, statics: dict[str, Any]) -> int:
@@ -92,10 +103,13 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
     return out
 
 
-def _twin(V: int, logits: np.ndarray, ops: dict[str, int]) -> tuple[int, dict]:
-    from verity.definitions.numerics.topp_stage_twins import stage_rows
+def _twin(family: str, V: int, logits: np.ndarray, ops: dict[str, int]) -> tuple[int, dict]:
+    """A row's token and every unit's outputs (its plan's key -> its return fields' words), by its family's twin."""
+    if OPERANDS[family] == _TOPP_OPERANDS:
+        from verity.definitions.numerics.topp_stage_twins import stage_rows
 
-    return stage_rows(V, logits, ops["top_p"], ops["seed"], ops["pos"], ops["temp"], ops["splits"])
+        return stage_rows(V, logits, ops["top_p"], ops["seed"], ops["pos"], ops["temp"], ops["splits"])
+    return importlib.import_module(STAGE_PLANS[family]).twin(V, logits)
 
 
 def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
@@ -104,33 +118,33 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
     `_operand` (what no constant or sampler input is, by ``slices``: `serving_rows._slices`) and every unit's outputs computed by
     the twin; one index entry per row.  ``twins`` (row -> the twin's token and outputs) keeps each row's twin for the window's
     other stage templates (`serving_rows.read_all`)."""
-    from verity.definitions.registry.topp_stages import plan
-
     tp = template(m.template)
     names = [q for q, _ in m.rows + m.outs]
     out = {q: np.empty((m.n, x), dtype=np.uint16) for q, x in m.rows + m.outs}
     entries: list[list[Any]] = []
     twins = {} if twins is None else twins
+    plan = _plan(spec_base(tp.word))
     lo = 0
     for rid, pi, r, d in rows:
         arrive, what, V = int((arrivals or {}).get(rid, 0)), f"row {r['i']} ({d['op_path']})", int(d["statics"]["V"])
-        if len(r["args"]) != len(OPERANDS):
-            raise ValueError(f"{what}: {len(r['args'])} operands, not a row of {tp.id}'s cut ({', '.join(OPERANDS)})")
-        if any(sl[0] == "p" for sl in runs_from_file_items(r["args"][OPERANDS.index("splits")])):
+        operands = OPERANDS[spec_base(r["spec"])]
+        if len(r["args"]) != len(operands):
+            raise ValueError(f"{what}: {len(r['args'])} operands, not a row of {tp.id}'s cut ({', '.join(operands)})")
+        if "splits" in operands and any(sl[0] == "p" for sl in runs_from_file_items(r["args"][operands.index("splits")])):
             raise ValueError(f"{what} reads its split count S from a Program input: S is the registered constant, a Const32[S] of "
                              f"the Program (topp_geometry.registered_splits)")
         got = [_operand(pi, store, weights, rid, arrive, g, int(d["step"]), slices) for g in r["args"]]
         logits = SL.elements(got[0], 16, f"{what} argument 0 (logits)")
         if logits.size != V:
             raise ValueError(f"{what}: {logits.size} logits, not V = {V}")
-        ops = {x: _word(p, BITS[x], f"{what} argument {k} ({x})") for k, (x, p) in enumerate(zip(OPERANDS, got)) if k}
+        ops = {x: _word(p, BITS[x], f"{what} argument {k} ({x})") for k, (x, p) in enumerate(zip(operands, got)) if k}
         (member, width, _dt), = d["members"]
         y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * int(width), (d["row"] + 1) * int(width))
         if y is None:
             raise LookupError(f"row {r['i']} output {member}: {why}")
         key = (rid, int(r["i"]), arrive)
         if key not in twins:
-            twins[key] = _twin(V, logits, ops)
+            twins[key] = _twin(spec_base(r["spec"]), V, logits, ops)
         token, words = twins[key]
         if np.asarray(y).size != 1 or int(np.asarray(y).reshape(-1)[0]) != token:
             raise ValueError(f"{what}: the twin's token {token} is not the row's served {member} {np.asarray(y).reshape(-1).tolist()}")
@@ -142,15 +156,17 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         for i, k in enumerate(P):
             u = us[k]
             wires = {p: (w, j) for p, w, j in u.wires}
+            params = u.defn.signature()[0]
+            bits = tp.packed or (16,) * len(names)
             ports = []
-            for x, _ty in u.defn.signature()[0]:
+            for g, (x, _ty) in enumerate(params):
                 if x == "logits":
                     ports.append(logits[u.lanes[0]:u.lanes[1]])
                 elif x in wires:
-                    ports.append(_u16(words[wires[x][0]][wires[x][1]], 32))
+                    ports.append(_u16(words[wires[x][0]][wires[x][1]], bits[g]))
                 else:
                     ports.append(_u16([ops[x]], BITS[x]))
-            ports += [_u16(f, 32) for f in words[u.key]]
+            ports += [_u16(f, bits[len(params) + j]) for j, f in enumerate(words[u.key])]
             if len(ports) != len(names):
                 raise ValueError(f"{what}: {len(ports)} ports, not member {m.key}'s {names}")
             for q, a in zip(names, ports, strict=True):
@@ -167,16 +183,14 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
 
 
 def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]]) -> list[CS.Member]:
-    """``ms`` with each stage member's wired parameters (`topp_stages.Unit.wires`) wired to the output rows of the units that
+    """``ms`` with each stage member's wired parameters (its plan's ``Unit.wires``) wired to the output rows of the units that
     write them (the same row's; each template's units in the module's order); refused when such a unit's template is not in
     the partition."""
-    from verity.definitions.registry.topp_stages import plan
-
     of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "stage"}
     base = {t: min(m.base for m in ms if m.template == t) for t in of}
     unit: dict[tuple[str, int, tuple], int] = {}
     for t, rs in of.items():
-        u = base[t]
+        u, plan = base[t], _plan(spec_base(template(t).word))
         for rid, _pi, r, d in rs:
             us = plan(int(d["statics"]["V"]))
             for k in positions(template(t), d["statics"]):
@@ -184,6 +198,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     writers: dict[str, list[tuple[str, str, np.ndarray]]] = {}
     for t, rs in of.items():
         tp = template(t)
+        plan = _plan(spec_base(tp.word))
         g = {nm: i for i, (nm, _ty) in enumerate(tp.fn.signature()[0])}
         ports: dict[str, tuple[int, list[int]]] = {}
         for rid, _pi, r, d in rs:

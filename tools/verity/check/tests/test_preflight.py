@@ -109,12 +109,13 @@ def _usage(free_gb: float):
     return lambda p: types.SimpleNamespace(free=int(free_gb * PF.GB))
 
 
-def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, sha=None, runs=None, shared=False):
+def _run(tmp_path, tree, *, inputs=None, custody=None, warm=True, cpu=NO_AVX, free_gb=100.0, usage=None, sha=None, runs=None,
+         shared=False):
     cache = tmp_path / "cache"
     if warm:
         (cache / "lean-deps" / _key(tree)).mkdir(parents=True, exist_ok=True)
     (tmp_path / "cpuinfo").write_text(cpu)
-    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", _usage(free_gb), sha=sha, runs=runs, shared=shared)
+    return PF.run(tree, inputs, custody, cache, tmp_path / "cpuinfo", usage or _usage(free_gb), sha=sha, runs=runs, shared=shared)
 
 
 def test_a_prepared_pod_passes(tmp_path, path):
@@ -230,6 +231,26 @@ def test_too_little_disk_is_refused(tmp_path, path):
     """TO3's check ran out of space on a pod that started with 36 GB free."""
     _, fails = _run(tmp_path, _tree(tmp_path), inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), free_gb=36)
     assert len(fails) == 1 and fails[0].startswith("disk: 36 GB free") and "needs 45 GB" in fails[0] and "larger pod" in fails[0]
+
+
+def test_a_short_disk_first_loses_the_scratch_a_killed_check_left(tmp_path, path):
+    """A check cancelled mid-audit leaves its Lean audit scratch in the cache, and the next run on the machine was refused for
+    the space it held: the preflight removes each tree no audit holds (here one whose creator's pid is gone) before it measures
+    again, keeps one whose creator lives, and on a machine with the space removes nothing."""
+    tree, cache = _tree(tmp_path), tmp_path / "cache"
+    dead, alive = cache / f"{PF.LA.SCRATCH}{2 ** 31}-a", cache / f"{PF.LA.SCRATCH}{os.getpid()}-b"     # no pid reaches 2^31
+    for d in (dead, alive):
+        (d / "build").mkdir(parents=True)
+    ok = dict(inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE))
+    _, fails = _run(tmp_path, tree, **ok, free_gb=100)
+    assert fails == [] and dead.is_dir()
+    facts, fails = _run(tmp_path, tree, **ok, usage=lambda p: types.SimpleNamespace(free=int((36 if dead.exists() else 76) * PF.GB)))
+    assert fails == [] and not dead.exists() and alive.is_dir(), fails
+    assert f"disk: removed 1 Lean audit scratch tree(s) in {cache} that no audit holds, a killed check's: {dead.name}" in facts
+    assert any(f.startswith("disk: 76 GB free") and "needs 45 GB" in f for f in facts), facts
+    (dead / "build").mkdir(parents=True)
+    facts, fails = _run(tmp_path, tree, **ok, free_gb=36)
+    assert not dead.exists() and len(fails) == 1 and fails[0].startswith("disk: 36 GB free"), "what it frees is measured, not assumed"
 
 
 def _recorded(runs: Path, run_id: str, tool: str, free_gb: list[float]) -> None:

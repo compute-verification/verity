@@ -1,9 +1,12 @@
 """Whether two builds of one module are one build but for where its source was: the module's `.olean` parts (`olean`,
 and a `module` file's `olean.server` and `olean.private`) compared as the object graphs Lean's compactor wrote, not as bytes.
 
-Lean 4.34's output is byte-identical for one module's sources built twice at one path, whatever the thread count, but not
-at another path: a module's `olean.server` keeps each message its compile logged (a linter's warning) with the absolute
-path of its source, and its `olean.private` points into that part, so a longer path moves the objects after it. A
+Lean 4.34's output is byte-identical for most modules' sources built twice at one path, whatever the thread count, but
+not for every one's: an equation lemma Lean realizes when a declaration first asks for it can name its binders in that
+declaration's hygiene context, so which declaration asks first changes the bytes (`Spot.SecondStage`'s `check.eq_3`),
+which a records run meets by compiling the module again (`lean_changed.mismatched`). Nor is it at another path: a module's `olean.server` keeps each message its compile logged (a
+linter's warning) with the absolute path of its source, and its `olean.private` points into that part, so a longer path
+moves the objects after it. A
 sampled recompile (`check.py`'s `sampled`) checks a module built in another tree, so for a module whose compile logged a
 message, bytes alone would refuse it. `differs` walks both graphs from each part's root in step: every object must have
 the same kind, fields and scalar bytes, and its fields the same, recursively, across the parts, which point into each

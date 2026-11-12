@@ -29,7 +29,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
   with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
   (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
-  `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
+  `names open --as HANDLE --succeeds` takes a handle over and opens the registry's holder change for you to mark, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
   `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
@@ -77,8 +77,8 @@ msg owners PATH...` names each path's owner (longest prefix).
   `ask` and `announce` warn past 60 words (150 for an announcement) and refuse past twice that: put the body in its issue
   (`research msg linear comment ISSUE --file BODY.md --as ME`) and post a line that links it.
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
-- **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (needs `SLACK_BOT_TOKEN`; the doorbells
-  it rang keep their copy).
+- **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (the doorbells it rang keep their
+  copy).
 - **Announcing.** `--verify CMD` marks a required action and names the command that shows it took; an announcement that
   fetches or installs code needs a pin, `--ships URL#sha256=<64 hex>` or `git:<40-hex commit>`. An addressed handle runs
   `verify-author`, applies it at its next safe point (checking every pinned checksum first, and running nothing that
@@ -89,7 +89,8 @@ msg owners PATH...` names each path's owner (longest prefix).
 ## Setup and subscriptions
 
 `SLACK_BOT_TOKEN` is Verity's bot; never print it. Without it, `research msg` goes through Verity's Slack broker on your
-Cursor identity (slack.py's docstring says which calls need the token).
+Cursor identity, for every call: the broker allows `retract`'s edit, `groups sync --apply` and `chat` only by who asks
+(`BROKER_GUARDED` in slack.py).
 `RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id>` identifies you. Two Slack apps sit in every channel: Cursor's
 delivers wakes (`subscribe_slack_*`), Verity's bot posts and reads, so a subscription to a channel without Cursor's app
 never fires. `research msg subscriptions --as <your handle>` prints the subscribe calls to make (exit 2 while a channel
