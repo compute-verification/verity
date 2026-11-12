@@ -131,6 +131,7 @@
     {"file": "tests/program/test_artifact_applicability_independent.py", "kind": "SIM115", "symbol": "test_v_program_digest_unchanged_by_the_patch", "detail": "Use a context manager for opening files"},
     {"file": "tests/program/test_artifact_applicability_independent_of_record.py", "kind": "SIM115", "symbol": "test_static_reference_hosts_share_the_program_digest", "detail": "Use a context manager for opening files"},
     {"file": "tests/program/test_bf16_gemm.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/program/test_boolean_marlin_moe.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_composition.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_composition.py", "kind": "SIM300", "symbol": "test_fa2_kblock_n_is_the_pinned_kernels_align_rule", "detail": "Yoda condition detected"},
     {"file": "tests/program/test_composition.py", "kind": "SIM300", "symbol": "test_two_records_differ_in_gemm_and_attention_only", "detail": "Yoda condition detected", "count": 4},

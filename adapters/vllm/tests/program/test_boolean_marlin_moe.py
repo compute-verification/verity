@@ -13,14 +13,15 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import bind
-from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation import bits as BS
+from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.types import Array
 from verity.definitions import boolean as SW
 from verity.definitions.numerics import marlin_moe_rows as MR
-from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.registry import boolean_marlin_moe as BM
 from verity.definitions.registry import marlin_moe as MM
 
