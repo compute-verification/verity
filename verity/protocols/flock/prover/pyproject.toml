@@ -151,6 +151,9 @@ tests = ["tests/test_stream_zk_server.py"]
 # (sampled-proofs-verifier, sampled-proofs-difftest) and of flock-verify and flock-firewall: their packages and those
 # they require by path
 paths = [
+    "verity/circuits/base",
+    "verity/circuits/lean",
+    "verity/commitments/lean",
     "verity/commitments/lms/lean",
     "verity/composite/device/live_challenger",
     "verity/protocols/interface",
