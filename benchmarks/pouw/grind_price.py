@@ -418,7 +418,7 @@ def render(t: dict) -> str:
     lines += ["", "## Deployed H1 attention's floor (ATTN-NOISE §5's h), visible matched rows", "",
               ("Each cell is the rows the cheater picks after the seed (`visible_premium`), then ATTN-NOISE's h form "
                "log₂(T/δ)/(h·N) (QKᵀ: h = d/L at prefill, 448/L at decode; P·V: h = 1 at prefill, 1.75 at decode), which "
-               "leaves the pick out. A call's seed draws a KV head's K rows and V columns once, read by its heads/kv "
+               "leaves the pick out. A call's seed samples a KV head's K rows and V columns once, read by its heads/kv "
                "query heads (GQA), so its prefill h is those over heads/kv; at decode the query's rows bind."), "",
               "| model | regime | T | QKᵀ, a seed a head | P·V, a seed a head | QKᵀ, a seed a call | P·V, a seed a call |",
               "|---|---|---|---|---|---|---|"]
