@@ -1577,3 +1577,22 @@ on the card would take.
   walk on (the host's other parts, the card's proving, waiting), since proofs' planner now reads
   the host's share. And your rows hold `every_prover_warmed` (`idle_provers` 0) as KSTEADY's
   do: say in your return that Friday's pinned `steady.sh` has that gate.
+
+## Thu 12 Nov 17:29Z: OPTIONAL for Friday, only if it costs the rows nothing: one look at the walk and the wide leaf TOGETHER
+
+KMOVE's screen on card 6 today (`r20261112-155330-a835`, HASH-119; `rate.json` read by me): at one
+prover the wide level-0 leaf takes 1.97 to 2.10 s a statement where today's leaf takes 2.43 to
+2.51 s (0.79 to 0.84), the prover's CPU seconds halve (14.9 to 7.6), and `witness_s` is 1.57 to
+1.62 against 1.84 to 1.86. Your walk took `witness_s` to 0.17 to 0.21 and the statement to 1.83
+to 2.05 s. **Nobody has run the two together**, and proofs' planner now needs the prover's
+seconds to fall about 3.2 times (HASH-123).
+
+- **Say in your return, from a CPU node only:** does the wide leaf's prover side
+  (`cursor/kernels-wide-leaf-7c1e`, #9079 at `c4bdf9e1ec4a`, with #9077 on `main`) merge with the
+  walk's head without a stop, and does the selftest's twin still hold on the merged tree with
+  `fast100-wide-leaf`.
+- **If both are yes and the dry run holds:** a look of two steps a side (the walk on, the wide
+  leaf on and off) as the LAST step of card 3's job on Friday, in what its lease has left, never
+  the run's exit, said as a look on the prover's own verifier (no Lean verifier knows a wide
+  session on `main`). If either is no, or it would touch a timed step: leave it out and say why.
+  It is on a branch of its own, never on `f9fc32ff3f`.
