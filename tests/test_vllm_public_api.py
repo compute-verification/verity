@@ -40,6 +40,9 @@ NOT_SCANNED = {
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
+    "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
+                            "there that can change what is computed or committed, a credential by name only, and their "
+                            "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",

@@ -216,6 +216,36 @@ def test_a_replay_runs_under_the_served_arms_other_plugins_and_environment(tmp_p
                 "--private", str(tmp_path / "out" / "private")])
 
 
+def test_replay_json_holds_the_value_settings_in_force_in_the_environment_the_replays_engine_is_given(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The served arm's meta.json has its server's (`serve_tax.value_settings`); with the replay's, a reader sees in which
+    variables the two engines' environments differ. The replay's is taken once its own two variables are set."""
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
+    given: dict[str, str] = {}
+
+    def replayed(w: dict, *args: object) -> dict:
+        given.update(R.os.environ)                                 # what the engine and its processes inherit
+        return {"wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
+                "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}}
+
+    monkeypatch.setattr(R, "replay", replayed)
+    # `main` refuses a process with hash randomization on: its own view of `sys`, since the import system reads the real flags
+    monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
+    monkeypatch.setenv("NCCL_P2P_DISABLE", "1")
+    monkeypatch.setenv("VLLM_API_KEY", "a credential's value")
+    for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
+        monkeypatch.setenv(name, "the job's")                      # `main` sets both in this process: put back after the test
+    assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out")]) == 0
+    out = json.loads((tmp_path / "out" / "replay.json").read_text())
+    assert out["bit_exact"] and out["settings"] == R.S.value_settings(given)
+    assert {k: out["settings"]["values"][k] for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION",
+                                                      "NCCL_P2P_DISABLE", "VLLM_API_KEY")} == {
+        "VLLM_ENABLE_V1_MULTIPROCESSING": "0", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1", "NCCL_P2P_DISABLE": "1",
+        "VLLM_API_KEY": "<redacted>"}
+    assert "a credential's value" not in json.dumps(out)
+
+
 def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Serving held ``a`` back from one schedule, which ran nothing, and ``b`` arrived after it: the next step ran both.
     The replay adds ``b`` after that empty schedule; added before it, as an arrival that names none is, ``b`` runs alone

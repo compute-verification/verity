@@ -19,8 +19,9 @@ too, under the arm's environment (`served_under`), and ``--private`` is where th
 (the top-k's counters; not kept without it). Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
-differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
-(first arrival to last step); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
+differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
+(first arrival to last step) and the value settings in force in its engine's environment (``settings``, as the served
+arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
 later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
 token-select span each, and replay.json says whether each one's ids are the ones served.
@@ -349,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.update(under)
         sys.path[:0] = [p for p in under["PYTHONPATH"].split(os.pathsep) if p and p not in sys.path]
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
+    settings = S.value_settings()       # the environment the engine and every process it starts are given
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
     capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
@@ -357,6 +359,7 @@ def main(argv: list[str] | None = None) -> int:
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_under": {"plugins": [entry for entry, _ in served.general], "by": "the replay" if under else "the job",
                             "env": {k: v for k, v in served.env.items() if S.PRIVATE not in v}} if served else None,
+           "settings": settings,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], **compare(w, got)}

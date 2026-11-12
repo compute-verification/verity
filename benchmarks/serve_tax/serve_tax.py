@@ -619,6 +619,20 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
     return env
 
 
+def value_settings(env: dict[str, str] | None = None) -> dict:
+    """The integration's value settings in force in ``env`` (this process's when None), as its registry records them
+    (`verity_vllm.settings.record`): each variable set there that can change what an engine computes or commits (the
+    ones the registry declares so, and every ``VLLM_``, ``NCCL_`` and ``CUBLAS`` variable), a credential by its name
+    with no value, and the SHA-512 of them. An arm's is of the environment its server is started with (`server_env`),
+    a replay's of its engine's. What `servetax_plugin` is told (`PLUGIN_ENV`) is no setting of the registry's, so it is
+    not among them: an arm's ``plugin``, ``edges`` and ``boundary_rows`` hold it."""
+    if "verity_vllm.settings" not in sys.modules:
+        sys.path.insert(0, str(ROOT / "adapters/vllm"))
+    from verity_vllm import settings
+
+    return settings.record(env)
+
+
 def wait_ready(server: subprocess.Popen, port: int, startup_s: float) -> None:
     deadline, last = time.monotonic() + startup_s, None
     while time.monotonic() < deadline:
@@ -1662,7 +1676,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
-            "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "plugin": list(arm.plugin), "env": arm.env, "settings": value_settings(env), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "lifetime": a.lifetime, "left_out": a.leave_out,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
