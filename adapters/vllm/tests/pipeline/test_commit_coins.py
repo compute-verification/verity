@@ -200,7 +200,7 @@ def test_a_session_opened_on_another_commits_root_is_refused(tmp_path, monkeypat
 
 ABSENT = object()
 #: what a record may hold where a block is left out: no field, a null, an empty block, or another value that is no block
-NO_BLOCK = (ABSENT, None, {}, "", 0, [])
+NO_BLOCK: tuple[object, ...] = (ABSENT, None, {}, "", 0, [])
 
 
 def _with(record: dict, field: str, value: object) -> dict:
@@ -233,7 +233,7 @@ def test_a_coins_record_with_no_session_no_openings_or_no_keys_is_refused_by_nam
 def test_a_run_with_no_coins_record_has_no_key(extra):
     rc = SimpleNamespace(run_root=_root("run 1"), **({} if extra is ABSENT else {"extra": extra}))
     for keywords in (CC.positions, CC.identities):
-        with pytest.raises(ValueError, match="no coins drawn after it"):
+        with pytest.raises(ValueError, match=f"run root {_root('run 1').hex()[:16]}: no coins"):
             keywords(rc)
 
 
