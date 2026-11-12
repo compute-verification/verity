@@ -692,14 +692,14 @@ class TP2CaptureWorkerExtension:
                     raise RuntimeError(f"rank {rank}: {pname} is replicated on every rank ({note.get('shard')}) -- no other rank's shard to serve")
                 own, _ = WR.compose(pname, list(p.shape), bits, ck, world=world_, rank=rank)
                 with torch.no_grad():
-                    before = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
+                    sha_before = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
                     t = torch.from_numpy(_np.ascontiguousarray(arr)).view(p.dtype).reshape(p.shape)
                     p.data.copy_(t.to(p.device))
-                    after = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
+                    sha_after = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
                 own_sha = hashlib.sha256(_np.ascontiguousarray(own).tobytes()).hexdigest()
                 applied.append({"rank": rank, "param": pname, "from_rank": frm, "shard_rule": note.get("shard"), "sources": note.get("sources"),
-                                "served_before_sha256": before, "served_after_sha256": after, "own_shard_of_record_sha256": own_sha,
-                                "own_equals_before": own_sha == before, "after_equals_before": after == before})
+                                "served_before_sha256": sha_before, "served_after_sha256": sha_after, "own_shard_of_record_sha256": own_sha,
+                                "own_equals_before": own_sha == sha_before, "after_equals_before": sha_after == sha_before})
             res["serve_shard_from"] = applied
         # the weights the rank registers, pins and replays: its MXFP4 Marlin experts' fields as loaded (`acquire.as_loaded`, bound by the TP
         # driver with the checkpoint of record), every other tensor as served
