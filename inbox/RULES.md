@@ -159,3 +159,8 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   then fails to connect, the pod has restarted and its address changed: stop and say so; do not guess one.
   Take the table out when the lead says RunPod answers again. The control pod's entry, if you need
   `research pods ssh vy-control`, is in infra's comment on INF-712.
+- **In the seven typed directories a new function carries its types** (from #9127's landing: `benchmarks/hash`,
+  `torch_gpu`, `moe_align`, `tc_probe`, `tc_probe_fp4`, `native_peak`, `verity/definitions/kernels`): an untyped
+  one is a ruff finding (`ANN001`, `ANN201`, `ANN202`, `ANN204`), a warning at your check and a ratchet failure after
+  landing in the six `benchmarks/` ones, a failing lint in `verity/definitions/kernels`. A file with a `@triton.jit`
+  kernel gets its own line in `ruff.toml`. The import order is not held.

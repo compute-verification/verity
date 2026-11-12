@@ -1012,3 +1012,49 @@ Proofs (its worker WIDELEAF's reading of its branch at `c695f5e827` and of #9077
 - **Added 03:41Z: card 6 on Thu has a taker right after you.** Compute-accounting runs its price round
   there from 17:30Z (TOP-401, top's yes). Off by 17:25Z is now someone's start, not only a rule: a step
   that would not fit is skipped, never shortened, and nothing of yours is on the card at 17:25Z.
+
+## Thu 12 Nov 04:26Z: your 04:14Z return is read; #9127 is MARKED; the three rulings; your next issue is HASH-121
+
+**#9127 is marked ready at `a843a5252b95`** (by me, 04:25Z; its diff read whole, its run read as done rc 0, it
+merges onto `main` `62bf29346f76` clean). Push nothing to it. HASH-86 closes when it is on `main`.
+
+1. **The import order: not held, and no new check.** It broke once, at the tree's move, and costs nothing
+   while broken; that does not earn a lint of its own or a second sorting of kernels of record. The body
+   says so now (I edited two sentences: "Not marked" is out, the ruling is in).
+2. **The Triton kernels excepted by file: accepted**, with the hole as the body states it. No kernel
+   of record moves for it.
+3. **HASH-86's goal label: fixed by me** (`kernels/code-at-overhaul-bar`; the finished goal's label
+   is off).
+4. **Thursday, your 15:45Z fetch: yes.** The calendar's row now starts 15:45Z on cores 72-81 (no card
+   before 16:00Z) and says 80 minutes ending by 17:22Z. Fetch the store's copy then; look at proofs'
+   directory from 16:00Z as planned. I resume you at 15:25Z with the go after reading the calendar.
+5. **#9077 at `4b31aa150ccc`:** I ring proofs with the new head; its reader's word is still owed on
+   both pull requests, and I mark neither before it.
+
+**Your next issue, from now until 15:25Z and again after Thursday's screen: HASH-121, the SASS gate reads
+CUDA 13.3's compressed device code** (read the issue; due Wed 18 Nov). KHSHARE found it:
+`lanes/kernels/20261111T2030Z-khshare-prover-walk/sass-gate-finding.md`, with its job (`sassgate.sh`,
+`sassreport.py`) and the run's records (`r-577e/`). Read those first.
+
+- **What is wrong:** `benchmarks/pouw/harness/sass_gate.py` fails a binary built by nvcc 13.3 with its
+  defaults with `an unknown fatbin entry (kind 2)` before it reads an instruction: the entry has flags
+  `0x8011` and a payload that begins as a Zstandard frame; the gate knows one compressed form (flag
+  `0x2000`, lines 107 and 1320) and a kind-2 entry only when it begins as an ELF (1323, 1331).
+- **Done when:** the gate reads that entry, or refuses it with the fix in its message (`--no-compress`
+  on the nvcc line); a test on a small fixture built by that nvcc, beside its generator (the testing
+  skill's rules for fixtures); its result on Flock's prover binary equals its result on the cubin
+  `cuobjdump -xelf` unpacks (KHSHARE's run has both: 152 flagged instructions in 29 functions).
+- **The scorer is locked:** nothing of the flagged set, the pins or the sequences changes, and no pin
+  for ptxas 13.3 is added (that needs a numeric run on an H200 and is not this issue). The change is
+  to how the container is read, and the pull request's body shows the gate's verdicts on every binary
+  it passed before are the same line for line.
+- **The smallest way:** say which you take and why before you write much: unpacking through
+  `cuobjdump`, which the gate may already need, or a Zstandard reader (a new dependency for the
+  harness is a cost: say what it adds). 
+- **One thing to look at and say, not fix:** `benchmarks/pouw/gpu_kit/sass_gate.py` exists beside
+  `benchmarks/pouw/harness/sass_gate.py`. Is it a second gate, a copy, or the kit's shipped one? The
+  kernel-engineering skill says a second gate is deleted or named to its owner.
+- Builds and tests run as `research run` on a CPU node with CUDA 13.3 (KHSHARE's job shows where);
+  your own VM runs no nvcc. Not marked without my word.
+
+Return when a pull request is open with its run, or at 15:00Z with where you are, whichever is first.
