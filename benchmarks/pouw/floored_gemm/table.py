@@ -10,11 +10,27 @@ passes alone, `g0` (b)'s GEMM and peel alone.
 
 import csv
 import json
+import re
 import sys
+from functools import partial
 from pathlib import Path
 
 ARMS = [("lt", "(a) cuBLASLt"), ("plain", "mine, plain"), ("b", "(b) noised"), ("c", "(c) duo /32"), ("d", "(d) duo /64"),
         ("c2", "duo2 /32"), ("d2", "duo2 /64"), ("c3", "probe: duo, IMAD -> IADD3 /32"), ("c4", "probe: duo, rotate-add -> IMAD /32")]
+#: the columns of ncu's CSV that `ncu_tensor` reads
+COLUMNS = ("ID", "Kernel Name", "Metric Name", "Metric Value")
+NUMBER = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?")
+
+
+def number(text: str) -> float | None:
+    """A metric's value in ncu's CSV (thousands in commas) as a float; None for one that is no number (ncu's "n/a")."""
+    text = text.replace(",", "").strip()
+    return float(text) if NUMBER.fullmatch(text) else None
+
+
+def over(t: dict[str, float], x: str, y: str = "lt") -> str:
+    """Arm x's time over arm y's, minus 1, as a signed percentage."""
+    return f"{100 * (t[x] / t[y] - 1):+.1f}%"
 
 
 def ncu_tensor(path: Path):
@@ -25,17 +41,14 @@ def ncu_tensor(path: Path):
     if not rows:
         return None
     head, body = rows[0], rows[1:]
-    try:
-        ki, mi, vi = head.index("Kernel Name"), head.index("Metric Name"), head.index("Metric Value")
-        ii = head.index("ID")
-    except ValueError:
+    if not set(COLUMNS) <= set(head):
         return None
+    ii, ki, mi, vi = (head.index(c) for c in COLUMNS)
     per: dict[str, dict[str, float]] = {}
     for r in body:
-        try:
-            per.setdefault(r[ii] + ":" + r[ki], {})[r[mi]] = float(r[vi].replace(",", ""))
-        except ValueError:
-            pass
+        value = number(r[vi])
+        if value is not None:
+            per.setdefault(r[ii] + ":" + r[ki], {})[r[mi]] = value
     tot = sum(v.get("gpu__time_duration.sum", 0) for v in per.values())
     if not tot:
         return None
@@ -89,7 +102,7 @@ def main() -> int:
     for s in bench:
         a = s["arms"]
         t = {k: a[k]["ms"] for k in a}
-        ov = lambda x, y="lt": f"{100 * (t[x] / t[y] - 1):+.1f}%"
+        ov = partial(over, t)
         print(f"| {s['shape']} | {s['m']} {s['n']} {s['k']} | " + " | ".join(f"{a[k]['eta']:.3f}" for k, _ in ARMS) +
               f" | {ov('b')} | {ov('c')} | {ov('d')} | {ov('c2')} | {ov('d2')} | {ov('c', 'b')} | "
               f"{100 * t['form'] / t['b']:.1f}% | {a['c']['mhz']:.0f} |")
@@ -102,7 +115,7 @@ def main() -> int:
         for s in bench:
             a = s["arms"]
             t = {k: a[k]["ms"] for k in a}
-            ov = lambda x, y="lt": f"{100 * (t[x] / t[y] - 1):+.1f}%"
+            ov = partial(over, t)
             print(f"| {s['shape']} | {a['bA']['eta']:.3f} | {a['cA']['eta']:.3f} | {a['c2A']['eta']:.3f} | {ov('bA')} | "
                   f"{ov('cA')} | {ov('c2A')} | {ov('cA', 'bA')} |")
     if out:

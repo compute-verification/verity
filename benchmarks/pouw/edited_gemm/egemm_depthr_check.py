@@ -197,7 +197,9 @@ def sample32(keys, words, rounds, nstate, seed=1):
 def main() -> int:
     checks = Checks()
     rng = np.random.default_rng(7)
-    rand_words = lambda n, k: [tuple(int(x) for x in rng.integers(1, 1 << n, 4)) for _ in range(k)]
+
+    def rand_words(n: int, k: int) -> list[tuple[int, ...]]:
+        return [tuple(int(x) for x in rng.integers(1, 1 << n, 4)) for _ in range(k)]
 
     # (0) the fold is faithful: one round of the proof's fold == receipt_folds_r9.xorin_step (the pinned r9 fold).
     a0m, a1m = np.uint32(0x9E3779B1), np.uint32(0x85EBCA77)
