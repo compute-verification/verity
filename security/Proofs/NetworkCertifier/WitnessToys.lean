@@ -281,8 +281,15 @@ theorem fxQueue_fits : (RowsFormat.recordFormat fxRows fxRows_wf 4 1).fits fxQue
       intro c
       have hadm : ¬ (fxQueueSched.adm c ≤ b ∧ b < fxQueueSched.adm c + fxQueueSched.D) := by
         fin_cases c <;> simp [fxQueueSched] <;> omega
-      simp only [laneLoad, hadm, ↓reduceIte, zero_add, List.length_eq_zero_iff, List.filter_eq_nil_iff,
-        List.mem_range, beq_iff_eq]
+      have htail : tailPads fxQueueSched c b = 0 := by
+        unfold tailPads
+        split_ifs with h
+        · obtain ⟨h1, h2⟩ := h
+          have := fxQueue_bucket c _ (Nat.sub_lt h1 Nat.one_pos)
+          omega
+        · rfl
+      simp only [laneLoad, hadm, htail, ↓reduceIte, zero_add, add_zero, List.length_eq_zero_iff,
+        List.filter_eq_nil_iff, List.mem_range, beq_iff_eq]
       intro j hj
       have := fxQueue_bucket c j hj
       omega

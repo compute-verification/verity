@@ -131,16 +131,20 @@ theorem lanesOfRows_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns
     funext i
     simp [CertifierSchedule.bucket]
   rw [hcount] at key
-  rw [List.getElem?_map, key]
+  have hlt : j % s.r < (((certifierCode s a c).filter fun x => x.1 == s.bucket c j).map Prod.snd).length := by
+    rw [List.length_map]
+    exact (List.getElem?_eq_some_iff.1 key).1
+  rw [List.getElem?_append_left hlt, List.getElem?_map, key]
   exact Prod.ext (hfst j h2).symm rfl
 
 /-- A row of the code's cells holds each connection's load in the bucket. -/
 theorem length_bucketFrames (conns : List κ) (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (b : ℕ) :
     (bucketFrames conns s (certifierCode s a) b).length = (conns.map fun c => laneLoad s c b).sum := by
-  simp only [bucketFrames, List.length_flatMap, List.length_map, laneFrames, List.length_append, laneLoad]
+  simp only [bucketFrames, List.length_flatMap, List.length_map, laneFrames, List.length_append, laneLoad,
+    List.length_replicate]
   congr 1
   refine List.map_congr_left fun c _ => ?_
-  congr 1
+  congr 2
   · split_ifs <;> simp
   · rw [← List.countP_eq_length_filter, ← List.countP_eq_length_filter,
       show (fun x : ℕ × CellView Cell => x.1 == b) = (· == b) ∘ Prod.fst from rfl, ← List.countP_map,

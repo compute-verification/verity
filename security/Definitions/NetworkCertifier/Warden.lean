@@ -75,6 +75,11 @@ client receives on each connection, each with its bucket. -/
 def certifierCode {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) : κ → List (ℕ × CellView Cell) :=
   fun c => certifierLane (arr c) (s.bucket c) 0 (s.cells c)
 
+/-- The padding after connection `c`'s last cell in bucket `b`: in the bucket of its lane's last cell, the slots of the
+bucket's `r` after it; none in any other bucket, or for a lane of no cells. -/
+def tailPads {κ : Type} (s : CertifierSchedule κ) (c : κ) (b : ℕ) : ℕ :=
+  if 0 < s.cells c ∧ b = s.bucket c (s.cells c - 1) then s.r - 1 - (s.cells c - 1) % s.r else 0
+
 /-- **The fail cell** of connection `c`: the first cell of its lane, among the data's cells and the end of the stream,
 that reached the network certifier after its bucket, or none. -/
 def failCell {κ Cell : Type} (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) (c : κ) : Option ℕ :=

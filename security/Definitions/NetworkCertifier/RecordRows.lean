@@ -40,10 +40,11 @@ namespace NetTiming
 variable {κ Cell : Type}
 
 /-- The frames connection `c` sends in bucket `b`, as its record holds them: `r` padding frames in each bucket from its
-admission to `adm c + D`, then the cells `v c` of its lane in bucket `b`, in order. -/
+admission to `adm c + D`, then the cells `v c` of its lane in bucket `b`, in order, then the padding after its last cell
+(`tailPads`). -/
 def laneFrames (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) (b : ℕ) : List (CellView Cell) :=
   (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++
-    ((v c).filter fun x => x.1 == b).map Prod.snd
+    ((v c).filter fun x => x.1 == b).map Prod.snd ++ List.replicate (tailPads s c b) .pad
 
 /-- **Bucket `b`'s row of frames**: each connection's frames in the bucket (`laneFrames`), connection by connection in
 the order `conns` (the ordinals), each frame naming its connection. -/
@@ -61,7 +62,7 @@ def lanesOfRows [DecidableEq κ] (s : CertifierSchedule κ) (rows : ℕ → List
 /-- The number of frames connection `c` sends in bucket `b` on schedule `s`, whatever its cells hold. -/
 def laneLoad (s : CertifierSchedule κ) (c : κ) (b : ℕ) : ℕ :=
   (if s.adm c ≤ b ∧ b < s.adm c + s.D then s.r else 0) +
-    ((List.range (s.cells c)).filter fun j => s.bucket c j == b).length
+    ((List.range (s.cells c)).filter fun j => s.bucket c j == b).length + tailPads s c b
 
 /-- **The rows format**: the connections in ordinal order (`conns`), a frame's encoding (`enc`) and its decoding
 (`dec`), the egress link the rows are on (`link`), the buckets a window (`T`), and each bucket's jitter class and
