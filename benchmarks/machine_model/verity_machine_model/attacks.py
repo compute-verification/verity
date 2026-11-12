@@ -7,6 +7,7 @@ the MACs it replaces at the vector's MAC price, so X ≥ 1 means it costs at lea
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable
 
 from verity_machine_model.lp import MACS, Solution, cost, price
 from verity_machine_model.model import Attack, Census, Floor, Model, measured_cost
@@ -49,7 +50,8 @@ def priced(census: Census, sol: Solution, floors: list[Floor], claim: str) -> li
                    for f in floors if f.claim == claim and f.kind in census), key=lambda t: (round(t[2], 2), t[0]))
 
 
-def cheapest(census: Census, sol: Solution, attacks: list[Attack], design: str, n: int = 3):
+def cheapest(census: Census, sol: Solution, attacks: list[Attack], design: str,
+             n: int = 3) -> tuple[list[tuple[float, str, str]], float | None]:
     """The `n` cheapest (X, family, name) of `design`, and the cheapest three-piece (iv) attack's X (None without one)."""
     xs = sorted((x_of(census, sol, a.program), a.family, a.name) for a in attacks
                 if a.design == design and not set(a.program) & set(sol.refused))
@@ -66,8 +68,8 @@ def families(attacks: list[Attack]) -> Counter:
     return Counter(a.family for a in attacks)
 
 
-def check(model: Model, census: Census, sol: Solution, credits, attacks: list[Attack], x_min: float,
-          rho: float, designs: set[str] | None = None) -> list[str]:
+def check(model: Model, census: Census, sol: Solution, credits: Iterable[tuple[str, float]], attacks: list[Attack],
+          x_min: float, rho: float, designs: set[str] | None = None) -> list[str]:
     """What the vector fails, empty when it passes: Σθ = 1, every price at or below its kind's measured cost (a convex
     combination of rows is at most its largest row), ρ on every CUDA lane kind, every credit paid, every attack at
     X ≥ x_min, and no kind refused."""

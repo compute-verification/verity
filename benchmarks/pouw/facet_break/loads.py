@@ -33,6 +33,7 @@ import argparse
 import json
 import re
 import sys
+import tomllib
 from fnmatch import fnmatchcase
 from fractions import Fraction
 from itertools import combinations
@@ -42,7 +43,11 @@ HERE = Path(__file__).resolve().parent
 MM = Path(__file__).resolve().parents[2] / "machine_model"
 sys.path.insert(0, str(MM))
 
-from verity_machine_model.model import census, model  # noqa: E402
+from verity_machine_model.model import census, entries, holds, model, vector, vectors  # noqa: E402
+
+__all__ = ["BULK_BYTES", "bulk_counts", "census", "class_of", "CLASS_RULES", "facet_loads", "gate_loops",
+           "l2_bytes_per_s", "L2_ROW", "load_rows", "main", "MMA_FORMS", "model", "program", "rates_by_class",
+           "unpriced"]
 
 SMSPS = 4
 
@@ -227,7 +232,6 @@ def l2_default() -> float | None:
     t = MM / "data" / "table.toml"
     if not t.exists():
         return None
-    import tomllib
     return float(tomllib.loads(t.read_text())["l2"])
 
 
@@ -267,7 +271,8 @@ def facet_loads(x: dict[str, float], c: dict[str, dict[str, float]], cycle_u: fl
     return load
 
 
-def program(row: dict, c, cycle_u: float, generic: bool = False, l2: float | None = None) -> dict:
+def program(row: dict, c: dict[str, dict[str, float]], cycle_u: float, generic: bool = False,
+            l2: float | None = None) -> dict:
     x = row["x"] if "x" in row else rates_by_class(row)
     load = facet_loads(x, c, cycle_u, generic)
     if "x_issue" in row and "issue" in load:
@@ -385,7 +390,6 @@ def load_rows(paths: list[Path], full: bool = False) -> list[dict]:
 
 def in_vector(epoch: str) -> set[str]:
     """The rows the named vector's price LP (and CALC's ε LP) reads, so a violation of one is flagged as ε-reading."""
-    from verity_machine_model.model import vector, vectors
     for n in vectors():
         v = vector(n)
         if v.epoch == epoch:
@@ -393,7 +397,7 @@ def in_vector(epoch: str) -> set[str]:
     return set()
 
 
-def cmd_loads(a) -> int:
+def cmd_loads(a: argparse.Namespace) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
@@ -408,7 +412,7 @@ def cmd_loads(a) -> int:
     return 0
 
 
-def cmd_table(a) -> int:
+def cmd_table(a: argparse.Namespace) -> int:
     """Every program as a JSON line: its mix, its load on every row and its heaviest row (the results table)."""
     m = model()
     epoch = a.epoch or m.current
@@ -422,7 +426,7 @@ def cmd_table(a) -> int:
     return 0
 
 
-def cmd_summary(a) -> int:
+def cmd_summary(a: argparse.Namespace) -> int:
     m = model()
     epoch = a.epoch or m.current
     c = census(m, epoch)
@@ -472,7 +476,7 @@ def cmd_summary(a) -> int:
     return 1
 
 
-def cmd_refit(a) -> int:
+def cmd_refit(a: argparse.Namespace) -> int:
     """The refit a beaten row needs. A row over MMA and one other class (R1, KFFMA0, KALU*, EIMAD*, …) gets the upper hull
     of every measured point (x_MMA, x_X) and the old row's MMA-axis end, at the margin (`eps1.facets`, the rule VF3m-16
     and VF3n-16 refit by); any other row gets its coefficients scaled so the worst program loads 1 - margin."""
@@ -553,12 +557,11 @@ def polygon(lines: list[tuple[float, float]], s: float, label: str) -> list[tupl
 
 def _close(m, epoch: str, rows: list[str]) -> list[str]:
     """Each live census line on the given rows, to close at `epoch` (its `until`), by the file it is in."""
-    from verity_machine_model.model import entries, holds
     return [f"close: census/{e.since or m.epochs[0]}.csv {e.kind},{e.row} until {epoch}"
             for e in entries(m) if e.row in rows and holds(m, e.since, e.until, epoch)]
 
 
-def cmd_family(a) -> int:
+def cmd_family(a: argparse.Namespace) -> int:
     """A beaten family of joint rows refitted as one (the VF3m-16 rule, `eps1.py facets --prior`): the upper hull of the
     old rows' vertices and every measured program, at the margin. Over an axis class (`--axis`, default MMA: the generic
     lines, which IMMA16832 takes, and with `--all-forms` every form) and one class (`--kind`); or, with `--forms`, the
