@@ -74,3 +74,33 @@ def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
     kept = rows.every(report, {**parts, **host, "offload_ms": [0.25] * 7})
     assert kept["launch_ms"] == host["launch_ms"] and kept["root_at_ms"][3] == 35.0 and kept["offload_ms"] == [0.25] * 7
     assert set(rows.every(report, parts)) == {"interval_ms", "gpu_ms", "part_ms"}
+
+
+def test_a_backend_builds_its_store_with_the_stores_own_shape(monkeypatch, tmp_path):
+    """The backend's shape also holds its side stream's arms, which no store takes: its own construction line, run
+    here over stand-ins, hands the store arguments the store's real signature binds."""
+    import inspect
+    from types import SimpleNamespace
+
+    device = rows.device
+    real, built = inspect.signature(device.DeviceStore.__init__), {}
+
+    def store(*args, **kwargs):
+        built.update(real.bind(None, *args, **kwargs).arguments)
+        return SimpleNamespace()
+
+    lib = lambda path, torch: SimpleNamespace(so=SimpleNamespace(rs_enable_peers=lambda: 0))  # noqa: E731
+    monkeypatch.setattr(device, "Lib", lib)
+    monkeypatch.setattr(device, "Kv", lambda path, torch: SimpleNamespace())
+    monkeypatch.setattr(device, "Gpu", lambda torch, index: SimpleNamespace(index=index))
+    monkeypatch.setattr(device, "DeviceStore", store)
+    torch = SimpleNamespace(cuda=SimpleNamespace(device_count=lambda: 1, synchronize=lambda: None))
+    so = tmp_path / "session.so"
+    so.write_bytes(b"")
+    backend = device.GpuBackend(torch, str(so), str(so), 1 << 20, seed=7, gpus=1, sketch_ctas=132)
+    assert backend.shape["side_priority"] == -1 and backend.shape["side_after"] is False
+    assert built["sketch_ctas"] == 132 and built["blocks"] == 1 << 20
+    assert device.store_shape(backend.shape) == {"chunk": 1 << 18, "kept_from": 6, "sketch_ctas": 132,
+                                                 "payload_kept_from": 6}
+    with pytest.raises(TypeError, match="side_priority"):
+        store(None, None, None, None, 1 << 20, b"", 7, **backend.shape)

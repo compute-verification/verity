@@ -1199,6 +1199,11 @@ class DeviceStore:
         return self.open_window([(handle, positions)])[0]
 
 
+def store_shape(shape: dict) -> dict:
+    """Of a backend's shape, what its store is built with; the rest (its side stream's arms) is the backend's own."""
+    return {k: shape[k] for k in ("chunk", "kept_from", "sketch_ctas", "payload_kept_from")}
+
+
 class GpuBackend:
     """The prover's backend (`prover.ProverSide`): the store across `gpus` GPUs (every visible one if None), its gates
     and calibration, its passes and openings."""
@@ -1240,7 +1245,7 @@ class GpuBackend:
         self.salt_key = self.rng.bytes(32)
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
-                                 host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
+                                 host_blocks=host_blocks, hbm=hbm, **self.host, **store_shape(self.shape))
         self.payload_key = self.salt_key
 
     def set_payload_key(self, key: bytes) -> None:
