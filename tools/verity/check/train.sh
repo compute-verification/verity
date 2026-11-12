@@ -129,17 +129,26 @@ tell() {
 trap tell EXIT
 root=$(git rev-parse --show-toplevel)
 sha=$(git -C "$root" rev-parse --verify "$commit^{commit}" 2>>"$why") || die "$commit: no such commit"
+common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)
+# origin holds the commit: a branch of origin points at it (the queue pushed it from this clone) or origin's main has it. Both
+# are milliseconds, where asking every branch of origin (`for-each-ref --contains`) walks the whole history
+held() {
+  [ -n "$(git -C "$root" for-each-ref --count=1 --points-at "$sha" refs/remotes/origin)" ] \
+    || git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main 2>/dev/null
+}
 # one fetch and worktree at a time per checkout: two launches racing on the fetch both fail
-exec 9> "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train.lock"
+exec 9> "$common/train.lock"
 flock 9
-# a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
-for backoff in 5 15 ''; do
-  git -C "$root" fetch -q origin 2>>"$why" && break
-  [ -n "$backoff" ] || die "git fetch origin failed"
-  sleep "$backoff"
-done
-[ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
-  || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
+if ! held; then
+  # a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
+  for backoff in 5 15 ''; do
+    git -C "$root" fetch -q origin 2>>"$why" && break
+    [ -n "$backoff" ] || die "git fetch origin failed"
+    sleep "$backoff"
+  done
+  held || [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
+    || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
+fi
 if [ -n "$below" ]; then
   b=$(git -C "$root" rev-parse -q --verify "$below^{commit}") || die "--base $below: no such commit"
   pass+=(--base "$b")
