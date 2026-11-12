@@ -2412,8 +2412,9 @@ def test_rules_name_the_hold_label_and_refuse_anything_else():
 
 def test_rules_name_the_author_of_the_queues_commits_with_a_name_and_an_address_or_name_none():
     """Rules that name no author leave the queue's commits as `IDENTITY`, the same object, so nothing about them changes;
-    rules that name one name both its name and its address, and half of one, an empty one, or one git would write otherwise
-    (it drops a newline, `<` and `>` without a word) is refused when the rules load, saying what to write."""
+    rules that name one name both its name and its address, and half of one, an empty one, one git would write otherwise
+    (it drops a newline, `<` and `>` without a word) or one no environment holds (a NUL) is refused when the rules load,
+    saying what to write."""
     for unnamed in (Rules.parse(RULES), Rules.parse(""), Rules()):
         assert unnamed.author is None and unnamed.identity is Q.IDENTITY
     name, email = AUTHOR
@@ -2429,6 +2430,7 @@ def test_rules_name_the_author_of_the_queues_commits_with_a_name_and_an_address_
                      ('author = { name = "n", email = " " }', "names an empty email"),
                      ('author = { name = "a\\nb", email = "e@x.invalid" }', r"names name 'a\nb', which holds '\n'"),
                      ('author = { name = "n", email = "<e@x.invalid>" }', "names email '<e@x.invalid>', which holds '<' and '>'"),
+                     ('author = { name = "n", email = "e\\u0000@x.invalid" }', r"names email 'e\x00@x.invalid', which holds '\x00'"),
                      ('author = { name = 7, email = "e@x.invalid" }', "names name 7, not a string"),
                      ('author = { name = "n", email = "e@x.invalid", date = "d" }', "has unknown keys ['date']"),
                      ('author = "n <e@x.invalid>"', "is 'n <e@x.invalid>', not a table")):

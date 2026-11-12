@@ -736,8 +736,9 @@ class Rules:
 
 
 def _author_why(author: object) -> str | None:
-    """Why the rules' ``author`` names no author and committer: both a name and an address, each a non-empty string git writes
-    as given (it drops a newline, `<` and `>` from either without a word); None when it names them."""
+    """Why the rules' ``author`` names no author and committer: both a name and an address, each a non-empty string holding
+    nothing git drops from inside one without a word (a newline, `<`, `>`) or can't be given at all (a NUL, which no
+    environment holds); None when it names them."""
     if not isinstance(author, dict):
         return f"is {author!r}, not a table"
     if unknown := sorted(set(author) - {"name", "email"}):
@@ -750,7 +751,7 @@ def _author_why(author: object) -> str | None:
             return f"names {key} {value!r}, not a string"
         if not value.strip():
             return f"names an empty {key}"
-        if bad := sorted(set(value) & set("\n<>")):
+        if bad := sorted(set(value) & set("\0\n<>")):
             return f"names {key} {value!r}, which holds {' and '.join(repr(c) for c in bad)}"
     return None
 
