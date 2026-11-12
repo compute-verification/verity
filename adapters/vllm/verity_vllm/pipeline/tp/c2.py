@@ -16,13 +16,10 @@ from typing import Any
 
 from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
 from verity_vllm.check.cublas_route_pin import route_pin_gate
-from verity_vllm.log import init_logger
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
 
 __all__ = ["DEFER_WORLDS"]
-
-logger = init_logger(__name__)
 
 DEFERRED = "replay_deferred.json"
 SCHEMA = TP_REPLAY_DEFERRED_SCHEMA
@@ -451,7 +448,7 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
             for rk in ranks:
                 RB.discard(out, p, rank=rk)
         if pending:
-            logger.info("[tp2commit] REPLAY BUNDLES discarded: the Commit is decided (pass %s) with pairs %s awaiting a replay", summ.get("pass"), pending)
+            print(f"[tp2commit] REPLAY BUNDLES discarded: the Commit is decided (pass {summ.get('pass')}) with pairs {pending} awaiting a replay", flush=True)
         return
     man_sha = sha256_file(Path(required_manifest)) if required_manifest else None
     bundles = []
@@ -467,8 +464,8 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
             t0 = time.perf_counter()
             m = RB.seal(out, pair, ctx, None, hashed=b["hashed"], rank=int(rk))
             bundles.append({"pair": pair, "rank": int(rk), "path": m["path"], "manifest_sha256": m["sha256"], "bytes": m["bytes"], "files": len(m["files"])})
-            logger.info("[tp2commit] REPLAY BUNDLE (pair %d, rank %s): %s sealed in %.1f s, %d files, %d MiB, manifest sha256 %s",
-                        pair, rk, m["path"], time.perf_counter() - t0, len(m["files"]), m["bytes"] >> 20, m["sha256"][:16])
+            print(f"[tp2commit] REPLAY BUNDLE (pair {pair}, rank {rk}): {m['path']} sealed in {time.perf_counter() - t0:.1f} s, {len(m['files'])} files, "
+                  f"{m['bytes'] >> 20} MiB, manifest sha256 {m['sha256'][:16]}", flush=True)
     xr_of = {str(r["pair"]): {"result": xr.get("result"), "by_family": xr.get("by_family")} for r, xr in zip(trt, xrank_pairs)}
     doc = {"schema": SCHEMA, "world": world, "pending_pairs": pending, "bundles": bundles, "all_pass": all_pass, "vc_base": vc_base,
            "components": comps, "xrank": xr_of, "xrank_families": xrank_families, "required_manifest": required_manifest,

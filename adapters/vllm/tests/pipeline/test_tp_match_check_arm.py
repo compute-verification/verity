@@ -85,18 +85,17 @@ def test_a_control_arm_that_generated_other_tokens_fails_the_check_alone(tmp_pat
 
 
 @pytest.mark.parametrize("control, verdict", [(GENERATED, True), ([7, 9], False), (None, True)], ids=["equal tokens", "other tokens", "no control"])
-def test_the_check_says_its_verdict_and_its_three_parts_in_the_log_and_writes_nothing_to_stdout(tmp_path, caplog, capsys, control, verdict):
+def test_the_check_prints_its_verdict_and_its_three_parts(tmp_path, capsys, control, verdict):
     rc, doc = _check(_capture(tmp_path / "run", control=control))
     said = json.dumps({k: doc[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1)
-    assert caplog.messages == [said] and len(said) < 6000 and doc["pass"] is verdict and rc == (0 if verdict else 1)
-    assert capsys.readouterr().out == ""
+    assert capsys.readouterr().out == said + "\n" and len(said) < 6000 and doc["pass"] is verdict and rc == (0 if verdict else 1)
 
 
-def test_what_the_check_says_in_the_log_ends_at_6000_characters(tmp_path, caplog, monkeypatch):
+def test_what_the_check_prints_ends_at_6000_characters(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(M, "_tokens", lambda control, tok: {"pass": True, "note": "n" * 7000})
     rc, doc = _check(_capture(tmp_path / "run"))
-    (said,) = caplog.messages
-    assert said == json.dumps({k: doc[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1)[:6000] and len(said) == 6000
+    said = capsys.readouterr().out
+    assert said == json.dumps({k: doc[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1)[:6000] + "\n" and len(said) == 6001
 
 
 def test_without_a_control_arm_the_tokens_part_is_not_judged(tmp_path):

@@ -16,10 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.log import init_logger
 from verity_vllm.pipeline.tp import lease as TPL
-
-logger = init_logger(__name__)
 
 
 def thread_cpu(worker: Any) -> dict[str, Any]:
@@ -67,7 +64,7 @@ def run(llm: Any, run_once: Callable[[], dict[str, Any]], d0: Path, ranks: list[
         rows.append(row)
         with (d0 / "traced.jsonl").open("a") as f:
             f.write(json.dumps(row, default=str) + "\n")
-        logger.info("[tp2commit] traced torch %s: %.3fs steps %d -> %s", arm, r["wall_s"], len(r["step_wall_s"]), d)
+        print(f"[tp2commit] traced torch {arm}: {r['wall_s']:.3f}s steps {len(r['step_wall_s'])} -> {d}", flush=True)
     if release:
         TPL.stop(llm, timeout, "work.trace")
     return rows

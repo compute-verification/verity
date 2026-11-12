@@ -215,21 +215,20 @@ def test_a_rank_with_no_replay_record_is_not_a_deferred_one():
     assert C2.query_population_component(rows, True)["why"] == "deferred: ranks ['0'] replay from their bundles"
 
 
-def test_a_decided_commit_names_the_runs_that_awaited_a_replay_or_held_no_commit(tmp_path: Path, caplog):
+def test_a_decided_commit_names_the_runs_that_awaited_a_replay_or_held_no_commit(tmp_path: Path, capsys):
     rows = [{"arm": "control", "pair": 0}, {"arm": "instrumented", "pair": 0}, {"arm": "instrumented", "pair": 1, "commit": None},
             _run({}, pair=2, commit_pass=None), _run({}, pair=3, commit_pass=True), _run({}, pair=4, commit_pass=False)]
     summ = {"pass": False}
     C2.seal(tmp_path, summ, rows, {}, replay_cfg={"requests": []}, required_manifest=None, world=2, versions={}, all_pass=False, vc_base=None, comps={},
             xrank_pairs=[], xrank_families=[], label=None)
-    assert caplog.messages == ["[tp2commit] REPLAY BUNDLES discarded: the Commit is decided (pass False) with pairs [0, 1, 2] awaiting a replay"]
+    assert capsys.readouterr().out == "[tp2commit] REPLAY BUNDLES discarded: the Commit is decided (pass False) with pairs [0, 1, 2] awaiting a replay\n"
     assert summ == {"pass": False} and list(tmp_path.iterdir()) == []
-    caplog.clear()
     C2.seal(tmp_path, summ, rows[-2:], {}, replay_cfg={"requests": []}, required_manifest=None, world=2, versions={}, all_pass=False, vc_base=None, comps={},
             xrank_pairs=[], xrank_families=[], label=None)
-    assert caplog.messages == []
+    assert capsys.readouterr().out == ""
 
 
-def test_a_deferred_commit_seals_each_ranks_bundle_and_says_so_in_the_log(tmp_path: Path, monkeypatch, caplog):
+def test_a_deferred_commit_seals_each_ranks_bundle_and_prints_a_line_for_each(tmp_path: Path, monkeypatch, capsys):
     sealed = []
 
     def seal(out, pair, ctx, source, *, hashed, rank):
@@ -243,7 +242,7 @@ def test_a_deferred_commit_seals_each_ranks_bundle_and_says_so_in_the_log(tmp_pa
     C2.seal(tmp_path, summ, rows, {0: {0: bundle, 1: bundle}}, replay_cfg={"requests": []}, required_manifest=None, world=2, versions={},
             all_pass=True, vc_base=None, comps={}, xrank_pairs=[{"result": True, "by_family": {}}], xrank_families=[], label=None)
     assert sealed == [(0, 0, "r0", "tp"), (0, 1, "r1", "tp")]
-    assert [re.sub(r"sealed in \d+\.\d s", "sealed in N s", m) for m in caplog.messages] == [
+    assert [re.sub(r"sealed in \d+\.\d s", "sealed in N s", m) for m in capsys.readouterr().out.splitlines()] == [
         "[tp2commit] REPLAY BUNDLE (pair 0, rank 0): /bundles/pair0/rank0 sealed in N s, 2 files, 3 MiB, manifest sha256 0a0a0a0a0a0a0a0a",
         "[tp2commit] REPLAY BUNDLE (pair 0, rank 1): /bundles/pair0/rank1 sealed in N s, 2 files, 4 MiB, manifest sha256 1a1a1a1a1a1a1a1a"]
     assert summ["pass"] is None and summ["replay_deferred"]["pending_pairs"] == [0]
