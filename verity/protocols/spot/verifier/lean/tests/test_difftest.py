@@ -4852,13 +4852,45 @@ DUO = bind(CompositeDefinition("CoreSpotDuo", 0, (),
                                register=False))
 SWAP = bind(CompositeDefinition("CoreSpotSwap", 0, (), lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
                                 lambda B, S, x: array_of([B.call(ID8, x[1]), B.call(ID8, x[0])]), register=False))
+#: A token select's pieces made small, each token two rows of two logits. Gathered: DUO is a chunk, its two outputs a
+#: best and an index, and MERGE the combine, reading logits[0], every chunk's best and every chunk's index. By units:
+#: UNIT is a unit of two chunks, its outputs its chunks' bests, their indices and its first logit, and JOIN the combine,
+#: each parameter one whole output of one unit.
+MERGE = bind(CompositeDefinition(
+    "CoreSpotMerge", 0, (), lambda S: ((("x0", Value(8)), ("best", Array(2, Value(8))), ("idx", Array(2, Value(8)))), Value(8)),
+    lambda B, S, x0, best, idx: B.call(XOR8, B.call(XOR8, x0, B.call(XOR8, best[0], best[1])), B.call(XOR8, idx[0], idx[1])),
+    register=False))
+UNIT = bind(CompositeDefinition(
+    "CoreSpotUnit", 0, (), lambda S: ((("x", Array(2, Value(8))),), Tuple(Array(2, Value(8)), Array(2, Value(8)), Value(8))),
+    lambda B, S, x: tuple_of(array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]),
+                             array_of([B.call(XOR8, x[0], x[1]), B.call(XOR8, x[1], x[0])]), x[0]), register=False))
+JOIN = bind(CompositeDefinition(
+    "CoreSpotJoin", 0, (), lambda S: ((("x0", Value(8)), *((f"{p}{j}", Array(2, Value(8))) for p in ("best", "idx")
+                                                            for j in range(2))), Value(8)),
+    lambda B, S, x0, *ps: functools.reduce(lambda a, p: B.call(XOR8, a, B.call(XOR8, p[0], p[1])), ps, x0),
+    register=False))
+
+
+def _select(B, x):
+    """`TokenSelect_v4`'s shape: a token's chunks, then its combine gathering one output of each."""
+    a, b = B.call(DUO, x[0]), B.call(DUO, x[1])
+    return B.call(MERGE, x[0][0], array_of([a[0], b[0]]), array_of([a[1], b[1]]))
+
+
+def _select_units(B, x):
+    """`TokenSelectUnits_v1`'s shape: a token's units, then its combine reading each output of each whole."""
+    a, b = B.call(UNIT, x[0]), B.call(UNIT, x[1])
+    return B.call(JOIN, a[2], a[0], b[0], a[1], b[1])
+
+
 #: Replay blocks of templates with several callers, to derive round 2's rows from (`second_stage.replay_rows`): PAIR
 #: over each of two rows, in order and the other way round, its outputs returned in order; that, and ID8 over the
 #: second's output, returned beside them; ID8 over the second output of DUO, a template of two; and, deriving none, PAIR
 #: over two parameters, PAIR over a slice not one of its rows, an ID8 batch mapped over a PAIR batch's outputs, PAIR
 #: over the parameter and over SWAP's output (a port one caller links and another wires), and PAIR over two ID8 outputs
 #: (a port gathered from two writers); then DUO over each of two rows, its first outputs returned, its second, both as
-#: two fields, and, deriving none, the first's first beside the second's second.
+#: two fields, and, deriving none, the first's first beside the second's second; then a token select inlined over two
+#: tokens, gathered (`_select`: no wires, and its logits read at two row widths) and by units (`_select_units`).
 MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
                  for name, sig, body in (
     ("Pairs", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
@@ -4885,7 +4917,11 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
      lambda B, S, x: (lambda a, b: tuple_of(array_of([a[0], b[0]]), array_of([a[1], b[1]])))(
          B.call(DUO, x[0]), B.call(DUO, x[1]))),
     ("Uneven", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
-     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])))]
+     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])),
+    ("Select", lambda S: ((("x", Array(2, Array(2, Array(2, Value(8))))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([_select(B, x[0]), _select(B, x[1])])),
+    ("SelectUnits", lambda S: ((("x", Array(2, Array(2, Array(2, Value(8))))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([_select_units(B, x[0]), _select_units(B, x[1])])))]
 ID18 = PrimitiveDefinition("CoreSpotId18", 1, (("a", Value(8)),), Value(18), lambda a: a, register=False)
 WIDE = bind(CompositeDefinition("CoreSpotWide", 0, (), lambda S: ((("x", Value(8)),), Value(18)),
                                 lambda B, S, x: B.call(ID18, x), register=False))
@@ -4903,6 +4939,11 @@ REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
     (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS + WIDE_REPLAYS]
 PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
+#: The interiors of the two inlined token selects (`MULTI_REPLAYS`' last two) after a replay sample of two: each
+#: block's four chunks then its two combines, and each block's four units then its two combines.
+SECOND_SELECTS = [Setup(P.mixed_population_program([(a, 8), (b, 4)]), P.template_instances_query([a.id, b.id]))
+                  for a, b in ((DUO, MERGE), (UNIT, JOIN))]
+PROGRAMS.update({s.sha512: s.program for s in SECOND_SELECTS})
 
 
 def replay_links(j):
@@ -7069,9 +7110,13 @@ def test_the_designs_rows_place_each_callers_units(pieces):
     the last no wires either; an ID8 batch mapped over a PAIR batch's outputs, or PAIR over two ID8 outputs, makes no
     wires; the rows are then only those of the others. DUO over each of two rows, returned one field of each, links
     that field's port (`o<f>`), each field returned its own; its first output at one caller and its second at the other
-    links neither."""
-    pair, id8, duo = (codec.descriptor_id(d) for d in (PAIR, ID8, DUO))
-    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
+    links neither. A token select inlined over two tokens, its combine gathering one output of each of a token's two
+    chunks, makes no wires, and its links read the logits at two row widths, the chunk's four rows a block and, for
+    logits[0], the combine's eight; by units, the combine reading each output of each of a token's two units whole, it
+    makes five wires, each unit of the combine at its token's units' rows, the logits read at the unit's width alone."""
+    pair, id8, duo, merge, unit, join = (codec.descriptor_id(d) for d in (PAIR, ID8, DUO, MERGE, UNIT, JOIN))
+    (pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven, select,
+     units) = MULTI_REPLAYS
 
     def link(t, port, value):
         return {"port": port, "template": t, "value": value}
@@ -7101,6 +7146,14 @@ def test_the_designs_rows_place_each_callers_units(pieces):
         (halves, [link(duo, "x", "x"), link(duo, "o0", "o0"), link(duo, "o1", "o1")], [],
          rows((duo, "x", 2, two), (duo, "o0", 2, two), (duo, "o1", 2, two))),
         (uneven, None, [], []),
+        (select, [link(duo, "x", "x"), link(merge, "x0", "x"), link(merge, "o0", "o0")], None,
+         rows((duo, "x", 4, [[0, 4, 0, 1]]), (merge, "x0", 8, [[0, 2, 0, 4]]), (merge, "o0", 2, two))),
+        (units, [link(unit, "x", "x"), link(join, "o0", "o0")],
+         [{"port": port, "template": join, "wport": wport, "writer": unit}
+          for port, wport in (("x0", "o2"), ("best0", "o0"), ("best1", "o0"), ("idx0", "o1"), ("idx1", "o1"))],
+         rows((unit, "x", 4, [[0, 4, 0, 1]]), (join, "o0", 2, two), (join, "x0", 4, [[0, 2, 0, 2]]),
+              (join, "best0", 4, [[0, 2, 0, 2]]), (join, "best1", 4, [[0, 2, 1, 2]]),
+              (join, "idx0", 4, [[0, 2, 0, 2]]), (join, "idx1", 4, [[0, 2, 1, 2]]))),
     ]
     for r, links, wires, want in cases:
         c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
@@ -7109,6 +7162,33 @@ def test_the_designs_rows_place_each_callers_units(pieces):
                                        (REPLAY_ROWS, replay_rows, want)):
             got = mirror(copy.deepcopy(c))
             assert got == expected and D.replay(port, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
+
+
+def test_round_two_passes_an_inlined_token_selects_design_by_units_and_refuses_it_gathered(pieces):
+    """Round 2's design check, Lean's the Python's whole, on the design each derives (`replay_links`, `replay_wires`,
+    `replay_rows`) from a replay block inlining a token select over two tokens, over its interior's parts after a
+    replay sample of two. Gathered, as `TokenSelect_v4`'s combine reads one output of each of its token's chunks, the
+    design has no wires and is refused before a statement is read (``second-wires``). By units, as
+    `TokenSelectUnits_v1`'s reads each output of each of its token's units whole, the check holds, and a run of no
+    statements fails ``second-statements`` alone; that design without its wires, or with a wired port's rows another
+    count a block than its writer's units, is refused (``second-wires``)."""
+    def case(r, s):
+        c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
+             "boundary": None}
+        design = {}
+        for name, port, mirror in (("links", REPLAY_LINKS, replay_links), ("wires", REPLAY_WIRES, replay_wires),
+                                   ("rows", REPLAY_ROWS, replay_rows)):
+            design[name] = mirror(copy.deepcopy(c))
+            assert D.replay(port, c, pieces) == ("output", D.canonical(design[name])), (c["replay"], name)
+        return {**_second_case(s, True, [0, 2], []), "statements": None, **design}
+    gathered, units = (case(r, s) for r, s in zip(MULTI_REPLAYS[-2:], SECOND_SELECTS))
+    assert gathered["wires"] is None and len(units["wires"]) == 5
+    short = [{**r, "per": 2} if r["port"] == "best1" else r for r in units["rows"]]
+    for c, codes in ((gathered, ["second-wires"]), (units, ["second-statements"]),
+                     ({**units, "wires": None}, ["second-wires"]), ({**units, "rows": short}, ["second-wires"])):
+        got = second_statements(copy.deepcopy(c))
+        assert D.replay(SECOND_STATEMENTS, c, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and not got["ok"], (codes, got)
 
 
 def test_the_names_of_what_a_replay_block_returns_lean_the_pythons_whole(pieces):
@@ -7140,7 +7220,7 @@ def test_a_replay_block_returns_its_units_fields_on_words_of_their_own(pieces):
     both are; four units of an 18-bit value two words each, twice their 72 bits; and two units of eight such values in
     one field nine words each, the 144 bits they hold. A replay block whose links can't be derived returns none, as do
     a key naming one of its templates and a key naming no Definition."""
-    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS[:13]
     wides, packs = WIDE_REPLAYS
     cases = [(BLOCK, None, 3 * 16), (pairs, None, 2 * 16), (fan, None, 3 * 16), (field, None, 16), (heads, None, 2 * 16),
              (halves, None, 4 * 16), (wides, None, 4 * 32), (packs, None, 2 * 144), (apart, None, None),

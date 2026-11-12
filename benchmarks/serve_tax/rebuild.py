@@ -1638,7 +1638,7 @@ def main(argv: list[str] | None = None) -> int:
                          "never ran")
     ap.add_argument("--capture", metavar="TEMPLATE",
                     help="with --served and --shape-only: take the target's logits rows and ids at every rank's sampler "
-                         "into OUT/capture, a span of TEMPLATE's units (a token select's, e.g. TokenSelect_v4{V=154880})")
+                         "into OUT/capture, a span of TEMPLATE's units (a token select's, e.g. TokenSelectUnits_v1{V=154880,K=20})")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if bool(a.served) == bool(a.arm_dir and a.kv_dir) or bool(a.served) != bool(a.scratch):

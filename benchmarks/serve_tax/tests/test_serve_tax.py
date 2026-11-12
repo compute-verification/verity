@@ -105,7 +105,7 @@ def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: 
     env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, check=glm.check, private=private)
     cfg = json.loads(env[S.PLUGIN_ENV])
     assert cfg["boundary_rows"] == {
-        "window_s": 3600.0, "check": "TokenSelect_v4{V=154880}", "inline": True, "per_prompt": 0, "per_output": 1,
+        "window_s": 3600.0, "check": "TokenSelectUnits_v1{V=154880,K=20}", "inline": True, "per_prompt": 0, "per_output": 1,
         "drained": True, "tables": {"layers": 1, "private": str(private)}}
     assert (env["VERITY_DSA_TOPK"], env["VERITY_DSA_TOPK_LOG"]) == ("canonical", f"{private}/topk-log")
     assert str(S.ROOT / "benchmarks/dsa_topk") in env["PYTHONPATH"].split(S.os.pathsep)

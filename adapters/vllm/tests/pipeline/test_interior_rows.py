@@ -20,6 +20,7 @@ import pytest
 
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
@@ -31,7 +32,7 @@ from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import boundary_rows as BR, chunk_rows as CR, interior_rows as IR, serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
 PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
@@ -375,9 +376,10 @@ def _select_rows(V: int) -> np.ndarray:
     return np.concatenate([np.random.default_rng(20261108).integers(0, 1 << 16, (4, V), dtype=np.uint16), edge])
 
 
-def _selects(tmp_path, V: int) -> dict[str, IR.Span]:
-    """Two requests' captured `TokenSelect_v4{V}` spans of five tokens each, each token its Definition's on its row."""
-    t, rows = f"TokenSelect_v4{{V={V}}}", _select_rows(V)
+def _selects(tmp_path, V: int, t: str | None = None) -> dict[str, IR.Span]:
+    """Two requests' captured spans of five tokens each of the token select ``t`` (`TokenSelect_v4{V}` by default), each
+    token its Definition's on its row."""
+    t, rows = t or f"TokenSelect_v4{{V={V}}}", _select_rows(V)
     fn = SRW.template(t).fn
     SC.write(tmp_path, t, {rid: {"logits": part, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in part],
                                  "steps": list(range(len(part))), "program": "p" * 64}
@@ -436,6 +438,72 @@ def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(
             SC.piece_rows(logits, torch.from_numpy(ids ^ 1), c)
         with pytest.raises(ValueError, match="don't pad to a size class of 4"):
             SC.piece_rows(logits, ids, c, pad=4)
+
+
+@pytest.mark.parametrize("V,K", [(256, 2), (192, 3), (128, 1)])
+def test_a_token_select_by_units_pieces_are_its_units_and_combine_by_their_definitions(tmp_path, V, K):
+    """`pieces` lays a captured `TokenSelectUnits_v1{V, K}` out as it calls its templates: each token's K
+    `TokenSelectGroups_v2` units, each its Definition's (bests, indices, first logit) of its logits, then its
+    `TokenSelectCombineUnits_v1` unit, whose ``x0`` row is its first unit's third output row and whose ``best<j>`` and
+    ``idx<j>`` rows are its unit j's first two, whole, and which its Definition takes to the span's token, on random
+    words and on NaN, ±0, ±inf and ties across chunks; a span pads by whole tokens. Pieces that don't select the span's
+    token, and another chunk than the Definition's, are refused."""
+    U, out = V // K, f"out.{SAMPLED_MEMBER}"
+    g = U // DF.CHUNK
+    unit, combine = bind(DF.TokenSelectGroupsV2, C=U, G=DF.CHUNK), bind(DF.TokenSelectCombineUnitsV1, V=V, C=DF.CHUNK, K=K)
+    for s in _selects(tmp_path, V, f"TokenSelectUnits_v1{{V={V},K={K}}}").values():
+        units, comb = IR.pieces(s)
+        assert (units.member, comb.member) == (IR.member(unit.id, s.n * K), IR.member(combine.id, s.n))
+        assert (units.group, comb.group) == (K, 1)
+        assert [p for p, _w in units.member.rows + comb.member.rows] == [
+            "x", "x0", *(f"best{j}" for j in range(K)), *(f"idx{j}" for j in range(K))]
+        assert [w for _p, w in comb.member.rows] == [1, *[g] * K, *[2 * g] * K]
+        o0, o1, o2 = (units.data["outs"][o] for o in ("o0", "o1", "o2"))
+        for j, row in enumerate(s.data["rows"]["in0"].tolist()):
+            parts = [evaluate(unit, row[a:a + U]) for a in range(0, V, U)]
+            got = [(*o0[j * K + u].tolist(), *o1[j * K + u].view("<u4").tolist(), int(o2[j * K + u, 0])) for u in range(K)]
+            assert got == parts
+            token = evaluate(combine, row[0], *(p[:g] for p in parts), *(p[g:2 * g] for p in parts))
+            assert token == (int(s.data["outs"][out].view("<u4")[j, 0]),)
+        rows = comb.data["rows"]
+        assert np.array_equal(rows["x0"], o2[::K])
+        assert all(np.array_equal(rows[f"best{u}"], o0[u::K]) and np.array_equal(rows[f"idx{u}"], o1[u::K]) for u in range(K))
+    wrong = s.data["outs"][out].copy()
+    wrong[0, 0] ^= 1
+    with pytest.raises(ValueError, match="its chunks and combine select"):
+        IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}))
+    with pytest.raises(ValueError, match="its units' chunks are 64 logits, not 16"):
+        IR.pieces(s, 16)
+
+
+def test_a_token_select_by_units_interior_reads_each_wired_row_at_the_unit_the_design_places_it(tmp_path):
+    """The interior of two spans of `TokenSelectUnits_v1{V=256, K=2}` inlined in a replay block of six tokens, with the
+    wires and rows round 2 derives from that block: the combine's five input ports commit no tree, each a table of the
+    units' Q·12 output rows, and token i of span s reads its ``x0`` at unit 12 s + 2 i's third output, its ``best<j>``
+    and ``idx<j>`` at unit 12 s + 2 i + j's first and second, which are the rows `pieces` replayed. It derives the
+    challenger's ports. With the wires alone every unit of a wired port reads its span's first writer, which these rows
+    are not, and rows that place a unit past its span's writers are refused, both before any commitment."""
+    V, K, N = 256, 2, 6
+    check = bind(DF.TokenSelectUnitsV1, V=V, K=K)
+    replay = BR.inlined(check, N)
+    program, key = P.population_program(replay, 3), descriptor_id(replay)
+    wires, rows = SS.replay_wires(program, key), SS.replay_rows(program, key)
+    per = [IR.pieces(s) for s in _selects(tmp_path, V, P.template_id(check)).values()]
+    cells, members = (N * K, N), [s.member for s in per[0]]
+    it = IR.interior(per, cells, "aa" * 64, [0, 2], row=ROW, salt_key=SALT, wires=wires, rows=rows)
+    w = it.committed.window
+    mu, mc = w.members
+    assert (mc.wired_trees, [p for p, _o, _ws in mc.wired]) == (False, ["x0", "best0", "best1", "idx0", "idx1"])
+    at = {p: (o, ws) for p, o, ws in mc.wired}
+    for p, o, j in (("x0", "o2", 0), ("best0", "o0", 0), ("best1", "o0", 1), ("idx0", "o1", 0), ("idx1", "o1", 1)):
+        assert at[p] == (o, tuple(N * K * s + K * i + j for s in range(Q) for i in range(N)))
+        assert w.held(mc, p) == mu.port(o) and mc.port(p) not in it.ports and dict(mc.tables)[p] == Q * N * K
+    assert it.ports == IR.interior_ports(members, cells, "aa" * 64, [0, 2], wires, rows=rows)
+    with pytest.raises(ValueError, match="rows are not the 'o[0-2]' rows of the"):
+        IR.interior(per, cells, "aa" * 64, [0, 2], row=ROW, salt_key=SALT, wires=wires)
+    past = [replace(r, runs=(SS.Run(0, N, 0, 3),)) if r.port == "best1" else r for r in rows]
+    with pytest.raises(ValueError, match="the design's rows place its 'best1' units at"):
+        IR.interior(per, cells, "aa" * 64, [0, 2], row=ROW, salt_key=SALT, wires=wires, rows=past)
 
 
 def test_a_token_selects_pieces_stage_as_the_second_stage_stages_an_interior_member():

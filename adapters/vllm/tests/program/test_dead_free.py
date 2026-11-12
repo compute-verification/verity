@@ -162,6 +162,44 @@ def test_token_select_groups_v1_refuses_groups_wider_than_its_logits():
         bind(DF.TokenSelectGroupsV1, C=16, G=17).signature()
 
 
+@pytest.mark.parametrize("C,G", [(64, 64), (128, 64), (40, 16)])
+def test_token_select_groups_v2_is_v1_and_its_first_logit(C, G):
+    new, old = bind(DF.TokenSelectGroupsV2, C=C, G=G), bind(DF.TokenSelectGroupsV1, C=C, G=G)
+    assert _dead(new) == 0
+    for row in _logit_rows(C):
+        assert evaluate(new, row) == evaluate(old, row) + (row[0],), row
+
+
+@pytest.mark.parametrize("V,C,K", [(128, 64, 1), (640, 64, 5), (96, 16, 3)])
+def test_token_select_combine_units_v1_is_the_combine_on_its_units_rows_joined(V, C, K):
+    """On partials of random and edge words, their indices anywhere in a chunk, each unit's as its own two arguments."""
+    new, old = bind(DF.TokenSelectCombineUnitsV1, V=V, C=C, K=K), bind(DF.TokenSelectCombineV2, V=V, C=C)
+    assert _dead(new) == 0
+    n = V // C
+
+    def units(xs: list[int]) -> list[list[int]]:
+        return [xs[j:j + n // K] for j in range(0, n, n // K)]
+    for row in _rows(n + 1, 3):
+        idx = [int(i) for i in RNG.integers(0, C, n)]
+        assert evaluate(new, row[0], *units(row[1:]), *units(idx)) == evaluate(old, row[0], row[1:], idx), (row, idx)
+
+
+@pytest.mark.parametrize("V,K", [(64, 1), (128, 1), (128, 2), (192, 3), (640, 2), (640, 5)])
+def test_token_select_units_v1_equals_v4(V, K):
+    """On rows that turn on every chunk's boundary and every unit's."""
+    new, old = bind(DF.TokenSelectUnitsV1, V=V, K=K), bind(DF.TokenSelectV4, V=V)
+    assert _dead(new) == 0
+    for row in _logit_rows(V) + _chunk_rows(V) + _boundary_rows(V, list(range(V // K, V, V // K))):
+        _same(new, old, row)
+
+
+@pytest.mark.parametrize("V,K", [(200, 2), (128, 3), (64, 0)])
+def test_token_select_units_v1_refuses_units_that_are_not_whole_chunks(V, K):
+    for fn, statics in ((DF.TokenSelectUnitsV1, {}), (DF.TokenSelectCombineUnitsV1, {"C": DF.CHUNK})):
+        with pytest.raises(ValueError, match=f"K = {K} units of a row of V = {V} logits in chunks of 64"):
+            bind(fn, V=V, K=K, **statics)
+
+
 def _grouped(V: int, C: int, G: int, row: list[int], ev=evaluate) -> tuple[int]:
     """``row``'s token by groups: `TokenSelectGroups_v1{C, G}` over each C logits (the last unit the rest, one group if that is
     narrower than G), then `TokenSelectCombine_v2{V, G}` over logits[0] and every group's partial."""
@@ -258,6 +296,29 @@ def test_every_token_select_unit_at_llama_vocabulary_has_a_row_past_one_sha512_b
     assert (groups, combine) == ((169, 3), (98, 112))
     assert _unit(bind(DF.TokenSelectChunkV2, C=768), {"x": 48}) == (50, 0)
     assert _unit(bind(DF.TokenSelectCombineV2, V=LLAMA_V, C=768), {"best": 167, "idx": 167}) == (336, 0)
+
+
+#: GLM-5.3's vocabulary as 20 units of `TokenSelectGroups_v2{C=7744, G=64}`, 121 chunks a unit
+GLM53_V, GLM53_K = 154880, 20
+
+
+def test_a_token_select_at_glm53_vocabulary_is_proof_blocks_only_by_units():
+    """A proof block reads one committed row a port, at most 256 rows in and out, in a Flock block of at most 2^27 bits
+    (`interface.check_proof_block`).  `TokenSelect_v4` whole reads its logits as one row, 2^28 bits of rows alone.  Its
+    combine, held to its 2,420 chunks' outputs, reads each chunk's best and its index as rows of their own, 4,842 rows; its
+    proof block fits only reading a ``best`` and an ``idx`` of its own that nothing holds to the chunks'.  By units, a unit
+    is 4 rows (its 7,744 logits, its 121 bests, their indices, its first logit) and the combine the 20 units' rows, 42."""
+    n = GLM53_V // DF.CHUNK
+    combine = bind(DF.TokenSelectCombineV2, V=GLM53_V, C=DF.CHUNK)
+    with pytest.raises(ValueError, match=r"its rows alone need a C-Flock block of 2\^28 bits"):
+        IF.check_proof_block(bind(DF.TokenSelectV4, V=GLM53_V))
+    with pytest.raises(ValueError, match="4842 rows, past a proof block's 256"):
+        IF.check_proof_block(combine, {"best": n, "idx": n})
+    assert (IF.check_proof_block(bind(DF.TokenSelectChunkV2, C=DF.CHUNK)), IF.check_proof_block(combine)) == (21, 24)
+    unit = bind(DF.TokenSelectGroupsV2, C=GLM53_V // GLM53_K, G=DF.CHUNK)
+    by_units = bind(DF.TokenSelectCombineUnitsV1, V=GLM53_V, C=DF.CHUNK, K=GLM53_K)
+    assert (_unit(unit, {}), _unit(by_units, {})) == ((4, 42), (2 * GLM53_K + 2, 34))
+    assert (IF.check_proof_block(unit), IF.check_proof_block(by_units)) == (24, 25)
 
 
 @pytest.mark.slow

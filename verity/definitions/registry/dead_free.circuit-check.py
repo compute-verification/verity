@@ -8,7 +8,7 @@ from typing import Any, Callable
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The RMSNorm at one warp's worth of columns and at Llama-3.2-1B's hidden size (8 warps' chunks), the selects at V = 16,
     TokenSelect_v4 at four chunks, the last one short, with its chunk and its combine there, a unit of groups of 16 with its last
-    group short, and the top-p pieces at the registered split count S = 32, the sampler at V = 64 (where
+    group short, `TokenSelectUnits_v1` at two units of two chunks with its unit and its combine there, and the top-p pieces at the registered split count S = 32, the sampler at V = 64 (where
     `GumbelTopPTokenSelect_v2` has 6,034 dead gates), and FA2's attention with a first block of 16 keys below kBlockN 32 (where
     `Attention_v5` has 2 dead gates a head), v19's head also at a first block of 8 keys (whose V rows `AttnBlockFirst_v1` pads to
     a k-step), and `AttnBlockFirst_v2` at those two first blocks with a key's value in 4 slices of 4 columns, also at Ampere's
@@ -16,12 +16,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `GumbelTopPTokenSelect_v3` at its vocabulary (V = 154,880), the latter at the H200's registered split count
     (`topp_geometry.registered_splits(132)` = 32, the S every served top-p launch is pinned to), the two the step compiler emits.
     Both are over `targets.MAX_GATES`, so ``--all`` checks the greedy one's combine at the served V and builds the top-p one,
-    whose keep word's `live_replay` holds V-sized liveness sets (heavy.json): a build that fails only at the served V fails here."""
+    whose keep word's `live_replay` holds V-sized liveness sets (heavy.json): a build that fails only at the served V fails here.
+    `TokenSelectUnits_v1`'s two proof blocks at that vocabulary in 20 units: a unit of 121 chunks, and the combine of the 20."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import dead_free as DF, hopper, prims as P
     from verity.definitions.registry.topp_geometry import registered_splits
 
-    glm53_v, glm53_s = 154880, registered_splits(132)
+    glm53_v, glm53_s, glm53_k = 154880, registered_splits(132), 20
 
     fa2 = {"D": 16, "BN": 32, "MASKED_FROM": 1, "DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
     return [
@@ -40,6 +41,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("TokenSelectChunk_v2", lambda: bind(DF.TokenSelectChunkV2, C=DF.CHUNK)),
         ("TokenSelectCombine_v2", lambda: bind(DF.TokenSelectCombineV2, V=200, C=DF.CHUNK)),
         ("TokenSelectGroups_v1", lambda: bind(DF.TokenSelectGroupsV1, C=40, G=16)),
+        ("TokenSelectGroups_v2", lambda: bind(DF.TokenSelectGroupsV2, C=2 * DF.CHUNK, G=DF.CHUNK)),
+        ("TokenSelectCombineUnits_v1", lambda: bind(DF.TokenSelectCombineUnitsV1, V=4 * DF.CHUNK, C=DF.CHUNK, K=2)),
+        ("TokenSelectUnits_v1", lambda: bind(DF.TokenSelectUnitsV1, V=4 * DF.CHUNK, K=2)),
         ("TopPMask_v3", lambda: bind(DF.TopPMaskV3, V=16)),
         ("GumbelSelectF32GivenGreedy_v2", lambda: bind(DF.GumbelSelectF32GivenGreedyV2, V=16)),
         ("GumbelTopPTokenSelectSharedGreedy_v2", lambda: bind(DF.GumbelTopPTokenSelectSharedGreedyV2, V=16)),
@@ -48,5 +52,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("GumbelSelectF32_v3", lambda: bind(DF.GumbelSelectF32V3, V=16)),
         ("GumbelTopPTokenSelect_v3", lambda: bind(DF.GumbelTopPTokenSelectV3, V=64, S=32)),
         ("TokenSelect_v4-glm53", lambda: bind(DF.TokenSelectV4, V=glm53_v)),
+        ("TokenSelectGroups_v2-glm53", lambda: bind(DF.TokenSelectGroupsV2, C=glm53_v // glm53_k, G=DF.CHUNK)),
+        ("TokenSelectCombineUnits_v1-glm53",
+         lambda: bind(DF.TokenSelectCombineUnitsV1, V=glm53_v, C=DF.CHUNK, K=glm53_k)),
         ("GumbelTopPTokenSelect_v3-glm53", lambda: bind(DF.GumbelTopPTokenSelectV3, V=glm53_v, S=glm53_s)),
     ]

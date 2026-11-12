@@ -21,13 +21,13 @@ from verity.protocols.spot.verifier.one_stage import partition as P, registratio
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits.population import population
+from verity.circuits.population import mixed_population_program, population
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.commitments import history as HT
 from verity.commitments.windows import rows as CS
-from verity.definitions.registry import stop_check, stop_rule
+from verity.definitions.registry import dead_free as DF, stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
 
@@ -363,6 +363,51 @@ def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
     for check in (R.check, V.check):
         assert check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         assert check(rec, off.program, off.grain, DESIGN, CS.SCHEME, off.ports()).codes != ()
+
+
+def _design(check, outputs: int, q: int) -> tuple[BR.Layout, SS.Own]:
+    """The replay block of ``outputs`` served tokens inlining ``check``, and what round 2 holds of its design after a
+    replay sample of ``q`` blocks: the links, wires and rows it derives from the block, over the interior's parts."""
+    L = BR.Layout(check, 0, 1, outputs, outputs, 8, "a" * 128, inline=True)
+    key = descriptor_id(L.replay)
+    interior = mixed_population_program([(t, q * sum(n.n for n in L.replay.body.nodes if n.fn is t))
+                                         for t in L.templates])
+    parts = SS.parts(q, P.strata(interior, P.template_instances_query(L.templates)))
+    return L, SS.Own(tuple(range(q)), parts, {}, {}, (), links=SS.replay_links(L.program, key, None),
+                     wires=SS.replay_wires(L.program, key), rows=SS.replay_rows(L.program, key))
+
+
+def test_an_inlined_token_select_passes_round_twos_design_check_by_units_only():
+    """Round 2's design check (`second_stage.check`: the links, the wires and their rows it derives from the replay block
+    alone, held before it reads a statement) on a replay block of four served tokens inlining a token select, after a
+    replay sample of three. `TokenSelect_v4`'s combine reads one word of each of its token's chunks, an argument gathered
+    from several nodes: round 2 derives no wires and refuses the run (``second-wires``), and its links read the logits at
+    two row widths, a chunk's and, for logits[0], one word's, where the boundary port has one. `TokenSelectUnits_v1`'s
+    combine reads each output of each of its token's K units whole: 2 K + 1 wires, each combine unit at its token's K
+    units' rows, the logits read at the unit's width alone, and the check holds (with no statements, the run fails for
+    that alone)."""
+    V, K, N, Q = 4 * DF.CHUNK, 2, 4, 3
+    L, own = _design(bind(DF.TokenSelectV4, V=V), N, Q)
+    chunk, combine = (P.template_id(t) for t in L.templates)
+    assert (chunk, combine) == ("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}")
+    assert own.wires is None and "second-wires" in SS.check(True, own, None).codes
+    assert [(x.template, x.port, x.value) for x in own.links] == [(chunk, "x", "logits"), (combine, "x0", "logits"),
+                                                                 (combine, "o0", "o0")]
+    assert {(r.template, r.port): r.per for r in own.rows} == {(chunk, "x"): N * V // DF.CHUNK, (combine, "x0"): N * V,
+                                                              (combine, "o0"): N}
+    L, own = _design(bind(DF.TokenSelectUnitsV1, V=V, K=K), N, Q)
+    unit, combine = (P.template_id(t) for t in L.templates)
+    assert (unit, combine) == ("TokenSelectGroups_v2{C=128,G=64}", "TokenSelectCombineUnits_v1{V=256,C=64,K=2}")
+    assert [(x.template, x.port, x.value) for x in own.links] == [(unit, "x", "logits"), (combine, "o0", "o0")]
+    assert [(w.template, w.port, w.writer, w.wport) for w in own.wires] == [
+        (combine, "x0", unit, "o2"), *((combine, f"best{j}", unit, "o0") for j in range(K)),
+        *((combine, f"idx{j}", unit, "o1") for j in range(K))]
+    rows = {(r.template, r.port): (r.per, r.runs) for r in own.rows}
+    assert rows[unit, "x"] == (N * K, (SS.Run(0, N * K, 0, 1),)) and rows[combine, "o0"] == (N, (SS.Run(0, N, 0, 1),))
+    assert all(rows[combine, f"{p}{j}"] == (N * K, (SS.Run(0, N, j, K),)) for p in ("best", "idx") for j in range(K))
+    assert rows[combine, "x0"] == (N * K, (SS.Run(0, N, 0, K),)) and len(rows) == 2 * K + 3
+    codes = SS.check(True, own, None).codes
+    assert "second-statements" in codes and not {"second-cells", "second-links", "second-wires"} & set(codes)
 
 
 class Request:

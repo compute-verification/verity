@@ -16,6 +16,11 @@ switch serves names one of these as its word (`boolean_attention`'s `AttnBlockFi
 * `TokenSelectGroups_v1{C,G}`: `TokenSelectChunk_v2{G}` over each group of G of its C logits, the groups' bests as one array
   and their indices as another, for `TokenSelectCombine_v2{V,G}`.  A unit's output rows then hold a word or two per group, so
   they pass the 111 bytes Flock needs in some row of every unit, where a chunk's partial alone is 2 and 4 bytes.
+* `TokenSelectUnits_v1{V,K}`: `TokenSelect_v4{V}`'s function from K units, each `TokenSelectGroups_v2{V / K, CHUNK}`
+  (`TokenSelectGroups_v1`'s two arrays and x[0] as a third output), reduced by `TokenSelectCombineUnits_v1{V,CHUNK,K}`
+  (`TokenSelectCombine_v2` with each unit's bests and indices a parameter of its own).  `TokenSelect_v4`'s combine reads
+  one word of every chunk, an argument gathered from V / `CHUNK` nodes; here every argument that reads a node is one
+  whole output of it, so a proof block of the combine reads each unit's rows as the unit committed them.
 * `TopPKeepWord_v2{V,S}`: `topp_words.TopPKeepWord_v1{V,S}`'s word gates that its keep bits depend on (`live_replay`).  The keep
   word's builder applies each operation to whole vectors of lanes, and some lanes of a vector are read by nothing after it.
 * `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
@@ -235,6 +240,59 @@ def TokenSelectV4(B, S, logits):
     best = _Coll(Array(len(parts), BF16), concat([p[0].refs for p in parts]))
     idx = _Coll(Array(len(parts), I32), concat([p[1].refs for p in parts]))
     return B.call(bind(TokenSelectCombineV2, V=S.V, C=C), logits[0], best, idx)
+
+
+def _groups_v2_type(S):
+    params, out = _groups_type(S)
+    return params, Tuple(*out.fields, BF16)
+
+
+@composite("TokenSelectGroups", 2, ["C", "G"], _groups_v2_type, conformance="model-untested")
+def TokenSelectGroupsV2(B, S, x):
+    """`TokenSelectGroups_v1{C,G}`'s bests and indices, and x[0] as a third output: `TokenSelectUnits_v1`'s unit, whose
+    first unit's third output is its combine's logits[0]."""
+    out = B.call(bind(TokenSelectGroupsV1, C=S.C, G=S.G), x)
+    return tuple_of(out[0], out[1], x[0])
+
+
+def _refuse_units(b: dict) -> str | None:
+    """Why K units of a row of V logits in chunks of C (`CHUNK` where the Definition has no C) are refused: a unit is V / K
+    logits, a whole number of chunks."""
+    V, K, C = b.get("V"), b.get("K"), b.get("C", CHUNK)
+    if None in (V, K, C) or (K >= 1 and C >= 1 and V % (K * C) == 0):
+        return None
+    return (f"K = {K} units of a row of V = {V} logits in chunks of {C}: each unit is V / K logits, a whole number of "
+            f"chunks, so V must be a multiple of K * {C}")
+
+
+def _combine_units_type(S):
+    n = S.V // (S.K * S.C)
+    return (("x0", BF16), *((f"best{j}", Array(n, BF16)) for j in range(S.K)),
+            *((f"idx{j}", Array(n, I32)) for j in range(S.K))), I32
+
+
+@composite("TokenSelectCombineUnits", 1, ["V", "C", "K"], _combine_units_type, conformance="model-untested",
+           refuse=_refuse_units)
+def TokenSelectCombineUnitsV1(B, S, x0, *parts):
+    """`TokenSelectCombine_v2{V,C}` with its partials as K units' rows: unit j's V / (K C) bests are the parameter
+    ``best<j>`` and their indices ``idx<j>``, joined in unit order. Each parameter is then one whole output of one unit,
+    where `TokenSelectCombine_v2`'s ``best`` and ``idx`` gather a word from every chunk."""
+    n = S.V // S.C
+    best = _Coll(Array(n, BF16), concat([p.refs for p in parts[:S.K]]))
+    idx = _Coll(Array(n, I32), concat([p.refs for p in parts[S.K:]]))
+    return B.call(bind(TokenSelectCombineV2, V=S.V, C=S.C), x0, best, idx)
+
+
+@composite("TokenSelectUnits", 1, ["V", "K"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested",
+           refuse=_refuse_units)
+def TokenSelectUnitsV1(B, S, logits):
+    """`TokenSelect_v4{V}`'s function from K units of V / K logits, V a multiple of K `CHUNK`s: each unit's chunks' partials
+    and its first logit by `TokenSelectGroups_v2{V / K, CHUNK}`, then `TokenSelectCombineUnits_v1` from the first unit's
+    first logit and each unit's partials. No argument reads more than one node, and each that reads one reads one whole
+    output of it."""
+    units = [B.call(bind(TokenSelectGroupsV2, C=S.V // S.K, G=CHUNK), logits[lo:hi]) for lo, hi in chunks(S.V, S.V // S.K)]
+    return B.call(bind(TokenSelectCombineUnitsV1, V=S.V, C=CHUNK, K=S.K), units[0][2], *[u[0] for u in units],
+                  *[u[1] for u in units])
 
 
 def _codes(r: Refs) -> np.ndarray:

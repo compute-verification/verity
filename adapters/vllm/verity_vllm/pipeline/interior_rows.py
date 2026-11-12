@@ -14,15 +14,18 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
   (`engine.sampler_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out.
   A replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
-* `pieces`: a token select's span as the units Flock proves it by, each token's `TokenSelectChunk_v2` units over its
-  chunks of logits and its `TokenSelectCombine_v2`, since a served vocabulary's whole select is past one Flock block.
+* `pieces`: a token select's span as the units Flock proves it by, since a served vocabulary's whole select is past one
+  Flock block: `TokenSelect_v4`'s, each token's `TokenSelectChunk_v2` units over its chunks of logits and its
+  `TokenSelectCombine_v2`; `TokenSelectUnits_v1`'s, each token's K `TokenSelectGroups_v2` units and its
+  `TokenSelectCombineUnits_v1`, whose every input row is one unit's output row.
 * `interior`: the replay sample's spans, template t's each padded to its n_t with copies of its last instance's units
   (`Span.group`: a token's chunks), so an inlined replay block's padded instances stay whole, committed template-major
   as one window (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member a template, each input
   port a table of its own Q·n_t rows and unit off_t + k reading row k, so each row a session proves is a registered read
   of the interior record. A port the replay block wires to another template's output (its wires, as round 2 derives
   them: `second_stage.replay_wires`) commits no tree of its own: its rows are its writer's Q·n_w output rows, whole, unit
-  u of span s reading its writer's unit off_w + s·n_w. It is registered after ``previous``, the boundary registration's digest,
+  u of span s reading its writer's unit off_w + s·n_w + j, j the row the design places it at (`second_stage.replay_rows`;
+  the writer's first in the span where it names none). It is registered after ``previous``, the boundary registration's digest,
   under the window ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and the
   replay sample, so every port's domain binds which replay block each cell of units is; the challenger derives the same
   ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
@@ -50,10 +53,11 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.circuits.defs import bind
 from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry.dead_free import CHUNK
+from verity.definitions.registry.dead_free import CHUNK, TokenSelectCombineUnitsV1, TokenSelectGroupsV2, TokenSelectUnitsV1
 from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay
@@ -261,15 +265,23 @@ def member(template: str, n: int = 1) -> CS.Member:
 
 
 def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
-    """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
-    `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
-    logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`chunk_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
-    be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
-    tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
-    ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
+    """A token select's span ``s`` as the units Flock proves it by, as its template calls them. `TokenSelect_v4`: each
+    token's V / c `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}`
+    unit over logits[0] and the chunks' (best, idx). `TokenSelectUnits_v1{V, K}`: each token's K
+    `TokenSelectGroups_v2{C=V / K, G=CHUNK}` units, one a unit of its logits row (its chunks' bests, their indices and its
+    first logit out), then its `TokenSelectCombineUnits_v1{V, CHUNK, K}` unit, whose ``x0`` is the first unit's first logit
+    and whose ``best<j>`` and ``idx<j>`` are unit j's two output rows, whole. Each piece's member is its template's bit
+    rows, as Flock stages a unit (`chunk_rows.unit_member`), each row named after its parameter (`named`). The first
+    template's outputs are computed here (`numerics.token_select_rows`), and the combine's must be ``s``'s tokens, or
+    nothing is committed. The first template's ``group`` is a token's units of it, so a span pads by whole tokens, as the
+    select inlined in a replay block (one instance a served token) lays its pieces out.
+    ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``; `TokenSelectUnits_v1`'s is `CHUNK`."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs
-    c = min(CHUNK, V) if c is None else int(c)
+    fn = SRW.template(s.member.template).fn
+    units = getattr(fn, "defn", None) is TokenSelectUnitsV1
+    if units and c not in (None, CHUNK):
+        raise ValueError(f"{s.member.template}: its units' chunks are {CHUNK} logits, not {c}")
+    c = CHUNK if units else min(CHUNK, V) if c is None else int(c)
     if not 1 <= c <= V or V % c:
         raise ValueError(f"{s.member.template}: {V} logits in chunks of {c} are not whole chunks, and a narrower last chunk "
                          "is a third template")
@@ -280,15 +292,24 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
         raise ValueError(f"request {s.rid}: its chunks and combine select other ids than its span's at "
                          f"{int(np.count_nonzero(tok != want))} of its {n} tokens")
     i32 = idx.astype("<u4").view("<u2")
-    split = ((f"TokenSelectChunk_v2{{C={c}}}", n * k, [x.reshape(n * k, c)], [best[:, None], i32.reshape(n * k, 2)]),
-             (f"TokenSelectCombine_v2{{V={V},C={c}}}", n, [x[:, :1], best.reshape(n, k), i32.reshape(n, 2 * k)],
-              [s.data["outs"][out]]))
+    if units:
+        K = fn.bindings["K"]
+        g, rows = k // K, x.reshape(n * K, V // K)
+        split = ((bind(TokenSelectGroupsV2, C=V // K, G=c).id, n * K, [rows],
+                  [best.reshape(n * K, g), i32.reshape(n * K, 2 * g), rows[:, :1]]),
+                 (bind(TokenSelectCombineUnitsV1, V=V, C=c, K=K).id, n,
+                  [x[:, :1], *best.reshape(n, K, g).transpose(1, 0, 2), *i32.reshape(n, K, 2 * g).transpose(1, 0, 2)],
+                  [s.data["outs"][out]]))
+    else:
+        split = ((f"TokenSelectChunk_v2{{C={c}}}", n * k, [x.reshape(n * k, c)], [best[:, None], i32.reshape(n * k, 2)]),
+                 (f"TokenSelectCombine_v2{{V={V},C={c}}}", n, [x[:, :1], best.reshape(n, k), i32.reshape(n, 2 * k)],
+                  [s.data["outs"][out]]))
     got = []
-    for t, units, ins, outs in split:
-        m = member(t, units)
+    for t, count, ins, outs in split:
+        m = member(t, count)
         data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, outs, strict=True)}}
-        scale = units // n
+        scale = count // n
         got.append(Span(s.rid, m, data, [[e[0] * scale, e[1] * scale, *e[2:]] for e in s.entries], s.program, group=scale))
     return got[0], got[1]
 
@@ -635,7 +656,10 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
                 port = w.held(m, p)
                 if port not in held:
                     held[port] = LK.Port.of(c, port)
-                entry[p] = held[port].header(w.held_leaves(m, p))
+                # a wired port with no tree of its own has its writer's rows, whole, as its table: Flock's verifier takes
+                # one position and one path a table row (`Flock.Registered.checkPort`), not one a reading unit
+                at = range(dict(m.tables)[p]) if port != m.port(p) else w.held_leaves(m, p)
+                entry[p] = held[port].header(at)
         registered[m.key] = entry
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
     CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},

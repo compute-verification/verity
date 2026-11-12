@@ -375,7 +375,7 @@ MODELS = {
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on")),
-                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
+                   metric="vllm/serving-cost-glm53", check="TokenSelectUnits_v1{V=154880,K=20}",
                    # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the

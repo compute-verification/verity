@@ -265,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tp", type=int, default=1, help="the tensor-parallel width the window was served at")
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
                                       "OUT/capture, each a span of --capture-template's units")
-    ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
+    ap.add_argument("--capture-template", default=S.MODELS["glm53"].check)
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if sys.flags.hash_randomization:
