@@ -78,7 +78,6 @@
     {"file": "benchmarks/pouw/rt2_logic/clock_offsets.py", "count": 1},
     {"file": "benchmarks/pouw/rt_fp/fx1_absorb.py", "count": 3},
     {"file": "benchmarks/pouw/rt_hopper/forms_gap.py", "count": 1},
-    {"file": "benchmarks/pouw/run_result.py", "count": 3},
     {"file": "benchmarks/pouw/served_zk/rows_bench.py", "count": 5},
     {"file": "benchmarks/pouw/served_zk/stage_tile.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_fp_exact.py", "count": 1},

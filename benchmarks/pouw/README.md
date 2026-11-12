@@ -34,8 +34,8 @@ each other, three scripts of `pearl_c_vllm/` (`run_result`), `theory/cpw_floor.p
 **What it never does.** The files directly here hold no kernel and build none. A calculator runs on a CPU and writes
 only the files its arguments name, but for three: `budget.py --sweep` and `--sampling-sweep` rewrite its two data files
 here, and `lean_headline.py` and `lean_headline_dc.py` write the Lean files they generate. `run_result.py` imports the
-standard library alone and writes a run's `result.json` only under a `research run`. `run.py` starts the runner it is
-asked for and nothing else.
+settings registry and the standard library, and writes a run's `result.json` only under a `research run`. `run.py`
+starts the runner it is asked for and nothing else.
 
 Served claims (`pearl_c_vllm/`) are measured against graphed stock FP8: stock vLLM `quantization="fp8"` compiled with its
 CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).

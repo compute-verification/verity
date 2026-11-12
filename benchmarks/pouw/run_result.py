@@ -1,6 +1,7 @@
 """The ``research/result/v0.1`` document (``tools/research/src/research/result.py``) each PoUW benchmark writes when it runs
 under ``research run`` (``$RESEARCH_RUN_DIR`` set): the gates as its validation, its headline numbers as measurements, and
-its full JSON as the measurement file.  Stdlib only, so the benchmarks need not import ``research``.
+its full JSON as the measurement file.  It imports the settings registry (``settings.py``), through which it reads the three
+variables ``research run`` sets, and beyond it the standard library alone, so the benchmarks need not import ``research``.
 It stands beside the harness kit's writer because it writes a run's result whole, so the last of a run's writers stands."""
 
 from __future__ import annotations
@@ -9,19 +10,23 @@ import json
 import os
 from pathlib import Path
 
+from verity_config.settings import of
+
+SETTINGS = of(__file__)
+
 #: what `pearlc_census.py`, `pearlc_k256_gate.py`, three scripts of `pearl_c_vllm/` and the tests read
 __all__ = ["write"]
 
 
 def write(out: Path, ok: bool, checker: str, detail: str, measurements: list[tuple[str, float, str]]) -> None:
-    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    run_dir, run_id = SETTINGS.raw("RESEARCH_RUN_DIR"), SETTINGS.raw("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
     d = Path(run_dir)
     out, root = Path(out).resolve(), d.resolve()
     rel = str(out.relative_to(root)) if out.is_relative_to(root) else None
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
-           "workload_fingerprint": {"source_sha": os.environ.get("RESEARCH_SOURCE_SHA")},
+           "workload_fingerprint": {"source_sha": SETTINGS.raw("RESEARCH_SOURCE_SHA")},
            "validation": {"status": "passed" if ok else "failed", "checker": checker, "detail": detail, "evidence": [rel] if rel else []},
            "measurements": [{"name": n, "value": float(v), "unit": u} for n, v, u in measurements],
            "measurement_files": [rel] if rel else [], "artifacts": []}
