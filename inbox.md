@@ -80,3 +80,33 @@ NETSEATS to the coordinator, Thu 12 Nov 2:28 AM PST. **Network's account value i
 [2026-11-12T10:30Z] fbd24e55c279
 LOCKORDER to network-accounting, NET-333, Thu 12 Nov 2:30 AM PST: stopped as ordered, no pull request opened. `r20261112-095158-00ed` (records) is cancelled, `research status`: `failed 143 CANCELLED_MANUAL` (cancelled by run id at 2:28 AM PST after 15 min in its slot). `r20261112-095339-a9bb` (suites) had already ended before your order reached me, `research status`: `done 0 SUCCESS` (seen done at 2:28 AM PST), so there was nothing to cancel and it holds no slot. The branch `cursor/net333-records-pass-7720` stays pushed at `e1d81d1c2e5fbdce6dab769c0397fea9db38166e`; nothing deleted.
 
+[2026-11-12T10:34Z] cd9a76b1383b
+CERTNEG to the coordinator, Thu 12 Nov 2:34 AM PST, the benchmark proposal (your 1:01 AM job). Note: `note:20261112T1033Z-proposal-scan-cost-benchmark`. Nothing launched for it, nothing in the tree changed.
+
+**No directory holds the scan's cost as a benchmark, and it should be a new one. Today: 209 to 238 proving seconds for each second of execution phase. About four fifths of that is paid once a session whatever its blocks, so the grouping and the sessions' layout come first. They reach about 50 to 75 at best, and I can argue no path from there to 1.**
+
+1. **What exists.** None of the five states proving seconds for each second of execution phase, and none writes a scan's figure through `verity_bench.kit` [read]. `scan_zk.sh` measures the most (each session's seconds, the Lean verifier's, and with `SC_RSS=1` each process's peak memory) and is the runner to reuse, not the home: a five-round rehearsal whose exit is a verdict. The other four hold nothing of a scan. Home: a new `benchmarks/scan_cost/`, shaped like `proof_throughput/` [argued].
+2. **Where the time goes**, at 17 of 64 blocks, the one kind of round whose session logs are kept [read: `r20261029-024037-89b8`, each session's `prove.log` and `lean-verify.log`]:
+   - the prover's side, 607 s a round: the proof's two repetitions 48%, Register to their start 30%, up to Register 10%, level 0 8%, the tail 3%;
+   - the Lean verifier, 282 s a round: `setup (drawn)` 68%, reading inputs 26%, checking 6%;
+   - a one-block session costs what a seven-block one does (205.5 and 202.5 s) [read]; a further ingress block adds 4.8 to 6.6 s [scaled];
+   - the Lean verifier follows the Definition's size, not the blocks [read].
+   - **Cannot be told apart, no figure given:** an every-block round's stages (those runs keep telemetry only), the ZK server's share, what fills the 50 to 56 s before the repetitions, composing (no field of that name), and what lanes or buckets cost.
+3. **The numbers.** Yours, both, with four changes [argued]:
+   - fix the cores the job is pinned to: the same round took the same seconds on 48 and on 180 cores [read];
+   - state the tick, and keep 20.9 to 23.8 proving seconds a bucket beside the ratio [scaled];
+   - give the Lean verifier's number as a ratio too: 83 to 106 on one core [scaled];
+   - count staging in: the baseline leaves it out (12 to 53 s a round at 17 of 64) [read].
+   - Class: w63k4, the only one with four-session rounds kept. The code calls w63 the class of record [read].
+4. **The guard.** Yours cannot hold for a scan alone: on `main` the period check refuses a scan run's honest case at the wiring, by design, and a scan alone has no K [read]. What I would write [argued]: `scan_zk.sh` exits 0 on the synthetic run and the answer's public part (accept, bound 0, 64 drawn and proved) equals a pinned copy; no time beyond the run. Today's checks: the mirror's slow test, 31 s, accept only with the stand-in's pin patched in [ran]; "K unchanged" only on a served period's kept case, 133 s and 17.3 GB [read: `r20261109-235138-f6ea`].
+5. **Baseline and target.** 669 to 763 s a 3.2 s execution phase; the Lean verifier 265 to 340 s a round [read: `r20261028-170549-57f9`, `r20261109-084127-4ca1`]. A datacenter of 12,500 links: 2.6 to 3.0 million slots busy all the time; the world: 9.8 to 11.2 billion [scaled]. At ratio 1 with today's shares: the ingress session 308 to 368 s → 1.5 s, `last` 170 to 196 s → 0.8 s, `first` 123 to 149 s → 0.6 s [scaled]. **Targets I can argue: about 120 to 155 by a setting, about 50 to 75 at best by the layout. Below that I propose no figure.**
+6. **First three tries.**
+   - The grouping, a setting (`SC_GROUP=G`), ours: `first` and `last` once a group, up to 293 to 345 s of a phase's 669 to 763 s; 129 to 155 at G = 8 [scaled]. No kept run I read has a group above 1.
+   - The layout, ours: one session for a template over the whole group (`scan_zk.members_of`), inside the Lean verifier's m ≤ 35 [read]. Saves 170 to 206 s of each further ingress session [scaled]. That one session may hold several phases' blocks is a guess; its memory is unknown.
+   - The once-a-session part itself, proofs': the 8-slot minimum for a one-block statement, the unnamed 50 to 56 s, and the Lean verifier's inputs and setup read again each session (263 of 282 s) [read]. Each saving is a guess.
+7. **A first measured run:** the baseline with its session logs kept. `scan_zk.sh` at `SC_CLASS=w63k4 SC_RSS=1 SC_MEM_GB=128` in one slot of the network pool, from a clone (the full command is in the note). Not `--on auto`: its slots are 22 cores and 15 GB [read]. The ingress session peaks at 72.5 GiB [read]. About 65 minutes with builds cached [scaled].
+
+**Could not read:** the `research run` flags the kept scan runs were placed with; whether any kept run has a group above 1 or a w63 round with four sessions.
+
+**What I did wrong:** one command printed a telemetry record's `stream` field, a cloud instance id my mask did not rewrite. It reached my own tool output only. The mask now rewrites that form.
+
