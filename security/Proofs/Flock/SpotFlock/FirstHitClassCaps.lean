@@ -65,20 +65,20 @@ theorem code_eventTwoX_le_cls_at_caps (hB : Built h) (hS : Addresses h)
         ((((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter fun v => h.reg.always v).length +
             K₀ * h.reg.ks.toList.sum : ℕ) +
           Pr (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => Except.toBool (Spot.Select.selectSecond
-            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (src (r (order h x).second))) = false) *
+            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (stageSrc (stageCoins h x r))) = false) *
             (SamplingDeploy.units ((base h).atOrder (order h)) x : ℝ))
         (((((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter fun v => h.reg.always v).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum +
             K₀ * ((List.range h.reg.ns.size).map fun t => h.reg.ks.getD t 0 * M t).sum : ℕ) +
           Pr (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => Except.toBool (Spot.Select.selectSecond
-            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (src (r (order h x).second))) = false) *
+            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (stageSrc (stageCoins h x r))) = false) *
             (((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum : ℝ))
         (((((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter fun v => h.reg.always v).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum +
             K₀ * ((List.range h.reg.ns.size).map fun t => h.reg.ks.getD t 0 * M t).sum : ℕ) +
           Pr (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => Except.toBool (Spot.Select.selectSecond
-            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (src (r (order h x).second))) = false) *
+            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (stageSrc (stageCoins h x r))) = false) *
             (((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum : ℝ)) := by
   subst hL
@@ -117,20 +117,20 @@ theorem code_eventTwoX_le_cls_at_cap (hB : Built h) (hS : Addresses h)
         ((((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter fun v => h.reg.always v).length +
             K₀ * h.reg.ks.toList.sum : ℕ) +
           Pr (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => Except.toBool (Spot.Select.selectSecond
-            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (src (r (order h x).second))) = false) *
+            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (stageSrc (stageCoins h x r))) = false) *
             (SamplingDeploy.units ((base h).atOrder (order h)) x : ℝ))
         (((((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter fun v => h.reg.always v).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum +
             K₀ * ((List.range h.reg.ns.size).map fun t => h.reg.ks.getD t 0 * M).sum : ℕ) +
           Pr (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => Except.toBool (Spot.Select.selectSecond
-            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (src (r (order h x).second))) = false) *
+            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (stageSrc (stageCoins h x r))) = false) *
             (((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum : ℝ))
         (((((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter fun v => h.reg.always v).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum +
             K₀ * ((List.range h.reg.ns.size).map fun t => h.reg.ks.getD t 0 * M).sum : ℕ) +
           Pr (fun r : Fin ((code h).V.k x) → FlockDeploy.Coin => Except.toBool (Spot.Select.selectSecond
-            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (src (r (order h x).second))) = false) *
+            (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks (stageSrc (stageCoins h x r))) = false) *
             (((List.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).map
               fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (L.nG x) cls needs u).card).sum : ℝ)) :=
   code_eventTwoX_le_cls_at_caps h hB hS hL hx hP hd hin P hneeds hcls T hT (fun _ => M) hM hK hBc hX hI

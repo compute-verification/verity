@@ -107,6 +107,11 @@
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
    "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+  },
+  "NciCheck.DefinitionDigest": {
+   "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
+   "except": [],
+   "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

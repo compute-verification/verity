@@ -29,7 +29,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
   with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
   (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
-  `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
+  `names open --as HANDLE --succeeds` takes a handle over and opens the registry's holder change for you to mark, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
   `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
