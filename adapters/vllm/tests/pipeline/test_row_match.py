@@ -119,9 +119,10 @@ def test_a_match_whose_fold_left_no_program_is_not_compared_and_says_so(tmp_path
     """No ``match/program.json`` or ``match/instances.jsonl``: neither comparison runs, both count rc 99, and the compare log says why."""
     r, ran = _match_row(tmp_path, monkeypatch, rcs={"match.run_config": 5})
     asked = _summary(monkeypatch, "FAIL")
+    d = r.d
+    Path(d, "match_compare.log").write_text("$ an earlier attempt's comparison\n")
     with pytest.raises(Stop) as e:
         r.match()
-    d = r.d
     assert e.value.rc == 11 and [name for name, _ in ran] == ["match.run_config"] and asked == [(5, 99, 99, -1, False)]
     assert Path(d, "match_compare.log").read_text() == f"no program.json/instances.jsonl in {d}/match (fold did not run or failed)\n"
     last = Path(d, "stages.txt").read_text().splitlines()[-1].split()

@@ -11,6 +11,7 @@ through ``timeout`` to the stage's workers), the row waits for the stage to be g
 """
 from __future__ import annotations
 
+import contextlib
 import glob
 import hashlib
 import json
@@ -337,10 +338,8 @@ class Row:
         self.signalled = name
         for pid in list(self._running):
             self.log(f"SIG{name} received: forwarding to the running stage (timeout pid {pid} -> its process group)")
-            try:
+            with contextlib.suppress(OSError):
                 os.kill(pid, signum)
-            except OSError:
-                pass
 
     def run_to(self, to: int | str, lf: str, cmd: list[str]) -> int:
         """Run one stage command under ``timeout TO`` with its output in ``lf`` (first line: ``$ <command>``) -> rc."""
@@ -440,7 +439,9 @@ class Row:
             r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t), *([str(C)] if C else [])), stdout=subprocess.PIPE,
                                stderr=f, text=True, cwd=self.tree, env=self.child_env)
         if r.returncode != 0:
-            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            with open(err, errors="replace") as f:
+                said = f.read().replace(chr(10), " ")[-300:]
+            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {said}")
             return None
         os.remove(err)
         lc = r.stdout.rstrip("\n")
