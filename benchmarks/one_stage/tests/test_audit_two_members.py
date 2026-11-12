@@ -29,7 +29,7 @@ Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the
 and about 5 GB at its peak, which the suite's ``worker_gb`` declares. Of it the changed member's audit is about 50 s:
 it alone shows a false member stopped (the ZK server lets no proof of it out, and the Lean verifier refuses its
 session), where the audit's own negatives change the record around honest sessions. The audit on the window's
-challenger session is a third run of the window, and its key about fifteen core-minutes: it alone runs Flock's own
+challenger session is a third run of the window, under a key made for it at the deployed parameters: it alone runs Flock's own
 `serve --tree-from` client against the relay, the challenger's service on a session held open through the proving,
 and Lean's whole per-member check (`OneStageZk.membersRun`, then v1's check at the challenger's coins) on a window's
 real files, where every other test of those gives one of them a stand-in. A pass is reused while the suite's
