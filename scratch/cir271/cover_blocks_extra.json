@@ -1,0 +1,24 @@
+{
+ "from": "r20261112-203223-8ab0 out/cuts.json: the units of the 5 list templates the card does not cut, and Friday's select",
+ "units": [
+  "RMSNormFusedCudaVector8_v3{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
+  "RMSNormFusedSumSqCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
+  "RMSNormFusedApplyCudaVector8_v1{G=3072}",
+  "RMSNormFusedApplyCudaVector8_v1{G=1536}",
+  "RMSNormFusedApplyCudaVector8_v1{G=768}",
+  "RMSNormFusedApplyCudaVector8_v1{G=384}",
+  "RMSNormFusedApplyCudaVector8_v1{G=192}",
+  "RMSNormFusedApplyCudaVector8_v1{G=96}",
+  "RMSNormFusedApplyCudaVector8_v1{G=48}",
+  "RMSNormFusedApplyCudaVector8_v1{G=24}",
+  "RMSNormFusedApplyCudaVector8_v1{G=12}",
+  "RMSNormFusedApplyCudaVector8_v1{G=6}",
+  "RMSNormFusedApplyCudaVector8_v1{G=3}",
+  "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+  "AllGather_v1{WORLD=8,N=19360}",
+  "AllGather_v1{WORLD=1,N=19360}",
+  "TokenSelect_v4{V=154880}",
+  "StopCheck_v1{T=32,STOP=[],MAX_TOKENS=32,PROMPT_LEN=256,MAX_MODEL_LEN=4096,FINISH=2}",
+  "GreedySelect_v1{V=154880,N=7744}"
+ ]
+}
