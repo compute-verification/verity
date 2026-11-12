@@ -109349,3 +109349,43 @@ Not established
 
 - Not run with a prover yet: an early-stopped span in the replay sample (`7b1c` and `9585`, every span sampled); the second try at V = 154,880 (`9585`); tables beside the select's inputs (`0d43`).
 - Next: `b876` at 00:30Z, and with it the estimate; VLLM-300 at 01:00Z for the small serve's result and serving's confirmed head; STOPDRIVER's branch when it says ready; #9480's body for the head `496aa18354`.
+
+## COINMAP, Thu 12 Nov 23:38Z: the first clause's proof is written end to end; nothing has compiled yet, and my try has waited 13 minutes for a Lean slot
+
+My Lean try has waited more than ten minutes for a slot on vy-nebius-2: run r20261112-232506-34ea has been queued since 23:25Z. I merged TWOLEG's head `b04e0a9fd9` and restated my law against its new `CoinMapLaw`, which carries the agreement `Ag` inside the event. The proof of the first clause (`LawAt`, the law without the agreement) is now written all the way down, in `SampledTwo/CoinMapLaw.lean`. It goes through the coin map one coin node at a time, the opening and fresh-coin writes, their independence from what the map writes later, and the transport from the period's game. None of it has compiled, so none of it is proved. Two tries are queued. The agreement inside the event (`CoinMapHolds`) needs a second induction of about the same size, which I size below. For HISTORY, my locator has no session split of its own; the split I propose is the log's prefix before the first release the locator puts on a round past the first stage's.
+
+**Branch.** `cursor/proofs-coinmap-8b0c` is at `9735d19957`, merged with TWOLEG's `b04e0a9fd9`. I am at the base's composite, before #9375. [read]
+
+**What is written** (all [read] from my own files; none compiled):
+- `CoinMap.lean` holds the definitions. `CoinMapHolds` is now TWOLEG's `CoinMapLaw` at the frame `frame V A x θ F c σ L P`, the agreement `ElemAgrees L A x reads` and `hide = gapOf …`. The old `CoinMapLawB` is gone. A new theorem `devAgrees_of_cover` gives TWOLEG's `DevAgrees` at `ElemAgrees` from `AgreeCovers L Rd (Acc ∧ Good)` and `Rd.dev = dev L`. So the parse piece owes `AgreeCovers`: on accepted plays whose log is the device's, `agree` holds of two coins with the same elements below `usedOf L i [] o.log`.
+- `CoinMapLaw.lean` holds the proof of `lawAt : LawAt V A x θ F c σ L P`, for every vocabulary, statement, strategy, locator and prover, at `hide = gapOf`. It goes in these steps:
+  - the law at one node (`LawHolds`) and its rules at an option, an `if`, a kept coin, a coin written with an independent value, and a coin written through `W`, which costs `shortfall W`;
+  - the chunk splits: a round's `m` elements from `u` are uniform and independent of the coins off them (`splits_chunk`, by restriction along an injection), and so are a fresh coin's 512 bits and an opening's elements (`splits_fresh`, `splits_open`);
+  - the coin map reads round `j` only from `usedOf L j [] pre` on (`placeK_congr`);
+  - the law frame by frame, then `law_placeK` by induction on the frame count;
+  - then `law_place` and `lawAt` through `prob_eq_prCoin` and `prCoin_eq_ofReal_pr`.
+
+**Size** [derived]. The two files come to about 1,200 lines. `CoinMapHolds`, the law with `ElemAgrees` in the event, needs two more things:
+- a second induction along `relK`, bounding the chance under the frame that some written opening's class at the run's elements is empty by the middle term of `gapRound`;
+- bit-level lemmas: the bits `devBits` collects for round `i` are the run coin's bits `0 … 128·usedOf`, and `elemOfBits` of them gives its elements back (`bitsEquiv`).
+
+I estimate that at 500 to 700 lines, about half of what is written. It does not double the piece now that HISTORY has the history. Order: get the first clause compiled by 03:00Z, then `CoinMapHolds`, with my word on it by 15:00Z Fri.
+
+**`split`, for HISTORY** [derived]. `Locate` is a parameter of the coin map: it maps a release, the log before it and its bytes to a round of the run. It defines no session boundary. The split I propose is this: `log₁` is the longest prefix of the log holding no release that `locAt L` puts on a round `i` with `groupOf A i ≠ .first`, and `log₂` is the rest. A `Hello` is put on no round, so it goes with whichever side it falls on. That is what "each tree's Hello and its openings lie in one session" has to be proved about. Whether CUT's `PrintsTwo` reads its split this way is for HISTORY and CUT to agree; nothing of mine depends on it. [guess] that it fits CUT's text, which I have not reread since 22:50Z.
+
+**Runs** (vy-nebius-2, pool `proofs`):
+- try7, r20261112-232506-34ea, at `541a510d9d` (the definitions plus the node rules): waiting since 23:25Z. [run]
+- try8, r20261112-233618-2d34, at `9735d19957` (everything): waiting since 23:36Z. [run]
+- `verity lean try` takes no `--timeout`, and research warns that the run has none. [run]
+
+**STOP RULE.** I changed no listed guarantee or lock, did not turn on the accept, and did not wire the form into `Sampled.lean`. I edited only my own files under `SampledTwo/` and the two root lines in `lakefile.toml`. [read]
+
+**NEEDS.** Nothing from the coordinator. HISTORY: read the `split` paragraph above.
+
+**To post.** Nothing.
+
+**Not established.**
+- That any of this elaborates. Nothing has compiled.
+- That `law_placeK`'s pattern match goes through Lean's structural recursion.
+- That `CoinMapHolds` holds at `ElemAgrees` with `hide = gapOf`. It is sized, not written.
+- That `split` as proposed is the one CUT's `PrintsTwo` reads.
