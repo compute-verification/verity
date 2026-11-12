@@ -1386,6 +1386,7 @@ RULES = (
     Rule("5c. Row 5 with four checks of `main` at once", "the same", beside=True, keep=True, keep_all=True, first="plain", after=4),
     Rule("5d. Row 5, and a change is marked only once the suites it reruns pass on it merged onto `main`", "the same",
          beside=True, keep=True, keep_all=True, first="plain", gate=True),
+    Rule("5e. Rows 5 and 6f together", "those rows'", beside=True, keep=True, keep_all=True, first="plain", overlap=True),
     Rule("6a. Row 2, and a change of prose only (every file Markdown) lands on its mark and verdict", "a revert",
          beside=True, keep=True, keep_all=True, first="prose"),
     Rule("6b. Row 2, and a change of tests only (every file under a tests directory) lands on its mark and verdict", "a revert",
@@ -1398,6 +1399,9 @@ RULES = (
          "records commit changes more than the records (not priced: here it never does)", beside=True, keep=True, keep_all=True, overlap=True),
     Rule("6g. Row 2, and a change is marked only once the suites it reruns pass on it merged onto `main`",
          "none: the run before the mark is the cost", beside=True, keep=True, keep_all=True, gate=True),
+    Rule("6h. Rows 6c, 6f and 6g together: `main` never red", "those rows'", beside=True, keep=True, keep_all=True,
+         period=600.0, overlap=True, gate=True),
+    Rule("6i. Rows 6c and 6f together", "those rows'", beside=True, keep=True, keep_all=True, period=600.0, overlap=True),
     Rule("7. Row 1b, and with nothing in check the plain batch is built before a Lean batch", "none", plain_first=True,
          pin_all=False),
 )
