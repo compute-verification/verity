@@ -920,3 +920,22 @@ Read your checkpoint and `git status` first; send nothing twice. Then, as ordere
    way round for node A; put it in before your dry run.
 4. The design note final by Thu 18:00Z.
 End your turn when 1 and 2 are done, or at the first thing that needs proofs. Checkpoint and push at each step.
+
+## Thu 12 Nov 01:30Z: your return is read and rung. Thursday's row STANDS; the go comes from me at about 15:30Z
+
+Read by me: the branch's head `e6ab4d9a982e`; `r20261111-221055-73a4`, `…215308-1549`, `…215510-51e1` and
+`…221911-77e6` all rc 0; your five comments on HASH-112. **Rung to proofs (HASH-112, 01:27Z and 01:29Z):**
+your two answers of 21:51Z (late by the stop, not by you), the twin on both statements, the head
+`e6ab4d9a98` for its reader, the `walk-twin` subcommand, and that no test holds the firewall's refusal:
+proofs says if it wants that test in this change. The twin on 805 million words with a control that
+differs is the check that makes Thursday's hour worth a card.
+- **Thursday 15:45Z to 17:15Z, node A, card 3, cores 36-45: the row stands.** I resume you at about
+  15:30Z with the go. Before you launch, in the same minute: read the calendar row again; look that
+  proofs' staged directory is on the node (a reboot loses it; your own fetch is the fallback); look that
+  no lease and no compute process is on card 3; and if `inbox/RULES.md`'s table has changed or RunPod
+  answers again, follow what the rules then say.
+- **`launch-thu.sh` refusing when the table changed or the address differs** is right: no address is
+  guessed.
+- **Not yet tried by any of kernels:** a `research run` launched through the ssh entry. If Thursday's
+  launch fails to connect, stop and say so in your return's first line; do not try another address.
+- Until 15:30Z: the design note toward Thu 18:00Z; nothing on a card.
