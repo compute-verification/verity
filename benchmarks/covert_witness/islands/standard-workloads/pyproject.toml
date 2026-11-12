@@ -6,5 +6,6 @@ testpaths = ["tests"]
 pythonpath = ["../.."]
 
 [tool.verity.tests]
-# The builder prices with te_core, which it imports from benchmarks/covert_witness.
-inputs = ["benchmarks/covert_witness/te_core"]
+# The builder prices with te_core, which it imports from benchmarks/covert_witness, and reads a put back with the
+# scorer's readback.py.
+inputs = ["benchmarks/covert_witness/te_core", "benchmarks/covert_witness/scorer/readback.py"]

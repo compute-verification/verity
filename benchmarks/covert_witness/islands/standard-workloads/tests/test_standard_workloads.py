@@ -358,6 +358,40 @@ def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_i
     assert SW.put(body(old), {SW.PANEL: new}) == 1 and route[SW.PANEL] == new
 
 
+def test_a_put_takes_the_routes_integer_for_a_whole_float_as_that_number(tmp_path, monkeypatch, capsys):
+    """The route writes a float with no fractional part as an integer (6.52837e+20 comes back 652837000000000000000),
+    which Python's != holds unequal to the float: the guard on the panel the build read and the read-back compare as
+    numbers, and still catch a changed cell."""
+    fx = json.loads(PINNED.read_text())
+    p, _, _ = build(formalism.from_json(fx["measured"]), fx, monkeypatch)
+    c = SW.COLUMNS.index("own_c_gates")
+
+    def big(q: dict, value) -> dict:
+        return q | {"rows": [[value if i == c else v for i, v in enumerate(q["rows"][0])], *q["rows"][1:]]}
+
+    old = big(json.loads(console.body(p | {"note": SW.note(p, TABLES)})), 6.52837e+20)
+    new = big(json.loads(console.body(p | {"note": SW.note(p, "run:r20261104-081500-abcd/out/tables")})), 6.52837e+20)
+    route = {SW.PANEL: big(old, 652837000000000000000)}
+
+    def put(q):
+        route[SW.PANEL] = big(json.loads(console.body(q)), 652837000000000000000)
+        return "200"
+
+    monkeypatch.setattr(console, "served", lambda: dict(route))
+    monkeypatch.setattr(console, "put", put)
+    monkeypatch.setattr(console, "refusal", lambda q: None)
+    (tmp_path / "body.json").write_bytes(console.body(new))
+    assert route[SW.PANEL] != old
+    capsys.readouterr()
+    assert SW.put(tmp_path / "body.json", {SW.PANEL: old}) == 0
+    assert f"GET {SW.PANEL}: the body, {len(new['rows'])} rows" in capsys.readouterr().out
+    monkeypatch.setattr(console, "put", lambda q: route.update({SW.PANEL: big(q, 652838000000000000000)}) or "200")
+    assert SW.put(tmp_path / "body.json", {SW.PANEL: route[SW.PANEL]}) == 1
+    assert "the route serves another panel than the body (rows differ)" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="someone PUT over it"):
+        SW.put(tmp_path / "body.json", {SW.PANEL: big(route[SW.PANEL], 652839000000000000000)})
+
+
 def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])

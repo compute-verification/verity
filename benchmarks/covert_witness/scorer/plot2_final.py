@@ -57,6 +57,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path.cwd()))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import readback
 from te_core import VERSION, console
 from te_core import algorithm_policy as ap
 from te_core.frontier import REF_DIRECTIONS
@@ -481,7 +483,7 @@ def dry(q: dict) -> str:
 
 def put_fit(path: Path, dry_run: bool) -> int:
     """PUT a search build's console body of te_core.frontier_fit's panel as it is (module docstring); then GET the
-    panel, which must be the body. 0 where the route serves it, else 1."""
+    panel, which must be the body as numbers (`readback`). 0 where the route serves it, else 1."""
     from te_core import frontier_fit
 
     q = json.loads(path.read_text())
@@ -502,7 +504,7 @@ def put_fit(path: Path, dry_run: bool) -> int:
     if not status.startswith("2"):
         return 1
     back = console.served().get(frontier_fit.PANEL) or {}
-    if differ := sorted(k for k in {*q, *back} if back.get(k) != q.get(k)):
+    if differ := readback.differ(q, back):
         print(f"GET {frontier_fit.PANEL}: the route serves another panel than the body ({', '.join(differ)} differ)")
         return 1
     print(f"GET {frontier_fit.PANEL}: the body, {len(back['rows'])} rows, updated_at {back['updated_at']}")

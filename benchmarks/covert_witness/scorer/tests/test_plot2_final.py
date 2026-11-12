@@ -99,3 +99,22 @@ def test_the_fits_body_is_put_as_a_build_wrote_it_and_read_back(route, capsys):
     (d / "other.json").write_bytes(console.body(panel(ap.PANEL, "n")))
     with pytest.raises(SystemExit, match=f"not {frontier_fit.PANEL}'s"):
         P2.main(["put-fit", str(d / "other.json")])
+
+
+def test_the_fits_read_back_takes_the_routes_integer_for_a_whole_float_as_that_number(route, monkeypatch, capsys):
+    """The route writes a float with no fractional part as an integer (6.52837e+20 comes back 652837000000000000000),
+    which Python's != holds unequal to the float; the read-back compares as numbers, and still catches a changed
+    cell."""
+    d, seen = route
+    q = panel(frontier_fit.PANEL, "the fit's note") | {"rows": [[6.52837e+20], [2.5]]}
+    body = d / "frontier-fit.json"
+    body.write_bytes(console.body(q))
+    served = {frontier_fit.PANEL: q | {"rows": [[652837000000000000000], [2.5]]}}
+    monkeypatch.setattr(console, "served", lambda *a: served)
+    monkeypatch.setattr(console, "put", lambda q: "200")
+    assert served[frontier_fit.PANEL] != q
+    assert P2.main(["put-fit", str(body)]) == 0
+    assert f"GET {frontier_fit.PANEL}: the body, 2 rows" in capsys.readouterr().out
+    served[frontier_fit.PANEL] = q | {"rows": [[652838000000000000000], [2.5]]}
+    assert P2.main(["put-fit", str(body)]) == 1
+    assert "the route serves another panel than the body (rows differ)" in capsys.readouterr().out

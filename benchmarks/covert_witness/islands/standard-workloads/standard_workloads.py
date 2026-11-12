@@ -90,7 +90,8 @@ at each of its points (tables/standard-workloads.json), and the console's copy
 stores with the run's record. With `--served` a build is refused where it would drop a served run's row or the route
 serves a newer te_core (`emptied`). `--put` PUTs a build's console body (`put`), refused where the route's panel
 changed since `--served` was read, where the build would drop a row or the route refuses it (`emptied`, `refused`), or
-where its note cites no stored tables; then it GETs the panel and compares it with the body. The panel's source names
+where its note cites no stored tables; then it GETs the panel and compares it with the body as numbers (the scorer's
+`readback`). The panel's source names
 the command at this checkout's commit and the integrator's commit it builds on (`commits`: `--base`, else their merge
 base on origin, which a node's checkout hasn't), refused where te_core or the island has uncommitted changes, which
 neither commit holds. Where the checkout builds on another branch than the integrator's, `--branch` names it: the
@@ -120,7 +121,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.append(str(Path(__file__).resolve().parents[2] / "scorer"))
 
+import readback
 from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy, workloads
 from te_core.ledger import Ledger, ingest
 
@@ -861,14 +864,14 @@ def put(body: Path, sent: dict, dry: bool = False) -> int:
     """PUT a build's console body (`body`, its console/standard-workloads.json), refused where the route's panel
     isn't `sent`'s (the panels it served when the build launched: someone PUT since), where the body would drop a
     served row or the route refuses it (`emptied`, `refused`), or where its note cites no stored tables (`TABLES`);
-    then GET the panel, which must be the body. 0 where the route serves the body, else 1. `dry` PUTs nothing: past
-    the same refusals, it prints the body's sha256, bytes, rows and note length, and what te_core.console's `put`
-    would refuse it for."""
+    then GET the panel, which must be the body as numbers (`readback`). 0 where the route serves the body, else 1. `dry`
+    PUTs nothing: past the same refusals, it prints the body's sha256, bytes, rows and note length, and what
+    te_core.console's `put` would refuse it for."""
     q = json.loads(body.read_text())
     if q.get("id") != PANEL:
         raise SystemExit(f"{PANEL}: not PUT: {body} is {q.get('id')}'s body")
     now = console.served().get(PANEL)
-    if now != sent.get(PANEL):
+    if not readback.same(now, sent.get(PANEL)):
         raise SystemExit(f"{PANEL}: not PUT: the route's panel changed after the build read it (now updated "
                          f"{(now or {}).get('updated_at')}, from {(now or {}).get('source')}): someone PUT over it, "
                          f"so tell the coordinator its time and build, and PUT nothing")
@@ -888,7 +891,7 @@ def put(body: Path, sent: dict, dry: bool = False) -> int:
     if not got.startswith("2"):
         return 1
     back = console.served().get(PANEL) or {}
-    if differ := sorted(k for k in {*q, *back} if back.get(k) != q.get(k)):
+    if differ := readback.differ(q, back):
         print(f"GET {PANEL}: the route serves another panel than the body ({', '.join(differ)} differ)")
         return 1
     print(f"GET {PANEL}: the body, {len(back['rows'])} rows, updated_at {back['updated_at']}")
