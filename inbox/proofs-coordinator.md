@@ -79393,3 +79393,31 @@ Every try's sibling check found no name declared twice. No file has a theorem, s
 - The lock counts are from tree `0b6bdb0352e1`, not `main`.
 
 **8. Next.** The 12:30Z entry: the optional field and its check as Lean text, the auditor's figure by the leaf's id with its JSON, the tick's length and a finer unit for β for the same move to v2, and the LMS key's encoding. Your 08:34Z ask, the word move's sites taken and left with one reason each, comes in that entry too, ahead of your 17:00Z line. Then the pull request by 13:00Z, when the records run says what the lock gains.
+
+## SESSREAD, Thu 12 Nov 08:38Z: the scratch file is on `cursor/proofs-pattern-threshold-3e7b` at `f5f7899d8298`, one file on `main` `0c0efe136ad8`; it compiles there without #9173 (`r20261112-081234-08ff`, exit 0, no axiom beyond the three); no pull request
+
+Mailbox read 08:38Z: the 07:59Z section is the last [read].
+
+- **Branch** `cursor/proofs-pattern-threshold-3e7b`, head `f5f7899d8298d0c0c88d74798717bc4d2292755b`, one commit on `origin/main` `0c0efe136ad8` (fetched 08:06Z). `git diff --name-status origin/main HEAD` names one file, added: `security/Proofs/Flock/SamplingGeneric/TwoRankinThreshold.lean`, 138 lines. Pushed to that branch only. No pull request, and nothing pushed to #9173's branch. [run]
+- **The text is `6f03f3185ea3`'s, copied and not cherry-picked.** My VM came up as a fresh clone, so that commit and my worktrees were gone. The file is the copy I saved at 07:50Z. It is byte-equal to the text in my 07:51Z entry (sha256 `bbd91206…`), and the tree of #9173's head with this blob added is `51fc0e702e8b`, the source tree the record of `r20261112-074115-0a8e` names (`job.json`, `store.conditions.source.tree`). [run]
+- **Run `r20261112-081234-08ff`** (`research run --on auto --cwd source`, `lean_changed.py --try security/Proofs/Flock/SamplingGeneric/TwoRankinThreshold.lean`, at `f5f7899d8298`, launched 08:12Z): done, exit 0, SUCCESS, read at 08:37Z. `lean exit 0 in 1245 s`, the build of what the file imports included (the slot was taken at 08:14Z); none of its 5 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. Its record names the source commit `f5f7899d8298` and tree `e44eb2f39700`, the branch head's. [run: its fetched log]
+- **It is `main`'s tree without #9173:** `git merge-base --is-ancestor b58c5f59ae01 origin/main` exits 1 at `0c0efe136ad8`, so the file compiled beside `main`'s `TwoRankin.lean`, the old proof. [run]
+- **Compiled, not proved:** no kernel replay, no second reader. [derived]
+
+**Step 3, the one line.** The planner's pull request adds `public import Proofs.Flock.SamplingGeneric.TwoRankinThreshold` to `security/Proofs/Flock/SamplingGeneric.lean`, after its line 30 (`public import Proofs.Flock.SamplingGeneric.TwoRankin`), in the same change as the proof that reads `rankinFactorPatterns_le_at`. [derived from the reads below; not run through `check.py`]
+
+- **The check that fails on it** [read]: the Lean check fails with `orphan.file` on a file of a package that its lock's `roots` do not reach and its `exempt` does not list (`tools/verity/lean/check.py:1470-1475`). The code is not among `BOOKKEEPING` (`:3088`), so it fails in a candidate's records run as well. `security/Proofs/lean-audit.json` has the root `Proofs.Flock`; `security/Proofs/Flock.lean:51` imports the umbrella `Proofs.Flock.SamplingGeneric`, which imports `TwoRankin` and most of the directory by name.
+- **No test lists a tree's files against its imports** [read: `git grep` over `tests/`, `tools/verity/lean/tests/`, `tools/verity/check/`]. The root suite's one test over every tracked Lean file, `tests/test_lean_packages.py::test_every_package_module_is_a_module`, asks only that each is on the module system, and this one is (`modules.is_module`: True) [run].
+- **The unread scan** reports a module no root imports as `unbuilt` and does not count it (`tools/verity/lean/unread.py:1005`). Once imported, a module nothing reads counts against `Proofs/Flock`'s cap in `tools/verity/lean/unread-caps.json` (265 modules, 2130 declarations), which is why the import goes in with its reader. [read]
+- **If the reader is `security/Proofs/Properties/Spot/FactorUpper/Patterns.lean`**, it imports the file itself too. That file does not import `TwoRankin` today (its imports are `FactorUpper/Sets.lean`'s), so the import brings `Claims.Sampling`'s lemmas beside the file's own of the same short names (`blocksTo_subset`, `:199`). I did not compile that. [read; the consequence is a guess]
+- **On this branch nothing is at stake:** no pull request. The ratchet gate passes (`0c0efe136ad8..f5f7899d8298`: 1 change, 0 failed), and no declaration of the file has a namesake in `main`'s Lean [run: `git grep -w`].
+
+**Comment for PRF-580** (five lines):
+
+> The lemma for "at most S" is on a branch of its own, no pull request: `cursor/proofs-pattern-threshold-3e7b` at `f5f7899d8298`, one file on `main` `0c0efe136ad8`, `security/Proofs/Flock/SamplingGeneric/TwoRankinThreshold.lean`. The planner's pull request takes it.
+> It holds `rankinFactorPatternsAt` (the patterns' factor at given thresholds), `rankinFactorPatternsAt_mono`, and `rankinFactorPatterns_le_at`: requests serving at most S bits have a factor at most the factor at S.
+> It compiles on `main`'s tree without #9173: `r20261112-081234-08ff`, exit 0, no axiom beyond `propext`, `Classical.choice`, `Quot.sound`. Compiled, not proved: no kernel replay, no second reader.
+> To take it: add `public import Proofs.Flock.SamplingGeneric.TwoRankinThreshold` to `security/Proofs/Flock/SamplingGeneric.lean` after line 30, with the proof that reads it. Without the import the Lean check fails with `orphan.file`.
+> Still to write: `Patterns.lean`'s proof at a threshold, so that `FactorUpperPatternsSound` and `RequestsCover`'s last clause read `≤ S`.
+
+Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now, at `origin/main` `0c0efe136ad8`; [derived] reasoned, not compiled; [guess] mine, unchecked.
