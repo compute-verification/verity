@@ -2,7 +2,8 @@
 one device (the caller's route, else the device with the fewest types), a verifier serves each connection the queue line
 written beside its prover's stream line (so interleaved types and devices still meet their own lines), a session is filed
 under its own directory, its verdict of record runs once both sides have recorded it, and a process that exits fails its
-unfinished sessions without hanging the server's close."""
+unfinished sessions without hanging the server's close. Its clock is the test's, and its stand-in prover finishes a
+session when the test lets it (``FAKE_PROVE_GATE``), so each prover's busy seconds and each session's share are exact."""
 from __future__ import annotations
 
 import json
@@ -17,7 +18,9 @@ from verity_flock.proof_server import ProofServer, ProofServerError, Statement
 
 #: a stand-in for flock-circuit. ``serve --queue -``: SERVING, then for each queue line one accepted connection, whose
 #: prover's label must be the line's; it files the session (``out``, else ``--out``) and prints its SESSION line.
-#: ``prove --stream -``: one session a stream line, in order, its LIVE line after the verifier's answer.
+#: ``prove --stream -``: one session a stream line, in order, its LIVE line after the verifier's answer. Under
+#: ``FAKE_PROVE_GATE`` (a FIFO) a prover takes one byte from it before each line's session: the test's `Gate` lets
+#: each session go.
 FAKE = '''#!{python}
 import json, os, pathlib, socket, sys, threading
 args = sys.argv[1:]
@@ -53,7 +56,10 @@ if args[0] == "serve":
         t.join()
 elif args[0] == "prove":
     die = int(os.environ.get("FAKE_PROVE_DIES_AFTER", "-1"))
+    gate = os.open(os.environ["FAKE_PROVE_GATE"], os.O_RDONLY) if os.environ.get("FAKE_PROVE_GATE") else None
     for n, raw in enumerate(sys.stdin):
+        if gate is not None and not os.read(gate, 1):
+            sys.exit(5)
         if n == die:
             sys.exit(int(os.environ.get("FAKE_PROVE_EXIT", "4")))
         j = json.loads(raw)
@@ -71,7 +77,7 @@ elif args[0] == "prove":
 
 @pytest.fixture
 def binary(tmp_path, monkeypatch):
-    for k in ("FAKE_SERVE_DIES", "FAKE_PROVE_DIES_AFTER", "FAKE_PROVE_EXIT"):
+    for k in ("FAKE_SERVE_DIES", "FAKE_PROVE_DIES_AFTER", "FAKE_PROVE_EXIT", "FAKE_PROVE_GATE"):
         monkeypatch.delenv(k, raising=False)
     b = tmp_path / "flock-circuit"
     b.write_text(FAKE.format(python=sys.executable))
@@ -357,6 +363,88 @@ def test_each_verifier_on_its_own_challenger_audited_at_close(binary, tmp_path, 
         assert record(s)["argv"][-4:-2] == ["--tree-from", f"127.0.0.1:{names.index(name) + 1}"]
         assert s.challenger is ps.challengers[name] and s.challenger["ok"] == (s.pin == pins[0])
         assert s.challenger["sessions"] == sorted(str(x.dir) for x in sessions if x.pin == s.pin)
+
+
+class Gate:
+    """The stand-in provers' gate and the server's clock, both the test's: a session is recorded only once `let` has
+    let it go, at the clock's reading then (``now``)."""
+
+    def __init__(self, tmp_path: Path, monkeypatch):
+        self.now, self.path = 0.0, tmp_path / "gate"
+        os.mkfifo(self.path)
+        self._w = os.open(self.path, os.O_RDWR)     # both ends, so neither this open nor a prover's waits for the other
+        monkeypatch.setenv("FAKE_PROVE_GATE", str(self.path))
+
+    def clock(self) -> float:
+        return self.now
+
+    def let(self, at: float, *sessions) -> None:
+        """At ``at`` by the clock, one session a prover goes on; returns once each of ``sessions`` has ended."""
+        self.now = at
+        os.write(self._w, b"g" * len(sessions))
+        for s in sessions:
+            s._done.wait()
+
+    def close(self) -> None:
+        os.close(self._w)
+
+
+def test_a_provers_busy_seconds_are_its_sessions_shares_and_not_their_waits(binary, tmp_path, monkeypatch):
+    """Three sessions submitted at once to one prover, which records them at 10, 25 and 30 s: each session's ``seconds``
+    hold its wait behind the ones before it (65 s in all), its ``busy_seconds`` only the seconds since its prover's last
+    record, and those sum to the 30 s the prover was busy. A session submitted after the prover stood idle counts from
+    its own submission, and the idle seconds are in neither."""
+    g = Gate(tmp_path, monkeypatch)
+    pin = "66" * 64
+    with ProofServer(binary, tmp_path / "ps", clock=g.clock) as ps:
+        a, b, c = (ps.submit(statement(tmp_path, pin), draw([i]), f"s{i}") for i in range(3))
+        assert ps.busy == {"prover-cpu": {"device": None, "seconds": 0.0, "sessions": 0}}
+        g.let(10.0, a)
+        g.now = 12.0
+        assert ps.busy == {"prover-cpu": {"device": None, "seconds": 12.0, "sessions": 1}}
+        g.let(25.0, b)
+        g.let(30.0, c)
+        assert [s.seconds for s in (a, b, c)] == [10.0, 25.0, 30.0]
+        assert [s.busy_seconds for s in (a, b, c)] == [10.0, 15.0, 5.0]
+        g.now = 100.0
+        assert ps.busy == {"prover-cpu": {"device": None, "seconds": 30.0, "sessions": 3}}
+        d = ps.submit(statement(tmp_path, pin), draw([3]), "s3")
+        g.let(104.0, d)
+        assert (d.seconds, d.busy_seconds) == (4.0, 4.0)
+        g.close()
+    assert ps.busy == {"prover-cpu": {"device": None, "seconds": 34.0, "sessions": 4}}
+    assert all(s.accepted for s in (a, b, c, d))
+
+
+def test_each_cards_prover_keeps_its_own_busy_seconds(binary, tmp_path, monkeypatch):
+    """Two cards, a type on each: each card's prover is busy from its own first submission to its own last record,
+    whatever the other card's does."""
+    g = Gate(tmp_path, monkeypatch)
+    pins = ["77" * 64, "88" * 64]
+    with ProofServer(binary, tmp_path / "ps", devices=[0, 1], route={pins[0]: 0, pins[1]: 1}, clock=g.clock) as ps:
+        on0 = ps.submit(statement(tmp_path, pins[0]), draw([0]), "s0")
+        g.let(3.0, on0)
+        on1 = ps.submit(statement(tmp_path, pins[1]), draw([1]), "s1")
+        g.let(11.0, on1)
+        g.close()
+    assert (on0.device, on0.busy_seconds, on1.device, on1.busy_seconds) == (0, 3.0, 1, 8.0)
+    assert ps.busy == {"prover-gpu0": {"device": 0, "seconds": 3.0, "sessions": 1},
+                       "prover-gpu1": {"device": 1, "seconds": 8.0, "sessions": 1}}
+
+
+def test_a_failed_session_ends_its_provers_busy_stretch_and_has_no_share(binary, tmp_path, monkeypatch):
+    """A prover that exits 6 s into its one session was busy those 6 s; the session, which has no records, has no
+    ``busy_seconds`` as it has no ``seconds``."""
+    g = Gate(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "0")
+    with ProofServer(binary, tmp_path / "ps", clock=g.clock) as ps:
+        s = ps.submit(statement(tmp_path, "99" * 64), draw([0]), "s0")
+        g.let(6.0, s)
+        with pytest.raises(ProofServerError, match="prover-cpu exited"):
+            s.result()
+        g.close()
+    assert (s.seconds, s.busy_seconds) == (None, None)
+    assert ps.busy == {"prover-cpu": {"device": None, "seconds": 6.0, "sessions": 1}}
 
 
 def test_a_failed_verdict_of_record_is_the_session_verdict_error(binary, tmp_path):
