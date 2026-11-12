@@ -49,6 +49,10 @@
   or did not accept; 4 when they do and that audit record accepted and is not complete. A record whose boundary
   stream's audit record is missing (case 3) or accepted and is not complete (case 4) has no verdict on it: it can
   accept, and is not complete, so no record is complete on a boundary stream's audit record that is not.
+  That audit record is the one the driver hands. Lean checks its format and its registration and reads its
+  ``accepted`` and ``complete``, and nothing holds it to the record the boundary stream's verifier wrote, so case 1
+  says no more than the record handed says. The two entries that read it, ``boundary-audit`` and
+  ``cross-stream-order`` (its ``case``), name that as their premise.
   ``summary.json`` copies the record's ``accepted`` and ``complete`` and lists every entry's ``premise``. It says the
   response's length is held (``length_held``) only when the record accepted and is complete.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
@@ -96,8 +100,10 @@ LEAN, M0, READS = f"lean-verify/{MEMBER}", f"m0-verifier/{MEMBER}", "registered-
 ORDER, BOUNDARY_AUDIT, REQUEST_ROW, STOP_RULE = TS.ORDER_REFUSED, "boundary-audit", "request-row", "stop-rule"
 #: the tool of an entry that is the Lean verifier's piece ``across``'s verdict
 ACROSS = f"{V.EXE} across"
-BOUNDARY_PREMISE = ("boundary stream's audit: its verdict carried from that stream's audit record by the audit driver, "
-                    "not checked by the Lean verifier")
+#: of every entry that reads the boundary stream's audit record: ``boundary-audit``, and ``cross-stream-order``'s ``case``
+BOUNDARY_PREMISE = ("boundary stream's audit: read from the audit record the audit driver hands; Lean checks its format "
+                    "and registration and reads its `accepted` and `complete`; nothing holds it to the record the "
+                    "boundary stream's verifier wrote")
 REQUEST_PREMISE = "request row: the engine's words, not held to the certified request"
 NOT_COMPLETE = "the boundary stream's audit record accepted with entries that did not run: it is not complete"
 STOP_RULE_PREMISE = "stop rule: the driver's parameter, not held to the pinned checkpoint"
@@ -339,7 +345,9 @@ def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -
     """The ``cross-stream-order`` entry from Lean's answer ``lean`` (`across`'s): accepted when its ``logged`` and its
     ``order`` both are and it decided on this stream's own registrations: its ``earlier``, ``later`` and ``received``
     are the boundary record's digest, the stop registration's and the boundary record's index in the boundary stream's
-    log, as ``r`` holds them. ``case`` is Lean's. ``audit``: the boundary stream's audit record's SHA-512."""
+    log, as ``r`` holds them. ``case`` is Lean's, and reads the boundary stream's audit record as the driver hands it:
+    the entry names that record's premise (`BOUNDARY_PREMISE`), as the ``boundary-audit`` entry does. ``audit``: the
+    boundary stream's audit record's SHA-512."""
     mine = {"earlier": r.boundary, "later": r.registration.digest, "received": r.received}
     why = f"Lean refused the read: {lean['refused']}" if "refused" in lean else None
     for k in ("logged", "order"):
@@ -349,7 +357,7 @@ def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -
     if why is None and any(lean.get(k) != v for k, v in mine.items()):
         why = "Lean's verdict is on other registrations than this stream's"
     return {"accepted": why is None, "of_record": False, "tool": ACROSS, "case": lean.get("case"),
-            **({} if why is None else {"why": why}),
+            "premise": BOUNDARY_PREMISE, **({} if why is None else {"why": why}),
             "boundary": {"registration": r.boundary, "received": r.received, "audit": audit},
             "stop": {"registration": r.registration.digest, "previous": r.registration.record.get("previous")}}
 

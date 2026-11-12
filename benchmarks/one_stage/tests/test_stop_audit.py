@@ -110,8 +110,10 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     """On Lean's accepting verdict of record the stop stream's audit record accepts with Lean's verdict on the order,
     read from the challenger's signed log, and three entries without a verdict: the boundary stream's audit, the
     request row and the stop rule, each with its premise. The boundary stream's audit record is missing, which is case
-    3. So the record is not complete, and the summary says no length is held and lists the premises, soundness's two
-    sentences among them."""
+    3. The order's entry carries that ``case``, which reads the boundary stream's audit record as handed, so it names
+    the boundary audit's premise too, and no other entry names one. So the record is not complete, and the summary
+    says no length is held and lists the three premises, the boundary audit's and the stop rule's held here word for
+    word."""
     stage1 = _stage1(tmp_path, monkeypatch, "accept")
     got, summary = _audit(stage1)
     audit = got["audit"]
@@ -122,13 +124,15 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     assert all(verdicts[k]["accepted"] is True for k in (SA.LEAN, SA.M0, SA.READS, SA.ORDER))
     assert [k for k, v in verdicts.items() if v.get("of_record")] == [SA.LEAN]
     order = verdicts[SA.ORDER]
-    assert order["case"] == summary["case"] == 3 and "premise" not in order
+    assert order["case"] == summary["case"] == 3
     assert order["tool"] == SA.ACROSS == "sampled-proofs-verifier across"
     assert order["boundary"] == {"registration": stage1["registration"], "received": 0, "audit": None}
     assert order["stop"] == {"registration": stage1["stop"]["registration"], "previous": stage1["registration"]}
-    assert verdicts[SA.BOUNDARY_AUDIT]["premise"] == SA.BOUNDARY_PREMISE == (
-        "boundary stream's audit: its verdict carried from that stream's audit record by the audit driver, not checked "
-        "by the Lean verifier")
+    assert {k for k, v in verdicts.items() if "premise" in v} == NULL | {SA.ORDER}
+    assert order["premise"] == verdicts[SA.BOUNDARY_AUDIT]["premise"] == SA.BOUNDARY_PREMISE == (
+        "boundary stream's audit: read from the audit record the audit driver hands; Lean checks its format and "
+        "registration and reads its `accepted` and `complete`; nothing holds it to the record the boundary stream's "
+        "verifier wrote")
     assert verdicts[SA.STOP_RULE]["premise"] == SA.STOP_RULE_PREMISE == (
         "stop rule: the driver's parameter, not held to the pinned checkpoint")
     assert verdicts[SA.REQUEST_ROW]["premise"] == SA.REQUEST_PREMISE
@@ -144,7 +148,8 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     whose audit record Lean's verdict refuses (case 3); a verdict that names another ``--registered`` file than the
     verifier's, or reports another root for a port; and an order the challenger's signed log does not show, here a
     log with no coin after the stop registration (case 2). With a boundary outcome that accepted and is complete the
-    entry accepts and names the audit record (case 1), and the record is still not complete. With one that accepted
+    entry accepts and names the audit record (case 1), and the record is still not complete; the record handed is
+    one made by hand, which no stream wrote, and the two entries that read it name that premise. With one that accepted
     with an entry that did not run the entry has no verdict and gives its reason (case 4): the record accepts, and
     the boundary-audit entry is among those that keep it from being complete."""
     stage1 = _stage1(tmp_path, monkeypatch, "refusals")
@@ -168,6 +173,8 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     assert summary["accepted"] is True and entry["accepted"] is True and summary["case"] == 1
     assert entry["lean"] == {"tool": SA.ACROSS, "accepted": True, "complete": True} and entry["tool"] == SA.TOOL
     assert entry["complete"] is True and "why" not in entry
+    assert entry["premise"] == got["audit"]["verdicts"][SA.ORDER]["premise"] == SA.BOUNDARY_PREMISE
+    assert SA.BOUNDARY_PREMISE in summary["premises"]
     assert summary["complete"] is False and summary["not_run"] == sorted(NULL - {SA.BOUNDARY_AUDIT})
     got, summary = _audit(stage1, SMALL.incomplete(stage1))
     entry = got["audit"]["verdicts"][SA.BOUNDARY_AUDIT]
