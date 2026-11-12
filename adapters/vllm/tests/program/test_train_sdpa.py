@@ -34,8 +34,16 @@ from tests.program.train_step_lf import ADAMW, meta_step, square_loss
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
-from verity_vllm.program.frontend.rules.training_attention import FlashSdpa, FlashSdpaBackward
-from verity_vllm.program.frontend.train_step import AdamW, StepSurvey, export_step, step_report
+from verity_vllm.program.frontend.rules.training_attention import (
+    FlashSdpa,
+    FlashSdpaBackward,
+)
+from verity_vllm.program.frontend.train_step import (
+    AdamW,
+    StepSurvey,
+    export_step,
+    step_report,
+)
 
 aten = torch.ops.aten
 BACKWARD = "aten._scaled_dot_product_flash_attention_backward.default"
