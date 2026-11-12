@@ -110,3 +110,52 @@ CERTNEG to the coordinator, Thu 12 Nov 2:34 AM PST, the benchmark proposal (your
 
 **What I did wrong:** one command printed a telemetry record's `stream` field, a cloud instance id my mask did not rewrite. It reached my own tool output only. The mask now rewrites that form.
 
+[2026-11-12T10:34Z] c68a9342e8c6
+TERMGB to the network-accounting coordinator, Thu 12 Nov 2:35 AM PT. Job G (NET-365), step 1: the read. Nothing in the tree changed. Nothing was run but one scratch of pure functions outside the tree, and proofs' run was fetched, not rerun. All on `main` `33faab2be81c`. Marks: [read], [ran], [argued].
+
+**In one line:** I recommend (A) with two small riders, not (B). Point 4 is so, and it is the reason for the riders.
+
+**1. Which arms fail.**
+- Every arm that reaches `prove_path.py audit` fails, at the same place [read]: the stand-in (`subset:4`, forged `subset:8`); `PP_PLAIN=1` (`stratified:4`, `stratified:8`); `PP_TP` (`stratified:4`, forged `subset:3`); `PP_LLAMA` (`subset:2`, forged `subset:1`); `PP_SERVE_STANDIN` and `PP_SERVE_RUN` without `PP_RECORDS`; the two transfer-gate partition files (`work:2`, `work:1`); and `PP_RECORDS=1` on an arm that sets no `REC_RUN` (the stand-in, `PP_TP`, plain `PP_LLAMA`), which falls through `run.sh` 148 to line 154.
+- Only `PP_RECORDS=1` with `PP_SERVE_RUN` or `PP_SERVE_STANDIN` passes the rule check, through `records()` and `rule_of` [read; I saw no run of it].
+- How: `commit` passes, since the adapter parses a fixed count. Every check before the sample passes. Then `a5.stream_of` line 301, `S.Law(a.rule)`, raises, and `coins_draw` records it as `checks.draw` [read].
+- proofs' run `r20261112-094134-10a2` [fetched and read]: rc 1, at `19fb19a21e40`, 32 commits behind `33faab2be81c`. `run.sh`, `service.py`, `a5.py` and `served_tp.py` are the same at both, and `prove_path.py`'s difference names no rule [ran: `git diff`]. `standin` ranks 0 and 1: population 8, `checks_before_draw` all true, `checks.draw` code `stream`, refusing `'subset:4'`. `standin-forged` rank 0: the same for `'subset:8'`. Both `PROVE-PATH` lines say `ok: false`, and the challenger's session never opened.
+
+**2. Who needs `prove_path.py audit`.**
+- Runs it: `run.sh` 154, nothing else [read: grep].
+- Reads its output: `benchmarks/network_e2e` (`e2e.py --prove-path`; `chain.prove_path`, from line 536, reads each arm's `summary.json` by its `ranks` and skips one without them, which is the records audit's shape), with tests in `test_chain.py`, `test_e2e_serve_run_adoption.py` and `test_e2e_report_ok.py`.
+- Docs' commands: `benchmarks/prove_path/README.md` 11, 124 (the charge terms of its `summary.json`), 142 (`--plain`); `benchmarks/network_e2e/README.md` 60; `demos/vllm/README.md` 103; `benchmarks/one_stage/README.md` 101, 200.
+- Tests: 12 in `test_prove_path.py` (166 lines) call functions only the audit reaches [ran: a count over the syntax tree]. None calls the audit.
+- What it checks that the records audit does not [read]: several ranks of a TP Commit on the run root's one challenger session (the records audit takes one window, one rank); `--plain`; the charge terms (`charge_terms`: c, the location bits, the harm bound), which the README and `network_e2e`'s report read; `i2_against_record`; the compiler negatives (another cap, the transfer-gate lists, another rank's registration) and the served record's negatives. Two checks exist twice: `advice_before_draw` and `advice_after_draw` beside the records audit's `fixed_before_draw` and `after_draw`.
+- Could every arm go through the records audit: not as it stands. The stand-in's rank windows do write `circuit.json` (seen in proofs' run), but the records audit has no several ranks, no `--plain` and no charge terms, and it needs the registered compiler as a command, which exists only for a served window (`prove_path.py circuit --serve-run`).
+- What (B) would delete [ran for the first two, argued for the total]: 18 functions of `prove_path.py` (288 lines) and its parser; 12 tests (166 lines); three arms of `run.sh`, the default one among them (about 45 lines); `chain.prove_path`, its report text and its tests. 700 to 900 lines in ten or more files, after the records audit gains what it lacks.
+
+**3. Why no suite caught it.**
+- No test runs `prove_path.py audit`, `rank_audit`, `a5.audit` or `a5.stream_of` on a partition file's text [read: grep]. The audit needs the prover, the Lean verifier and the ZK server, so only `run.sh` under `research run` reaches line 1237.
+- `test_prove_path.py` 291 to 310 is the module fixture `tp`: it commits the stand-in with `--law subset:4` and an `all.json` of `subset:8`. `commit` takes a fixed count, so it passes. The five tests on it (341 to 435) are all `slow`, so outside the quick tier, and they assert windows and registrations only: the window held to the verifier's, the advice negatives, advice committed after the sample, the forged unit, `plain_refusal`.
+- Line 404 is the plain test's docstring. That test builds its windows from rates (`stratified-rate:1/2`, `rate:1/2`, `work-rate:1/2`) and names `subset:8` only as a case `--plain` refuses.
+- The change that made a rule rate-only (the queue's merge is dated Mon 9 Nov 12:58 AM PT) rewrote `prove_path.py`'s help, the README, a5's `main`, which refuses a fixed count up front by name, and the adapter, whose `window_law.law_of` takes a rate. It left `run.sh` and the six partition files. The records path was mended later because a slow test runs it as a process (`one_stage/tests/test_audit_two_members.py`). Nothing does that for `prove_path.py audit`.
+
+**4. `rule_of`'s N: it is so.**
+- `rule_of(law, N)` states K/N, K from the verifier's `--law` and N the window's own population [read]. So the rate it states is no constant [ran, scratch]: `subset:4` at N = 8, 80 and 800 states `rate:4/8`, `rate:4/80` and `rate:4/800`, and the stream samples 4 each time, where `rate:1/2` samples 4, 40 and 400. It restates the fixed count in a form `service.Law` takes.
+- Where N comes from on each path [read]:
+  - The stand-in through `prove_path.py audit`: today the rule is the file's text and N is not in it. The window is the verifier's own compile of the opened advice under the registered compiler, in the partition file's scope (8 a rank), and the registration is held to it before the sample (`source`). Under (A) that N enters the rule.
+  - A served window through `run.sh`'s `records()` (`served_verdicts.sh` 1010): N is the sum of the template counts in the prover's `circuit.json`, which the registration binds by SHA-512 and `compile_check` holds to what the registered compiler makes of the opened advice.
+  - V3c (`served_verdicts.sh` 421): the committed circuit is first held to the verifier's window-circuit record at the public size class (lines 333 to 354), so N is the class's. The `--circuit` then passed is the SHA-512 of the committed file itself.
+- On the first two, N follows the advice, which the prover chose. A prover whose advice names more lowers each proof block's chance, K/N, which is what the refusal is for. Nothing I read holds N before the rule is stated but the advice's cap and, on V3c, the class.
+- A third place states K of N [read]: `benchmarks/network_traces/scan_zk.py` 1109, its own `rule_of(k, n)`, `stratified-rate:K/N` over the round's N, for the scan's round on the challenger's coins. Its docstring says each proof block is sampled with probability at least k/n however many the prover registers, which holds only where n is not the prover's to size.
+- A second thing [ran, scratch]: over several strata `stratified-rate:K/N` is not `stratified:K`. `stratified:4` over strata of 4 and 4 gives a rule whose design is `stratified:3`, which the stream then refuses at registration, as `rule_of`'s docstring says. `PP_TP`'s default partition has two templates under `stratified:4`.
+
+**5. Recommendation: (A), with two riders.**
+- (A) as you state it: `rule_of` moves to `benchmarks/one_stage/a5.py` beside `rated`, which both audits import; `prove_path.py` states each rank's rule from its own window (N is a rank's, so line 1237 moves into `rank_audit`); `run.sh`'s header says what is true. About 105 lines in 8 files, 50 of them the guard: `a5.py` +15, `records_audit.py` -12 +3, `prove_path.py` +8 -2, `run.sh`'s header 9, the README 4, 4 test references.
+- Rider 1, 3 lines: the function gives a rate's text back as itself. A partition file that states a rate, which the adapter and `prove_path.py`'s help already take, is then never restated over N.
+- Rider 2, 3 lines: `run.sh`'s stand-in states rates, `rate:1/2` and forged `rate:1/1` (`stratified-rate` under `PP_PLAIN=1`). Over a rank's 8 these give today's samples, 4 and 8 [ran, scratch]. The default arm then does not rest on point 4, whatever proofs answers.
+- Not (B): point 2 names what needs the other audit, and it is not a change for noon.
+- What (A) leaves: the seven partition files' fixed counts go through K of N on both paths, and `scan_zk.py` keeps its own copy, which the one function could replace (+2 -5 lines); I would leave that out unless you say. If proofs agrees with point 4, the follow-up is that the files and `V3C_LAW` state rates, `records_audit.py --law` takes one, and `rule_of` goes: about 12 lines of `records_audit.py`, 7 one-line files and `served_verdicts.sh`'s `V3C_LAW` defaults. Which rate each served window should state is not mine to pick.
+- The guard: not built, since its second half calls the one function the ruling names. The same calls in a scratch [ran]: on `main` the `prove_path.py audit` path refuses 11 of 11 texts (the four `run.sh` states, the six files, the GLM default) and the records path takes 11 of 11. It costs 0.9 s of imports the suite already pays and 1 ms of its own. I would have it also hold, for the stand-in's window (one stratum of 8), that the rule's design is the one the window registers: `service.Law` alone passes a rule that registration then refuses.
+
+**Least sure of:** whether (A) mends `PP_TP` and the two `work:K` files. It depends on their windows' strata, which only a run gives me, and I did not read whether `work-rate:K/N` gives the work table such a window registered.
+**Did not look at:** any run of the `PP_RECORDS` path; how V3c's class is derived; whether `served_tp --law rate:1/2` commits (the header of `a5_tp.sh` gives such an entry as an example, and the plain test builds such windows; I ran neither).
+
+TIMER: none
+
