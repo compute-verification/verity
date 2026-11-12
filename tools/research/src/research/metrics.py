@@ -13,10 +13,10 @@ import argparse
 import json
 import urllib.error
 
-from .jobs.client import TOKEN_ENV, TOKEN_FILE, kept_token
+from .jobs.client import DEFAULT_URL, TOKEN_ENV, TOKEN_FILE, kept_token
 from .slack import RouteError, SlackError, _code, _Identity, http_json, route_error
 
-METRICS = "https://website-docs-sage.vercel.app/api/metrics"   # the route, and its OIDC token's audience
+METRICS = f"{DEFAULT_URL}/api/metrics"   # the route, and its OIDC token's audience
 KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 
 
