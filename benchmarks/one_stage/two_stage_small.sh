@@ -18,9 +18,10 @@
 #   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances;
-#   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop; adding --logits
-#   commits the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load), which
-#   `second` takes as --kept
+#   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop; adding --tables
+#   commits each request's history table beside it instead, as a serve with no stop rule does; adding --logits commits
+#   the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load), which `second`
+#   takes as --kept
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.

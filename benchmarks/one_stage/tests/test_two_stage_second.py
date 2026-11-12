@@ -327,7 +327,8 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
 
 
 @pytest.mark.slow
-def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_takes_its_hand_over(tmp_path):
+@pytest.mark.parametrize("tables", [False, True], ids=["alone", "beside-tables"])
+def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_takes_its_hand_over(tmp_path, tables):
     """A class as a served vocabulary's is with the greedy select in units, its replay block
     `GreedySelect_v1{V, N=V / K}`'s body inlined: one unit of each of its K templates a token, the combine's every
     wired row one chunk's output row (K = 4 here; a served row's is 20). Round 2 derives its wires, a link from each
@@ -335,12 +336,20 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     the ids as its return's port, `replayed` commits it linked (`interior_rows.pieces`), and round 2 takes the
     hand-over, the combine's ``o0`` read at round 1's rows, but for the ``logits`` the prover registers after the
     first stage's sample (``second-inputs``). With the return read at the interior's own port, as a record without
-    the port leaves it, round 2 refuses that read too, at the combine's statement (``second-read``). Slow (about
-    16 s): it lowers the K templates for the references and the sessions' files."""
+    the port leaves it, round 2 refuses that read too, at the combine's statement (``second-read``). The same holds
+    with each span's history table committed beside the class, as a serve with no stop rule commits them
+    (``two_stage_small --tables``): the record lists the tables' roots after the return, which a record of tables
+    names ``<block>/o0`` (`boundary_rows.return_port`), as round 2 names the link from each unit's ``logits``
+    ``<block>/logits``, and no unit reads a table. Slow (about 16 s a case): it lowers the K templates for the
+    references and the sessions' files."""
     v, k = 256, 4
-    got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k), BR.check_template(SM.template(v, k))
+    got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k, tables=tables), BR.check_template(SM.template(v, k))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
-    assert c.layout.inline and len(c.layout.templates) == k and c.layout.returned == "o0"
+    ret, names = c.layout.returned, list(c.layout.tables)
+    block = f"{BR.descriptor_id(c.layout.replay)}/" if tables else ""
+    assert c.layout.inline and len(c.layout.templates) == k and len(names) == (N if tables else 0) and pub["ids"]
+    assert ret == f"{block}o0"
+    assert list(pub["values"]) == [*BR.PORTS, ret, *names]
     first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior")
@@ -349,18 +358,20 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert d.cells == (O,) * k and [m.template for m in d.members][-1] == combine
     assert [(w.template, w.port, w.wport) for w in d.wires] == [(combine, f"r{j}", "o0") for j in range(k - 1)]
     assert [w.writer for w in d.wires] == [m.template for m in d.members[:-1]]
-    assert [(x.template, x.port, x.value) for x in d.links] == [(m.template, "logits", "logits") for m in d.members]
-    assert d.returns == (IR.Return(combine, "o0", "o0", O, tuple(range(O)), True),)
-    assert [e["value"] for e in r.record["registered"]] == ["logits"] and [x.value for x, _v in r.interior.returns] == ["o0"]
+    assert [(x.template, x.port, x.value) for x in d.links] == [(m.template, "logits", f"{block}logits") for m in d.members]
+    assert d.returns == (IR.Return(combine, "o0", ret, O, tuple(range(O)), True),)
+    assert [e["value"] for e in r.record["registered"]] == [f"{block}logits"]
+    assert [x.value for x, _v in r.interior.returns] == [ret]
     assert sorted(u // O for u in drawn) == sorted(t * Q + s for t in range(k) for s in range(Q))
 
     mine = d.window(again.registration.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
-    served, = (x for x in brec["roots"] if x["port"] == "o0")
+    assert [x["port"] for x in brec["roots"]] == [*BR.PORTS, ret, *names]
+    served, = (x for x in brec["roots"] if x["port"] == ret)
     last = mine.members[-1]
     assert reads[last.key]["ports"]["o0"] == {
-        "value": "o0", "root": served["root"], "leaves": N * O, "words": 2, "word_bits": 16, "domain": served["domain"],
+        "value": ret, "root": served["root"], "leaves": N * O, "words": 2, "word_bits": 16, "domain": served["domain"],
         "row_schema": last.schema("o0"), "reads": [s * O + j for s in sample for j in range(O)], "reads_from": last.base}
     proofs = TS.references(d, Q, tmp_path / "references")
     S.template_circuits(proofs, again.stream.spec.check.query)
@@ -369,7 +380,7 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     args = (c.layout.program, d.key, sample, mine, r.record, brec, drawn)
     got = TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs, r.tie)
     assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED],
-                   "detail": {TS.INPUTS_REFUSED: {"value": "logits", "why": SS.INPUTS_WHY}}}
+                   "detail": {TS.INPUTS_REFUSED: {"value": f"{block}logits", "why": SS.INPUTS_WHY}}}
 
     own = TS.verifier_reads(replace(d, returns=()), mine, r.record, brec, sample)
     assert own[last.key]["ports"]["o0"]["value"] == f"{combine}/o0"
@@ -380,11 +391,15 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("stop", [False, True])
-def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_round_2_has_no_code(tmp_path, stop):
+@pytest.mark.parametrize("stop, tables", [(False, False), (True, False), (False, True)],
+                         ids=["alone", "stop", "beside-tables"])
+def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_round_2_has_no_code(tmp_path, stop,
+                                                                                                    tables):
     """The same class with the select's inputs committed in round 1's record beside the ids
-    (`boundary_rows.Layout.logits`, K rows a token, row k the lanes unit k reads), under no rule and as a stop class
-    whose first request ends at its second token: the design holds each template's ``logits`` as an input round 1
+    (`boundary_rows.Layout.logits`, K rows a token, row k the lanes unit k reads), under no rule, as a stop class
+    whose first request ends at its second token, and beside each span's history table, where the record names the
+    return and the inputs by the block (``<block>/o0``, ``<block>/logits``): the design holds each template's
+    ``logits`` as an input round 1
     commits and no link, the rule's interior registers no value, and `replayed` opens the kept rows at the record's
     root and commits each port that reads them under the serve's salts. The verifier's reads name round 1's entry
     for every such port, unit j of the i-th sampled span's template t reading row ``sample[i]·K·O + j·K + t``, and
@@ -393,17 +408,21 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
     commits nothing; with the inputs read at the interior's own ports round 2 refuses that read (``second-read``).
     Slow (about 20 s a case): it lowers the K templates for the references and the sessions' files."""
     v, k = 256, 4
-    got, check = SM.serve(tmp_path, v, O, N, inline=True, units=k, logits=True, stop=stop), BR.check_template(SM.template(v, k))
+    got, check = (SM.serve(tmp_path, v, O, N, inline=True, units=k, logits=True, stop=stop, tables=tables),
+                  BR.check_template(SM.template(v, k)))
     rule = got["stop"]
     assert (rule is not None) == stop and (not stop or [len(t) for t in got["tokens"].values()][0] == 2)
     c, pub = BR.reopen(got["class"], check, stop=rule), json.loads((got["class"] / BR.COMMIT).read_text())
     L = c.layout
-    assert L.logits and L.logits_port == "logits" and L.logit_rows == (k * O, v // k) and L.returned == "o0"
-    assert (pub["values"]["logits"]["leaves"], pub["values"]["logits"]["words"]) == (N * k * O, v // k)
+    block = f"{BR.descriptor_id(L.replay)}/" if tables else ""
+    ret, name = f"{block}o0", f"{block}logits"
+    assert L.logits and L.logits_port == name and L.logit_rows == (k * O, v // k) and L.returned == ret
+    assert len(L.tables) == (N if tables else 0)
+    assert (pub["values"][name]["leaves"], pub["values"][name]["words"]) == (N * k * O, v // k)
     rule_of = TS.rule_of(L, f"rate:{Q}/{N}", K, 60.0)
     assert rule_of.span_values == ()
     first = TS.first(pub, check, rule_of, FC.Challenger("first"), stop=rule)
-    assert [x["port"] for x in first.record["roots"]][-2:] == ["o0", "logits"]
+    assert [x["port"] for x in first.record["roots"]][-2 - len(L.tables):] == [ret, name, *L.tables]
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"), stop=rule)
     with pytest.raises(ValueError, match="--kept"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
@@ -412,21 +431,21 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     assert d.links == () and r.tie == {} and not r.record.get("registered")
     assert [(x.template, x.port, x.value, x.per, x.at, x.words) for x in d.inputs] == [
-        (m.template, "logits", "logits", k * O, tuple(j * k + t for j in range(O)), v // k) for t, m in enumerate(d.members)]
-    assert [x.value for x, _v in r.interior.inputs] == ["logits"] * k and [x.value for x, _v in r.interior.returns] == ["o0"]
+        (m.template, "logits", name, k * O, tuple(j * k + t for j in range(O)), v // k) for t, m in enumerate(d.members)]
+    assert [x.value for x, _v in r.interior.inputs] == [name] * k and [x.value for x, _v in r.interior.returns] == [ret]
 
     mine = d.window(again.registration.digest, sample)
     assert CS.expected_ports(mine) == r.interior.ports
     reads = TS.verifier_reads(d, mine, r.record, brec, sample)
-    served, = (x for x in brec["roots"] if x["port"] == "logits")
+    served, = (x for x in brec["roots"] if x["port"] == name)
     for t, m in enumerate(mine.members):
         assert reads[m.key]["ports"]["logits"] == {
-            "value": "logits", "root": served["root"], "leaves": N * k * O, "words": v // k, "word_bits": 16,
+            "value": name, "root": served["root"], "leaves": N * k * O, "words": v // k, "word_bits": 16,
             "domain": served["domain"], "row_schema": m.schema("logits"),
             "reads": [s * k * O + j * k + t for s in sample for j in range(O)], "reads_from": m.base}
     proofs = TS.references(d, Q, tmp_path / "references")
     S.template_circuits(proofs, again.stream.spec.check.query)
-    assert all(e["registered"]["ports"]["logits"]["value"] == "logits" for e in proofs["templates"])
+    assert all(e["registered"]["ports"]["logits"]["value"] == name for e in proofs["templates"])
     stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
     assert len(stmts) == k and all(TS.pins(proofs, stmts).values())
     args = (L.program, d.key, sample, mine, r.record, brec, drawn)
