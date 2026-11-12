@@ -66609,3 +66609,44 @@ So wherever the registration record is one a run (row 1), an accepted composite'
 - Item 2 (the event restated, 1 bit): not started. Item 1 alone reads `2^-102.58` (modeled, on a branch, not run on the served engine), so the 100-bit target does not need it. I send its statement first if you want it built.
 - Mailbox read 22:25Z: nothing after your 21:26Z section.
 - Next date: the lemmas' ready line when its two runs end; the Thu 02:00Z entry stands.
+
+## COUNT, Thu 12 Nov 01:41Z: yes, `main` alone refuses today's plan of record, and not since a landing: since a label in the store at 9:29 AM PST Wed. Run `0a76`'s plan is `art:bc129c10bf4b…` and `main` alone reads it (0.0372). Merging `main` breaks the figure of record's driver against my planner; I mend it in my pull request, due 05:00Z
+
+Mailbox read whole at 01:22Z and its headings again at 01:37Z (eleven sections, the last 01:19Z). Fresh VM after the stop: nothing was unpushed (`cursor/proofs-count-71ac` was at `bfc3da111b74`), no run launched twice. Marks: [run] with its id, [local] my VM with the tree named, [read] with the place, [relayed], [derived].
+
+### 1. Your question: is today's plan of record refused by `main` alone? Yes
+
+- [local: tree `be9a3d566905`, none of my commits, 01:24Z to 01:33Z] `verity bench prove --system spot --workload glm53` exits 2, and so does the same with `--sampling art:adca7a9a…`: "the sampling plan art:adca7a9a… and the census don't cover each other: the plan has no cell for 2 block type(s) (MoeExpertFp8ReadGemm_v1{…}, MoeExpertFp8ReadGemmW_v1{…}), and the census no block type for 2 cell(s) (Fused[…], Fused[…]). It is another census's or cut's plan, or no steady-state row of record names those cells' staged types".
+- **Since which landing: none.** [read: the body of benchmarks' #8852, open, head `e9471df5d11f`, not merged, last moved 01:15Z] The plan names its two fused cells by a staged type alone (`fr-w13`, `fr-w2`); the only rows staged under those names were in three runs of 8 Nov, and benchmarks marked those runs superseded at 9:29 AM PST on Wed 11 Nov (17:29Z). The reader on `main` (`693fc39a2a`) ties such a cell through a labelled row, so it has refused since that label. I did not read the label events myself.
+- **Who else runs it, and do they know: benchmarks, and yes.** #8852 is their mend ("a superseded row still ties a plan's cell"); its body says the command "on `main` currently refuses" and prints 0.0367 again from their head. Until it lands, Friday's print from `main` fails.
+- **A second way out, yours to pick.** [local: tree `be9a3d566905`, rc 0] `main` alone reads run `0a76`'s plan, whose cells are all the census's block types: **0.0372 prover GPUs a serving GPU (0.0371 to 0.0372), modeled, steady-state measurements covering 99.4% of its proving time; 0.0529 at the plan's own prices; no cell missing.** That plan is unlabelled, so the command takes it only once someone labels it; I ran the command's own build and render with the plan read from the file.
+
+### 2. Run `0a76`'s artifact
+
+- [run `r20261111-220645-0a76`, rc 0, source `bfc3da111b74`] **The plan: `art:bc129c10bf4b95705aefb01c95da00f5719254c53dcd5f79f7f59fb74cbdb8d2`** (`mix.json`, sha256 `12c0bd994307…`, kind `evidence/v1`, preserved 01:27Z, unlabelled; I label nothing). Refs: the plan of record, the census, this run's record, the run that dumped the planner's inputs (`8476`), and the counts.
+- **The counts: `art:7267aa46978911a7a557e95418ef9b1ba94f6d2889e5f00e7ec14ef414ee07e2`** (`counts.json`, the form the two-stage rule's per-template counts take: 27 sampled replay blocks, 193 block types, counts 4 to 6,123,015).
+- What it is: the plan of record's case, from that plan's own planner inputs, at a verification phase of a datacenter's 600 s (12,500 machines, 90,237,980 replay blocks), the first stage a whole count, the second stage by template. 192 cells, each a block type of the census under the cut `per-expert-fused`; the two fused cells carry the census's names. Modeled, on the cost model: 2,635.9 GB (2,767.7 at ×1.05) beside the plan of record's 3,846.2 (4,038.5).
+- Its meta says: the verifier's second stage refuses it (several sessions a template; the two-stage form is off); no code builds a verification phase of that size; the designs beside it; and that its `binding_bits` is one reading of two, neither settled, to be quoted by nobody alone.
+- It was planned before your 01:19Z rulings, so it has no 64-table line and no "first limit met". The plan at the pull request's head will have both; I send that id with the ready line and you choose which to label.
+
+### 3. Both runs read
+
+- `r20261111-220645-0a76`: rc 0. Its tables are the ones in my 22:20Z entry, sections 2 to 5, now [run] where that entry said [local]: I checked fifteen of that entry's figures (the three datacenter tables' by-template rows and the plan's case at 1, 16 and 200 tables) against the run's output, and all are there.
+- `r20261111-220725-e8ed`: rc 0. "57 suites: 57 passed (0 cached), 0 failed" for `suites.py --changed origin/main --quick` at `bfc3da111b74`. The head moves (below), so this is not the pull request's run.
+
+### 4. New since the stop: `main`'s figure-of-record driver does not run on my planner
+
+- [local: `bfc3da111b74` merged with `main` `be9a3d566905`, one conflict in the figures' README, resolved] #8853 put `benchmarks/spot_figures/breakeven/headline.py` on `main`. It calls the planner two ways my branch changed: `two_stage_statements(cells, k, q, registration)` (mine takes the sampled count), and it prices each row at its line's verification phase, one machine's 600 s, where my planner has no design at any of its pinned shares of compute up to 15 (one sampled replay block costs about 27 machine-windows). [local] Its slow test fails at the merged head: `test_a_planner_row_describes_itself_and_restores_the_planner`, `TypeError` on a row with no plan. The quick tier would not have shown it.
+- **What I do, unless you say otherwise:** in my pull request the driver's rows state their verification phase, a datacenter's 600 s by your 18:59Z ruling, each row carrying the size and the sampled count; `plan` reads the row's own strata and count; a row with no design is an error that says so. The driver's figures then move with the planner, which is the recomputation this job is for; I print the rows before and after in the body.
+
+### 5. Your rulings of 01:19Z, as I build them
+
+1. Binding: two columns, headed "if each sampled proof block has its own classes" and "if a session's proof blocks share their classes", nothing quoted alone, reruns at the tables rounded up. [local] The proved four are ⌈4·J·2^23/e⌉ times 210 plus 1, and that formula gives 165,903,167,851 at 64 tables, which is not among the proved instances; I mark it so.
+2. A 64-table line, and "first limit met" on every row, in the figure's own output and in `total_cost.py counts`: a session's tables against 1, 64, 127 and 200; the release log's lines; the second draw's bytes against one layout. [read: `verity/protocols/spot/device/challenger.py:219-257`; `flock-circuit.rs:59`; `Flock/Tags.lean:85`] A row that meets one prints "out of reach" with the limit first, and its bound after it as the cost model's alone; the one-session row past 200 tables prints no bound, as before. [local: `rec_live.rep_rounds`] A repetition of one table is 86 to 136 rounds by its size, so I count at least 2 lines a session and 172 a table.
+3. In-tree code names no pull request, so the figure uses `main`'s limits (2^20 lines, 2^20 coins); #8914's 2^23 and 2^24 are a column in the body only.
+
+### 6. Hours, re-dated
+
+- Thu 05:00Z: the pull request with its ready line (was 04:00Z), with the plan at its head put and its id.
+- Fri 13 Nov 04:00Z (Thu 8 PM PST): the class's counts file, once the vLLM lane names the class. What `counts` needs as input for a class: each check template's descriptor id, its proof blocks a replay block (whole), its witness bits and output bits, and the seconds a proof block and a statement for it.
+- Not yet done from 22:16Z: the binding error at the best weight of the split head's table (item 3). It goes in the next entry.
