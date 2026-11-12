@@ -8,9 +8,10 @@ every capture format read to the same sums, and each thing the reader doesn't re
 the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
 on it in no sum; a run of two execution phases is counted across both phases' records; a run in the id egress form,
-at the id front's cell, agrees as one in the bytes form does; a request's place in the release order is its `END`
-cell's in the ingress record, where a bucket's are not in their ordinals' order; the answer on a watermark
-connection in no pair makes its direction a bound; and a connection that failed is a bound."""
+at the id front's cell, agrees as one in the bytes form does, and its capture kept at 54 bytes a packet holds no
+content and is read as the one kept at 130 is; a request's place in the release order is its `END` cell's in the
+ingress record, where a bucket's are not in their ordinals' order; the answer on a watermark connection in no pair
+makes its direction a bound; and a connection that failed is a bound."""
 from __future__ import annotations
 
 import argparse
@@ -452,6 +453,12 @@ def _packet(protocol: int, body: bytes = b"", **how) -> bytes:
     return fx.ip(CERTIFIER[0], SERVER[0], protocol, body, **how)
 
 
+def _with_ip_options(packet: bytes, n: int = 8) -> bytes:
+    """One of the fixture's IPv4 packets with `n` bytes of IP options, each the end of the list."""
+    return (bytes([0x40 | (5 + n // 4)]) + packet[1:2] + (int.from_bytes(packet[2:4], "big") + n).to_bytes(2, "big")
+            + packet[4:20] + bytes(n) + packet[20:])
+
+
 @pytest.mark.parametrize("name, frames, how, said", [
     ("an IP fragment", [fx.ethernet(_packet(fx.TCP, fx.tcp(40001, 8000, 1, fx.ACK, fx.data(64)), fragment=0x2000))],
      {}, r"capture\.pcap's packet 0 is an IP fragment of a flow with a given address: .* reassembles nothing"),
@@ -464,6 +471,11 @@ def _packet(protocol: int, body: bytes = b"", **how) -> bytes:
     ("MPLS", [fx.ethernet(bytes(4) + fx.first()[0], kind=0x8847)], {}, "is MPLS, an encapsulation"),
     ("cut inside its headers", [fx.ethernet(p) for p in fx.first()], {"snapshot": 40},
      r"packet 0 is kept too short for its headers: capture at least 130 bytes of each packet \(`-s 130`\)"),
+    ("IPv6 kept at 54 bytes a packet",
+     [fx.ethernet(fx.ip(fx.CERTIFIER6, fx.SERVER6[0], fx.TCP, fx.tcp(40001, 8000, 1, fx.SYN)))], {"snapshot": 54},
+     "packet 0 is kept too short for its headers: capture at least 130 bytes of each packet"),
+    ("eight bytes of IP options kept at 54 bytes a packet", [fx.ethernet(_with_ip_options(fx.first()[0]))],
+     {"snapshot": 54}, "packet 0 is kept too short for its headers: capture at least 130 bytes of each packet"),
     ("another link type", [fx.ethernet(p) for p in fx.first()], {"link": 105},
      r"capture\.pcap has link type 105: this reads Ethernet \(1\), raw IP \(101\) and Linux cooked \(113, 276\)"),
 ])
@@ -592,12 +604,12 @@ def _sent(writer: _Writer) -> bytes:
     return b"".join(data for _, data in writer.writes)
 
 
-def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]]) -> Path:
+def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]], name: str = "seen.pcap", **how) -> Path:
     """A capture of one connection from the certifier to the server for each of `streams`, (the bytes the certifier
     sent, the bytes the server sent), their packets interleaved, some of their sequence numbers passing the wrap."""
     return _capture(tmp_path, fx.interleaved(*(
         fx.exchange((CERTIFIER[0], 40001 + k), SERVER, sent, answered, isn=(2 ** 32 - 97 * k, 1000 * k), mss=400)
-        for k, (sent, answered) in enumerate(streams))), name="seen.pcap")
+        for k, (sent, answered) in enumerate(streams))), name=name, **how)
 
 
 ANSWER = b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n"
@@ -712,6 +724,20 @@ def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp
     assert cf.record_counts(out) == record | {"phase_records": {"certified": 5, "of": 6}}
 
 
+def _three_ids(tmp_path: Path):
+    """Three id requests through the device in the id egress form at 4,096-byte cells and one slot, each answered an
+    event of exactly P bytes a token, its ids 0, 1, …, and then the trailer, and the watermark stream."""
+    out, key = tmp_path / "run", tmp_path / "key"
+    out.mkdir()
+    params = dataclasses.replace(PARAMS, cell_bytes=4096, slots=1, egress="id")
+    tokens, prompts = (1, 8, 3), ([7], list(range(1, 801)), [3, 4, 5])
+    requests = [ws.id_request(model="m", user=f"user-{k}", prompt=prompt, max_tokens=n, frame_bytes=params.cell_bytes,
+                              offset=0) for k, (prompt, n) in enumerate(zip(prompts, tokens))]
+    responses = [ws.id_response(list(range(n)), params.payload) for n in tokens]
+    relay, servers, mark = _served(out, key, requests, responses, params=params)
+    return out, params, tokens, requests, responses, relay, servers, mark
+
+
 def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direction(tmp_path):
     """The id egress form at the id front's cell of 4,096 bytes (`ids.sh`'s): three id requests
     (`active.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
@@ -721,15 +747,9 @@ def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direct
     certified. A connection's count to the server is its request with its release headers, and from it P bytes a
     token and the trailer. A capture of exactly the bytes the server's side saw agrees in each direction and pairs
     every connection, the server's answer on the watermark's in no sum."""
-    out, key = tmp_path / "run", tmp_path / "key"
-    out.mkdir()
-    params = dataclasses.replace(PARAMS, cell_bytes=4096, slots=1, egress="id")
-    P, tokens, prompts = params.payload, (1, 8, 3), ([7], list(range(1, 801)), [3, 4, 5])
-    requests = [ws.id_request(model="m", user=f"user-{k}", prompt=prompt, max_tokens=n, frame_bytes=params.cell_bytes,
-                              offset=0) for k, (prompt, n) in enumerate(zip(prompts, tokens))]
-    responses = [ws.id_response(list(range(n)), P) for n in tokens]
+    out, params, tokens, requests, responses, relay, servers, mark = _three_ids(tmp_path)
+    P = params.payload
     assert 2 * P < len(requests[1]) <= 3 * P and [len(r) for r in responses] == [n * P + len(TRAILER) for n in tokens]
-    relay, servers, mark = _served(out, key, requests, responses, params=params)
     deployment = json.loads((out / "deployment.json").read_text())
     assert deployment["params"]["egress"] == "id"
     assert deployment["digest"] == params.digest.hex() != dataclasses.replace(params, egress="bytes").digest.hex()
@@ -761,6 +781,40 @@ def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direct
     assert got["watermark_answer_bytes"] == len(ANSWER) and got["bounded"] == got["unpaired"] == []
     assert cf.table(result).splitlines()[1] == \
         "record: 4 connection(s) to the server; 3 of its execution phases' 3 records certified"
+
+
+def _timestamped(packet: bytes) -> bytes:
+    """One of the fixture's IPv4 TCP packets with the twelve bytes of TCP options a Linux loopback's packets carry,
+    two no-ops and a timestamp: in an Ethernet frame its headers are 66 bytes."""
+    return (packet[:2] + (int.from_bytes(packet[2:4], "big") + 12).to_bytes(2, "big") + packet[4:32] + bytes([8 << 4])
+            + packet[33:40] + b"\x01\x01\x08\x0a" + bytes(8) + packet[40:])
+
+
+def test_a_capture_kept_at_54_bytes_a_packet_holds_no_content_and_is_read_as_one_kept_at_130_is(tmp_path):
+    """The id-form run's capture with a Linux loopback's headers, 66 bytes a packet (Ethernet, IPv4, TCP with its
+    timestamp), kept twice: at the reader's 130 bytes a packet and at 54, the least a TCP packet's headers are over
+    IPv4 in an Ethernet frame. The file kept at 130 holds the first 64 bytes of every segment, a request's start and
+    a token id among them; the file kept at 54 holds no byte past any packet's headers. The reader reads none of
+    TCP's options and takes every length from the headers and the length on the wire, so what it reads of the two is
+    equal field for field but for the snapshot length it reports: each direction agrees and every connection pairs."""
+    out, _, _, _, responses, _, servers, mark = _three_ids(tmp_path)
+    streams = [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), ANSWER)]
+    files = {kept: _seen(tmp_path, streams, name=f"kept{kept}.pcap", frame=lambda p: fx.ethernet(_timestamped(p)),
+                         snapshot=kept) for kept in (cf.SNAPSHOT, 54)}
+    held = {kept: [data for _, _, data in cf.packets(path, {})] for kept, path in files.items()}
+    assert {len(data) for data in held[54]} == {54} and min(map(len, held[cf.SNAPSHOT])) == 66
+    start, token = _sent(servers[0])[:64], b'"token_id":%10d' % 4
+    assert start.startswith(b"POST ") and any(data[66:] == start for data in held[cf.SNAPSHOT])
+    assert any(token in data[66:] for data in held[cf.SNAPSHOT])
+    assert not any(word in files[54].read_bytes() for word in (b"POST", b"token_id", b"data:"))
+    results = {kept: cf.read([path], *_given(), run=out) for kept, path in files.items()}
+    assert [f["snapshot"] for f in results[54]["capture"]["files"]] == [54]
+    results[54]["capture"]["files"][0]["snapshot"] = cf.SNAPSHOT
+    assert results[54] == results[cf.SNAPSHOT]
+    got = results[54]["compared"]
+    assert got["to_server"]["says"] == got["from_server"]["says"] == got["pairing"]["says"] == "agrees"
+    assert got["to_server"]["difference"] == got["from_server"]["difference"] == [0, 0]
+    assert (got["pairing"]["connections"], got["pairing"]["flows"], got["pairing"]["pairs"]) == (4, 4, 4)
 
 
 def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ingress_record(tmp_path):
