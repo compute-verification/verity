@@ -8,23 +8,19 @@ the switch itself."""
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import shutil
 
 import mc_cases as M
 import pytest
 import verity_difftest as D
 import wipe_cases as W
+import wipe_verdict as V
 from hypothesis import strategies as st
 
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-
-_spec = importlib.util.spec_from_file_location("streamed_wipe_lean_verdict", M.PACKAGE / "wipe_verdict.py")
-V = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(V)
 
 #: The mappings a caller passes: the accepted schemes, the test signers', both, none, one test height alone.
 SCHEME_SETS = [mc.SCHEMES, M.ts.SCHEMES, W.KNOWN, {}, {M.ts.scheme(1): M.ts.SCHEMES[M.ts.scheme(1)]}]
