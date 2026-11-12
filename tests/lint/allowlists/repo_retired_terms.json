@@ -5413,7 +5413,6 @@
     {"file": "verity/protocols/pouw/prover/circuit/anchors.py", "count": 13},
     {"file": "verity/protocols/pouw/prover/circuit/cap.circuit-check.py", "count": 16},
     {"file": "verity/protocols/pouw/prover/circuit/cap.py", "count": 237},
-    {"file": "verity/protocols/pouw/prover/circuit/compile.py", "count": 3},
     {"file": "verity/protocols/pouw/prover/circuit/h1window.py", "count": 8},
     {"file": "verity/protocols/pouw/prover/circuit/h1zy.py", "count": 3},
     {"file": "verity/protocols/pouw/prover/circuit/leaves.py", "count": 74},

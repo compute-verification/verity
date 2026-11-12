@@ -354,7 +354,11 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
                 tuple(sorted(bs)))
 
 
-def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
+#: the sampling design `work_table` reads floors from when it is given none: it names no template, so each floor is 1
+_NO_FLOORS = WorkLaw()
+
+
+def work_table(lay: Layout, law: WorkLaw = _NO_FLOORS) -> dict[str, dict[str, int]]:
     """The verifier's work table (its `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
     per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
     than one stratum (`check_work_strata`, the execution phase pin's `hone`)."""
