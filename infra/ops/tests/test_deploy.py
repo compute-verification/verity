@@ -517,11 +517,11 @@ def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
     node of their kind has already run: cpu-12's entries, its managed patterns and its record."""
     nodes = deploy.load()
     twin = nodes["vy-nebius-cpu-12"]
-    want = sorted((e.path, e.src, e.by, tuple(e.run), e.hold) for e in twin.entries)
+    want = sorted(twin.entries, key=lambda e: e.path)
     assert want
     for n in range(14, 18):
         node = nodes[f"vy-nebius-cpu-{n}"]
-        assert sorted((e.path, e.src, e.by, tuple(e.run), e.hold) for e in node.entries) == want, node.name
+        assert sorted(node.entries, key=lambda e: e.path) == want, node.name
         assert (node.managed, node.record, node.admin, node.quiet) == (twin.managed, twin.record, twin.admin, twin.quiet), node.name
 
 
