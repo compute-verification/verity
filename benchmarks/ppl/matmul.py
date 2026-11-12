@@ -147,7 +147,7 @@ class MM:
 
     # ------------------------------------------------------------ what a step does
 
-    def replace(self, x: torch.Tensor | None = None, w: Callable | torch.Tensor | None = None, **extra) -> MM:
+    def replace(self, x: torch.Tensor | None = None, w: Callable | torch.Tensor | None = None, **extra: Any) -> MM:
         """A copy with a new x, and w either mapped (a callable, applied after the current maps) or replaced."""
         maps, base = self.maps, self._w
         if callable(w):
@@ -157,7 +157,7 @@ class MM:
         return MM(self.kind, self.name, self.run, self.x if x is None else x, base, maps, self.store,
                   {**self.extra, **extra}, self.stage, self.prefix, self._coin_calls)
 
-    def integer(self, x: torch.Tensor, w: torch.Tensor, **extra) -> MM:
+    def integer(self, x: torch.Tensor, w: torch.Tensor, **extra: Any) -> MM:
         """The integer stage: x and w on the grid; what the rest of the chain returns is their exact product."""
         m = self.replace(x=x, w=w, **extra)
         m.stage = "int"

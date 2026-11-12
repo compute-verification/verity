@@ -18,6 +18,29 @@ def test_negatives_tier_all_behave() -> None:
     assert all(d["bad"] == 0 for d in rep["by_mistake"].values())
 
 
+def test_a_negative_whose_hints_are_rejected_has_no_accepted_word(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hint generation rejecting the operands is the checker's no to every word: a ``reject`` row behaves, and a ``wrong``
+    row's correct word is reported as not accepted. A crash there is a failure of its own."""
+    tier = I.load("vu-k1536-neg", ROOT)
+    monkeypatch.setattr(S, "_TIER", tier)
+    rows = [dict(zip(tier.columns, row)) for row in tier.index]
+
+    def reject(*_: object) -> None:
+        raise S.Reject("outside the domain")
+
+    monkeypatch.setattr(S, "gen_vu", reject)
+    got = [S._neg(i) for i in range(tier.n)]
+    assert [r["ok"] for r in got] == [row["verdict"] == "reject" for row in rows]
+    assert [r.get("why") for r in got] == [
+        f"correct {int(row['correct_y']):#06x} not accepted" if row["verdict"] == "wrong" else None for row in rows]
+
+    def crash(*_: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(S, "gen_vu", crash)
+    assert S._neg(0) == {"id": 0, "ok": False, "mistake": rows[0]["mistake"], "why": "hint generation crashed: RuntimeError: boom"}
+
+
 @pytest.mark.parametrize("tier", ["vu-k1536", "tu-k16"])
 def test_positive_tiers_when_built(tier: str) -> None:
     try:
