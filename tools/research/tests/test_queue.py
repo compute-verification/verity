@@ -4530,9 +4530,9 @@ def _landed_move(world: World, rows: str, files: dict[str, str | None]) -> tuple
     return base, move
 
 
-def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map_its_words_in_any_case(world):
+def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map_its_words_in_any_case(world, capsys):
     """`map_retires` reads a map as `layout.py` and `rename.py` take it: a row that keeps its path and a one-word module retire
-    nothing, and a map missing at the base or that doesn't parse can't be read."""
+    nothing, and a map missing at the base or that doesn't parse can't be read, the one that doesn't parse said on stderr."""
     main = _move_main(world, {"tools/move/l_map.toml": '[paths]\n"old/" = "new/"\n"kept.py" = "kept.py"\n'
                                                        '[retired]\npaths = ["gone/"]\n[drop]\npaths = ["x.toml"]\n'
                                                        '[modules]\n"old" = "new"\n"pkg.old" = "pkg.new"\n',
@@ -4543,8 +4543,11 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     assert layout == Q.Retired(frozenset({"old", "gone", "x.toml", "pkg.old"})), layout
     assert words == Q.Retired(words=frozenset({"warden", "tap"})), words
     assert words.named("a NETWORK WARDEN, pkg.old") == ["warden"] and layout.named("from pkg.old import y; Old") == ["old", "pkg.old"]
+    capsys.readouterr()
     assert Q.map_retires(world.origin, main, "tools/move/bad_map.toml") is None
+    assert f"tools/move/bad_map.toml at {main[:12]} doesn't parse" in capsys.readouterr().err
     assert Q.map_retires(world.origin, main, "tools/move/none_map.toml") is None
+    assert not capsys.readouterr().err
 
 
 def test_the_status_command_refuses_a_head_lacking_a_move_whose_change_names_what_it_retires_and_admits_the_rest(world):

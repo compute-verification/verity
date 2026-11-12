@@ -4099,13 +4099,15 @@ class Retired:
 
 def map_retires(repo: Path, at: str, path: str) -> Retired | None:
     """What the move map ``path`` retires, read at ``at`` (the move's base, where `tools/move/stage.py` ran it and
-    `move_check.py` reads it), or None when it is missing there or doesn't parse: a layout map's old paths that a [paths]
-    row sends elsewhere, its [retired] and [drop] paths and its dotted [modules] and [aliases] old names (`layout.py`
-    rewrites no one-word module); a word map's [words] and [[words_in]] old words."""
+    `move_check.py` reads it), or None when it is missing there or doesn't parse (said on stderr): a layout map's old paths
+    that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted [modules] and [aliases] old names
+    (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old words."""
     r = _git(repo, "show", f"{at}:{path}", check=False)
     try:
         data = tomllib.loads(r.stdout) if not r.returncode else None
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"research queue: the move map {path} at {at[:12]} doesn't parse ({e}), so a head that lacks its move "
+              "stays out", file=sys.stderr)
         data = None
     if not isinstance(data, dict):
         return None
