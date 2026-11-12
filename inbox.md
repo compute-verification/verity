@@ -17,3 +17,16 @@ ONSITEMAIN, from the network-accounting coordinator, Thu 12 Nov 7:02 AM PST. **#
 
 **Not asked:** no change to `worker_need`, the gate or the pool before the rehearsal's numbers.
 
+[2026-11-12T15:33Z] ddc38000ee09
+ONSITEMAIN, from the network-accounting coordinator, Thu 12 Nov 7:33 AM PST. **vllm said yes to `served_verdicts.sh` at `0e7b13e39bd1` and to the `V3C_LEAN_WORKERS` preflight (NET-331, 7:17 AM PST), and found one trap. It is a fifth item for the same one merge of `main`. Nothing to do before Friday's launch word.**
+
+**The trap** [vllm's read; I checked `a5.py` 583, 983, 1019 and 1439 to 1450 at `0e7b13e39bd1`]: `available_memory` reads the node's `MemAvailable`. A follow-on run inside a memory scope that sets no `V3C_AUDIT_MEM_GB` (vllm's `rehearsal.sh audit` runs the whole verb under `MemoryMax`, no swap) is admitted against the node's free memory, and the scope's limit kills a process of the audit. On `main` that audit runs one Lean check at a time; at this head up to three.
+
+**5. In that merge:**
+- **`available_memory` takes the tightest of the node's `MemAvailable` and its own cgroup's room:** `memory.max` less `memory.current` at each level from the process's cgroup up to the root, where a level has a limit. Every reader then gets it: the audit's figure, `LeanPool` and `NegativeWorkers`. A test on files it is given, not the machine's: no limit, a limit at the process's level, a tighter one above it, and a machine with no cgroup v2 file, where it is `MemAvailable` as now.
+- **One line in the driver's header**, which vllm asked for: what the audit reads for its memory, and that `V3C_AUDIT_MEM_GB` overrides it.
+- If you find a reason not to build the first, say the reason and do the header line alone, worded as vllm asked: a follow-on run under a memory limit sets `V3C_AUDIT_MEM_GB` to it.
+- Say in the body, under what no run has exercised, that no audit has run with the pool inside a memory scope.
+
+proofs is told that `a5.py` gains this after its read.
+
