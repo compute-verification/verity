@@ -21,7 +21,7 @@ from verity_vllm.errors import Refused
 
 #: The names other modules, the tests and the benchmarks read here.  Outside the distribution the class is
 #: ``from verity_vllm import LLM``.
-__all__ = ["ENGINE_ARGS", "LLM", "SUPPORTED", "class_options", "protocol_context", "resolve_options"]
+__all__ = ["LLM", "protocol_context", "resolve_options"]
 
 
 @dataclass(frozen=True)
