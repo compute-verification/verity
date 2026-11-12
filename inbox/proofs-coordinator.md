@@ -78085,3 +78085,178 @@ I am the execution that made the branch. The other one (its 07:39Z entry) made o
 **5. For REDRAW's ready line.** The merge-tree step at `7393f47f04b1` against lean's merge (`1ab0a94237`) names the six files REDRAW's 07:51Z entry names at `dd89861a3e`, and no seventh [run: both, side by side]. My seven files stop against nothing.
 
 **6. For REDRAW's body, if it says them.** The stop audit's written cases are fourteen on this branch; #9081's body says twelve, which is right at `ad9af609f4ee`. If #9081 lands first, `main` has `RecordAcross.lean` calling `coinsReason` with four arguments, and REDRAW's branch without this one does not compile once it merges `main` [derived: the arity; not run].
+
+## OUTBITS (SERVEDFORM), Thu 12 Nov 08:14Z: it differs by row: a served statement names exactly the Definition its partition file names; on `main` that is the Boolean version for rows 4 and 12, the census's own Definition for row 15 (the form check under `--zk` takes it), and for rows 6, 7 and 16 the same GEMM split four times finer than the census's block, named by a file at `K=256` only
+
+First entry, items 1 to 4 of the 07:40Z section as changed at 07:59Z. The brief's task 4 (the figure's label) and the line
+for HASH-98 follow in the full entry. Commit read: `origin/main` `bcaf58a45d53` [run: `git rev-parse` after a fetch,
+08:11Z]. Every check ran with that tree on `PYTHONPATH`, and each printed `verity.__file__` under it [run]. I changed no
+code and launched nothing on a node.
+
+### 1. Circuits' reading holds on rows 4, 12, 6 and 15: the served path lowers exactly the Definition the name names
+
+- **Holds.** Nothing between a partition file's name and the circuit swaps one form for the other [read, the four
+  places below; run, the call below].
+- A name becomes a template by binding exactly that Definition; a name that binds to another id is refused [read:
+  `adapters/vllm/verity_vllm/pipeline/serving_templates.py:223-281`, the refusal at `:248-249`].
+- The verifier's population program is over each template's own `fn` [read:
+  `adapters/vllm/verity_vllm/pipeline/serving_rows.py:208` (`ts = [template(t) for t in tmpls]`), `:253`
+  (`[t.fn for t in ts]`), `:440` (`CS.population_program([(fn, n_of[t]) ...])`)].
+- The composer hands that `fn` to Flock's `UnitStager` [read: `benchmarks/one_stage/compose_circuit.py:226-235`; the
+  audit calls it with the member's template name, `benchmarks/one_stage/a5.py:733-735`]. `stage.py census:NAME` does
+  the same without the binding to a partition [read: `benchmarks/served_units/stage.py:386-405`].
+- `boolean_version` is called in two places of the serving pipeline, and neither changes what is lowered: the name of a
+  per-expert fused block's `DOT` (`serving_templates.py:492`, none of rows 4, 6 to 12, 14, 15, 16) and the text of a refusal
+  (`chunk_rows.py:131`) [run: `rg boolean_version` over the adapter, the composer, `a5.py`, `served_units`, Flock's
+  prover and `verity/commitments`].
+- The call (`check1.py`: `template(name)`, then `descriptor_id(tp.fn) == name`, `is_boolean(tp.fn)`, `tp.word`,
+  `tp.layout`, `chunk_rows.statement(tp)`, `chunk_rows.zk_refusal(tp)`) printed [run]:
+
+| name, and where it is named | `fn` id is the name | `is_boolean` | word | layout | statement | `zk_refusal` |
+|---|---|---|---|---|---|---|
+| `BatchedGemm_v2{B=1,K=512,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v2"}}` (row 4; `glm53_all_families_tp8_step16.json`) | True | True | `BatchedGemm_v1{B=1,K=512,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}`, the census's name | slice | reads inline | None |
+| `BatchedGemm_v2{B=1,K=192,N=1,DOT=...v2}` (row 12; the same file) | True | True | `BatchedGemm_v1{B=1,K=192,N=1,DOT=...v1}`, the census's name | slice | reads inline | None |
+| `ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}` (`glm53_prefill_tp8_step0.json`) | True | True | `ScaledMmFp8BlockSharedScale_v1{K=256,N=1,G=128}`: not the census's name for row 6, 7 or 16 | coord | reads inline | None |
+| `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` (row 6's census name; no file) | True | False | itself | coord | reads inline | None |
+| `SparseMlaCombine_v1{NSPLIT=5,DV=64,INV={"fn":"Fa3InvSum_v1"}}` (row 15; `glm53_sparse_mla_tp8_step16.json`) | True | False | itself | chain | reads inline | None |
+| `SparseMlaCombine_v2{NSPLIT=5,DV=64,INV={"fn":"Fa3InvSum_v2"}}` (row 15's Boolean version; no file) | True | True | row 15's census name | chain | reads inline | None |
+| `SparseMlaSplitEndCols_v1{DV=512,G=64,C=0,INV=...v1,SCALE=...}` (the same step-16 file) | True | False | itself | chain | reads inline | None |
+
+- `boolean_version` of each word name above is the `_v2` name beside it, for rows 4, 12, 6 (`..._v2{K=6144,N=4,G=128}`)
+  and 15 [run, same call].
+- None of the nine `glm53_*tp8*.json` partition files has a `zk` key, so `chunk_rows.zk_check` checks nothing for them
+  [run: each file's keys printed; read: `chunk_rows.py:138-147`].
+
+### 2. Rows 6, 7 and 16: the partition's unit is a finer split of the census's block, not another computation; one census block is 4 units of the one-output binding at the same K, and only `K=256` is in a file
+
+- **Which of the two it is: the first.** Both are coordinates of the GEMM part of a `DeepGemmFp8Linear_v1` or
+  `FlashInferFp8Linear_v1` row: coordinate j of width c is the part's Definition at `N=c`, reading the activation row
+  and its scales whole, weight columns [jc, (j+1)c) and their one scale row, and returning the row's output words
+  [jc, (j+1)c) [read: `serving_templates.py:16-28` (`COORDS`, `WIDE_COORDS`), `:71-74` (`PARTS`), `:320-344`
+  (`coord_width`, `coord_widths`); `serving_rows.py:68-77`].
+- **The count: 4 at each of the three K.** A row of N outputs holds N/4 units of `ScaledMmFp8BlockSharedScale_v1{K,N=4,G=128}`
+  and N units of `...{K,N=1,G=128}` [run, `check2.py`: `unit_templates("DeepGemmFp8Linear_v1{K=6144,N=2624}")` lists
+  656 and 2624; `{K=2048,N=6144}` 1536 and 6144; `{K=256,N=6144}` 1536 and 6144; the same for the `FlashInferFp8Linear_v1`
+  rows; `row_units` is `N // coord_width` at `serving_rows.py:272-273`].
+- **The older census in the tree agrees.** `benchmarks/harness/tests/fixtures/prove/census.json` counts the one-output
+  coordinate, and its prefill counts are exactly 4 times `benchmarks/sampling_plan/glm53_blocks.json`'s at each K:
+  516,685,824 = 4 x 129,171,456 (`K=6144`), 1,484,783,616 = 4 x 371,195,904 (`K=2048`), 943,718,400 = 4 x 235,929,600
+  (`K=256`) [read: both files; the arithmetic is mine]. These are the two files' `prefill` counts of proof blocks (the census file's header: a 256-token prompt, 8 ranks);
+  nothing here ran on the served engine.
+- **Nothing joins the units, and no unit holds a scale.** Each unit returns its own words of the row's committed
+  output, and the weights' scale row is one of its four input rows (`in3`) [run, `check2.py`: ports `xq`, `sx`, `w`,
+  `ws` to 4 words or 1; read: `serving_rows.py:325-331`].
+- **Beside them, once a row: the row's quantisation unit,** which the census already counts as its own kind
+  (`Fp8GroupQuantUe8m0_v1{K,G=128}` for a DeepGEMM row, its q and s committed; `FlashInferFp8Quant1x128_v1{K}` for a
+  FlashInfer row, its q and s wired to the coordinates) [run, `check2.py`: `unit_templates`; read:
+  `serving_templates.py:71-74`, `adapters/vllm/verity_vllm/pipeline/part_rows.py:1-9`, `glm53_blocks.json`].
+- **What the files name, by K** [run: every `glm53_*tp8*.json` file's templates printed]:
+
+| K | the census's block | in a partition file on `main` | units of that entry for one census block | beside them |
+|---|---|---|---|---|
+| 6144 (row 6) | `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | no GEMM coordinate at any width or form; only the quantisation, `Fp8GroupQuantUe8m0_v2{K=6144,G=128}` (prefill, step 0) | none served; it would be 4 of `..._v2{K=6144,N=1,G=128}` | the quantisation unit, once a row |
+| 2048 (row 7) | `...{K=2048,N=4,G=128}` | the same: only `Fp8GroupQuantUe8m0_v2{K=2048,G=128}` | none served; it would be 4 | the same |
+| 256 (row 16) | `...{K=256,N=4,G=128}` | prefill, step 0: `ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}`. Decode, step 16: `FlashInferFp8Linear_v2{K=256,N=1}`, the FlashInfer linear's own coordinate, which redoes the row's quantisation inside each unit | 4 in either file | prefill: `Fp8GroupQuantUe8m0_v2{K=256,G=128}`, once a row. Decode: none for a FlashInfer row (it is inside each unit) |
+
+- **4 units is the count, not the price.** Four one-output units open the activation row and its scales four times
+  where the census's block opens them once, and each sits in its own block. Input rows, in bits [run, `check2.py`,
+  `chunk_rows.unit_rows`]: at `K=6144` 248,832 for the census's block against 4 x 101,376; at `K=2048` 82,944 against
+  4 x 33,792; at `K=256` 10,368 against 4 x 4,224. Estimated block sizes [read: `glm53_blocks.json` for `N=4`,
+  `benchmarks/spot_figures/cards/workload.glm-5.3.json` for `N=1`; estimates, not staged]: 2^25 against 4 x 2^24 at
+  `K=6144`, 2^24 against 4 x 2^23 at `K=2048`, 2^22 against 4 x 2^22 at `K=256`. So a row timed at the files' binding,
+  times 4, prices the census's block about twice over at `K=6144` and `K=2048` and four times over at `K=256` [guess,
+  from those block sizes; no timing of mine].
+- **Neither is wrong as a computation; the two differ in the width of the split, and the file's entry is the older
+  one.** The prefill file's `N=1` entry is from 24 Oct (`487dbe6edc`); coordinates c outputs wide, with the census
+  picking the width by cost, came on 8 Nov (`9be6495f45`), and the census file was regenerated on 9 and 10 Nov [run:
+  `git log -S` on the three files]. The census's choice is the tree's rule today [read:
+  `benchmarks/one_stage/block_census.py:11-13`, `width_pick`].
+- **So the census stands, and what prices its block is a row at the census's own binding in its Boolean version:**
+  `ScaledMmFp8BlockSharedScale_v2{K,N=4,G=128}` at `K=6144`, `2048` and `256`. Each binds as a serving template whose
+  word is the census's name, with the census block's own rows [run, `check2.py`: `is_boolean True`, word equal, 4
+  output words]. If a served partition is to name what the census counts, its entry changes to that name at each K;
+  a file cannot name both widths for one row (`serving_rows.py:239-240` refuses two members reading one part) [read].
+  The partition files are in `benchmarks/one_stage/`, read by the adapter's tests and `a5_tp.sh` [run: `rg`]; I
+  changed none.
+
+### 3. Row 15: `verify --zk` takes the word form the step-16 file names
+
+- **(ii) The direct evidence is yes for both families, at the stand-in's statics, not at the file's.** The run
+  `r20261111-150349-7a37` (tree `3eff0ee0b767`, a CPU node, exit 0) proved `a5_sparse_mla.py`'s stand-in window, not
+  `glm53_sparse_mla_tp8_step16.json`: its partition names three `SparseMlaHeadBlock_v2{DR=16,DV=32,...}` and the word
+  forms `SparseMlaSplitEndCols_v1{DV=32,G=32,C=0,...}` and `SparseMlaCombine_v1{NSPLIT=2,DV=32,...}` [read: the run
+  record's `out/sparse-mla/rank0/partition.json`]. The Lean verifier ran
+  `flock-verify verify --statement verity/flock-circuit ... --zk --session` on each sampled member and answered
+  `"accepted":true` for member 4, one unit of the word column end, and member 5, a unit of the word combine [read:
+  `rank0/session-m4/lean-verify.log`, `session-m5/lean-verify.log`, `window/m4-units.json`, `m5-units.json`]. The
+  column end's circuit was composed by `compose_circuit.py --template SparseMlaSplitEndCols_v1{...}` [read:
+  `rank0/m3/compose.log`]. I found no run that proved the GLM-5.3 step-16 file itself under `--zk` [guess: one search
+  of the notes, none of the store].
+- **(i) `ks_form_why`'s two grounds, at the file's statics: neither applies.** The form mirror's line in the records
+  of the runs that timed these word forms says `out_net` `unit`, no shared rows, `accepted`, for
+  `SparseMlaCombine_v1{NSPLIT=5,DV=64,INV={"fn":"Fa3InvSum_v1"}}` (`r20261111-024727-c0c5`, `out/form.tsv`) and
+  `SparseMlaSplitEndCols_v1{DV=512,G=64,C=0,...}` (`r20261111-015621-f1a4`) [relayed: kernels' runs at tree
+  `c6cadd0e325f`, their records read by me from the store]. `main` stages the same circuit file for the combine (pin
+  `0bd0add3...`, kernels' run `r20261112-060030-1329`) [relayed: `h98/main-stages-the-pins.md`]; the column ends
+  C=1 to 7 were not looked at.
+- **The same on `main`, run by me at the stand-in's statics.** Composed as the served composer does (`UnitStager` on
+  `chunk_rows.unit_rows` and `chunk_rows.statement`), the word combine and the word column end each give a circuit
+  whose META has no `out_net` (so the unit returns the outputs) and whose unit reads one input group;
+  `ks_form_why` and `template_why` both return None, as for their Boolean versions [run, `check3.py`, at
+  `SparseMlaCombine_v1{NSPLIT=2,DV=32}` and `SparseMlaSplitEndCols_v1{DV=32,G=32,C=0}`].
+- **Why by read:** a word template of these kinds reads its tables inline (`chunk_rows.py:35-62`), an inline statement
+  has no tail stage, and META names an `out_net` only when the outputs come from a tail stage
+  (`verity/protocols/flock/prover/python/verity_flock/circuit.py:838, 863`) [read]. `zk_refusal` is None for both at
+  the file's statics [run, `check1.py`].
+- **The step-16 file is not `zk: true`** [run: its keys are `chunk_cap`, `law`, `scope`, `templates`].
+- **So the file need not name `_v2` for `--zk`.** Naming `SparseMlaCombine_v2` is a choice of cost, not of form: at the
+  file's statics the Boolean version is 1,404,134 ANDs against the word form's 1,676,431, both staged [relayed:
+  kernels' staging records `h98/row15-dry-stage.json` and `stage-main-combine-v1.json`].
+- **#9087, one line:** on its head `0cb0d8dbb679` the step-16 file still names `SparseMlaCombine_v1{NSPLIT=5,DV=64,...}`
+  unchanged, and names one word-form end `SparseMlaSplitEnd_v1{DV=64,...}` in place of the eight
+  `SparseMlaSplitEndCols_v1{DV=512,G=64,C=0..7}`; it also regenerates `glm53_blocks.json` [run: `git show` of that
+  head's file and `gh pr view 9087 --json files`].
+
+### 4. The seven kinds in no file: the form check takes each word form, and each has a registered Boolean version
+
+Each word name bound as the serving path would bind it (`check4.py`); the form mirror's verdict is from the record of
+the kernels run that timed that word form at these statics (`out/form.tsv`) [relayed, read by me from the store].
+No partition file names a template of either family for any of the seven [run: the nine files' names compared by
+family].
+
+| kind (the census's name) | layout | statement, `zk_refusal` [run] | form mirror at these statics [relayed] | Boolean version registered, and it binds as a template whose word is the census's name [run] |
+|---|---|---|---|---|
+| `CublasSplitKGemmF32Out_v1{K=6144,N=1,SPLIT_K=3,DOT=...v1}` (row 8) | slice | inline, None | accepted (`r20261111-024454-e0f2`) | `CublasSplitKGemmF32Out_v2{K=6144,N=1,SPLIT_K=3,DOT=...v2}`, yes |
+| `AllReduceMultimem_v1{WORLD=8,SIZE=96,TREES=...,FTZ=false}` (row 14) | cols | inline, None | accepted (`r20261111-024541-688a`) | `AllReduceMultimem_v2{...}`, yes |
+| `DsaMqaLogits_v3{N=1,H=32,D=128}` | slice | inline, None | accepted (`r20261111-013927-ac13`) | `DsaMqaLogits_v4{N=1,H=32,D=128}`, yes |
+| `SparseMlaHeadEnd_v1{DV=512,INV=...v1}` | chain | inline (reads `rcp`), None | accepted (`r20261111-024800-16db`) | `SparseMlaHeadEnd_v2{DV=512,INV=...v2}`, yes |
+| `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` | row | inline (reads `ex2`), None | accepted (`r20261111-024657-933c`) | `DsaIndexerQ_v2{H=32,D=128,ROPE=64}`, yes |
+| `AllReduceResidualMnnvl_v1{WORLD=8,N=96,SHOT=1}` | cols | inline, None | accepted (`r20261111-024551-bc85`) | `AllReduceResidualMnnvl_v2{...}`, yes |
+| `DsaTopKShortRow_v1{TOPK=2048}` | row | inline, None | accepted (`r20261110-232129-ed12`) | `DsaTopKShortRow_v2{TOPK=2048}`, yes |
+
+- So the form does not decide which a partition must name for these seven: either is taken. The two of layout `row`
+  (`DsaIndexerQ`, `DsaTopKShortRow`) get this statement only when the file's `chunk_cap` names them; without it the
+  verifier's input set lowers the unit, a statement I did not look at [read: `serving_rows.py:284-290`,
+  `compose_circuit.py:1-16`].
+
+### What I could not establish
+
+- That Lean's own `ks-form` (not its Python mirror) or `verify --zk` takes the word combine and column end at the
+  file's statics: no run found, and I staged nothing at those statics.
+- The form mirror for the column ends C=1 to 7 and for `main`'s staging of any kind but the combine.
+- Any timing: the price ratios in section 2 are from estimated block sizes.
+
+### Limits I broke
+
+Three local checks ran past a minute and 1 GB, because binding a large Boolean Definition traces its body: `check1.py`
+(60 s, 6.3 GB at peak, run twice), `check3.py` (129 s, 4.6 GB, once) and a first form of `check4.py` that died after
+227 s with nothing printed (memory, most likely; not confirmed). I stopped calling `is_boolean` on large bodies
+(`tp.id != tp.word` says the same) and ran nothing else of that size. Outputs: `/opt/cursor/artifacts/servedform-*.log`.
+
+### My own task, and the line the 03:50Z section asked for
+
+- #9117 is marked ready since 03:37Z at `3e94266a6db3` and waits on a reader's land verdict; #9066 waits on its
+  verdict; the finding note waits on its second reader. I come back to them after this task.
+- The fixture: `verity/protocols/spot/verifier/tests/fake_challenger.py` (`Challenger`, `Stream`), used by
+  `verity/protocols/spot/verifier/tests/test_two_stage.py`, drives the device's client and the verifier in one
+  process on a CPU [read: both files at `bcaf58a45d53`].
