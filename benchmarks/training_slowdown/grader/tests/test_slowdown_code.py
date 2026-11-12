@@ -118,17 +118,17 @@ def test_the_command_line(fresh, steps, tmp_path, capsys, unit_prices) -> None:
                                               "a minute)")
 @pytest.mark.parametrize("step", ["f32", "bf16", "bf16-cublas"])
 def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch, request) -> None:
-    """The slowdown code's capture of the same tiny step (`capture_step`, its product rows with each GEMM at its operands'
-    dtype) beside what the grader reads of the step's circuit: the same products, N and token dims at every (phase, op,
-    dims), and the same O and operand widths at every one but the bf16 steps' attention products. Those are the one
-    exception, named and exact: the trace prices an attention call's products at the width the card's fused kernel computes
-    them at, the 16 bits of the call's query (its raw rows' `attention`), and the step's circuit computes them on torch's
-    math path, in the 32 bits that path casts the call's operands up to, until it wires that kernel. So on the rows whose
-    `attention` is narrower than the dtype they were traced in, and on no other, the circuit's O is 32 bits a word against
-    the trace's 16, twice the trace's, and its operands are 32 bits wide each, where the trace has at 16 every one its
-    capture passes at the call's width (at least one a product); the float32 step has no such row. On sm_120, priced at the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a
-    bf16 MAC that dot's over 16) times their routes' factor (`route_factor`: the zeros grid.z slices pad their residue
-    tiles with are dots the trace doesn't count)."""
+    """The slowdown code's capture of the same tiny step (`capture_step`, its product rows with each GEMM at its operands' dtype)
+    beside what the grader reads of the step's circuit: the same products, N and token dims at every (phase, op, dims), and the same
+    O and operand widths at every one but the bf16 steps' attention products. Those are the one exception, named and exact: the
+    trace prices an attention call's products at the width the card's fused kernel computes them at, the 16 bits of the call's query
+    (its raw rows' `attention`), and the step's circuit computes them on torch's math path, in the 32 bits that path casts the
+    call's operands up to, until it wires that kernel. So on the rows whose `attention` is narrower than the dtype they were traced
+    in, and on no other, the circuit's O is 32 bits a word against the trace's 16, twice the trace's, and its operands are 32 bits
+    wide each, where the trace has at 16 every one its capture passes at the call's width (at least one a product); the float32 step
+    has no such row. On sm_120, priced at the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16
+    MAC that dot's over 16) times their routes' factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are
+    dots the trace doesn't count)."""
     dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
     directory, _, commit = SLOWDOWN_CODE.rpartition("@")
     code = G.load_slowdown_code(Path(directory), commit)
