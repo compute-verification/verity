@@ -80065,3 +80065,22 @@ Applied to the staged tree (`36a5f6dafdf2`, #9202's mover on `bcaf58a45d53`), `t
 - Scratch branches of mine, never to be marked: `cursor/proofs-scratch-maps-on-remote-merge-9d2b` (lean's landing head with the maps, the one_stage change and #9202's commits) and `cursor/proofs-scratch-maps-mover-on-main-6b1f` (#9202's commits and the maps on `main`). Say if I should delete them once the move is staged.
 - When lean's landing head moves again I rerun the staging and write one line only if a certificate or the resolving check changes.
 - The `Goal top/architecture-signed` line in #9196's and #9202's bodies is my reading of the goals page (08:33Z entry); correct it if it is not the goal.
+
+## STOPDRIVER, Thu 12 Nov 09:05Z: the third run: the rehearsal at `2011220faf` ended exit 0, its five audits as at #9081's head; so all three runs of the families branch are exit 0. One correction: the rehearsal runs `--handoff` and not `--zk-server`
+
+**1. The run** [run: its `status.json`, `stdout.log` and `out/`, fetched 09:00Z].
+
+- `r20261112-082319-a0bb`, vy-nebius-cpu-8, commit `2011220faf`, `bash benchmarks/one_stage/stop_audit_small.sh`: **exit 0**. It waited 31 minutes and held its slot 08:54:46Z to 08:59:17Z.
+- The five audits: `accept rc=0`, `length rc=1`, `unlogged rc=1`, `unaccepted rc=1`, `incomplete rc=0`, and `SMALL {"accept": true, "accept_is_not_complete": true, "length": true, "unlogged": true, "unaccepted": true, "incomplete": true}`. Their `STOP` lines are those of #9081's rehearsal (`82ad`) word for word, apart from the units each session sampled and the two digests the `unlogged` refusal names [run: `diff` of the two logs' lines].
+- With my 08:45Z entry, the three runs my 08:27Z entry named: `7007` at `7393f47f04b1` (18 passed), `8852` at `2011220faf` (6 passed), `a0bb` at `2011220faf` (the five audits). Exit 0 each.
+
+**2. What it adds to the tests: the family on a session the driver made** [run: `out/first/p4-o32/stage1.json`, each `out/<audit>/audit.json`, `out/build-lean.log`].
+
+- `two_stage.py first --stop` registered the two ranks on a local challenger session. The hand-off names `draw/0` for the boundary registration and `draw/1` for the stop registration, and its order held.
+- The Lean piece `across` was built in the run from this tree (`Spot.RecordAcross`, 473 jobs). It accepted the order in the four audits that reach it (cases 3, 3, 3 and 4). `unlogged` is refused before any session, case 2.
+
+**3. A correction to my 08:45Z entry.** It said the rehearsal is the only run of `--zk-server`. It is no run of it: the script passes that flag only through `SMALL_AUDIT`, which this run did not set [run: the run's command and environment]. The rehearsal ran `--handoff` in all five audits and wrote `sample.json` in the four that have a session. `--zk-server` is parsed and the path behind it has not run, as `--firewall`'s had not at #9081, whose body says the rehearsal has no ZK server.
+
+**4. One consequence of the rename that my 08:27Z entry left out.** `two_stage.py second` still takes `--stage1` and `--firewall` for the same two arguments [run: `rg` of the flags], so the two commands of one audit now spell them differently. #9081's body gave that as its reason for leaving them. `two_stage.py` is not one of the four files, and I leave it. I recommend no alias in `stop_audit.py`: the newer command has the Glossary's names, and `two_stage.py` follows when its flags are renamed. Nothing for you to do unless you want the alias.
+
+**5. Left with me:** nothing is out. The branch is `2011220faf` and I push nothing more to it unless REDRAW's merge or its check finds something.
