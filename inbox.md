@@ -715,3 +715,45 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov 11:58 AM PST. **NET-394
 
 TIMER: none
 
+[2026-11-12T20:03Z] 01121929f769
+BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 12:03 PM PST [clock read]. **NET-388's pull request is open and unmarked, and my turn ends with this line.** Each line is marked.
+
+**The pull request**
+- #9457, `cursor/na-turn-away-on-tick-9d4f` at `259aadb07b66c3767d49b3950e29933c20f7e6d3`, eleven commits on `1d6ebf70ff8c`, 10 files, none outside the certifier's package, its tests and `benchmarks/network_traces/` [ran]. Opened by `research queue open`, linked to NET-388, no mark. `gh` could not read it back (its API rate limit), so its state is as the command printed it.
+- The body has the rule, the three conditions each with its test, the issue's five other tests, the stream's end as its own section, the share of a link's time, what the cell charges, what I decided that no one ruled, and the limits.
+- **One line of the body is one status behind:** it has `r20261112-193414-73a6` as running, and it is done (below). `research queue edit` was refused by the same rate limit at 12:03 PM PST. I put it right with the other runs' statuses in my next turn.
+
+**The runs at this head are launched and not read** [ran: each `research status`, last at 12:02 PM PST]. The pool gave them no slot between 11:46 AM and 12:02 PM PST. I read them first thing in my next turn and put their statuses in the body.
+
+| run | head | what | status |
+|---|---|---|---|
+| `r20261112-193050-3071` | `23f3446303b0`, one commit before the head | certifier's verifier suite; its `network` suite; `verity-network-traces` | done, rc 0: 1425 passed 1 skipped; 85 passed; 617 passed; 0 cached |
+| `r20261112-193153-34b1` | `23f3446303b0` | ratchet gate against `origin/main`, then against `1d6ebf70ff8c` | failed, rc 1: retired-term sites alone, 72 over the three changes, 9 of this one's, all the code's own names |
+| `r20261112-193127-2728` | `23f3446303b0` | `repository`, whole | waiting: not read |
+| `r20261112-194600-eb11` | `259aadb07b66` | the three suites | waiting: not read |
+| `r20261112-194636-9134` | `259aadb07b66` | `repository`, whole | waiting: not read |
+| `r20261112-194733-aba8` | `259aadb07b66` | ratchet gate, as above | waiting: not read |
+| `r20261112-194838-6e3f` | scratch C `34509dd7346c` | the three suites and `repository` | waiting: not read |
+| `r20261112-193414-73a6` | scratch C one commit earlier, `804ffaebd19d` | the same | done, rc 0: 1480 passed 1 skipped; 91 passed; 682 passed; `repository` 358 passed; 0 cached |
+
+- At the head, locally, one file at a time: the four test files the change touches pass (15, 8, 19, 23), and the gate against `1d6ebf70ff8c` names the same 9 sites and nothing else [ran].
+
+**What changed after my 11:27 AM PST line**
+- **The gate's two silent handlers** are gone: the pacer reports a bucket unwritten where a link takes its last part and not the stream's end, and the device counts a turned-away link its client resets (`turned_away_reset`, in `warden.json`) [ran].
+- **The read of a turned-away link is bounded**: at most a byte past the cells a request may hold (`ingress_cells`), as an admitted connection's ingress is. A link that sends more is read no further and is closed at the run's end [ran]. This is the one commit after `23f3446303b0`.
+- **Why the bound, and one thing for soundness** [argued, not measured]: the device reads a link on its loop. When the loop reads, the kernel may open that link's TCP window to its client, so a client that sends enough sees when the loop read, and a server's writes move the loop. That holds today for every link the device accepts, up to what the stream's reader buffers. Without the bound, one turned-away link would have given its client that view without limit for `span` buckets. With it a turned-away link gives what an admitted one does. Whether that signal is charged anywhere I did not find in `PROTOCOL.md`; it is soundness's to say.
+- **Mutations:** 18 changes to the device and the pacer, each failing at least one test, none hanging [ran].
+
+**Scratch C**
+- `cursor/na-scratch-c-388-lean-4f8a` at `34509dd7346c1c205ef3a858b5d4bc5c29d1529c`: NET-388's head merged onto scratch B, in two merge commits (the head before the bound, then the head). Nothing stopped. Its tree is scratch B's merged with the head directly [ran: `git merge-tree`].
+- NET-388 shares eight files with #9375's branch: `warden.py`, `pacer.py`, `warden_serve.py`, `PROTOCOL.md`, the README (49,046 bytes merged), `test_network_certifier_pacer.py`, `test_network_certifier_warden.py`, `test_warden_serve.py`.
+- **The one place they meet in behaviour** [read: that branch's `pacer.py` `main` and `_drain`, `Warden._report`; argued from the order]: there a part whose link has not reached the pacer by its release is lost and the window is faulted. A turn-away's link is sent in its cell's tick, before that bucket is handed, and the pacer takes every link its channel holds before a release that misses one. The four test files pass on scratch C locally, the paced turn-away among them [ran].
+
+**The share of a link's time** [arithmetic on the cost runner's schedule]: `span` is 542 buckets, 54.2 s a run. A run of a week 0.0090%, of a month of 30 days 0.0021%, of a year of 365 days 0.00017%. A device that runs a day at a time: 0.063% at every period.
+
+**Decided here and ruled by no one:** the stream's end with the cell, the open link, the read's bound and the reset's count; the pacer's keys for turn-aways (2³² − n); a link already closing at its tick gets no cell; that the pacer now ends the stream with every link's last part, an admitted connection's too.
+
+**Not looked at:** a served run at form 2 under the pacer; anything on a network that is not loopback; a turn-away in the run's last bucket over TCP; the ruling's own text (I have it from your line).
+
+**Your 11:45 AM PST line** reached me through the shell hook. I did not start #9378's change or the read for soundness. I end the turn here, at the pull request, so that your turn reaches me.
+
