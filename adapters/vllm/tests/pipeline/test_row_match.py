@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -50,22 +51,25 @@ def _flag(cmd: list[str], name: str) -> str:
 # ---------------------------------------------------------------------------------------------------------------- the comparison
 
 def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_served_at(tmp_path, monkeypatch):
-    """B=1: the request Program is the Build's when the fold ran every step of the cap, and the one of the served shape (derived when
-    not on disk) when the request stopped early; ``match_shape.json`` names the shape and the Program dir either way."""
+    """B=1: the request Program is the Build's when the fold ran every decode step the row asks for, and the one of the served shape
+    (derived when not on disk) when the request stopped early; ``match_shape.json`` holds, in this order, LP, the served T, the row's T
+    and the Program dir either way, under the names its reader looks them up by."""
     r, ran = _match_row(tmp_path, monkeypatch, rcs={"match_compare.log": 7})
     d = r.d
     assert r.compare(60) == (7, None, False)
-    assert Path(d, "match_shape.json").read_text() == f'{{"LP": 8, "T": 3, "cap_T": 3, "derived": "{d}/build_request"}}\n'
+    shape = Path(d, "match_shape.json").read_text()
+    assert shape.endswith("}\n") and list(json.loads(shape).values()) == [8, 3, 3, f"{d}/build_request"] and R.served_shape(d) == ""
     (name, cmd), = ran
     assert name == "match_compare.log" and cmd[3] == "program-compare"
     assert (_flag(cmd, "--a"), _flag(cmd, "--b"), _flag(cmd, "--out")) == (f"{d}/build_request", f"{d}/match", f"{d}/match_compare.json")
 
     ran.clear()
     os.makedirs(f"{d}/match")
-    Path(d, "match", "fold_summary.json").write_text(json.dumps({"n_steps": 3}))      # two decode steps served of the cap's three
+    Path(d, "match", "fold_summary.json").write_text(json.dumps({"n_steps": 3}))      # two decode steps served of the row's three
     assert r.compare(60) == (7, None, False)
     early = f"{d}/build_request_LP8_T2"
-    assert json.loads(Path(d, "match_shape.json").read_text()) == {"LP": 8, "T": 2, "cap_T": 3, "derived": early}
+    assert list(json.loads(Path(d, "match_shape.json").read_text()).values()) == [8, 2, 3, early]
+    assert re.findall(r"\d+", R.served_shape(d)) == ["8", "2", "3"]
     (derive, dcmd), (name, cmd) = ran
     assert derive == "build_request_LP8_T2.log" and (_flag(dcmd, "--LP"), _flag(dcmd, "--T"), _flag(dcmd, "--out")) == ("8", "2", early)
     assert name == "match_compare.log" and _flag(cmd, "--a") == early
