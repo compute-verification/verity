@@ -3382,12 +3382,12 @@ def test_the_preflight_merges_no_marked_head_the_head_contains_or_that_contains_
 def test_the_read_of_the_marked_heads_names_what_its_own_budget_left_unread_and_takes_none_of_the_checks_time(
         world, monkeypatch, capsys):
     """The read has a budget of its own, read from the clock before each group of merges: past it the marked heads still to
-    merge are named and not merged, the collision already found is still told, and the mark goes through.  The merged tree's
-    checks get their whole budget from when the read ends, so a slow read never costs a lint its time."""
-    from research.queue import COLLIDE_SAYS, MarkOnly, Preflight, StoreLabels, ready
+    merge are named, every one, and not merged, the collision already found is still told, and the mark goes through.  The
+    merged tree's checks get their whole budget from when the read ends, so a slow read never costs a lint its time."""
+    from research.queue import COLLIDE_SAYS, PREFLIGHT_COLLIDE_NAMED, MarkOnly, Preflight, StoreLabels, ready
 
     main = _on_main(world)
-    five, six, seven = (_marked(world, n, {"a.txt": f"a{n}\n"}) for n in (5, 6, 7))
+    five, *rest = (_marked(world, n, {"a.txt": f"a{n}\n"}) for n in range(5, 7 + PREFLIGHT_COLLIDE_NAMED))
     world.gh.put(2, h2 := world.change({"a.txt": "a2\n"}), ready=False)
     now, real, deadlines = [0.0], Q.conflicting_files, []
 
@@ -3400,13 +3400,14 @@ def test_the_read_of_the_marked_heads_names_what_its_own_budget_left_unread_and_
     merged = _merges(monkeypatch)
     pre = _preflight(world, budget_s=120.0, collide_s=50.0, collide_jobs=1, clock=lambda: now[0])
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
-    assert five in merged and six not in merged and seven not in merged, merged
+    assert five in merged and not set(rest) & set(merged), merged
     assert [s for s in world.logs if "warning" in s] == [
         f"research queue: preflight: warning: #2 at {h2[:12]}: it doesn't merge with 1 marked PR(s), each merged onto `main` at "
         f"{main[:12]} and this head onto that, as a candidate holding both merges them:\n"
         f"    #5 (lane-5) at {five[:12]}, in a.txt\n  {COLLIDE_SAYS}",
-        f"research queue: preflight: warning: #2 at {h2[:12]}: whether it merges with these PRs wasn't read: #6, #7 (not merged in "
-        "time). The read has 50 s of its own and refuses nothing; the queue's merge judges each"], world.logs
+        f"research queue: preflight: warning: #2 at {h2[:12]}: whether it merges with these PRs wasn't read: "
+        f"{', '.join(f'#{n}' for n in range(6, 7 + PREFLIGHT_COLLIDE_NAMED))} (not merged in time). The read has 50 s of its own "
+        "and refuses nothing; the queue's merge judges each"], world.logs
     assert deadlines == [1000.0 + 120.0], deadlines
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 

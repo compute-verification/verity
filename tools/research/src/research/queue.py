@@ -4484,7 +4484,7 @@ PREFLIGHT_CHECKS_S = 120.0
 #: fetch of the marked heads not here and two merges for each marked head that shares a changed path with the head, a few
 #: seconds in all: the budget is what a slow store, remote or disk may take of a mark before the read gives up and says so
 PREFLIGHT_COLLIDE_S = 30.0
-#: how many of a collision's files, and of the PRs the read didn't get to, its warning names before "and N more"
+#: how many of a collision's files its warning names before "and N more" (the PRs the read didn't get to are all named)
 PREFLIGHT_COLLIDE_NAMED = 5
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM
 PREFLIGHT_JOBS = 2
@@ -5391,8 +5391,8 @@ class Preflight:
         """A warning, never a refusal: each marked PR among ``prs``, the open ones, whose head doesn't merge with this head
         (`_collide`), with its lane, the files in conflict and the fix (`COLLIDE_SAYS`).  The queue refuses whichever of two
         such heads it merges second, for a conflict with `main` that its own mark, made before the other landed, couldn't see;
-        this says it at the mark.  The PRs the read didn't get to are named with why, and a read that fails is said in its
-        place: it never costs the mark."""
+        this says it at the mark.  The PRs the read didn't get to are named, every one, with why, and a read that fails is said
+        in its place: it never costs the mark."""
         say = lambda what: self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {what}")  # noqa: E731
         some = lambda xs: ", ".join(xs[:PREFLIGHT_COLLIDE_NAMED]) + (                                              # noqa: E731
             f" and {len(xs) - PREFLIGHT_COLLIDE_NAMED} more" if len(xs) > PREFLIGHT_COLLIDE_NAMED else "")
@@ -5408,7 +5408,7 @@ class Preflight:
                 + f"\n  {COLLIDE_SAYS}")
         if unread:
             say("whether it merges with these PRs wasn't read: "
-                + "; ".join(f"{some([f'#{p.number}' for p in ps])} ({why})" for why, ps in unread.items())
+                + "; ".join(f"{', '.join(f'#{p.number}' for p in ps)} ({why})" for why, ps in unread.items())
                 + f". The read has {self.collide_s:g} s of its own and refuses nothing; the queue's merge judges each")
 
     def _collide(self, pr: PR, prs: list[PR], base: str) -> tuple[list[tuple[PR, list[str]]], dict[str, list[PR]]]:
