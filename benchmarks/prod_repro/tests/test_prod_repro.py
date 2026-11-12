@@ -258,7 +258,7 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
             "served ids") in txt
 
 
-def test_the_arms_are_the_production_arms_once_the_benchmark_has_them(monkeypatch: pytest.MonkeyPatch):
+def test_the_arms_are_the_published_settings_arms_once_the_benchmark_has_them(monkeypatch: pytest.MonkeyPatch):
     assert P.default_arms() == (P.PROD if set(P.PROD) <= set(S.ARMS) else P.TODAY)
     assert all(a in S.ARMS for a in P.TODAY)
     monkeypatch.setattr(S, "ARMS", {**S.ARMS, **dict.fromkeys(P.PROD, S.ARMS["compiled"])})

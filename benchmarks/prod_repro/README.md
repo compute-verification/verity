@@ -1,6 +1,7 @@
-# Production vLLM, reproducible
+# vLLM at its serving settings, replayed
 
-One command serves vLLM at production settings with and without our changes, replays the window it served, and prints
+One command serves vLLM at the settings vLLM publishes for serving the model (prefix caching on, speculative decoding
+on, the model's own context limit) with and without our changes, replays the window it served, and prints
 what the serve turned on and three lines: whether the replay's tokens are the served ones, what our changes cost over
 stock, and the advice a request. It measures nothing of its own. The serve, the load, the cost and the replay are the
 serving cost benchmark's (`benchmarks/serve_tax/`: `run.sh`, `serve_tax.py`, `replay.py`); this directory is the runner
@@ -19,7 +20,7 @@ verity bench prod_repro --report OUT --load NAME [--stock ARM] [--again ARM] [--
 ~~~
 
 - The first form serves three arms of the benchmark, each a server lifetime of its own: stock, stock a second time,
-  and ours. They are the production arms (`prod`, `prod-again`, `prod-record`) where `serve_tax.ARMS` has them, else
+  and ours. They are the arms at those settings (`prod`, `prod-again`, `prod-record`) where `serve_tax.ARMS` has them, else
   `compiled`, `compiled-again` and `record`. The corpus client sends each the same plan (C4 prompts, about 60% of them
   behind one of eight shared prefixes) as a burst the engine can't keep up with, each rep from an empty prefix cache.
   Then `replay.py` rebuilds the engine and re-runs rep 1 of ours under its recorded schedule.

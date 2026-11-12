@@ -1,4 +1,4 @@
-# Production vLLM, reproducible (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the
+# vLLM at its serving settings, replayed (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the
 # report on synthetic arm and replay directories and the runner against a stand-in for the serving cost benchmark's,
 # stdlib only.
 [tool.pytest.ini_options]

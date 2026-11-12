@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Production vLLM, reproducible (README.md): serve stock and ours at the same settings and load, replay the window ours
-# served, and print the settings and three lines (tokens, cost, advice). From the tree's root, as the command of a
-# `research run` on a GPU node, the C4 shard sent with --send (or C4=PATH) unless a ready plan is (PLAN_FILE):
+# vLLM at its serving settings, replayed (README.md): serve stock and ours at the same settings and load, replay the
+# window ours served, and print the settings and three lines (tokens, cost, advice). From the tree's root, as the
+# command of a `research run` on a GPU node, the C4 shard sent with --send (or C4=PATH) unless a ready plan is
+# (PLAN_FILE):
 #   verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM] [--ours ARM] [--load burst] [--rate 1000]
 #     [--requests 800 | --span-s S] [--reps 3] [--max-model-len N] [--target 1]
 #   verity bench prod_repro --client vllm-bench --load NAME[=RUNG+RUNG...] [--reps 6] [--model ...] [--stock ...] ...
 #   verity bench prod_repro --report OUT --load NAME [--stock ARM] [--again ARM] [--ours ARM] [--target 1]
 # The serve, the load and the replay are the serving cost benchmark's (benchmarks/serve_tax/run.sh, whose header says
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
-# CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the production arms where the
-# benchmark has them, else stock compiled vLLM, stock again and the step record (prod_repro.py arms), each a server
-# lifetime of its own. By default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
+# CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
+# settings where the benchmark has them, else stock compiled vLLM, stock again and the step record (prod_repro.py
+# arms), each a server lifetime of its own. By default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
 # prompts behind one of eight shared prefixes) arriving at RATE a second, faster than the engine serves, each rep from
 # an empty prefix cache; then the replay re-runs rep 1 of ours under its recorded schedule, in the mode it was served
 # in (REPLAY_MODES, by default compiled). With --client vllm-bench vLLM's own client sends the load at its rungs, which

@@ -1,4 +1,4 @@
-"""Production vLLM, reproducible: what one served job shows, as the settings it ran with and three lines (README.md).
+"""vLLM at its serving settings, replayed: what one served job shows, as the settings it ran with and three lines (README.md).
 
     prod_repro.py arms
     prod_repro.py report OUT --stock ARM --ours ARM [--again ARM] --load NAME [--rep 1] [--replay DIR]
@@ -24,8 +24,8 @@ cost and its interval and the comparison are the benchmark's functions. It exits
 was served, naming each differing request and its first position, and 0 otherwise: a line that is not measured is not a
 failure, and the last line counts the lines that are measured.
 
-``arms`` prints the three arms a job serves by default: the production arms where the benchmark has them (`PROD`),
-else stock compiled vLLM, stock again and the step record (`TODAY`).
+``arms`` prints the three arms a job serves by default: the arms at vLLM's published serving settings where the
+benchmark has them (`PROD`), else stock compiled vLLM, stock again and the step record (`TODAY`).
 """
 from __future__ import annotations
 
@@ -42,7 +42,8 @@ import replay as R  # noqa: E402 (benchmarks/serve_tax, put on sys.path above)
 import serve_tax as S  # noqa: E402
 
 SCHEMA = "verity-bench/prod-repro/v0"
-#: the arms a job serves by default, stock, stock again and ours: the production arms where `serve_tax.ARMS` has them
+#: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings where
+#: `serve_tax.ARMS` has them
 PROD = ("prod", "prod-again", "prod-record")
 TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
@@ -93,10 +94,10 @@ def trace_header(arm_dir: Path) -> dict:
 def model_limit(checkpoint: Path) -> dict | None:
     """The model's own context limit: the smallest of `CONTEXT_KEYS` in the checkpoint's config.json, with its key.
     None where this machine has no such file or it names none."""
-    try:
-        cfg = json.loads((checkpoint / "config.json").read_text())
-    except (OSError, ValueError):
+    f = checkpoint / "config.json"
+    if not f.is_file():
         return None
+    cfg = json.loads(f.read_text())
     found = [(int(cfg[k]), k) for k in CONTEXT_KEYS if isinstance(cfg.get(k), int)]
     return {"tokens": min(found)[0], "key": min(found)[1]} if found else None
 
