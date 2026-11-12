@@ -1,6 +1,6 @@
 """`aot.write_row` (``verity-vllm predict row``) end to end on TINY: each request's named Build, the workload Program, the row's
 manifest under the row's own policies (`manifest.build` for one request, `manifest.build_global` for more) and `predicted.json`
-naming that manifest. CPU only, seconds."""
+naming that manifest; then `aot.compare_row`, which holds the row to a traced Build of it. CPU only, seconds."""
 from __future__ import annotations
 
 import hashlib
@@ -9,6 +9,7 @@ import json
 import pytest
 
 from tests.program.predict.test_steps import _registered
+from verity_vllm.config import UsageError
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.phi import Phi
@@ -56,3 +57,33 @@ def test_the_row_command_prints_six_fields_of_its_record_and_says_on_stderr_what
     said = got.err.splitlines()
     first = next(i for i, line in enumerate(said) if line.startswith(f"[predict] {name}: {digest[:16]}… ("))
     assert said[first + 1].startswith("  ")
+
+
+def test_a_predicted_row_is_held_to_the_traced_build_of_the_same_row(tmp_path, monkeypatch):
+    """`compare_row` reads a single-GPU row's traced Build as its dir holds it (the digests in `build_summary.json`, the request's
+    shape in its derive's `result.json`, the manifest beside them) and holds the predicted row's request Program, workload and
+    manifest to it: equal only when each part is, and refused where the traced Build has more than one rank."""
+    _tiny(tmp_path, monkeypatch, 1)
+    rec = A.write_row("tiny", str(pred := tmp_path / "row"), config="config.json")
+    ((name, digest),) = rec.requests.items()
+    lp, t = A._request_shape(name, "the predicted row")
+    traced = tmp_path / "traced"
+    (traced / "build_step").mkdir(parents=True)
+    (traced / "build_request").mkdir()
+    (traced / "build_request" / "result.json").write_text(json.dumps({"LP": lp, "T": t}))
+    (traced / "manifest.json").write_bytes((pred / "manifest.json").read_bytes())
+    summary = {"build_step": {"program_digest": "s"}, "request": {"program_digest": digest}, "workload": {"workload_digest": rec.workload_digest}}
+    (traced / "build_summary.json").write_text(json.dumps(summary))
+    facts = {"manifest_digest": rec.manifest_digest, "program_digest": rec.program_digest, "identities": rec.identities}
+    assert A.compare_row(str(traced), str(pred)) == {"dir": str(pred.resolve()), "equal": True, "parts": {
+        "workload": {"traced": rec.workload_digest, "predicted": rec.workload_digest, "equal": True},
+        name: {"traced": digest, "predicted": digest, "equal": True},
+        "manifest": {"traced": facts, "predicted": facts, "equal": True}}}
+    other = "0" * len(digest)
+    (traced / "build_summary.json").write_text(json.dumps({**summary, "request": {"program_digest": other}}))
+    got = A.compare_row(str(traced), str(pred))
+    assert got["equal"] is False and {n: v["equal"] for n, v in got["parts"].items()} == {"workload": True, name: False, "manifest": True}
+    assert got["parts"][name] == {"traced": other, "predicted": digest, "equal": False}
+    (traced / "build_summary.json").write_text(json.dumps({"ranks": {"rank0": summary, "rank1": summary}}))
+    with pytest.raises(UsageError, match="a predicted row is one rank's, and the traced Build has ranks"):
+        A.compare_row(str(traced), str(pred))
