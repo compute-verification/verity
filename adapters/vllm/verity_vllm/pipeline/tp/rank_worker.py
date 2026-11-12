@@ -1091,10 +1091,10 @@ class TP2CaptureWorkerExtension:
         """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
+        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())
