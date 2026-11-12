@@ -108,6 +108,21 @@ def after(api, reads, then):
     return undo
 
 
+def busy(api, then=lambda: None):
+    """From now on each new run POSTed is refused 409 (agent busy), as Cursor refuses one on an agent with a run going,
+    after `then()`, which a test gives to make the API show that run. Returns the refused POSTs' paths."""
+    real, refused = api.post, []
+
+    def post(path, body=None):
+        if path.endswith("/runs"):
+            then()
+            refused.append(path)
+            raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+        return real(path, body)
+    api.post = post
+    return refused
+
+
 def held_tool_call(w, run="run-1", cid="c1"):
     """A tool call as the API streams it: the simple event, then its `interaction_update` twin (nearly always)."""
     w.on_event(run, "tool_call", {"callId": cid, "name": "run_terminal_cmd", "status": "running"})
@@ -4057,6 +4072,170 @@ def test_a_coordinator_past_its_restarts_is_relaunched_from_its_handover_note_wi
         "relaunch", gen4, f"relaunched it from its handover note as {gen4} (generation 4)")
     written = "".join(p.read_text() for p in tmp_path.rglob("*") if p.is_file() and p.name != "launch.env")
     assert KEY not in written and KEY not in "".join(capsys.readouterr())
+
+
+def relaunchable(tmp_path, status="ACTIVE", run="run-1", state="RUNNING"):
+    """Circuits' generation-3 coordinator, its latest run `run` in `state`, with all a relaunch needs: the launch key, a
+    launcher, its inbox thread and a handover note. (api, clock, the watch, its id, the launches made.)"""
+    gen3, gen4 = (f"bc-{W.uuid.uuid5(W.COORDINATORS, f'circuits/{n}')}" for n in (3, 4))
+    launcher, launched = tmp_path / "launch_coordinator.py", []
+    launcher.write_text("# stand-in\n")
+
+    def launch(argv, env):
+        launched.append(argv)
+        return 0, f"circuits: launched {gen4}, https://cursor.com/agents/{gen4}\n", ""
+    api, clock, w = coordinators(tmp_path, [{"id": gen3, "name": "verity: circuits", "status": status, "latestRunId": run,
+                                             "updatedAt": W.iso(T0)}], {run: {"status": state}}, timers=None,
+                                 notes=tmp_path / "notes", launcher=launcher, launch=launch)
+    (tmp_path / "registry.json").write_text(json.dumps({"handles": [{"handle": "circuits", "holder": f"circuits ({gen3})"}]}))
+    (tmp_path / "routes.d" / "circuits.json").write_text(json.dumps({"name": "circuits", "holder": gen3, "closed": None,
+                                                                     "inbox_ts": "1760000000.000300"}))
+    note(tmp_path / "notes", "circuits", "20261018T1900Z-report-coordinator-handover.md", f"circuits ({gen3})")
+    (tmp_path / "launch.env").write_text(f"export CURSOR_API_KEY='{KEY}'\n")
+    return api, clock, w, gen3, launched
+
+
+def held_and_cancelled(tmp_path, api, clock, w, co):
+    """The coordinator's run-1 held and cancelled, and the continue run refused 409: the refused POSTs' paths."""
+    w.sweep(lambda r: None)
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    refused = busy(api)
+    w.sweep(lambda r: None)
+    assert [p for p, _ in api.posts] == [f"/v1/agents/{co}/runs/run-1/cancel"] and co in w.pending
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["action"]) == ("held", "cancelled; the continue run was refused (HTTP 409), tried again each sweep")
+    return refused
+
+
+@pytest.mark.parametrize("own_run, followed", [("run-2", True), ("run-goal-2", False)])
+def test_a_refused_continue_on_a_coordinator_that_began_a_run_by_itself_is_dropped_and_no_second_one_launched(
+        tmp_path, own_run, followed):
+    """The watch cancelled a coordinator's run, and the API refuses the continue run as busy because the coordinator began
+    a run by itself: one the sweep follows, or a goal run, which no sweep follows and only the runs read at the refusal
+    show. The run the watch held for it is dropped and that recorded; half an hour on nothing is given up, and no second
+    coordinator is launched beside the working one."""
+    api, clock, w, co, launched = relaunchable(tmp_path)
+    refused = held_and_cancelled(tmp_path, api, clock, w, co)
+    api._agents[0]["latestRunId"], api.older[co] = own_run, ["run-1"]
+    api._runs.update({"run-1": {"status": "CANCELLED", "durationMs": 1}, own_run: {"status": "RUNNING"}})
+    for _ in range(W.CONTINUE_RETRY_S // 60 + 2):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(lambda r: None)
+    assert [(r["kind"], r.get("own_run")) for r in records(tmp_path)] == [("held", None), ("continued_itself", own_run)]
+    assert w.pending == {} and launched == []
+    assert len(refused) == (1 if followed else 2), "asked again only where the sweep's own runs showed none going"
+
+
+def test_a_continue_refused_while_the_sweeps_reads_are_spent_gives_nothing_up_and_launches_no_coordinator(tmp_path):
+    """The continue run is refused for half an hour, under sweeps that read nothing past their listing: the watch can't
+    tell an agent that began a run by itself from one nothing will start. It gives nothing up and launches no one, and
+    asks again; the first sweep that reads the agent's runs finds the run it began, and drops the one it held."""
+    api, clock, w, co, launched = relaunchable(tmp_path)
+    held_and_cancelled(tmp_path, api, clock, w, co)
+    api._agents[0]["latestRunId"], api.older[co] = "run-2", ["run-1"]
+    api._runs.update({"run-1": {"status": "CANCELLED", "durationMs": 1}, "run-2": {"status": "RUNNING"}})
+    undo = after(api, 0, spent)
+    for _ in range(W.CONTINUE_RETRY_S // 60 + 30):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["held"] and co in w.pending and launched == []
+    undo()
+    w.sweep(lambda r: None)
+    assert [(r["kind"], r.get("own_run")) for r in records(tmp_path)] == [("held", None), ("continued_itself", "run-2")]
+    assert w.pending == {} and launched == []
+
+
+def test_a_coordinators_continue_refused_for_half_an_hour_with_no_run_going_by_its_runs_read_then_is_relaunched(tmp_path):
+    """Nothing starts on the coordinator for half an hour, and its runs, read at each refusal and again by the relaunch,
+    show none going: it is left for a person, and its successor launched."""
+    api, clock, w, co, launched = relaunchable(tmp_path)
+    held_and_cancelled(tmp_path, api, clock, w, co)
+    api._runs["run-1"] = {"status": "CANCELLED", "durationMs": 1}
+    api._agents[0]["status"] = "IDLE"
+    api.gets.clear()
+    for _ in range(W.CONTINUE_RETRY_S // 60 + 2):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(lambda r: None)
+    kinds = [r["kind"] for r in records(tmp_path)]
+    assert kinds == ["held", "continue_failed", "relaunch"] and len(launched) == 1 and w.pending == {}
+    assert records(tmp_path)[-1]["action"].startswith("relaunched it from its handover note as bc-")
+    assert api.gets.count(f"/v1/agents/{co}/runs") == W.CONTINUE_RETRY_S // 60 + 1, \
+        "its runs read at each refusal, and once more by the relaunch"
+
+
+def test_a_coordinator_whose_cancelled_run_reads_running_yet_after_half_an_hour_gets_no_successor(tmp_path):
+    """The API took the cancel and refuses the continue run for half an hour, and the run still reads RUNNING: the cancel
+    did not take, and a coordinator with a run going is not a dead one. It is left for a person, the run is the rules'
+    to judge again, and no successor is launched beside it."""
+    api, clock, w, co, launched = relaunchable(tmp_path)
+    held_and_cancelled(tmp_path, api, clock, w, co)
+    for _ in range(W.CONTINUE_RETRY_S // 60 + 2):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["held", "continue_failed"] and w.pending == {} and launched == []
+    assert records(tmp_path)[-1]["action"] == "none: its run run-1 still reads RUNNING, so it is not relaunched; left for a person"
+
+
+@pytest.mark.parametrize("by_then, action", [
+    ("began", "not relaunched: its run run-own reads RUNNING now, so it runs"),
+    ("unread", "not relaunched: its runs could not be read afresh (TimeoutError: this sweep's reads are spent (12 min); the "
+               "next sweep reads again), and no coordinator is launched beside one that may be running")])
+def test_a_coordinator_is_relaunched_only_on_its_runs_read_then_and_showing_none_going(tmp_path, by_then, action):
+    """A coordinator past its restarts is relaunched on a latest run the sweep read in ERROR at its start. By the time it
+    relaunches, the coordinator may have begun a run by itself, or its runs may be past reading: the relaunch reads them
+    itself, launches no successor then, and its record says which."""
+    api, clock, w, co, launched = relaunchable(tmp_path, status="IDLE", run="run-e1", state="ERROR")
+    for n in range(W.MAX_RESTARTS):
+        api._agents[0]["latestRunId"] = f"run-e{n + 1}"
+        api._runs[f"run-e{n + 1}"] = {"status": "ERROR"}
+        w.sweep(lambda r: None)
+        clock.t += W.RESTART_S
+    api._agents[0]["latestRunId"] = "run-e9"
+    api._runs["run-e9"] = {"status": "ERROR"}
+
+    def began():
+        api._agents[0]["latestRunId"], api.older[co] = "run-own", ["run-e9"]
+        api._runs["run-own"] = {"status": "RUNNING"}
+    after(api, 1, began if by_then == "began" else spent)
+    w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["crashed"] * 3 + ["erroring", "relaunch"] and launched == []
+    rec = records(tmp_path)[-1]
+    assert (rec["action"], rec["owner"], rec["handle"], rec["run"]) == (action, "top", "circuits", "run-e9")
+
+
+@pytest.mark.parametrize("beside, action", [
+    (None, "relaunched it from its handover note as bc-"),
+    ("run-goal-2", "not relaunched: its run run-goal-2 reads RUNNING now, so it runs")])
+def test_a_coordinator_whose_held_run_the_api_wont_cancel_is_relaunched_unless_another_run_of_its_is_going(
+        tmp_path, beside, action):
+    """The API refuses to cancel a coordinator's held run and reads it RUNNING still: that run is why it is relaunched, so
+    it doesn't count as the coordinator running, and its successor is launched. Another run going beside it (a goal run,
+    which only its runs read then show) does: none is."""
+    api, clock, w, co, launched = relaunchable(tmp_path)
+    w.sweep(lambda r: None)
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    post = api.post
+
+    def refuse(path, body=None):
+        if path.endswith("/cancel"):
+            raise W.urllib.error.HTTPError(path, 409, "Conflict", {}, None)
+        return post(path, body)
+    api.post = refuse
+    w.sweep(lambda r: None)
+    assert records(tmp_path) == [] and launched == []
+    if beside:
+        api._agents[0]["latestRunId"], api.older[co] = beside, ["run-1"]
+        api._runs[beside] = {"status": "RUNNING"}
+    clock.t += W.REFUSED_S
+    w.sweep(lambda r: None)
+    assert [r["kind"] for r in records(tmp_path)] == ["cancel_refused", "relaunch"] and api.posts == []
+    assert records(tmp_path)[-1]["action"].startswith(action) and len(launched) == (0 if beside else 1)
 
 
 # workers of one coordinator that stopped mid-step, each its last entry a tool call, a tool result

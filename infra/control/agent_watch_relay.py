@@ -123,7 +123,9 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "handin_waiting": "has a hand-in on {issue} waiting since {since} ({minutes} min): a comment signed {by} with no "
                          "comment signed LANE/{signs} after it",
        "unjudged": "was found {rule} by its stream since {since} ({minutes} min), but {why}: the watch cancelled nothing, "
-                   "and judges it again each sweep; look at it if it can't wait"}
+                   "and judges it again each sweep; look at it if it can't wait",
+       "continued_itself": "went on by itself (its run {own_run} is going), so the run the watch had waiting for it since "
+                           "{since}, which the API refused, was dropped"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage", "unjudged"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived", "handin_waiting"}     # rung to the record's handle

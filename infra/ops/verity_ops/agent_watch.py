@@ -22,9 +22,9 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   counting its subagents' progress, and longer because cancelling it may take its background workers with it; a wait after its
   turn ended is the normal state, never held). The watch cancels it (`POST .../runs/{run}/cancel`) and starts a new run on the
   agent (`POST /v1/agents/{id}/runs`) that says from when it was held and to read its inbox. A refused new run (409 agent_busy)
-  is tried again every sweep for `CONTINUE_RETRY_S`, then left for a person. A cancel refused with 409 is not asked again;
-  a run still read as going `REFUSED_S` later is recorded for a person. It cancels at most once per agent every
-  `RECANCEL_S`, so a run that hangs again is left for a person;
+  is tried again every sweep for `CONTINUE_RETRY_S`, then left for a person (`retry`, below). A cancel refused with 409 is
+  not asked again; a run still read as going `REFUSED_S` later is recorded for a person. It cancels at most once per agent
+  every `RECANCEL_S`, so a run that hangs again is left for a person;
 - **stalled** when it reads RUNNING and has streamed nothing at all, its subagents' progress included, for `STALL_S`, and the
   agent's own `updatedAt` (which moves while it works; a run's doesn't) hasn't moved for as long: a hung tool call or a
   suspended VM, which the API doesn't show. It is cancelled and continued as a held
@@ -236,7 +236,14 @@ names), to report in its coordinator's inbox thread with `research msg send --as
 runs, and given its newest note; it is written to workers.d as the lane's worker, so its runs route as a worker's. A sender no
 route knows is learned from its brief (`learn`). A coordinator the watch can't resume (erroring, a continue refused for 30 min, a cancel the API refuses) is relaunched
 from the newest handover note under `lanes/<handle>/` with `launch_coordinator.py launch --predecessor` at its next
-generation, its inbox thread as the pairing thread. Each is relaunched at most once every `RELAUNCH_EVERY_S`. Relaunching
+generation, its inbox thread as the pairing thread, and only when its runs, read as the watch is about to relaunch it
+(`going`), show none going but a run the API refused to cancel: beside a coordinator that runs, or whose runs it can't
+read, the watch launches no other, and the `relaunch` record says which. A refused continue run is judged the same way
+(`retry`): the agent's runs are read at each refusal as busy, and one with a run of its own going has continued by
+itself, so the run is dropped and that recorded (**continued_itself**); one refused for `CONTINUE_RETRY_S` is left for
+a person (`continue_failed`), and a coordinator relaunched only with no run at all going by that read (a cancelled run
+that reads as going yet is the rules' to judge again); with that read failed nothing is given up or relaunched. Each is
+relaunched at most once every `RELAUNCH_EVERY_S`. Relaunching
 needs a key the GitHub broker trusts (Daniel's user key; a service account's agents can't push), which the watch reads,
 only when it relaunches, from `launch.env` beside `--log` (root, 0600, one `CURSOR_API_KEY=` line) and passes only in the
 launch's environment; until that file exists every relaunch is recorded as not done. Each failure record names its `owner`
@@ -292,7 +299,8 @@ RECANCEL_S = 3600
 #: run for a person
 CANCEL_OFF = "/data/agent-watch/cancel.off"
 GUARD_TIMEOUT_S = 15        # a read an action rests on, made as the watch is about to act (the agent and the run before a
-#                             cancel): the sweep's own reads are minutes old by then
+#                             cancel; the agent's runs before a relaunch and at a refused continue): the sweep's own reads
+#                             are minutes old by then
 MOVED_S = 60                # an agent's `updatedAt` this far past the last event its run's stream gave has moved since (the
 #                             write an event makes may trail it, and an event is timed as it arrives): a broken stream
 REOPENS = 2                 # a run followed afresh this often for a broken stream is recorded, for a person
@@ -407,7 +415,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage", "archived", "unplaced", "handin_waiting", "unjudged")
+                "outage", "archived", "unplaced", "handin_waiting", "unjudged", "continued_itself")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -1065,6 +1073,15 @@ def judge_of(runs: list[dict], latest: str | None) -> dict | None:
     else its `latest`."""
     return (followed(runs) or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None)
             or next((x for x in runs if x.get("id") == latest), None))
+
+
+def own(runs: list[dict], run: str, cancelled: bool = True) -> list[dict]:
+    """Of `runs`, those that show an agent going by itself while the watch holds a run to start on it after `run`: each
+    RUNNING or waiting on background work, a goal run included, other than `run`. `run` itself counts only when the watch
+    did not cancel it (a background wait it left standing) and it reads RUNNING: the wait went on. One the watch
+    cancelled may read as going for a while yet."""
+    return [x for x in runs if x.get("status") in FOLLOW
+            and (x.get("id") != run or (not cancelled and x.get("status") == "RUNNING"))]
 
 
 def overdue(runs: list[dict], t: float) -> list[tuple[dict, float]]:
@@ -1753,7 +1770,7 @@ class Watch:
                                f"reads it {r.status}", **owner)
             if handle:
                 self.relaunch_coordinator({"id": r.agent, "name": r.name}, handle,
-                                          f"had run {r.run} {kind}, and the API refused to cancel it", r.run, t)
+                                          f"had run {r.run} {kind}, and the API refused to cancel it", r.run, t, held=True)
             return
         try:
             self.api.post(f"/v1/agents/{r.agent}/runs/{r.run}/cancel")
@@ -1798,28 +1815,67 @@ class Watch:
         except (urllib.error.URLError, OSError, ValueError) as e:
             return None, f"{type(e).__name__}: {e}"
 
+    def going(self, agent: str) -> tuple[list[dict] | None, str]:
+        """(the agent's runs that are RUNNING or waiting on background work, newest first, ""), read now (`GUARD_TIMEOUT_S` a
+        page, back to the newest that started, as the sweep reads them); (None, why) when a read fails or `RUNS_PAGES`
+        pages reach no run that started: an action that needs no run going rests on a list read whole, or isn't taken."""
+        listed, cursor = [], None
+        try:
+            for _ in range(RUNS_PAGES):
+                page = self.api.get(f"/v1/agents/{agent}/runs", timeout=GUARD_TIMEOUT_S, limit=RUNS_PAGE, cursor=cursor) or {}
+                listed += page.get("items") or []
+                cursor = page.get("nextCursor")
+                if not cursor or any(started(x) for x in listed):
+                    break
+            else:
+                raise ValueError(f"none of its newest {len(listed)} runs started")
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"{iso(self.clock())} runs of {agent}, read before acting on it: {type(e).__name__}: {e}", file=sys.stderr,
+                  flush=True)
+            return None, f"{type(e).__name__}: {e}"
+        return [x for x in listed if x.get("status") in FOLLOW], ""
+
     def retry(self, current: dict[str, tuple[dict, dict]], t: float) -> None:
-        """Start each continue run the API refused, unless the agent has a run of its own going again; a coordinator's refused
-        for `CONTINUE_RETRY_S` is relaunched."""
-        going = {a["id"] for a, x in current.values() if x["id"] != self.pending.get(a["id"], {}).get("run")}
+        """Start each continue run the API refused. An agent with a run of its own going instead (`own`) has continued by
+        itself: the run is dropped, and that recorded. It is seen in this sweep's runs, else, once the API refuses the run
+        as busy (409) or has refused it for `CONTINUE_RETRY_S`, in the agent's runs read then (`going`). Refused that long,
+        it is left for a person, and a coordinator relaunched only with no run going by that read: one whose only run going
+        is the run this follows (a cancel that did not take, a wait left standing) is no dead agent, and that run is the
+        rules' to judge. With that read failed nothing is dropped, given up or relaunched, and the next sweep asks again."""
+        seen: dict[str, list[dict]] = {}
+        for a, x in current.values():
+            seen.setdefault(a["id"], []).append(x)
         for agent, p in list(self.pending.items()):
-            r = Run(agent, p["run"], p.get("name", ""))
-            if agent in going:
-                self.pending.pop(agent)
-            elif t - p["since"] >= CONTINUE_RETRY_S:
-                self.pending.pop(agent)
-                handle = self.coords.get(agent)
+            r, late, cancelled = Run(agent, p["run"], p.get("name", "")), t - p["since"] >= CONTINUE_RETRY_S, p.get("cancelled", True)
+            mine, runs = own(seen.get(agent, []), p["run"], cancelled), []
+            if not mine and not late:
+                new, err = self.cont(agent, p["text"])
+                if new is not None:
+                    self.pending.pop(agent)
+                    self.record("continued", r, new_run=new)
+                    self.save()
+                if new is not None or err != "HTTP 409":
+                    continue
+            if not mine:
+                runs, _ = self.going(agent)
+                if runs is None:
+                    continue
+                mine = own(runs, p["run"], cancelled)
+            if not mine and not late:
+                continue
+            self.pending.pop(agent)
+            handle = self.coords.get(agent)
+            if mine:
+                self.record("continued_itself", r, own_run=mine[0]["id"], since=iso(p["since"]))
+            elif runs:
+                self.record("continue_failed", r, since=iso(p["since"]), action=f"none: its run {runs[0]['id']} still reads "
+                            f"{runs[0]['status']}, so it is not relaunched; left for a person", **self.owned(agent))
+            else:
                 self.record("continue_failed", r, since=iso(p["since"]),
                             action="relaunching it" if handle else "none: left for a person", **self.owned(agent))
                 if handle:
                     self.relaunch_coordinator({"id": agent, "name": r.name}, handle,
                                               f"had a continue run refused for {CONTINUE_RETRY_S // 60} min", p["run"], t)
-            else:
-                new, _ = self.cont(agent, p["text"])
-                if new is None:
-                    continue
-                self.pending.pop(agent)
-                self.record("continued", r, new_run=new)
             self.save()
 
     def dropped(self, a: dict, last: dict | None, t: float, **detail) -> None:
@@ -2763,11 +2819,21 @@ class Watch:
         return False, (f"its run {x['run']} passed (rc=0) and its last message (\u201c\u2026{quote}\u201d) reads as neither a "
                        "report nor a stop mid-step")
 
-    def relaunch_coordinator(self, a: dict, handle: str, why: str, run: str, t: float) -> None:
+    def relaunch_coordinator(self, a: dict, handle: str, why: str, run: str, t: float, held: bool = False) -> None:
         """Launch `handle`'s next coordinator from its newest handover note (`launch_coordinator.py launch --predecessor`, its
-        inbox thread as the pairing thread), with the launch key; recorded as not done while there is none."""
+        inbox thread as the pairing thread), with the launch key; recorded as not done while there is none. Only beside a
+        predecessor with no run going, by its runs read here (`going`): whatever the caller saw, a coordinator that runs,
+        or whose runs the API won't read, gets no successor, and the record says which. `held`: `run` is a run the API
+        refused to cancel, which reads as going and is why it is relaunched; any other run going still refuses it."""
         agent = a["id"]
         if t - self.relaunched.get(agent, -RELAUNCH_EVERY_S) < RELAUNCH_EVERY_S:
+            return
+        runs, unread = self.going(agent)
+        if runs is None or (mine := [x for x in runs if not (held and x.get("id") == run)]):
+            self.record("relaunch", Run(agent, run, a.get("name") or ""), role="coordinator", handle=handle, reason=why, note="",
+                        action=(f"not relaunched: its runs could not be read afresh ({unread}), and no coordinator is launched "
+                                "beside one that may be running" if runs is None else
+                                f"not relaunched: its run {mine[0]['id']} reads {mine[0]['status']} now, so it runs"), owner="top")
             return
         self.relaunched[agent] = t
         self.save()
