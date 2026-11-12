@@ -1,8 +1,8 @@
 """`verity_vllm.pipeline.commit` on records that leave a block out: the stop rule of record over versions that record no engine
 arguments, the summary over an instrumented run with no Commit record, and the readers `main` reads a workload, a stop rule of
-record, a collector's extra, a run's Commit record, an oracle compare and the versions through.  A block that is absent, null,
-empty or zero reads alike: each is tested for its truth.  The stand-in engine, the workload and the rows are
-`test_commit_main.py`'s.  CPU only."""
+record, a collector's extra, a run's Commit record, an oracle compare and the versions through, and the engine's schedule of
+record where the collector recorded no request rows.  A block that is absent, null, empty or zero reads alike: each is tested
+for its truth.  The stand-in engine, the workload and the rows are `test_commit_main.py`'s.  CPU only."""
 from __future__ import annotations
 
 import json
@@ -147,3 +147,28 @@ def test_versions_that_record_no_compilation_or_no_generated_kernels_give_none(c
 def test_the_generated_kernels_are_the_ones_the_versions_compilation_holds() -> None:
     kernels = {"loaded": {"modules": 3}}
     assert commit.generated_kernels_of({"compilation": {"generated_kernels": kernels}}) is kernels
+
+
+NO_ROWS = "no per-step request rows (single request or none recorded): declared arrive_steps"
+
+
+def schedule(request_rows: Any, declared: dict[str, int], caps: dict[str, int]) -> Record:
+    """The engine's schedule of record less its `basis`, the sentence that says what it is read from."""
+    of_record = commit.engine_schedule(request_rows, declared, caps)
+    assert of_record.pop("basis").startswith("engine schedule of record: per-committed-step request rows")
+    return of_record
+
+
+@pytest.mark.parametrize("request_rows", [None, {}])
+def test_a_collector_that_recorded_no_request_rows_leaves_the_declared_schedule(request_rows: Any) -> None:
+    assert schedule(request_rows, {"r0": 0}, {"r0": 32}) == {
+        "declared_arrive_steps": {"r0": 0}, "observed_arrive_steps": {}, "equal_declared": None, "all_equal_declared": False,
+        "scheduled_steps": {}, "contiguous": None, "steps_equal_caps": False, "complete": False, "use": "declared", "why": NO_ROWS}
+
+
+def test_the_schedule_of_record_places_each_request_at_the_first_committed_step_it_ran_in() -> None:
+    request_rows = {2: [("r1", 0, 1)], 0: [("r0", 0, 1)], 1: [("r0", 0, 1), ("r1", 1, 2)]}
+    assert schedule(request_rows, {"r0": 0, "r1": 5}, {"r0": 2, "r1": 2}) == {
+        "declared_arrive_steps": {"r0": 0, "r1": 5}, "observed_arrive_steps": {"r0": 0, "r1": 1},
+        "equal_declared": {"r0": True, "r1": False}, "all_equal_declared": False, "scheduled_steps": {"r0": 2, "r1": 2},
+        "contiguous": True, "steps_equal_caps": True, "complete": True, "use": "observed", "why": None}
