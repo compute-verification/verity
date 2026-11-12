@@ -2,31 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
+import lean_headline as H
+import loads
 from verity_machine_model.model import census, model, vector
 
-POUW = Path(__file__).resolve().parents[1]
 PROGRAMS = Path(__file__).resolve().parent / "fixtures" / "census_programs.json"
 FOLD_BULK = Path(__file__).resolve().parent / "fixtures" / "fold_bulk_loops.json"
 
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-H = _load("pouw_lean_headline", POUW / "lean_headline.py")
-loads = _load("facet_break_loads", POUW / "facet_break" / "loads.py")
 
 #: Bit-exact ways to compute fx1's word step (d' = w·m1, u = y ⊕ d' ⊕ k_x, y' = u·a + z, z' = rotl(u, r) + y'), lane
 #: instructions a word by census class. rotl(u, r) is u·2^r mod 2^32 plus ⌊u·2^r/2^32⌋, whose bits don't overlap.
@@ -48,7 +34,8 @@ def lanes(fold: dict[str, int]) -> dict[str, Fraction]:
 
 def beaten(name: str) -> list[tuple[float, str, str, str]]:
     """Each (load, row, run, probe) with a census program (fixtures/census_programs.json) above 1 on a row of the named
-    vector, heaviest first. The load is loads.py's over the classes of the program's x alone, so it is a lower bound."""
+    vector, heaviest first. The load is facet_break/loads.py's over the classes of the program's x alone, so it is a
+    lower bound."""
     m, v = model(), vector(name)
     c = census(m, v.epoch)
     out = []
