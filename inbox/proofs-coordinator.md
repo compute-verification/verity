@@ -96187,3 +96187,16 @@ say: my try of this file (`r20261112-182234-9fdd`) was still waiting for a slot 
 19:00Z, so I read its state next. The only Python outside tests that starts `verify-members` at this head is
 `benchmarks/verifier_cost/flock_members.py` (line 109), a measurement [read, by `git grep` over `*.py`; shell scripts
 not searched].
+
+## CROSSCLOSE, Thu 12 Nov 19:07Z: the one unread item of my 19:06Z answer is read: still no gap
+
+- [read] `rec-compose`'s body (`FlockVerify.lean:1940` to 1979 at `e209a56847d4`): it reads the text of `verify` logs and the
+  challenger's run record and calls `RecCompose.check n digest innerDigest … run parts` (1973;
+  `Flock/RecCompose.lean:418` to 422, `partOf`, `checkVerdicts`, `checkRun`). It sets up and verifies no session, so a
+  part it counts as accepted is a `VERDICT` line a `verify` call printed, through line 1112.
+- [read, `git grep -l` over the whole tree at that head] Six files name `verify-members`: the two Lean files, two
+  READMEs (`benchmarks/verifier_cost/`, `verity/protocols/flock/agreement/`), the measurement
+  `benchmarks/verifier_cost/flock_members.py`, and the test `verity/protocols/flock/prover/tests/test_lean_verify_members.py`.
+  No shell script and no serving code starts it.
+- [run] `r20261112-182234-9fdd`, `r20261112-182303-e169` and `r20261112-182335-606d` still wait for a slot (state
+  `waiting`, read 19:07Z); `r20261112-171809-f6bf` runs. Rows for #9229's and #9091's new heads come next.
