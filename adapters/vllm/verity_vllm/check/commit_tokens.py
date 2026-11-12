@@ -39,6 +39,7 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.executed_prefix import ACTIVE_REFERENCE_ONLY
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
 from verity_vllm.program.sampling_event import circuit_token_id
+from verity_vllm.records.schema_ids import COMMIT_TOKENS_SCHEMA
 
 __all__ = ["account_links"]
 
@@ -51,7 +52,7 @@ class CommitTokens:
     the committed sampled id it was served from.  The per-request names are the Match record's (capture/tokens.json), read through
     `request_entries`: the Match record's names that differ are `ALIASES`, and its requests carry no `index` (their order is the
     workload's).  Every field name the writer, the link and the tests use is one of these, so a rename is one edit."""
-    SCHEMA = "verity-vllm/commit-tokens/v1"
+    SCHEMA = COMMIT_TOKENS_SCHEMA
     FILE = "tokens_p{pair}.json"
     SCHEMA_KEY, PROGRAM_DIGEST, PAIR, RUN_ROOT, TOKENS_SOURCE = "schema", "program_digest", "pair", "run_root", "tokens_source"
     STOP_RULE, EOS_IDS, LAG, LAG_VALUE, ASYNC, SOURCE = "stop_rule", "eos_token_ids", "lag", "value", "async_scheduling", "source"
