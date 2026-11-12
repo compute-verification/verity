@@ -323,7 +323,7 @@ def _gate_status(gates: dict, gid: str) -> str | None:
 
 def vu_partition_text(gates: dict) -> str:
     """The "VU partition" row: G8's status with the set count and the largest w_out seen (`n/a` for a record that predates G8)."""
-    g8 = gates.get("G8")
+    g8 = gates.get(G.VU_PARTITION)
     if not isinstance(g8, dict):
         return "n/a (record predates G8)"
     st = g8.get("status")
@@ -364,7 +364,7 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
     rp = run.json("root_policy") or {}
     q = run.json("quarantine")
     ra = run.json("replay_a") or {}
-    g2, g5 = _detail(gates, "G2"), _detail(gates, "G5")
+    g2, g5 = _detail(gates, G.SEMANTIC_CLOSURE), _detail(gates, G.COMPOSITION)
     unsupported = field_of(res.get("totals"), "unsupported")
     ambiguous = g2.get("ambiguous", field_of(cr.get("totals"), "ambiguous"))
     unknown_roots = fs.get("unknown_roots") or field_of(res.get("roots"), "unknown")   # the fold's, else the resolution's; a run that names none has none
@@ -400,7 +400,7 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
     chn = g5.get("chain")
     chain_txt = (f"{chn.get('n_slices')} slices, {chn.get('n_edges_chained')} chained edges " + ("PASS" if chn.get("status") == "pass" else "FAIL")
                  if chn and chn.get("status") else "skipped")
-    ni_status = _gate_status(gates, "G1")
+    ni_status = _gate_status(gates, G.OBSERVATION)
     # D85: what the sampled population covers (vu_query; informational, never gates)
     vp = ra.get("vu_population")   # what the sampled population covers; a run whose tier a did not compute it says so
     if vp and vp.get("status") == "ok":
@@ -479,7 +479,7 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
         roots["unknown_names"] = unknown
     spend = run.json("spend") or {}
     hf_C = hf_config if hf_config is not None else man.get("hf_config")
-    g4, g5 = _detail(gates, "G4"), _detail(gates, "G5")
+    g4, g5 = _detail(gates, G.PRIMITIVE), _detail(gates, G.COMPOSITION)
     card = ReportCard(
         schema=CARD_SCHEMA, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), config_id=cid, model=model,
         C=c_with_provenance(C, hf_C), engine_args=engine_args,
@@ -575,7 +575,7 @@ def top_section(card: ReportCard) -> str:
         _row("VU partition (G8, structural)", c.get("vu_partition") or vu_partition_text(card.gates or {})),
         "HOLDOUTS",
     ]
-    hold = _detail(card.gates, "G7").get("holdouts")   # the holdout cases G7 ran; a card without them says (none)
+    hold = _detail(card.gates, G.HOLDOUT).get("holdouts")   # the holdout cases G7 ran; a card without them says (none)
     if hold:
         for name, h in hold.items():
             L.append(f"  {name:<{_W - 2}}{'PASS' if h.get('pass') else 'FAIL'}")
