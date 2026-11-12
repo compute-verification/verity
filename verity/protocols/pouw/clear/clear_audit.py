@@ -13,7 +13,7 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` samples t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
    source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
-   Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
+   Pearl's mining rule, not one of the audit's sampling designs, and stays unwired: the tiles whose digest, read little-endian, is at
    most ``target·|rows|·|cols|·k``.  The prover opens each selected tile's strips and leaf; the verifier recomputes the
    tile through the scheme.
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.

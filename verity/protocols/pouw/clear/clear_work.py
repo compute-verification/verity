@@ -12,11 +12,11 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   - A credited row must pass the rules.
 * **Credit.**
   - A cell's sample weight is its row's share of `W_ref` at |K|, with no weight side (F2), so padding to `k_unit` and
-    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`draw_wref`): on sm_120 at its cap
+    filler earn nothing. `W_ref` is the one the sample's Lean statement weighs by (`draw_wref`): on sm_120 at its inert-work bound
     1/1,000, `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72 (`SM120_LOOP_CAST_8P72`), so that a served
     step's mixed linears are sampled in proportion to it; elsewhere the scheme's own `wref`, Lean's
     `wrefDevRev1` at its record.  W, the profile's work, stays the scheme's own `wref`.
-  - An accepted unit is credited (1 − ρ)·`creditDevRev1` over its credited cells, at the scheme's cap ρ (`scheme.cap`:
+  - An accepted unit is credited (1 − ρ)·`creditDevRev1` over its credited cells, at the scheme's inert-work bound ρ (`scheme.cap`:
     Pearl-C's is its device record's, 1/400 on the H100 and 1/1,000 on sm_120; Pearl-C4's is its own 1/400).
 * **The tile rule (`check_opened`)**, beside `clear_audit.Verifier.check_tile`'s openings and digest:
   - filler rows are zero;
@@ -25,9 +25,9 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   - the inert work replayed over the credited words (`pearl_c_debit`), their flagged atom-words, later +0 promotions and
     P3's forming elements (fs·|cols|/n each), is at most the inert-work share ρ times the credited cells' credit, their
     share of the unit's `creditDevRev1` (F1; `tile_cap`);
-  - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
+  - under a hashing format with the row bound (-h3, `row_cap`), so is each credited A row's inert work over the credited columns,
     at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)), and at most 4ρ at Pearl-C's census ks below k_min
-    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`), the tile's cap staying ρ.
+    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`), the tile's bound staying ρ.
   A failure is a wrong tile, reported as a reason; nothing raises.
 * **Voluntary rows.**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
@@ -37,8 +37,8 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
     64 × 64 tile, a tile holding one has no ticket and no credit, and every ticketed tile's credited cells are the game's
     passing rows × all its columns. Its words are still formed, checked and hashed on every sampled tile that holds it.
   - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
-  - The tile cap and R1 read credited rows only, as before. Giving up credit never helps a cheater, and the declaration
-    can't adapt to the sample. `volunteer` is an honest prover's remedy for a tile over the cap.
+  - The tile's inert-work bound and R1 read credited rows only, as before. Giving up credit never helps a cheater, and the declaration
+    can't adapt to the sample. `volunteer` is an honest prover's remedy for a tile over the inert-work bound.
 * **The sampling guarantee is per credited cell.** The samples are weighted by the credited cells' `wref`, and a sampled
   tile's uncredited cells (filler, excluded, voluntary, or in a voluntary row's band or block) never count as coverage.
   Volunteering rows only lowers the weight of the tiles it reaches to their credited cells, which is exactly the bound
@@ -51,7 +51,7 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
     on the commitment. It supports no claim about the sample.
   - `audit` checks the splits through `split_check`, the pinned rule that computes S (`split_channels`, with its
     tie-break and budget), which lives with the model integration.
-* **Other row formats.** A scheme with its own row encoding, per-row rules and debit (`pearl_c4`) brings
+* **Other row formats.** A scheme with its own row encoding, per-row rules and count of inert work (`pearl_c4`) brings
   `parse_row(row, k)`, `row_passes(words)` and `tile_cap(record, ops, rows, cols)`; Pearl-C v1's are this module's. Every
   scheme brings its `cap`.
 """
@@ -83,7 +83,7 @@ DRAW_DOMAIN = "verity/pouw/pearl-c-draw/v1"
 DRAW_AFTER_TAG = "verity/pouw/pearl-c/draw-after/v1"
 
 
-#: V-EX's count caps: at most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight.
+#: V-EX's count limits: at most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight.
 VOLUNTARY_PER = 64
 
 
@@ -93,7 +93,7 @@ def voluntary_cap(rows: int) -> int:
 
 def check_records(epoch: Epoch, splits: Mapping[int, Split], records: Sequence[UnitRecord]) -> str | None:
     """The records against the workload and the splits: one per matmul in order, k = the split's `k_unit`, |K| its
-    `k_kept`, one set of excluded and one of voluntary B rows per weight, and V-EX's count caps."""
+    `k_kept`, one set of excluded and one of voluntary B rows per weight, and V-EX's count limits."""
     if [r.matmul for r in records] != list(epoch.workload.matmuls):
         return "the records are not the workload's matmuls in order"
     if set(splits) != set(epoch.workload.weights()):
@@ -143,7 +143,7 @@ class DrawWref:
     c: Fraction
 
 
-#: The statement Pearl-C v1's served gap and ε cite on sm_120 at its cap 1/1,000 (`ServedMixedRev1Gap`, `Completeness`'s
+#: The statement Pearl-C v1's served gap and ε cite on sm_120 at its inert-work bound 1/1,000 (`ServedMixedRev1Gap`, `Completeness`'s
 #: `HonestTileCapRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
 #: 8953/1000 (the credited cast 8 and the A-only forming's measured 1.047, rounded up to qa = 2).
 SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1Cap1000", SM120.name, SM120.cap,
@@ -206,7 +206,7 @@ def row_passes(words: Sequence[int]) -> bool:
 
 def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]],
              formed: Sequence[tuple[int, Sequence[int], int]]) -> tuple[Fraction, Fraction]:
-    """(debit, cap) over credited words given as their A′ and B̃ code rows, ``formed`` each A row's forming (α, x, β): the
+    """(inert work, its bound) over credited words given as their A′ and B̃ code rows, ``formed`` each A row's forming (α, x, β): the
     replayed inert work, rev1's `tileDebitRev1` (`pearl_c_debit.tile_debit`), and its bound, the inert-work share ρ
     times the credited cells' credit, the unit's `creditDevRev1` at |K| times their share |rows|·|cols|/(m·n) (the
     per-tile statement's `tileShare`, `pearlCTilesDevRev1`).  A row's own terms (its forming and A′·F_B) so count once
@@ -277,8 +277,8 @@ def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
 
 
 def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) -> str | None:
-    """`check_opened`'s cap on the tile's credited words: None, or the reason the tile's debit or (under a row-capped
-    format) a credited row's is over its cap.  The hidden path's is `circuit.cap`'s (`cap.served`)."""
+    """`check_opened`'s inert-work bound on the tile's credited words: None, or the reason the tile's inert work or (under a row-bounded
+    format) a credited row's is over its bound.  The hidden path's is `circuit.cap`'s (`cap.served`)."""
     k = record.matmul.shape.k
     rows, cols = record.credited(tile)
     if rows and cols:
@@ -296,15 +296,15 @@ def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) ->
 
 
 def row_cap(scheme) -> bool:
-    """Whether the scheme's hashing format caps every credited row's debit as well as the tile's (`HashFormat.row_cap`,
-    -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's debit over the tile's credited columns at
+    """Whether the scheme's hashing format bounds every credited row's inert work as well as the tile's (`HashFormat.row_cap`,
+    -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's inert work over the tile's credited columns at
     most ρ times its cells' share of the credit, or `row_cap_multiple`·ρ (`pearlCTilesDevRev1RowCapAt`)."""
     hashing = getattr(scheme, "hashing", None)
     return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_cap
 
 
 def row_cap_multiple(scheme, k: int) -> Fraction:
-    """A credited row's cap at depth ``k`` over the tile's ρ: the scheme's `row_cap_at(k)`/ρ, 4 at Pearl-C's census ks
+    """A credited row's inert-work bound at depth ``k`` over the tile's ρ: the scheme's `row_cap_at(k)`/ρ, 4 at Pearl-C's census ks
     (`pearl_c.CENSUS_ROW_CAP`), and 1 for a scheme without one."""
     at = getattr(scheme, "row_cap_at", None)
     return Fraction(1) if at is None else Fraction(at(k)) / Fraction(scheme.cap)
@@ -312,7 +312,7 @@ def row_cap_multiple(scheme, k: int) -> Fraction:
 
 def _debit_cap(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
                ) -> tuple[Fraction, Fraction]:
-    """(debit, cap) over the words of the tile's rows × cols: the scheme's `tile_cap` when it brings one, else this
+    """(inert work, its bound) over the words of the tile's rows × cols: the scheme's `tile_cap` when it brings one, else this
     module's on the A′ and B̃ code rows and the A rows' forming."""
     pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
     if hasattr(scheme, "tile_cap"):
@@ -528,10 +528,10 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
               activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]]
               ) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
     """V-EX's honest remedy, before the samples: (voluntary A rows by matmul index, voluntary B rows by weight) such that
-    no tile's credited debit passes its cap, for `declare`.  The prover knows the salt when it forms and commits, so it
-    replays every tile's debit as the verifier will.  For a tile over the cap it gives up the credited row whose removal
-    leaves the least debit over the cap, and repeats while the tile is over and the count caps allow; a tile the caps
-    leave over the cap stays so, and fails if sampled.  Under the row cap (`row_cap`) a credited A row over its own cap goes
+    no tile's credited inert work passes its bound, for `declare`.  The prover knows the salt when it forms and commits, so it
+    replays every tile's count of inert work as the verifier will.  For a tile over the bound it gives up the credited row whose removal
+    leaves the least inert work over the bound, and repeats while the tile is over and the count limits allow; a tile the limits
+    leave over the bound stays so, and fails if sampled.  Under the row bound (`row_cap`) a credited A row over its own bound goes
     first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight.  R1's rows aren't given up
     here: `records` are `declare`'s on the transcript, which excludes them.  By the band rule a row given up takes its
     band's or block's credit (`UnitRecord.credited`), so at the deployed 64 × 64 tile the first row given up leaves the
@@ -543,7 +543,7 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
     tol = 1 + Fraction(getattr(scheme, "r1_tolerance", 0))
     changed = True
     while changed:
-        # a B row given up changes every tile of its weight, and can lift one that passed over its cap
+        # a B row given up changes every tile of its weight, and can lift one that passed over its bound
         changed = False
         for p, r in enumerate(records):
             u = r.matmul
@@ -586,8 +586,8 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
 
 def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
                 words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]):
-    """(scale, tol, per record (p, record, a cell's cap, a row's cap a cell, its tiles as (t, tile, each word's debit))), the
-    debits and caps times `scale`, so a word's debit is an integer."""
+    """(scale, tol, per record (p, record, a cell's bound, a row's bound a cell, its tiles as (t, tile, each word's inert work))), the
+    inert work and bounds times `scale`, so a word's inert work is an integer."""
     import numpy as np
 
     if hasattr(scheme, "tile_cap"):
@@ -608,8 +608,8 @@ def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
 
 def over_words(scheme: C.PearlC, records: Sequence[UnitRecord],
                words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]) -> list[dict]:
-    """`cap_failure` on every tile from its words' counts (`volunteer_words`' ``words``): each tile whose credited debit is
-    over its cap, or (under the row cap) one of whose credited A rows is, with the tile's debit and cap and each such row's."""
+    """`cap_failure` on every tile from its words' counts (`volunteer_words`' ``words``): each tile whose credited inert work is
+    over its bound, or (under the row bound) one of whose credited A rows is, with the tile's inert work and bound and each such row's."""
     import numpy as np
 
     scale, tol, units = _word_units(scheme, records, words)
@@ -639,14 +639,14 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
     can still be over `tile_cap`'s.
     ``words[(p, t)]`` is (flagged atoms, later +0 promotions) over the rows x columns of tile t of record p, in
     `scheme.tiles`' order (`fast_tile.word_debits` on the tile's A′ and B̃ codes).  Returns (voluntary A rows by matmul
-    index, voluntary B rows by weight), for `declare`; `over_words` on the records with them is what the caps leave over.
-    - Under the row cap (`row_cap`) a unit's A rows over their own caps go first, the row furthest over summed over the
+    index, voluntary B rows by weight), for `declare`; `over_words` on the records with them is what the limits leave over.
+    - Under the row bound (`row_cap`) a unit's A rows over their own bounds go first, the row furthest over summed over the
       unit's tiles first, one a band of 64 (the band rule leaves the rest of its band no credit), up to ⌈m/64⌉, which
       covers every band unless the records already spent it.  A row the A count leaves over then gives up, one at a
       time, the B row whose word
-      carries most of its debit, while that word's debit is over the row's cap a cell, up to ⌈n/64⌉ per weight.
-    - Then a tile over its own cap gives up the row whose removal leaves the least debit over the cap, as `volunteer` does.
-    - It repeats until nothing changes: a B row given up lowers the cap of every row in its column's tiles.
+      carries most of its inert work, while that word's inert work is over the row's bound a cell, up to ⌈n/64⌉ per weight.
+    - Then a tile over its own bound gives up the row whose removal leaves the least inert work over the bound, as `volunteer` does.
+    - It repeats until nothing changes: a B row given up lowers the bound of every row in its column's tiles.
     Every tile's credited rows and columns are `UnitRecord.credited`'s at the rows given up so far, the band rule's."""
     import numpy as np
 
@@ -675,7 +675,7 @@ def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
         for _, r, _, row_cell, tiles in units if capped else ():
             if not a_left(r):
                 continue
-            # an A row given up takes its band out and leaves every other band's rows' sums and caps as they were (both
+            # an A row given up takes its band out and leaves every other band's rows' sums and bounds as they were (both
             # read the credited columns, which only a B row changes), so one scan ranks the rows given up one at a time:
             # furthest over, then the lower row, one a band
             bands = {i // BAND for i in va[r.matmul.index]}
