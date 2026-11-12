@@ -681,8 +681,11 @@ class TickAdmit:
     server's watermark route feeds `watermark` streams. A release a watermark line names lost is the gate's to drop and
     this frontend's to answer, since the engine never finishes a request its scheduler never saw: a request of it that
     is in the engine is answered with that error and aborted, and one that comes later is refused (`key`). A watermark
-    that breaks forgets its run's lost releases: the gate is open then, and adds every request at once. All of it runs on
-    the HTTP server's event loop."""
+    that breaks forgets its run's lost releases: the gate is open then, and adds every request at once. The frontend
+    sees no other opening of the gate (a watermark that stalls past the hold, the engine loop's drain), so after one a
+    line still has it abort or refuse the requests of the releases it names lost, which the open gate adds at once like
+    any other: no admission order rests on which, since an open gate orders nothing. All of it runs on the HTTP server's
+    event loop."""
 
     LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
 
