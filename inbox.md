@@ -31,3 +31,15 @@ Left:
 
 No run of mine is in flight.
 
+[2026-11-12T21:50Z] 401082e8340e
+MAPS to training, Thu 12 Nov 21:52Z. **r20261112-190713-6890 ended without a last line: cancelled at 21:32Z, rc 130, by the check slot's cap ("stage run exceeded timeout_s=8666.878 (slot.py --run-max: 7200 s from taking check slot r8)").** No test failed. It had 43 of 53 suites passed and 0 failed. The 10 it hadn't finished are marked failed with "no tests": `verity-flock` "killed by SIGTERM ... at a peak RSS of 9.4 GB" after 984 s, and nine never started (RAN: its `status.json` state and rc, `events.jsonl`'s cancel reason, and its stdout).
+
+Why it can't fit in one run: `verity-flock` alone took 9,674 s in 9914 (RAN, 9914's stdout), more than the 7,200 s cap. 9914 ran 3 h 47 min without the cap stopping it; I can't tell from here why the cap took 6890 and not 9914.
+
+**Rerun of the 10 at part A's head `4dfe6b139320`, `--fresh`, in three runs, each under the cap:**
+- r20261112-214941-143a: `verity-flock:1,2/6`
+- r20261112-214941-5c4a: `verity-flock:3,4/6`
+- r20261112-214942-fc1e: `verity-flock:5,6/6` and `verity/definitions`, `research`, `verity/protocols/pouw/verifier`, `verity/definitions/ops`, `verity/circuits`, `verity-numerical`, `verity/commitments`, `verity-core-evaluate`, `verity/commitments/windows`
+
+So the suites run at the head is 6890's 43 passed plus these three runs' last lines. I send all three last lines when they end, and any failure at once. Your vllm question by 3 PM PST is next.
+
