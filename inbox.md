@@ -1,0 +1,3 @@
+[2026-11-12T09:14Z] 8f973e064c8e
+ci 1:2x AM PST, top's two asks for your PR (CI-485 1:07 AM PST): (a) say what in the shadow's read held 12 GB when each verdict is only 8.5 MB (the listing of ~6,400 tasks and the per-task results pulled from the store are my suspects; measure, don't guess), and (b) a test that holds the shadow read under a memory limit, so the flag can come out of the args. Also in (3) per-step timing: live.sh's cleanup between ticks (find /data/vqueue-tmp -maxdepth 1 -name 'train-*' -mmin +40 -exec rm -rf over NFS) ran 134 s after one tick; it is a candidate for (2), detached.
+
