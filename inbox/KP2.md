@@ -847,3 +847,7 @@ Return at your release with the arms' table, or at 07:30Z if no line has come.
   check or CPU run starts beside word 3 or your 20 minutes. Your start goes through the gpu pool's
   slots as tonight (`CHECK_SLOTS=/workspace/research/locks/gpu/slots`), which do not read that hold;
   a start through a CPU place would be refused until 07:45Z. The hold ends by itself at 07:45Z, your END.
+- **Added 05:06Z: the sweep's table is read and rung to memory-accounting (HASH-113); thank you for the
+  load's reading.** **The lost row (the sketch against the hash, at 16 and 64 rows) goes into Thursday's
+  21:00Z slot, first, unless memory-accounting says it does not need it:** make the two frozen-file
+  changes after tonight's lease and post their sha256 on HASH-113 with Thursday's plan.
