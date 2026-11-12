@@ -84,6 +84,9 @@ from verity_vllm.commit.committer.native_host import (
 from verity_vllm.commit.committer.plan_cache import PlanCache, PlanMetas
 from verity_vllm.engine import runner_step
 
+__all__ = ["GATHER_FLUSH_LEAVES", "GPU_CHUNK_BYTES", "NativeCollectCommitter", "ROWS_FOLD_BYTES", "ROWS_HOLD_BYTES",
+           "WINDOW_SLOTS", "ext", "window_mb_default"]
+
 
 def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.

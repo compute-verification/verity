@@ -89,6 +89,9 @@ from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.spans import Spans
 
+__all__ = ["GPU_CHUNK_BYTES", "NativeHostCommitter", "bounded_host_bound", "hazard_of_record", "schedule_stream_bound",
+           "value_family"]
+
 
 class _DeviceArena:
     """Device (GPU) staging blocks, one per in-flight step.  A hook copies every acquired tensor D2D into the step's block ON THE
