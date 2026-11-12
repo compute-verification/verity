@@ -36,7 +36,6 @@ from verity_vllm.acquire.sources.call_boundary_plan import (
     Body,
     Plan,
 )
-from verity_vllm.commit.binding import logical_request
 from verity_vllm.log import init_logger
 
 logger = init_logger(__name__)
@@ -216,6 +215,9 @@ class CallBoundarySource:
         if rows is None:
             self.error(f"call boundaries: no row order recorded at engine step {e} (step_rows); its packed rows cannot be split")
             return None
+        # imported here, not at the top: it loads the core's commitments, which importing this module does not
+        from verity_vllm.commit.binding import logical_request
+
         got = [(self._request(logical_request(rid, self.plan.order)), int(hi) - int(lo)) for rid, lo, hi in rows]
         declared = self.plan.composition.get(e) or {}
         if sorted(got) != sorted(declared.items()):
