@@ -105,8 +105,8 @@ static_assert(H1C_MK || !H1C_MKN, "H1C_MKN is H1C_MK's M_key a nibble at a time"
 static_assert(H1C_MK || !H1C_LVB, "H1C_LVB's subtrees are H1C_MK's leaves kernel's");
 static_assert(H1C_HB || !H1C_SEGJ, "H1C_SEGJ is H1C_HB's segments kernel's");
 
-#include "../../../verity/ml/kernels/sha512.cuh"
-#include "../../../verity/ml/kernels/row_commit.cuh"
+#include "../../../verity/definitions/kernels/sha512.cuh"
+#include "../../../verity/definitions/kernels/row_commit.cuh"
 using u64 = rc::u64;
 using u32 = rc::u32;
 

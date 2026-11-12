@@ -29,13 +29,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.circuits.codec import canonical_json, encode_program
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.types import Array, Value as Bits
+from verity.protocols.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def _load():
@@ -394,7 +394,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
     stratified over the three templates, its bound 0, for the group's registration; a refused audit a reject of the same
     registration naming why; an accepted record of another registration the driver's error."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.protocols.pouw.verifier import core_check as CC
 
     G, T = 2, 4
     defs = {"first": FIRST, "ingress": ING, "egress": EG}

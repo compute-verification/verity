@@ -1,0 +1,52 @@
+# PoUW's check of one audit window as a core protocol (`core_protocol`'s `Core.Protocol`), the port of
+# `verity/protocols/pouw/verifier/core_check.py`: the verifier's parameters, the window's registration and its digest,
+# the proof system's answer, and PoUW's rule over them. Lean core only; its properties are stated in
+# `Security/Properties/Pouw/Check.lean`, and the difftest (`tests/test_difftest.py`, on the shared harness) holds
+# `pouw-check serve` and `pouw-check-difftest` (a unit's opening, `PouwCheck.Opening`; the window's pass and draw,
+# `PouwCheck.Pass`; a live window's round coins, `PouwCheck.Rounds`; a served window's credit, `PouwCheck.Credit`) to
+# the Python on generated cases. `pouw-period` is a period's credit as a core protocol (`PouwCheck.Period`,
+# `verity/pouw/period/v1`, onsite's work component), held to `period_check.py` by `tests/test_period_difftest.py`.
+# `pouw-leaf-own-window` is the leaf verifier's check of a window unit's leaf statement's `--registered` file at the
+# unit's placement, from the window's descriptor and round log (`PouwCheck.LeafOwn`).
+name = "pouw_check"
+defaultTargets = ["PouwCheck", "pouw-check", "pouw-period", "pouw-check-difftest", "pouw-leaf-own-window"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "core_protocol"
+path = "../../../../interface"
+
+[[require]]
+name = "pouw_window"
+path = "../window"
+
+# `PouwCheck.Credit` embeds the model pin (`include_str`), which Lake tracks only as this target
+[[input_file]]
+name = "models"
+path = "models.json"
+text = true
+
+[[lean_lib]]
+name = "PouwCheck"
+roots = ["PouwCheck", "PouwCheck.Difftest", "PouwCheck.CreditDifftest", "PouwCheck.VerifiedDifftest"]
+needs = ["models"]
+
+[[lean_exe]]
+name = "pouw-check"
+root = "PouwCheck.Main"
+
+[[lean_exe]]
+name = "pouw-period"
+root = "PouwCheck.PeriodMain"
+
+[[lean_exe]]
+name = "pouw-check-difftest"
+root = "PouwCheck.DifftestMain"
+
+[[lean_exe]]
+name = "pouw-leaf-own-window"
+root = "PouwCheck.LeafOwnMain"

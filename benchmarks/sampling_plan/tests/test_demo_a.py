@@ -14,10 +14,10 @@ from math import floor, fsum, log1p
 import pytest
 
 import demo_a as D
-from verity.core.protocols.pouw.window import k_prime
-from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
-from verity.core.protocols.spot.consumers import location_bits
-from verity.core.protocols.spot.optimize import Objective, certify
+from verity.protocols.pouw.verifier.window import k_prime
+from verity.protocols.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
+from verity.protocols.spot.verifier.consumers import location_bits
+from verity.protocols.spot.optimize import Objective, certify
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 

@@ -3,7 +3,7 @@ the total parser the kernel can evaluate.
 
 `Lean.Json.parse` is a `partial def`, an opaque constant to the kernel, so no proof can show that a text it reads parses;
 `JsonParse.parse` reads the same language, with the same values and refusal strings (`Flock.Test.JsonParse` holds the
-two to each other). A scan of the Lean under `verity/core/service/flock/`, `verity/core/service/spot/` and
+two to each other). A scan of the Lean under `verity/protocols/flock/verifier/`, `verity/protocols/spot/verifier/lean/` and
 `Security/Proofs/Properties/Verity/` refuses a call of `Lean.Json.parse`, written `Json.parse` under `open Lean` or in
 full, outside the module that mirrors it, the test that compares the two, and the declarations `PENDING` names.
 """
@@ -14,10 +14,10 @@ import re
 
 from test_repository import ROOT, _tracked
 
-TREES = ("verity/core/service/flock/", "verity/core/service/spot/", "Security/Proofs/Properties/Verity/")
+TREES = ("verity/protocols/flock/verifier/", "verity/protocols/spot/verifier/lean/", "Security/Proofs/Properties/Verity/")
 ALLOWED = {
-    "verity/core/service/flock/Flock/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
-    "verity/core/service/flock/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
+    "verity/protocols/flock/verifier/Flock/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
+    "verity/protocols/flock/verifier/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
 }
 #: (file, declaration) still calling `Lean.Json.parse`, each with the switch that deletes its entry. An entry whose file
 #: is in the tree names a declaration that still calls it; one whose file isn't yet arrives with that file.

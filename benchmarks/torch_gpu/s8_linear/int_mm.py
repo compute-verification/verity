@@ -1,6 +1,6 @@
 """The int_mm backend of the exact W8A8 linear (run.py's `--kernel int_mm`; the plain GEMM
 p2_stage's full.py and j10r_sm90's bench call): every coordinate of x W^T is `ScaledMmS8Coordinate_v1{K, DOT}`
-(`verity.ml.circuits.ops.gemm`),
+(`verity.definitions.ops.gemm`),
 
     acc[i, j] = sum_k x[i, k] w[j, k]                                  s32, exact in any order for K < 2^17
     y[i, j]   = cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx[i]) * sw[j])  two f32 mul.rn, the token's scale first

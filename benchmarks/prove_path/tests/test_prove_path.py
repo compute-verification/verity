@@ -1,5 +1,5 @@
 """The prove path's compiler, its advice commitment and its sample-order check, and its prover's and verifier's windows on the CPU
-TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without proving.
+TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without proving.
 
 * The compiler is total: every byte string is the requests or a `ValueError` naming why, the same on every run; random and
   truncated advice is refused, advice over the registered cap ℓ is refused before it is read, and a malformed opening is
@@ -41,17 +41,17 @@ from typing import Any
 
 import pytest
 
-from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.spot.one_stage import audit as AU, draw as DR, registration as R
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.windows import interface as IF, rows as CS
+from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
+from verity.circuits.codec import canonical_json
+from verity.commitments.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = Path(__file__).resolve().parent
-VLLM = HERE.parents[2] / "integrations" / "vllm"
+VLLM = HERE.parents[2] / "adapters" / "vllm"
 sys.path.insert(0, str(HERE.parent))
 import prove_path as PP  # noqa: E402
 
@@ -511,7 +511,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
-#: integrations/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
+#: adapters/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
@@ -546,7 +546,7 @@ def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = N
     program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default); the digest."""
     import gzip
 
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.pipeline.build_instances import write_instances
 
     d.mkdir(parents=True, exist_ok=True)
@@ -587,7 +587,7 @@ def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, reques
 def test_i2_refuses_a_build_whose_body_was_swapped_under_its_old_digest(tmp_path, requests_of_tiny):
     """The Build's ``result.json`` (and its instances head) keep the digest I2 compiled, and its body is another Program's:
     each is refused by name, the descriptor by its recomputed digest, the instances by the descriptor's rows."""
-    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity.circuits.codec import encode_program, program_digest
 
     greedy, longer = requests_of_tiny["greedy"], requests_of_tiny["longer"]
     dg, other = (program_digest(encode_program(p)) for p in (greedy, longer))

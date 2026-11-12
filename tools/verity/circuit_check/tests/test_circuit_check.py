@@ -70,10 +70,10 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
 @pytest.mark.slow
 def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(catalog):
-    """The guard does not visit an operation (`verity.ml.circuits.operations`), so a table an operation reached would be hidden: every
+    """The guard does not visit an operation (`verity.definitions.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
-    from verity.ml.circuits import constants as K
-    from verity.ml.circuits import operations as O
+    from verity.definitions.circuits import constants as K
+    from verity.definitions.circuits import operations as O
 
     suite = catalog.suite
     ops = [fn for fid in suite if catalog.reached[fid][0] in O.OPERATIONS and O.is_operation(fn := suite[fid])]
@@ -91,9 +91,9 @@ def test_every_template_is_checked():
 
 def _descriptor_digest(fn) -> str:
     """A target's canonical descriptor digest: `program_digest` of the one-call Program at its statics."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.program import Program
+    from verity.circuits import codec
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.program import Program
 
     params, ret = fn.signature()
     shell = CompositeDefinition(f"Show[{fn.id}]", 1, (), lambda S: (tuple(params), ret), lambda B, S, *a: B.call(fn, *a),
@@ -181,12 +181,12 @@ def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(
 
 def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(monkeypatch):
     """A Boolean Definition linked to its word by name is the Boolean version only at a binding that gives each of its statics
-    (`verity.ml.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
+    (`verity.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
     `is_call` says it is no Call without the catalog: a new port shape (``{K,R}`` beside the word Call's ``{K}``) is not
     refused."""
     from types import SimpleNamespace
 
-    from verity.ml.definitions import boolean as BV
+    from verity.definitions import boolean as BV
 
     TG.load_registries()
     exact, by_name, errors = BV._load()
@@ -229,7 +229,7 @@ def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
 def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatch):
     """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
     registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
-    from verity.ml.definitions import boolean
+    from verity.definitions import boolean
 
     asked: list[str] = []
     monkeypatch.setattr(boolean, "made_on_demand", asked.append)
@@ -289,7 +289,7 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
     `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
     an id neither knows still raises."""
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     real = W.specialization
 
@@ -329,7 +329,7 @@ def test_a_target_with_a_record_static_parses_as_its_id_prints_it(suite):
 def _request_program(tmp_path: Path, **kw) -> Path:
     """The vLLM tests' synthetic request Program (per token Embedding -> RMSNorm -> Gemm -> RoPE -> SiluMul -> Gemm -> RMSNorm, per
     step the LM head and TokenSelect; ``attn``: the attention and its o_proj, whose output is a leaf) as ``instances.json.gz``."""
-    path = REPO / "integrations" / "vllm" / "tests" / "check" / "test_sampled_replay.py"
+    path = REPO / "adapters" / "vllm" / "tests" / "check" / "test_sampled_replay.py"
     spec = importlib.util.spec_from_file_location("circuit_check_request_program", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -358,7 +358,7 @@ def test_a_call_output_no_commitment_holds_is_named(tmp_path):
 # --- the vectors ----------------------------------------------------------------------------------------------------------------
 
 def test_the_vectors_start_with_every_edge():
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.types import Array, Value
 
     a, x = VX.vectors([Value(32), Array(3, Value(16))], 40, 1)
     assert a.dtype == np.uint32 and x.shape == (40, 3) and x.dtype == np.uint16
@@ -373,7 +373,7 @@ def test_the_vectors_start_with_every_edge():
 
 
 def test_a_caller_keeps_room_for_random_vectors_after_fewer_edges():
-    from verity.ml.circuits.types import Value
+    from verity.circuits.types import Value
 
     e16 = VX.edges(16)
     (a,) = VX.vectors([Value(16)], 6, 1, edge=4)
@@ -382,8 +382,8 @@ def test_a_caller_keeps_room_for_random_vectors_after_fewer_edges():
 
 
 def _f32_sum():
-    from verity.ml.circuits.types import Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.types import Value
+    from verity.definitions.registry import prims as P
 
     return _composite("CircuitCheckFloorSum", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Add, x[0], x[1]))
 
@@ -419,10 +419,10 @@ def test_a_kernel_takes_its_floor_from_its_own_sampler():
     kernel is then compared on two vectors its own sampler samples in its domain (a random vector over many leaves almost always
     holds a word a finite-only kernel declines).  One right on every edge word and wrong elsewhere fails by name; one whose
     sampler samples only outside its domain compared on edge vectors only; past ``random_budget`` none is sampled."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.evaluation import register_kernel
-    from verity.ml.circuits.evaluation.batch import _KERNELS
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation.batch import _KERNELS
+    from verity.circuits.types import Value
 
     prim = PrimitiveDefinition("CircuitCheckFloorKernel", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
     edges = np.array(VX.edges(16), dtype=np.uint16)
@@ -496,8 +496,8 @@ def _table_word(j: int) -> int:
 
 
 def _holds():
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
 
     return PrimitiveDefinition("CircuitCheckHolds", 1, (("x", Value(32)),), Value(32), _table_entry, register=False,
                                tables=(("cc_table", "registered"),))
@@ -505,8 +505,8 @@ def _holds():
 
 def _table_read(lazy: bool = True):
     """(index, table) -> the table's two-word entry at the index's low bits, as `TableRead` reads it."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Array, Value
 
     mask = (1 << TABLE_IB) - 1
     p = PrimitiveDefinition("CircuitCheckTableRead", 1, (("index", Value(32)), ("table", Array((2 << TABLE_IB) // 64, Array(64, Value(16))))),
@@ -517,7 +517,7 @@ def _table_read(lazy: bool = True):
 
 
 def _table_probe(holds):
-    from verity.ml.circuits.evaluation import RegisteredTable
+    from verity.circuits.evaluation import RegisteredTable
 
     return VX.TableProbe(1, RegisteredTable("cc_table", _table_word, 2 << TABLE_IB, holds), 2, TABLE_REGIONS,
                          lambda e: [[e | (0x5A << 24)]])
@@ -534,7 +534,7 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
 def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
     """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
     vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     read, holds = _table_read(), _holds()
     probe = _table_probe(holds)
@@ -580,9 +580,9 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
 
 def _wide_gemm():
     """`Gemm_v2` at K=32, N=64, with an input budget its weight's 2,048 leaves are over and 32 vectors of its x fit in."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import gemm as G
-    from verity.ml.circuits.ops import prims as P
+    from verity.circuits.defs import bind
+    from verity.definitions.ops import gemm as G
+    from verity.definitions.ops import prims as P
 
     return bind(G.Gemm, K=32, N=64, DOT=P.AmpereBF16TcDot16), dataclasses.replace(OPTS, input_budget=1024, vectors=40)
 
@@ -590,7 +590,7 @@ def _wide_gemm():
 def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(monkeypatch):
     """A weight over the input budget (`targets.LAZY_OPERANDS`) takes the edge and random words every parameter takes, one
     vector at a time, and is read lazily, never flattened; the reference on each vector equals it on the same words flattened."""
-    from verity.ml.circuits.evaluation import RegisteredTable, evaluate
+    from verity.circuits.evaluation import RegisteredTable, evaluate
 
     t, opts = _wide_gemm()
     (x, w), _ = CK.signature_of(t)
@@ -619,7 +619,7 @@ def test_an_operand_read_lazily_past_the_random_budget_takes_one_edge_vector_and
     past `Options.random_budget` (`checks._lazy_vectors`), a Definition read lazily takes ``random_floor + 1`` vectors: one
     all-edge, the others random in every operand, each the reference on the same words flattened.  Within it, it keeps
     `_n_vectors`' (the test above)."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     t, opts = _wide_gemm()
     (x, w), _ = CK.signature_of(t)
@@ -641,9 +641,9 @@ def test_an_operand_read_lazily_past_the_random_budget_takes_one_edge_vector_and
 def _wide_experts(E: int):
     """`MoeExpertFp8Gemm_v1` over E experts at the sidecar's small statics, with an input budget its expert stack's E N K leaves
     are over and 8 vectors of its other parameters fit in."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
-    from verity.ml.definitions.registry import fp8_moe_experts as X
+    from verity.circuits.defs import bind
+    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.definitions.registry import fp8_moe_experts as X
 
     return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
             dataclasses.replace(OPTS, input_budget=8192, vectors=8))
@@ -651,15 +651,15 @@ def _wide_experts(E: int):
 
 def test_an_expert_gemm_resolves_only_the_expert_a_vector_selects(monkeypatch):
     """An expert GEMM's stack read lazily: each vector that selects an expert reads its N K weights and no other's, the walk's
-    parameter resolutions (`verity.ml.circuits.layout._arg_ref`) are the same over 4 experts as over 16, so a vector costs
+    parameter resolutions (`verity.circuits.layout._arg_ref`) are the same over 4 experts as over 16, so a vector costs
     what its expert's rows cost and not every expert's, and the reference equals it on the same words flattened.  On random
     words and operands (the vectors here are edge vectors, whose experts' words are all equal), for each expert and for none, the
     lazy evaluation's whole trace is the eager walk's."""
     import random
 
-    from verity.ml.circuits import layout
-    from verity.ml.circuits.evaluation import evaluate, evaluate_region
-    from verity.ml.circuits.evaluation.reference import standalone_call
+    from verity.circuits import layout
+    from verity.circuits.evaluation import evaluate, evaluate_region
+    from verity.circuits.evaluation.reference import standalone_call
 
     resolutions = {}
     for E in (4, 16):
@@ -702,8 +702,8 @@ def test_an_expert_gemm_resolves_only_the_expert_a_vector_selects(monkeypatch):
 def _wide_shard():
     """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
     random token lies in the shard."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import b1_tp2
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=64, H=32, START=1000), dataclasses.replace(OPTS, input_budget=1024, vectors=8)
 
@@ -711,7 +711,7 @@ def _wide_shard():
 def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_rows():
     """A shard's edge and random tokens lie outside it, so only its probes (`targets.OPERAND_PROBES`: the shard's first and last
     token) read the table, one row each, on random words; the reference there equals it on the same words flattened."""
-    from verity.ml.circuits.evaluation import evaluate
+    from verity.circuits.evaluation import evaluate
 
     t, opts = _wide_shard()
     (_tok, table), _ = CK.signature_of(t)
@@ -743,7 +743,7 @@ def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_
 def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
     """Vector i of a lazily read operand is the i-th edge of its width in every leaf, then random words of that width, the same
     on every sample and different per vector and per parameter."""
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.types import Array, Value
 
     pt = Array(64, Array(80, Value(8)))
     ew = VX.edges(8)
@@ -778,20 +778,20 @@ def test_a_definition_over_the_leaf_budget_is_not_partitioned(monkeypatch):
 # --- negatives: each check fires, by name ---------------------------------------------------------------------------------------
 
 def _composite(name, sig, body):
-    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.defs import CompositeDefinition, bind
 
     return bind(CompositeDefinition(name, 1, (), lambda S: sig, body, register=False))
 
 
 def _f32x2():
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.types import Array, Value
 
     return (("x", Array(2, Value(32))),)
 
 
 def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
-    from verity.ml.circuits.types import Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.types import Value
+    from verity.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
@@ -804,9 +804,9 @@ def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
 def test_a_value_computed_in_two_units_is_a_recompute_failure():
     """Two identical calls, each returned by its own proof block (the body reads only its parameters, which `word.unit_rule` partitions
     node by node; the whole Definition's cut compares them)."""
-    from verity.ml.circuits.refs import array_of
-    from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.refs import array_of
+    from verity.circuits.types import Array, Value
+    from verity.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -823,8 +823,8 @@ def test_a_call_over_the_partition_budget_fails_by_its_name(monkeypatch):
     """Over ``partition_max_gates`` the partition is not run.  A Definition that is no Call is partitioned inside the Call that
     contains it, so its record says it is unchecked and nothing fails; a Call whose callees can't partition it either (one is no
     Call) fails by its name, with that callee, so its entry never reads as a pass."""
-    from verity.ml.circuits.types import Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.types import Value
+    from verity.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckOverBudget", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]))
@@ -842,9 +842,9 @@ def test_a_call_over_the_partition_budget_fails_by_its_name(monkeypatch):
 def _two_callees():
     """A Call over a budget of 2 gates whose body (not separable: its second node reads the first's output) calls a 2-gate
     callee that computes one value twice, each copy returned by its own proof block, and a 1-gate one."""
-    from verity.ml.circuits.refs import array_of
-    from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.refs import array_of
+    from verity.circuits.types import Array, Value
+    from verity.definitions.registry import prims as P
 
     twice = _composite("CircuitCheckTwice", (_f32x2(), Array(2, Value(32))),
                        lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -874,7 +874,7 @@ def test_a_call_cut_member_by_member_down_to_a_member_over_the_budget_is_partiti
     """A Call whose body `cut.separable` cuts member by member, down to a member over the budget that isn't (``too-large``), is
     `checks.uncut` too, as `DsaButterflyRowsPad_v1` is around `DsaButterflyRows_v1`: its callees partition it, the member by its
     own callees, and where one of those is no Call it fails by its name with that gap."""
-    from verity.ml.circuits.types import Value
+    from verity.circuits.types import Value
 
     top, twice, mul, opts = _two_callees()
     wrap = _composite("CircuitCheckWrap", (_f32x2(), Value(32)), lambda B, S, x: B.call(top, x))
@@ -908,8 +908,8 @@ def test_a_call_over_the_budget_with_a_callee_that_is_no_call_fails_by_its_name(
 def test_a_call_over_the_budget_with_a_primitive_callee_over_it_too_fails_by_its_name(monkeypatch):
     """A primitive callee over ``partition_max_leaves`` has no callees to partition it, so nothing checks its Call's partition
     though it is a Call: `checks.callee_gap` names it, in the record, in the Call's failure and for the suite's walk."""
-    from verity.ml.circuits.types import Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.types import Value
+    from verity.definitions.registry import prims as P
 
     top = _composite("CircuitCheckOverPrimitive", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Mul, x[0], x[1]))
     monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, P.F32Mul)})
@@ -928,8 +928,8 @@ def test_a_call_over_the_leaf_budget_partitioned_by_its_callees_still_compares_i
     """Over ``partition_max_leaves`` a Call whose body nodes read only its parameters is partitioned by its callees too, and a
     value two of its members compute fails under `Q_word` v1 by the Call's name (`cross_call.members_check`), as `word.unit_rule`
     fails it for one cut member by member."""
-    from verity.ml.circuits.refs import array_of
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.refs import array_of
+    from verity.circuits.types import Array, Value
 
     _top, _twice, mul, _opts = _two_callees()
     pair = _composite("CircuitCheckPairByCallees", ((("x", Array(3, Value(32))),), Array(2, Value(32))),
@@ -995,7 +995,7 @@ def _partition(fn, q_word, opts=OPTS):
 def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
     """A Boolean Call is judged by `Q_word` v2: the values two proof blocks compute are recorded, in the entry and the summary, not
     failed; under v1 the same cut fails by name."""
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
 
     fn = TG.definition(BOOL_RECOMPUTE)
     assert BL.is_boolean(fn) and TG.family(fn) in TG.call_families()
@@ -1011,8 +1011,8 @@ def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
 
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
-    from verity.ml.circuits.partition import CutVerdict
-    from verity.ml.definitions import word as W
+    from verity.circuits.partition import CutVerdict
+    from verity.definitions import word as W
 
     real = W.units
 
@@ -1033,9 +1033,9 @@ def test_the_partition_cuts_a_call_once(monkeypatch):
     """`partition` checks the cut `word.unit_rule` made of the whole Definition (its ``graphs``) rather than cutting it again: one
     `word.Graph` of it, and the record and failures of cutting it twice; a Definition cut member by member (`word.separable`) is
     cut whole once, by `partition` alone."""
-    from verity.ml.circuits.types import Value
-    from verity.ml.definitions import word as W
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.types import Value
+    from verity.definitions import word as W
+    from verity.definitions.registry import prims as P
 
     real_rule, cuts = W.unit_rule, []
 
@@ -1064,8 +1064,8 @@ def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
     """`Q_call` v1 beside `Q_word`: a Boolean Call's proof blocks, committed bits and the values two proof blocks compute
     (reported); a Call with
     a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Array, Value
 
     fn = TG.definition(BOOL_RECOMPUTE)
     rec, failed = _partition(fn, 2)
@@ -1114,7 +1114,7 @@ def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
     """{the suite's Calls over `Options.partition_max_gates` or `Options.partition_max_leaves`: which}.  Gate counts are the
     catalog's (`Catalog.reached`): a target made from its record has no body built, and building every Call's would take about
     half an hour."""
-    from verity.ml.circuits.evaluation.reference import signature_of
+    from verity.circuits.evaluation.reference import signature_of
 
     suite, out = catalog.suite, {}
     for k in suite:
@@ -1213,7 +1213,7 @@ def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(c
 def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding(suite):
     """The suite keeps a family's smallest specialization over `MAX_GATES`; a Boolean norm's smallest binds the word MUFU, so its
     smallest Boolean binding (the one the Program on bits calls) is checked too."""
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
     for word, bits in [("RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v1}", "RMSNormFusedCuda_v3{N=16,EPS=1e-05,RSQRT=RsqrtApprox_v2}"),
                        ("RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v1,SCALEA=DivFullScaleA_v1,RCP=DivFullRcp_v1}",
                         "RMSNormTriton_v2{N=16,EPS=1e-05,SQRT=MufuSqrtFtz_v2,SCALEA=DivFullScaleA_v3,RCP=DivFullRcp_v2}")]:
@@ -1222,8 +1222,8 @@ def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding(suite):
 
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
-    from verity.ml.circuits.types import Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.types import Value
+    from verity.definitions.registry import prims as P
 
     def body(B, S, x):
         B.call(P.F32Mul, x[0], x[1])
@@ -1235,8 +1235,8 @@ def test_a_gate_no_output_reads_is_a_dead_gate():
 
 
 def test_a_unit_wider_than_the_word_fails_the_width_rule():
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
 
     wide = PrimitiveDefinition("CircuitCheckWide", 1, (("a", Value(32)), ("b", Value(32))), Value(64), lambda a, b: (a << 32) | b,
                                register=False)
@@ -1246,8 +1246,8 @@ def test_a_unit_wider_than_the_word_fails_the_width_rule():
 
 
 def test_a_partial_reference_is_named():
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
 
     def finite_only(a):
         if (a >> 23) & 0xFF == 0xFF:
@@ -1260,11 +1260,11 @@ def test_a_partial_reference_is_named():
 
 
 def test_a_declared_interval_the_reference_leaves_is_named():
-    """A primitive's declared return interval is a fact the Build takes (`verity.ml.circuits.ports`): checked on operands within
+    """A primitive's declared return interval is a fact the Build takes (`verity.circuits.ports`): checked on operands within
     its declared bounds, so a product of two s8 operands holds in [-16256, 16384] and one off by a unit is named."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.ports import In, Out, Ports
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.ports import In, Out, Ports
+    from verity.circuits.types import Value
 
     def mul(a, b):
         return ((a - (1 << 16) if a >> 15 else a) * (b - (1 << 16) if b >> 15 else b)) & 0xFFFFFFFF
@@ -1286,9 +1286,9 @@ def test_a_declared_interval_the_reference_leaves_is_named():
 def test_a_transfer_the_reference_leaves_is_named():
     """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
     intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.ports import Ports, as_reading
-    from verity.ml.circuits.types import Value
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.ports import Ports, as_reading
+    from verity.circuits.types import Value
 
     def add(a, b):
         return (((a ^ 0x80) - 0x80) + ((b ^ 0x80) - 0x80)) & 0xFFFF
@@ -1312,10 +1312,10 @@ def test_a_transfer_the_reference_leaves_is_named():
 
 def test_a_kernel_wrong_only_on_edge_words_is_caught():
     """A kernel that returns 0 for a NaN operand: uniform random words rarely hold a NaN, the edge vectors always do."""
-    from verity.ml.circuits.evaluation import register_kernel
-    from verity.ml.circuits.evaluation.batch import _KERNELS
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Value
+    from verity.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation.batch import _KERNELS
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
 
     prim = PrimitiveDefinition("CircuitCheckKernel", 1, (("a", Value(32)),), Value(32), lambda a: a ^ 1, register=False)
     nan = lambda a: ((a >> 23) & 0xFF == 0xFF) & ((a & 0x7FFFFF) != 0)  # noqa: E731
@@ -1331,10 +1331,10 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
 def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_reported_checked():
     """A kernel that declines every vector, and one not registered partial that declines vectors the reference accepts,
     each fail `correspondence` under their `SelfCheck.fault`; the partial one that computes some vectors passes."""
-    from verity.ml.circuits.evaluation import register_kernel
-    from verity.ml.circuits.evaluation.batch import _KERNELS
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.types import Value
+    from verity.circuits.evaluation import register_kernel
+    from verity.circuits.evaluation.batch import _KERNELS
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.types import Value
 
     prim = PrimitiveDefinition("CircuitCheckDeclines", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
     odd = lambda a: (a ^ 1, a % 2 == 1)  # noqa: E731
@@ -1355,10 +1355,10 @@ def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_rep
 
 def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
     """The Boolean Definition is the definition: the word Definition it names must equal its gates through the word view."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-    from verity.ml.circuits.refs import Coll, concat
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits import boolean as BL
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.circuits.refs import Coll, concat
+    from verity.circuits.types import Array, Value
 
     nib = Array(4, BL.BIT)
 
@@ -1379,14 +1379,14 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
 
 
 def test_a_boolean_constant_is_checked_on_its_one_instance():
-    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.ml.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
+    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.definitions.ops.boolean.scalar.const_word`) takes no operands: its lowering
     and its word view each compare its one vector, every bit, so a constant one bit off its word constant is named."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.boolean.forms import const_bits
-    from verity.ml.circuits.boolean.trace import definition
-    from verity.ml.circuits.ops import prims as MP
-    from verity.ml.circuits.ops.boolean import scalar as BS
-    from verity.ml.circuits.types import Array
+    from verity.circuits import boolean as BL
+    from verity.circuits.boolean.forms import const_bits
+    from verity.circuits.boolean.trace import definition
+    from verity.definitions.ops import prims as MP
+    from verity.definitions.ops.boolean import scalar as BS
+    from verity.circuits.types import Array
 
     e = CK.check_definition(BS.const_word(32, 0x3727C5AC), OPTS, pins=PINS)
     via = {r["via"]: r for r in e["correspondence"]["realizations"]}
@@ -1400,7 +1400,7 @@ def test_a_boolean_constant_is_checked_on_its_one_instance():
 
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     add = IL.PIECES["F32Add_v1"]
     monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
@@ -1409,7 +1409,7 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
 
 
 def test_a_lowering_count_off_its_pin_is_named():
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
@@ -1480,8 +1480,8 @@ def test_a_lowering_type_is_its_flat_circuit_type():
 def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_its_type(monkeypatch):
     """The same ANDs computing the same function, but built another way (every AND's operands swapped), match the pin's AND count
     and every correspondence check: only the pin's ``type`` refuses it."""
-    from verity.ml.circuits.boolean import forms
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.boolean import forms
+    from verity.definitions.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     pins = {"pieces": {"F32Mul_v1": pin["counts"]}, "units": {}}
@@ -1499,7 +1499,7 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
     warning, and `--update-pins` writes the lowering's ``type`` into it."""
     from circuit_check import cli
     from circuit_check import sidecars as SC
-    from verity.ml.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
@@ -1516,9 +1516,9 @@ def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
     """A Definition a Program holds as one gate naming its circuit digest (``gated``: N2's served counts here) has that
     digest, core's `program_digest` of its Program, checked against its ``digests`` pin, which a verifier reads in its
     place: its own digest passes, another fails by name, and none warns."""
-    from verity.ml.circuits.codec import program_digest
-    from verity.ml.circuits.program import Program
-    from verity.core.protocols.certifier import served as SV
+    from verity.circuits.codec import program_digest
+    from verity.circuits.program import Program
+    from verity.protocols.certifier.verifier import served as SV
 
     d = SV.unit(8, 3, 1, 2, 2, 0)
     digest = program_digest(Program(d))
@@ -1535,10 +1535,10 @@ def test_any_definition_holding_a_digests_pin_is_held_to_it():
     """A Definition that isn't gated but holds a ``digests`` pin (a binding at served statics over `targets.MAX_GATES`, which
     the pin keeps in ``--all``, `targets.pinned`) has its circuit digest checked against it, so no held pin goes uncompared:
     its own digest passes and another fails by name. Without a pin it gets no digest check."""
-    from verity.ml.circuits.codec import program_digest
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.program import Program
-    from verity.ml.definitions.registry import tp_allreduce as TA
+    from verity.circuits.codec import program_digest
+    from verity.circuits.defs import bind
+    from verity.circuits.program import Program
+    from verity.definitions.registry import tp_allreduce as TA
 
     d = bind(TA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)
     digest = program_digest(Program(d))
@@ -1616,10 +1616,10 @@ def test_a_template_s_unit_is_checked_as_its_lowering_built_it_and_traced_only_t
 
 def _whole_boolean(name, build):
     """`checks.whole_lowering` of the Boolean Definition of three bits that ``build`` computes: its record and findings."""
-    from verity.ml.circuits.boolean.trace import definition
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.reference import resolve, signature_of
-    from verity.ml.circuits.ops.boolean import scalar as SB
+    from verity.circuits.boolean.trace import definition
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.reference import resolve, signature_of
+    from verity.definitions.ops.boolean import scalar as SB
 
     t = resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
     F = CK.Findings()

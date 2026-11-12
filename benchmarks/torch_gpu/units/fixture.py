@@ -14,10 +14,10 @@ Each pool's rows come from KINDS of generators (normal values, wide exponents, s
 NaN and infinities, uniform random words, ...), each row from its own seed.
 
 Two cross-checks, each of whose disagreements exits 1 before anything is written:
-- with --replay PATH (the H200 demo's CPU replay, examples/h200/replay.py), every pool word is also computed by
+- with --replay PATH (the H200 demo's CPU replay, archive/examples/h200/replay.py), every pool word is also computed by
   that file's references of circuits' templates (RmsSumSqPart_v1 ... ArgmaxCombine_v1, unit by unit as the replay reads
   them);
-- with `verity.ml.circuits.ops.rows` installed, or its file given as --rows PATH, every argmax pool's tokens by
+- with `verity.definitions.ops.rows` installed, or its file given as --rows PATH, every argmax pool's tokens by
   `rows.argmax` (Argmax_v1{V}) and the add pool by `rows.add_row` (Bf16AddRow_v1{N}).
 
   uv run python benchmarks/torch_gpu/units/fixture.py CHECK [--replay PATH] [--rows PATH] [--no-sweep]   (env PROCS,
@@ -386,12 +386,12 @@ def replay_argmax(R: ModuleType, d: dict) -> dict:
     return {"best": _cmp(best, d["best"]), "idx": _cmp(idx, d["idx"]), "token": _cmp(token, d["token"])}
 
 
-ROWS = "verity.ml.circuits.ops.rows"
+ROWS = "verity.definitions.ops.rows"
 
 
 def load_rows(path: str | None) -> tuple[ModuleType | None, str | None]:
     """`ops.rows` and where it came from: the installed module, else the file at ``path`` loaded in its place in
-    `verity.ml.circuits.ops` (its relative imports read main's fp32, prims and scalar), else (None, None)."""
+    `verity.definitions.ops` (its relative imports read main's fp32, prims and scalar), else (None, None)."""
     try:
         return importlib.import_module(ROWS), "installed"
     except ModuleNotFoundError as e:
@@ -399,7 +399,7 @@ def load_rows(path: str | None) -> tuple[ModuleType | None, str | None]:
             raise
     if not path:
         return None, None
-    importlib.import_module("verity.ml.circuits.ops")
+    importlib.import_module("verity.definitions.ops")
     spec = importlib.util.spec_from_file_location(ROWS, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[ROWS] = mod

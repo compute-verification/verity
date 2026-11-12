@@ -13,9 +13,9 @@ OPTS = CK.Options()
 
 
 def _toy():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
+    from verity.definitions.registry import prims as P
 
     return bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
                                     lambda B, S, x: B.call(P.F32Add, x[0], x[1]), register=False))
@@ -34,7 +34,7 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     monkeypatch.setattr(FC, "K_MAX", b["k_log"] - 1)
     (f,) = [f for f in CK.check_definition(fn, OPTS, as_call=False)["failures"] if f["check"] == "block"]
     assert f["name"].startswith(f"block/past-range CircuitCheckBlock_v1 the unit needs a block of 2^{b['k_log']} bits")
-    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/core/protocols/pouw/leaf_lanes.py), or extend "
+    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/protocols/pouw/verifier/leaf_lanes.py), or extend "
                               "the proved range (proofs)")
     assert (f["ands"], f["k_log"], f["sha512x3"]) == (b["ands"], b["k_log"], b["sha512x3"])
     F = CK.Findings()
@@ -42,8 +42,8 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
 
 
 def _rows():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
 
     return bind(CompositeDefinition("CircuitCheckBlockRows", 1, (), lambda S: ((("x", Array(1 << 17, Value(16))),), Array(1 << 17, Value(16))),
                                     lambda B, S, x: x, register=False))
@@ -154,8 +154,8 @@ def test_a_held_id_the_catalog_no_longer_checks_fails(monkeypatch):
 def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     """GLM-5.3's `SparseMla_v1` at its circuit-check binding (T = 65, the served heads and widths) is past the block whole
     (2^30 bits) and cut by `sparse_mla.CUTS` into each head's blocks and end, whose largest, a full block, fits."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import sparse_mla as M
 
     F = CK.Findings()
     b = CK.block_range(bind(M.SparseMla, T=65, **M.SPARSE_MLA_GLM53), F)
@@ -168,8 +168,8 @@ def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
     """GLM-5.3's `SparseMlaSplit_v1` at T = 130 in two splits (split 0 of two blocks) is past the block whole and cut by
     `sparse_mla_split.CUTS` into each split's blocks, its ends in column blocks and each column block's combine, whose
     largest, a full block, fits."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import sparse_mla as M, sparse_mla_split as W
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import sparse_mla as M, sparse_mla_split as W
 
     F = CK.Findings()
     b = CK.block_range(bind(W.SparseMlaSplit, T=130, NS=2, **M.SPARSE_MLA_GLM53), F)

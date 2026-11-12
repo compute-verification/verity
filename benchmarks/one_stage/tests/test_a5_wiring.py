@@ -10,11 +10,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.windows import interface as I
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops import gemm as G
+from verity.commitments.windows import interface as I
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5

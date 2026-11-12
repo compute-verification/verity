@@ -6,7 +6,7 @@ imports it with no `sys.path` entry.
 
 The kit holds no theory and no fold semantics. A referee and the author it checks may both use it, and neither re-runs
 the other's argument. Fold semantics belong to the receipt-fold module. MMA semantics come from
-`verity.ml.circuits.silicon` and are never re-derived here.
+`verity.definitions.silicon` and are never re-derived here.
 
 ## API
 

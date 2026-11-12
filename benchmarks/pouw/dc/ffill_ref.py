@@ -20,7 +20,7 @@ absorb that step at once. No chain of a tile overflows for |w| < 2^29 (`WORD_BOU
 At the tile's end the li fold absorbs bits(x) and bits(y) as two more words of its last segment, so LI-CP-W's last
 checkpoint commits them and the check that recomputes a sampled tile recomputes them with it (PinnedFillBlocksDeficit).
 
-Every FMA is `verity.ml.circuits.ops.fp32.F32FmaV2`, the registered FFMA: the exact rational a·b + c rounded once to
+Every FMA is `verity.definitions.ops.fp32.F32FmaV2`, the registered FFMA: the exact rational a·b + c rounded once to
 nearest even, subnormals kept (`fma.rn.f32` without `.ftz`, SASS `FFMA`), every NaN result 0x7FFFFFFF, the word sm_90
 writes. It is never a float64 product summed and cast to binary32, which rounds twice (`DOUBLE_ROUNDING` is a case where
 that differs). ffill.cu runs the same steps on the GPU through an explicit `fma.rn.f32`, which neither contraction nor
@@ -36,7 +36,7 @@ import struct
 import sys
 from pathlib import Path
 
-from verity.ml.circuits.ops.fp32 import F32_NAN_PTX, F32FmaV2
+from verity.definitions.ops.fp32 import F32_NAN_PTX, F32FmaV2
 
 M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1

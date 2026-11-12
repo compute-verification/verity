@@ -29,13 +29,13 @@ from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, W
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import class_size as CZ  # noqa: E402
 
-#: integrations/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
+#: adapters/vllm's `tests.program.predict.test_steps.TINY` and its grain in test_window_circuit
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 PROBE = WindowClass(1, 2, 2)
-LLAMA_1B = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+LLAMA_1B = Path(__file__).resolve().parents[3] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 
 
 def _registered(config: dict) -> Registered:

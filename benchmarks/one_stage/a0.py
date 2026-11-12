@@ -1,7 +1,7 @@
 """One-stage audit, run A0: a template's captured served values through registration, the verifier's sample, M0's prover and
 verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
@@ -26,14 +26,14 @@ import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
-from verity.ml.circuits.program import Program
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.spot import challenger as Ch, coins as CC
-from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.spot.device import challenger as Ch, coins as CC
+from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 

@@ -1,6 +1,6 @@
 """Small Programs, built with verity's constructive front end, for the demo and the tests.
 
-They are Boolean (`verity.ml.circuits.boolean`): a BF16 word is its 16 bits (`BF16`, least significant first), and every
+They are Boolean (`verity.circuits.boolean`): a BF16 word is its 16 bits (`BF16`, least significant first), and every
 stage is a registered Boolean Definition. `LINEAR` is `Gemm_v3` at K = N = 32 over the BF16 tensor-core step on bits
 (`ops.boolean.gemm.GEMM_AMPERE`, `AmpereBF16TcDot16_v3`, the step sm_120 runs too), x[32] @ W[32, 32]^T, 1,024
 multiply-adds and 32 roundings to BF16; `DOT` is one of its coordinates, a dot product of two 32-word rows (PoUW's noised
@@ -15,11 +15,11 @@ import random
 import struct
 from collections.abc import Callable
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean.gemm import GEMM_AMPERE, Gemm, GemmCoordinate
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array, Type
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.definitions.ops.boolean.gemm import GEMM_AMPERE, Gemm, GemmCoordinate
+from verity.circuits.program import Program
+from verity.circuits.types import Array, Type
 
 
 def word(w: int) -> Type:
@@ -69,8 +69,8 @@ X = words("x", K)
 def s8_grid(r: int = 4, c: int = 16, k: int = 64) -> Program:
     """A served s8 matmul on bits, the shape PoUW's sm_120 scheme (`eps1-sm120-h1fx1`) tiles: each of r rows of x against
     each of c rows of the registered w, a `GemmAccumulatorS8_v2` over the s8 IMMA step's Boolean form."""
-    from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.ml.circuits.refs import Coll, concat
+    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.refs import Coll, concat
 
     row = Array(k, word(8))
     acc = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)

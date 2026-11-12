@@ -27,7 +27,7 @@ sys.path.insert(0, str(HERE))
 
 import slots as S  # noqa: E402
 import slots_gpu as G  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 
 CTX = identity_digest_sha512("verity/commit-slots/check/context/v1", {"check": 1})
 KEY = bytes(range(32, 64))
