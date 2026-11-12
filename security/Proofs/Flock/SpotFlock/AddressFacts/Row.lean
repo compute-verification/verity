@@ -127,7 +127,8 @@ def PositionFact : Prop :=
   ∀ {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {own : Array _root_.Flock.Registered.Port} {w : Claims.Flock.Wit} (σ : ℕ → ℕ),
     FlockDeploy.setupOf true xS = some (ins, spec, sts) → ins.registered = some own → ScopedHidden xS →
-      Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true → LabelledAt σ sts →
+      Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true → 0 < sts.size →
+        LabelledAt σ sts →
         ∀ reg ∈ own, ∀ q tb positions paths,
           (List.range sts[0]!.c.ports.size).find? (fun q => sts[0]!.c.ports[q]!.name == reg.name) = some q →
           sts[0]!.pub.tables = some tb → _root_.Flock.Registered.entry sts[0]!.pub reg = .ok (positions, paths) →

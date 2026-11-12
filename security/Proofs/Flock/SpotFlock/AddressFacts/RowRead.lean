@@ -188,6 +188,24 @@ theorem readFact : ReadFact := by
         simp only [hi, Bool.and_eq_true] at hok
         exact (rowsOk_read (b := u - p.lo) hok.2 hl hrd rfl).trans hpl
 
+/-- **The header's position for an instance is the registered read's at its label** (`PositionFact`): `rows_open` at
+the session's first table, read at the instance's label (`Registered.Port.readAt_eq`). -/
+theorem positionFact : PositionFact := by
+  intro xS ins spec sts own w σ hset hown hsc hck h0 hlab reg hreg q tb positions paths hq htb hent n hn
+  have e0 : sts[0]! = sts[0] := getElem!_pos sts 0 h0
+  obtain ⟨tb', idx, ht', hidx, hall⟩ := rows_open hset hown hsc hck 0 h0
+  obtain ⟨q', positions', paths', hq', hent', hrows⟩ := hall reg hreg
+  have hl := hlab idx (by rw [e0]; exact hidx) n hn
+  rw [e0] at hq htb hent hn
+  have hqq : q = q' := Option.some.inj (hq.symm.trans hq')
+  have htt : tb = tb' := Option.some.inj (htb.symm.trans ht')
+  obtain ⟨hpos, -⟩ := Prod.mk.inj (Except.ok.inj (hent.symm.trans hent'))
+  subst hqq htt hpos
+  obtain ⟨-, hreads, -⟩ := hrows n hn
+  rw [← _root_.Flock.Registered.Port.readAt_eq, hl] at hreads
+  rw [e0]
+  exact hreads
+
 end AddressRow
 
 end SpotFlock
