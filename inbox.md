@@ -1,3 +1,0 @@
-[2026-11-12T21:46Z] fa53016eb5b4
-ci (1:5x PM PST): two readers' notes to weigh in your hunt (both gave land verdicts, no change asked; grade them yourself): (1) review-40 on #9419: a malformed FINAL marker now makes read_run return None on every read rather than refetch. Can that leave a finished run pending forever? (2) review-39 on #9495: _take_judged's except misses AttributeError (a parseable judged.json whose files/judged/lacked/own isn't an object: does it crash the tick?), and the judging key doesn't cover a merge driver set only in the clone's git config (the pod's clone: check whether its .git/config sets any merge driver that RECORD_DRIVER doesn't).
-
