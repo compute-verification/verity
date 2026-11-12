@@ -164,6 +164,9 @@ LmsUnforgeable remote only. Nothing else is introduced.
 | `r20261111-053108-072a` | `Proofs/Properties/Verity/WindowFiles.lean` | `a1f057c487` | 0 | 34 theorems, standard axioms |
 | `r20261112-095016-237c` | `Window/Instance.lean` | head `7c5571d97e` less six reflowed lines | 0 | 21 theorems, standard axioms (`remote_soundness_window` among them) |
 | `r20261112-095017-87ae` | `Sampled/OpensAt.lean` | the same | 0 | 15 theorems, standard axioms |
+| `r20261112-130836-9929` | `Sampled/MemberForm/Order.lean` | `fbd623491d` | 0 | 46 theorems, standard axioms |
+| `r20261112-131925-4133` | `Proofs/Properties/Verity/WindowFiles.lean` | `7d32ec9ea6` | 0 | 39 theorems, standard axioms, no reducibility change |
+| `r20261112-132719-e3fd` | `Window/Instance.lean` | `f9be38bd3c` | 0 | 22 theorems, standard axioms (`remote_soundness_window` among them) |
 
 Records (`lean_changed.py --records security/Properties --update`, the fast path: no kernel replay):
 
@@ -175,14 +178,19 @@ Records (`lean_changed.py --records security/Properties --update`, the fast path
 | `r20261112-102444-788a` | `7c5571d97e` | 1 | `security/Proofs` **pass** (197575 declarations in 3930 modules). `security/Properties` fail: `layers` (Game imports WindowFiles, WindowFiles imports `Definitions.Core.Compiler`). `security` fail: `reads` (WindowFiles outside `meaning`) and record differences |
 | `r20261112-111216-22a7` | `503ea26f8a` (the lock's layer and meaning) | 0 | `security/Proofs` pass; `security/Properties` pass, record regenerated; `security` record regenerated (every failure a record difference). Committed in `ae16d2211c` |
 | `r20261112-120421-3642` | `349f7d16b3` (no `--update`) | 0 | `security/Properties`, `security` and `security/Proofs` pass on the committed records |
+| `r20261112-134620-d5de` | `f9be38bd3c` (`security/Properties`, `--update`) | 0 | `security/Properties` and `security/Proofs` pass; `security`'s record regenerated |
+| `r20261112-134620-7809` | `f9be38bd3c` (the SPOT verifier's, `--update`) | 0 | `verity/protocols/spot/verifier/lean` pass (5632 declarations in 50 modules); `security` and `security/Properties` records regenerated, the same bytes as the row above: the reads of `Spot.ChallengerTrees` only. Committed as `70c2ed527a` |
+| `r20261112-150854-de45` | `70c2ed527a` (no `--update`) | 0 | the SPOT verifier's, `security`, `security/Properties` and `security/Proofs` pass on the committed records |
 
-Suites (`suites.py --changed BASE --quick`), at `7c5571d97e`; the last row at `349f7d16b3`:
+Suites (`suites.py --changed BASE --quick`), at `7c5571d97e`; the third row at `349f7d16b3`; the last two as they say:
 
 | Run | Base | Verdict |
 |---|---|---|
 | `r20261112-102450-4e71` | `1a3eadc9c5` (the merge base with main) | 73 suites: 73 passed, 0 failed |
 | `r20261112-103631-4015` | `e67c8c956f` (the branch before this work) | 68 suites: 68 passed, 0 failed |
 | `r20261112-120426-2e1e` | `7c5571d97e` (the lock's commits after it) | 9 suites: 9 passed, 0 failed |
+| `r20261112-134625-afc0` | `1a3eadc9c5`, at `f9be38bd3c` | 73 suites: 72 passed, 1 failed (`repository`: `member_line`'s handler over the silent-handler count, fixed in `2b0d7cea6e`) |
+| `r20261112-150859-c826` | `1a3eadc9c5`, at `70c2ed527a` | 73 suites: 73 passed, 0 failed |
 
 Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
 this file.
