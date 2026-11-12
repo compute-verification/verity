@@ -36,7 +36,7 @@ from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline.row_json import load_json
 
-__all__ = ["build_spec", "code_version", "write_experiment", "write_spec"]
+__all__ = ["build_spec", "code_version", "digest_doc", "write_experiment", "write_spec"]
 
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
@@ -51,8 +51,13 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def _digest_doc(doc) -> str:
+def digest_doc(doc) -> str:
+    """The sha256 of ``doc`` as JSON with sorted keys: a spec's ``digest``."""
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
+
+
+#: the older name of `digest_doc`, which `pipeline/match.py` reads
+_digest_doc = digest_doc
 
 
 def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
@@ -151,7 +156,7 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
         },
         "initial_state": initial_state or {"kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"},
     }
-    spec["digest"] = _digest_doc({k: v for k, v in spec.items() if k != "digest"})
+    spec["digest"] = digest_doc({k: v for k, v in spec.items() if k != "digest"})
     return spec
 
 
