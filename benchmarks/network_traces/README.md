@@ -234,7 +234,7 @@ link between two machines under the capture.
 result file holds every flow's sums, and the table is:
 
 - The packets read and what was skipped, then the record's connections to the server and how many of its execution
-  phases' records, two a phase, are certified under its key.
+  phases' records (each phase's ingress, egress and reasons) are certified under its key.
 - A line for each direction between the server and the certifier: its flows, `packets` and `wire bytes` (every frame,
   with its headers, ACKs and retransmissions), `payload bytes` (above the TCP header, a retransmitted segment each time
   it was sent), `stream bytes` (each sequence number once, which the record's count is held against), `holes` (bytes

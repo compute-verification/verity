@@ -375,8 +375,8 @@ def record_counts(run: Path) -> dict:
     """What the network certifier's record of the run in `run` (`warden_serve.py serve`'s directory) says each of its
     connections to the server carried (the module docstring's "Which bytes are compared"): each admitted connection's
     `to_server` and `from_server`, whether they are `exact`, and `why` not (then the first is a ceiling and the second
-    a floor); the watermark stream's where `warden.json` has one, its `from_server` None; and how many of the two
-    wire records of the run's execution phases are certified under the deployment's key."""
+    a floor); the watermark stream's where `warden.json` has one, its `from_server` None; and how many of the records
+    it read, each execution phase's ingress, egress and reasons, are certified under the deployment's key."""
     import warden_serve as ws
     from verity.protocols.certifier.verifier.active import DATA
     from verity.protocols.certifier.verifier.certificate import record_head
@@ -391,21 +391,22 @@ def record_counts(run: Path) -> dict:
     key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     certified, _ = ws.read_certified(run / "certified.jsonl")
     windows = 0
-    requests: dict[int, bytearray] = defaultdict(bytearray)
-    for name in (ws.INGRESS, ws.EGRESS):
-        link, direction = ws.CERTIFIED[name]
-        for record in sorted(records[name], key=lambda r: r.window):
+    for name, (link, direction) in ws.CERTIFIED.items():
+        grid = params.fails_grid if name == ws.FAILS else params.grid
+        for record in records[name]:
             c = certified.get((link, direction, record.window))
             windows += bool(c is not None and c.verify(key, session) and c.head == record_head(
-                link, direction, record.window, record.grid, record.status, params.grid, params.digest))
-            for row in record.grid if name == ws.INGRESS else ():
-                for frame in row[:row_count(row)]:
-                    try:
-                        kind, ordinal, payload = read_cell(frame, params.cell_bytes)
-                    except ValueError as e:
-                        raise Refused(f"{run.name}'s ingress record holds a frame that isn't a cell: {e}") from None
-                    if kind in (DATA, END):
-                        requests[ordinal] += payload
+                link, direction, record.window, record.grid, record.status, grid, params.digest))
+    requests: dict[int, bytearray] = defaultdict(bytearray)
+    for record in sorted(records[ws.INGRESS], key=lambda r: r.window):
+        for row in record.grid:
+            for frame in row[:row_count(row)]:
+                try:
+                    kind, ordinal, payload = read_cell(frame, params.cell_bytes)
+                except ValueError as e:
+                    raise Refused(f"{run.name}'s ingress record holds a frame that isn't a cell: {e}") from None
+                if kind in (DATA, END):
+                    requests[ordinal] += payload
     connections = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])["connections"]
     released = sorted((c["ingress_end"], c["ordinal"]) for c in connections if c["ingress_end"] is not None)
     order = {ordinal: n for n, (_, ordinal) in enumerate(released)}
@@ -432,7 +433,7 @@ def record_counts(run: Path) -> dict:
         stopped = mark.get("error")
         out.append({"connection": "watermark", "exact": stopped is None, "why": stopped and f"stopped ({stopped})",
                     "to_server": size + (0 if stopped else len(WATERMARK_END)), "from_server": None})
-    return {"phase_records": {"certified": windows, "of": 2 * dep["windows"]}, "connections": out}
+    return {"phase_records": {"certified": windows, "of": len(ws.CERTIFIED) * dep["windows"]}, "connections": out}
 
 
 def _signed(n: int) -> str:

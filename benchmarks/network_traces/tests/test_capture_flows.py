@@ -70,7 +70,7 @@ def _capture(tmp_path: Path, packets: list, name: str = "capture.pcap", frame=No
 
 def _record(*counts: tuple[int, int | None], **more) -> dict:
     """A record's counts as `record_counts` gives them: exact connections of (bytes to the server, bytes from it)."""
-    return {"phase_records": {"certified": 2, "of": 2},
+    return {"phase_records": {"certified": 3, "of": 3},
             "connections": [{"connection": n + 1, "exact": True, "why": None, "to_server": t, "from_server": f} | more
                             for n, (t, f) in enumerate(counts)]}
 
@@ -600,7 +600,7 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
                                            for k, r in enumerate(requests)]
     assert _sent(mark).startswith(watermark_head(warden.run_id)) and _sent(mark).endswith(WATERMARK_END)
     record = cf.record_counts(out)
-    assert record["phase_records"] == {"certified": 2, "of": 2}
+    assert record["phase_records"] == {"certified": 3, "of": 3}
     assert record["connections"] == [
         *({"connection": k + 1, "exact": True, "why": None, "to_server": len(_sent(s)), "from_server": len(r)}
           for k, (s, r) in enumerate(zip(servers, responses))),
@@ -624,7 +624,7 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
                     "--out", str(path)]) == 0
     assert json.loads(path.read_text()) == result
     lines = capsys.readouterr().out.splitlines()
-    assert lines[1] == "record: 4 connection(s) to the server; 2 of its execution phases' 2 records certified"
+    assert lines[1] == "record: 4 connection(s) to the server; 3 of its execution phases' 3 records certified"
     assert [line.split()[-2:] for line in lines[4:6]] == [[f"{to_server:,}", "agrees"], [f"{from_server:,}", "agrees"]]
     assert lines[6] == "pairing, a connection's two counts with a flow's: 4 pair(s) of equal counts, 0 inside a " \
                        "connection's bounds; unpaired, 0 of 4 connection(s) and 0 of 4 flow(s), 0 of them held in " \
@@ -701,8 +701,8 @@ def test_a_connection_that_failed_is_a_bound_and_an_uncertified_record_is_said(t
            f"{payload} from it" in cf.table(result).splitlines()
     (out / "certified.jsonl").unlink()
     again = cf.read([seen], *_given(), run=out)
-    assert again["record"]["phase_records"] == {"certified": 0, "of": 2} and again["compared"] == got
-    assert cf.table(again).splitlines()[1] == ("record: 2 connection(s) to the server; 0 of its execution phases' 2 "
+    assert again["record"]["phase_records"] == {"certified": 0, "of": 3} and again["compared"] == got
+    assert cf.table(again).splitlines()[1] == ("record: 2 connection(s) to the server; 0 of its execution phases' 3 "
                                                 "records certified")
     # fewer bytes than the record's floor is outside the bound
     short = _seen(tmp_path, [(_sent(servers[0]), responses[0]), (_sent(servers[1]), responses[1][:payload - 1])])
