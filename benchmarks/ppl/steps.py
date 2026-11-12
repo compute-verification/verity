@@ -636,7 +636,7 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     return (num * sv.double()).float()
 
 
-def draw_nonzero(width: int, shape, gen: torch.Generator, device) -> torch.Tensor:
+def random_nonzero(width: int, shape, gen: torch.Generator, device) -> torch.Tensor:
     """Uniform on {+-1, ..., +-width}."""
     table = torch.tensor([v for v in range(-width, width + 1) if v], dtype=torch.float32, device=device)
     return table[torch.randint(0, len(table), shape, generator=gen, device=device)]
@@ -665,7 +665,7 @@ def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
     s = mm.extra["s"]
     U = mm.run.peel_u.get(operand)
     if U is None:
-        U = mm.run.peel_u[operand] = draw_nonzero(width, (s, PEEL_L), mm.run.ugen(mm.device), mm.device)
+        U = mm.run.peel_u[operand] = random_nonzero(width, (s, PEEL_L), mm.run.ugen(mm.device), mm.device)
     if mm.kind == "qk":
         d = mm.x.shape[-1]
         ki = mm.weight()
@@ -908,7 +908,7 @@ def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 12
     if alphabet == "bit":
         U = torch.randint(0, 2, (n, PEEL_L), generator=g, device=mm.device).float()
     else:
-        U = draw_nonzero(width, (n, PEEL_L), g, mm.device)
+        U = random_nonzero(width, (n, PEEL_L), g, mm.device)
     served = w + U[:, torch.arange(k, device=mm.device) % PEEL_L]
     fits = G.within(top, served)
     fold = mm.x.double().view(mm.x.shape[0], k // PEEL_L, PEEL_L).sum(1)

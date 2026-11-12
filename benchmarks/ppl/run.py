@@ -1,7 +1,7 @@
 """The perplexity bench: `verity bench ppl COMMAND ...` (README.md says what it measures and how).
 
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
-                [--data DIR] [--hf-home DIR] [--plugin FILE.py]... SPEC...     on a GPU node: one results.json
+                [--data DIR] [--plugin FILE.py]... SPEC...                     on a GPU node: one results.json
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
                                                                             (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
@@ -14,7 +14,8 @@
     run.py selftest                                                         the engine on a tiny model, CPU or GPU
 
 SPEC is a TOML file or the name of one in specs/. The bf16 reference and the plain int8 arm of each SPEC's scope run
-with it. A run whose gates fail writes its gates and no perplexity, and exits 1."""
+with it. A run whose gates fail writes its gates and no perplexity, and exits 1. The environment variables it reads
+(a model's snapshot is under HF_HOME) are declared in settings.py."""
 from __future__ import annotations
 
 import argparse
@@ -28,20 +29,21 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import methodology
+import models
+import report
+import settings
+import spec
+import tables
+import windows
+
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import methodology  # noqa: E402
-import models  # noqa: E402
-import report  # noqa: E402
-import spec  # noqa: E402
-import tables  # noqa: E402
-import windows  # noqa: E402
-
 ROOT = HERE.parents[1]
-DATA = Path(os.environ.get("PPL_DATA", "/workspace/ppl-data"))
+DATA = Path(settings.get("PPL_DATA"))
 LOCAL_DATA = Path.home() / ".cache" / "verity-ppl"
-HF_HOME = Path(os.environ.get("HF_HOME", "/workspace/hf"))
+HF_HOME = Path(settings.get("HF_HOME"))
 NODE = "vy-nebius-2"
 
 
@@ -111,7 +113,7 @@ def build_windows(model: str, set_name: str, ctx: int, data: Path, calibration: 
 
 
 def visible_gpus() -> list[str]:
-    env = os.environ.get("CUDA_VISIBLE_DEVICES")
+    env = settings.get("CUDA_VISIBLE_DEVICES")
     if env:
         return [x for x in env.split(",") if x]
     import torch
@@ -191,7 +193,7 @@ def merge(a, arms, seeds, wrec, shard_out, nll, seconds, n_gpus) -> dict:
            "windows": [0, n - 1], "scored_tokens": methodology.scored_tokens(a.ctx), "window_digest": wrec["sha256"],
            "seeds": list(seeds), "gates": g.log, "passed": passed, "gpus": n_gpus, "seconds": seconds,
            "env": {"torch": torch.__version__, "device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
-                   "run": os.environ.get("RESEARCH_RUN_ID", "")},
+                   "run": settings.get("RESEARCH_RUN_ID")},
            "arms": {}}
     all_arms = [spec.BF16] + list(arms)
     for arm in all_arms:
@@ -236,7 +238,7 @@ def submit_command(a, data: Path) -> list[str]:
     flags = f"--model {a.model} --set {a.set} --ctx {a.ctx} --gpus {gpus} --seeds {a.seeds}"
     flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
     flags += " " + " ".join(shlex.quote(s) for s in a.spec)
-    who = os.environ.get("GPU_LEASE_WHO", "ppl-bench")
+    who = settings.get("GPU_LEASE_WHO")
     sends = [x for d in windows.DATASETS.values() for x in ("--send", str(Path(data) / d["file"]))]
     return ["research", "run", "--on", NODE, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
             "--cwd", "source", "--custody-ttl", "12h", *sends, "--env", f"GPU_LEASE_WHO={who}",
