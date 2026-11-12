@@ -24,8 +24,8 @@ the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
 
 ## Interface
 
-What code outside this directory may use. Everything else here is internal: each module lists in its `__all__` the
-names of its own that code outside it reads.
+What code outside this directory may use. Everything else here is internal: a module that states an `__all__` lists in
+it the names of its own that code outside it reads.
 
 | Entry point | What it is |
 |---|---|
