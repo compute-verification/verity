@@ -30,7 +30,7 @@ import exposure as X  # noqa: E402
 import fit as F  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
-from rho.theorem import multiple_bound  # noqa: E402
+from slowdown.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
