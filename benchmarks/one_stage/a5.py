@@ -1582,7 +1582,8 @@ class NegativeWorkers:
     running the next starts whatever its estimate, so one over the budget runs alone. A task's `entries` are its own,
     and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
     falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
-    killed. `timing` is each task's own seconds and, for a worker, its memory."""
+    killed. `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
+    process's as the workers started (``memory``), which a worker's ``private`` is to be read against."""
 
     def __init__(self, workers: int, budget: float, available: Callable[[], float],
                  need: Callable[[], float] = worker_need, own: Callable[[], float] = audit_own):
@@ -1609,7 +1610,7 @@ class NegativeWorkers:
             return
         ctx = multiprocessing.get_context("fork")
         t0, need, own = time.time(), self.need(), self.own()
-        self.stage.update(need=need, audit=own)
+        self.stage.update(need=need, audit=own, memory={"audit": process_memory(), "lean": lean_server_memory()})
         running: dict[Any, tuple[Negative, Any]] = {}
         gc.freeze()  # the audit's objects stay out of a worker's collections, which would write to, and so un-share, each
         try:

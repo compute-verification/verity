@@ -96,6 +96,7 @@ def test_more_workers_run_the_tasks_side_by_side_each_in_its_own_process_and_the
     assert len(set(pids.values())) == 2 and str(os.getpid()) not in pids.values()
     timing = w.timing()
     assert timing["workers"] == 2 and timing["need"] == GB and timing["audit"] == GB
+    assert timing["memory"]["audit"]["rss"] > 0 and set(timing["memory"]) == {"audit", "lean"}
     assert all(set(timing["negatives"][n]) == {"own_s", "worker", "lean", "verifier_checks"} for n in ("first", "second"))
     assert all(timing["negatives"][n]["worker"]["private"] > 0 for n in ("first", "second"))
     assert not multiprocessing.active_children()
