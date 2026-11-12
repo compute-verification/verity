@@ -156,7 +156,9 @@
 #     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration). No
 #     answer accepts beside an audit that exited nonzero: the period's answer and the record's row are one function of
 #     the audit (`served_integrity.answer`), a reject saying so where its record accepts and its summary doesn't say it
-#     passed, and `v3c_proved` returns the audit's exit;
+#     passed, and `v3c_proved` returns the audit's exit. The audit's directory is one attempt's: where an attempt
+#     reached its draw (a5's receipt, written before it draws), `records_audit.py audit` starts no other, and an
+#     attempt that died after it is a reject;
 #     $OUT/v3c-audit holds what it reads of it (`served_integrity.py public-copy`), the registration it audited and that
 #     period.json, nothing else (`kind_scan.V3C_DOCS`): the audit's logs and main's first-parent line stay in the serve
 #     dir's private/v3c-audit. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close,

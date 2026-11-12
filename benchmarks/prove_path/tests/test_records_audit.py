@@ -1098,18 +1098,35 @@ def test_a_tie_failing_after_the_sessions_is_a_reject_naming_it(written, tmp_pat
                                            "public": None, "reason": "after the draw: record (record)", "verdict": "reject"}
 
 
-def _two_attempts(written, tmp_path, monkeypatch, first):
-    """`RA.main`'s ``audit`` on ``written`` twice into one ``--out``, a5 stood in: the first attempt is ``first``
-    (``"accepted"``: a5 writes its registration, receipt and an accepting audit record; ``"before the draw"``: it
-    refuses before its sample and writes none), the second one a5 refuses after its draw, where it writes no audit
-    record and removes none. -> (the two exits, the a5 stand-ins that ran, ``--out``)."""
+def _two_attempts(written, tmp_path, monkeypatch, first, second="after the draw"):
+    """`RA.main`'s ``audit`` on ``written`` twice into one ``--out``, a5 stood in by what it writes and returns:
+    ``"accepted"`` (its registration, its receipt and an accepting audit record); ``"before the draw"`` (its receipt,
+    then its checks before the draw refuse: it never draws); ``"after the draw"`` (its receipt, its draw, then a
+    refusal: no audit record, and none removed); ``"died before its receipt"`` (it raises, nothing written). -> (the
+    two exits, an exception's name where the attempt raised; the a5 stand-ins that ran; ``--out``; the first attempt's
+    files' bytes)."""
     import a5 as A5
     import a5_coins as AC
 
-    def accepted(a, sets, out, *rest, **kw):
-        out.mkdir(parents=True)
+    def receipt(a, sets, out, *rest, **kw):
+        out.mkdir(parents=True, exist_ok=True)
         (out / "registration.json").write_text(json.dumps(written.rec))
         (out / "receipt.json").write_text(json.dumps({"registration": R.digest(written.rec), "verifier": A5.CHALLENGER}))
+
+    def before(*a, **kw):
+        receipt(*a, **kw)
+        return {"checks_before_draw": {"registration": False}}, False
+
+    def after(a, sets, out, *rest, **kw):
+        receipt(a, sets, out)
+        (out / "draw.json").write_text(json.dumps({"units": [1, 3]}))
+        return {"checks_before_draw": {"registration": True}, "checks": wiring}, False
+
+    def died(*a, **kw):
+        raise MemoryError("a compose was killed")
+
+    def accepted(a, sets, out, *rest, **kw):
+        receipt(a, sets, out)
         (out / "audit.json").write_text(json.dumps({
             "accepted": True, "registration": written.rec, "proved_units": [1, 3], "checks": {"draw": {"ok": True}},
             "draw": {"law": "subset", "k": 2, "population": written.rec["population"], "units": [1, 3]},
@@ -1120,36 +1137,61 @@ def _two_attempts(written, tmp_path, monkeypatch, first):
     stand_ins = {"accepted": accepted,
                  "accepted, a negative not refused": lambda *a, **kw: (
                      {**accepted(*a, **kw)[0], "negatives": {"coins-no-evidence": False}}, False),
-                 "before the draw": lambda *a, **kw: ({"checks_before_draw": {"registration": False}}, False),
-                 "after the draw": lambda *a, **kw: ({"checks_before_draw": {"registration": True}, "checks": wiring}, False)}
+                 "before the draw": before, "after the draw": after, "died before its receipt": died}
     ran: list[str] = []
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     out, exits = tmp_path / "out", []
-    for attempt in (first, "after the draw"):
+    for attempt in (first, second):
         monkeypatch.setattr(A5, "audit", lambda *a, _n=attempt, **kw: (ran.append(_n), stand_ins[_n](*a, **kw))[1])
-        exits.append(RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"],
-                              "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out),
-                              "--skip-negatives", "--challenger", "local", "--main", "m.txt"]))
+        try:
+            exits.append(RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"],
+                                  "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out),
+                                  "--skip-negatives", "--challenger", "local", "--main", "m.txt"]))
+        except MemoryError as e:
+            exits.append(type(e).__name__)
         if len(exits) == 1:
-            kept = {f: (out / f).read_bytes() for f in ("summary.json", "window/audit.json") if (out / f).exists()}
+            kept = {str(f.relative_to(out)): f.read_bytes() for f in sorted(out.rglob("*")) if f.is_file()}
     return exits, ran, out, kept
 
 
 def test_a_second_attempt_on_an_out_that_holds_an_audit_record_refuses_to_start_and_changes_nothing(tmp_path, monkeypatch, capsys):
     """An ``--out`` whose first audit accepted holds its record. A second attempt there that a5 would refuse after its
     draw writes no record of its own, so its summary would stand beside the first attempt's accepting record, which
-    `served_integrity.answer` then accepts on. The audit refuses to start instead (`held_record`): it exits nonzero
+    `served_integrity.answer` then accepts on. The audit refuses to start instead (`spent`): it exits nonzero
     before a5 or the challenger's session runs, says a second attempt is a new serve directory, and leaves the first
     attempt's summary and record byte for byte, so the answer is the first audit's own."""
     written = _write(tmp_path / "w", advice=False)
     exits, ran, out, kept = _two_attempts(written, tmp_path, monkeypatch, "accepted")
     assert exits == [0, 1] and ran == ["accepted"]
     assert "a new serve directory" in capsys.readouterr().err
-    assert {f: (out / f).read_bytes() for f in kept} == kept and set(kept) == {"summary.json", "window/audit.json"}
+    assert _files(out) == kept and {"summary.json", "window/audit.json", "window/receipt.json"} <= set(kept)
     assert json.loads(kept["summary.json"])["ok"] is True and SI.answer(out, written.rec)["verdict"] == "accept"
-    assert RA.held_record(out) and RA.held_record(tmp_path / "another") is None
+    assert RA.spent(out) and RA.spent(tmp_path / "another") is None
+
+
+def _files(out):
+    return {str(f.relative_to(out)): f.read_bytes() for f in sorted(out.rglob("*")) if f.is_file()}
+
+
+@pytest.mark.parametrize("first, reason", [("after the draw", "after the draw: wiring (wiring)"),
+                                           ("before the draw", "before the draw: registration")])
+def test_an_attempt_that_reached_its_draw_is_its_directorys_only_attempt_whatever_it_wrote_after(tmp_path, monkeypatch, capsys,
+                                                                                               first, reason):
+    """An attempt refused after its draw leaves no audit record. A second attempt on its ``--out`` would draw again,
+    and one that accepts leaves an accepting record and summary there: a resample, and the first attempt's refusal in
+    no record. a5's receipt, which it writes before it draws, is what says an attempt got that far, so the audit
+    refuses to start where it is: before a5 or the challenger's session, changing nothing, and the answer stays the
+    first attempt's refusal. An attempt its checks before the draw refused wrote the receipt too (it is written
+    before them, and it never drew): its directory is spent the same."""
+    written = _write(tmp_path / "w", advice=False)
+    exits, ran, out, kept = _two_attempts(written, tmp_path, monkeypatch, first, "accepted")
+    assert exits == [1, 1] and ran == [first]
+    err = capsys.readouterr().err
+    assert "window/receipt.json is an earlier attempt's" in err and "a new serve directory" in err
+    assert _files(out) == kept and "window/receipt.json" in kept and "window/audit.json" not in kept
+    assert SI.answer(out, written.rec)["verdict"] == "reject" and SI.answer(out, written.rec)["reason"] == reason
 
 
 def test_an_audit_that_exits_nonzero_after_it_wrote_an_accepting_record_leaves_no_accepted_answer(tmp_path, monkeypatch):
@@ -1166,13 +1208,46 @@ def test_an_audit_that_exits_nonzero_after_it_wrote_an_accepting_record_leaves_n
                                            "public": None, "reason": SI.EXITED_NONZERO, "verdict": "reject"}
 
 
-def test_an_out_whose_attempt_wrote_no_audit_record_takes_a_second_attempt_whose_refusal_is_the_answer(tmp_path, monkeypatch):
-    """The refusal is the record's alone: an ``--out`` whose attempt was refused before its draw holds no audit record, so
-    a second attempt starts there, and its own refusal after the draw is what `served_integrity.answer` then reads."""
+def test_an_out_whose_attempt_died_before_its_receipt_takes_a_second_attempt_whose_refusal_is_the_answer(tmp_path, monkeypatch):
+    """The refusal is the draw's alone: an attempt that died before a5 wrote its receipt never reached its draw, so a
+    second attempt starts on its ``--out``, and its own refusal after the draw is what `served_integrity.answer` then
+    reads; that attempt's receipt then spends the directory."""
     written = _write(tmp_path / "w", advice=False)
-    exits, ran, out, kept = _two_attempts(written, tmp_path, monkeypatch, "before the draw")
-    assert exits == [1, 1] and ran == ["before the draw", "after the draw"] and set(kept) == {"summary.json"}
-    assert SI.answer(out, written.rec)["reason"] == "after the draw: wiring (wiring)"
+    exits, ran, out, kept = _two_attempts(written, tmp_path, monkeypatch, "died before its receipt")
+    assert exits == ["MemoryError", 1] and ran == ["died before its receipt", "after the draw"]
+    assert not any(f.startswith("window/") for f in kept)
+    assert SI.answer(out, written.rec)["reason"] == "after the draw: wiring (wiring)" and RA.spent(out)
+
+
+def test_an_attempt_that_died_after_its_receipt_spends_its_directory_and_its_answer_is_a_reject(tmp_path, monkeypatch, capsys):
+    """An attempt that wrote its receipt and died (here a5 raises once it has) leaves no summary. Its directory takes
+    no second attempt, and its answer is `served_integrity.NO_SUMMARY`'s reject: the attempt that drew is the only
+    one, and it left no accepted answer."""
+    import a5 as A5
+    import a5_coins as AC
+
+    written = _write(tmp_path / "w", advice=False)
+    out = tmp_path / "out"
+
+    def died(a, sets, window, *rest, **kw):
+        window.mkdir(parents=True)
+        (window / "receipt.json").write_text(json.dumps({"registration": R.digest(written.rec)}))
+        raise MemoryError("a session was killed")
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setattr(A5, "audit", died)
+    argv = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out), "--skip-negatives",
+            "--challenger", "local", "--main", "m.txt"]
+    with pytest.raises(MemoryError):
+        RA.main(argv)
+    kept = _files(out)
+    monkeypatch.setattr(A5, "audit", lambda *a, **kw: pytest.fail("a second attempt ran"))
+    assert RA.main(argv) == 1 and "a new serve directory" in capsys.readouterr().err and _files(out) == kept
+    assert SI.answer(out, written.rec) == {"commitment": R.digest(written.rec), "profile": None, "protocol": SI.PROTOCOL,
+                                           "public": None, "reason": SI.NO_SUMMARY, "verdict": "reject"}
 
 
 def test_a5s_part_of_the_audit_runs_under_its_memo_and_the_summary_counts_the_checks(written, tmp_path, monkeypatch):

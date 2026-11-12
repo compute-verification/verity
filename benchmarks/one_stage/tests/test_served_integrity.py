@@ -166,6 +166,51 @@ def test_an_audit_that_left_nothing_is_an_error(tmp_path):
         I.answer(write(tmp_path / "a", {"checks_before_draw": {"registration": True}}), REG)
 
 
+def receipt(out: Path) -> Path:
+    """``out`` with a5's receipt, as an attempt leaves it once its checks before the draw are made, before it draws."""
+    (out / "window").mkdir(parents=True, exist_ok=True)
+    (out / "window" / "receipt.json").write_text(json.dumps({"registration": R.digest(REG), "verifier": "a5"}))
+    return out
+
+
+def test_an_attempt_that_reached_its_draw_and_died_is_a_reject_never_an_error_or_an_accept(tmp_path):
+    """An audit's directory that holds a5's receipt is one an attempt reached its draw under. One that then died
+    leaves no summary, or a summary with neither an audit record nor a refusal; each was an error, so nothing said
+    the directory is spent. Each is a reject that says so, on the registration, with no public outputs or profile.
+    So is an accepting audit record whose audit died before its summary: the record alone, with or without the
+    receipt, says an attempt drew. The same directories without receipt or record are no audit's, and raise."""
+    passed = {"checks_before_draw": {"registration": True}}
+    died = {"no summary": (receipt(tmp_path / "a"), I.NO_SUMMARY),
+            "no record": (receipt(write(tmp_path / "b", passed)), I.NO_RECORD),
+            "a record, no summary": (receipt(tmp_path / "c"), I.NO_SUMMARY),
+            "a record alone": (tmp_path / "d", I.NO_SUMMARY)}
+    for d in (tmp_path / "c", tmp_path / "d"):
+        (d / "window").mkdir(parents=True, exist_ok=True)
+        (d / "window" / "audit.json").write_text(json.dumps(record(True)))
+    for out, reason in died.values():
+        a = I.answer(out, REG)
+        assert check_answer(a) == a
+        assert a == {"commitment": R.digest(REG), "profile": None, "protocol": I.PROTOCOL, "public": None,
+                     "reason": reason, "verdict": "reject"}
+    assert I.attempt(tmp_path / "a") == tmp_path / "a" / "window" / "receipt.json"
+    assert I.attempt(tmp_path / "d") == tmp_path / "d" / "window" / "audit.json" and I.attempt(tmp_path / "none") is None
+    assert I.ATTEMPT == ("window/receipt.json", "window/audit.json")
+    assert "before it draws" in I.NO_SUMMARY and "before it draws" in I.NO_RECORD and I.NO_SUMMARY != I.NO_RECORD
+
+
+@pytest.mark.parametrize("summary, reason", [
+    ({"refused": {"records": "ValueError: no such value"}}, 'refused: {"records": "ValueError: no such value"}'),
+    ({"checks_before_draw": {"registration": False}}, "before the draw: registration"),
+    ({"checks_before_draw": {"registration": True},
+      "checks": {"registration": {"ok": True}, "wiring": {"ok": False, "codes": ["wiring"]}}}, "after the draw: wiring (wiring)"),
+])
+def test_an_attempts_own_refusal_stays_its_answer_beside_its_receipt(tmp_path, summary, reason):
+    """A refusal the audit wrote is the answer, with the receipt or without it: the receipt adds a reject only where
+    the audit left none of its own."""
+    assert I.answer(receipt(write(tmp_path / "a", summary)), REG)["reason"] == reason
+    assert I.answer(write(tmp_path / "b", summary), REG)["reason"] == reason
+
+
 def test_an_audit_that_opened_the_advice_is_no_answer(tmp_path):
     """The records audit's compile check ran (``--opening``): accepted or refused, `answer` makes no verdict of it."""
     before = PASSED

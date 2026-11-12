@@ -42,6 +42,19 @@ SUMMARY = {"ok": None, "compile": None, "refused": None, "checks_before_draw": N
 #: the reject of an accepting audit record whose audit didn't pass
 EXITED_NONZERO = ("the audit exited nonzero (records_audit.py audit's exit is its summary's ok, which isn't true) "
                   "beside an accepting audit record: no answer accepts on it")
+#: what says, under an audit's ``--out``, that an attempt there reached its draw, earliest first: a5's receipt, which
+#: `a5.audit` writes once its checks before the draw are made and before it draws (so an attempt those checks refused
+#: wrote it too), and the audit record, written after the sample. An ``--out`` that holds either is spent, whatever
+#: the attempt wrote after: nothing resamples
+ATTEMPT = ("window/receipt.json", "window/audit.json")
+#: the rejects of an attempt that reached its draw and ended with no summary, or with neither an audit record nor a
+#: refusal: an audit that died, which no answer accepts on
+NO_SUMMARY = ("an attempt reached its draw under this audit (its receipt, written before it draws, or its audit record "
+              "is there) and ended without a summary: nothing resamples, so its directory is spent and no answer "
+              "accepts on it")
+NO_RECORD = ("an attempt reached its draw under this audit (its receipt, written before it draws, is there) and ended "
+             "with neither an audit record nor a refusal: nothing resamples, so its directory is spent and no answer "
+             "accepts on it")
 #: what `answer` reads of the audit record ``window/audit.json``: its verdict, each check's outcome and the proved units
 #: its statement covers, the draw, the registration, the bound on wrong units and the units proved; and what the onsite
 #: record credits members by: each check after the draw's outcome, with the drawn members whose ``--registered`` files
@@ -167,15 +180,24 @@ def opened(summary: Mapping[str, Any]) -> bool:
     return summary.get("compile") is not None
 
 
+def attempt(out: Path) -> Path | None:
+    """The earliest file under an audit's ``out`` that says an attempt reached its draw there (`ATTEMPT`), or None."""
+    return next((out / f for f in ATTEMPT if (out / f).exists()), None)
+
+
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ. It accepts only where the summary says the audit passed (``ok``
-    true, an exit of 0): any other beside an accepting record is `EXITED_NONZERO`."""
+    true, an exit of 0): any other beside an accepting record is `EXITED_NONZERO`. An attempt that reached its draw
+    (`attempt`) and died, leaving no summary (`NO_SUMMARY`) or neither an audit record nor a refusal (`NO_RECORD`),
+    is a reject; an ``out`` no attempt drew under, with no summary or no refusal, is no audit's and raises."""
     commitment = R.digest(registration) if registration is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
     except (OSError, ValueError) as e:
+        if attempt(out) is not None:
+            return _refusal(NO_SUMMARY, commitment)
         raise RuntimeError(f"the records audit left no summary under {out}: {e}") from None
     if opened(summary):
         raise RuntimeError(f"the records audit under {out} opened the advice (records_audit.py audit --opening), a "
@@ -196,6 +218,8 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         if audit.get("accepted") is False:
             return _refusal("no audit record: " + json.dumps(audit.get("outcome"), sort_keys=True, default=str),
                             commitment)
+        if attempt(out) is not None:
+            return _refusal(NO_RECORD, commitment)
         raise RuntimeError(f"the records audit wrote no audit record and no refusal under {out}")
     rec = json.loads(rec_file.read_text())
     if rec.get("accepted") is not True:
@@ -232,7 +256,8 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["EXITED_NONZERO", "PROTOCOL", "RECORD", "SUMMARY", "answer", "exact_delta", "opened", "public_copy"]
+__all__ = ["ATTEMPT", "EXITED_NONZERO", "NO_RECORD", "NO_SUMMARY", "PROTOCOL", "RECORD", "SUMMARY", "answer", "attempt",
+           "exact_delta", "opened", "public_copy"]
 
 
 if __name__ == "__main__":

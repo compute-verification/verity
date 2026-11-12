@@ -74,9 +74,12 @@ checks and one that alters an input is checked again; the summary's ``verifier_c
 With ``--negative-workers N`` a5's negatives that ask the verifier again run N at a time, each in a worker process
 forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
-An ``--out`` that already holds an audit record (``window/audit.json``) is one audit's: ``audit`` refuses to start on it
-(`held_record`) and changes nothing under it. Nothing resamples, and an attempt that wrote no record of its own would
-leave the earlier one for `served_integrity.answer`; a second attempt on a registration takes a new serve directory.
+An ``--out`` an attempt reached its draw under is that attempt's alone, whatever it wrote after: ``audit`` refuses to
+start on it (`spent`) and changes nothing under it. The evidence is a5's receipt (``window/receipt.json``), which
+`a5.audit` writes once its checks before the draw are made and before it draws, or the audit record after it
+(`served_integrity.ATTEMPT`); an attempt its checks before the draw refused wrote the receipt too, and its ``--out`` is
+spent with it. Nothing resamples: a second attempt after a draw would draw again, and where the first was refused its
+verdict would be in no record. A second attempt on a registration takes a new serve directory, and nothing clears one.
 
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
@@ -824,14 +827,18 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
-def held_record(out: Path) -> str | None:
-    """Why no audit starts under ``out``, or None: it holds an audit record (``window/audit.json``), an earlier
-    audit's, which a second attempt must neither replace (nothing resamples) nor leave beside a summary of its own."""
-    rec = out / "window" / "audit.json"
-    if not rec.exists():
+def spent(out: Path) -> str | None:
+    """Why no audit starts under ``out``, or None: an earlier attempt reached its draw there
+    (`served_integrity.attempt`: its receipt, written before the draw, or its audit record), which a second attempt
+    must neither draw after (nothing resamples) nor leave beside a summary of its own."""
+    import served_integrity as SI
+
+    held = SI.attempt(out)
+    if held is None:
         return None
-    return (f"{rec} is an earlier audit's record, so no audit starts here and nothing under {out} was changed: nothing "
-            "resamples, and a second attempt on a registration is a new serve directory (a new --out)")
+    return (f"{held} is an earlier attempt's, which reached its draw here (an audit writes its receipt before it draws), "
+            f"so no audit starts here and nothing under {out} was changed: nothing resamples, whatever that attempt "
+            "wrote after, and a second attempt on a registration is a new serve directory (a new --out)")
 
 
 def audit(a: argparse.Namespace) -> int:
@@ -841,7 +848,7 @@ def audit(a: argparse.Namespace) -> int:
     import a5_coins as AC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
-    if why := held_record(out):
+    if why := spent(out):
         print(f"records_audit.py audit: {why}", file=sys.stderr)
         return 1
     out.mkdir(parents=True, exist_ok=True)
