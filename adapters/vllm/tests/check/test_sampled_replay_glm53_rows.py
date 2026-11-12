@@ -9,11 +9,11 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-from verity.circuits.defs import bind
+from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype, type_shape
 from verity.circuits.evaluation.reference import signature_of
-from verity.definitions.numerics import rows
+from verity.definitions.numerics import batched_gemm_rows, glm53_rows, rows
 from verity.definitions.numerics.kernel_registry import Declined
 from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import (
@@ -64,8 +64,8 @@ CASES = [
      bind(fp8_moe_experts.MoeExpertFp8GemmW, E=3, K=256, N=3, G=128, KB=128, SWAP=False, DOT=HopperE4m3MmaV2Dot32)),
     ('MoeExpertFp8GemmW_v1{E=3,K=256,N=3,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}',
      bind(fp8_moe_experts.MoeExpertFp8GemmW, E=3, K=256, N=3, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32)),
-    ('SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=16,BN=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
-     'SCALE={"f64":"0x1.0000000000000p-4"}}', bind(sparse_mla_split.SparseMlaSplit, T=40, NS=2, NH=2, **MLA)),
+    (('SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=16,BN=16,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},'
+     'SCALE={"f64":"0x1.0000000000000p-4"}}'), bind(sparse_mla_split.SparseMlaSplit, T=40, NS=2, NH=2, **MLA)),
     ('SparseMlaSplit_v1{T=20,NS=1,NH=3,DR=16,DV=16,BN=16,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}',
      bind(sparse_mla_split.SparseMlaSplit, T=20, NS=1, NH=3, **MLA)),
     ('ResidualAdd_v1{N=16}', bind(b1.ResidualAdd, N=16)),
@@ -112,7 +112,7 @@ def test_the_split_k_gate_at_glm53s_served_statics_is_the_definition(spec):
 
 def test_the_split_k_gate_declines_what_splitk_rows_does_not_model():
     statics = RM.spec_statics('LlBf16SplitKGemm_v1{N=2,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v1}')
-    args = [np.zeros(128, np.uint16), np.zeros(256, np.uint16)]
+    args: list[np.ndarray] = [np.zeros(128, np.uint16), np.zeros(256, np.uint16)]
     assert rows.ROWS["LlBf16SplitKGemm_v1"].fn(statics, args)["0"].tolist() == [0, 0]
     with pytest.raises(Declined, match="no twin for DOT=AmpereBF16TcDot16_v1"):
         rows.ROWS["LlBf16SplitKGemm_v1"].fn(statics | {"DOT": "AmpereBF16TcDot16_v1"}, args)
@@ -124,8 +124,6 @@ def test_the_split_k_gate_cites_the_h200_capture_at_every_split_k_m_it_runs():
     """The replay record's `evaluator_provenance` for LlBf16SplitKGemm_v1 is the capture that held cuteDSL's split-K launches to
     `splitk_rows`: at both gates, every M the capture runs that the dispatch table sends to the split-K kernel, at the table's
     SPLIT_K, TILE_K and WARPS, N words a token row; and the Definition's conformance cites the same record."""
-    from verity.circuits.defs import conformance_label
-    from verity.definitions.numerics import batched_gemm_rows, glm53_rows
     from verity.definitions.registry import bf16_gemm_check as BC
 
     from tests.properties import glm53_bf16_gemm_capture_gpu as X

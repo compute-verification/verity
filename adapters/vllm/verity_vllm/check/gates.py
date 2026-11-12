@@ -79,9 +79,10 @@ import math
 import re
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.result import MISSING_INPUT, CheckResult
@@ -116,6 +117,9 @@ HOLDOUT_GATES = ("G1", "G2", "G3", "G4", "G5", "G6")
 #: Structural gates outside the frozen G1..G7 set (evaluated and reported, verdict rule in `verdict`).
 STRUCTURAL_GATES = ("G8",)
 GATE_NAMES["G8"] = "VU partition"
+#: Each gate's id by what it checks: a reader of a gates document reads its keys by these names.
+OBSERVATION, SEMANTIC_CLOSURE, ROOT_CLOSURE, PRIMITIVE, COMPOSITION, CANONICALITY, HOLDOUT = GATES
+(VU_PARTITION,) = STRUCTURAL_GATES
 #: Integrity gates outside the frozen set: the fail-closed reference-integrity rule.
 INTEGRITY_GATES = ("R1",)
 GATE_NAMES["R1"] = "reference integrity (fail-closed)"
@@ -210,7 +214,7 @@ class GateResult:
         return asdict(self)
 
     @classmethod
-    def from_json(cls, d: dict) -> "GateResult":
+    def from_json(cls, d: dict) -> GateResult:
         return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
                    evidence=list(d.get("evidence") or []), detail=dict(d.get("detail") or {}), reason=d.get("reason"))
 
@@ -482,8 +486,8 @@ def _get(d: Any, path: str, what: str) -> Any:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G1")
-def gate_G1(run: RunArtifacts) -> GateResult:
+@_gate(OBSERVATION)
+def gate_observation(run: RunArtifacts) -> GateResult:
     """Observation fidelity: `noninterference.json` PASS; tokens equal across the (a) observer, (b) hooks and (c) bare
     variants AND equal to the clean control run's tokens (computed here from `generated_token_ids`, never from a
     workload-authored accepted list); every boundary hash equal; `steps == max_tokens`; `layers == expected_layers`
@@ -546,9 +550,9 @@ def gate_G1(run: RunArtifacts) -> GateResult:
         exp_layers = int(exp_layers)
         if ni.get("layers") != exp_layers:
             problems.append(f"layers={ni.get('layers')!r} != expected_layers={exp_layers}")
-        counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
-        if rows and counts != [(exp_layers, exp_layers)]:
-            problems.append(f"per-step layer counts {counts} != expected_layers={exp_layers} in both variants")
+        layer_counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
+        if rows and layer_counts != [(exp_layers, exp_layers)]:
+            problems.append(f"per-step layer counts {layer_counts} != expected_layers={exp_layers} in both variants")
         try:
             C = run.C
         except ArtifactError as e:
@@ -609,8 +613,8 @@ def _ambiguity(res: dict, run: RunArtifacts) -> tuple[int | None, str, str | Non
     return None, "unavailable", None
 
 
-@_gate("G2")
-def gate_G2(run: RunArtifacts) -> GateResult:
+@_gate(SEMANTIC_CLOSURE)
+def gate_semantic_closure(run: RunArtifacts) -> GateResult:
     """Semantic closure: the resolution report has 0 Unsupported (and 0 ResolutionErrors), the fold 0 Unresolved (and no
     other fold error: any fold error leaves an instance unemitted), and 0 ambiguous pattern matches (the census
     reconciliation's ambiguity count stands in when the resolver report has no ambiguity field)."""
@@ -660,8 +664,8 @@ def gate_G2(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G3")
-def gate_G3(run: RunArtifacts) -> GateResult:
+@_gate(ROOT_CLOSURE)
+def gate_root_closure(run: RunArtifacts) -> GateResult:
     """Root closure: 0 unknown roots (fold summary and resolution report), 0 opaque / prescribed fallbacks, and
     `root_policy.json` status pass with `new_root_classes == []` and no failed root validation."""
     fs = run.need("fold_summary")
@@ -732,8 +736,8 @@ def quarantine_specs(res: dict | None) -> list[str]:
     return sorted(set(out))
 
 
-@_gate("G4")
-def gate_G4(run: RunArtifacts) -> GateResult:
+@_gate(PRIMITIVE)
+def gate_primitive(run: RunArtifacts) -> GateResult:
     """Primitive exactness: the tier-a replay passes with `k >= TIER_A_K` and no uncovered specialization; when the run
     uses newly registered definitions, `quarantine.json` must show every differential test passed (passed == total > 0)
     and `negative_matcher_tests: pass` — missing while the resolution report lists quarantine specs is a failure."""
@@ -794,8 +798,8 @@ def gate_G4(run: RunArtifacts) -> GateResult:
 # G5 — composition exactness (tier b replay of step 0 and every decode snapshot step)
 # ---------------------------------------------------------------------------------------------------------
 
-@_gate("G5")
-def gate_G5(run: RunArtifacts) -> GateResult:
+@_gate(COMPOSITION)
+def gate_composition(run: RunArtifacts) -> GateResult:
     """Composition exactness (D82): exhaustive provenance/structure, sampled numerical semantics.
 
     (a) `wiring.json` — every operand read of every instance is reproduced by the independent last-writer map
@@ -893,8 +897,8 @@ def gate_G5(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G6")
-def gate_G6(run: RunArtifacts) -> GateResult:
+@_gate(CANONICALITY)
+def gate_canonicality(run: RunArtifacts) -> GateResult:
     """Canonicality + regression: two independent folds (separate processes) of the same log give one digest, and
     `golden.json` (`verity_vllm.properties.golden --check`) passes with every entry's digest and attribution sha as expected.
     Equal digests across two captures of one workload are NOT required (recorded as detail when available)."""
@@ -933,8 +937,8 @@ def gate_G6(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G7")
-def gate_G7(run: RunArtifacts) -> GateResult:
+@_gate(HOLDOUT)
+def gate_holdout(run: RunArtifacts) -> GateResult:
     """Holdout generalization: `holdouts.json` (written by the orchestrator) is present with at least one holdout and
     G1..G6 pass in every holdout."""
     h = run.json("holdouts")
@@ -967,8 +971,8 @@ def gate_G7(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G8")
-def gate_G8(run: RunArtifacts) -> GateResult:
+@_gate(VU_PARTITION)
+def gate_vu_partition(run: RunArtifacts) -> GateResult:
     """Proof-block partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + verdict).
     Pass iff `verdict.partition.status == "exact"` and `verdict.width.status == "ok"` (no violators, no unsupported); fail with
     the partition codes / width violators otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
@@ -983,7 +987,9 @@ def gate_G8(run: RunArtifacts) -> GateResult:
         raise ArtifactError(f"{what}: not a JSON object")
     if doc.get("schema") != QUERY_USE_SCHEMA:
         raise ArtifactError(f"{what}: schema {doc.get('schema')!r} != {QUERY_USE_SCHEMA!r}")
-    use = doc.get("use") if isinstance(doc.get("use"), dict) else {}
+    use = doc.get("use")
+    if not isinstance(use, dict):
+        use = {}
     v = _get(doc, "verdict", what)
     part = _get(v, "partition", f"{what}.verdict")
     width = _get(v, "width", f"{what}.verdict")
@@ -1031,7 +1037,9 @@ def gate_G8(run: RunArtifacts) -> GateResult:
             problems.append("binding: query.json binding_id != query_use.json binding_id")
         if digest is not None and qdoc.get("program_digest") != digest:
             problems.append("binding: query.json program_digest != the run's fold digest")
-    rd = v.get("readiness_32") if isinstance(v.get("readiness_32"), dict) else {}
+    rd = v.get("readiness_32")
+    if not isinstance(rd, dict):
+        rd = {}
     detail: dict[str, Any] = {
         "schema": doc.get("schema"), "binding_id": doc.get("binding_id"), "use": {"kind": use.get("kind"), "w_max": use.get("w_max")},
         "status": v_status,                          # the document's verdict.status, verbatim
@@ -1106,9 +1114,9 @@ def fold_integrity(fold_summary: Any, fold_summary_2: Any = None, resolution: An
         per_step = fs.get("per_step")
         if isinstance(per_step, list) and per_step and n_err is not None:
             vals = [s.get("errors") for s in per_step if isinstance(s, dict)]
-            if all(isinstance(v, int) and not isinstance(v, bool) for v in vals) and len(vals) == len(per_step):
-                if sum(vals) != n_err:
-                    unverified.append(f"{what}.per_step errors sum to {sum(vals)}, errors = {n_err}")
+            ints = [v for v in vals if isinstance(v, int) and not isinstance(v, bool)]
+            if len(ints) == len(vals) == len(per_step) and sum(ints) != n_err:
+                unverified.append(f"{what}.per_step errors sum to {sum(ints)}, errors = {n_err}")
         detail[what] = {**counts, "error_classes": classes if isinstance(classes, dict) else None, "digest": fs.get("digest"),
                         "with_program": fs.get("with_program"), "n_instances": fs.get("n_instances")}
     if resolution is not None:
@@ -1355,7 +1363,8 @@ __all__ = [
     "STRUCTURAL_GATES", "INTEGRITY_GATES", "REF_INTEGRITY_RULE", "ALL_GATES", "QUERY_USE_SCHEMA", "QUERY_USE_KIND",
     "GATES_SCHEMA", "FOLD_SUMMARY_SCHEMA", "FOLD_SUMMARY_FIELDS", "ARTIFACTS", "ARTIFACT_STAGE", "replay_b_key", "replay_b_rel",
     "GateResult", "ArtifactError", "RunArtifacts", "load_profile_config",
-    "gate_G1", "gate_G2", "gate_G3", "gate_G4", "gate_G5", "gate_G6", "gate_G7", "gate_G8", "gate_R1", "fold_integrity", "quarantine_specs",
+    "gate_observation", "gate_semantic_closure", "gate_root_closure", "gate_primitive", "gate_composition", "gate_canonicality", "gate_holdout",
+    "gate_vu_partition", "gate_R1", "fold_integrity", "quarantine_specs",
     "evaluate_gates", "verdict", "gates_json", "write_gates", "gates_markdown",
     "strip_T", "diag_structure", "diag_family_match", "diag_overhead", "diagnostics",
 ]

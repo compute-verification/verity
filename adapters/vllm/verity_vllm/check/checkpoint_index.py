@@ -12,9 +12,14 @@ import os
 import re
 import struct
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from verity_vllm.config import checkpoint_entries
+
+__all__ = ["CheckpointIndex", "manifest_entry"]
 
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
@@ -89,8 +94,6 @@ def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revis
     """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
-    from verity_vllm.config import checkpoint_entries
-
     for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
         if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \
@@ -131,13 +134,16 @@ class CheckpointIndex:
         self.config = {}
         cfg = os.path.join(ckpt_dir, "config.json")
         if os.path.exists(cfg):
-            self.config = json.load(open(cfg))
+            self.config = json.loads(Path(cfg).read_text())
         rules = renames(self.config)
         for fn in shard_names(ckpt_dir):
             hdr, base = read_safetensors_header(os.path.join(ckpt_dir, fn))
             self.shards.append(fn)
-            for name, meta in hdr.items():
-                if name == "__metadata__" or (rules and (name := renamed(name, rules)) is None):
+            for key, meta in hdr.items():
+                if key == "__metadata__":
+                    continue
+                name = renamed(key, rules) if rules else key
+                if name is None:
                     continue
                 lo, hi = meta["data_offsets"]
                 self.tensors[name] = (fn, meta["dtype"], [int(x) for x in meta["shape"]], base + int(lo), base + int(hi))
