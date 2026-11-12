@@ -118,5 +118,8 @@ cover = {
     "rows": rows,
 }
 assert cover["totals"] == cover["list_check"], (cover["totals"], cover["list_check"])
-(HERE / "cover.json").write_text(json.dumps(cover, indent=1, sort_keys=False) + "\n")
+head = json.dumps({k: v for k, v in cover.items() if k != "rows"}, indent=1)[:-2]
+body = ",\n".join(" " + json.dumps(r, separators=(",", ":")) for r in rows)
+(HERE / "cover.json").write_text(f'{head},\n "rows": [\n{body}\n ]\n}}\n')
+assert json.loads((HERE / "cover.json").read_text()) == json.loads(json.dumps(cover))
 subprocess.check_call([sys.executable, str(HERE / "cover_md.py")])
