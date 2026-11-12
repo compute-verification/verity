@@ -6,8 +6,8 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
 
   secrets     every name the role needs (`SECRETS`) and every name this VM injects ($CLOUD_AGENT_INJECTED_SECRET_NAMES) is set;
               a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named. On a VM that
-              injects secrets it is a finding too when no tmux server holds them, or the one that does has no kept session
-              (`secret_hint.server`): its fix is the one command that starts that session
+              injects secrets, an ok notes when no tmux server holds them, or the one that does has no kept session
+              (`secret_hint.server`), with the one command that starts that session: a note, never a finding of its own
   github      `gh auth status` exits 0
   git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
               accepts the credential git pushes with
@@ -153,15 +153,15 @@ def check_secrets(role: str) -> Check:
         if unset:
             fixes.append(f"{', '.join(unset)}: add {'it' if len(unset) == 1 else 'them'} in {DASHBOARD}; a new agent VM gets them")
         return Check("secrets", FINDING, f"not set here: {', '.join(missing)}", "; ".join(fixes))
-    if held is None:
-        return Check("secrets", FINDING, "no tmux server holds this VM's secrets: a shell that loses them has nowhere to take them "
-                     "back from", f"start the kept session from this shell, which has them: `{secret_hint.START_KEPT}`")
-    if not kept:
-        return Check("secrets", FINDING, f"the tmux server that holds this VM's secrets has no `{secret_hint.KEPT_SESSION}` session: "
-                     "it ends with its last session, and its copy of them with it", f"start the kept session: `{secret_hint.START_KEPT}`")
     took = [n for n in secret_hint.RECOVERED if os.environ.get(n)]
     detail = f"the {len(needs(role))} names the {role} role needs" + (f" and the {len(injected)} this VM injects" if injected else "") + " are set"
-    if lacks := [n for n in injected if n not in held]:
+    once = f"run `{secret_hint.START_KEPT}` once, from a shell that has the secrets, to start the session this VM keeps"
+    if held is None:
+        detail += f"; note: no tmux server holds them, so a shell that loses one has nowhere to take it back from: {once}, and a server with it"
+    elif not kept:
+        detail += (f"; note: the tmux server that holds them has no `{secret_hint.KEPT_SESSION}` session and ends with its last one, its "
+                   f"copy of them with it: {once}")
+    if lacks := [n for n in injected if held is not None and n not in held]:
         detail += (f"; the tmux server lacks {len(lacks)} of them ({', '.join(lacks[:4])}{f' and {len(lacks) - 4} more' if len(lacks) > 4 else ''}), "
                    "which a shell that loses them can't take back")
     if took:

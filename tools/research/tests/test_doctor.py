@@ -96,30 +96,44 @@ def test_a_secret_the_vm_injects_and_lost_is_a_finding_whose_fix_is_a_fresh_shel
                                                   "the tmux server because this shell had lost them (R2_BUCKET, JOBS_TOKEN)")
 
 
-def test_no_tmux_server_or_no_kept_session_is_a_finding_whose_fix_is_the_one_command_that_starts_it(monkeypatch):
-    """A shell that loses its secrets takes them back from the tmux server, which holds them only while one of its sessions lives."""
+def test_no_tmux_server_or_no_kept_session_is_a_note_with_the_one_command_and_no_finding_of_its_own(monkeypatch):
+    """A shell that loses its secrets takes them back from the tmux server, which holds them only while one of its sessions
+    lives. A VM that runs without the kept session is told the one command that starts it, and its doctor stays ok: only
+    what was a finding without that session is one."""
     injected, start = [*LANE, "JOBS_TOKEN"], "`tmux new-session -d -s vm-secrets`"
     for n in injected:
         monkeypatch.setenv(n, "dummy")
     monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", ",".join(injected))
+    set_ = "the 6 names the lane role needs and the 7 this VM injects are set"
+    once = f"run {start} once, from a shell that has the secrets, to start the session this VM keeps"
     monkeypatch.setattr(secret_hint, "server", lambda: (None, False))
     assert doctor.check_secrets("lane") == Check(
-        "secrets", FINDING, "no tmux server holds this VM's secrets: a shell that loses them has nowhere to take them back from",
-        f"start the kept session from this shell, which has them: {start}")
+        "secrets", OK, f"{set_}; note: no tmux server holds them, so a shell that loses one has nowhere to take it back from: {once}, "
+        "and a server with it")
     monkeypatch.setattr(secret_hint, "server", lambda: (injected, False))
     assert doctor.check_secrets("lane") == Check(
-        "secrets", FINDING, "the tmux server that holds this VM's secrets has no `vm-secrets` session: it ends with its last "
-        "session, and its copy of them with it", f"start the kept session: {start}")
+        "secrets", OK, f"{set_}; note: the tmux server that holds them has no `vm-secrets` session and ends with its last one, its "
+        f"copy of them with it: {once}")
+    assert doctor.render("lane", [doctor.check_secrets("lane")]).startswith("research doctor (lane): ok\nok ")
+    monkeypatch.setattr(secret_hint, "server", lambda: (LANE, False))
+    assert doctor.check_secrets("lane").status == OK and doctor.check_secrets("lane").detail.endswith(
+        f"{once}; the tmux server lacks 1 of them (JOBS_TOKEN), which a shell that loses them can't take back")
+    monkeypatch.setattr(secret_hint, "server", lambda: ([], True))
+    assert doctor.check_secrets("lane") == Check("secrets", OK, f"{set_}; the tmux server lacks 7 of them ({', '.join(LANE[:4])} and "
+                                                 "3 more), which a shell that loses them can't take back")
     monkeypatch.setattr(secret_hint, "server", lambda: (injected, True))
-    assert doctor.check_secrets("lane") == Check("secrets", OK, "the 6 names the lane role needs and the 7 this VM injects are set")
+    assert doctor.check_secrets("lane") == Check("secrets", OK, set_)
     monkeypatch.setattr(secret_hint, "server", lambda: (LANE, True))
     assert doctor.check_secrets("lane") == Check("secrets", OK, "the 6 names the lane role needs and the 7 this VM injects are set; the "
                                                  "tmux server lacks 1 of them (JOBS_TOKEN), which a shell that loses them can't take back")
     monkeypatch.delenv("JOBS_TOKEN")
     monkeypatch.setattr(secret_hint, "server", lambda: (None, False))
-    c = doctor.check_secrets("lane")
-    assert c.detail == "not set here: JOBS_TOKEN" and c.fix.endswith(
+    c = doctor.check_secrets("lane")                                          # a finding as it was: the secret is not set
+    assert (c.status, c.detail) == (FINDING, "not set here: JOBS_TOKEN") and c.fix.endswith(
         f"; no tmux server runs on this VM to take a lost secret back from: a shell that still has them starts the kept session with {start}")
+    monkeypatch.setattr(secret_hint, "server", lambda: (LANE, False))
+    c = doctor.check_secrets("lane")
+    assert (c.status, c.detail) == (FINDING, "not set here: JOBS_TOKEN") and "vm-secrets" not in c.fix
     monkeypatch.delenv("CLOUD_AGENT_INJECTED_SECRET_NAMES")
     monkeypatch.setattr(secret_hint, "server", lambda: None)                  # no injected list: nothing is asked, or said
     assert doctor.check_secrets("lane") == Check("secrets", OK, "the 6 names the lane role needs are set")
