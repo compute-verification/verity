@@ -234,12 +234,27 @@ protocol's verdict.
 - The file is pcap; `tcpdump -r IN -w OUT.pcap` rewrites a pcapng one. A capture point that writes each direction of a
   fibre to its own file gives two files: name both.
 
+**On the server's loopback**, where the server listens on its machine's loopback at `PORT` and the network certifier
+reaches it through a forward that ends on that machine, their bytes pass in the clear only there, between the
+forward's end and the server's port:
+
+    tcpdump -i lo -U -s 130 -w run.pcap 'ip host 127.0.0.1 and tcp port PORT'
+
+- Every flow on a loopback has its address on both sides, so the address alone keeps them all, other programs' among
+  them. The port clause keeps the flows of the server's port and nothing else: none of the server's own connections
+  to another port is in the file.
+- The two sides are one address, told apart by the server's port: the reader takes them as
+  `--server 127.0.0.1:PORT --certifier 127.0.0.1`.
+- The count is of what the server's port received and sent. The link under the forward carries the forward's own
+  bytes, which this capture doesn't hold and the reader doesn't read.
+
 **On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
 certifier and the load on one machine's loopback (`warden_serve.py rehearse --fake --watermark`), a capture of the
 loopback beside them, then the reader. The front and the relay share an address there, so the front's is given with
-its port, and the load's connections to the relay are among the other flows. It is a `research run` job where the job
-may capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
-link between two machines under the capture.
+its port, and the load's connections to the relay are among the other flows. The run is in the bytes egress form, or
+with `EGRESS=id` at its launch in the id form, id requests each answered an id event a token. It is a `research run`
+job where the job may capture, which a pool node's job may not. It holds the reader's count to the relay's on the same
+bytes; it puts no link between two machines under the capture.
 
 **Reading it:**
 
