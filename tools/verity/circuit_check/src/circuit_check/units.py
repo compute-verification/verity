@@ -1108,11 +1108,13 @@ def untaken(cache: Path | None, entries: list[Entry]) -> dict:
     binding, and its count of the reused alone says nothing of it.  Records under its keys that no longer count are not
     this: the run counts those as skipped.  Asked before the run stores what it built.  An entry it cannot read is listed
     with the run's unread ones (`cache.unread`)."""
-    if cache is None or not entries or any(e.reused or CC._dir(cache, e.key).is_dir() for e in entries):
+    if cache is None or not entries or any(e.reused for e in entries):
         return {}
     k = key(REGISTERED, 0)
     top = Path(cache) / k["version"]
-    with CC.internal():
+    with CC.internal():                                # the cache's own files: no read of a build, wherever the cache is
+        if any(CC._dir(cache, e.key).is_dir() for e in entries):
+            return {}
         for d in sorted(top.iterdir()) if top.is_dir() else ():
             # every entry of a directory has its key: the first says whether they are bindings' records
             if d.name == CC.READS or (first := min(d.glob("*.json"), default=None)) is None:
