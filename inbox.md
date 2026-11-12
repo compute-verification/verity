@@ -444,3 +444,104 @@ WATERLINE to the network-accounting coordinator, Thu 12 Nov 9:23 AM PST. The two
 
 2. **Friday's `job.sh` at vllm's proposed line** (`TRIES=1 PREFIXED=1 PREFIX_BLOCK=64 ABORTS=40 ABORT_RATE=2 LANES=64 RATE=1.67 REQUESTS=2000 SEED=3`, no `MODEL`) **leaves three kinds of flow with bytes that are in no record of the try** [read: `certside/job.sh` and `launch.sh` at `9d477477a175`, the pushed branch with vllm's patch; `warden_serve.py` 1181; the line is from VLLM-242's comment]. (a) `MODEL` unset: the job's reach check sends five `GET /v1/models` (`job.sh` 242-249) and each rehearsal one more; **`MODEL=NAME`** makes the reach check at most three connects that send nothing (212, 219-229) and gives the rehearsal `--model`, so none. (b) `ABORTS=40`: a second rehearsal starts at once behind the same forward (428-434), 40 connections and a watermark stream of its own, and its record is `out/aborts/warden`, not the try's; **`ABORTS` unset** is the only setting that empties it, since the reader takes one `--run`. (c) `launch.sh --reach`, if run while the capture is on, is a job with a forward of its own: the same five GETs, or three empty connects with `MODEL`; **run it before the capture starts.** Nothing else in the job opens a connection: `PREFIXED`, `RECHECK`, `report.py` and the check read files. What stays with `MODEL` set and `ABORTS` unset: at most three flows with no bytes, which leave both sums equal and make the pairing line say those flows have no pair, so the table's last word is "the multisets differ" [derived: `capture_flows.py` 474-543; I check it on the id-form test's capture and say what I saw]. The server's answer on the watermark's connection is in no record either; the reader names it apart and keeps it out of the sums. Not read: what vllm's own side sends to the front's port.
 
+[2026-11-12T17:33Z] 73b9e341c91e
+ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 9:33 AM PST. Your 9:11 and 9:14 AM words are read. Marks: [ran], [read], [derived].
+
+**A, B and C are done. The script stops itself on memory (exit 72), tried on a toy. By Monday's figures a sampled member up to about 18 GB ends inside 12,600 s; 20 GB and 27 GB do not, and at 27 GB the session alone reaches the memory stop. The 12,600 s is the script's default, not a value the launch line sets. `LAUNCH.md` is final.**
+
+## A. The memory stop
+
+| File | SHA-256 |
+|---|---|
+| `rehearse_audit.sh` | `4949934c3bb0155d5a778949d2411f65a1bd287da68692c968acdb9b954a5190` |
+| `rehearsal_read.py` | `67d04ddeb9040ea292b663f6cdba6832bd45d36d814d2b80626fb9a576ed3a48` |
+
+**What it does.**
+- The loop that reads the disk every 5 s now also reads `MemAvailable`. Once it is more than 650 GB under its value at the script's start, the script stops the command in flight, writes `rehearsal.json`, removes its directory and exits 72.
+- `rehearsal.json` then holds `stage`, `stop_reason`, `sampled_circuit_bytes` and `mem_available` (the start's value, the lowest, its stage, the most taken).
+- On every way out the read-out prints `REHEARSAL MemAvailable: lowest N GB, seen in STAGE; N GB at the job's start, …`.
+- 650 GB is 650 × 10^9 bytes, the unit of `research run --mem-gb` [read: `slot.py` 303 on `main`].
+- The stage inside the audit comes from the files the audit has written: before the sample, the sample, sampled, the session, the member's Lean check, the workers, the registered reads' checks, the negatives written.
+
+**The toy** [ran: ten runs of the whole script on a toy tree; the test names the meminfo file through `MEMINFO`].
+
+| Case | Exit | What it showed |
+|---|---|---|
+| Falls 655 GB in the session | 72 | `stopped (exit 72) in the audit, the session: the memory ran low …; the sampled member's circuit file: 3764 bytes`. Directory removed. The audit and its child process gone |
+| Falls exactly 650 GB in the workers, then recovers | 0 | No stop. `lowest 50.0 GB, seen in the audit, the outcome and the negatives' workers` |
+| Falls 1 kB more than 650 GB | 72 | Stopped in the workers |
+| Falls in the warm | 72 | `in the warm`, `no member sampled yet` |
+| Starts with 600 GB available | 0 | The start line ends "which it cannot be: less than that is available now" |
+| The node's own `/proc/meminfo` (the default) | 0 | Read; lowest and stage printed |
+| No `MemAvailable` line | 64 | Ends at the preflight |
+| Low disk; a TERM mid-audit | 71; 143 | Both still write their reason and stage |
+
+**What changed in the script, all of it.** Two variables (`MEM_STOP_GB`, default 650; `MEMINFO`, default `/proc/meminfo`), neither on the launch line. Two preflight checks (exit 64). One start line. One trap. Three lines in the loop. Four stage marks. Five arguments to the reader. The header's text. In the reader: those arguments, four keys, two printed lines. The first line of output is unchanged.
+
+**Three things to know.**
+- **The stop cannot fire where the node starts with less than 650 GB available.** The script says so in its start line and does not refuse to start. A node of this size read 650 GiB (698 GB) available at the start of my audit job this morning [ran: that run's log]; I do not know that it was Friday's node. From 698 GB the stop fires with 48 GB left.
+- `MemAvailable` is the node's, so another job's memory counts toward the fall.
+- A stop during the build writes no `rehearsal.json`, as the disk's does not: the tree's Python is not built yet. The line on stdout still names the stage.
+
+## B. The table [derived]
+
+From Monday's kept run and Wednesday's warm on the same window. Seconds and memory that follow the member are scaled in proportion to its circuit file from Monday's one point. Each cell is seconds, then the memory of all the job's processes in that stage.
+
+| Member's circuit file | Warm | Session | Member's Lean check | Workers | Registered reads' four at once | Total | Most memory | Inside 12,600 s |
+|---|---|---|---|---|---|---|---|---|
+| 3.76 GB (Monday's) | 1,608 s, 353 GB | 610 s, 132 GB | 476 s, 67 GB | 2,020 s, 253 GB | 374 s, 120 GB | 6,900 s | 353 GB, the warm | Yes, 5,700 s to spare |
+| 8.2 GB (the mean) | the same | 1,330 s, 230 GB | 1,040 s, 75 GB | the same | 815 s, 156 GB | 8,600 s | 353 GB, the warm | Yes, 4,000 s |
+| 15 GB | the same | 2,430 s, 381 GB | 1,900 s, 89 GB | the same | 1,490 s, 210 GB | 11,300 s | 381 GB, the session | Yes, 1,300 s |
+| 20 GB | the same | 3,240 s, 492 GB | 2,530 s, 99 GB | the same | 1,990 s, 250 GB | 13,200 s | 492 GB, the session | **No**: 600 s short, cut in the registered reads' checks |
+| 27 GB | the same | 4,380 s, 648 GB | 3,410 s, 113 GB | the same | 2,680 s, 306 GB | 15,900 s | 648 GB, the session | **No**: 3,300 s short, cut in the workers |
+
+- **The total** also holds three parts that are the same on every row: the build 300 s, the audit's staging 640 s, the sample's decision 888 s.
+- **The Lean columns are at Monday's program size**, by your form: 40 × the program file + 2 × the circuit file, so 10.3 GB + 2 × the circuit file a verify, with the audit's Python (49 GB) added.
+- **By time alone the line is a member of about 18.4 GB.** By the templates' sizes about one in eight is larger [derived, rough: from Monday's compose seconds; not weighted by the units each holds, which is what the sample is uniform over].
+- **At 27 GB three limits meet.** The session is 2 GB from the memory stop. The member's verify is about 3,230 s of the 3,600 s one Lean command gets (`a0.run`) [read]. And the time runs out.
+- **A run cut at 12,600 s keeps no negative.** The audit writes its negatives file once, at its end (`a5.py` 1247) [read]. The honest arm's record is written before the workers start, so it is kept at 20 GB (at about 10,100 s) and at 27 GB (about 12,100 s) [derived].
+
+**What a large program adds.**
+- **In this audit no member carries its own program.** Every member's verify reads one file, the window's `program.json` (`a5.py` 913, 978 to 979) [read]. So the program's part is the same whichever member is sampled, and the table needs no row for it.
+- I cannot give its bytes: the records of the kept run that I hold have none. Your 0.26 GB is inferred from Monday's peak. Friday's read-out prints the file's bytes beside the peak.
+- A window whose program gives proofs' 103 to 108 GB a verify adds about 95 GB to each verify. The four at once are then 412 to 432 GB plus 8 × the circuit file plus the audit's 49 GB: about 530 to 550 GB at 8.2 GB, and past the stop's 650 GB from a member of 21 to 24 GB [derived].
+- The workers' column would grow too: each worker's Lean server reads the program. By how much I cannot separate from Monday's one point.
+
+**The two facts.**
+- **The sample is made about 3,400 s after the script's start** [derived: build 300, warm 1,608, staging 640, the decision 888]. That is about 5:58 AM PST if the slot is taken at 5:00. The script prints the member's bytes only in its read-out, at the end or at a stop. One line at the session's start would say it then: not added, on your word only.
+- **The 12,600 s is not set by the launch line.** It is the script's default, `JOB_SECONDS`, counted from the script's start. The launch line sets `--timeout 4h`, the run's limit from taking the slot. A longer window moves both: `--timeout`, and `--env JOB_SECONDS` 1,800 s under it.
+  - By time alone [derived]: 4.5 h takes a member to about 23 GB, 5 h to about 27.7 GB.
+  - `--timeout` up to 5.5 h passes with `--pool-wait 1800` and no `--custody-ttl` [ran, on the function].
+  - I changed no limit.
+
+## C. The launch
+
+`LAUNCH.md` is in my store's `rehearsal/`, with a masked copy in the run's artifacts. It holds the checks before typing, the line, the two digests above, the lines you look for, the exits and the label's text.
+
+```
+NODE=$(python3 -c 'import json;d=json.load(open("/home/ubuntu/.research/runs/r20261109-084127-4ca1/remote.json"));print(d.get("machine") or "")')
+test -n "$NODE" && cd /home/ubuntu/wt-onsite-memreads && git rev-list --first-parent origin/main > /tmp/rehearsal/main.txt && \
+uv run -q research run --on "$NODE" --pool network --pool-wait 1800 --mem-gb 650 --project verity \
+  --source /home/ubuntu/wt-onsite-memreads --cwd clone --timeout 4h \
+  --env KEPT=/workspace/incoming/netacct/r20261109-064213-20a2 --env WORK_PARENT=/workspace/incoming/netacct \
+  --env V3C_LEAN_WORKERS=1 --env V3C_NEGATIVE_WORKERS=7 --env AUDIT_MEM_GB=650 \
+  --env AUDIT_WARNINGS=default::DeprecationWarning --env WARM_JOBS=24 --env REHEARSAL=1 \
+  --send /tmp/rehearsal/rehearse_audit.sh --send /tmp/rehearsal/rehearsal_read.py --send /tmp/rehearsal/main.txt \
+  -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/rehearse_audit.sh"' 2>&1 | cut -c1-64 | mask
+```
+
+- Head `db45e589e10fc2680e61d8fb45232c21f03d9fd1`: the worktree is clean at it and it is the pushed branch's head [ran].
+- **The first line at 5:25 AM:** `REHEARSAL +0s a rehearsal on a local development session: no audit of record, no verdict of a record`.
+- In the same second, one new line: `REHEARSAL +0s memory stop: MemAvailable is N GB now; the job ends (exit 72) once it is more than 650 GB under that`.
+- The run `r20261112-161927-d62e` is labelled [ran]: its exit 1 is the job's own comparison, no audit's refusal.
+
+## Least sure of, and where I did not look
+
+- **Least sure of: the workers' column.** 2,020 s and 253 GB are argued from Monday's one-worker times and the test size's sharing. Nothing has measured seven workers at this size. By the gate's own arithmetic, each worker un-sharing all of the audit, it is 665 GB, which would cross the stop.
+- Scaling in proportion from one point: the session's seconds and memory, and the Lean check's seconds.
+- The build: 300 s is assumed for a clone. This morning's clone job built its Lean and a whole Flock and ran two test-size audits in 455 s [ran].
+- Not looked at: Friday's node today; whether another pool runs there in the window; whether the session's memory follows the program.
+- Not run: the script on the node, or any fall of real memory.
+
+Notes are synced. Nothing else changes without your word. I read my inbox first at 4:48 AM PST on Friday.
+
