@@ -49,7 +49,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
   `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
-  delete or copy one.
+  delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
+  (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
 - **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
   at `lean-audit/audit-TAG/lean-audit.json`.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean

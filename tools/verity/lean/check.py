@@ -15,10 +15,15 @@ and is the one that judges. The audits of `UNREAD_FACTS` that replay also write 
 (`Unread.lean`, `unread_facts`), which `unread.py`'s ratchet on wholly unread modules reads.
 
 It judges what it read against the package's policy and records, `lean-audit.json`. README.md is the outline: "What it
-checks" lists every way a package fails (each failure carries a code, `Failure`, which the report lists in
-`failure_codes`), then the sandbox, the Lean slot and the memory floors; "The lock" lists the policy's sections and
-`proved_in`, and "The records" `--update`, `--moved` and lifts, `--regenerate` and its bookkeeping, and merging records.
-Each line there names the function or constant here whose docstring has the rule.
+checks" lists every way a package fails (each failure carries a code and the entry it is about, `Failure`, which the
+report lists in `failure_codes` and `failure_entries`), then the sandbox, the Lean slot and the memory floors; "The lock"
+lists the policy's sections and `proved_in`, and "The records" `--update`, `--moved` and lifts, `--regenerate` and its
+bookkeeping, and merging records. Each line there names the function or constant here whose docstring has the rule.
+
+It takes no allowance. A lane's fast path may be told to allow a failure by its code and entry (`lean_changed.py --records
+--allow CODE:ENTRY`, which reads both from this report); here that failure is one like any other, in the report's `failures`
+and in the exit status, and this file has no such option, so the Lean check, the merge queue's Lean tasks and the ready
+mark's preflight, which run it or `lean_changed.py` without `--records`, see every finding.
 
 Exit 0 when every package passes, 1 when one fails, 2 on a usage error or a refusal. This directory is self-contained (the
 standard library, `lake` and the toolchain's `lean` and `leanchecker`): another repository can copy it and use it with
@@ -128,8 +133,9 @@ PREMISE_NAMES = {"assumptions": "a named assumption", "domain": "a domain hypoth
 class Failure(str):
     """A failure: its text as the audit prints and reports it, with a stable ``code`` (`check.kind`, its check the text's
     leading word, spaces as `-`) and the ``entry`` it is about (a guarantee, a module, a file; None when it is about several
-    or the package).  What follows from a failure (`RECORD_DIFFERENCE`, `regenerated`) reads its code, never its text, so a
-    reworded message changes nothing a Lean check settles.  The report's `failure_codes` lists the codes beside `failures`."""
+    or the package).  What follows from a failure (`RECORD_DIFFERENCE`, `regenerated`; the fast path's allowances, which name
+    it by code and entry) reads those, never its text, so a reworded message changes nothing a Lean check settles.  The
+    report's `failure_codes` and `failure_entries` list them beside `failures`."""
     code: str
     entry: str | None
 
@@ -5940,11 +5946,13 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
 
 
 def reported(rep: dict) -> dict:
-    """``rep`` with `failure_codes` (and `settled_codes` beside `settled`): each failure's code (`Failure`), in its order,
-    null for a bare string."""
-    for key, codes in (("failures", "failure_codes"), ("settled", "settled_codes")):
+    """``rep`` with `failure_codes` and `failure_entries` (and `settled_codes` and `settled_entries` beside `settled`): each
+    failure's code and the entry it is about (`Failure`), in its order, null for a bare string and for a failure about no
+    one entry.  The two name a failure where a caller must (the fast path's `--allow CODE:ENTRY`), never its text."""
+    for key, codes, entries in (("failures", "failure_codes", "failure_entries"), ("settled", "settled_codes", "settled_entries")):
         if key in rep:
             rep[codes] = [code_of(f) for f in rep[key]]
+            rep[entries] = [getattr(f, "entry", None) for f in rep[key]]
     return rep
 
 
