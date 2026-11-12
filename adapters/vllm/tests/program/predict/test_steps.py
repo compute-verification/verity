@@ -951,6 +951,17 @@ def test_class_g_plans_each_request_at_the_launch_context_its_build_traced(tmp_p
     assert trace_dir(plan.requests[0]) == trace_dir(summary["requests"][0])
 
 
+@pytest.mark.parametrize("limit", [4032, 401408, 1048576])
+def test_class_g_plans_at_the_context_limit_its_registration_states(limit, tmp_path):
+    """Class G fixes no context limit: a registration stating any length up to the checkpoint's own (1,048,576 positions) plans
+    the B8 window, each request's stop rule at that length, with the launches and shapes it has at any other."""
+    advice, ingress, _ = _b8_window()
+    plan = plan_steps(_class_g(tmp_path, engine={"max_model_len": limit}), advice, ingress)
+    assert not plan.refused and {u.stop["max_model_len"] for u in plan.requests} == {limit}
+    at = plan_steps(_class_g(tmp_path), advice, ingress)
+    assert [(u.LP, u.T, u.C, u.batch()) for u in plan.requests] == [(u.LP, u.T, u.C, u.batch()) for u in at.requests]
+
+
 def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tmp_path):
     """GLM-5.3 in class G (an H200) samples a seeded top-p request at its registered split count and a greedy one by `TokenSelect`;
     `prune`'s dead-free versions of the two at its vocabulary are the bindings `dead_free.circuit-check.py` holds for it."""
@@ -1018,7 +1029,9 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
-    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
+    ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 1048576"),
+    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 1048576"),
+    ({"max_model_len": 1048577}, {}, "engine arg max_model_len 1048577, not a stated value of at most 1048576"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),

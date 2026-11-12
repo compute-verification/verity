@@ -42,8 +42,8 @@ import sys
 from pathlib import Path
 
 MANIFEST = "verity-vllm/served-window-programs/v1"
-#: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, the
-#: prefix cache), none of which a request Program reads
+#: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, its
+#: context limit, the prefix cache), none of which a request Program reads
 REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
 
 
@@ -71,7 +71,8 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
-    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
+    (`LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1, the length the built engine
+    reads back, ``effective``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
     (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
     own order; a ValueError for a rank the world doesn't have."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
@@ -82,6 +83,8 @@ def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
     engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if engine.get("max_model_len") == -1:
+        engine["max_model_len"] = (rec.get("effective") or {}).get("max_model_len")
     if "env_flags" in rec:
         flags = rec["env_flags"] or {}
         engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
