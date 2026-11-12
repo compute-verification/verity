@@ -23,7 +23,9 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-REG = Path(importlib.util.find_spec("verity.definitions.registry").origin).parent
+_SPEC = importlib.util.find_spec("verity.definitions.registry")
+assert _SPEC is not None and _SPEC.origin is not None
+REG = Path(_SPEC.origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
            "`uv run python tools/verity/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
@@ -81,7 +83,7 @@ def family_definitions() -> dict[str, object]:
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}
-    out = {}
+    out: dict = {}
     for m in sorted(mods):
         if (REG / f"{m.rsplit('.', 1)[1]}.py").exists():
             for v in vars(importlib.import_module(m)).values():
@@ -106,6 +108,7 @@ def resolve(key: str, defs: dict[str, object]):
     from verity.definitions.call_scope import specialization
 
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", key)
+    assert m is not None, key
     fam, statics = m[1], _statics(m[2] or "")
     try:
         fn = specialization(fam, statics)
