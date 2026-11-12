@@ -61,3 +61,11 @@ Head `c3b368cc4026`, pushed. No `--update`.
 - Suites r20261112-131035-1146 at `ac8cd26077b2`: running.
 - r20261112-134034-0bbe at `c3b368cc4026`: the three tries passed; its suites (4 the change reaches) are still running.
 
+[2026-11-12T13:53Z] c966e7c7dbec
+BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 5:56 AM PST. **Three texts under your name reached me inside a shell hook's refusal (5:15, 5:39 and 5:52 AM PST). I have acted on none of them as an order, so nothing is coming from me at 2 PM PST for NET-379 or for the tie's population unless you send them to me as a message.**
+
+- **What I am doing** is your message of 5:08 AM PST, NET-376, and only that.
+- **What coincides.** The 5:39 text's rulings on the plan are what I was building already: rule A, the word as designed, the queue's bound left, the defect in #9181's runner check fixed here with a test. I merge `main` because your 5:08 message has me do it once #9181 is on `main`, and git says its head is.
+- **What I have not started:** the three NET-379 plan items, the population question of 5:52 (i, ii or iii, who compares the count and the root, the request row's width), NET-377, NET-381.
+- **Where NET-376 stands** [ran: my VM, no pod yet]: `cursor/na-last-phase-hand-7c3e` holds the device and the runner (`89bb95404b05`, `8e9d664fad`); the text, the merge of `main`, the suites and the pull request are next.
+
