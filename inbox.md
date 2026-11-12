@@ -145,3 +145,50 @@ def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts Ã— Nat Ã
 
 TIMER: none
 
+[2026-11-12T19:27Z] 3df3c8921d12
+BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 11:27 AM PST [clock read]. Your 9:58 AM PST order: parts 1 and 2 are done, part 3 (NET-388) is built and not yet a pull request. Each line is marked.
+
+**1. The scratches** (lean's branch taken once, at `238ad6621c279889ff50d95dad374bf02a2d164b`; `origin/main` is `4a90174415b7` and does not hold it [ran, 11:26 AM PST])
+
+- **Scratch A:** `cursor/na-scratch-a-9333-lean-6e1b` at `34038fb2edd6753d6b2324e4df8487c1c113b36a`, pushed. One merge commit, parents #9333's `2e6f1977ba4a` and lean's `238ad6621c27` [ran]. It stopped in your two files and no other [ran].
+  - Close, `benchmarks/network_traces/connection_rows_run.py`: both sides kept; `check` takes `Sequence[BlockGrid]` for ingress, egress and fails, and `_device` keeps `VirtualClock(0.0)` passed as `clock` and `sleep` [read: the scratch's file].
+  - Close, `verity/protocols/certifier/verifier/connection_rows.py`: both sides kept; `of_records` takes `Sequence[BlockGrid]` where it took `grid.Record` [read: the scratch's file].
+- **Scratch B:** `cursor/na-scratch-b-9378-lean-2d7c` at `87a4978e1a1b3030ed106b5ac810c0ad6597059c` (tree `a8d12909ba0d`), pushed. #9378's head `1d6ebf70ff8c` **merged** onto scratch A, not picked: one merge commit [ran].
+  - It stopped in one file, since A already holds the other's close [ran: the merge's combined diff names that file only]. Close, `connection_rows_run.py`'s `_device`: #9378's `windows=3 if params.closes else 2` on A's `VirtualClock`, and both docstring sentences kept.
+- **Devices on the host's clock:** none in a test. Every `Warden(...)` the tests of both scratches build takes an injected clock; the one device on the host's clock is `warden_serve.serve`'s, which is paced [read: every `Warden(` in the two packages and their tests].
+- **What the merge changed in what #9378's tests assert: nothing.** #9378's four own test files are the same blobs in scratch B as at `1d6ebf70ff8c` [ran: blob ids]. `test_warden_serve.py` (+12) and `tools/verity/cli/tests/test_run.py` (+17 -5) take lean's side.
+- The verifier's README is 48,834 bytes in A and 48,911 in B, under its 49,152 [ran].
+
+**2. Runs, each launched once through `research run`, none with `--quick`** [ran, each record read]
+
+| run | head | suites | status |
+|---|---|---|---|
+| `r20261112-180522-8025` | scratch A | certifier's verifier suite; `verity-network-traces` | done, rc 0: 1456 passed 1 skipped; 679 passed; 0 cached |
+| `r20261112-180804-acbb` | scratch B | certifier's verifier suite; its `network` suite; `verity-network-traces` | done, rc 0: 1471 passed 1 skipped; 91 passed; 681 passed; 0 cached |
+| `r20261112-180838-76dc` | scratch B | `repository`, whole | done, rc 0: 358 passed, all the tree collects (354 and 4 slow-marked) |
+| `r20261112-180939-4c61` | scratch B | ratchet gate, against `origin/main` and against lean's `238ad6621c27` | **failed, rc 1**: both exit 1, below |
+| `r20261112-181049-93cd` | `1d6ebf70ff8c` | certifier's verifier suite; its `network` suite | done, rc 0: 1416 passed 1 skipped; 85 passed; 0 cached |
+| `r20261112-181025-041c` | `1d6ebf70ff8c` | `repository`, whole | done, rc 0: 352 passed (349 and the 3 slow-marked) |
+
+- **The gate on scratch B, the one run that is not green.** Against `origin/main` (the run's clone had `99b81651cc4c`) it names one thing: `tests/lint/allowlists/lean_bar.json` grows (long files 39 to 42, module docs 307 to 309). Those are Lean files of lean's merge; neither pull request touches Lean [read: the run's log]. Against lean's branch it names the 63 retired-term sites in ten files that you have [read].
+- **The gap at #9378's head is closed** by the last two rows: the root suite whole and the certifier's two suites, at `1d6ebf70ff8c` itself.
+
+**3. NET-388: built, on `cursor/na-turn-away-on-tick-9d4f`, cut on `1d6ebf70ff8c`; no pull request yet**
+
+- Local head `4aee58408244`, nine commits; pushed head `4b1d212e2c74` (the last two commits go up with the next push). It holds nothing of lean's branch [ran].
+- **The rule and the cell, as NET-388 says them** [ran: the tests named]: under form 2 an arrival handled at a tick at or past the first bucket that admits nothing takes no ordinal, is never queued, is no refusal and withholds no record; the next tick releases one constant `REFUSED` cell on ordinal 0, through the pacer when paced; the run's log counts turn-aways on their own.
+- **Soundness's three conditions, each a device test** [ran]: the same bytes at every turn-away; on the next tick through the pacer and never off it; the turned-away set does not move when the queue and the lanes at the stretch's start vary. NET-388's five other tests are there too, form 1 byte for byte among them.
+- **One thing I found and built that NET-388 does not say** [ran]: a turn-away that closes its link at the tick with the client's request unread resets a TCP client, which then reads an error where the cell should be (`ConnectionResetError`, errno 104, on loopback). So the cell's tick also ends the device's stream on the link (through the pacer when paced: `pacer.py` now shuts a link's sending side down with its last part), and the device keeps the link open, reads and drops what the client still sends, and closes at the client's end of stream or at the run's end. None of those bytes reaches a server or a record. A test on a real socket, unpaced and paced, reads the cell and then the stream's end. The body will say it.
+- **A refusal has the same exposure today and I did not change it** [argued]: it writes its cell and closes at the arrival. That is outside NET-388; say if you want it filed.
+- **Mutations:** 16 changes to the device and the pacer, each failing at least one test and none hanging [ran: `net388-mutations.log`].
+- **Gate, locally:** against `1d6ebf70ff8c` NET-388 adds 9 retired-term sites, all the code's own names (`Warden`, `WardenParams`, `warden.json`, the test module's name) and none of my choosing; no other finding [ran].
+- **It touches what lean's branch changes** (`warden.py`, `pacer.py`, `warden_serve.py`, `PROTOCOL.md`, the README, two test files), so a scratch C on scratch B follows, with its runs.
+- **Left:** the suites and the gate once at the pushed head, the body with the share of a link's time for a week, a month and a year, the pull request open and unmarked, scratch C.
+
+**4. Three texts reached me through the shell hook only, after your 9:58 AM turn** [read]
+
+- **10:38 AM** (one more test: a TCP client turned away reads the cell and the stream's end, never a reset). The test is in NET-388, and the half-close above came from it.
+- **11:05 AM** (#9378: `content_rows.tables` raises at a release past a class's R-th under form 2, and two body lines). Not acted on.
+- **11:21 AM** (vllm's four questions on the filing rule, due 4 PM; the repository is public). Not acted on, beyond keeping machine names and addresses out of everything I write, which was the rule already.
+- I act on the last two when a turn of yours carries them, as with the three before. If they stand, tell me their order against NET-388's pull request and scratch C.
+
