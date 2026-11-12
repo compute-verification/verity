@@ -10,11 +10,12 @@ and everything the run writes are what they were.
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
 the next one's records are published (`Warden.hand_lengths`): on its ticker, after that execution phase's last bucket
 has left, or after the pacer has reported it released. The ticker only queues the hand, a slot stride an item, so the
-queue's thread pickles a stride's releases at a time and never an execution phase's. The publisher's process, which
-alone holds the key, lays the tables (`connection_rows.tables`), commits them and signs their one head: a line of
-`rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables, their rows and
-bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts` (witness, table by
-table). It keeps no row: the prover, who holds the records, lays the tables again from them
+queue's thread pickles a stride's releases at a time and never an execution phase's. The hand carries every release,
+filed in a class or not, so its time on the ticker follows the releases and not the classes' rows. The publisher's
+process, which alone holds the key, lays the tables (`connection_rows.tables`), commits them and signs their one
+head: a line of `rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables,
+their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
+(witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
 (`connection_rows.of_records`). The head takes one more leaf of the key an execution phase.
 
 **The check** (`check`). Every execution phase whose three records and the next one's were published complete, and

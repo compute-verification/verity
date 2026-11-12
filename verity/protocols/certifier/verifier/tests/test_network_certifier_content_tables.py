@@ -379,7 +379,7 @@ def test_a_row_of_zero_bytes_reads_as_each_tables_decoder_says(ran):
 
 def test_one_head_lists_every_table_and_says_nothing_of_the_load(ran, signed, tmp_path):
     """The head lists the lengths table, the fails table and each class's three, in the schedule's order, and is
-    signed once. Its fields and sizes, and the registration's, are the schedule's: an execution phase with seven
+    signed once. Its fields and sizes, and the registration's, are the schedule's: an execution phase with four
     releases, one with three and one with none differ in their roots and the certificate alone, so nothing public
     counts a class's held rows."""
     _, _, _, handed = ran
