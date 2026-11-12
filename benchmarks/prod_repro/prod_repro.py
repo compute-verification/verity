@@ -129,6 +129,10 @@ UNDER, OVER, NOT_SHOWN = "under", "over", "not shown"
 VERDICTS = {"meets": UNDER, "misses": OVER, "cannot tell": NOT_SHOWN}
 #: why a job of one server lifetime an arm has no verdict
 ONE_LIFETIME = "each arm has one server lifetime, and the verdict reads the interval over lifetime pairs"
+#: why a job of more lifetimes an arm has none either, where all but one pair of them is without a pass both arms
+#: counted (an arm stopped before its lifetime's first counted pass: the benchmark's STOP_AT)
+ONE_PAIR = ("only one pair of the arms' lifetimes has a pass both arms counted, and the verdict reads the interval "
+            "over lifetime pairs")
 #: why a cost with such an interval is not shown to be under its target
 NOT_UNDER = "the upper end of the interval over lifetime pairs is not under it"
 #: why a load that is not a sessions load has no verdict, however many lifetimes served it
@@ -603,7 +607,9 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     ``target`` percent. On a sessions load every figure is the benchmark's own cost's (`serve_tax.session_cost`): the
     cost is the mean over the server lifetimes an arm of each one's cost, its interval is over the lifetimes, and the
     verdict is the benchmark's, which reads that interval alone (`VERDICTS`). So a job of one lifetime an arm, which
-    has no such interval, shows nothing, nor does one whose arms did not do the same work. Beside it and in no
+    has no such interval, shows nothing, nor does one with one pair of lifetimes that has a pass both arms counted
+    (``lifetimes`` holds the pairs counted, ``pairs``, and the lifetimes both arms were served in, ``served``), nor
+    one whose arms did not do the same work. Beside it and in no
     verdict: the cost over the passes taken as independent with its interval (``passes``), each lifetime's cost, the
     spread between lifetimes and between a lifetime's passes, the same cost under the benchmark's other readings of
     a pass's rate of work (``readings``), each side's engine steps and accepted drafts (``sides``: `SIDE`) and its
@@ -624,7 +630,8 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     if any(unserved.values()):
         return not_measured("the arms did not serve the same tokens: " + ", ".join(
             f"{a} left {n} requests unserved" for a, n in unserved.items() if n))
-    lives = {"pairs": len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1])), "ci95": None}
+    served = len(set(ref.get("lifetimes") or [1]) & set(mine.get("lifetimes") or [1]))
+    lives = {"pairs": served, "served": served, "ci95": None}
     verdict = NOT_SHOWN
     if load in S.bench_loads(ref):
         c = S.serving_cost(ref, mine, load)
@@ -646,7 +653,7 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
                                     f"not of {load}: a job serves one sessions load", how=how)
             same, value, verdict, n = own["same_work"], _frac(own["value"]), VERDICTS[own["verdict"]], own["noise_floor"]
             both = dict(zip((stock, ours), (own["sides"]["reference"], own["sides"]["arm"])))
-            lives = {"pairs": own["lifetimes"], "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
+            lives = {"pairs": own["lifetimes"], "served": served, "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
                      "each": own["by_lifetime"] and [{**x, "value": _frac(x["value"])} for x in own["by_lifetime"]],
                      "spread_points": own["spread"], "left_out": own["left_out"],
                      "readings": {k: _frac(v) for k, v in (own.get("readings") or {}).items()},
@@ -1104,7 +1111,8 @@ def _verdict(c: dict) -> str:
         return "NO, the lower end of the interval over lifetime pairs is over it"
     life = c["lifetimes"]
     why = (UNLIKE if c.get("settings_differ") else UNEQUAL if c.get("same_work") is False else
-           ONE_LIFETIME if life["pairs"] < 2 else NOT_UNDER if life["ci95"] else NOT_SESSIONS)
+           (ONE_LIFETIME if life["served"] < 2 else ONE_PAIR) if life["pairs"] < 2 else
+           NOT_UNDER if life["ci95"] else NOT_SESSIONS)
     return f"{NOT_SHOWN}, {why}"
 
 

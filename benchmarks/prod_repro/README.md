@@ -134,9 +134,10 @@ replay that differs, the first token that does and the first step.
   the lifetimes' costs, a lifetime's being ours's seconds for its passes over stock's, less one, a pass's seconds
   from its users' first send to the last one's last answer, with its 95% interval over the lifetimes an arm.
   `under 1%: yes` is printed only where the benchmark says that interval's upper end is under the target; `NO` where
-  its lower end is over it; `not shown` otherwise, with the reason: one lifetime an arm (no such interval), an upper
-  end that is not under the target, arms that did not do the same work (a request unserved, another count of output
-  tokens, another share of the prompts from the prefix cache), or settings that differ. Under it: that each request
+  its lower end is over it; `not shown` otherwise, with the reason: one lifetime an arm, or one pair of lifetimes
+  with a pass both arms counted where an arm stopped before the rest (no such interval), an upper end that is not
+  under the target, arms that did not do the same work (a request unserved, another count of output tokens, another
+  share of the prompts from the prefix cache), or settings that differ. Under it: that each request
   decoded to its recorded length, past any end-of-text token, in the benchmark's own words (vLLM's client sends each
   with its length and `ignore_eos`, in every arm); the benchmark's line counting the requests that served an
   end-of-text token before their end and went on, for a side whose server kept the served ids and whose record names

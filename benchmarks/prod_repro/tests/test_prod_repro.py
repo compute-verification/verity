@@ -141,7 +141,7 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
             "arm has one server lifetime, and the verdict reads the interval over lifetime pairs\n"
             "  passes taken as independent, 95% interval [") in txt
     assert "]: over 3 and 3 reps, at 1000 requests a second, which stock did not keep up with" in txt
-    assert r["cost"]["verdict"] == "not shown" and r["cost"]["lifetimes"] == {"pairs": 1, "ci95": None}
+    assert r["cost"]["verdict"] == "not shown" and r["cost"]["lifetimes"] == {"pairs": 1, "served": 1, "ci95": None}
     assert "\n  noise floor, beside and not added: compiled-again over compiled" in txt
     assert ", passes taken as independent\n" in txt and r["cost"]["noise_floor"]["leaves_out_zero"] is False
     assert "STOCK DIFFERS FROM STOCK" not in txt
@@ -619,7 +619,7 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
                                 "by": r["cost"]["how"]["by"]}
     # six passes that all sit under the target show nothing: they are one lifetime an arm, and the verdict reads the
     # interval over lifetime pairs, which a job does not have
-    assert r["cost"]["verdict"] == "not shown" and r["cost"]["lifetimes"] == {"pairs": 1, "ci95": None}
+    assert r["cost"]["verdict"] == "not shown" and r["cost"]["lifetimes"] == {"pairs": 1, "served": 1, "ci95": None}
     assert ("cost: record over compiled +0.40% of stock's serving time; under 1%: not shown, each arm has one server "
             "lifetime, and the verdict reads the interval over lifetime pairs\n"
             "  passes taken as independent, 95% interval [+0.40%, +0.40%]: over 6 paired reps, at concurrency 16, where "
@@ -669,7 +669,16 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     # taken as independent sits under the target
     assert (own["verdict"], own["lifetimes"]) == ("cannot tell", 1) and c["passes"]["ci95"][1] < 0.01
     assert (c["same_work"], c["verdict"], P._verdict(c)) == (True, "not shown", "not shown, " + P.ONE_LIFETIME)
-    assert c["lifetimes"]["pairs"] == 1 and c["lifetimes"]["ci95"] is None and c["noise_floor"] is None
+    assert c["lifetimes"]["pairs"] == c["lifetimes"]["served"] == 1 and c["lifetimes"]["ci95"] is None and c["noise_floor"] is None
+    # two lifetimes an arm, each leaving out its first pass, and ours's second stopped before the pass it counts (the
+    # benchmark's STOP_AT): one pair of lifetimes has a pass both counted, so no interval, and the line says which it is
+    cut = S.lifetimes([sessions_arm(name, x) | {"lifetime": k, "reps": 2, "left_out": 1} for name, rates in (
+        ("prod", [[2.0, 2.0], [2.0, 2.0]]), ("prod-record", [[1.99, 1.99], [1.99]])) for k, x in enumerate(rates, 1)])
+    c = P.cost(tmp_path, {a["arm"]: a for a in cut}, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert (c["lifetimes"]["served"], c["lifetimes"]["pairs"], c["lifetimes"]["ci95"]) == (2, 1, None)
+    assert [(x["lifetime"], x["reps"]) for x in c["lifetimes"]["each"]] == [(1, 1)] and round(100 * c["value"], 2) == 0.5
+    assert (c["verdict"], P._verdict(c)) == ("not shown", "not shown, " + P.ONE_PAIR)
+    assert P.ONE_PAIR.startswith("only one pair of the arms' lifetimes has a pass both arms counted")
     # three lifetimes an arm whose costs agree: the interval over them is the benchmark's, and its upper end is under
     c, own = lifetimes_cost(tmp_path, [[2.0, 2.0], [2.01, 2.01], [1.99, 1.99]], [[1.99, 1.99], [1.998, 1.998], [1.981, 1.981]])
     assert own["verdict"] == "meets" and (c["verdict"], P._verdict(c)) == ("under", "yes")
@@ -786,7 +795,7 @@ def test_a_job_served_in_lifetimes_is_read_from_each_lifetimes_directory(tmp_pat
     # the cost of a load that is not a sessions load is over the four passes an arm, and has no verdict
     ref, mine = (S.summary(x) for x in ([100.0, 101.0, 102.0, 103.0], [99.0, 100.0, 101.0, 102.0]))
     assert r["cost"]["value"] == pytest.approx(S.tax(ref, mine)["value"]) and r["cost"]["how"]["reps"] == [4, 4]
-    assert r["cost"]["lifetimes"] == {"pairs": 2, "ci95": None}
+    assert r["cost"]["lifetimes"] == {"pairs": 2, "served": 2, "ci95": None}
     assert "; under 1%: not shown, the interval over lifetime pairs is the benchmark's for a sessions load" in txt
     # a replay of the second lifetime's pass is compared with that lifetime's window
     shutil.rmtree(out / "replay-compiled")
