@@ -26,11 +26,12 @@ in (`--repo`). Wherever AGENT_ID runs, its shell hook starts `pull` in the backg
 seconds (default 30): `pull` appends the branch's new messages to this VM's inbox and pushes a commit that empties the file,
 so a message reaches one VM once. A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`, and
 messages sent before delivery queue up in it. The agent's next shell command is refused once with them as the refusal's text,
-and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands; one
-still waiting when its turn completes is the turn's follow-up (`stop_hook.py`). An agent whose turn has ended (FINISHED or
-IDLE) runs no command and takes nothing until it is resumed, with Task or a follow-up. `send` says when earlier messages to
-the agent are still uncollected on origin, and `send --wait S` whether a VM took this one: taken is on the agent's VM, to be
-delivered at its next command, and not yet acted on.
+and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands.
+Nothing delivers one at a turn's end: an agent whose turn has ended (FINISHED or IDLE) runs no command, starts no turn for
+a message that waits, and is reached only by resuming it, with Task or a follow-up; its first shell command then delivers
+what waited. (`stop_hook.py` offers a waiting message to the runtime as the turn's follow-up; no delivery relies on it.)
+`send` says so each time, and says when earlier messages to the agent are still uncollected on origin; `send --wait S`
+says whether a VM took this one: taken is on the agent's VM, to be delivered at its next command, and not yet acted on.
 `--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
 
 Which hooks a session runs is fixed when its VM boots, by its branch's tracked `.cursor/hooks.json`, and nothing on a
@@ -195,10 +196,11 @@ def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
             f"FETCH_HEAD:{FILE}`, and `inbox.py check {agent}` on its VM says why")
 
 
-#: a target that ended its turn runs no shell command, so its hook never pulls (a worker finished and marked its PR ready
-#: before two stop messages reached it); a sender without the Cursor API can't see that, so `send` always says it
-UNTIL_RESUMED = ("it arrives only while {agent}'s turn runs shell commands: if {agent} has ended its turn (FINISHED or IDLE), "
-                 "resume it with Task (or a follow-up), which delivers at once")
+#: a target that ended its turn runs no shell command, so its hook neither pulls nor delivers, and it starts no turn for a
+#: message that waits (a worker finished and marked its PR ready before two stop messages reached it); a sender without the
+#: Cursor API can't see that a turn has ended, so `send` always says it
+UNTIL_RESUMED = ("{agent}'s next shell command delivers it, and nothing delivers it at a turn's end: if {agent} has ended its "
+                 "turn (FINISHED or IDLE), resume it with Task (or a follow-up), and its first shell command delivers it")
 
 
 #: Cursor reads hooks.json as JSONC and strips these before parsing it, inside strings too: a `/*` in a command (a glob such as
@@ -393,7 +395,7 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
     if a.cmd == "send":
         text = a.text if a.text is not None else (sys.stdin.read() if a.file == "-" else Path(a.file).read_text())
         if a.local:
-            print(f"queued for {a.agent}: {send(a.agent, text)}")
+            print(f"queued for {a.agent}: {send(a.agent, text)}; {UNTIL_RESUMED.format(agent=a.agent)}")
             return 0
         if a.wait is not None and not 0 < a.wait <= WAIT_MAX_S:
             raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_MAX_S:g} seconds (no tool call blocks more than "
@@ -403,8 +405,8 @@ def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) 
         except RuntimeError:
             before = (0, None)
         ident = secrets.token_hex(6)
-        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo, ident)[:12]}; its "
-              f"shell hook delivers it within a poll interval, but {UNTIL_RESUMED.format(agent=a.agent)}"
+        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo, ident)[:12]}; "
+              f"{UNTIL_RESUMED.format(agent=a.agent)}"
               + ("" if a.wait is not None else ". `--wait S` says whether its VM took it within S seconds"), flush=True)
         n, oldest = before
         if n and oldest and age_s(oldest) > STALE_S:
