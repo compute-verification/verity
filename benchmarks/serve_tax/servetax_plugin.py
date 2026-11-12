@@ -9,14 +9,15 @@ directory its files go to, ``window_s``, and a true value for each change), ever
   numbers them, standing in for the certifier's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
-- ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
+- ``boundary_rows`` (object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``, ``verdicts``): the
   two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), each window's finished
   requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
   directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's
   directory for what never leaves the node (``private``/boundary/), and under ``out`` only where none is named. With
   ``tables`` in it (``private``, ``layers``, ``capacity``, ``timeout_s``), each span's latent history tables too: rank 0
   of Model Runner V2 reads each step's rows (`_tables_runner`) and builds each class's tables once the window assigns
-  its slots, keeping their rows and salts under the ``private`` it names, never under ``out`` or the run's directory;
+  its slots, keeping their rows and salts under the ``private`` it names, never under ``out`` or the run's directory. An
+  engine whose cache can't hold the tables' row is refused as it starts, when the runner binds its caches (`_tables_guard`);
 
 and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag``) or ``every_s`` (an edge each
 ``every_s`` seconds of a load's serving) every engine core takes a replay block's boundary state at each edge
@@ -320,11 +321,27 @@ def rank0_tables(runner: Any, cfg: Mapping[str, Any]) -> tuple[Any, Any, Any]:
     return hook, BT.Channel.of(tc, *public), BT.Builder(hook.latents, device=runner.device, keep=keep)
 
 
+def _tables_guard(initialize: Callable[..., Any], cfg: Mapping[str, Any],
+                  rank: Callable[[], int] = _tp_rank) -> Callable[..., Any]:
+    """Model Runner V2's ``initialize_kv_cache``, then, on rank 0, the history tables' guard on the caches it bound
+    (`boundary_tables.StepHook`'s: an MLA cache that doesn't hold the tables' row, a configured layer that is no MLA
+    layer). A refusal stops the engine as it starts, before it serves a request."""
+    def initialize_kv_cache(self: Any, *args: Any, **kwargs: Any) -> Any:
+        out = initialize(self, *args, **kwargs)
+        if getattr(self, "kv_caches", None) and rank() == 0:
+            from verity_vllm.pipeline import boundary_tables as BT
+
+            BT.StepHook(self.model, layers=BT.layers_of(cfg["boundary_rows"]["tables"]["layers"]))
+        return out
+    return initialize_kv_cache
+
+
 def _tables_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturing: Callable[[], bool] | None = None,
                    rank: Callable[[], int] = _tp_rank, start: bool = True) -> Callable[..., Any]:
     """Model Runner V2's ``execute_model``, then, on rank 0, `boundary_tables.StepHook.after` on the step. Its tables
     start at the first step with a KV cache outside a capture and a dummy run, as the edge's do, with the builder
-    answering the boundary commitment's channel on a thread of its own (``start``)."""
+    answering the boundary commitment's channel on a thread of its own (``start``). A step whose tables can't start
+    raises, and so does every step after it: no step is served with the tables off."""
     state: dict[str, Any] = {}
     if capturing is None:
         import torch
@@ -336,12 +353,12 @@ def _tables_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturin
         if kwargs.get("dummy_run") or not getattr(self, "kv_caches", None) or capturing():
             return out
         if "hook" not in state:
-            state["hook"] = None
-            if rank() == 0:
+            if rank() != 0:
+                state["hook"] = None
+            else:
                 hook, channel, builder = rank0_tables(self, cfg)
-                state.update(hook=hook, channel=channel, builder=builder)
-                if start:
-                    state["stop"] = channel.start(builder)
+                started = {"stop": channel.start(builder)} if start else {}
+                state.update(hook=hook, channel=channel, builder=builder, **started)
         if state["hook"] is not None:
             state["hook"].after(self, scheduler_output)
         return out
@@ -710,6 +727,7 @@ def register() -> None:
     if (cfg.get("boundary_rows") or {}).get("tables"):
         from vllm.v1.worker.gpu.model_runner import GPUModelRunner
 
+        hooks.wrap(GPUModelRunner, "initialize_kv_cache", lambda initialize: _tables_guard(initialize, cfg))
         hooks.wrap(GPUModelRunner, "execute_model", lambda execute: _tables_runner(execute, cfg))
     if cfg.get("edges_s") or cfg.get("every_s"):
         import boundary as B
