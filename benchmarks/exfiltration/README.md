@@ -79,7 +79,7 @@ field's name:
 - `verifier`: `{"module": ..., "commit": ...}`, the verifier that checked it and the commit it ran at.
 - `verdict`: `accept` (accepted and complete), `not complete` (accepted, which moves no figure), `refuse`, or
   `withheld`: the verifier held back its last accept itself because the form it would accept is not yet proved (every
-  sampled proof accepted, every check before the sample held, every tampered input refused). `withheld` is neither an
+  SPOT proof accepted, every check before the sample held, every tampered input refused). `withheld` is neither an
   accept nor a refusal.
 - `proved_by`: null until a Lean proof covers that verifier, then the Lean guarantee's name.
 - `open`: while `proved_by` is null, and on every `withheld` verdict, what stands between the verdict and proved,

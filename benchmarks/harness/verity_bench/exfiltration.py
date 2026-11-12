@@ -192,7 +192,7 @@ PIECES = {"stop_record": "the stop record", "response_tie": "the response tie", 
 #: each refused by the verifier that accepted the honest run's verdict on the same piece
 CONTROLS = {"id": "a changed id", "max_tokens": "a changed `max_tokens`"}
 #: a verdict: accepted and complete, accepted and not complete (which moves no figure), refused, or withheld: the
-#: verifier held back its last accept itself because the form it would accept is not yet proved (every sampled proof
+#: verifier held back its last accept itself because the form it would accept is not yet proved (every SPOT proof
 #: accepted, every check before the sample held, every tampered input refused), which is neither an accept nor a refusal
 VERDICT_READS = ("accept", "not complete", "refuse", "withheld")
 #: a verdict's record: its `piece` and `control`, the `run` that produced it, the `verifier` that checked it (its
