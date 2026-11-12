@@ -229,8 +229,8 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     `MULTI_REFUSED`, with exit 1; with one proof file of the first session changed after its closing round, it refuses
     the session's coins as the driver's check of the log does; and with the second session left out, the log shows a
     tree no session records, which both refuse (`challenger.UNUSED_TREE`). The Python run of the form
-    (`members.members_run`) answers the same on the first two: every session accepted with the units it proved, which
-    maps to the refusal, and the changed file's reason."""
+    (`members.members_run`) answers the same on all three: every session accepted with the units it proved, which
+    maps to the refusal, the changed file's reason, and the unused tree's."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -271,7 +271,9 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     # the second member's statement and its session taken out of the evidence, everything else as the audit wrote it
     first = {**evidence, "sessions": evidence["sessions"][:1],
              "proofs": {"statements": evidence["proofs"]["statements"][:1]}}
-    assert M.case_refusal({**case, "evidence": _evidence_hex(first)}) == (f"proofs: {left_out}", True)
+    assert twin(case, first) == (None, left_out)
+    assert M.case_refusal({**case, "evidence": _evidence_hex(first)}) == (M.run_reason(None, left_out), True) \
+        == (f"proofs: {left_out}", True)
 
     rep = sorted(dirs[0].glob("*.bin"))[0]
     changed = tmp_path / "changed" / rep.name
