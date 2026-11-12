@@ -1062,8 +1062,9 @@ class TP2CaptureWorkerExtension:
             # to WHICH block a request was bound to; this is what makes an omitted / relabelled / duplicated request fail named on a rank
             comp = bd.composition_check(man_hdr, bmap) if (man_hdr is not None and hasattr(bd, "composition_check")) else None
             if comp is not None:
+                stated = {k: v for k, v in comp.items() if k != "problems"}
                 problems = comp.get("problems")
-                cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": problems[:3] if problems else []}
+                cov["composition"] = stated | {"problems": problems[:3] if problems else []}
             if man_hdr is not None and man_hdr.get("complete") is False:            # unmodelled Program families -> not a population
                 unmodelled = man_hdr.get("unmodelled")
                 families = "; ".join(f"{k} x{v}" for k, v in sorted(unmodelled.items())) if unmodelled else ""
