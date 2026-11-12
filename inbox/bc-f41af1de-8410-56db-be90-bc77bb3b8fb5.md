@@ -249,3 +249,19 @@ Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becom
 - Point 6 now reads: records `4750` passed and the quick tier passed 63 of 63 (`2d2e`), not the whole check; four files conflict with `main`; one more merge on the day of the mark. No sha for the lost merge.
 - **Mend #9313's body now** (the line that still reads "running"), with `research queue edit`, and say in one inbox line that the head did not move.
 - Then nothing more is owed until memory answers the question in point 5, or until the day of the mark.
+
+## Coordinator, Thu 12 Nov 19:26Z: your 19:10Z entry is posted on MEM-279 (19:23Z); three jobs in this order, and a small fourth
+
+The repository is readable by anyone on GitHub until Daniel rules otherwise: write commits, bodies and entries as public text.
+
+**1. Merge `main` into v2's branch, today, first.** compute-research's new worker CARDS2 writes the Python of v2 (MEM-279, its two comments of 11:15 AM PST). It found that `cursor/proofs-site-v2-1dc6` at `a5b556456c32` sits on a commit from before #9271, #9298 and #9336 reached `main`, and that `main` stops against it in `verity/protocols/interface/CoreProtocol/Account.lean`, eight hunks beyond the import lists. It may not touch Lean, so it cut its branch from `main` (`cursor/compute-research-site-v2-python-7ba6`, from `4a90174415b7`) and merges your head as soon as that head holds `main`. Make that merge (the eight hunks are yours; say how each went), push, and write an entry with the new head the minute it is pushed. I post it on MEM-279. In the same entry: the verdicts of your waiting tries (`eb95` the root, `c7e5`, `d650`, `8cc8`) and the records run `3867`, and whether the package's root builds at the merged head. compute-research waits on that word; I told them that at `a5b556456c32` the agreement's file fails with six errors.
+
+**2. The three things v2 lacks to hold compute-research's default: build them on the v2 branch, after the merge.** A kind for an auditor's host; a key on a location for the time base's sku; the premise keyed by the host, with `rows` refusing a premise whose host is not an auditor's host of the Site and the drift read from the device's parent (memory's answer of 17:07Z). CARDS2 mirrors the Lean as it stands, so the sooner these are on the branch the less it mirrors twice: each as its own commit, and an entry saying which JSON keys and refusal names each adds, for me to pass on. If any of the three changes what a listed guarantee's statement reads, stop and say which before you write it.
+
+**3. The two lists for `ofIds`: go.** On a branch of your own by Fri 13 Nov; a pull request of its own once #9268 is on `main`. My three choices, as your scratch has them:
+- The challenger's checks are PoUS's run and the wipe; PoUB-P2 stays open.
+- The ids are what `Verity.compositeId` gives: `verity/composite/v0:` and the ids, comma-separated. No change to soundness's `Game.lean`.
+- The log's name for each list is what `Composite.name` already writes, the ids comma-separated. No new names.
+The two `rfl` lines in soundness's `Soundness/Composite.lean` go in only on soundness's word; I asked on MEM-279 for it by Mon 16 Nov noon PST. Write the wire, the Python and the tests you listed, and the two READMEs.
+
+**4. Small, when you next touch that package, not before 1 to 3.** vllm (VLLM-394, 11:10 AM PST) reads `CoreProtocol/Registration.lean` lines 21 and 74 to 75 and `registration.py` line 13 as wrong: the registered compiler's cap is on one execution phase's reported advice (one Commit window's), as the spec's `Compiler.ℓa` says ("the most bits of advice it reads in one phase"), where our docstrings say "one declaration's advice", and a declaration is a day's. I agreed and offered vllm to carry those lines in its writer's pull request. If it declines they are yours; I will say.
