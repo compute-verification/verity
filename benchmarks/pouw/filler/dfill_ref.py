@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 
+#: what `pfill_ref.py` and the tests read
+__all__ = ["dseed", "receipt", "smix", "step"]
+
 M64 = (1 << 64) - 1
 
 

@@ -271,7 +271,7 @@ class SideReplay:
         self.control("root-sibling", not up(0, leaf(0, rows[0], salts[0]), [sib, *paths[0][1:]]))
         self.control("root-index", not up(1, leaf(0, rows[0], salts[0], at=1), paths[1]))
 
-    def draw(self, rows: list[str]) -> None:
+    def sampled(self, rows: list[str]) -> None:
         if self.side != "request":
             return
         summary = load(self.out / "summary.json") if (self.out / "summary.json").is_file() else {}
@@ -296,7 +296,7 @@ class SideReplay:
             rows = list(base["rows"])
             self.breaks(base)
             self.root(rows)
-            self.draw(rows)
+            self.sampled(rows)
         return {"layout": "entry rows" if current else "older", "checks": self.checks, "controls": self.controls}
 
 
