@@ -230,9 +230,10 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "$e" = sparse-mla:units ]; then
+    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "$e" = sparse-mla:units ] || [ "${e#sparse-mla:cir242-}" != "$e" ]; then
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       n=${e//:/-}; s=${e%%:*}; UNITS=(); [ "$e" = "$s" ] || UNITS=(--units)
+      [ "${e#sparse-mla:cir242-}" = "$e" ] || UNITS=(--cir242 ${e#sparse-mla:cir242-})   # CIR-242 scratch
       mkdir -p $O/$n
       $TIME $PY benchmarks/one_stage/a5_${s//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
         ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \

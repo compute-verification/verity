@@ -49,6 +49,16 @@ RULE = "stratified-rate:1/64"
 FIXTURE = "adapters/vllm/tests/pipeline/test_serving_rows_splits.py"
 
 
+def cir242(form: str) -> tuple[str, dict, CS.Binding, TS.Served]:
+    """CIR-242's toy row (``cir242_window.zk_window``) in form ``form``: its session root, what it stands in for, its window
+    and its served row."""
+    import cir242_window as CW
+
+    s, ts, caps, S = CW.zk_window(form)
+    root = hashlib.sha512(f"verity/a5/sparse-mla-cir242/{form}/v1".encode()).hexdigest()
+    return root, {"fixture": "benchmarks/one_stage/cir242_window.py", "form": form, "statics": S}, CW.window(s, ts, caps), s
+
+
 def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
     """The stand-in's session root (as a TP Commit's run root is its ranks' session root), what it stands in for, its
     templates and each one's chunk size: the fixture's row in whole key blocks, or with ``units`` its row at DV = 64 in scores
@@ -58,13 +68,21 @@ def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
     return hashlib.sha512(tag).hexdigest(), {"fixture": FIXTURE, "row": row}, tmpls, chunk
 
 
-def commit(out: Path, units: bool = False) -> CS.Binding:
-    """The fixture's window of one row under ``<root>/rank0`` committed into ``out`` as serving commits it, its salts fresh."""
-    root, of, tmpls, chunk = stand_in(units)
-    s = TS.Served(of["row"])
-    w = a5.rated(replace(TS.window(s, tmpls, chunk), run=f"{root}/rank0"), RULE)
+def commit(out: Path, units: bool = False, form: str | None = None) -> CS.Binding:
+    """The fixture's window of one row under ``<root>/rank0`` committed into ``out`` as serving commits it, its salts fresh;
+    with ``form``, CIR-242's (`cir242`)."""
+    from verity_vllm.pipeline import chain_rows as CH
+
+    if form:
+        root, of, w0, s = cir242(form)
+        tmpls = list(dict.fromkeys(m.template for m in w0.members))
+    else:
+        root, of, tmpls, chunk = stand_in(units)
+        s = TS.Served(of["row"])
+        w0 = TS.window(s, tmpls, chunk)
+    w = a5.rated(replace(w0, run=f"{root}/rank0"), RULE)
     got = TS.read(s, w.members, tmpls)
-    c = CS.commit(w, [g for g, _e in got])
+    c = CS.commit(w, CH.held_rows(w, [g for g, _e in got]))
     CS.write(c, out, {"of": of, "committer": {"module": "a5_sparse_mla.py"}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
              kind="stand-in", registrar=R)
     return w
@@ -78,6 +96,7 @@ def main() -> int:
     ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
                     "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--units", action="store_true", help="each key block as its scores unit and its values units")
+    ap.add_argument("--cir242", choices=("b3", "b2"), help="CIR-242's toy row in that form (`cir242_window.zk_window`)")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
@@ -86,8 +105,8 @@ def main() -> int:
     ap.add_argument("--compose-cache", help="a5.py's: this machine's composed circuits (`compose_circuit.py --cache`)")
     a = ap.parse_args()
     out = Path(a.out)
-    root, of, _tmpls, _chunk = stand_in(a.units)
-    mine = commit(out / "window", a.units)
+    root, of = cir242(a.cir242)[:2] if a.cir242 else stand_in(a.units)[:2]
+    mine = commit(out / "window", a.units, a.cir242)
 
     def source(w: dict) -> dict:
         ok = {"kind": w.get("kind") == "stand-in", "run": w.get("run") == mine.run, "of": w.get("of") == of}

@@ -73,24 +73,25 @@ def keys(nvis: int, S: dict, boolean: bool = False, wire: bool = False) -> str:
     return descriptor_id(bind(BM.SparseMlaHeadKeysV2 if boolean else M.SparseMlaHeadKeys, NVIS=nvis, W=S["DR"]))
 
 
-def writer(nvis: int | None, S: dict) -> str:
+def writer(nvis: int | None, S: dict, boolean: bool = False) -> str:
     """Form (b2)'s writer: the scores unit that also returns the keys it read, in column blocks of DR (`SparseMlaHeadScoresKeys_v1`)."""
     st = {x: S[x] for x in ("DR", "DV", "BN", "SCALE")}
     at = {"NVIS": S["BN"], "FIRST": False} if nvis is None else {"NVIS": nvis, "FIRST": True}
-    return descriptor_id(bind(M.SparseMlaHeadScoresKeys, **at, **st, G=S["DR"], DOT=TS.FA3["DOT"]))
+    return descriptor_id(bind(BM.SparseMlaHeadScoresKeysV2, **at, **st, G=S["DR"], DOT=TS.BOOL["DOT"]) if boolean
+                         else bind(M.SparseMlaHeadScoresKeys, **at, **st, G=S["DR"], DOT=TS.FA3["DOT"]))
 
 
-def layout_b2(S: dict, each: bool = False) -> tuple[dict[str, str], dict[str, int]]:
+def layout_b2(S: dict, each: bool = False, boolean: bool = False) -> tuple[dict[str, str], dict[str, int]]:
     """Form (b2)'s templates by role and caps: per (row, key block) head `chain_rows.KEYS_HEAD`'s scores unit the writer
     (each head's with ``each``), the other heads' `SparseMlaHeadScoresCols_v1`, the values units in column blocks of DR and
     the ends; a later writer member holds every later block of its head, every other member one unit (an end, its head's
     column blocks)."""
     T, BN, DR, DV = (int(S[x]) for x in ("T", "BN", "DR", "DV"))
     first, nc, later = T - (T - 1) // BN * BN, DV // DR, (T - 1) // BN
-    tm = {"writer first": writer(first, S), "writer": writer(None, S)}
+    tm = {"writer first": writer(first, S, boolean), "writer": writer(None, S, boolean)}
     if not each:
-        tm |= {"scores first": scores(first, S), "scores": scores(None, S)}
-    tm |= {"values first": TS.values(first, S, G=DR), "values": TS.values(None, S, G=DR),
+        tm |= {"scores first": scores(first, S, boolean), "scores": scores(None, S, boolean)}
+    tm |= {"values first": TS.values(first, S, boolean, G=DR), "values": TS.values(None, S, boolean, G=DR),
            "end": descriptor_id(bind(M.SparseMlaHeadEnd, DV=DR, INV=TS.FA3["INV"]))}
     caps = {t: {"writer": later, "end": nc}.get(r, 1) for r, t in tm.items()}
     return tm, caps
@@ -112,15 +113,16 @@ def computed_b2(S: dict, each: bool = False) -> dict[str, int]:
     return {"rows": len(rows), "bytes": sum(rows), "bytes_whole_blocks": sum(-(-b // 128) * 128 for b in rows)}
 
 
-def layout(S: dict, per: str, queries: bool = False, wire: bool = False) -> tuple[dict[str, str], dict[str, int]]:
+def layout(S: dict, per: str, queries: bool = False, wire: bool = False, boolean: bool = False) -> tuple[dict[str, str], dict[str, int]]:
     """The row's templates by role, and each one's chunk cap (`serving_rows.members`); with ``queries`` a head's query one
     writer too, the row's heads one member."""
     T, BN, DR, DV = (int(S[x]) for x in ("T", "BN", "DR", "DV"))
     first, nc, later = T - (T - 1) // BN * BN, DV // DR, (T - 1) // BN
     if first == BN:
         raise SystemExit(f"T = {T} is whole blocks of {BN}: the first block's keys template is the later blocks', give T % BN != 0")
-    tm = {"scores first": scores(first, S), "scores": scores(None, S), "values first": TS.values(first, S, G=DR),
-          "values": TS.values(None, S, G=DR), "keys first": keys(first, S, wire=wire), "keys": keys(BN, S, wire=wire),
+    tm = {"scores first": scores(first, S, boolean), "scores": scores(None, S, boolean),
+          "values first": TS.values(first, S, boolean, G=DR), "values": TS.values(None, S, boolean, G=DR),
+          "keys first": keys(first, S, boolean, wire), "keys": keys(BN, S, boolean, wire),
           "end": descriptor_id(bind(M.SparseMlaHeadEnd, DV=DR, INV=TS.FA3["INV"]))}
     kf, kl, vc = (1, later, 1) if per == "column" else (nc + 1, later * (nc + 1), nc)
     caps = dict(zip(tm.values(), (1, 1, vc, vc, kf, kl, nc), strict=True))
@@ -128,6 +130,19 @@ def layout(S: dict, per: str, queries: bool = False, wire: bool = False) -> tupl
         tm["queries"] = descriptor_id(bind(M.SparseMlaHeadQuery, DR=DR, DV=DV))
         caps[tm["queries"]] = int(S["NH"])
     return tm, caps
+
+
+def zk_window(form: str) -> tuple[TS.Served, list[str], dict[str, int], dict]:
+    """The toy row's window in form ``form`` (``b3``: form (b) with the wire writer; ``b2``) over Boolean scores, values and
+    writers, the templates a window proved under ``--zk`` names (`a5_sparse_mla.py --cir242`): its served row, templates,
+    caps and statics."""
+    S = TOY
+    if form == "b2":
+        CH.KEYS_HEAD = 0
+        tm, caps = layout_b2(S, boolean=True)
+    else:
+        tm, caps = layout(S, "column", wire=True, boolean=True)
+    return TS.Served(TS.row(S), n=1), list(tm.values()), caps, S
 
 
 def window(s: TS.Served, ts: list[str], caps: dict[str, int], rewire=None) -> CS.Binding:
