@@ -10,7 +10,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 import kappa  # noqa: E402
-import slowdown as S  # noqa: E402
+import bracket as S  # noqa: E402
 import tiers as T  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[5]
