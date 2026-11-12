@@ -15,7 +15,7 @@ issue, table routes by bytes, priced side units at the pi32 floor.
   - "sidefloor": a side unit (reduction, atomic, texture, bulk) priced at the pi32 floor (floors.csv).
   - "mover": no arithmetic; its output equals an existing word (a copy/transpose/select).
   - "control": branch/barrier/predicate/misc; writes no committed word.
-  - None: not priced by any menu route -- `loads.class_of` returns None and it is no tensor/side form. The red-team gap.
+  - None: not priced by any menu route -- `loads.class_of` returns None and it is no tensor/side form. A gap in the menu.
 
 This table is keyed on the SASS base opcode (the part before the first `.`). It is the reviewable hand-classification the
 diff ranks; `diff_menu.py` cross-checks it against `loads.class_of` (the model's own SASS->census-class map) and flags

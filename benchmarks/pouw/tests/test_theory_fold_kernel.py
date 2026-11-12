@@ -8,10 +8,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 
 import fold_kernel_check as fk
+
+THEORY = Path(__file__).resolve().parents[1] / "theory"
 
 
 def test_fold_kernel_matches_meet_in_the_middle(tmp_path):
@@ -23,7 +24,7 @@ def test_fold_kernel_matches_meet_in_the_middle(tmp_path):
     assert len(res[1]) == 15
     assert res[3] == res[1]
     assert fk.mitm_k1(word, 37, 21, 6, 2, 4) == res[1]
-    assert all(fk.g3_ok(word, w2, 6) for w2 in res[1])
+    assert all(fk.g3_ok(word, w2) for w2 in res[1])
 
 
 @pytest.mark.slow
@@ -39,7 +40,10 @@ def test_chain_kernel_matches_brute_force(tmp_path):
     ys = np.arange(1 << n, dtype=np.uint64)
     words = np.arange(1 << (4 * n), dtype=np.uint64)
     limbs = [(words >> np.uint64(i * n)) & np.uint64((1 << n) - 1) for i in range(4)]
-    idx = lambda w: sum(int(x) << (i * n) for i, x in enumerate(w))
+
+    def idx(w):
+        return sum(int(x) << (i * n) for i, x in enumerate(w))
+
     for a0, a1 in keys:
         tab = {c: fk.fold(ys[None, :], [x[:, None] for x in limbs], a0, a1, n, r1, r2, c).astype(np.int64) for c in (1, 2)}
         for c0 in (1, 2):

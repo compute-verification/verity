@@ -16,7 +16,7 @@ unbiased running sums (`checked_unbiased`, Lean `mmW`) are retired as checked va
 low six bits minus 31, exactly uniform on [−31, 32].  A tile's digest is SHAKE256 over its checked words, little-endian, step by step and
 row-major within a step (the order an accumulator produces them).
 
-``ncp-v1`` uses the word-granular production P v1.1 (`word_perm`: it moves aligned 4-entry words and keeps the order
+``ncp-v1`` uses the word-granular P v1.1 (`word_perm`: it moves aligned 4-entry words and keeps the order
 inside each, so forming E₂ is a free word move under W1 with byte moves priced).  It is certified
 (independence rank T − 1, λ₃ = 32, MinRank 16 at k = 1,088, 2,048, 4,096 and 11,008); ``tests/test_pouw_word_p.py``
 re-checks the rejection rule, the MinRank argument's hypotheses and λ₃ ≥ 16 at the k the MVP uses.  ``ncp-v1-shift24``
@@ -79,7 +79,7 @@ def inside_cycles(p: Sequence[int], wps: int = 4) -> set[int]:
 
 
 def word_perm(k: int, seed: bytes = WORD_P_SEED, g: int = 4) -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """The word-granular production P, v1.1 (``pword-repair2.py``): a SHAKE256 Fisher-Yates over the k/g aligned words;
+    """The word-granular P, v1.1 (``pword-repair2.py``): a SHAKE256 Fisher-Yates over the k/g aligned words;
     repair 1 so no word lands in its own 16-step; repair 2 so no cycle of π² stays inside one step (hence no 2-cycle).
     The order inside each word is kept and every sign is +1.  Neither repair guards the rejection rule's other clauses or
     λ₃ ≥ 16, which are certified per k in ``tests/test_pouw_word_p.py``."""

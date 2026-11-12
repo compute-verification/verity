@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_machine_model import model
 
 POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
@@ -94,11 +95,6 @@ def test_schema_is_machine_models():
             r = csv.DictReader(f)
             assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
             lines += r
-    sys.path.insert(0, str(MACHINE_MODEL))
-    try:
-        from verity_machine_model import model
-    finally:
-        sys.path.remove(str(MACHINE_MODEL))
     for d in lines:
         assert rows.u_of(300.08, d["rate"], d["noise"], d["cycles"], d["u"]) == model.u_of(
             300.08, d["rate"], d["noise"], d["cycles"], d["u"])
@@ -569,6 +565,27 @@ def test_sm89_ji_pins_only_the_schedule_its_name_says():
     assert ji89.exact("j16_iadd3_q64_a2u1_w2", {"IMAD.IADD": 32, "IADD3": 33, "IMMA.16816.S8.S8": 8, "ISETP.GE.AND": 1})
     names = [p[0] for p in ji89.grid(32)]
     assert "j32_fmuli_q112_a2u1_w2" in names and len(names) == len(set(names))
+
+
+@pytest.mark.parametrize("k, source", [(16, "ji16.cu"), (32, "ji32.cu")])
+def test_sm89_ji_grids_are_what_emit_writes_from_their_own_pins(tmp_path, k, source):
+    """`ji16.cu` and `ji32.cu` are generated files: `emit --pins`, given a gate whose loops are the counts the file
+    itself pins, writes the file back byte for byte. The grid points it leaves out are the unroll-4 programs at Q 64 and
+    112, whose loops are not the schedule their names say; unpinned, it writes every grid point."""
+    text = (POUW / "opcode_probe" / "sm89" / source).read_text()
+    pinned = re.findall(r'\.name = "(\w+)", .*?\.expect = "([^"]+)"', text)
+    tops = {name: {op: int(n) for op, n in (c.split("=") for c in expect.split(","))} for name, expect in pinned}
+    grid = [p[0] for p in ji89.grid(k)]
+    left_out = sorted(set(grid) - set(tops))
+    assert left_out == sorted(f"j{k}_fmuli_q{q}_a{na}u4_w2" for q in (64, 112) for na in (2, 3, 8))
+    split = {"FMUL": 256, f"IMMA.168{k}.S8.S8": 32, "CALL.REL.NOINC": 1, "BRA": 1}
+    verdicts = [{"probe": name, "verdict": {"loops": [{"top": top}]}} for name, top in tops.items()]
+    verdicts += [{"probe": name, "verdict": {"loops": [{"top": split}]}} for name in left_out[:4]]
+    verdicts += [{"probe": left_out[4], "verdict": None}, {"probe": left_out[5], "verdict": {"loops": []}}]
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    assert ji89.emit(k, tmp_path / "gate.json") == text
+    unpinned = ji89.emit(k, None)
+    assert unpinned.count("\nJM(") == unpinned.count(".expect = ") == len(grid) == len(tops) + 6
 
 
 def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):
