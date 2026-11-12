@@ -443,16 +443,21 @@ def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged
         IR.history(rec, [NAMES[0]], 4, C, {}, {})
 
 
+@_opt_in("a round 1 and an interior over the table reads on a stream of the test's own, as `SHARED`'s tests build "
+         "once for the module")
+@pytest.mark.slow
 def test_an_interior_whose_history_names_a_table_round_1_did_not_serve_under_its_name_is_refused():
     """An interior built, and its `history` taken, against a copy of round 1's record whose port for a drawn span's
     table names another table's root: the prover's strings, the interior's `history` and its supplied reads all agree
     on that table (`history.roots_of` and R7 pass), but the boundary registration the stream holds names another root
     for the port, so the stream refuses the interior (`interior-table`). The honest interior registers
-    (`test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them`)."""
+    (`test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them`). Slow: the
+    refusal is the stream's, over the record it registered; `tables_served`'s difftest piece holds the Python to the Lean
+    on records written by hand."""
     tables = _tables()
     stream, reg, first, rec = _first(tables)
     drawn = [tables[u] for u in first.units]
-    other = HT.HistoryTable(PROGRAM, drawn[1].value, 2, CAP)
+    other = HT.HistoryTable(_program(), drawn[1].value, 2, CAP)
     rows = np.array(drawn[1].rows)
     rows[1, 0] ^= 1
     other.append(rows, drawn[1].salts)
