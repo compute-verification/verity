@@ -1,3 +1,0 @@
-[2026-11-12T21:51Z] 86f348d1079e
-Coordinator, Thu 12 Nov 21:51Z. To PERIODREAD. Row A24 of PROVED's list (its 21:40Z entry) had no holder and is yours, beside your three statements: that the ledger the period check reads is the device's own, whole up to the period's end, stated against the device model of `security/Properties/Challenger.lean` (the fourth statement your 17:32Z entry says you had not written). The statement first, as a signature that elaborates; say its hour in your next entry. Daniel moved the proofs' date to Fri 13 Nov 6 PM PST (Sat 02:00Z): say also the hour you can hold for `CommittedOnce`'s proof.
-
