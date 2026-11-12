@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
+import types
 from pathlib import Path
 
 import pytest
@@ -306,6 +308,74 @@ def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkey
     ps.close()
     with pytest.raises(ProofServerError, match="closed"):
         ps.submit(statement(tmp_path, "11" * 64), draw([0]), "s1")
+
+
+def test_a_provers_exit_fails_its_sessions_before_the_server_retires_their_verifier(binary, tmp_path, monkeypatch):
+    """A session its prover left unrecorded has failed on the prover's exit before the server does anything to the
+    session's verifier: before the thread that retires the verifier starts, and so before the server ends the verifier's
+    queue or terminates it. The verifier's own exit, which is the server's doing, is then never the reason the session
+    carries. Stand-ins record at each of the three steps whether the session has failed. The prover ends with status 0 (a
+    session is done on its records, never on its prover's exit status), and the server is closed as soon as the session
+    fails: its close has joined the retiring thread."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
+    st = statement(tmp_path, "ab" * 64)
+    seen: list[tuple[str, bool]] = []
+
+    def note(step: str, then=lambda: None):
+        seen.append((step, ps._sessions["s1"]._error is not None))
+        return then()
+
+    class Retiring(threading.Thread):
+        def start(self) -> None:
+            if self.name.startswith("retire-"):
+                note("retire")
+            super().start()
+
+    spy = types.ModuleType("threading")
+    vars(spy).update(vars(threading), Thread=Retiring)
+    monkeypatch.setattr(PS, "threading", spy)
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(st, {"units": [0]}, "s0").result()
+        (v,) = ps._verifiers.values()
+        monkeypatch.setattr(v, "end", lambda end=v.end: note("end", end))
+        monkeypatch.setattr(v.p, "terminate", lambda terminate=v.p.terminate: note("terminate", terminate))
+        left = ps.submit(st, {"units": [1]}, "s1")
+        with pytest.raises(ProofServerError) as e:
+            left.result()
+    assert seen == [("retire", True), ("end", True), ("terminate", True)], "False: the session had not failed at that step"
+    assert "prover-cpu exited" in str(e.value) and left.live is None and ps.exits["prover-cpu"] == 0
+    assert first.accepted and [t.is_alive() for t in ps._retiring] == [False]
+
+
+def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
+    """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
+    and the next session meets a new prover and verifier on their first lines."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    pin = "ff" * 64
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(statement(tmp_path, pin), {"units": [0]}, "s0").result()
+        with pytest.raises(ProofServerError, match="prover-cpu exited"):
+            ps.submit(statement(tmp_path, pin), {"units": [1]}, "s1").result()
+        last = ps.submit(statement(tmp_path, pin), {"units": [2]}, "s2").result()
+    assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
+    v = f"verifier-{pin[:16]}"
+    assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
+
+
+def test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session(binary, tmp_path, monkeypatch):
+    """A session is done on its records and never on its prover's exit status: a prover that ends with status 0 and no
+    ``LIVE`` record for a line it was handed fails that line's session, as one that ends with any other status does. The
+    server is closed as soon as the session fails, and its close finds the verifier's retiring thread started."""
+    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
+    st = statement(tmp_path, "ee" * 64)
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        first = ps.submit(st, {"units": [0]}, "s0").result()
+        left = ps.submit(st, {"units": [1]}, "s1")
+        with pytest.raises(ProofServerError, match=r"prover-cpu exited \(rc 0\) before its records"):
+            left.result()
+    assert first.accepted and left.live is None and ps.exits["prover-cpu"] == 0
 
 
 def test_each_verifier_on_its_own_challenger_audited_at_close(binary, tmp_path, monkeypatch):
