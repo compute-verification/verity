@@ -644,3 +644,48 @@ def test_a_root_other_than_the_expected_one(tmp_path, stand_ins, capsys):
     assert [row["root_equal_expected"] for row in rows] == [False, False]
     assert [row["commit"]["value_correspondence"]["result"] for row in rows] == [False, False]
     assert [f"[delta] ROOT MISMATCH: run root {root} != expected {'ab' * 64}" in ended.printed for root in MADE[0].roots[1:]] == [True, True]
+
+
+NOT_RUN = "oracle compare not run: "
+
+
+def oracle_compares(ended: Ended) -> list[Record]:
+    """Each instrumented row's oracle-compare record; a control row has no commit record, so none."""
+    assert [row.get("commit") for row in ended.rows() if row["arm"] == "control"] == [None, None]
+    return [row["commit"]["oracle_compare"] for row in ended.rows() if row["arm"] == "instrumented"]
+
+
+def test_an_oracle_that_cannot_be_read_is_recorded_as_not_checked(tmp_path, stand_ins, capsys):
+    """``--match-dir`` on a directory that holds no Match record: each instrumented row records an oracle compare that did not
+    run, under the comparison's own schema id and with no result, and its value correspondence says the compare is partial."""
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--match-dir", str(tmp_path / "no_match"))
+    missing = "FileNotFoundError(2, 'No such file or directory')"
+    assert oracle_compares(ended) == [{"schema": "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
+                                       "why": NOT_RUN + missing, "compared": 0, "mismatch_n": 0, "error": missing}] * 2
+    for row in ended.rows():
+        if row["arm"] == "instrumented":
+            correspondence = row["commit"]["value_correspondence"]
+            assert correspondence["method"].startswith("oracle-compare(partial) + ")
+            assert correspondence["oracle_provenance"] is None
+            assert correspondence["components"]["oracle_compare"] == {
+                **dict.fromkeys(("result", "grade", "equal", "steps_compared", "steps_not_snapshotted", "complete", "attribution",
+                                 "workload_check", "value_source", "provenance")),
+                "why": NOT_RUN + missing, "compared": 0, "mismatch_n": 0, "reference": "live Match oracle of this attempt (--match-dir)"}
+
+
+def test_an_oracle_compare_that_cannot_be_imported_is_recorded_under_the_same_schema(tmp_path, stand_ins, capsys, monkeypatch):
+    """The comparison's module is imported where it is first needed.  Where that import fails the record still carries the
+    comparison's schema id, which is the id the module itself writes."""
+    from verity_vllm import check
+    from verity_vllm.check import oracle_compare
+
+    assert oracle_compare.SCHEMA == "verity-sweep/oracle-compare/v1"
+    monkeypatch.delattr(check, "oracle_compare")
+    monkeypatch.setitem(sys.modules, "verity_vllm.check.oracle_compare", None)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--match-dir", str(tmp_path / "no_match"))
+    records = oracle_compares(ended)
+    assert [(r["schema"], r["method"], r["result"], r["compared"], r["mismatch_n"]) for r in records] == [
+        ("verity-sweep/oracle-compare/v1", "oracle-compare", None, 0, 0)] * 2
+    assert all(r["why"] == NOT_RUN + r["error"] and r["error"].startswith(("ImportError(", "ModuleNotFoundError(")) for r in records)
