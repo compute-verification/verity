@@ -185,7 +185,7 @@ def _load(p: str) -> Any:
 def _result_digest(path: str) -> Any:
     """The Program digest a Build's `result.json` at `path` names; None where it names no Program."""
     program = _load(path).get("program")
-    return None if program is None else program.get("digest")
+    return program.get("digest") if program else None
 
 
 def _label(r: Mapping[str, Any]) -> str:
@@ -198,7 +198,7 @@ def plan(manifest: Mapping[str, Any], ids: Sequence[Mapping[str, Any]], *roots: 
     Build dirs under `roots`."""
     p = Plan(identities=len(ids))
     stated, steps = manifest.get("requests"), manifest.get("engine_steps")
-    requests, ranks, progs = ([] if stated is None else list(stated)), int(manifest.get("ranks") or 1), request_programs(manifest)
+    requests, ranks, progs = (list(stated) if stated else []), int(manifest.get("ranks") or 1), request_programs(manifest)
     if steps and isinstance(steps[0], Mapping):
         p.composition = {int(e["engine_step"]): {str(m["request_id"]): int(m["rows"]) for m in e.get("members") or ()} for e in steps}
     p.order = {str(d["workload_request_id"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("workload_request_id")}

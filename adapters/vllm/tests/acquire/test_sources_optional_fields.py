@@ -1,11 +1,14 @@
 """What the sources read from a record that leaves an optional field out: absent, null and empty read alike, and a stated one is read.
+A field that holds another empty value (`OTHER_EMPTY`) in its block's place reads as the absent one too.
 
 Each reader below takes a document whose writer may leave a field out: a required manifest's `identities`
 (`verity_vllm.acquire.sources.int8_source`, `verity_vllm.acquire.sources.call_boundary_source`,
 `verity_vllm.acquire.sources.call_boundary_plan`, `verity_vllm.acquire.sources.taps`), its `requests`, `engine_steps` and `fixture`, a
 Build's `result.json`, a capture map's `pins`, what a rank recorded of the sources it attached, a step the declared composition or the
-recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), and a capture's stored tensors
-(`verity_vllm.acquire.sources.partial_source`).  CPU only."""
+recorded routes do not hold (`verity_vllm.acquire.sources.route_source`), a capture's stored tensors
+(`verity_vllm.acquire.sources.partial_source`), and a capture map's taps, whose `commit` block names the source that commits them
+(`verity_vllm.acquire.sources.attention_source`, `verity_vllm.acquire.sources.dsv4_attention_source`,
+`verity_vllm.acquire.sources.mhc_source`).  CPU only."""
 from __future__ import annotations
 
 import json
@@ -17,9 +20,12 @@ import pytest
 import torch
 
 from tests.check.opened import commit_steps
+from verity_vllm.acquire.sources import attention_source as AT
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources import dsv4_attention_source as D4
 from verity_vllm.acquire.sources import int8_source as I8
+from verity_vllm.acquire.sources import mhc_source as MH
 from verity_vllm.acquire.sources import partial_source as P
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
@@ -28,6 +34,8 @@ from verity_vllm.commit import capture_map as CM
 
 #: a manifest that names no identity: none given, the field absent, null and empty
 NO_IDENTITIES: list[dict[str, Any] | None] = [None, {}, {"identities": None}, {"identities": []}]
+#: the other empty values a writer may leave in an optional block's place; each reads as the absent block
+OTHER_EMPTY: list[Any] = [0, "", False, 0.0, []]
 QUANT = {"family": CP.FAMILY, "spec": f"{I8.QUANT_SPEC}{{w=8}}", "op_path": "model.layers.0.q/quant", "engine_step": 2,
          "output_member": "0", "request_id": "r0"}
 KV = {"family": "instance_outputs", "spec": I8.KV_SPEC, "op_path": "model.layers.0.attn", "port": 1}
@@ -69,7 +77,7 @@ def test_a_manifests_identities_name_the_sources_its_commit_attaches():
     assert TAPS.attached(STATED) == [CB.CallBoundarySource.short_name, I8.SHORT_NAME]
 
 
-@pytest.mark.parametrize("identities", [{}, {"identities": None}, {"identities": []}, None])
+@pytest.mark.parametrize("identities", [{}, {"identities": None}, {"identities": []}, None, *({"identities": v} for v in OTHER_EMPTY)])
 def test_a_rank_whose_manifest_names_no_identities_attaches_nothing_to_a_model_no_source_knows(tmp_path, identities):
     """`verity_vllm.acquire.sources.taps.attach_rank`: the rank's rows of a manifest file that leaves `identities` out, or of no file."""
     path = None
@@ -99,7 +107,8 @@ def test_a_manifests_token_rows_divide_a_steps_bytes():
     assert CP._arena_bound(tokens, CP.Plan(bodies={(0, "m"): _body()})) == (16, 1)
 
 
-@pytest.mark.parametrize("manifest", [{}, {"requests": None, "engine_steps": None}, {"requests": [], "engine_steps": []}])
+@pytest.mark.parametrize("manifest", [{}, {"requests": None, "engine_steps": None}, {"requests": [], "engine_steps": []},
+                                      *({"requests": v, "engine_steps": v} for v in OTHER_EMPTY)])
 def test_a_manifest_that_states_no_requests_and_no_engine_steps_is_one_requests_without_a_composition(manifest):
     """`verity_vllm.acquire.sources.call_boundary_plan.plan`: the one request is `r0`, whose Program no Build dir holds here."""
     p = CP.plan(manifest, [ADD])
@@ -121,7 +130,8 @@ def test_a_build_whose_result_names_no_program_is_no_programs_build_dir(tmp_path
     """`verity_vllm.acquire.sources.call_boundary_plan.build_dirs`: a `result.json` whose `program` is absent, null or empty names no
     digest, so its directory is listed under none; an `artifact.json` that states the digest is read first."""
     results: dict[str, dict[str, Any]] = {"a": {}, "b": {"program": None}, "c": {"program": {}}, "d": {"program": {"digest": "d1"}},
-                                          "e": {"program": {"digest": "d9"}}}
+                                          "e": {"program": {"digest": "d9"}},
+                                          **{f"empty{i}": {"program": v} for i, v in enumerate(OTHER_EMPTY)}}
     for name, doc in results.items():
         (tmp_path / name).mkdir()
         (tmp_path / name / "result.json").write_text(json.dumps(doc))
@@ -130,7 +140,8 @@ def test_a_build_whose_result_names_no_program_is_no_programs_build_dir(tmp_path
     assert CP.build_dirs(str(tmp_path)) == {"d1": str(tmp_path / "d"), "d2": str(tmp_path / "e")}
 
 
-@pytest.mark.parametrize("declared", [{0: {"r0": 2}}, {0: {"r0": 2}, 1: None}, {0: {"r0": 2}, 1: {}}])
+@pytest.mark.parametrize("declared", [{0: {"r0": 2}}, {0: {"r0": 2}, 1: None}, {0: {"r0": 2}, 1: {}},
+                                      *({0: {"r0": 2}, 1: v} for v in OTHER_EMPTY)])
 def test_a_step_the_composition_declares_nothing_for_is_a_collector_error_naming_it(declared):
     """`verity_vllm.acquire.sources.call_boundary_source.CallBoundarySource._order`: the rows a step ran must be the composition's; a
     step it holds no requests for declares none."""
@@ -151,10 +162,10 @@ def _made(states: list[Any]) -> list[dict[str, Any]]:
 def test_ranks_that_recorded_no_source_pass_without_a_tap_and_fail_a_tap_that_is_on():
     """`verity_vllm.acquire.sources.taps.require_on_every_rank`: a rank's record whose `tap_sources` is absent, null or empty attached
     none of the sources."""
-    made = _made([..., None, {}])
+    made = _made([..., None, {}, *OTHER_EMPTY])
     versions: dict[str, Any] = {}
     assert TAPS.require_on_every_rank(made, ("a",), versions, TAPS.TapSources(), explicit_classes=True) == ("a",) and versions == {}
-    with pytest.raises(SystemExit, match=r"fail-closed: the vocab_range source did not attach on ranks \[0, 1, 2\] of 3: \[None, None\]"):
+    with pytest.raises(SystemExit, match=r"fail-closed: the vocab_range source did not attach on ranks \[0, 1, 2, 3, 4, 5, 6, 7\] of 8: "):
         TAPS.require_on_every_rank(made, ("a",), {}, TAPS.TapSources(vocab_range=True), explicit_classes=True)
 
 
@@ -174,9 +185,11 @@ def _map(name: str, **fields: Any) -> dict[str, Any]:
 
 @pytest.fixture
 def maps(tmp_path, monkeypatch):
-    """Capture maps under a directory of their own: five that pin no checkpoint, one of another model, one of the model without a
+    """Capture maps under a directory of their own: fifteen that pin no checkpoint, one of another model, one of the model without a
     route site, one of the model at four ranks and one of the model at two."""
     docs = [_map("a"), _map("b", pins=None), _map("c", pins={}), _map("d", pins={"checkpoint": None}), _map("e", pins={"checkpoint": {}}),
+            *(_map(f"c{i}", pins=v) for i, v in enumerate(OTHER_EMPTY)),
+            *(_map(f"e{i}", pins={"checkpoint": v}) for i, v in enumerate(OTHER_EMPTY)),
             _map("f", pins={"checkpoint": {"repo": "org/other"}}), _map("g", pins={"checkpoint": {"repo": "org/model"}}, route_site=None),
             _map("h", pins={"checkpoint": {"repo": "org/model"}}, target={"tensor_parallel_size": 4}),
             _map("i", pins={"checkpoint": {"repo": "org/model"}})]
@@ -185,7 +198,8 @@ def maps(tmp_path, monkeypatch):
     monkeypatch.setattr(RS, "MAPS", tmp_path)
 
 
-@pytest.mark.parametrize("manifest", [None, {}, {"fixture": None}, {"fixture": {}}, {"fixture": {"model": None}, "ranks": 2}])
+@pytest.mark.parametrize("manifest", [None, {}, {"fixture": None}, {"fixture": {}}, {"fixture": {"model": None}, "ranks": 2},
+                                      *({"fixture": v, "ranks": 2} for v in OTHER_EMPTY)])
 def test_a_manifest_that_states_no_model_has_no_capture_map(maps, manifest):
     """`verity_vllm.acquire.sources.route_source.manifest_map`: a manifest whose `fixture`, or whose fixture's model, is absent, null or
     empty."""
@@ -224,9 +238,10 @@ def test_a_name_a_step_committed_nothing_under_has_no_occurrence():
     """`verity_vllm.acquire.sources.partial_source._nth`: occurrence k of a name in a step's layout, None past its last and for a name
     the layout does not hold."""
     a, b = object(), object()
-    by: dict[str, Any] = {"m/out": [a, b], "m/none": [], "m/null": None}
+    by: dict[str, Any] = {"m/out": [a, b], "m/none": [], "m/null": None, **{f"m/empty{i}": v for i, v in enumerate(OTHER_EMPTY)}}
     assert P._nth(by, "m/out", 0) is a and P._nth(by, "m/out", 1) is b and P._nth(by, "m/out", 2) is None
     assert P._nth(by, "m/absent", 0) is None and P._nth(by, "m/none", 0) is None and P._nth(by, "m/null", 0) is None
+    assert [P._nth(by, f"m/empty{i}", 0) for i in range(len(OTHER_EMPTY))] == [None] * len(OTHER_EMPTY)
 
 
 class RowParallelLinear:
@@ -236,7 +251,7 @@ class RowParallelLinear:
         return iter(())
 
 
-@pytest.mark.parametrize("stored", [{}, {"part": None, "out": None}, {"part": [], "out": []}])
+@pytest.mark.parametrize("stored", [{}, {"part": None, "out": None}, {"part": [], "out": []}, *({"part": v, "out": v} for v in OTHER_EMPTY)])
 def test_a_capture_step_that_stored_no_tensors_is_named_inconsistent_with_its_record(tmp_path, stored):
     """`verity_vllm.acquire.sources.partial_source.TPPartialSource.compare_match_oracle`: the step's `.pt` leaves `part` and `out` out
     while the capture's record names one collective at the step."""
@@ -249,3 +264,24 @@ def test_a_capture_step_that_stored_no_tensors_is_named_inconsistent_with_its_re
     res = src.compare_match_oracle(str(tmp_path), OC.OpenedReader(com, run))
     assert res["verdict"] == "FAIL" and res["oracle_inconsistent"] == [{"step": 0, "jsonl_names": 1, "pt_part": 0, "pt_out": 0}]
     assert res["tensors"] == 0 and "error" not in res
+
+
+#: a tap's `commit` block that names no binder, or another source's: left out (`...`), null, empty, another empty value, or a block
+NOT_THE_SOURCES: list[Any] = [..., None, {}, *OTHER_EMPTY, {"name": "a/b"}, {"binder": None, "name": "a/b"}, {"binder": "another", "name": "a/b"}]
+
+
+def _tap(block: Any) -> dict[str, Any]:
+    tap: dict[str, Any] = {"id": "t", "role": "r", "site": {"function": "f", "module": "m", "output": 0}}
+    return tap if block is ... else {**tap, "commit": block}
+
+
+@pytest.mark.parametrize("source", [AT, D4, MH])
+@pytest.mark.parametrize("block", NOT_THE_SOURCES)
+def test_a_tap_whose_commit_block_does_not_name_a_sources_binder_is_not_the_sources(source, block):
+    """`binds` of the three capture-map sources, and `ports_of` of the two that read ports: a tap is a source's when its `commit` block
+    names the source's binder; a tap with no block, an empty one, or another binder's is committed by another source or by none."""
+    cmap = {"id": "m", "taps": [_tap(block)]}
+    assert not source.binds(cmap)
+    assert source.binds({"id": "m", "taps": [_tap(block), _tap({"binder": source.BINDER, "name": "a/b"})]})
+    if source is not AT:
+        assert source.ports_of(cmap) == {}
