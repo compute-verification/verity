@@ -44,6 +44,9 @@ import numpy as np
 from verity.definitions.registry import sampling_topp_difftest
 
 from verity_vllm.config import option, workload_arg, workload_file
+from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
+from verity_vllm.observe.log import header_of, read_log
+from verity_vllm.program import sampling_rng
 from verity_vllm.properties.admission import evaluate_spec
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
@@ -424,36 +427,12 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     return out
 
 
-def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
-                  jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
-                  reference_rows: int = 0) -> dict:
-    from verity_vllm.check.fold_compare import SnapshotStore
-    from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
-    from verity_vllm.observe.log import header_of, read_log
-    from verity_vllm.program import sampling_rng as R
-
-    t0 = time.time()
-    events = list(read_log(log_path))
-    header = header_of(events)
-    run_facts = _request_facts(header)                     # what the run was GIVEN (the capture header's request records)
-    facts = dict(run_facts)
-    header_vs_manifest: list[str] = []
-    if workload is not None:
-        # the manifest of record is the authority for the declared inputs; the header must agree with it (else FAIL, named)
-        mf = _manifest_facts(workload)
-        for rid, m in mf.items():
-            h = run_facts.get(rid)
-            if h is not None:
-                for k in ("seed", "temperature", "top_p", "top_k"):
-                    a, b = m.get(k), h.get(k)
-                    same = (a == b) if k in ("seed", "top_k") else (a is not None and b is not None and _f32_bits(a) == _f32_bits(b))
-                    if not same:
-                        header_vs_manifest.append(f"{rid}: manifest declares {k}={a!r} but the run's header records {k}={b!r}")
-        facts = {rid: dict(run_facts.get(rid, {}), **m) for rid, m in mf.items()} or facts
-    store = SnapshotStore(snapshots_dir)
+def _sampler_steps(events: list) -> dict[int, dict]:
+    """Each engine step of the record with the sampler chain the record holds for it: its StepStart, its Gumbel launch, its top-p
+    mask launch, the names of its top-p launches in order, its temperature launch and its SampleEnd (None where there is none)."""
     per_step: dict[int, dict] = {}
     cur: StepStart | None = None
-    for ev in events[1:]:
+    for ev in events:
         if isinstance(ev, StepStart):
             cur = ev
             per_step[ev.step] = {"start": ev, "gumbel": None, "mask": None, "topp": [], "temp": None, "sample_end": None}
@@ -471,26 +450,30 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                 d["temp"] = ev
         elif isinstance(ev, SampleEnd) and ev.step in per_step:
             per_step[ev.step]["sample_end"] = ev
+    return per_step
+
+
+def _sampled_rows(per_step: dict[int, dict], store, facts: dict[str, dict], program_S: dict[str, Any], max_rows: int | None,
+                  reasons: list[str]) -> tuple:
+    """Walk every sampled row of the record: (rows, pending, tally, rows_without_seed, steps_seen, sampled_rows_total, s_disagree,
+    chain_absent, samples_seen).  `rows` holds one entry per sampled row, or one per step whose rows cannot be value-checked; `pending`
+    the rows to evaluate under their declared facts.  Each row that is not checked is named in `reasons`."""
     rows: list[dict] = []
     pending: list[tuple[int, tuple, np.ndarray | None]] = []      # (row index, (V, S, words), observed masked row)
-    reasons: list[str] = list(header_vs_manifest)
     tally = {"exact-match": 0, "mismatch": 0, "no-snapshot": 0, "skipped": 0}
     rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
     sampled_rows_total = 0            # every sampled row of the record counts; the verdict names k of n value-checked
-    program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request, if a Build is given
-    reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
     events_of: dict[str, int] = {}                         # sampled events attributed to each request so far (the event index of the next row)
     s_disagree: list[str] = []
     chain_absent: list[str] = []      # engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
-    engine_steps = len(per_step)
-    draws_seen: dict[str, list[dict]] = {}                 # every sampled row of every request, snapshot or not: the sample ledger
+    samples_seen: dict[str, list[dict]] = {}                 # every sampled row of every request, snapshot or not: the sample ledger
     for step, d in sorted(per_step.items()):
         g, se, ss = d["gumbel"], d["sample_end"], d["start"]
         _lrows = list(getattr(ss, "logits_rows", None) or ())
         _srv = list(getattr(se, "sampled_token_ids", None) or ()) if se is not None else []
         for _row, (_rid, _pos) in enumerate(_lrows):
-            draws_seen.setdefault(str(_rid), []).append({"step": int(step), "row": int(_row), "pos": int(_pos),
+            samples_seen.setdefault(str(_rid), []).append({"step": int(step), "row": int(_row), "pos": int(_pos),
                                                          "served": int(_srv[_row]) if _row < len(_srv) else None})
         if g is None or se is None or d["mask"] is None:
             # the denominator is the RECORD's sampled rows (StepStart.logits_rows at every engine step), not the tool's
@@ -521,21 +504,21 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             reasons.append(f"step {step}: {n_rows_step} sampled row(s) not value-checked (the logits row fed to the sampler was not snapshotted)")
             continue
         bf_words = np.asarray(store.extract(bsnap, bf)).reshape(bf.shape)
-        masked_obs = R._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
+        masked_obs = sampling_rng._as_f32(np.asarray(store.extract(msnap, lv)), lv.dtype).reshape(lv.shape) if msnap is not None else None
         R_, V = bf.shape
         cx = dict(g.constexprs or {})
         S = None
         if d["mask"] is not None:
             S = (d["mask"].constexprs or {}).get("S")
-        seeds_snap = R._small_int_arg(store, g, "seeds_ptr")
-        pos_snap = R._small_int_arg(store, g, "pos_ptr")
-        temp_snap = R._small_arg(store, g, "temp_ptr", np.float32)
-        map_snap = R._small_int_arg(store, g, "expanded_idx_mapping_ptr")
+        seeds_snap = sampling_rng._small_int_arg(store, g, "seeds_ptr")
+        pos_snap = sampling_rng._small_int_arg(store, g, "pos_ptr")
+        temp_snap = sampling_rng._small_arg(store, g, "temp_ptr", np.float32)
+        map_snap = sampling_rng._small_int_arg(store, g, "expanded_idx_mapping_ptr")
         p_snap = None
         if d["mask"] is not None:                                   # the split kernels' signature names the top-p buffer `P`
-            p_snap = R._small_arg(store, d["mask"], "P", np.float32)
+            p_snap = sampling_rng._small_arg(store, d["mask"], "P", np.float32)
             if p_snap is None:
-                p_snap = R._small_arg(store, d["mask"], "p_ptr", np.float32)
+                p_snap = sampling_rng._small_arg(store, d["mask"], "p_ptr", np.float32)
         served = list(se.sampled_token_ids)
         for row, (rid, pos_fact) in enumerate(ss.logits_rows):
             if max_rows is not None and len(rows) >= max_rows:
@@ -604,6 +587,13 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                      np.array([_f32_bits(T)], dtype=np.uint64)]
             pending.append((len(rows), (int(V), int(S), words), None if masked_obs is None else masked_obs[row].view(np.uint32).copy()))
             rows.append(rec)
+    return rows, pending, tally, rows_without_seed, steps_seen, sampled_rows_total, s_disagree, chain_absent, samples_seen
+
+
+def _evaluate_pending(pending: list, rows: list[dict], reasons: list[str], tally: dict[str, int], jobs: int | None, evaluator: str,
+                      reference_rows: int, sampled_rows_total: int) -> tuple[float, dict]:
+    """Evaluate the pending rows and write each one's token, masked row and status into its entry of `rows`: (the evaluation's
+    seconds, the record of the lane-walk reference)."""
     # evaluate the pending rows (the Definition of record, GumbelTopPTokenSelect_v1{V,S}) -- by the interpreter ('lane', the path of
     # record) or by the vectorised twins ('rows'); under 'rows', `reference_rows` of them ALSO go through the lane
     # walk and both results are compared word for word (token + masked row): a disagreement between the two evaluators is a FAIL by
@@ -655,6 +645,42 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
         if st == "mismatch":
             reasons.append(f"step {step} row {row} ({rid}): served token {rec['served']} != GumbelTopPTokenSelect_v1{{V={V},S={S}}} "
                            f"under the declared seed {seed} / T={T} / p={p} / pos={int(pos_fact)} -> {tok}")
+    return eval_seconds_total, ref_check
+
+
+def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
+                  jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
+                  reference_rows: int = 0) -> dict:
+    # fold_compare imports torch, which only this function needs
+    from verity_vllm.check.fold_compare import SnapshotStore
+
+    t0 = time.time()
+    events = list(read_log(log_path))
+    header = header_of(events)
+    run_facts = _request_facts(header)                     # what the run was GIVEN (the capture header's request records)
+    facts = dict(run_facts)
+    header_vs_manifest: list[str] = []
+    if workload is not None:
+        # the manifest of record is the authority for the declared inputs; the header must agree with it (else FAIL, named)
+        mf = _manifest_facts(workload)
+        for rid, m in mf.items():
+            h = run_facts.get(rid)
+            if h is not None:
+                for k in ("seed", "temperature", "top_p", "top_k"):
+                    a, b = m.get(k), h.get(k)
+                    same = (a == b) if k in ("seed", "top_k") else (a is not None and b is not None and _f32_bits(a) == _f32_bits(b))
+                    if not same:
+                        header_vs_manifest.append(f"{rid}: manifest declares {k}={a!r} but the run's header records {k}={b!r}")
+        facts = {rid: dict(run_facts.get(rid, {}), **m) for rid, m in mf.items()} or facts
+    store = SnapshotStore(snapshots_dir)
+    per_step = _sampler_steps(events[1:])
+    engine_steps = len(per_step)
+    reasons: list[str] = list(header_vs_manifest)
+    program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request, if a Build is given
+    reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
+    rows, pending, tally, rows_without_seed, steps_seen, sampled_rows_total, s_disagree, chain_absent, samples_seen = _sampled_rows(
+        per_step, store, facts, program_S, max_rows, reasons)
+    eval_seconds_total, ref_check = _evaluate_pending(pending, rows, reasons, tally, jobs, evaluator, reference_rows, sampled_rows_total)
     checked = tally["exact-match"] + tally["mismatch"]
     device_ok = all(r.get("device_facts_match", True) for r in rows)
     masked_ok = all(r.get("masked_row_equal", True) for r in rows)
@@ -664,7 +690,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     reasons.extend(chain_absent)
     # the sample ledger: one sample per request per step at pos = prompt_len - 1 + k, samples == cap or
     # EOS + exactly eos_lag_rows lag draw(s) and none after; a ledger problem is a FAIL reason by name
-    ledger = draw_accounting(draws_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
+    ledger = draw_accounting(samples_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
     reasons.extend(ledger["problems"])
     complete = checked == sampled_rows_total and not chain_absent
     if not complete:
