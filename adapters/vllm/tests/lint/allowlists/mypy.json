@@ -10,7 +10,6 @@
   "entries": [
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Layer", "detail": ""},
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Model", "detail": ""},
-    {"file": "tests/engine/fake_scheduler.py", "kind": "var-annotated", "symbol": "FakeScheduler.schedule", "detail": ""},
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "assignment", "symbol": "<module>", "detail": ""},
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "arg-type", "symbol": "_load", "detail": ""},
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "dict-item", "symbol": "test_verify_allows_new_ids_only_where_the_promoted_targets_reach", "detail": ""},
