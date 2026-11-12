@@ -6,7 +6,9 @@ as PRF: not priced, not assumed). `eps` is 2^-128 when the bound covers the sess
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
 was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one
-adaptive prover.
+adaptive prover. A period's row covers those T wipes, so its error is their `eps` summed, T·`eps` (`reporting.summed`);
+where that is 1 or more the row prints `reporting.NO_BOUND` with the sum and neither statement below
+(`reporting.no_bound`). Under 1 it prints both:
 
 - **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each wipe,
   given the earlier ones, is accepted and leaves more than its `foreign_bits` with probability at most p, at least M of
@@ -43,7 +45,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from verity.periods import block_count
-from verity.protocols.reporting import DELTAS, PERIODS
+from verity.protocols.reporting import DELTAS, PERIODS, no_bound, summed
 
 from . import wipe_period
 
@@ -148,6 +150,10 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
         row: dict[str, Any] = {"seconds": seconds, "wipes": t, "wipes_per_machine": per_machine}
         if t == 0:
             periods[name] = row | {"why": f"a wipe every {cadence_s} s doesn't fit a {name}"}
+            continue
+        row["error"] = float(summed(eps, t))
+        if (why := no_bound(summed(eps, t))) is not None:
+            periods[name] = row | {"no_bound": why}
             continue
         periods[name] = row | {str(d): pooled_step(t, eps, d) for d in DELTAS} | {"per_wipe": per_wipe(t, eps)}
     return head | {"periods": periods,
