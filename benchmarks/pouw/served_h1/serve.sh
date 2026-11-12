@@ -43,7 +43,7 @@ if [ -n "${POUW_CHALLENGER:-}" ]; then
   ss -Hltn "sport = :$port" | grep -q . || { echo "served-h1: NO_CHALLENGER: nothing listens on $POUW_CHALLENGER"; exit 13; }
   echo "served-h1: coins from challenger session $POUW_CHALLENGER_SESSION at $POUW_CHALLENGER (development: its root isn't this window's)"
 elif [ -n "${POUW_CHALLENGER_GATE:-}" ]; then
-  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)"; exit 13
+  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py"; exit 13
 else
   echo "served-h1: coins=in-process (not certified)"
 fi
