@@ -157,13 +157,20 @@ CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1"),
 #: a ``CHAINS`` unit's role by its index in its row family's entry
 CHAIN_ROLES = ("block", "end", "cols", "combine")
 CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
-#: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, every split
-#: count's top-p pipeline (stats blocks and their parts, probabilities, each round's step blocks and combines) and the select's
-#: chunks, each carrying what the stage after it reads; the units are the cut the row's module names (`sampling.CUTS`:
-#: `topp_stages.plan`), which circuit-check holds to the Flock block in the row's place
+#: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, each carrying
+#: what the stage after it reads.  A stochastic top-p select's are every split count's top-p pipeline (stats blocks and their
+#: parts, probabilities, each round's step blocks and combines) and the select's chunks (`topp_stages`); a greedy select's are
+#: its chunks' partial argmaxes and their combine (`greedy_stages`).  The units are the cut the row's module names
+#: (`sampling.CUTS`, `b1.CUTS`: the ``plan`` of the module ``STAGE_PLANS`` names), which circuit-check holds to the Flock block
+#: in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
-STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES}
+STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
+          "TokenSelect_v1": ("GreedyChunk_v1", "GreedyCombine_v1")}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
+_TOPP_PLAN = "verity.definitions.registry.topp_stages"
+#: the module whose ``plan`` and ``cut`` a ``STAGES`` row family's units are
+STAGE_PLANS = {"GumbelTopPTokenSelect_v1": _TOPP_PLAN, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_PLAN,
+               "TokenSelect_v1": "verity.definitions.registry.greedy_stages"}
 #: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
 #: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
 #: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
@@ -363,8 +370,8 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
     row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
-    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (`topp_stages.cut`:
-    each stage Definition and its units in `topp_stages.plan`), for an ``EXPERTS`` row family, at each block of n rows
+    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (the ``cut`` of the
+    module ``STAGE_PLANS`` names: each stage Definition and its units in its ``plan``), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
     them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of
@@ -424,8 +431,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
 
             hit += tuple((descriptor_id(c), n) for c, n in {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)](sp))
         if spec_base(spec) in STAGES:
-            from verity.definitions.registry.topp_stages import cut
-
+            cut = importlib.import_module(STAGE_PLANS[spec_base(spec)]).cut
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
         if (fam := EXPERTS.get(spec_base(spec))) is not None:
             from verity.commitments.gates.embedding import read
