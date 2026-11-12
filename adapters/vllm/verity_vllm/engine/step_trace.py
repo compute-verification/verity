@@ -31,6 +31,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.engine import handle
 from verity_vllm.engine.hooks import Hooks
 
 __all__ = ["SCHEMA", "StepTrace", "load", "step_geometry", "steps"]
@@ -43,22 +44,6 @@ FINISH = {0: "stop", 1: "length", 2: "abort", 3: "error", 4: "repetition"}
 #: the sampling parameters a request carries into the engine core, as `SamplingParams` names them
 SAMPLING = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "presence_penalty", "frequency_penalty",
             "repetition_penalty", "stop_token_ids", "stop", "ignore_eos", "logit_bias", "n")
-
-
-def scheduler_of(engine: Any) -> Any:
-    """The in-process V1 scheduler of a `vllm.LLM`, a `verity_vllm.LLM` or an `LLMEngine` (or the scheduler itself); refuses by name a
-    multiprocess engine core, whose scheduler lives in another process."""
-    if hasattr(engine, "update_from_output"):
-        return engine
-    eng = getattr(engine, "vllm", engine)
-    eng = getattr(eng, "llm_engine", eng)
-    core = getattr(eng, "engine_core", None)
-    inner = getattr(core, "engine_core", None) or core
-    sched = getattr(inner, "scheduler", None)
-    if sched is None or not hasattr(sched, "update_from_output"):
-        raise RuntimeError(f"{type(engine).__name__}: no in-process V1 scheduler (engine core {type(core).__name__}); the step trace needs "
-                           f"VLLM_ENABLE_V1_MULTIPROCESSING=0 (engine.env.ENGINE)")
-    return sched
 
 
 def _plain(v: Any) -> Any:
@@ -180,7 +165,8 @@ class StepTrace:
         self._emit({"kind": "window", "window": int(window), "event": event, "before_step": self.scheduled})
 
     def install(self, engine: Any) -> StepTrace:
-        sched = self.sched = scheduler_of(engine)
+        """Wraps the in-process scheduler of ``engine`` (`handle.scheduler`), or ``engine`` itself where it is the scheduler."""
+        sched = self.sched = engine if hasattr(engine, "update_from_output") else handle.scheduler(engine)
         if self.path is not None:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._fh = self.path.open("a")
