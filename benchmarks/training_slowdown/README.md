@@ -390,8 +390,9 @@ python grader.py HANDOVER --slowdown-code DIR --commit SHA [--trace STEP.product
 `HANDOVER` is the directory `grader.write_handover` writes: `handover.json` and the step's Program at two batch shapes.
 `--slowdown-code` is the directory this package sits in, which the grader loads where it sits and, in a git checkout,
 holds to the commit named. It writes `OUT.json`: the step's matrix products as rows, with their multiply-adds and output
-wires, the circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of
-this package's capture beside them. It computes no ρ. Its tests are a suite of their own:
+wires (a flash attention the step keeps at a cc as the products its head Definitions compute, `grader.ATTENTION`), the
+circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of this package's
+capture beside them. It computes no ρ. Its tests are a suite of their own:
 `uv run tools/verity/check/suites.py benchmarks/training_slowdown/grader`.
 
 ## What it reads, what it writes and what loads it
