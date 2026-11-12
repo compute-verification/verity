@@ -65,7 +65,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
 - `keys` makes the key directory: the LMS key, its leaf state and, with a key made there, its device state
   (`make_key`; `certificate.DeviceState`): the key's life so far, in milliseconds on the network certifier's clock,
   and the sessions started under it.
-- `serve` runs on the host's raw clock and no other (`warden`'s "The clock"), and refuses to start where the host
+- `serve` runs on the host's raw clock and no other (the device's "The clock"), and refuses to start where the host
   has none. It holds the key's device state from before its first tick until its publisher has closed, so a second
   `serve` under the key is refused meanwhile, as is a session id the key has started. The device state gives the
   session its base, the key's life before the run, and moves the life on by the run's whole span, `--windows`
@@ -878,7 +878,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     (`certificate.StartRefused` for a state that is held, missing or another key's, and for a session already
     started). The publisher signs the start's certificate at that base. Only then is the origin set, a reading of
     the clock, with the host's wall time read beside it; both are read again when the last tick is done, and
-    `warden.json` says how far they parted (`clocks`, `clocks_parted`). `clock`, `sleep` and `wall` are the network
+    the run's log says how far they parted (`clocks`, `clocks_parted`). `clock`, `sleep` and `wall` are the network
     certifier's clock, its wait and the host's wall time, for a caller that drives a run itself."""
     out.mkdir(parents=True, exist_ok=True)
     clock()

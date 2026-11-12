@@ -160,7 +160,7 @@ def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_an
     runs out 819 windows in. The default height, 20, signs anything the gate takes."""
     assert [A.warden_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]
     assert A.warden_height(1031, heads=733) == 13
-    assert A.warden_signatures(819) == 4096 and A.warden_height(819) == 12 and A.warden_height(819, heads=1) == 13
+    assert A.key_signatures(819) == 4096 and A.warden_height(819) == 12 and A.warden_height(819, heads=1) == 13
     assert (A.warden_windows(1559), A.warden_windows(1700), A.warden_windows(1700, scan=False)) == (1031, 1119, 60)
     assert (A.warden_minutes(1559, 13), A.warden_minutes(1700)) == (55, 64)
     long = REQUEST[:-1] + ["55", "--scan", "--prompts", "--requests", "1559", "--height"]
