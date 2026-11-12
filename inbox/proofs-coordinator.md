@@ -73500,3 +73500,103 @@ Read at `origin/main` = `d6075b75d289` [read: `git rev-parse origin/main` at 05:
 - Flag 3's question and flag 5's.
 
 Next entry (the table in the row's form) by 06:58Z.
+
+## COUNT, Thu 12 Nov 06:02Z: a session's fixed seconds charged as measured, one table a session (modeled): the best designed configuration is 2,942.0 GB as `main` runs today (3,202.7 with the head's read counted), 1,045.4 (1,367.0) with a kept verifier process and 807.8 (987.3) with the circuit file kept too; under 300 GB needs about 0.02 of the kept process's fixed seconds on both sides, and with the prover's at 1 no verifier gets under 592.4 GB
+
+Tags: [run] a run I launched and read, with its id; [read] a place I read now; [relayed] another entry's figure I did not check; [derived] my arithmetic; [local] my VM, the same script, where no run holds it. **Every GB, K, count and share below is modeled**: the planner's design by template at a datacenter's 600 s (12,500 machines, 90,237,980 replay blocks), one verification phase, the 10% point, sessions of one table; ×1.05 in parentheses. Nothing here runs on the served engine, and no figure is a limit met. Mailbox read 06:02Z (22 sections). #9112 and `main` untouched.
+
+**0. Where your reading is off, first.**
+
+1. **The head statement's 160 core-seconds is the session's line. The read of its circuit file is on top of it, not inside it.** Line 68396 of this file: "159.9 and 160.3 s a session, 127.6 s to read the statement once a call"; the 05:25Z entry, item 2: the 160 is "the session's own line, with the read already left out" [read]. Your 04:19Z sentence had the 127.6 inside the 159.9. So a fresh process pays about 287.5 core-seconds for a head session, and so does a kept process that does not keep the circuit file (row B). Every other block type's seconds are the `verifier_cost` card's, a fresh process with its read in [relayed: the 05:25Z entry's table of sources]. I give the rows as you asked (160) and at 287.5 beside them. At 287.5 row C's half is 143.8, near the 155 to 160 s the session alone takes, so 287.5 is the reading that fits all three rows [derived].
+2. **The 459 to 462 is by proportion, not timed at the registered program.** It is the setup's readings with #8949 and #9042 at 236 to 239 [relayed] plus the digest at 223, which is 15.5 s on a 152 MB program taken by proportion to the registered one [read: this file, the 16:58Z Wed entry above line 58911]; the 05:36Z entry's own figure by proportion is 470 to 480. Both pull requests are on `main` since 03:54Z [read: `gh pr view`].
+3. **"Once a table" is timed on one GEMM type at two tables of 32 blocks, no session an acceptance** [relayed: the 05:25Z entry]. Of its 7.84 to 8.10 s, 3.14 to 3.19 s is setup: `main` reads the circuit file again for each table. Without that second read two tables come to about two one-table sessions (4.80 to 5.03 s), so your conclusion holds either way. On the prover's side the same run has two tables of 32 at 3.12 to 3.22 s against 2.12 to 2.20 s for one, so less than two sessions there, on a CPU prover, one type [relayed].
+
+**Why one table a session only:** the verifier pays its fixed seconds a table, as timed, and on `main` a read of the circuit file a table more, so a session of several tables costs it at least what as many one-table sessions cost.
+
+**1. Rows A to C** [run `r20261112-054659-8921`, exit 0, vy-nebius-cpu-12, tree `c8b46edd10e4`, run record `art:ecf1b3182ad16e04bca32da659ae42a64c54a733d205073992facaaea03a816c`; `out/measured.json` and `out/measured.head287.json`; equal to my local run of the same script].
+
+- **A, `main` today:** every session a fresh verifier process, which pays its type's own Lean seconds and the program's read. At 1,006 core-seconds for the read this is my 05:17Z row at fraction 1. At 459 it is `main` since 03:54Z (462 gives the same design at a head of 160).
+- **B, a kept verifier process** (a branch, not on `main`): the program's read once a verification phase, nothing a session; every session its type's own Lean seconds in full; the prover's fixed seconds in full.
+- **C, B with the circuit file kept** (a second branch, not on `main`): a block type's first session of a phase in full, its later ones at 0.5 of its own Lean seconds; the prover's in full.
+- "Own Lean seconds" is the pricing run's `verifier_s_a_statement` less its 1,006 flag. One statement of every block type, in GPU-seconds: the best designed configuration's prover 403.7, verifier's own 403.1 (633.8 with the head at 287.5), the program's read 3,613.3 at 1,006 and 1,648.6 at 459; the partition `main` defines 271.2, 258.3 (373.7), 2,703.0 and 1,233.3 [run `8921`].
+
+Head statement at 160 core-seconds ("measured on one whole core, a kept session from a branch-built prover, not the served engine"); the plan of record's case at its assumed 60.56. All rows modeled.
+
+| configuration | row | GB (×1.05) | K | sampled proof blocks | sessions | prover's fixed | verifier's fixed | proof blocks |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| the best designed configuration | A, the read at 1,006 | 4,865.6 (5,108.8) | 52 | 203,265,972 | 167,824 | 5.5% | 79.2% | 4.4% |
+| | A, the read at 459 | 2,942.0 (3,089.1) | 86 | 336,170,646 | 277,518 | 9.1% | 67.4% | 7.3% |
+| | B | 1,045.4 (1,097.6) | 17 | 1,063,205,806 | 877,309 | 28.9% | 44.3% | 23.0% |
+| | C | 807.8 (848.2) | 22 | 1,375,913,396 | 1,135,341 | 37.3% | 28.7% | 29.7% |
+| the partition `main` defines | A, the read at 1,006 | 11,531.0 (12,107.5) | 22 | 83,086,234 | 164,327 | 10.3% | 79.0% | 5.1% |
+| | A, the read at 459 | 7,046.7 (7,399.1) | 36 | 135,959,292 | 268,836 | 16.8% | 67.7% | 8.3% |
+| | B | 3,382.4 (3,551.6) | 75 | 283,248,525 | 559,985 | 35.0% | 33.5% | 17.3% |
+| | C | 2,749.0 (2,886.5) | 13 | 392,762,994 | 776,423 | 48.5% | 23.2% | 24.0% |
+| the plan of record's case (assumed 60.56 s; its cells charge no program's read) | A, the read added at 1,006 | 11,005.7 (11,555.9) | 46 | 86,865,250 | 171,802 | 10.7% | 76.6% | 5.3% |
+| | A, the read added at 459 | 6,342.1 (6,659.2) | 40 | 151,065,880 | 298,692 | 18.7% | 64.7% | 9.2% |
+| | B (its own row at fraction 1) | 2,558.2 (2,686.2) | 7 | 422,974,874 | 836,124 | 52.3% | 20.6% | 25.8% |
+| | C | 2,372.3 (2,491.0) | 30 | 453,189,300 | 895,873 | 56.0% | 11.0% | 27.7% |
+
+The same with the head statement at 287.5 core-seconds (item 0.1; the plan of record's case does not move) [run `8921`]:
+
+| configuration | row | GB (×1.05) | K | sampled proof blocks | sessions | prover's fixed | verifier's fixed | proof blocks |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| the best designed configuration | A, the read at 1,006 | 5,163.5 (5,421.6) | 49 | 191,539,089 | 158,153 | 5.2% | 80.0% | 4.1% |
+| | A, the read at 459 | 3,202.7 (3,362.8) | 79 | 308,807,919 | 254,935 | 8.4% | 70.7% | 6.7% |
+| | B | 1,367.0 (1,435.4) | 13 | 813,039,734 | 670,907 | 22.1% | 57.0% | 17.6% |
+| | C | 987.3 (1,036.6) | 18 | 1,125,747,324 | 928,932 | 30.6% | 39.5% | 24.3% |
+| the partition `main` defines | A, the read at 1,006 | 12,656.5 (13,289.3) | 40 | 75,535,000 | 149,407 | 9.3% | 78.6% | 4.6% |
+| | A, the read at 459 | 7,927.6 (8,323.9) | 32 | 120,852,704 | 238,975 | 14.9% | 71.0% | 7.4% |
+| | B | 4,228.0 (4,439.4) | 60 | 226,598,820 | 447,995 | 28.0% | 47.1% | 13.8% |
+| | C | 3,235.0 (3,396.8) | 22 | 332,338,820 | 656,992 | 41.1% | 34.5% | 20.3% |
+
+**No binding column:** the bits are counted by template from these sampled proof blocks in the 05:48Z binding entry, not here.
+
+**2. The grid: what under 300 GB needs from row B** [run `8921`, `out/measured.json`, `grid`]. The best designed configuration, one table a session, head at 160; a multiplier on what every session pays on the verifier's side (rows) against one on the prover's fixed seconds (columns); GB (×1.05), modeled.
+
+| verifier's ↓, prover's → | 1 | 0.5 | 0.2 | 0.1 | 0.05 | 0.02 | 0.01 | 0 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1,045.4 (1,097.6) | 888.6 (933.0) | 807.8 (848.2) | 772.7 (811.3) | 772.7 (811.3) | 772.7 (811.3) | 740.5 (777.5) | 740.5 (777.5) |
+| 0.5 | 807.8 (848.2) | 658.2 (691.1) | 573.3 (601.9) | 538.5 (565.4) | 522.7 (548.8) | 522.7 (548.8) | 507.7 (533.1) | 507.7 (533.1) |
+| 0.2 | 683.5 (717.7) | 522.7 (548.8) | 433.4 (455.1) | 403.9 (424.1) | 386.3 (405.6) | 378.1 (397.0) | 370.2 (388.7) | 370.2 (388.7) |
+| 0.1 | 634.7 (666.4) | 480.3 (504.3) | 386.3 (405.6) | 355.4 (373.2) | 335.3 (352.1) | 329.1 (345.5) | 323.1 (339.3) | 323.1 (339.3) |
+| 0.05 | 612.8 (643.4) | 455.7 (478.5) | 362.7 (380.8) | 329.1 (345.5) | 311.8 (327.4) | 306.4 (321.7) | 301.2 (316.3) | **296.2** (311.0) |
+| 0.02 | 592.4 (622.0) | 433.4 (455.1) | 341.8 (358.8) | 311.8 (327.4) | 301.2 (316.3) | **291.3** (305.9) | 286.6 (301.0) | 282.1 (**296.2**) |
+| 0.01 | 592.4 (622.0) | 433.4 (455.1) | 341.8 (358.8) | 311.8 (327.4) | **296.2** (311.0) | 286.6 (301.0) | 282.1 (**296.2**) | 277.7 (291.6) |
+| 0 | 592.4 (622.0) | 423.1 (444.3) | 335.3 (352.1) | 306.4 (321.7) | 291.3 (305.9) | 282.1 (**296.2**) | 277.7 (291.6) | 273.4 (287.1) |
+
+- **The frontier** (the largest pairs under 300 GB, verifier's then prover's): on the bound itself (0.05, 0), (0.02, 0.02), (0.01, 0.05); on the ×1.05 figure (0.02, 0), (0.01, 0.01), (0, 0.02). With no fixed seconds at all: 273.4 (287.1).
+- **The sentence:** under 300 GB at one table a session needs a session's fixed seconds at about 0.02 of a kept process's on the verifier's side and 0.02 of today's on the prover's (291.3 GB; 0.01 and 0.01 for the ×1.05 figure, 296.2).
+- **The prover's side alone holds the bound at twice 300:** with the prover's fixed seconds at 1, as timed, a verifier that cost nothing a session gives 592.4 (622.0). No change on the verifier's side alone gets under 300 at one table a session.
+- **What 0.02 on the verifier's side is:** 0.4% of what a session pays the verifier on `main` today with the read at 459 [derived: 0.02 × 403.1 over 403.1 + 1,648.6]. In a kept process the check is about half of a later session's own seconds (6.70 of 13.06 s; 19.80 of 39.12 s [relayed: the 05:36Z entry]), so nothing kept reaches it: it needs the check itself changed, or larger tables (section 3).
+- **At the head's 287.5** the grid starts at 1,367.0 (1,435.4) and its frontier is (0.02, 0.02) at 296.2 and (0.01, 0.05) at 296.2 on the bound, (0.01, 0) and (0, 0.02) on the ×1.05 figure, both 296.2; the prover's-at-1 column ends at the same 592.4 [local; the same script through `research run` is `r20261112-055545-efb7`, waiting for a slot at 06:02Z, a five-minute job].
+- At the frontier the design is all proof blocks: at (0.02, 0.02), K 61, 3,815,032,598 sampled proof blocks in 3,147,886 sessions; the prover's fixed seconds 2.1% of the budget, the verifier's 3.2%, the proof blocks 82.5% [run `8921`].
+
+**3. The largest table.** A table holds 2^35 bits, so `2^35 >> k_log` proof blocks of a type (256 of the head's scores unit, 1,024 of its values unit, 2,048 of `DsaMqaLogits_v3`) [read: the kit's `count_common.staged`, which sizes it as `total_cost.priced` does].
+
+- **At the under-300 sample** (the grid's 0.02 and 0.02): every one of the 258 block types fills more than one table, 3,147,950 tables in all. By family: the head's values unit 1,549,719 tables, the fused embedding read and expert GEMM 537,909, the head's scores unit 481,730, `DsaMqaLogits_v3` 269,068, `ScaledMmFp8BlockSharedScale_v1` 136,362, `Fp8GroupQuantUe8m0_v1` 40,204, `BatchedGemm_v1` 22,090, `RMSNormFusedCudaVector8_v1` 20,797. The largest single type: the head block (64 visible, not the first) at 1,466,242 tables for its values unit and 455,822 for its scores unit. **One-table sessions: 3,147,950; if a table held 4 times more, 787,081; 16 times more, 196,860** (64 times: 49,344) [local: read from the design, `under300.txt` in my artifacts; not a run].
+- **At row B's own sample:** 257 of 258 types fill more than one table, 877,378 tables; 219,453 sessions at 4 times, 54,963 at 16 times. Row C's: 258 of 258, 1,135,410 tables; 283,975 and 71,103 [run `8921`].
+- **The design with a larger table, if its session paid the same fixed seconds as today's table** (assumed: nothing times it, and no such table is built; today's bound is the 2^35-bit table, `kLog` at most 27 [relayed: your section]): the best designed configuration, row B, 467.7 (491.0) at 4 times and 323.1 (339.3) at 16 times; row C, 413.3 (433.9) and 306.4 (321.7). With the head at 287.5: B 555.3 and 341.8, C 455.7 and 317.3. So a table 16 times larger with the circuit file kept is still just over 300 GB; under 300 by tables alone needs more than 16 times [run `8921`].
+
+**4. Your 05:24Z items.**
+
+- **The label.** My 05:17Z binding column is "at 4,130 classes a sampled proof block, assumed".
+- **By template** [run `r20261112-053401-68b3`, exit 0, vy-nebius-cpu-4, tree `c8b46edd10e4`, run record `art:b8ac23818a37ddcea7d8d021d7ce047514f9c32cee77a02f2549a575e4139524`; `out/fixed.cls.json`; the binding entry's own functions on my designs; control: the classes by template give run `d5e1`'s `K_m` in 4 of its designs a configuration]: 166.7 classes a sampled proof block in the best designed configuration, 391.6 in the other two.
+- **"No row is over 100 bits" stands** for every row of one verification phase, as the proof stands: the highest is 98.80 (the partition `main` defines, one table, 11,531.0 GB), and the best designed configuration's is 98.73 at 4,865.6 GB.
+- **"The least bound over 100 bits is 1,967.5 GB" moves, and it was the wrong figure to quote.** It counted the bits of one verification phase of 256. Over a datacenter's 600 s the phases' bounds add, which takes log2 of their number back, so more phases never help the 600 s. By template, as the proof stands, for the 600 s: nothing over 100 bits under 20,000 GB in any configuration (the only cells: 20,259.5 GB and 30,903.4 GB, both by paying more for a smaller sample). A phase alone reaches 100 bits from 354.9 GB (372.6) at 50 phases in the best designed configuration with no fixed seconds, 4,865.6 (5,108.8) at 4 phases as `main` pays; that is a statement about a phase, not about the 600 s.
+- **With the three changes** (none on `main`, no two proved together), one phase, the 600 s, the best designed configuration at one table: the one-wait trace alone gives 105.45 bits at 4,865.6 GB and 101.12 at the 273.4 floor; the wide level-0 leaves alone 102.73 and 98.41; the reruns charged a table change nothing at one table. Every under-300 design of section 2 is at one table and samples 3.75 to 4.07 billion proof blocks, so it reads about 101.1 to 101.2 bits with the one-wait trace alone and 94.4 to 94.5 as the proof stands [derived: the run's row at the 273.4 floor and the samples' ratio; run `68b3`]. I read every count from my own designs, not from runs `153e` and `082b`.
+
+**5. The follow-up change to the cost model, for you to file** (not in #9112):
+
+1. `verity/protocols/spot/optimize.py`: `Cell.fixed` in two parts, the prover's and the verifier's; `two_stage_statements` charges the verifier's part once a table in every form, so a session of several tables books no saving; tests in `verity/protocols/spot/verifier/tests/test_optimize.py`.
+2. The same file: the program's read leaves the statement and is charged once a verifier process, a parameter of `two_stage_design` and `two_stage_price` (once a session for a fresh process, once a verification phase for a kept one).
+3. The same file: a parameter for a kept process, the share of its own Lean seconds a type's later sessions pay (1 as `main` runs; 0.5 with the circuit file kept), its default what `main` runs.
+4. `benchmarks/spot_figures/breakeven/reprice.py` (`apply_server`, `verifier_seconds`) and `total_cost.py` (`verifier_seconds`, `priced`) hand the read, the setup and the check apart; the `verifier_cost` card (`cards.py`, `cards/verifier_cost.glm-5.3.json`) holds them apart, with the head's read (127.6 s) beside its session.
+5. `benchmarks/spot_figures/total_cost.py` (`limits`, `session_designs`), `figure1.py` (`split_cells`), `breakeven/headline.py` and their tests (`tests/test_total_cost.py`, `test_figure1.py`, `test_headline.py`) carry the two parts and print rows A to C.
+
+**6. State.**
+
+- Runs: `8921` exit 0; `68b3` exit 0; `efb7` out (the grid at 287.5; its figures above are local until it ends, about 06:15Z [guess]). Scripts `count_measured.py` and `count_fixed_cls.py` are in the lane's notes under `tools/`.
+- The census of record's workload card: branch `cursor/proofs-count-4d1e` (from #9112's head, nothing pushed). Checked locally so far: the generator gives a card of 192 block types that passes `cards.py check`; the lever computed from the tree's serve plan and the census equals the plan of record's lever file on all 84 sparse-attention types; with the new card 4 of the 220 figures tests fail, each a pinned figure of the old card. Ready line by Fri 08:00Z stands.
+- The class's counts file: no class named in my mailbox yet.
+- Next: the card's pull request; this entry's follow-up is yours to file.
