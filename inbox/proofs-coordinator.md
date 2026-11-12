@@ -66908,3 +66908,47 @@ So every one of the seventeen packages whose lock the branch changed against `ma
 For the table:
 - #9042 `00963f010905`, marked: records `pass` for all seventeen packages whose lock it changed (the six small runs all `pass`, nothing regenerated); merges onto `main` `be9a3d566905` and the merged tree builds (`r20261112-013258-c530`); in ci's candidate `62bf29346f76` with #8949 since 01:33Z.
 - #9057: ejected 01:15Z (its own test failed on the tree it landed on: `flock_sessions.sh` started the verifier without the setting); mended at `ad9b7db26798`, not marked; quick tier of 63 suites out, verdict about 03:15Z.
+
+## LAND3, Thu 12 Nov 01:54Z: a batch that holds #9066 with #8878 or #8893 goes red (three tests fail on their merge); #8940 is at `58a598e615b1` with its records run out; #8950 is mended at `f53cf612414e`; #9051 is at `88372b58943e`
+
+**First, a hazard between two pull requests that are both marked ready.** It needs a word to ci before the next batch.
+
+- [run] #8878 at `9fddbf3aa740` and #9066 at `23b637d143c7` merge as text (`git merge` exit 0). On the merge, `pytest benchmarks/spot_figures/tests/test_figure1.py`: **3 failed, 30 passed** (local, a throwaway worktree, 167 s).
+- [run] Reason one, in two of the three: #8878 takes `ceil` out of `figure1.py`'s line 82 (`from math import inf, log, sqrt`), and #9066 adds `returned_bits`, which returns `ceil(served)` at line 130. `NameError: name 'ceil' is not defined` in `test_lean_two_sends_the_planners_design_in_each_form` and `test_a_two_stage_point_is_what_lean_certifies_and_a_tampered_design_is_refused`.
+- [run] Reason two, in the third, with `ceil` imported again (a probe edit, pushed nowhere): #8878's `test_a_design_of_a_stratum_a_width_is_read_in_the_planners_strata` passes a served limit of 80 bits and a fan-out and no `returned`, which #9066's rule refuses: "ValueError: a served cap is held to the bits a replay block of the registered Program returns: pass the count its registration publishes (WindowCommitmentRecord.returned), not None" (`verity/protocols/spot/plancheck.py:117`).
+- [read] Who holds what: #8878, #8893 (`4d8451dfd83e`) and #8904 (`cb795dd94a73`) hold both. #8950's new head holds only reason one: its test passes no served limit (below). [run] #8950's new head merged with #9066: 2 failed, 29 passed, both the `NameError`; with `ceil` imported, 31 passed.
+- [read] The candidate on origin now, `queue/62bf29346f76` (01:33Z), holds none of #8878, #8893, #9066. It holds #8914 and #8934.
+- [guess] The mend that does not depend on which lands first, in two branches I do not hold: (1) #9066's `figure1.py` imports what it calls on a line of its own (`from math import ceil` beside `returned_bits`, or `math.ceil`), which merges with #8878's line 82 either way; (2) #8878's test takes the two lines #8950 now has (no served limit, so neither a fan-out nor `returned` is asked), and #8893, #8904 and #8950 merge it. Until then, ask ci not to put #9066 in a batch with #8878 or #8893. If you hand me #8878's branch I do (2) and the three merges; (1) is its author's.
+
+**Job A, #8940: head `58a598e615b1d170e2b9a19440af93f1ba0ac79e`, pushed 01:25Z, not marked; the records run is `r20261112-014158-2129`, expected about 02:50Z.**
+
+- [run] `main` at `be9a3d566905` merged in. One conflict, the docstring of `accepting` in `security/Proofs/Flock/SpotFlock/Accepting.lean`, settled as my 21:47Z entry said; the file is byte-equal to the resolution I saved then. #8940's own edits to that file are docstrings, so its code there is `main`'s.
+- [run] Try of that file at the new head, `r20261112-012538-f1e2` (cpu-8): exit 0, "lean exit 0 in 1373 s", "none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- [run] Quick tier at the new head, `r20261112-012550-baf6` (cpu-3): exit 0, "9 suites: 9 passed (0 cached), 0 failed".
+- [run] Records run. The first, `r20261112-012538-481b` on cpu-5, I cancelled at 01:41Z before it checked anything: it held a check slot and waited 9 minutes for a Lean slot, both of cpu-5's being held by other runs (`add5`, `03f0`). The second and only live one is `r20261112-014158-2129` on cpu-8; it took its check slot and a Lean slot at 01:50Z. [guess] It ends about 02:50Z (the last one took 58 minutes after its slot).
+- [run] The lock at the new head against `main`'s, compared before the run: 1121 guarantees; one guarantee's record differs, `Flock.SecurityProofs.SampledKSTwo_honest`, as #8940's body names; the open premise `SpotFlock.Addresses` changes its hash; `security/Properties` and `security/Proofs` locks are `main`'s.
+- When the run ends: on `pass` I update the body and mark it; on `regenerated` I commit the kept records, compare them, run the quick tier again and then mark; if a guarantee moves that the body does not name, I stop and tell you.
+
+**Job B, #8950: head `f53cf612414e81be5fe8295b9a3e0314953afd62`, pushed 01:33Z, not marked (the push took its mark at the broken head off).**
+
+- [run] What was wrong: `test_a_design_of_a_stratum_a_width_is_read_in_the_planners_strata` called `lean_two` with a served limit (80 bits, the sets' form off) and expected `plancheck.two` without a fan-out, which `main` refuses since #8539.
+- [run] The mend, your first choice, two lines: the test passes no served limit (`f.lean_two(cells, 4, row, .01, None, False)`, and expects `plancheck.two(..., .5, .01, theta=2.0)`). What the test is for, that a stratum's width is read in the planner's strata, is unchanged.
+- [run] The branch now holds the three pull requests under it at their present heads: I merged #8904's `cb795dd94a73` (which holds #8893's `4d8451dfd83e` and #8878's `9fddbf3aa740`), then `main` at `be9a3d566905`, no conflict in either. Against `main` it changes 6 files.
+- [run] Local, at the new head: `test_figure1.py` and `test_headline.py` 43 passed; `test_optimize.py` and `test_plancheck.py` 71 passed.
+- [run] Runs at the new head: the `benchmarks/spot_figures` suite, `r20261112-013418-2070`, running; the quick tier, `r20261112-013934-4033` on cpu-6, waiting for a check slot behind about six others. **A deviation:** `--on auto` put `2070` and a first quick tier (`r20261112-013422-a1ae`) on cpu-2. I cancelled `a1ae` before it started and left `2070`, which builds no Lean (the suite stubs Lean's checker).
+- **Open:** its body still describes the old head and names no Linear issue. Tell me the issue for its `Refs` line; I rewrite the body when the runs end. Ready line by 03:00Z if cpu-6 gives `4033` a slot in time; I say so at 02:45Z if it has not.
+
+**Job C, #9051: head `88372b58943eba6129e51548bc0db11647a78cee`, pushed 01:52Z, not marked; I mark it when `r20261112-015203-3a29` passes.**
+
+- [run] `main` merged in; `benchmarks/spot_figures/binding.py`'s two docstring hunks settled as `main`'s sentences with this branch's word "limit".
+- [run] #8853's nine sites in `benchmarks/spot_figures/breakeven/headline.py`: two were prose and are reworded; five go by a rename of two names that only that file reads (`host_cap`, `HOST_CAPS` to `host_provers`, `HOST_PROVERS`: the provers a GPU's share of host memory leaves room for; `rg` over the tree finds no other reader, and neither #8950 nor COUNT's branch names them); two stay and are listed: the plan cell's key `"cap"` and the planner's field `Cell.cap` on one line.
+- **My slip:** the head I marked on Wednesday held a stray three-line `benchmarks/spot_figures/uv.lock`. It is removed (`90454b6c32`).
+- [run] The ratchet gate at the new head (local): "ratchet gate be9a3d566905..88372b58943e: 1 change(s), 0 failed". The quick tier at the head before the rename, `r20261112-013820-0f03`: exit 0, "4 suites: 4 passed (0 cached), 0 failed". At the new head: `r20261112-015203-3a29` (cpu-7), running. [run] It merges with #8950's new head, with the candidate and with #9066 (`git merge-tree` exit 0 each).
+
+**Your 22:03Z question: the ten sites in `TwoAt.lean`.**
+
+- When: the pull request opens once #8934 and #8940 are both on `main` ([read] the candidate `62bf29346f76` holds #8934), within a day of #8940 landing.
+- [read] `ReplayCap` should not be renamed in it. `SamplingDeploy.Code.ReplayCap` (`security/Proofs/Flock/SamplingGeneric/TwoDeployed.lean:75`) has a record of its own in `security/lean-audit.json`, a guarantee's statement names it, and seven Lean files read it. #9043 (`972a687a0583`) names it in no file it changes. #8915 (`3468c5485255`) adds no line that names it, and changes the lock that records it. #9080 (`601df7cb4bb5`) changes six files that name it, `TwoAt.lean` among them, and adds six lines naming it: a rename would conflict with #9080.
+- So the pull request takes out the binders and the docstrings' words, and lists `ReplayCap`'s sites with that reason. It still meets #9080 in `TwoAt.lean` as text; I open it after whichever of the two is ahead.
+
+**Hours, re-dated:** #8940's ready line when `2129` ends (about 02:50Z); #8950's by 03:00Z; #9051's by 04:00Z (I expect about 02:20Z); the table by 05:00Z. I can carry all four.
