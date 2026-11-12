@@ -1,8 +1,10 @@
-"""What the readers of `verity_vllm.check.replay` answer for a field its document leaves out: a Program row without operands, a
-binding map without entries, an entry without an identity or an encoding, a manifest without a query, aliases or a cross-check's
-counts, an instances document without supplied inputs, an engine schedule without observed arrive steps, a population without
-reasons.  Each field is given absent, null and empty, and the answer is the same for the three; where a document can state the
-field, the stated answer stands beside them."""
+"""What the readers of `verity_vllm.check.replay` answer for a field its document leaves out: a Program row without operands and
+an instances document without supplied inputs (`verity_vllm.check.replay.index`, and the row's readers in `evaluate`, `population`
+and `driver`), a binding map without entries and an entry without an identity or an encoding (`verity_vllm.check.replay.opening`),
+a manifest without a query, aliases or a cross-check's counts, an engine schedule without observed arrive steps
+(`verity_vllm.check.replay.linkage`), a population without reasons (`verity_vllm.check.replay.replay_codes`).  Each field is given
+absent, null and empty, and the answer is the same for the three; where a document can state the field, the stated answer stands
+beside them."""
 from __future__ import annotations
 
 import copy
