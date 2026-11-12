@@ -106,7 +106,7 @@ at every R, and a `static_assert` bounds R to 1..64.
 | `eps_profile.py`, `vprod_profile.py` | a run's `ncu` sections as executed instructions by class, against the ACCEL model |
 | `summary.py`, `prof_summary.py`, `egemm80.py` | `run.sh`'s, `profile.sh`'s and `run80.sh`'s summaries; `egemm80.py gate` is the sm_80 SASS gate |
 | `flash_ref.py` | plain attention's time under torch, `fattn.cu`'s baseline |
-| `tests/` | the suite `uv run tools/verity/check/suites.py benchmarks/pouw/edited_gemm` runs |
+| `tests/` | the suite `uv run tools/verity/check/suites.py benchmarks/pouw/edited_gemm` runs: `egemm_ref.py`, `egemm80_ref.py` and `d2sgemm_ref.py` on made-up gate directories, `egemm_ref.py` against the receipts reference, the summaries and `vprod_profile.py` on made-up run directories, `egemm80.py`'s SASS gate and the depth-R check |
 
 ## What other code reads
 
@@ -117,8 +117,8 @@ references recompute through `benchmarks/pouw/theory/checked_strip.py`. Inside t
 `cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, `apv_ref.py` imports `cpv_ref.py`'s `patch_cols`, and
 `vprod_profile.py` imports `eps_profile.py`; each module another file imports lists what it imports in `__all__`. From
 outside the directory, `verity/protocols/pouw/receipts/receipt_conform.py --adopter egemm_ref` checks `egemm_ref.py`'s
-`xin_keys`, `xin13_receipts` and `tile_receipts`, `benchmarks/pouw/theory/`'s fold checks import
-`egemm_depthr_check.py`'s `key_ok_r11` and `key_ok_r11_32`, `adapters/vllm/tests/engine/` loads `fattn_ref.py` by path
-as the int8 attention's oracle, and the ACCEL model's honest profiles under `benchmarks/pouw/machine_model/data/` are
-written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The Python here touches no GPU but `flash_ref.py`;
-the job scripts do the rest.
+`xin_keys`, `xin13_receipts` and `tile_receipts` (the suite runs that check too), `benchmarks/pouw/theory/`'s fold
+checks import `egemm_depthr_check.py`'s `key_ok_r11` and `key_ok_r11_32`, `adapters/vllm/tests/engine/` loads
+`fattn_ref.py` by path as the int8 attention's oracle, and the ACCEL model's honest profiles under
+`benchmarks/pouw/machine_model/data/` are written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The
+Python here touches no GPU but `flash_ref.py`; the job scripts do the rest.
