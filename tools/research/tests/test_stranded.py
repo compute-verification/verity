@@ -162,6 +162,23 @@ def test_twins_are_one_job_and_its_move_is_a_late_twin_where_the_machine_can_cla
     assert w["move"]["how"] == "none", "a machine with no peers file claims on no home"
 
 
+def test_a_twin_left_in_line_while_its_pair_runs_is_no_wait_and_rings_no_one(tmp_path):
+    """A machine with no /etc/vy/peers can't ask its twin's home, so its twin stays in line after the pair took a slot there:
+    the job runs, so the line it is left in is listed apart, takes no place and rings no one."""
+    took = slot("c", "0-95", held=True, trains=True, mem=300)
+    took["holder"]["twin"] = "p1"
+    home = machine(check=pool(took, slot("b", "96-191", trains=True, mem=300)))
+    away = machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(twin=f"p1@{A}", run="r-b"),)))
+    docs = {A: home, B: away | {"peers": None}, C: machine(check=pool(slot("t", "0-95", trains=True, mem=400)))}
+    doc = stranded.analyse(docs, T0, CPUS)
+    (w,) = doc["waits"]
+    assert not w["stranded"] and w["places"] == [] and w["runs_on"] == [A]
+    assert w["move"]["how"] == "none" and f"its pair runs on {A}" in w["move"]["why_not"]
+    assert f"check  p1: in {B}'s for 40 min; its pair runs on {A}" in stranded.text(doc)
+    assert doc["pools"]["check"]["stranded"] == 0 and stranded.moves(doc) == []
+    assert [e for e in watch(tmp_path, [(T0 + t, docs) for t in (0, 600, 1200)]) if e[1].startswith("stranded|check|")] == []
+
+
 def test_a_job_without_a_pair_moves_only_at_its_next_launch():
     docs = {A: machine(research=pool(slot("r0", held=True), waiters=(waiter(30, "r1"),))), B: machine(research=pool(slot("r0")))}
     (w,) = stranded.analyse(docs, T0, CPUS)["waits"]
@@ -367,11 +384,11 @@ def test_a_lane_pool_rings_infra_once_a_pool_while_one_of_its_jobs_has_been_stra
 def test_a_pool_shut_by_an_inode_floor_rings_infra_at_once_on_an_idle_machine_and_after_30_minutes_on_a_busy_one(tmp_path):
     floor = "/workspace has 812 inodes free, under 1000000"
     elsewhere = machine(research=pool(slot("r0", held=True), waiters=(waiter(3, "r1"),)))
-    idle = quiet(**{A: elsewhere, B: machine(floor=floor, research=pool(slot("r0", "16-31")))})
-    assert watch(tmp_path / "a", [(T0, idle)]) == [("open", f"stranded|shut|{B}|research", ["infra"])]
+    idle = quiet(**{A: elsewhere, B: machine(floor=floor, research=pool(slot("r0", "16-31")), proofs=pool(slot("p0", "32-47")))})
+    assert watch(tmp_path / "a", [(T0, idle)]) == [("open", f"stranded|shut|{B}", ["infra"])], "one incident a machine, not a pool"
     busy = quiet(**{A: elsewhere, B: machine(floor=floor, research=pool(slot("r0", "16-31"), slot("r1", "32-47", held=True)))})
     assert watch(tmp_path / "b", [(T0, busy), (T0 + 1200, busy)]) == []
-    assert watch(tmp_path / "c", [(T0, busy), (T0 + 1800, busy)]) == [("open", f"stranded|shut|{B}|research", ["infra"])]
+    assert watch(tmp_path / "c", [(T0, busy), (T0 + 1800, busy)]) == [("open", f"stranded|shut|{B}", ["infra"])]
 
 
 def test_infra_hears_of_a_line_stalled_30_minutes_a_lean_wait_of_10_and_a_short_peers_file(tmp_path):

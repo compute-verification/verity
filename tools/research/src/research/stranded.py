@@ -21,7 +21,9 @@ A place (`analyse`) is a slot the launcher's own rule would start the job in now
   - any other pool as `auto._pool` decides for the ask on the job's ticket, against the memory not reserved (`free_gb`), with
     each slot that shares a core with any held slot on the machine first marked blocked;
   - two idle slots that overlap are one place, and one place takes one job: places are dealt oldest first (priority first in
-    the check pool), and a job left with none is in line but not stranded.
+    the check pool), and a job left with none is in line but not stranded;
+  - a twin still in line while its pair holds a slot (`runs_on`: its machine can't ask its home, so it can't see that) is a
+    job that runs, not one that waits: it is listed apart and takes no place.
 
 A slot a window closes, a line stalled on memory (`auto.Stalled`), a wait for a Lean slot and a pool shut by a disk floor are
 printed apart and never counted as stranded. `moves` says, for each stranded job, the lines it should be in; nothing here
@@ -438,18 +440,25 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
                 summary[p]["places"] += int(min(len(_check_free(doc, True, 0)), max(_lean_room(docs[m].get("lean")), 0)))
             else:
                 summary[p]["places"] += _lane_free(doc, 0)[0]
+    runs_on: dict[str, list[str]] = {}
+    for m, pools in work.items():
+        for doc in pools.values():
+            for s in doc["slots"]:
+                if isinstance(s.get("holder"), dict) and s["holder"].get("twin"):
+                    runs_on.setdefault(str(s["holder"]["twin"]).partition("@")[0], []).append(m)
     for j in jobs.values():
         j["minutes"] = max(ln["minutes"] for ln in j["lines"])
+        j["runs_on"] = sorted(set(runs_on.get(j["twin"] or "", [])))
     order = sorted(jobs.values(), key=lambda j: (j["pool"], not (j["pool"] == CHECK and j["priority"]), -j["minutes"], j["job"]))
     docs = json.loads(json.dumps(docs))                                     # deal from a copy: the Lean waiters grow
     for j in order:
-        j["places"] = places(j) if j["minutes"] >= min_minutes else []
+        j["places"] = places(j) if j["minutes"] >= min_minutes and not j["runs_on"] else []
         j["stranded"] = bool(j["places"])
         if j["stranded"]:
             deal(j, j["places"][0])
         j["move"] = _move(j)
         out["waits"].append({k: j[k] for k in ("job", "pool", "runs", "lines", "by", "priority", "mem_gb", "twin", "placed",
-                                               "minutes", "stranded", "places", "move")})
+                                               "minutes", "runs_on", "stranded", "places", "move")})
     out["waits"].sort(key=lambda w: (not w["stranded"], -w["minutes"], w["pool"], w["job"]))
     for p, s in sorted(summary.items()):
         line = [w for w in out["waits"] if w["pool"] == p]
@@ -469,6 +478,9 @@ def _move(j: dict) -> dict:
     lines at most, never one that can't claim on the job's home (its /etc/vy/peers). `how`: `late twin` for a waiter that
     carries a pair (slot.py's claim lets one of them run), `at launch` for one that carries none (only its next launch can be
     placed better), `none` when nothing should move."""
+    if j.get("runs_on"):
+        return {"how": "none", "to": [], "why_not": f"its pair runs on {', '.join(j['runs_on'])}; this twin leaves its line once "
+                                                    f"its machine can ask its home ({PEERS})"}
     if not j.get("stranded"):
         return {"how": "none", "to": [], "why_not": "it has no place elsewhere now"}
     own = sorted({ln["machine"] for ln in j["lines"]})
@@ -528,6 +540,9 @@ def text(doc: dict, with_moves: bool = False) -> str:
                    f"{_gb(x['available_gb'])}, not reserved {_gb(x['free_gb'])}, reserved and not reached {_gb(x['unreached_gb'])}"),
         ("windows", "windows", lambda x: f"{x['machine']}: {x['start']} to {x['end']}" + (f": {x['note']}" if x["note"] else "")
                                          + f"; closes {x['slots']}"),
+        (f"twins in line while their pair runs (their machine can't ask the pair's home: {PEERS})", "left",
+         lambda x: f"{x['pool']}  {x['job']}: in " + ", ".join(f"{ln['machine']}'s for {ln['minutes']} min" for ln in x["lines"])
+                   + f"; its pair runs on {', '.join(x['runs_on'])}"),
         ("waits for a Lean slot", "lean_waits", lambda x: f"{x['machine']} {x['pool']}: {x['job']}, {x['minutes']} min"),
         ("shut", "shut", lambda x: f"{x['machine']} {x['pool']}: {x['why']}"),
         ("not read", "unread", lambda x: f"{x['machine']}" + (f" {x['pool']}" if x["pool"] else "") + f": {x['why']}"),
@@ -537,8 +552,8 @@ def text(doc: dict, with_moves: bool = False) -> str:
     windows: dict[tuple, list[str]] = {}
     for x in doc["windows"]:
         windows.setdefault((x["machine"], x["start"], x["end"], x["note"]), []).append(f"{x['pool']} {x['slot']}")
-    rows = {**doc, "windows": [{"machine": m, "start": s, "end": e, "note": n, "slots": ", ".join(v)}
-                               for (m, s, e, n), v in windows.items()]}
+    rows = {**doc, "left": [w for w in doc["waits"] if w["runs_on"]],
+            "windows": [{"machine": m, "start": s, "end": e, "note": n, "slots": ", ".join(v)} for (m, s, e, n), v in windows.items()]}
     for title, key, fmt in sections:
         if rows[key]:
             out += ["", f"{title}:"] + [f"  {fmt(x)}" for x in rows[key]]
@@ -550,10 +565,11 @@ def text(doc: dict, with_moves: bool = False) -> str:
 def findings(ctx: Any) -> list:
     """The monitor `stranded`'s findings from one read of every CPU machine through ``ctx.run``. A check-pool job stranded for
     STRANDED_S rings ci, one incident a job (the runner times it: `for_s`); any other pool rings infra once a pool while one of
-    its jobs has been stranded STRANDED_S (``ctx.memo`` keeps when each was first seen so). Then infra's: a pool not read or
-    shut by a floor (`shut`: at once on a machine that holds no run while that pool's jobs wait elsewhere, else after SHUT_S),
-    a line stalled on memory for STALLED_S, a wait for a Lean slot of LEAN_WAIT_MIN, and one incident (`peers`) naming every
-    machine whose /etc/vy/peers is missing or short. Raises only when no machine could be read at all."""
+    its jobs has been stranded STRANDED_S (``ctx.memo`` keeps when each was first seen so). Then infra's: a machine a floor
+    shuts, one incident a machine, and a pool not read (`shut`: at once on a machine that holds no run while jobs of a pool it
+    shuts wait elsewhere, else after SHUT_S), a line stalled on memory for STALLED_S, a wait for a Lean slot of LEAN_WAIT_MIN,
+    and one incident (`peers`) naming every machine whose /etc/vy/peers is missing or short. Raises only when no machine could
+    be read at all."""
     from .monitors import Finding
 
     names = machines()
@@ -595,12 +611,20 @@ def findings(ctx: Any) -> list:
     held = {m for m, d in docs.items() if isinstance(d, dict) and any(
         s.get("holder") for pd in (d.get("pools") or {}).values() if isinstance(pd, dict) for s in pd.get("slots") or [])}
     waiting = {w["pool"] for w in doc["waits"]}
-    for x in doc["shut"] + [u for u in doc["unread"] if u["pool"] != "lean"]:
+    floors: dict[str, list[dict]] = {}
+    for x in doc["shut"]:
+        floors.setdefault(x["machine"], []).append(x)
+    for m, xs in floors.items():
+        pools = sorted(x["pool"] for x in xs)
+        out.append(Finding(f"shut|{m}", f"*{m} can't take a job in its pool(s) {', '.join(f'`{p}`' for p in pools)}*: "
+                                        f"{xs[0]['why']}", owners=("infra",),
+                           for_s=0 if m not in held and waiting & set(pools) else SHUT_S))
+    for x in [u for u in doc["unread"] if u["pool"] != "lean"]:
         pool = x["pool"] or "*"
         idle = isinstance(docs.get(x["machine"]), dict) and x["machine"] not in held
         now_ = idle and (pool in waiting or pool == "*")
         out.append(Finding(f"shut|{x['machine']}|{pool}", f"*{x['machine']}'s " + (f"pool `{pool}`" if x["pool"] else "pools")
-                                                          + f" can't take a job*: {x['why']}", owners=("infra",),
+                                                          + f" can't be read*: {x['why']}", owners=("infra",),
                            for_s=0 if now_ else SHUT_S))
     for pool in sorted({x["pool"] for x in doc["stalled"]}):
         lines = [x for x in doc["stalled"] if x["pool"] == pool]
