@@ -8,10 +8,12 @@ base, each failure by the tests it names."""
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import signal
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,8 +22,9 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures, audited, audits, based,
-                                  combine, failures, judge, key, lean_inputs, reads, shard_count, start, step_test, unnamed)
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures,
+                                  audited, audits, based, combine, failures, judge, key, lean_inputs, left, reads, replaced,
+                                  shard_count, start, step_test, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -635,6 +638,142 @@ def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_sh
     abandon(rec)
     assert (Path(rec["plan"]["out"]) / AUTO_PLAN).is_file() == made and not Path(rec["plan"]["dir"]).exists()
     abandon({"ids": ["r-1"], "tip": sha})
+
+
+# -- carry: a check replacing dropped candidates' checks
+
+
+def _carry(h: Beside, monkeypatch) -> tuple[set[str], list[str | None]]:
+    """The runs whose records the store holds (`left`), and what each launch's environment named (`CARRY_ENV`)."""
+    published, named, launch = set(), [], h.d.launch_postland
+    monkeypatch.setattr("research.vqueue_slim.left", lambda d, rid: rid in published)
+    h.d.launch_postland = lambda *a, **kw: named.append(os.environ.get(CARRY_ENV)) or launch(*a, **kw)
+    return published, named
+
+
+@pytest.mark.parametrize("shards", [0, 3])
+def test_a_check_replacing_dropped_ones_waits_for_their_records_then_launches_naming_them(world, monkeypatch, shards):
+    """A check replacing the runs of dropped candidates' checks (``after``) launches nothing while the store lacks any one's
+    record: its record waits, pending, across saves; the `judge` that finds every record launches it, ``at`` then, each launch
+    naming the runs (`CARRY_ENV`), which leave the environment with it."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on = "m1,m2,m3"
+    published, named = _carry(h, monkeypatch)
+    after = {"r-b": h.clock - 30, "r-a": h.clock - 10}
+    rec = start(h.d, sha, base, shards=shards, after=after)
+    assert (rec["ids"], rec["carry"], rec["wait"]["runs"], h.posted) == ([], ["r-a", "r-b"], after, [])
+    assert world.logs[-1].endswith(f": waiting for the records of r-a r-b, whose passes it reuses, at most "
+                                   f"{CARRY_WAIT_S // 60} min after their cancel"), world.logs
+    published.add("r-a")
+    h.clock += 60
+    rec = json.loads(json.dumps(rec))
+    assert judge(h.d, rec) == Verdict(PENDING) and h.posted == [] and "wait" in rec
+    published.add("r-b")
+    h.clock += 1
+    assert judge(h.d, rec) == Verdict(PENDING)
+    n = max(shards, 1)
+    assert len(h.posted) == n and named == ["r-a,r-b"] * n and CARRY_ENV not in os.environ
+    assert ("wait" in rec, rec["at"], len(rec["ids"]), "carry_without" in rec) == (False, h.clock, n, False)
+    h.run_state.update({i: ("running", None, None) for i in rec["ids"]})
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and len(h.posted) == n, "it launches once"
+
+
+@pytest.mark.parametrize("shards", [0, 3])
+def test_a_check_waits_at_most_carry_wait_s_after_a_cancel_then_launches_without_that_runs_passes(world, monkeypatch, shards):
+    """The wait is bounded: `CARRY_WAIT_S` after a run's cancel the check launches without its record, still naming it, and
+    its record and log say whose passes it went without (``carry_without``)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on = "m1,m2,m3"
+    published, named = _carry(h, monkeypatch)
+    rec = start(h.d, sha, base, shards=shards, after={"r-a": h.clock - 20, "r-b": h.clock})
+    published.add("r-b")
+    h.clock += CARRY_WAIT_S - 21
+    assert judge(h.d, rec) == Verdict(PENDING) and h.posted == []
+    h.clock += 1
+    assert judge(h.d, rec) == Verdict(PENDING) and named == ["r-a,r-b"] * max(shards, 1)
+    assert rec["carry_without"] == ["r-a"] and "wait" not in rec and rec["at"] == h.clock
+    assert world.logs[-1].endswith(f"; without the passes of r-a, whose records weren't in the store {CARRY_WAIT_S // 60} min "
+                                   "after their cancel"), world.logs
+
+
+@pytest.mark.parametrize("how", ["left", "late", "none"])
+def test_a_check_launches_at_once_when_nothing_it_replaces_is_awaited(world, monkeypatch, how):
+    """Every record already in the store, or every cancel `CARRY_WAIT_S` old, launches at once, ``carry`` naming the runs
+    (the late one in ``carry_without``); no ``after`` names no run and keeps no ``carry``."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    published, named = _carry(h, monkeypatch)
+    published.add("r-a")
+    after = {"left": {"r-a": h.clock}, "late": {"r-z": h.clock - CARRY_WAIT_S}, "none": None}[how]
+    rec = start(h.d, sha, base, after=after)
+    assert rec["ids"] == ["r-post-0"] and "wait" not in rec
+    assert named == [{"left": "r-a", "late": "r-z", "none": None}[how]]
+    assert (rec.get("carry"), rec.get("carry_without")) == {"left": (["r-a"], None), "late": (["r-z"], ["r-z"]),
+                                                            "none": (None, None)}[how]
+
+
+def test_a_launch_names_the_runs_it_carries_and_puts_back_what_the_environment_held(world, monkeypatch):
+    h, base, sha, _ = _harness(world, monkeypatch)
+    published, named = _carry(h, monkeypatch)
+    published.add("r-a")
+    monkeypatch.setenv(CARRY_ENV, "theirs")
+    start(h.d, sha, base, after={"r-a": h.clock})
+    assert named == ["r-a"] and os.environ[CARRY_ENV] == "theirs"
+
+
+def test_an_auto_plan_waits_then_is_made_and_each_of_its_shards_names_the_runs_it_carries(world, monkeypatch, tmp_path):
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on = "m1,m2"
+    published, named = _carry(h, monkeypatch)
+    plans = Plans(h.d, tmp_path)
+    rec = start(h.d, sha, base, shards="auto:2", after={"r-a": h.clock})
+    assert "wait" in rec and plans.asked == []
+    published.add("r-a")
+    assert judge(h.d, rec) == Verdict(PENDING) and len(plans.asked) == 1 and h.posted == []
+    plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+    assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and named == ["r-a", "r-a"]
+
+
+def test_a_check_that_waited_and_then_registered_no_run_is_infra_kept(world, monkeypatch):
+    h, base, sha, _ = _harness(world, monkeypatch)
+    published, _ = _carry(h, monkeypatch)
+    h.got = ([], "train.sh: no slot")
+    rec = start(h.d, sha, base, after={"r-a": h.clock})
+    published.add("r-a")
+    got = judge(h.d, rec)
+    assert got.state == INFRA and got.infra[0].task.endswith("registered no run: train.sh: no slot"), got
+    assert rec["verdict"]["state"] == INFRA and judge(h.d, rec) == got and len(h.posted) == 1
+
+
+def test_a_check_replaces_the_runs_the_loop_cancelled_for_a_candidate_sharing_a_member_in_the_last_carry_wait_s():
+    """Of the loop's lines, a drop's or a launched drop's (`Loop._launched`) cancel of a check in the last `CARRY_WAIT_S` of a
+    candidate sharing a member: every run it names (one whose cancel failed among them) but one `KEEP_RUNS` left running,
+    each by its first such line; not a records run's, nor a line without a time."""
+    from research.vqueue_loop import stamp
+
+    now = 1_800_000_000.0
+    lines = [{"action": "drop", "at": stamp(now - CARRY_WAIT_S - 1), "members": [2], "beside_cancelled": ["r-old"]},
+             {"action": "drop", "at": stamp(now - 100), "members": [1, 2], "beside_cancelled": ["r-1", "r-kept", "r-stuck"],
+              "beside_cancel_failed": {"r-kept": "left running: /data/keep names it", "r-stuck": "cancel exited 1"}},
+             {"action": "drop", "at": stamp(now - 50), "members": [3], "beside_cancelled": ["r-other"]},
+             {"action": "slim", "at": stamp(now - 40), "members": [2], "dropped": True, "beside_cancelled": ["r-late", "r-1"]},
+             {"action": "drop", "at": stamp(now - 30), "members": [2], "records_cancelled": ["r-records"]},
+             {"action": "drop", "at": "a while ago", "members": [2], "beside_cancelled": ["r-bad"]}]
+    assert replaced(lines, [2, 4], now) == {"r-1": now - 100, "r-stuck": now - 100, "r-late": now - 40}
+    assert replaced(lines, [5], now) == {} == replaced([], [2], now)
+
+
+def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():
+    """`check.run_packs` finds a run's packs through its attempt, which custody publishes once it ended; a store that can't
+    answer, or none, finds none."""
+    class Store:
+        def get_attempt(self, rid):
+            if rid == "r-away":
+                raise RuntimeError("the store is away")
+            return {"id": rid} if rid == "r-done" else None
+
+    d = SimpleNamespace(q=SimpleNamespace(store=Store()))
+    assert [left(d, r) for r in ("r-done", "r-running", "r-away")] == [True, False, False]
+    assert not left(SimpleNamespace(q=SimpleNamespace()), "r-done")
 
 
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
