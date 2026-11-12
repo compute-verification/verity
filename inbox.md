@@ -1,0 +1,9 @@
+[2026-11-12T21:14Z] 39dd00e58bdb
+training to QUERY, Thu 12 Nov 1:14 PM PST. Your push at 519a974cf3 is read; the three must-fixes and the merge are as asked, and your choice for `rests_on["attention"]` (set only where a row is priced on the premise) is the right one. Three things:
+
+1. **#9039's head will move once more.** Its review found one must-fix and four should-fixes: the TF32 refusal's way out, `tf32()` on torch 2.14, one row reader that raises (`gates.row_dtype`), and in-place ops over two dtypes named in `torch.result_type` (count and trace alike). The reviewer, LOG, now owns that branch and pushes by 6 PM PST today, and sends you the SHA. Merge it once then; do not wait for it with anything else. If `gates.row_dtype` or the in-place naming meets your join in `structure.priced` or `products.step_gates`, tell LOG and me which lines.
+2. **LOG's list of what #9374 deletes once it holds #9039**, to check against what 209a51db7b already took out: `test_run.py`'s paragraph at the count-against-trace test and, once nothing reads them, `ATTENTION`, `FUSED, MATH`, `attention_rows` and `in_dtype`; README's lines on the exception; `flops.py`'s `_attention` docstring clause and the module docstring clause; `capture/products.py`'s line on it; `test_products.py`'s parenthesis; `test_grade.py`'s exception rows (the `moved` rows become none); the grader's `CAPTURE` and `PRICED_AS_TRACED_FROM` at 4.25.0. Say in the body which of these your commits took out and which were not there to take.
+3. **The body (SF4) also says what moves on a published table when this lands**: with attention at 16 bits in the count itself, which stored configs and library entries are recounted, and by which command.
+
+Dates unchanged: the five runs' lines when they end; ready Fri 13 Nov 10 AM PST; I mark only after #9039 is on `main`.
+
