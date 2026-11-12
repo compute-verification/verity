@@ -1408,3 +1408,120 @@ def test_a_book_that_isnt_a_share_of_its_mem_stops_its_own_slot_and_nothing_else
     assert json.loads((SLOT.RAMLOCK / "check-d.json").read_text())["gb"] == 161.1 and not (SLOT.RAMLOCK / "check-c.json").exists()
     (first,) = [ln for ln in SLOT.status(SLOT.parse("c 0 mem=300 book=350"), tmp_path, NOW) if ln.startswith("c ")]
     assert first.startswith("c  cores 0  mem 300 GB  free; blocked: its line has book=350")
+
+
+def _ledger(tmp_path: Path, *runs: tuple) -> Path:
+    """A /proc and a RAMLOCK with one live reservation a run, each (its name, the GB it reserved, the GiB its process holds,
+    and True for a train check's); the /proc."""
+    proc = tmp_path / "proc"
+    SLOT.RAMLOCK.mkdir(parents=True, exist_ok=True)
+    for pid, (name, gb, held, *train) in enumerate(runs, 100):
+        (proc / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "stat").write_text(f"{pid} (python) S 1 0 0\n")
+        (proc / str(pid) / "status").write_text(f"Name:\tpython\nVmRSS:\t{held << 20} kB\n")
+        (SLOT.RAMLOCK / f"{name}.json").write_text(json.dumps(
+            {"gb": gb, "pid": pid, "run_id": name, **({"priority": True} if train else {})}))
+    return proc
+
+
+def _unreached(gb: float, held: int) -> float:
+    return gb * 1e9 - (held << 30)
+
+
+def test_peaks_counts_the_largest_unreached_lane_reservations_whole_and_the_rest_at_a_share(tmp_path):
+    """Many lane runs holding slots together don't reach what they reserved at the same moment, and counted whole their
+    reservations keep the pool's own idle slots shut beside most of the machine's memory. With peaks=N the N largest unreached
+    count whole and each of the others at PEAK_SHARE; a train check's always counts whole, and without peaks= every one does."""
+    proc = _ledger(tmp_path, ("a", 64.4, 10), ("b", 32.2, 2), ("c", 32.2, 20), ("d", 16.1, 1), ("e", 32.2, 4),
+                   ("t", 161.1, 50, True))
+    (SLOT.RAMLOCK / "a-at-launch.json").write_text(json.dumps({"gb": 16.1, "pid": 100, "run_id": "a"}))   # a's second file
+    a, b, c, d, e, t = (_unreached(*x) for x in ((64.4, 10), (32.2, 2), (32.2, 20), (16.1, 1), (32.2, 4), (161.1, 50)))
+    whole = int(a + b + c + d + e + t) >> 30
+    assert SLOT.reserved_gb(proc) == whole == 227, "no peaks=: every reservation whole, each run's largest once"
+    assert SLOT.reserved_gb(proc, peaks=2) == int(t + a + b + SLOT.PEAK_SHARE * (e + d + c)) >> 30 == 190, \
+        "the train's whole, the two largest lane ones (a, b) whole, the other three at the share"
+    assert SLOT.reserved_gb(proc, peaks=1) == int(t + a + SLOT.PEAK_SHARE * (b + e + d + c)) >> 30
+    assert SLOT.reserved_gb(proc, peaks=5) == SLOT.reserved_gb(proc, peaks=9) == whole, \
+        "as many peaks as lane runs, or more: what a line without the key counts"
+    assert SLOT.reserved_gb(proc, priority=True, peaks=2) == SLOT.reserved_gb(proc, priority=True) == int(t) >> 30, \
+        "a train's gate counts train checks only, whole"
+    assert 0 < SLOT.PEAK_SHARE < 1
+
+
+def test_a_slot_with_peaks_starts_a_run_beside_a_crowd_and_still_wants_the_runs_whole_ask_free(tmp_path, monkeypatch, capsys):
+    """Six lane runs that each reserved 30 GiB and hold 4 leave a line without peaks= at -55 GiB free of the 200 available,
+    beside a train check's 100 unreached. With peaks=2 the same ledger leaves 22: a run asking 15 starts, reserving its
+    whole 15 as ever, and one asking 30 still waits. A train slot reads no peaks=."""
+    proc = _ledger(tmp_path, *[(f"r{i}", 32.2, 4) for i in range(6)], ("t", 161.1, 50, True))
+    real = SLOT.reserved_gb
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda priority=False, peaks=None: real(proc, priority, peaks))
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 200)
+    plain, crowd, train = SLOT.parse("r1 1 mem=15\nr0 0 mem=15 peaks=2\nt 2 only=trains mem=120 peaks=2")
+    assert (crowd["peaks"], "peaks" in plain) == (2, False)
+    assert SLOT.blocked(plain, NOW) == ("-55 GB of memory free (255 GB more is reserved by live runs that haven't reached it), "
+                                        "under the 15 GB a check here may peak at")
+    assert SLOT.blocked(crowd, NOW) is None, "200 less the train's 100, two runs' 26 whole and four at a quarter: 22 free"
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "32")
+    assert SLOT.blocked(SLOT.asking([crowd])[0], NOW) == (
+        f"22 GB of memory free (178 GB more is reserved by live runs that haven't reached it, the 2 largest counted whole and "
+        f"the rest at {SLOT.PEAK_SHARE:g}), under the 30 GB a check here may peak at"), "the run's own ask is never discounted"
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    assert SLOT.blocked(train, NOW) == ("100 GB of memory free (100 GB more is reserved by live train checks that haven't "
+                                        "reached it), under the 120 GB a check here may peak at"), "a train's gate, as without the key"
+    assert SLOT.blocked({**train, "mem": 100}, NOW) is None
+    lines = SLOT.status([plain, crowd], tmp_path, NOW)
+    assert lines[1].startswith("r0  cores 0  mem 15 GB  peaks 2  free") and "peaks" not in lines[0]
+    assert [s.get("peaks") for s in SLOT.slot_docs([plain, crowd], tmp_path, NOW)] == [None, 2], "`--status --json` names it"
+    (tmp_path / "slots").write_text("r1 1 mem=15\nr0 0 mem=15 peaks=2\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env["CHECK_SLOT"])))
+    with pytest.raises(Exec, match="r0"):
+        SLOT.main(["--", "suites.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot r0 has the memory"))
+    assert json.loads((SLOT.RAMLOCK / "check-r0.json").read_text())["gb"] == 16.1, "what the run reserves is its whole 15 GiB"
+
+
+def test_a_pools_backfill_counts_the_ledger_as_its_slots_do(tmp_path, monkeypatch, capsys):
+    """A small run passes a waiter ahead only while memory keeps that one from starting. In a pool whose slots have peaks=
+    the waiter ahead starts on what those slots find free, so the small run counts the same and keeps its place behind it:
+    counted whole, it would read the head as stuck and take the slot the head was about to."""
+    slots = SLOT.parse("r0 0 mem=15 peaks=4\nr1 1 mem=15 peaks=2\nt 2 only=trains mem=300")
+    assert SLOT.lane_peaks(slots) == {"peaks": 4}, "the largest of the slots a lane run may take: no slot would find less free"
+    assert SLOT.lane_peaks(SLOT.parse("r0 0 mem=15 peaks=4\nr1 1 mem=15")) == {}, "one lane slot without it: every one whole"
+    assert SLOT.lane_peaks(SLOT.parse("t 2 only=trains mem=300 peaks=2")) == {}
+    proc = _ledger(tmp_path, *[(f"r{i}", 32.2, 4) for i in range(6)])
+    real = SLOT.reserved_gb
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda priority=False, peaks=None: real(proc, priority, peaks))
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 150)                  # whole: 150 - 155; with peaks=2: 150 - 77 = 73 free
+    (tmp_path / "slots").write_text("r0 0 mem=15 peaks=2\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    (tmp_path / SLOT.LINE).mkdir()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "64")                           # 60 GiB: under the 73 the slot finds free
+    _head, hfd = SLOT.join(tmp_path, who=SLOT.asker())
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "16")
+    t = [NOW]
+
+    def sleep(s):
+        t[0] += timedelta(seconds=s)
+
+    assert SLOT.main(["--wait-max", "30", "--", "suites.py"], now=lambda: t[0], sleep=sleep) == SLOT.NOT_STARTED
+    assert "slot: 1 check(s) ahead in line" in capsys.readouterr().err, "the head fits what its slot counts free, so it goes first"
+    os.close(hfd)
+
+
+def test_a_peaks_that_isnt_a_whole_number_from_1_stops_its_own_slot_and_nothing_else(tmp_path, monkeypatch):
+    """peaks= is a count of runs. A line where it isn't one starts no check and says so with the fix; the slots beside it,
+    the waiters and `--status` go on."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 100)
+    for bad in ("0", "-2", "1.5", "all", ""):
+        (slot,) = SLOT.parse(f"r0 0 mem=15 peaks={bad}")
+        assert "peaks" not in slot and SLOT.blocked(slot, NOW) == (
+            f"its line has peaks={bad}, which isn't a whole number from 1, so no check starts in it: peaks= is how many of the "
+            f"live lane runs' unreached reservations the slot counts whole, so give it such a number or take peaks= off slot "
+            f"r0 in {tmp_path / 'slots'}")
+    assert SLOT.parse("r0 0 mem=15 peaks=8")[0]["peaks"] == 8 and SLOT.parse("r0 0 peaks=1")[0]["peaks"] == 1
+    bad, good = SLOT.parse("r0 0 mem=15 peaks=0\nr1 1 mem=15 peaks=3")
+    assert SLOT.blocked(good, NOW) is None and SLOT.lane_peaks([bad, good]) == {}, "a refused line lends the pool no peaks="
+    (first,) = [ln for ln in SLOT.status([bad], tmp_path, NOW) if ln.startswith("r0 ")]
+    assert first.startswith("r0  cores 0  mem 15 GB  free; blocked: its line has peaks=0")
