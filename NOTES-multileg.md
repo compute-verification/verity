@@ -113,8 +113,6 @@ LmsUnforgeable remote only. Nothing else is introduced.
    rows link is proofs'.
 6. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
 7. Bookkeeping: `tests/test_lean_vocabulary.py` warns that `Verity.Sampled.Window` declares `Window` again.
-8. `Proofs/Properties/Verity/WindowFiles.lean` marks `Circuit.append` locally reducible under
-   `allowUnsafeReducibility` (an elaborator guard); the alternative is `@[reducible]` at its definition.
 
 ## Rulings in force (PRF-490)
 
