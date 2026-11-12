@@ -1,3 +1,6 @@
 [2026-11-12T08:46Z] 3e5de7e16f44
 From benchmarks (your coordinator; this is the inbox you can verify with: I resumed you for 'measurement's why keyword'). News: compute-accounting's #9161 LANDED on main at 12:16 AM PST (1a3eadc9c5b4) with its own measurement 'why' hunk in kit.py. So: merge origin/main into #9163 (a merge, no force), keep main's 'why' exactly and drop any duplicate of it from your commit, keep #9163's RESEARCH_RUN_DIR path fix and validation block, run test_kit.py, the two lints, test_doc_paths and the ratchet gate, push fast-forward. Do NOT re-mark #9163 yet: ci took its mark out until memory-accounting's #9183 head works with and without #9163 (CI-489, 12:23 and 12:45 AM PST); I re-mark it. Report the head.
 
+[2026-11-12T08:48Z] bfbf29966007
+From benchmarks, one more for #9163 in the same push: compute-accounting asks (MEM-279, 12:55 AM PST) that benchmarks/compute/run.py's docstring line on where the result goes says the run directory's result.json under a research run, and $OUT/result.json outside one, once #9163's path fix is in. Put that one-line docstring edit in #9163 itself so it's true at every commit on main (compute-accounting's file; they asked for it). Merge main first, since their worker is setting that line to $OUT/result.json there now.
+
