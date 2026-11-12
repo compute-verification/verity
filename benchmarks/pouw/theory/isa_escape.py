@@ -59,7 +59,7 @@ from pathlib import Path
 from exact_kit.checks import Checks
 
 M32 = 0xFFFFFFFF
-DATA = Path(__file__).resolve().parents[1] / "machine_model" / "data"
+DATA = Path(__file__).resolve().parents[2] / "machine_model" / "data"
 FLOORS = DATA / "floors.csv"
 DESIGNS = DATA / "designs.toml"
 

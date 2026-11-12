@@ -371,15 +371,26 @@ def full_pages(spans: dict[str, tuple[list[int], int]], block_size: int) -> dict
     return {rid: list(blocks[: n // block_size]) for rid, (blocks, n) in spans.items()}
 
 
-class LocalKv:
-    """The fresh pool's layers in this process (one GPU): `boundary.KvPool`'s rows (blocks x row bytes, int8), each
-    layer's dtype, and the served edge's K/V file (``near``, `kv_file`) that `readd` loads prefixes from."""
+#: the byte a dummy K/V holds in every byte, on one GPU as on a tensor-parallel engine: zero, or NaN in bf16, e4m3 and
+#: fp32 alike, so a cache of any format (bf16 words, an FP8 cache's bytes) takes it
+FILL_BYTE = {"zero": 0, "nan": T.FILL}
 
-    def __init__(self, rows: list[Any], dtypes: list[Any], block_size: int, near: list[Any] | None,
-                 layout: dict[str, Any]) -> None:
+
+def nan_bytes(t: Any) -> None:
+    """Every byte of ``t`` (a pool's int8 rows, or a part of one) set to `FILL_BYTE`'s NaN."""
+    import torch
+
+    t.view(torch.uint8).fill_(FILL_BYTE["nan"])
+
+
+class LocalKv:
+    """The fresh pool's layers in this process (one GPU): `boundary.KvPool`'s rows (blocks x row bytes, int8) and the
+    served edge's K/V file (``near``, `kv_file`) that `readd` loads prefixes from."""
+
+    def __init__(self, rows: list[Any], block_size: int, near: list[Any] | None, layout: dict[str, Any]) -> None:
         if not all(slot_major(v["shape"], block_size) for v in layout["views"]):
             raise SystemExit("a layer's blocks are not laid out slot by slot: the tail's slots can't be told apart")
-        self.rows, self.dtypes, self.bs, self.near = rows, dtypes, block_size, near
+        self.rows, self.bs, self.near = rows, block_size, near
         self.slot = int(rows[0].shape[1]) // block_size
         self.flat = [r.view(r.shape[0] * block_size, self.slot) for r in rows]
         self.block_bytes = int(rows[0].shape[1]) * len(rows)
@@ -392,28 +403,27 @@ class LocalKv:
         import torch
 
         if tail == "nan":
-            for r, dt in zip(self.rows, self.dtypes, strict=True):
-                r.view(dt).fill_(float("nan"))
+            for r in self.rows:
+                nan_bytes(r)
         if pairs:
             old_ids = np.array([p[0] for p in pairs])
             new_ids = torch.tensor([p[1] for p in pairs], device=self.rows[0].device)
             for src, dst in zip(self.near, self.rows, strict=True):
                 dst.index_copy_(0, new_ids, torch.from_numpy(np.ascontiguousarray(src[old_ids])).to(dst.device))
         for b, j in partial:
-            for dst, dt in zip(self.rows, self.dtypes, strict=True):
+            for dst in self.rows:
                 if tail == "zero":
                     dst[b, j * self.slot:].zero_()
                 elif tail == "nan":
-                    dst[b, j * self.slot:].view(dt).fill_(float("nan"))
+                    nan_bytes(dst[b, j * self.slot:])
         torch.cuda.synchronize()
 
     def _fill(self, slots: list[int], mode: str) -> None:
         import torch
 
         if mode not in self.fills:
-            v = 0.0 if mode == "zero" else float("nan")
-            self.fills[mode] = [torch.full((self.slot // dt.itemsize,), v, dtype=dt, device=r.device).view(torch.int8)
-                                for r, dt in zip(self.rows, self.dtypes, strict=True)]
+            self.fills[mode] = [torch.full((self.slot,), FILL_BYTE[mode], dtype=torch.uint8, device=r.device).view(torch.int8)
+                                for r in self.rows]
         idx = torch.tensor(slots, device=self.flat[0].device)
         for f, fill in zip(self.flat, self.fills[mode], strict=True):
             f.index_copy_(0, idx, fill.expand(idx.numel(), -1).contiguous())
@@ -441,10 +451,6 @@ class LocalKv:
 
     def roots(self, spans: dict[str, tuple[list[int], int]]) -> dict[str, str]:
         return roots(self.rows, spans, self.bs)
-
-
-#: the byte a tensor-parallel engine's dummy K/V holds in every byte: zero, or NaN in bf16, e4m3 and fp32 alike
-FILL_BYTE = {"zero": 0, "nan": T.FILL}
 
 
 class RankKv:
@@ -929,7 +935,7 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], kv:
 
 
 def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served_outs: dict[int, dict],
-                 layout: dict[str, Any], block_size: int, tail: str, shape: Dummies | None = None) -> dict[str, Any]:
+                 block_size: int, tail: str, shape: Dummies | None = None) -> dict[str, Any]:
     """Every request ``start`` (the scheduler's queues when it scheduled step S, `Mirror` mode's start.json) holds and the
     step record doesn't finish before S, added to the fresh engine as `readd` adds an edge's: with its outputs through
     step S-1 (those processed by then, and the record's since), and its computed prefix, the served count when it
@@ -943,11 +949,10 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
     if tail == "copy":
         raise SystemExit("a mirror holds no bytes past a request's computed tokens: --tail zero or nan")
     rows = B.KvPool(runner.kv_caches, len(pool.blocks)).rows
-    dtypes = [getattr(torch, v["dtype"].split(".")[-1]) for v in layout["views"]]
     L, slot, bs = len(rows), int(rows[0].shape[1]) // block_size, block_size
     if tail == "nan":
-        for r, dt in zip(rows, dtypes, strict=True):
-            r.view(dt).fill_(float("nan"))
+        for r in rows:
+            nan_bytes(r)
     S, done = start["step"], start["processed_through"]
     t = time.monotonic()
     ids: list[int] = []
@@ -999,11 +1004,11 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
         for i, dst in enumerate(rows):
             dst.index_copy_(0, dev, torch.from_numpy(np.ascontiguousarray(np.concatenate([c[i] for c in chunks]))).to(dst.device))
     for b, j in partial:
-        for dst, dt in zip(rows, dtypes, strict=True):
+        for dst in rows:
             if tail == "zero":
                 dst[b, j * slot:].zero_()
             else:
-                dst[b, j * slot:].view(dt).fill_(float("nan"))
+                nan_bytes(dst[b, j * slot:])
     if shape is not None:
         shape.taken["blocks_poisoned_at_start"] += shape.poison(allocated)
         shape.taken["target_prefix_blocks_loaded"] = len(ids)
@@ -1193,8 +1198,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     if kv.layout() != st0["kv_layout"]:
         raise SystemExit("the fresh engine's KV pool is laid out unlike the served one's")
     near_file = kv_file(files[a.from_edge], st0["kv_layout"])
-    dtypes = [getattr(torch, v["dtype"].split(".")[-1]) for v in st0["kv_layout"]["views"]]
-    lk = LocalKv(kv.rows, dtypes, bs, near_file, st0["kv_layout"])
+    lk = LocalKv(kv.rows, bs, near_file, st0["kv_layout"])
     pages = edge_pages(near_file, st0["pool"])
     # forced hits read pages written inside the block from the mirror, as lifetime replay reads its host copy, where the
     # fresh pool evicted a page the served one still had cached
@@ -1208,7 +1212,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     if begin:
         saved = Saved(a.from_mirror / "mirror")
         pages = first_of(pages, saved.page, *([mirror.page] if mirror and not shape else []))
-        out["rebuilt"] = readd_mirror(eng, core, begin, saved, w["outputs"], st0["kv_layout"], bs, a.tail, shape)
+        out["rebuilt"] = readd_mirror(eng, core, begin, saved, w["outputs"], bs, a.tail, shape)
         readded = set(out["rebuilt"].pop("order"))
         held = out["rebuilt"].pop("blocks_held_through_first_schedule")
         out["rebuilt"]["blocks_held_through_first_schedule"] = len(held)
