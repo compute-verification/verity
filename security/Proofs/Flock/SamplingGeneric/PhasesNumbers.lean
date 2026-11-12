@@ -99,14 +99,28 @@ and a phase's own terms `3/2^202 + 2·q`. -/
 
 /-- A sample of one session: `k·γ_s ≤ 1212·10^12` and `Pr[B] ≤ 2^-351` are within `q = 49234135/2^176`. -/
 theorem forkSq_one : (1212 * 10 ^ 12 : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 176) ^ 2 := by
+  have ha : (0 : ℚ) < 2 ^ 175 := by positivity
+  have h351 : (2 : ℚ) ^ 351 = 2 * (2 ^ 175) ^ 2 := by
+    rw [show (351 : ℕ) = 175 * 2 + 1 from rfl, pow_succ', pow_mul]
+  have h176 : (2 : ℚ) ^ 176 = 2 * 2 ^ 175 := by
+    rw [show (176 : ℕ) = 175 + 1 from rfl, pow_succ']
+  rw [h351, h176]
+  generalize (2 : ℚ) ^ 175 = a at ha ⊢
+  have h2 : (0 : ℚ) ≤ a ^ 2 := sq_nonneg a
   rw [mul_one_div, div_pow, div_le_div_iff₀ (by positivity) (by positivity)]
-  norm_num
+  nlinarith
 
 /-- A sample of `4096` sessions: `k·γ_s ≤ 4096·1212·10^12` and `Pr[B] ≤ 2^-351` are within
 `q = 49234135/2^170`. -/
 theorem forkSq_4096 : (4096 * (1212 * 10 ^ 12) : ℚ) * (1 / 2 ^ 351) ≤ (49234135 / 2 ^ 170) ^ 2 := by
+  have ha : (0 : ℚ) < 2 ^ 170 := by positivity
+  have h351 : (2 : ℚ) ^ 351 = 2 ^ 11 * (2 ^ 170) ^ 2 := by
+    rw [show (351 : ℕ) = 11 + 170 * 2 from rfl, pow_add, pow_mul]
+  rw [h351]
+  generalize (2 : ℚ) ^ 170 = a at ha ⊢
+  have h2 : (0 : ℚ) ≤ a ^ 2 := sq_nonneg a
   rw [mul_one_div, div_pow, div_le_div_iff₀ (by positivity) (by positivity)]
-  norm_num
+  nlinarith
 
 /-- One session a sample, `59,100,000` phases: at most `2^-111`. -/
 theorem phasesBound_one_59100000 :
