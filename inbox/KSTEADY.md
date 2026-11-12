@@ -1892,3 +1892,13 @@ three launches are dry-run, or at 13:00Z with where you are.
   both); before Thu 17:20Z whether `verify --zk` takes row 15's word form (if it refuses, row 15's
   `_v2` is timed: keep it last on the list) and which form a partition would name for the seven
   kinds in no file (rows 8 and 14 stay off unless proofs names one). I pass each at the go.
+- **Added 07:52Z: #9152 is MARKED ready at `8970c20dc922`** (by me, on benchmarks' land verdict of 07:50Z;
+  merges onto `main` `bcaf58a45d53` clean). Push nothing to it. **Benchmarks' five notes are your
+  next pull request, in its order** (read its comment on HASH-115): (1) the toolkit check moves out
+  of the lease: read `nvcc --version` in `point()` before `statement()`, so a wrong pin costs
+  nothing; (2) `harness/README.md:192` overstates the refusal: reword; (3) one exact-argv assertion
+  for a direct vLLM point in `tests/test_bench.py`; (4) the spec's comment at lines 15-17; (5)
+  `write_result` writes the result once. **And its word on the pin: keep the pin and exit 4; never
+  read the version on the node at run time** (rows at different patch versions would share an
+  identity): the value is written into the spec by hand from KHSHARE's Thursday read. That pull
+  request waits behind tonight's stagings and Thursday's cards.
