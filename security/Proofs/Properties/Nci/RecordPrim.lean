@@ -174,8 +174,9 @@ theorem prim_unit {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
       m < ((P.defs[P.root]!).body.nodes[k]!).members ∧ sc = P.child P.rootScope k m ∧
       (P.defs[sc.d]!).body = default ∧ (P.defs[sc.d]!).gates = 1 ∧ ∃ w, (P.defs[sc.d]!).ret = .value w := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hrs
+  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hir hrs
   obtain ⟨i, m, hi, -, hm, -, rfl⟩ := hu
   have hmem : rs[i]! ∈ rs.toList := by
     rw [getElem!_pos rs i hi]
@@ -246,8 +247,9 @@ theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Read
       ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).args.size =
         (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).params.size := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hrs
+  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hir hrs
   obtain ⟨j, m, hj, htj, hm, huj, hsc⟩ := hu
   have hmem : rs[j]! ∈ rs.toList := by
     rw [getElem!_pos rs j hj]

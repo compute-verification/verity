@@ -1,7 +1,9 @@
 # Flock verifier: runners and cross-checks
 
-Flock's verifier is the Lean package in `verity/protocols/flock/verifier/` (`flock_verifier`, Lean 4, no
-dependencies, toolchain pinned in its `lean-toolchain`). Its definitions are the specification, and its docstrings say
+Flock's verifier is the Lean package in `verity/protocols/flock/verifier/` (`flock_verifier`, Lean 4, nothing fetched: it
+requires only the tree's three base packages, `verity/circuits/base/`, `verity/circuits/lean/` and
+`verity/commitments/lean/`, by path; toolchain pinned in its
+`lean-toolchain`). Its definitions are the specification, and its docstrings say
 what each check is. This directory holds what runs it and what holds it to other implementations: the agreement job
 against upstream's Rust verifier, the agreement scripts for single parts, the mutant and fuzz generators, and the vectors.
 Upstream's Rust verifier is a cross-check, never a verifier.
@@ -278,6 +280,6 @@ legacy or before hm96-sha512 rows, so Lean refuses each and no agreement job rep
 
 ## Tests
 
-`verity/protocols/flock/prover/tests/test_lean_verifier.py` pins the toolchain, rejects `native_decide`, `implemented_by`, `extern` and
-`unsafe` in the sources, and runs the Lean-backed tests when `lake` is on the PATH; the `test_lean_*.py` modules verify
+`verity/protocols/flock/prover/tests/test_lean_verifier.py` pins the toolchain, holds the package's requires to the base packages
+of the tree, rejects `native_decide`, `implemented_by`, `extern` and `unsafe` in its sources and theirs, and runs the Lean-backed tests when `lake` is on the PATH; the `test_lean_*.py` modules verify
 fetched fixtures (`fixtures/artifacts.json`) with the built verifier.

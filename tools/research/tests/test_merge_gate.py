@@ -640,7 +640,8 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
                  [*slot, "--by", "ci", "--wait-max", "60", "--priority", "--run-max", "9", "--", *cmd]):
         assert unlike(argv, cmd) is None, argv
     for argv in ([*slot, "--by", "a", "--by", "b", "--", *cmd], [*slot, "--priority", "--priority", "--", *cmd],
-                 [*slot, "--cores", "8", "--", *cmd], [*slot, "--rank", "--", *cmd]):
+                 [*slot, "--cores", "8", "--", *cmd], [*slot, "--rank", "--", *cmd],
+                 [*slot, "--budget-gb", "64", "--", *cmd]):         # how many of its steps CMD starts at once: another run
         assert "isn't the target's declared" in (unlike(argv, cmd) or ""), argv
     other, extra = "isn't the target's declared", "which check.py doesn't take"
     for argv, why in (([], other), (None, "its record has no argv"), ([*cmd[:-1], "check.py"], other), (["env", "X=1", *cmd], other),

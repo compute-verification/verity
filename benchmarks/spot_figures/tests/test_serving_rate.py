@@ -43,7 +43,7 @@ def test_the_kept_card_is_its_owners_and_a_floor_is_provisional():
 @pytest.mark.parametrize("change,message", [
     ({"provisional": False}, "a lower bound is provisional"),
     ({"status": "modeled"}, "a serving rate is measured"),
-    ({"value": {"bound": "memory"}}, "one of 'compute', 'kv-pool', 'unknown'"),
+    ({"value": {"bound": "memory"}}, "one of 'compute', 'engine-step', 'kv-pool', 'unknown'"),
     ({"value": {"plan": "the 128k plan"}}, "an art id .* or the id of the run that holds it"),
     ({"value": {"tokens_per_gpu_second": 0}}, "a rate above 0"),
     ({"value": {"tokens_per_gpu_second": "fast"}}, "it is a number"),

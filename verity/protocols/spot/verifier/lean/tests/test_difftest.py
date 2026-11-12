@@ -2518,6 +2518,28 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
             "reject", f"proofs: session s's coins are not the challenger's: {CH.LINK_TABLES}"), keys
 
 
+def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
+    """An audit of `s` that v1 accepts on the verdict its evidence hands in and its challenger's coins, sampled under
+    `seed`: the registration record, the challenger's session, v1's evidence without its ``sessions`` and
+    ``verdicts``, and v1's parameters, which v2 reads with ``proofs``."""
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    ch, d, coins = _challenger_draw(random.Random(seed), s, law, rec)
+    proved = DR.proved(d)
+    base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+            "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+            "statement": {}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+              "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "window_root": ch.ledger.window["root"], "work_table": None}
+    v1 = base | {"sessions": [], "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    assert D.replay(ONE_STAGE, _json({"commitment": _hex(rec), "evidence": _hex(v1), "params": params}),
+                    server)[0] == "accept", s.templates
+    return rec, ch, base, params
+
+
 def test_v2_refuses_a_population_out_of_order(server, server_v2):
     """v2 refuses a registration whose program's proof blocks, read stratum by stratum, are not its population's units
     in order (`OneStageZk.popHeld`, `Slots.popOk`), before any session is verified, as the service's run refuses it at
@@ -2525,30 +2547,91 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
     R2 holds only the population's count, accepts the same audit on its verdicts. `SETUPS[4]` and `SETUPS[5]` are out
     of order (`test_the_run_refuses_a_population_out_of_order`); `SETUPS[3]`'s audit goes on to its session's
     verdict."""
-    law = {"k": 2, "law": "subset"}
     circuit = STAND_IN_CIRCUIT
     for s, ok in ((SETUPS[4], False), (SETUPS[5], False), (SETUPS[3], True)):
         assert P.in_order(s.program, s.query, s.population) is ok, s.templates
-        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                       WINDOW, leaf_layer=LEAF)
-        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{s.templates}"), s, law, rec)
-        proved, public, record = DR.proved(d), _public_of(rec), D.canonical(ch.trees[0].record).encode()
-        base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                "statement": {}}
-        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
-                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-                  "window_root": ch.ledger.window["root"], "work_table": None}
-        v1 = base | {"sessions": [], "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-        assert D.replay(ONE_STAGE, _json({"commitment": _hex(rec), "evidence": _hex(v1), "params": params}),
-                        server)[0] == "accept", s.templates
+        rec, ch, base, params = _audit_v1_accepts(s, f"v2-order-{s.templates}", server)
+        public, record = _public_of(rec), D.canonical(ch.trees[0].record).encode()
         v2 = base | {"proofs": {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}, "sessions": ["s"]}
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(v2),
                 "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
         out = server_v2.exchange(_json(case))
         want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
         assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
+
+
+def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_path, server, server_v2):
+    """`proofs.members_v2` writes v2's per-member form of ``proofs`` for a window of several members, and
+    `OneStageZk`'s parsers read what it wrote (`proofs.members_parsed`, the executable's ``members``:
+    `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`), on an audit v1 accepts: every member with its files'
+    digests, its units and its ``vus_per_block``, and a statement for each member with a session, in the members'
+    order. The command's line says ``parsed, not checked`` and names no verdict, and the audit refuses the same case
+    for its keys, so no check of the form is reached. What the parsers refuse the command refuses with their reason:
+    statements out of the members' order, a statement of two sessions or of a member the parameters don't name, v1's
+    ``sessions`` other than the statements', and either file in the one statement's form."""
+    rec, _, base, params = _audit_v1_accepts(SETUPS[3], "v2-members", server)
+
+    def member(k: int, name: str, lo: int, hi: int, *sessions: str) -> PF.Member:
+        at = tmp_path / f"m{k}"
+        at.mkdir()
+        (at / "circuit.txt").write_bytes(STAND_IN_CIRCUIT + name.encode())
+        (at / "pub.bin").write_bytes(_public_of(rec, indices=list(range(lo, hi))))
+        for x in sessions:
+            (at / x).mkdir()
+            (at / x / "session.json").write_text(json.dumps({"member": name, "session": x}))
+            (at / x / "rep-0.bin").write_bytes(f"{name} {x}".encode())
+        return PF.Member(name, PF.Proof(at / "circuit.txt", at / "pub.bin", tuple(at / x for x in sessions)),
+                         PF.file_sha512(at / "circuit.txt"), PF.file_sha512(at / "pub.bin"), None, ((lo, hi),), 4)
+
+    ms = [member(0, f"{PAIR.id}/c0", 0, 2, "s0"), member(1, f"{TRIPLE.id}/c0", 2, 4),
+          member(2, f"{TRIPLE.id}/c1", 4, 5, "s1")]
+    pm, pe, blobs = PF.members_v2(ms)
+    names = [x["name"] for st_ in pe["statements"] for x in st_["sessions"]]
+    assert names == ["s0", "s1"] and [st_["member"] for st_ in pe["statements"]] == [ms[0].name, ms[2].name]
+    assert blobs == [f for m in (ms[0], ms[2]) for f in (m.proof.circuit, m.proof.public, m.proof.sessions[0] / "session.json",
+                                                         m.proof.sessions[0] / "rep-0.bin")]
+    p2, e2 = params | {"proofs": pm}, base | {"proofs": pe, "sessions": names}
+    got, refused = PF.members_parsed(p2, e2)
+    assert refused is None, refused
+    assert got == {
+        "members": sorted(({"circuit": m.circuit_sha512, "name": m.name, "public": m.public_sha512, "registered": False,
+                            "units": [list(u) for u in m.units], "vus_per_block": 4} for m in ms), key=lambda m: m["name"]),
+        "parsed": "parsed, not checked",
+        "statements": [{"member": ms[0].name, "sessions": ["s0"]}, {"member": ms[2].name, "sessions": ["s1"]}]}
+    assert PF.PARSED == got["parsed"] and not {"verdict", "accept", "accepted", "public", "profile"} & set(got)
+
+    case = {"blobs": [f.read_bytes().hex() for f in blobs], "commitment": _hex(rec), "evidence": _hex(e2), "params": p2}
+    out = server_v2.exchange(_json(case))
+    assert (out["verdict"], out["reason"]) == ("reject", "params: the keys of proofs are not circuit, public, registered")
+
+    def why(p: dict = p2, e: dict = e2) -> str:
+        got, refused = PF.members_parsed(p, e)
+        assert got is None, got
+        return refused
+
+    first, last = pe["statements"]
+    assert why(e=e2 | {"proofs": {"statements": [last, first]}, "sessions": names[::-1]}).startswith(
+        f"proofs: member {ms[0].name}: its statement follows a member's whose units start after its own")
+    twice = {**first, "sessions": [*first["sessions"], {**first["sessions"][0], "name": "s2"}]}
+    assert why(e=e2 | {"proofs": {"statements": [twice, last]}, "sessions": ["s0", "s2", "s1"]}).startswith(
+        f"proofs: member {ms[0].name}: its statement has 2 sessions")
+    assert why(e=e2 | {"proofs": {"statements": [{**first, "member": "x/c0"}, last]}}) == (
+        "proofs: member x/c0: the parameters name no such member")
+    assert why(e=e2 | {"proofs": {"statements": [first, {**last, "member": ms[0].name}]}}) == (
+        f"proofs: member {ms[0].name}: a second statement: a member's units are one statement's")
+    assert why(e=e2 | {"sessions": names[::-1]}) == (
+        "evidence: proofs: the sessions are not the evidence's sessions, in order")
+    one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
+    assert why(e=e2 | {"proofs": one}) == "evidence: the keys of the evidence's proofs are not statements"
+    assert why(p=params | {"proofs": {"circuit": ms[0].circuit_sha512, "public": ms[0].public_sha512,
+                                      "registered": None}}) == "params: the keys of proofs are not members"
+    again = pm["members"] | {"z/c0": {**pm["members"][ms[0].name], "units": [[1, 2]]}}
+    assert why(p=params | {"proofs": {"members": again}}) == (
+        "params: proofs: unit 1 is in two members' units: a unit is one member's")
+    with pytest.raises(ValueError, match="exactly one session"):
+        PF.members_v2([member(3, f"{PAIR.id}/c1", 5, 6, "a", "b")])
+    with pytest.raises(ValueError, match="two members have one name"):
+        PF.members_v2([ms[0], ms[0]])
 
 
 def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
@@ -5467,6 +5550,52 @@ def test_the_call_queries_cut_call_by_call(pieces):
             slots(copy.deepcopy(refused))
 
 
+def _keyed(key: str, first: bool = False) -> dict:
+    """The descriptor of a root of one instance of `PAIR` and one Call of a composite of one gate whose id is the input id
+    `key`, the Call the later node or, `first`, the earlier; its program put among `PROGRAMS`."""
+    name, version = key.rsplit("_v", 1)
+    keyed = bind(CompositeDefinition(name, int(version), (), lambda S: ((("y", Value(8)),), Value(8)),
+                                     lambda B, S, y: B.call(XOR8, y, y), register=False))
+    assert codec.descriptor_id(keyed) == key
+
+    def body(B, S, x, y):
+        calls = [lambda: B.call(keyed, y), lambda: B.call(PAIR, x)]
+        return tuple_of(*(call() for call in (calls if first else calls[::-1])))
+
+    program = Program(bind(CompositeDefinition(
+        f"CoreSpotKeyed{name}{'First' if first else ''}", 0, (),
+        lambda S: ((("x", Array(2, Value(8))), ("y", Value(8))), Tuple(Value(8), Value(8))), body, register=False)))
+    PROGRAMS[PO.program_sha512(program)] = program
+    return _json(codec.encode_program(program))
+
+
+@pytest.mark.parametrize("key, first", [("Input16_v1", False), ("Input16_v1", True), ("RegisteredInput16_v1", False)])
+def test_a_composite_whose_id_is_an_input_id_is_no_input(pieces, key, first):
+    """A root Call of a composite whose id is an input id is no input node (`program.is_input`: only a primitive is one):
+    its gate is computed. A template query that doesn't list the composite refuses the program, Lean with the Python's
+    reason, in `unit_gates`, `slots` and `select`. One that lists it, and `Q_call` at `X = 16`, which cuts every Call,
+    take the Call as a unit, and Lean's slots are the Python's whole: the Call's gate is its unit's and no input block's,
+    so the proof blocks' gates and the input class's are every gate of the program once."""
+    desc = _keyed(key, first)
+    case = {"closure": None, "program": desc, "source": hashlib.shake_256(b"keyed").hexdigest(400), "work_table": None}
+    one = _json(P.template_instance_query(PAIR.id))
+    refused = {**case, "query": one, "rule": {"rule": "all"}}
+    for port, reference, j in [(UNIT_GATES, unit_gates, {"program": desc, "query": one}), (SLOTS, slots, refused),
+                               (SELECT, select, refused)]:
+        with pytest.raises(D.Reject) as why:
+            reference(copy.deepcopy(j))
+        assert f"is a call of '{key}'" in str(why.value)
+        assert D.replay(port, j, pieces) == ("reject", f"query-refused: {why.value}")
+    size = PROGRAMS[PO.program_sha512(desc)].circuit.size
+    for query in (P.template_instances_query([PAIR.id, key]), PO.call_query(16)):
+        taken = {**case, "query": _json(query), "rule": {"law": "rate:1/2", "rule": "law"}}
+        out = slots(copy.deepcopy(taken))
+        assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(out))
+        blocks = [b for c in out["classes"] for s in c for b in s]
+        assert sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi)) == list(range(size))
+        assert sorted(b["unit"] for b in blocks if b["unit"] is not None) == [0, 1]
+
+
 XOR64 = PrimitiveDefinition("CoreSpotXor64", 1, (("a", Value(64)), ("b", Value(64))), Value(64),
                             lambda a, b: a ^ b, register=False)
 #: A template of one batch of `N` 64-bit XORs: an instance returns `64 N` bits.
@@ -6387,7 +6516,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
         ({**wired, "wires": [{**wire, "wport": "x"}]}, ["second-header", "second-read"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}],
           "rows": [*wired["rows"], {"template": pair, "port": "x", "per": 2, "runs": [[0, 3, 0, 0]]}]},
-         ["second-header", "second-read"]),
+         ["second-wires"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}]},
          ["second-wires"]),
         ({**wired, "wires": None}, ["second-wires"]),
@@ -6405,6 +6534,20 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_refuses_a_wire_that_reads_a_returned_output(pieces):
+    """A wire whose writer's port a link names reads an output the replay block returns: the boundary record commits
+    that output and the interior record's port is what the reader is held to, two entries nothing holds to each other.
+    The design fails `second-wires`, its links derived, alike in both."""
+    pair, triple = SECOND_MIXED.templates
+    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
+    per, n = BOUNDARY.ports[BX]["leaves"] // BOUNDARY.population, wired["rows"][0]["per"]
+    case = {**wired, "links": [{"template": pair, "port": "out", "value": BX}],
+            "rows": [*wired["rows"], {"template": pair, "port": "out", "per": per, "runs": _runs(n, per)}]}
+    got = second_statements(copy.deepcopy(case))
+    assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), got
+    assert "second-wires" in got["codes"] and "second-links" not in got["codes"], got
 
 
 def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
