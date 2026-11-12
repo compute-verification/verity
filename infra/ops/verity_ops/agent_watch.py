@@ -113,7 +113,7 @@ its (a note whose `origin:` names it, new or changed by its mtime; for a coordin
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
 head ending in its id's last four characters (a coordinator's `cursor/...-1037`), widened by `same_task` to the heads a task
 moved to (`cursor/lean-one18-v2-fc8d` beside `cursor/lean-one18-fc8d`); pushes are read every `HEADS_EVERY_S` with
-`git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
+`git ls-remote --heads` of `--git-remote` (the App token fixtures_export.sh fetches with), a branch's push time being when the
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
@@ -1676,7 +1676,7 @@ class Watch:
         self.pr_branches, self.pr_lanes = named, lanes
 
     def read_heads(self, t: float) -> None:
-        """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
+        """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the App token fixtures_export.sh fetches with):
         a branch whose sha moved, or that appeared, was pushed when the watch saw it; `heads.json` keeps them across restarts."""
         if not self.git_remote or t - self.heads_read < HEADS_EVERY_S:
             return
