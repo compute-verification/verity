@@ -13,9 +13,9 @@ import pytest
 
 POUW = Path(__file__).resolve().parents[1]
 #: each directory with a runner -> the scripts beside it its jobs source, never started
-RUNNERS = {"served_h1": {"arch"}, "served_zk": set(), "hidden_zk": set(), "h1_prove": set()}
+RUNNERS = {"served_h1": {"arch"}, "served_zk": set(), "hidden_zk": set(), "h1_prove": set(), "h1_lanes": set()}
 #: the directories whose `run.py` is a step of their jobs, beside the runner
-STEP_BESIDE = ("h1_prove",)
+STEP_BESIDE = ("h1_prove", "h1_lanes")
 
 
 def jobs(d: str) -> list[str]:
