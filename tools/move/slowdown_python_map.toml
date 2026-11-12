@@ -21,8 +21,8 @@
 # What stays: "overhead" where it is prose or another quantity (a family's κ overhead, a regime's proving overhead, a
 # figure's per-block `overhead`, the `overheads` figure); `multiple` and `multiple_bound`; the stored keys (the
 # board's `"rho"` and the circuit properties' `out["rho"]`: [keep]; every `"rho"` and `"rho_fit"` of the harness,
-# quoted or in backticks: a row to itself in its block); SPOT's risk `level.rho(1)`, which the calculator's
-# `tests/test_held_to_core.py` holds to core ([keep_in]); and the symbol ρ.
+# quoted or in backticks: [keep_in]); SPOT's risk `level.rho(1)`, which the calculator's `tests/test_held_to_core.py`
+# holds to core ([keep_in]); and the symbol ρ.
 
 [words]
 
@@ -106,18 +106,21 @@ words = { "test_every_shape_is_rhos" = "test_every_shape_is_the_slowdown_calcula
 files = ["tests/test_retired_terms.py"]
 words = { "test_the_scan_reads_rho_terms" = "test_the_scan_reads_the_slowdown_calculators_terms", "faulty outputs outside rho" = "faulty outputs outside the calculator" }
 
-# --- the training harness: the record's slowdown. A key stays (`slowdown_harness_map.toml`'s header): where a block
-# has the bare word, the key in its quotes or backticks is a row to itself, which stands before the bare word and keeps
-# it. The printed phrases stand before the bare word too.
+# --- the training harness: the record's slowdown. A key stays (`slowdown_harness_map.toml`'s header says which are
+# stored). A row cannot keep a word and [keep]'s patterns hold in every file of the map, so where a block has the bare
+# word, the key in its quotes or backticks has a row of its own, standing before the bare word, and [keep_in] holds that
+# row's word in the harness's files: the row is never written there. Its name is the one the calculator's own key has
+# (`slowdown_calculator_names_map.toml`), so the word has one name in both maps; what a harness key is called when its
+# schema changes is that change's to say. The printed phrases stand before the bare word too.
 
 # the grade and its block: the row heads are `S = p x slowdown` and `record's slowdown`
 [[words_in]]
 files = ["benchmarks/training_slowdown/training_slowdown/grade.py",
          "benchmarks/training_slowdown/tests/test_grade.py"]
 [words_in.words]
-"\"rho\"" = "\"rho\""
-"'rho'" = "'rho'"
-"`rho`" = "`rho`"
+"\"rho\"" = "\"slowdown\""
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
 "BOUND_IS_RHO" = "BOUND_IS_SLOWDOWN"
 "rho's products term is this bound" = "the products term of the record's slowdown is this bound"
 "rho is it" = "the record's slowdown is it"
@@ -154,11 +157,11 @@ files = ["benchmarks/training_slowdown/tests/test_grade.py"]
 files = ["benchmarks/training_slowdown/training_slowdown/formalism.py",
          "benchmarks/training_slowdown/tests/test_formalism.py"]
 [words_in.words]
-"\"rho\"" = "\"rho\""
-"'rho'" = "'rho'"
-"`rho`" = "`rho`"
-"\"rho_fit\"" = "\"rho_fit\""
-"`rho_fit`" = "`rho_fit`"
+"\"rho\"" = "\"slowdown\""
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
+"\"rho_fit\"" = "\"slowdown_fit\""
+"`rho_fit`" = "`slowdown_fit`"
 "rho_fit" = "slowdown_fit"
 "rho is unmeasured" = "the record's slowdown is unmeasured"
 "rho" = "slowdown"
@@ -166,9 +169,9 @@ files = ["benchmarks/training_slowdown/training_slowdown/formalism.py",
 [[words_in]]
 files = ["benchmarks/training_slowdown/tests/test_one_calculator.py"]
 [words_in.words]
-"\"rho\"" = "\"rho\""
-"'rho'" = "'rho'"
-"`rho`" = "`rho`"
+"\"rho\"" = "\"slowdown\""
+"'rho'" = "'slowdown'"
+"`rho`" = "`slowdown`"
 "rho" = "slowdown"
 
 [rewrite]
@@ -184,3 +187,5 @@ strings = ["the board's `\"rho\"`"]
 [keep_in]
 # SPOT's risk ρ(m), the integrity profile's
 "verity/protocols/inference_only/slowdown/tests/test_held_to_core.py" = ["rho"]
+# the harness's keys, each a row of its block
+"benchmarks/training_slowdown/**" = ["\"rho\"", "'rho'", "`rho`", "\"rho_fit\"", "`rho_fit`"]
