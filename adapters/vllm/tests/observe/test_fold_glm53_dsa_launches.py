@@ -5,6 +5,8 @@
   request j holds its logits from column ``cu_j``; the decodes' paged logits ``[rows, width]`` come after, from column 0;
 * each top-k writes the run of the top-k allocation's rows its launch covers;
 * every row is one `DsaMqaLogits_v3{N=T}` and one `DsaTopKShortRow_v1`, the Build's per row; a launch that is not the next one is refused;
+* the request-index copy between the top-k and FA3 is held to its pinned launch, its pointers, its i32 layouts and the shared top-k
+  allocation, in that order, and records the page table it writes;
 * the FA3 sparse MLA call is held to its pointers, the step's rows, the pinned widths, bf16 and the default arguments, in that order.
 """
 from __future__ import annotations
@@ -18,6 +20,7 @@ from verity_vllm.observe.events import (
     DispatchExit,
     RunHeader,
     StepStart,
+    TritonLaunch,
     ViewDesc,
 )
 from verity_vllm.observe.fold.patterns import dsa as D
@@ -159,6 +162,53 @@ def test_each_top_k_writes_the_rows_of_its_launch():
                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32", offset=12 * 2048),
                  view(4, (1048576,), "uint8"), 2048, 20])
     assert isinstance(D.DsaTopK().match(off, ctx), Unsupported)
+
+
+SHARE_PINS = {"BLOCK_SIZE": 64, "BLOCK_STRIDE_ROWS": 64, "BLOCK_N": 2048, "HAS_PREFILL": False, "COUNT_VALID": True, "SINGLE_TILE": True,
+              "COMPACT_TO_FRONT": True, "DCP_SIZE": 1, "DCP_RANK": 0, "DCP_INTERLEAVE": 1}
+
+
+def _share(rows=2, consts=None, warps=8, fn=D.INDEX_SHARE_KERNEL, **pointers):
+    """The request-index copy's launch over `rows` rows: it reads the request ids, the block table and the top-k allocation's rows, and
+    writes the page table and each row's valid count."""
+    args = {"req_id_ptr": view(50, (rows,), "int32"), "block_table_ptr": view(51, (rows, 4), "int32"),
+            "token_indices_ptr": view(TOPK_ALLOC, (rows, 2048), "int32"), "out_ptr": view(52, (rows, 2048), "int32"),
+            "valid_count_ptr": view(53, (rows,), "int32"), **pointers}
+    consts = {**SHARE_PINS, **(consts or {})}
+    launch = TritonLaunch(41, None, 0, "forward", fn, D.INDEX_SHARE_SRC_SHA, {**args, **consts}, consts, [rows], warps, 3, 7, LAYER)
+    return build_trees([launch])[0][0]
+
+
+@pytest.mark.parametrize("kw,warps,mismatches", [({"warps": 4}, 4, {}), ({"consts": {"HAS_PREFILL": True}}, 8, {"HAS_PREFILL": (True, False)})],
+                         ids=["warps", "constexpr"])
+def test_an_index_share_copy_off_its_pinned_launch_is_refused_with_what_differs(kw, warps, mismatches):
+    off = D.DsaIndexShare().match(_share(**kw), _ctx([("a", [5]), ("b", [9])]))
+    assert isinstance(off, Unsupported) and off.reason == "IndexShare conversion source or launch geometry differs from the recorded GLM-5.3 pin"
+    assert (off.detail["src_sha"], off.detail["num_warps"], off.detail["num_stages"]) == (D.INDEX_SHARE_SRC_SHA, warps, 3)
+    assert off.detail["mismatches"] == mismatches
+
+
+def test_an_index_share_copy_is_held_to_its_pointers_then_its_layouts_then_the_shared_top_k_allocation():
+    ctx = _ctx([("a", [5]), ("b", [9])])
+    unbound = D.DsaIndexShare().match(_share(out_ptr=None), ctx)
+    assert isinstance(unbound, Unsupported) and unbound.reason == "IndexShare conversion pointers are not bound"
+    valid = view(53, (3,), "int32")
+    shaped = D.DsaIndexShare().match(_share(valid_count_ptr=valid), ctx)
+    assert isinstance(shaped, Unsupported) and shaped.reason == "IndexShare conversion views differ from the pinned i32 layouts"
+    assert shaped.detail["valid"] == repr(valid) and shaped.detail["source"] == repr(view(TOPK_ALLOC, (2, 2048), "int32"))
+    other = D.DsaIndexShare().match(_share(token_indices_ptr=view(99, (2, 2048), "int32")), ctx)
+    assert isinstance(other, Unsupported) and other.reason == "IndexShare conversion does not read the shared top-k allocation"
+    assert (other.detail["source"], other.detail["established"]) == ((99, 0, 2048, (2048, 1)), (TOPK_ALLOC, 0, 2048, (2048, 1)))
+    assert "page_table" not in D._state(ctx)["modules"][LAYER], "a refused copy records no page table"
+
+
+def test_an_index_share_copy_of_the_shared_top_k_rows_is_staging_and_records_its_page_table():
+    ctx = _ctx([("a", [5]), ("b", [9])])
+    assert D.DsaIndexShare().match(_share(fn="pkg.another.kernel"), ctx) is None, "another kernel is not this pattern's"
+    r = D.DsaIndexShare().match(_share(), ctx)
+    assert isinstance(r, Transparent) and (r.effect, r.consumed, r.kernels) == ("noop", (41,), ("ConvertReqIndexToGlobalIndexKernel",))
+    assert r.hint == f"{LAYER}/IndexShare top-k staging" and r.pattern == "dsa.index_share_copy"
+    assert D._state(ctx)["modules"][LAYER]["page_table"] == (52, 0, 2048, (2048, 1))
 
 
 MLA = "_vllm_fa3_C::fwd(Tensor q, Tensor k, Tensor v, Tensor? q_v) -> Tensor[]"
