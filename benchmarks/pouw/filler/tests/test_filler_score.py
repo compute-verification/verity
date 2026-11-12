@@ -352,6 +352,17 @@ def test_clock_gate():
     assert not S.clock_gate(stats, [])["ok"]
 
 
+def test_parse_smi_says_which_rows_it_left_out(caplog):
+    """A row with a field that is no number is left out of the reading and named in the log, never dropped silently."""
+    good = "2092, 3090, 410.5, 600.00, [N/A], 2430, 0x0"
+    with caplog.at_level("WARNING"):
+        assert len(S.parse_smi(good + "\n")) == 1 and not caplog.records
+        assert len(S.parse_smi(f"{good}\n2092, 3090, [N/A], 600.00, 2430, 2430, 0x0\nshort, row\n")) == 1
+    assert [r.getMessage() for r in caplog.records] == [
+        ("parse_smi: 1 row(s) with a field that is no number are left out, the first "
+         "'2092, 3090, [N/A], 600.00, 2430, 2430, 0x0'")]
+
+
 def test_margin_per_point():
     """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
     point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone
@@ -895,12 +906,12 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
         assert e["served_part_modelled"] == pytest.approx(0.9 * e["serving_macs"] / e["capacity_macs"])
     d = next(e for e in sc["entries"] if e["kind"] == "decode")
     v4 = S.decode_entry(stats[("decode", d["B"], d["L"])], d["B"], d["L"])
-    pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.cap(v4["mhz"])) * 1e3
+    pass_ms = 1.57 * v4["serving_macs"] / (0.71 * S.capacity(v4["mhz"])) * 1e3
     u = max(0.71, S.defer_at(S.DEFER_FIT, "u", 2, d["B"], d["L"]))
     assert d["served_model"]["defer_d"] == pytest.approx(u * (1 - shown)) and d["served_model"]["defer_s"] == shown
     assert d["t1_ms"] == pytest.approx(v4["t1_ms"] + shown * pass_ms)
     assert d["filler_macs"] == pytest.approx(
-        max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.cap(v4["mhz"]) * 1e-3))
+        max(0.0, v4["filler_macs"] - u * (1 - shown) * pass_ms * S.capacity(v4["mhz"]) * 1e-3))
     p = next(e for e in by.values() if e["kind"] == "prefill")
     st = stats[("prefill", S.PREFILL_M, 0)]
     assert p["t1_ms"] == pytest.approx(p["t1_measured_ms"] + (0.57 + 0.13) * (st["alone_ms"] + share.FA2_MS_8192))
@@ -919,14 +930,14 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
     held flat) and its displacement u(1 − s), u the larger of TP 2's r3 fit and the MAC-for-MAC rule; read at B and L
     clamped to the points."""
     def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
-        plain = served / (0.71 * S.cap(mhz)) * 1e3
-        lost = u * (plain - s * plain) * S.cap(mhz) * 1e-3
+        plain = served / (0.71 * S.capacity(mhz)) * 1e3
+        lost = u * (plain - s * plain) * S.capacity(mhz) * 1e-3
         return {"T": 4096, "tp": tp, "B": b, "L": l, "base_ms": 40.0, "defer_ms": 40.0 + s * plain, "dalone_ms": plain,
                 "mhz": mhz, "served_macs": served, "defer_fill_macs": 5e12 - lost, "phase_slowdown": 1.0,
                 "phase_fill_macs": 5e12}
 
-    law = {2: (0.8, 1.1), 4: (0.6, 1.4)}
-    pts = [point(t, b, l, law[t][0] * (b / 32) ** -0.5 * (l / 2048) ** 0.1, law[t][1] * (b / 32) ** -0.2)
+    coef = {2: (0.8, 1.1), 4: (0.6, 1.4)}
+    pts = [point(t, b, l, coef[t][0] * (b / 32) ** -0.5 * (l / 2048) ** 0.1, coef[t][1] * (b / 32) ** -0.2)
            for t in (2, 4) for b, l in ((32, 2048), (64, 2048), (128, 8192), (256, 2048))]
     f = S.defer_fit(4096, pts)
     assert f["s"]["intercept"] == pytest.approx({2: 0.8, 4: 0.6}) and f["u"]["intercept"] == pytest.approx({2: 1.1, 4: 1.4})
@@ -956,7 +967,7 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
         assert dp["added_ms"] == pytest.approx(m["added_ms"] + r["added_err_ms"])
         assert dp["displaces"] / m["lost_macs"] == pytest.approx(1 + r["d_resid"])
         t1 = p["base_ms"] * p["phase_slowdown"] + dp["added_ms"]
-        share = max(0.0, p["phase_fill_macs"] - dp["displaces"]) / (S.cap(p["mhz"]) * t1 * 1e-3)
+        share = max(0.0, p["phase_fill_macs"] - dp["displaces"]) / (S.capacity(p["mhz"]) * t1 * 1e-3)
         assert 100 * share == pytest.approx(100 * r["fill_share"] + r["fill_err_pts"])
     assert S.defer_rates(2, 1, 1024) == S.defer_rates(2, 32, 2048)
     assert S.defer_rates(4, 1024, 65536) == S.defer_rates(4, 256, 8192)
@@ -997,7 +1008,7 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     assert dp["s"] == pytest.approx(min(1.0, S.DEFER_FIT_TP["s"]["intercept"][2])) and e["served_model"]["defer_s"] == dp["s"]
     assert dp["d"] == pytest.approx(S.DEFER_FIT_TP["d"]["intercept"][2]) and e["served_model"]["defer_d"] == dp["d"]
     assert e["t1_ms"] == pytest.approx(42.0 + dp["added_ms"]) and e["filler_measured_macs"] == 1.5e12
-    c = S.cap(2000.0) * e["t1_ms"] * 1e-3
+    c = S.capacity(2000.0) * e["t1_ms"] * 1e-3
     assert e["filler_part"] == pytest.approx(0.45 * (1.5e12 - dp["displaces"]) / c)
     assert e["served_part_modelled"] == pytest.approx(0.9 * 1e12 / c) and e["time"] == pytest.approx(2 * e["t1_ms"] / 40.0)
     assert e["time_v4"] == pytest.approx(2 * 42.0 / 40.0)  # v4's form weighs by v4's wall time, no modelled pass
@@ -1012,4 +1023,4 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     sc = S.tp_score([e])
     assert "SCORE_TP" not in sc and len(sc["missing"]) == len(S.TP_SUITE) - 1
     assert sc["by_tp"][2]["coverage"] == pytest.approx(e["coverage"])
-    assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.cap(2000.0) * 42.0e-3))
+    assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.capacity(2000.0) * 42.0e-3))

@@ -20,8 +20,8 @@ import pytest
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_h1"))
-import lane_refs as LR  # noqa: E402
-import partials as PT  # noqa: E402
+import lane_refs as LR
+import partials as PT
 
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)

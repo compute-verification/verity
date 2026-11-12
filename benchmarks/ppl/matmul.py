@@ -104,11 +104,11 @@ class MM:
 
     def __init__(self, kind: str, name: str, run: Run, x: torch.Tensor, w: torch.Tensor, maps: tuple = (),
                  cache: dict | None = None, extra: dict | None = None, stage: str = "real", prefix: tuple = (),
-                 draws: list | None = None):
+                 coin_calls: list | None = None):
         self.kind, self.name, self.run, self.x, self._w, self.maps = kind, name, run, x, w, maps
         self.store = run.cache if cache is None else cache
         self.extra, self.stage, self.prefix = extra or {}, stage, prefix
-        self._draws = draws if draws is not None else [0]
+        self._coin_calls = coin_calls if coin_calls is not None else [0]
 
     # ------------------------------------------------------------ what a step reads
 
@@ -149,7 +149,7 @@ class MM:
         elif w is not None:
             maps, base = (), w
         return MM(self.kind, self.name, self.run, self.x if x is None else x, base, maps, self.store,
-                  {**self.extra, **extra}, self.stage, self.prefix, self._draws)
+                  {**self.extra, **extra}, self.stage, self.prefix, self._coin_calls)
 
     def integer(self, x: torch.Tensor, w: torch.Tensor, **extra) -> "MM":
         """The integer stage: x and w on the grid; what the rest of the chain returns is their exact product."""
@@ -178,8 +178,8 @@ class MM:
         levels = 2^b). Linears: one stream per (seed, layer, linear, window); attention: the (seed, layer, window)
         stream, in sample order."""
         if self.kind == "linear":
-            n = self._draws[0]
-            self._draws[0] += 1
+            n = self._coin_calls[0]
+            self._coin_calls[0] += 1
             tag = f"{self.seed}/{self.layer}/{self.name}/{self.window}" + (f"/{n}" if n else "")
             g = torch.Generator(device=self.device)
             g.manual_seed(zlib.crc32(tag.encode()))
