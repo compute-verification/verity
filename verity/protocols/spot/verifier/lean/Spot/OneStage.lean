@@ -51,10 +51,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   refused in any other form;
   and it may add `certified`, `{value: {"domain", "leaves", "root", "words"}}`, with `word_bits` (16 or 32, 16 when
   left out): the entries it built from registrations it read under the deployment's key, each of a value it neither
-  expects a parameter registered under nor fills, `root` lowercase hex of 64 bytes, `leaves` and `words` naturals and `domain` a
-  string, which R7 holds the record's entries for those values to (`Registration.certifiedHeld`), with which it
-  expects a v2 record whatever it expects registered (`Registration.Verifier.v2`), refused in any other form, and
-  which only the registration check and the run of record read: `paramsOfJson` refuses the key;
+  expects a parameter registered under nor fills, `root` lowercase hex of 64 bytes, `leaves` and `words` naturals
+  and `domain` a string, which R7 holds the record's entries for those values to (`Registration.certifiedHeld`),
+  with which it expects a v2 record whatever it expects registered (`Registration.Verifier.v2`), refused in any
+  other form, and which only the registration check and the run of record read: `paramsOfJson` refuses the key;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
