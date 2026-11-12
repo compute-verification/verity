@@ -103645,3 +103645,79 @@ To soundness and lean, unchanged: everything from "In plain words" to the end of
 - The pull request's body is drafted in A2's words, with the thirteen before and now and the four changed texts in Lean, in my checkpoint note `lanes/proofs/20261112T2146Z-report-accounts.md`. Three gaps in it: the records that move, compute-research's merge, network-accounting's commit.
 
 **I wait on:** your word that compute-research's branch is final and network-accounting's branch is named; the two runs above; your word to open. Nothing of mine holds a slot beyond those two runs in line.
+
+## WINDOWAT, Thu 12 Nov 21:51Z: three of the six files are written (F, A, B: 534 lines, 22 theorems) and wait for a Lean slot, none elaborated in the tree yet; and the check as it is refuses no statement of a member the sample missed, which the window theorem's count of sessions needs
+
+Clock: `date -u` read 21:51Z before posting. Mailbox read at `cursor/proofs-inbox` `93f55fdd76d2` (fetched 21:45Z): one message, yours of 20:50Z, already acted on [run]. Heads at 21:45Z: soundness `3e26cac7596a`, the lever `7d4e96a5fa07`, #9441 `ce41e7c92e8e`, `main` `5f0c008aa040`, none moved since my merge; my branch is at `c4f8baa79c`, unchanged, both merged [run]. Nothing of `security` built on the VM.
+
+### 1. What is written, and where it stands
+
+Under `security/Proofs/Properties/Verity/Sampled/MemberForm/`, in my working tree, **not committed**: I commit a file when its run says it elaborates with the three axioms.
+
+| file | lines | theorems | definitions | what it gives |
+|---|---|---|---|---|
+| F `Consts.lean` | 101 | 5 | 1 | `constsWith_read`: the vocabulary's openings hold at each member's constants at every window, in `ReadsWith`'s recursion (the `consts` clause of `MemberV5.ReadAt`) |
+| A `Accept.lean` | 75 | 2 | 3 | `MembersAccept`, `FormAccepts`, `formAccepts_refused`, `stepAt` (the verifier's `StepAt` as `SessionVerdict` reads one) |
+| B `Run.lean` | 358 | 15 | 5 | `membersRun_ok`: where `membersRun` returns with every session accepted, the statements are members' in order, one session each, at the statement read for its member (`statementAt_files`), and the sessions have soundness's `Verdicts` in order |
+
+- [run] **Tries waiting for a slot**, both on `vy-nebius-cpu-8`, `--pool proofs --mem-gb 64 --cwd clone`, each `lean_changed.py --try FILE` on a snapshot commit of my working tree (never pushed): `r20261112-213253-a3cc` (F alone, launched 21:33Z, "1 check ahead in line" at 21:46Z) and `r20261112-214653-68e1` (A, B, then F, launched 21:47Z, 2 checks ahead at 21:51Z). On `vy-nebius-cpu-12` and `-cpu-10` the line was 11 checks at 21:33Z, so I moved to `-cpu-8`; four earlier launches of mine there were cancelled before they took a slot (`r20261112-212232-1516`, `-212718-d5ab`, `-213226-1b3d`: the file changed, or a shorter line elsewhere).
+- [run: on this VM, no run id] **The tactic scripts of F and B elaborate in a model, not in the tree**: `lean` of the VM's toolchain (v4.34.0, core only, under 5 s, no `lake`) on a scratch file that holds F's five declarations over stub copies of `Circuit.beside`, `circuitWith`, `constsWith` and `ConstsOpen`, and on a second that holds B's text unchanged over the verifier's functions copied verbatim from `Spot/OneStageZk.lean` (`heldStep`, `membersHeld`, `follows`, `runFrom`, `stepMember`, `runMembers`, `membersFiles`, `statementAt`, `provedHeld`, `mapError_ok`, `membersRun`) with stub types, and soundness's `steps_iff`, `verdicts_append` and `eq_single` assumed. It caught two errors before a slot was spent (a `rw` of `BitVec.getLsbD_cast` that finds no instance at the widths' transparency; a `rw` in the wrong direction). [guess] So the tree's elaboration should differ only where Mathlib's or soundness's names do. A is not modelled: 75 lines, one three-line proof.
+- [read] B ports the forward half of soundness's stand-in (`Sampled/Window/Members.lean`, 734 lines, namespace `Verity.Sampled.PerMember`: a root of the lakefile that no Lean file imports) to the verifier's own `heldStep`, `runFrom`, `stepMember` and `runMembers`, and adds what the stand-in has no counterpart of: the statement a session runs at is the one `membersFiles` read under its member's name (`statementAt`, `OneStageZk.lean:1182`), which is that member's own (`membersFiles_lookup`: `List.lookup` and `Array.find?` both take the first of a name).
+- [run] **Records run `r20261112-203452-ae67`** (`vy-nebius-cpu-12`, the spot verifier's records at the merged tree's Lean): still running at 21:46Z, slot `p2` since 20:42Z, peak 46.7 GiB. No verdict.
+
+### 2. One statement of the map changes: `FormAccepts` is stated at `V2Accepts`
+
+- [read] The map (21:16Z, section 2) stated `FormAccepts` of `checkBlobsAt p c ξ e bs` at any evidence `e`. `MembersAccept.sessions` (`e.sessions = sts.flatMap (·.sessions)`) does not follow from that: the members' check reads `e.base.sessions` (`membersStructure`, `OneStageZk.lean:1394`) and `e.statements` (`checkBlobsAt`, `:1471`) and never `e.sessions`, whose only reads are the one statement's (`:715,761,768`); the equation is the parser's (`membersEvidenceOf`, `:849-858`). Soundness's `sentRecordAt` reads `e.sessions[u]?` (`Sampled/Window/Record.lean:200-209`), so I need it.
+- So, in `Accept.lean`:
+
+```lean
+def FormAccepts : Prop :=
+  ∀ (bs : _root_.Core.Blobs) (a b e : ByteArray) (p : _root_.Spot.OneStageZk.Params)
+    (c : _root_.Spot.OneStage.Commitment) (ev : _root_.Spot.OneStageZk.Evidence) (ξ : ByteArray) (dr : Draws)
+    (ms : Array _root_.Spot.OneStageZk.Member),
+    V2Accepts bs a b e p c ev ξ dr → p.members = some ms → ∃ sts r, MembersAccept p c ξ ev bs ms sts r
+```
+  [read] `V2Accepts` (`Proofs/Properties/Verity/SampledDraw.lean:429-435`) holds the composite's own parse of the evidence bytes (`VStar.Recursive.Sampled.evidenceOf e = .ok (.inl ev)`), so the day the composite parses either form, `sessions` is a fact of `membersEvidenceOf`. Today it holds because no accept has members (`formAccepts_refused`, by `checkBlobsAt_accept`). No declaration of soundness's or MEMBERS' changes; this is the shape MEMBERS' accept-shape lemma is asked in.
+
+### 3. A statement of an undrawn member is not refused (the map's open question, answered at the one-stage check)
+
+- [read] **What the window theorem needs.** `WindowSessions.trees : (openedTrees x.log).length ≤ drawnBefore W.ms S W.ms.length` and a drawn member's session is the play's session after `drawnBefore W.ms S i` others (`Sampled/Window/Steps.lean:239-250`). The log opens one tree a session (`membersTreesHeld`, `OneStageZk.lean:1373-1383`) and a statement has one session (`heldStep`, `:898-902`), so both need: **every statement's member has a unit in the sample**.
+- [read] **What the check holds.** `heldStep` reads no sample (its refusal text says "an undrawn member has no statement", `:900-901`, of a statement with a number of sessions other than one; nothing holds the member to the sample). `membersStructure` holds no member to the sample (`:1391-1401`: the sessions' names, the trees and their order, the population, the members' ranges). `runMembers` holds only the union: `provedHeld r.proved want` (`:1206-1209`, `:625-627`), and `push` appends a session's `provedUnits` (`:600-601`), so a session that proves no unit changes nothing. v1's `verdictOf` and `check` read no per-session count (`OneStage.lean:462,511`).
+- [read] **What a session of no unit meets** (`verdictOf`, `OneStageZk.lean:558-576`; paths below under `verity/protocols/flock/verifier/`). Its record's `unit_draw` is a subset draw of `k = 0` and no units over the member's population: `UnitDraw.ofJson` refuses a subset draw only at `k > population || units.size != k` (`verity/commitments/lean/Commitments/Draw.lean:382`); `lawWhy` passes any subset draw under `--zk` (`Flock/ProvedScope.lean:560`); `KsScope.drawWhy` checks nothing at one table (`Flock/KsScope.lean:111`); the setup refuses zero units only at several tables (`splits`, `Flock/HmRow.lean:2488-2493`); `RecSetup.fullDraw` and `innerDrawn` pass without an inner session (`Flock/RecSetup.lean:241,255`); `HmRow.drawn` at an empty draw returns a public of no instance, `n := proved.size` (`HmRow.lean:1382-1402`). [derived] At `n = 0` the statement's size is the size at one unit, `m = kLog + 3` (`HmRow.lean:2561-2564`: `nbl = max 3 (log2ceil (max blocksReal 1))`), so `sizesOk` (`ProvedScope.lean:331-340`) refuses it exactly where it refuses a session of one unit.
+- [guess] So a prover can add, for a member the sample missed, a statement whose one session proves no unit, and the check accepts it wherever it accepts without it. Not read at no instance: the rest of the setup after the size (`HmRow.lean:2565` on), `Record.decode`, `RecordText.check`, `PortRoots.checkOf`, `FilePart.check`, and the inside of `Zk.verify`. Nothing false is credited by it (the proved units are still the sample), but the theorem's count of sessions is then wrong, and I cannot prove `trees` or a session's place.
+- **The change it takes is in `runMembers` or `membersStructure`, which are not mine: I have not made it.** Before (`OneStageZk.lean:1204-1205`):
+
+```lean
+  membersHeld ms sts >>= fun held =>
+  membersFiles slice bs ms.toList >>= fun files =>
+```
+  After (one way, not elaborated; `want` is the evidence's `proved_units`, which v1's `Record.checks` hold to the sample; [guess] they and `Member.units` count the registration's population's units alike, as `laidHeld`, `:1024-1030`, and `provedHeld` suggest):
+
+```lean
+  membersHeld ms sts >>= fun held =>
+  (match held.find? fun m => !want.any fun u => m.units.any fun x => decide (x.1 ≤ u) && decide (u < x.2) with
+    | some m => throw s!"member {m.name}: the sample holds none of its units, and an undrawn member has no statement"
+    | none => pure ()) >>= fun _ =>
+  membersFiles slice bs ms.toList >>= fun files =>
+```
+  [derived] It reopens `runMembers_files` and `runMembers_proved` (one more `bind_ok` each) and my `runMembers_ok`, and changes no statement in a lock that I can see (`checkMembersAt_refuses` and `checkBlobsAt_accept` do not unfold it). The other way, with no change to the verifier, is a proof that `Flock.Zk.verify` accepts no session of no instance; I have no reason to think that is true.
+- [derived] What does not wait on it: F, A, B, the `read` clause (C) and the files' checks; of E, that every drawn member has a statement and that a statement's record carries its member's part of the sample (both from `provedHeld` and the member's `units.indices`). What waits: `WindowSessions.trees` and the equation `session index = drawnBefore` in D and E.
+
+### 4. Two of the map's open items, closed
+
+- [read] `Flock.Record.decode spec record = .ok sess` from `Flock.Zk.verify spec tabs record proofs = .ok ()`: `zk_verify_ok` (`security/Proofs/Flock/Soundness/Discharge/ZkExec/Verify.lean:22`), used that way at `Proofs/Flock/Claims/KS/ZkRows.lean:551`.
+- [read] The device's log is not v2's read on the one statement's path either: `verdict_read` hands `List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) x.log` beside `readLog … = some lr` (`Sampled/MovesReach.lean:672-679`). So (N2) of the map asks of `WindowSessions` what the one statement's path already does.
+
+### To post
+
+- To MEMBERS and to you, the decision in section 3: a refusal of a statement whose member the sample missed, in `runMembers` (or `membersStructure`), text above; or the ruling that S7 proves `trees` another way. It is on the path of the form's first accept: without it `WindowReads` is not provable of an accept.
+- To MEMBERS: `FormAccepts` as in section 2 is the accept-shape lemma I read, at `V2Accepts`, with `sessions`.
+- To soundness: unchanged from the map, (N2), (N1), (N4), (N3) in that order.
+
+### Not established
+
+- That F, A or B elaborates in the tree: the two runs above; the model is not the tree.
+- Whether the merged tree builds: `r20261112-203452-ae67`, and the first try's `lake build` of F's imports.
+- Whether Flock refuses a session of no instance somewhere I did not read (section 3's [guess]).
+- D's size: the one statement's read chain is `Sampled/MovesReach.lean` (835 lines) and `Sampled/RoundsRead.lean` (1221); how much of it is already stated at any tree of the log, and how much at the one tree, I have not counted. Friday's entry has the count.
+- The day for the whole: Friday 18:00Z, with the size against the tree.
