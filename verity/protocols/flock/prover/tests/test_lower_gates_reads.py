@@ -211,6 +211,30 @@ def test_a_builder_whose_leaf_has_no_word_is_refused_either_way(kept) -> None:
     assert _made(lower(2 * W)) == dropped
 
 
+def test_a_builder_that_declines_once_chosen_is_an_error(kept, monkeypatch) -> None:
+    """A caller that names its reads has each word's readers counted before anything is lowered, over the builders chosen
+    then: one that declines afterwards is refused, where a caller that names none falls back to the activation's gates."""
+    monkeypatch.setattr(IL, "_lower_activation", lambda *_a: False)
+    with pytest.raises(AssertionError, match="before its builder ran"):
+        _lower(bind(ROUNDS, N=1))
+    kept()
+    assert _lower(bind(ROUNDS, N=1)).counts()["ands"] == MIX_ANDS + W
+
+
+def test_a_read_counted_and_never_made_is_an_error(monkeypatch) -> None:
+    steps = IL._steps
+    _prog, call = IL.standalone(bind(ROUNDS, N=1))
+
+    def one_more(gates, wires, reads):
+        made, left = steps(gates, wires, reads)
+        left[call.args[0]] += 1
+        return made, left
+
+    monkeypatch.setattr(IL, "_steps", one_more)
+    with pytest.raises(AssertionError, match="1 reads counted over the gates were not made"):
+        _lower_call(call, call.returns)
+
+
 def test_wires_passed_from_call_to_call_give_the_same_circuit() -> None:
     """Two calls over the two halves of a unit on one ``wires``: the first names what the second reads, or neither names
     anything; a first call that names nothing it reads leaves the second a KeyError, not another circuit."""
