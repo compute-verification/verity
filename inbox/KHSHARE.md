@@ -1627,3 +1627,37 @@ minutes before that, so the job has to be built for it:
    if only two leases can be had.
 
 The rest of the 16:50Z section stands; the return is still by Fri 01:00Z.
+
+## Thu 12 Nov 17:54Z: Daniel's rule on models, today: FRIDAY'S WINDOW IS RUN BY A NEW WORKER ON OPUS 5.5. Your return by Fri 01:00Z is its handoff
+
+Daniel today, through top (TOP-402, 17:45Z): "Opus 5.5 does the work; Fable 5.2 plans it"; every
+launch names its model; a worker on the lead's model whose next task is Opus's is not resumed for
+it: what is left goes to a new Opus worker, briefed from its note. You run on the lead's model.
+Friday's window is launching three prepared jobs, reading their records and posting tables: Opus's.
+You designed the walk, held it to the host and ran it on a card; what is left is to make Friday
+runnable by someone who was not there.
+
+**So your return (and the top of your note) is written for that worker, complete enough that it
+needs nothing else but the notes' files:**
+1. **For each of cards 6, 2 and 3:** the one launch line, the job's and every sent file's sha256,
+   the head it builds, the dry-run command that shows it still holds, what it prints when it
+   starts well, and its exits with what each means.
+2. **The order and the clock:** card 6 four provers first, then two, then one; nothing timed
+   before 16:15Z; off every card by 19:45Z; which of cards 2 and 3 goes first if only two leases
+   can be had.
+3. **The gates before any timed step** and what to do at each failure, as a table: the twin
+   differs (stop, nothing timed, tell the lead); a card or lease in use (wait, kill nothing); the
+   launch cannot connect (say so at once); `idle_provers` not 0 (the step is void, run again if
+   the lease allows); memory at four provers with the walk does not fit (that size stops cleanly).
+4. **How a row is read and labelled as its step ends:** the script, the fields, where a
+   statement's seconds go with the walk on, what "labelled" means for a row built from a branch
+   (asked at 17:45Z), and the comment's form for HASH-112 after each size.
+5. **What only you know:** every trap met on node A (the record's step on its Python, RunPod's
+   refusals, the pinned `steady.sh`'s differences), and what you would watch in the first ten
+   minutes.
+6. **A rehearsal the new worker can run tonight on stand-ins or a CPU node** that exercises its
+   launch lines without a card: name it.
+
+The new worker starts when you return, rehearses overnight, and gets the go at 15:25Z. **If its
+rehearsal has not held by Fri 12:00Z, I resume you for the window instead and say so on TOP-402:**
+the rows are on Daniel's top goal and have one try.
