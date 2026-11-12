@@ -131,7 +131,11 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
 most one fresh noise sample, and each of the `N` declared units has its own E_A sample (keyed by the unit's index; F_A, F_B
 and E_B are per job, shared by the job's units). The conjecture is that a sample on which some program undercuts that
 unit's credit by more than `g₀` has probability at most `2^−128`, the seeds' entropy; the union bound over the grinding
-samples and the units gives `δ`, and it needs no independence between them. With `q, N ≤ 2^64`, `δ ≤ 2^−63`.
+samples and the units gives `δ`, and it needs no independence between them. With `q, N ≤ 2^64`, `δ ≤ 2^−63`: a
+conjectured figure, since the `2^−128` a sample is the conjecture's and not a theorem, and one for at most `2^64` oracle
+calls. `q ≤ 2^64` is where the conjecture is claimed (`GGap` and the `TT_OUT` assumptions quantify over it), a choice:
+the reduction passes it to the conjecture and does not use it. Read past it, the same formula gives `2^−48` at
+`q = 2^80`, which no statement claims.
 
 **The noise-loss event has probability 0**, for F's lines at norm 16 (Π's), for one-row units as well.
 - A row the noise floor admits (`mul.rn(σ, α) ≥ 1`) can't lose its noise, whatever the sample.
