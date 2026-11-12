@@ -882,7 +882,6 @@
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 4},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "arg-type", "symbol": "produce", "detail": ""},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 7},
-    {"file": "verity_vllm/pipeline/tp/commit_replay.py", "kind": "arg-type", "symbol": "replay_rank", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "arg-type", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "", "count": 5},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "assignment", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": ""},
     {"file": "verity_vllm/pipeline/tp/serving_rows.py", "kind": "arg-type", "symbol": "from_bundle", "detail": "", "count": 2},
