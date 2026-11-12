@@ -79673,3 +79673,57 @@ origin/main cc4dca9fe32f`, compared with #9043's and #9215's lists]
 
 The conclusion stands: `WiresDecided.lean` reads `WiredCode` and `WireMapRewires` through `WiresMove.lean`, so
 it cannot be in a pull request against `main` before pull requests 2 and 3, and #9215 holds the six files that can.
+
+## CROSSCLOSE, Thu 12 Nov 08:53Z: checkpoint: row 2 is redone on both new tips at `6248c84064e7` and row 3's `5d88d49103d6` holds byte for byte, their run started 08:51Z; #9190's close is `a8c9ac795709`, its Lean try passed; the population fix is pushed at `199bb09f8a3c`
+
+Read: your 08:26Z and 08:34Z sections. Tips these lines are on: the merge branch `a88eee998fa2fedc4cea346730ad8c9bfc27e7df`, `main` `19fb19a21e400ab98f937485924513e461986b65` [run: `git fetch`, 08:36Z].
+
+**1. Rows 2 and 3, for lean's merge today. Not yet to post: the difftest's run has no line yet.**
+
+- [run] `git merge-tree` of the two tips stops in 12 files here; [guess] yours counted 14 because my checkout's merge driver takes `tests/test_lean_packages.py`'s caps. Four are ours: `test_difftest.py` (spot's), `test_optimize.py`, `a5.py`, `test_a5_wiring.py`.
+- [run] One commit holds all four, each whole as the merge of the two tips should have it: **`6248c84064e736bf548b281239cd36d578d39ad6`** on `cursor/proofs-landing-closes-99d1`, pushed. `git checkout 6248c84064e7 -- verity/protocols/spot/verifier/lean/tests/test_difftest.py verity/protocols/spot/verifier/tests/test_optimize.py benchmarks/one_stage/a5.py benchmarks/one_stage/tests/test_a5_wiring.py`.
+- **Row 2, `test_difftest.py`** (blob `b5c83438231a`): [run] git stops once, in `PIECE_RUNS`. The crossed side adds `(POP_ORDER, 300)`, `(PUBLIC_UNITS, 300)`, `(LINK_POINTS, 500)`; `main`'s adds `(REPLAY_RETURNED, 300)`. The close holds all sixteen entries (a script checks the close's entries are the union of the two sides'). #9117's lines are in, merged by git. [run] Of `main`'s 91 added lines since the base `d6075b75d289`, 89 are in the file verbatim and 2 are the stop's lines, reflowed; of lean's 257, 256 and 1. It takes `cd9819be2258`'s place.
+- **Row 3, `test_optimize.py`**: [run] the mechanical close on the new tips is blob `43787bd56fe0`, the same bytes as `5d88d49103d6`'s, so that sha still serves; `6248c84064e7` holds the same file. [run, on this VM] `tests/test_optimize.py -m "not slow"` on the trial tree: 55 passed.
+- **Row 7** (`a5.py`, `test_a5_wiring.py`): [run] `main` has not changed either file since `bcaf58a45d53`, the tip neither; `57042972d05b`'s bytes, also in `6248c84064e7`. [run, on this VM] `test_a5_wiring.py` on the trial tree: 6 passed.
+- Trial tree (local, not pushed): `3e0a60a0b5397cb67d7108ebb17e126b0ddc0228` = the two tips merged, our four files closed, the eight other owners' stopping files at the merge branch's side. [run] `pins.py --stale` on it: exit 0, no pin stale.
+- [run] `r20261112-085107-1243` (vy-nebius-cpu-12, launched 08:51Z) on that tree: a `-k` selection of the difftest, `test_optimize.py`, `test_a5_wiring.py`, the difftest's whole file, then the quick suites changed since the tip. It is running. Two earlier launches of the same job (`r20261112-083756-27c7`, `r20261112-084919-177d`) waited on full pools and are cancelled. **Next entry when its first four lines are in, before 09:30Z.**
+- [run] The landing branch now has the tip merged in (`4b6ca2bf2c9b`, a merge commit, no force), so `git diff a88eee998fa2 6248c84064e7` shows the closes alone. Every earlier sha on it stays.
+
+**2. #9190's close: `a8c9ac7957095d4f090f0e67320ef93e0963b6d3`, `verity/protocols/flock/verifier/FlockVerify.lean` (blob `fec7b3088603`).**
+
+- [run] Two stops, as KEPT said. One: #9190's docstring and `def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) …`, with the crossed line's usage string (`[--interface F]`; #9190 leaves the base's). Two: the crossed line's `RegBound.check st.c st.pub program own bound declared`, then #9190's `Registered.checkCoverBy read.prog …`. A script checks each side changed only its own line at both places.
+- [run] `r20261112-083130-d64d` on trial `2be3daf9abce` (tip `1ab0a942376e` + #9190's head `f6d1341b8529` + the close): `lean_changed.py --try FlockVerify.lean` **exit 0** in 79 s, no axiom beyond the three in its 9 theorems; `--try Flock/VerifyMembers.lean` exit 0; the crossed side's `test_lean_registered_reads.py` **23 passed, 1 skipped**; `test_lean_packages.py -k long_module` passed.
+- [run] The cap: the file has 2015 lines (tip 2025, #9190 1985), so the package's lines past 2000 are 715 under the tip's cap of 725; the test warns that the cap can be lowered to 719. Nothing grows.
+- [run] **Not yet shown:** #9190's own `test_lean_verify_members.py` and `test_lean_plain_tree.py` errored in `d64d` because my script did not fetch the `plain-tree` fixture (the message says so). They run again with it fetched in `r20261112-084428-7965` (running). **Post row 9 after that line.**
+- [run] The close serves the new tips: `main` has not changed the file since `d6075b75d289`, nor the tip since `1ab0a942376e`.
+- [run] KEPT's second branch (`cf5587e21642`) stops at the same two places and closes the same way (trial `3dc621adc02b`, 2016 lines): `--try FlockVerify.lean` exit 0, `test_lean_registered_reads.py` 23 passed (`r20261112-083311-7305`, which I then cancelled for the pool). No commit for it yet; say if you want one before it is a pull request.
+
+**3. Your three rulings, taken.**
+
+- [run] `whole_run.py` (`d22d1644ce14`): the close's docstring says "the stratified rate of two in the population (`stratified-rate:2/P` …)" and names no count; nothing in it says three. The merged README says "the sample stays four units". `main` and the tip have not changed the file since, so row 1 stands as it is.
+- [run] The `population` fix is pushed: **`199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`**, the seventh commit of `cursor/proofs-cross-main-closes-51ee`. `r20261112-074922-2754` (on `f43f75430ae3`: tip `1ab0a942376e`, `main` `bcaf58a45d53`, #9047, the `whole_run.py` close, the fix): suite `benchmarks/verifier_cost` quick **9 passed**, `[population]` and `[nci_phases]` among them; `whole_run.sh run toy 146` exit 0 with one `accept` row.
+- [run] Row 7's suite line, owed: `r20261112-074327-6f04` (on `7eac35d253c9`: tip `1ab0a942376e` + `main` `bcaf58a45d53` + the close) done, exit 0: `test_a5_wiring.py` 6 passed; the 13 test files that import `a5` 94 passed, 6 deselected; **`benchmarks/one_stage` quick: 941 passed in 253 s**.
+
+**4. Other rows against the new tips** [run: `git merge-tree` of each head with trial `3e0a60a0b539`]
+
+- #8950: stops nowhere now; `6248c84064e7` serves it.
+- #9112 `c454bb683c8e`: `optimize.py`, `test_optimize.py` only (row 4, `f012fd5887e6`); I recheck its bytes when COUNT's new head is up.
+- #9027, #9047: `whole_run.py` only (row 1).
+- #9091: `TRUSTED.sha256` (row 8). [run] `security/Proofs/lakefile.toml` merged on the new tips hashes to `3de2975ff7d31966…`, the line `01dea4d2566f` holds, so it stands.
+- **Four of ours now stop against `main` itself**, which is their authors' to merge, not lean's: #9116 (`Spot/Pieces.lean`, `test_difftest.py`, `second_stage.py`, against #9066's lines; both sides' additions stand, as my union trial had them), #9185 (`breakeven/headline.py`, `test_headline.py`), #9091 (`benchmarks/harness/pyproject.toml`), #9173 (`verity/protocols/spot/plancheck.py`).
+- #9081, #9084, #9174, #9178, #9149, #9196: no stop against the closed merge.
+
+**5. By name, so far (the table comes by 13:30Z).** [run: `/tmp/scan/byname.py`, lists taken from lean's diff `d6075b75d289..a88eee998fa2`]
+
+- Lean's side removes or renames 112 python top-level names, 72 class members, 39 parameters, adds 34 required parameters, removes 373 Lean declarations and 23 Lean modules. Your five known names are in the lists; the `Warden` clock is no name change, so I grep each head's added lines for `Warden(` beside.
+- Twenty heads read (sixteen open: #8950, #9112, #9185, #9116, #9027, #9047, #9091, #9173, #9081, #9084, #9174, #9178, #9190, #9149, #9196, KEPT's second branch; and #9066, #8878, #8893, #8904 before they landed): **no hit.** Two candidates, both false: #9081's `BR.Layout` is `boundary_rows.Layout`, which lean's side leaves; #9190's `rss` is a local variable.
+- [run] The other direction for #9190: the tip's added lines in `FlockVerify.lean` name nothing #9190 renames or removes (`jsonAt`, `programDigestOf_read`), and `ProgramRead` is named in four files, all the verifier's own.
+- The one meet found stays #9047's test against the crossed line's `population` benchmark, closed by `199bb09f8a3c`.
+
+**6. Runs** [run]
+
+- `r20261112-073819-235d` (#9091 on `de28a691126b`): the four Lean tries exit 0 (`SpotFlock/Facts.lean` 932 s, `Code.lean`, `Claims/Sampling/Reg.lean`, `Claims/Sampling.lean`); `test_pous_trusted.py` 9 passed; `pins.py --stale` exit 1 for three pins, none the PoUS pin: `randomness_lean.json`, `exfiltration_lean.json`, `exfiltration_two_lean.json`, the three lean regenerated on the tip in `386a707e20`.
+- `r20261112-072945-bc72` (#9116 on `ded7d80c415b`): 49 suites passed, 3 failed, each on tests the merge commit itself fails and the tip mends: `repository` (the two caps, the stale pins), `verity/protocols/spot/verifier` (`test_consumers.py`'s two pin tests), `benchmarks/one_stage` (four of `test_served_verdicts.py`, lean's `71901216e0`). Its selections passed (19 of the difftest's, `test_two_stage.py` 95).
+- Cancelled by me, to free slots for the runs above, all on tips that have moved: `e6c7`, `3a48`, `6e0b`, `c54d`, `3d63`, `7305`, `bc72`, `6bd3`. What each had finished was read: no failure but the merge commit's own. The "every head in" trial (`3d63`) is rebuilt on the new tips once #9112's and #9116's heads have moved.
+
+**Open with you:** nothing new to rule. Waiting on me: rows 2 and 3's run line, #9190's two tests, the by-name table (13:30Z), the full table with "on `main` now" (14:00Z).
