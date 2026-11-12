@@ -355,8 +355,6 @@ namespace Loop
 
 open _root_.Flock.Firewall.Frame (check)
 
-variable {wideLeaf : Bool}
-
 /-- A loop each of whose steps yields or refuses, where it returns, yielded at each. -/
 theorem forIn_yield_each {g : ℕ → PUnit → V (ForInStep PUnit)}
     (hg : ∀ i, g i PUnit.unit = .ok (.yield PUnit.unit) ∨ ∃ e, g i PUnit.unit = .error e) :
@@ -691,7 +689,7 @@ theorem outer_of_answer {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {j r e s
   dsimp only at ha
   obtain ⟨alg, sched, hal, hsc⟩ := repState_ok ha
   obtain ⟨hts', -, -⟩ := Count.placeholder_tab hph
-  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule wideLeaf _ = .ok (y.sch, y.tPad) from hz)
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule _ _ = .ok (y.sch, y.tPad) from hz)
   obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hdg : t.st.digest.size < 2 ^ 64 := by

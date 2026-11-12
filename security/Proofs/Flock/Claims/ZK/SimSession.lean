@@ -569,7 +569,11 @@ theorem simSession_of (hc : SimCommit) (h0 : HybridStep 0) (h1 : HybridStep 1) (
       unfold stAt
       simp [FlockDeploy.tabsOf]
       rfl
-    rw [e, h2] at h1
+    have e' : (FlockDeploy.tabsOf (stsOf x))[i].wideLeaf = (stAt x ⟨i, hi⟩).wideLeaf := by
+      unfold stAt
+      simp [FlockDeploy.tabsOf]
+      rfl
+    rw [e, e', h2] at h1
     rw [getElem!_pos schs i (by omega)]
     exact (Except.ok.inj h1).symm
   dsimp only

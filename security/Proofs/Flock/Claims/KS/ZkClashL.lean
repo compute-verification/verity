@@ -92,7 +92,8 @@ theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {
     rw [extraClaims_size (st := sts[j]) hex, ← hpts, hpn, hp2, Nat.mul_comm]
   have hzs : Claims.Flock.zkSched (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m = (sch, tPad) := by
     simp only [Claims.Flock.zkSched]
-    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl, hsch]
+    rw [show (Setup.ofCircuit sts[j]).m = sts[j].m from rfl,
+      show (Setup.ofCircuit sts[j]).wideLeaf = sts[j].wideLeaf from rfl, hsch]
   have hsh : Claims.Flock.zkProofShape (Setup.ofCircuit sts[j]).wideLeaf (Setup.ofCircuit sts[j]).m (Setup.ofCircuit sts[j]).kLog (2 + extras.size)
       (Setup.ofCircuit sts[j]).merkle.digestLen (saltLenOf true (Setup.ofCircuit sts[j])) =
       ZkExec.shapeZKn (Setup.ofCircuit sts[j]) sch (2 * sts[j].regions.size) := by
