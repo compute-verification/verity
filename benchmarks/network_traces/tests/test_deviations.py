@@ -163,6 +163,7 @@ def test_the_tie_is_not_run_without_the_commits_ids_and_the_row_says_so(tmp_path
     _try(tmp_path / "tokens", "tokens", [1, 0] * 60)
     row = dv.row("tokens", tmp_path / "tokens", None)
     assert (row["tie"], row["ok"]) == (dv.NOT_RUN, None) and "--ids" in row["words"]
+    assert row["charged"] == "nothing, and the tie that refuses it wasn't run"
     assert "not shown either way" in dv.table([row])
 
 

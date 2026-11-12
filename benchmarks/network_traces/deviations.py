@@ -477,9 +477,12 @@ def row(cls: str, run: Path, committed: Mapping[int, Sequence[int]] | None, seco
         ok = (None if cls == "fail" and not any(bits.values()) else
               any(reason in p for p in audit) and not (cls == "extra" and shown))
         words = "; ".join(audit[:2])
+    cost = charged(cls, len(conns), params)
+    if cls == "tokens" and tied["verdict"] != "refused":
+        cost = "nothing, and the tie that refuses it " + ("wasn't run" if tied["verdict"] == NOT_RUN else "accepted")
     return {"class": cls, "changed": CASES[cls][0], "check": CASES[cls][1], "relay": relay, "tie": tied["verdict"],
             "words": words, "refusals": len(audit) if cls not in ("tokens", "length") else tied.get("refusals", 0),
-            **result, "charged": charged(cls, len(conns), params), "connections": len(conns),
+            **result, "charged": cost, "connections": len(conns),
             "seconds": None if seconds is None else round(seconds, 1), "ok": ok}
 
 
