@@ -213,8 +213,12 @@ def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[byt
 def _counted(doc: Mapping, blob: bytes, listed: Sequence[tuple[str, int]]) -> list[tuple[str, int]]:
     """Each table's rows in a line's blob of salts where a class's rows are a count: the rows the line's
     registration gives the table, and no table for a line without one. ValueError for a registration that doesn't
-    list the schedule's tables, or a blob that isn't a salt a row of them."""
+    list the schedule's tables, a blob that isn't a salt a row of them, or salts beside the word that the execution
+    phase has no head."""
     if "registration" not in doc:
+        if blob and NO_HEAD in doc:
+            raise ValueError(f"execution phase {_phase(doc)} has the network certifier's word that it has no head, "
+                             f"and {len(blob)} bytes of {SALTS}")
         return []
     mine = [(t["name"], t["rows"]) for t in doc["registration"]["tables"]]
     if [name for name, _ in mine] != [name for name, _ in listed] or \

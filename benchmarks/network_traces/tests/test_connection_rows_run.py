@@ -318,7 +318,8 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
 def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_due(tmp_path):
     """The run above, its lines changed: the check refuses an execution phase with neither a head nor the word, one
     with a head where the word is due, one with the word where a head is due, one with two lines, a word signed for
-    another execution phase, and a word whose signature is changed, each by the execution phase it names."""
+    another execution phase, a word whose signature is changed, and a word with salts beside it, each by the
+    execution phase it names."""
     out = tmp_path / "run"
     params = dataclasses.replace(ENDS, queue=5)
     served(out, tmp_path / "key", params=params)
@@ -366,6 +367,12 @@ def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_du
     (problem,) = edited(other_signature)
     assert problem.startswith("execution phase 1's word that it has no head: ") and "doesn't verify" in problem
     assert edited(refusal) == [neither.format(1)]
+
+    def salted(lines, salts) -> None:
+        salts[1] = bytes(crr.WR.SALT_BYTES)
+
+    word = f"execution phase 1 has the network certifier's word that it has no head, and {crr.WR.SALT_BYTES} bytes"
+    assert any("don't read" in p and word in p for p in edited(salted))
 
 
 def test_under_form_2_the_check_reads_a_tables_salts_by_the_rows_its_registration_counts(tmp_path):
