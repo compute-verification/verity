@@ -92756,3 +92756,140 @@ Read at that head by our worker CLOSEROUND; nothing was run. Line numbers are th
    - [run] The trial left 29 MB of scratch, which this run removed at its start. If this run is stopped from outside, `/workspace/tmp/whole-units.7yjBhn` may be left, and I remove it.
 6. **Item 3, the half I already hold.** [derived, from my 13:52Z entry] Of the 34 templates that change class when a template is sized by its row, none passes the widest class (262,144 bits): the 32 `DsaTopKDigitCount_v1` go from 4,096 to 8,192 bits and the two picks from 32 to 64 and from 128 to 256. What moves by name (registration digests, partition files, pins, served ids) comes with the `unit_block` read, by Fri 13 Nov 20:00Z.
 7. **Next.** An entry the hour the run ends, and one by Fri 13 Nov 16:00Z in any case. Way (3) is untouched.
+
+## REFUSE, Thu 12 Nov 16:04Z: NET-369: YES to #9329's change of `test_audit_two_members.py`; the exclusion belongs in `a0.lean_refused` and is built with A11's line and a test (`cursor/proofs-lean-refused-7c3e`, `8fe73485fcad`, no pull request, not marked); its suites run `r20261112-154726-e6a8` rc 0, 5 suites passed
+
+For you, not for posting:
+
+- [run] Built, since it is small: branch `cursor/proofs-lean-refused-7c3e`, one commit `8fe73485fcad` on `main` at
+  `99f1b414a647`, pushed. `a0.py` +15 −3, `a11.py` +7 −4 (22 lines added, 7 removed, comments and docstrings among
+  them) and a test file of 58 lines. No pull request, nothing marked, nothing pushed to #9329's branch.
+- [run] Its suites run `r20261112-154726-e6a8` (vy-nebius-cpu-1, `suites.py --changed 99f1b414a647 --quick` at
+  `8fe73485fcad`): rc 0, 15:47:47Z to 15:57:11Z, 5 suites passed, 0 failed: `benchmarks/one_stage` 590 passed (the new
+  test file run whole), `benchmarks/prove_path` 155, `repository` 350, `verity-network-traces` 609, `verity-graph` 220.
+- [read] Mailbox re-read at 16:02Z (your 15:53Z section: #9091 marked at `675dea740d6a`). Its body's Lean item was
+  restated with `c6d3` at 15:38Z by `research queue edit`; read back equal to the file sent; the head did not move.
+- Evidence for what follows: `net-369-lean-refused.log` in this turn's artifacts. The comment below is written to post
+  on NET-369 as it stands.
+
+**The comment:**
+
+**Yes** to the change of `benchmarks/one_stage/tests/test_audit_two_members.py` at `c77b01b8b79a`. The forged member's
+proof never leaves the prover, so "Lean refused it" was never what this test showed. The new expectation says what
+happens and holds more than the old line did.
+
+**1. The test**
+
+- [read: the test, `records_audit.py`'s `audit` and `forged_outcome`, `a0.session`, at `c77b01b8b79a`] The forged
+  member's case: the audit runs behind the ZK server with the prover's self-check off (`--forged`). The prover proves
+  the false witness, the ZK server holds the proof back, and the prover's `LIVE` line gives `prover_stopped` opening
+  `FIREWALL-REFUSED`. No proof is released: the verifier's record of that session lists none.
+- [read: `FlockVerify.lean` 1159 and 1172] The Lean verifier does run on that session, and reads no proof: `verify`
+  sets the statement up, finds a proof file of the session missing and answers `session files: …` before any check of
+  a proof. `lean-verify/m1` is Lean's own verdict, on no proof.
+- [read: `origin/main:benchmarks/prove_path/records_audit.py` 913] On `main`, `lean_refused` in this row is "some
+  `lean-verify/` verdict is not an acceptance", which a session with no proof meets. The old line's
+  `lean_refused: True` was that and no more.
+- What `None` means to each reader of the row [read: `forged_outcome`; run: `rg` over the tree at `c77b01b8b79a`]:
+  - `forged_outcome`'s own `ok`. Behind the ZK server `lean_refused` is the check it does not count (`passes_on` is
+    `no_proof_released`), so `None` decides nothing. In a plain audit it is the check it counts, `None` is not `True`,
+    and the window fails: it fails closed.
+  - `records_audit.audit`, `prove_path`'s rank audit and `network_e2e/chain.py` (570) read `forged["ok"]` alone. No
+    code in the tree reads `checks["lean_refused"]` by its key.
+  - A person. `no_value.lean_refused` says in words that Lean read no proof, and of which session. `None` is "Lean had
+    no proof to refuse", apart from `False`, "Lean had one and did not refuse it".
+- [read: the test, lines 164 to 179] It still fails if the forged member is accepted, in three places: `rc == 0 and
+  row["ok"]` (164: `rejected` false makes `ok` false); the exact `verdicts` map (174: `m0-verifier/m1`,
+  `lean-verify/m1` and `lean-draw/m1` must each be false); the session's record (179: for m1, `verdict.accepted` and a
+  listed proof must both be false). It also fails now where `main`'s line passed: a proof that leaves and that Lean
+  then refuses fails 166 to 170 (`no_proof_released`, `m1.proofs == 0`, `prover_stopped`).
+- [run: VM, the named file] `benchmarks/prove_path/tests/test_prove_path.py -k forged` at `c77b01b8b79a`: 16 passed.
+  Among them, behind the ZK server, `accepted` and "a proof left and Lean refused it" are each not ok.
+- [read: your run `r20261112-144251-1977`, its stdout] The test itself on the built prover, ZK server and Lean
+  verifier: 1 passed, 1 deselected, 331 s.
+- [read] One limit, the same on `main`: this test never hands the Lean verifier a forged proof.
+  `verity/protocols/flock/prover/tests/test_lean_forged_proofs.py` is the test that does.
+
+**2. `a0.lean_refused`**
+
+The exclusion belongs inside `a0.lean_refused`. Its docstring already says it counts a refusal of the proof, and it
+already leaves out a refusal at `setup:` for that reason. It cannot go in alone: one of the six passes today only on
+that refusal. What each does with a `session files:` refusal today [read: `main` at `99f1b414a647`]:
+
+- [read] `a0.py` 612 and 614 (`wrong-output-word`). A plain session: no self-check and no ZK server, so the forged proof
+  leaves and Lean reads it ([read: the proofs lane's finding of 5 Oct] its reason there is `lincheck:
+  ConsistencyFailed (sumcheck-final)`). A `session files:` refusal there means the prover died, and today it counts as
+  refused. With the exclusion the negative fails.
+- [read] `a11.py` 1070 and 1072 (the tampered member). A `--zk` session with the prover's self-check on. [read:
+  `forged_proofs.py`'s docstring, `test_lean_forged_proofs.py`'s, and the circuits lane's reports of 19 Oct] The
+  self-check finds the witness false, the prover sends no proof, and Lean refuses with `session files:`. **Today this
+  negative passes only because that refusal counts.** With the exclusion alone its `refused` is false, and every A11
+  run with a tampered member (the default) exits 1.
+- [read] `prove_bundle.py` 200 (`flipped`). Lean's verdict on one-bit edits of an honest session's proof files. Files
+  are replaced and none removed, so a `session files:` refusal there is an accident; today it would count.
+- [read] `prove_bundle.py` 275. Read only in the arm with no ZK server, where the self-check is off and the proof
+  leaves. The arm behind the ZK server does not read `lean_refused`: it already asks for `prover_stopped` opening
+  `FIREWALL-REFUSED`.
+- [run: `rg` over `main`] A seventh bare read, not on your list: `benchmarks/prove_path/records_audit.py` 776
+  (`proof_edits`; 787 at `c77b01b8b79a`), the same shape as `flipped`.
+- [read] The reads that pass `names` (`a0.py` 455, `a5.py` 555, `a6.py` 307, `prove_leg.py` 576 and 598) are held to
+  their named check and do not change.
+
+To your open question [derived from the above]: none of the six runs its forged session behind the ZK server and reads
+`lean_refused`, so none meets a proof the ZK server held back. One, A11's, meets a proof the prover never sent, on
+every run.
+
+Built on `cursor/proofs-lean-refused-7c3e` (`8fe73485fcad`, on `main` at `99f1b414a647`; no pull request yet, not
+marked): `a0.py` +15 −3, `a11.py` +7 −4, and a test file of 58 lines.
+
+- [read: the commit] `a0.NO_SESSION_FILES`. `a0.lean_refused` leaves out a reason that opens with it, as it does
+  `setup:`. `a0.lean_read_no_proof(v)` is Lean's own verdict for want of the session's files.
+- [read: the commit; run: `rg` for the keys' readers] `a11.py`: `refused` takes either (`lean_refused or
+  lean_read_no_proof`), so its verdict is what it was on every verdict, and the negative now writes both flags. For
+  its tampered member it writes `lean_refused` false and `lean_read_no_proof` true, where it wrote `lean_refused`
+  true. No code in the tree reads either key.
+- [run: VM] The new test file with `a0`'s two neighbours: 29 passed. Ruff: clean. Four mutations of `a0.py` each fail
+  it, `main`'s rule among them (2 failed).
+- [run: VM] On that branch merged with `c77b01b8b79a`, your 16 forged-run cases pass, and still pass with your own
+  exclusion in `forged_outcome` removed. At `c77b01b8b79a` alone, removing it fails 6 of the 16. So once both are on
+  `main`, `records_audit.NO_SESSION_FILES` and its `and not …startswith(…)` are a second copy, and your next change
+  can read `a0`'s.
+- [run] `git merge-tree`, drivers registered: the branch with `main`, with `c77b01b8b79a` and with #9237's head
+  `9d4aec0111fb`: no stop. Either order lands.
+- [run] `r20261112-154726-e6a8`, the changed suites' quick tier at `8fe73485fcad`: rc 0, 5 suites passed, 0 failed
+  (`benchmarks/one_stage` 590 passed, `benchmarks/prove_path` 155, `repository` 350, `verity-network-traces` 609,
+  `verity-graph` 220).
+
+**3. Lean's landing** [run: `git merge-tree` with `cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, `main` at
+`99f1b414a647`, drivers registered]
+
+- [run] `main` stops in 31 files; #9305 and #9329 in 35 each. #9329 adds no stop beyond #9305's. Beyond `main`'s, both
+  stop in four files, all #9305's: `benchmarks/one_stage/served_verdicts.sh`,
+  `benchmarks/one_stage/tests/test_served_verdicts.py`, `benchmarks/prove_path/records_audit.py` and
+  `benchmarks/prove_path/tests/test_records_audit.py`.
+- [run] Conflict hunks in #9329's six files, the same counts for #9305: `prove_path.py` 5 (`main` alone has 1),
+  `records_audit.py` 1, `run.sh` 1 and `tests/test_prove_path.py` 1 (`main` alone has 1 in each),
+  `test_audit_two_members.py` 0 and `network_e2e/chain.py` 0. #9329's own lines add none.
+- [run] The test file, `a0.py`, `a11.py` and `prove_bundle.py` stop nowhere. Lean's side changes `a0.py` only inside
+  `lean_verify` (8 lines added, 4 removed), above `lean_refused`, and the branch above stops in nothing beyond
+  `main`'s 31.
+
+**Not established**
+
+- [derived] No run on the built binaries with the forged member accepted, or with a proof released and then refused by
+  Lean. That the test fails there is by reading its assertions and by the 16 unit cases.
+- [read: your suites run `r20261112-144330-b96d`] `benchmarks/one_stage` there: 582 passed, 2 skipped. [derived] The
+  two are this file's two tests: the run took that module whole, slow tests included, the file has two tests and both
+  skip without the built binaries, and no test of about 290 s is among its slowest. So in that run the changed test
+  did not run; `1977` is the run that exercised it. Which binary was missing, and whether the queue's check runs the
+  test or skips it, I did not read.
+- [read] No A0, A11 or `prove_bundle` run on real sessions at `8fe73485fcad`. That A11's tampered member is refused
+  for want of its files today is by reading the code and the reports of 19 Oct, with no run of mine. A11's verdict
+  does not rest on it: the two flags together are the old rule on every verdict (the new test's second case).
+- [derived] A11's negative still shows that the honest prover stops, not that Lean refuses a forgery. Handing Lean the
+  forged proof there (self-check off, no ZK server) changes what an A11 run does and needs one A11 run; not built.
+- [read] `verity/protocols/flock/pod/lean_verdicts.py`'s `no_proof` holds a third copy of the prefix; not touched.
+- [run, 16:02Z] `main` moved to `87fec6c6491b` while this was written. The branch still merges with it at no stop;
+  point 3 was not recomputed there.
+- [run] Of #9329 I ran the 16 cases named above and `git merge-tree` (with `main`: no stop; with #9237: no stop), no
+  other test of it.
