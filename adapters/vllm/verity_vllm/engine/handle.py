@@ -3,7 +3,8 @@ its executor and the uniproc executor's driver worker).
 
 Each accessor takes a :class:`verity_vllm.LLM`, a ``vllm.LLM`` or its ``LLMEngine``, and raises ``RuntimeError`` naming
 the multiprocess engine core when the object lives in another process (build with ``VLLM_ENABLE_V1_MULTIPROCESSING=0``,
-`engine.env.ENGINE`); `scheduler_or_none` returns None there instead.  Attribute reads only; nothing is patched.
+`engine.env.ENGINE`); `scheduler_or_none` returns None there instead, and `structural_output_lag` says only which of
+vLLM's two architectures the engine is.  Attribute reads only; nothing is patched.
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
     Engine = Wrapper | vllm.LLM | LLMEngine
 
-__all__ = ["engine_of", "executor", "model_runner", "scheduler", "scheduler_or_none"]
+__all__ = ["engine_of", "executor", "model_runner", "scheduler", "scheduler_or_none", "structural_output_lag"]
 
 
 def engine_of(llm: Engine) -> LLMEngine:
@@ -35,6 +36,17 @@ def engine_of(llm: Engine) -> LLMEngine:
 def _engine_core(llm: Engine) -> Any:
     core = getattr(engine_of(llm), "engine_core", None)
     return getattr(core, "engine_core", None) or core
+
+
+def structural_output_lag(llm: Engine) -> int | None:
+    """The output lag the engine's architecture implies: 1 for vLLM V1 (an ``engine_core``), 0 for V0 (the engine holds
+    its ``model_executor``, no core), None when the engine is of no known kind (a caller then keeps the lag it measured)."""
+    eng = engine_of(llm)
+    if getattr(eng, "engine_core", None) is not None:
+        return 1
+    if getattr(eng, "model_executor", None) is not None:
+        return 0
+    return None
 
 
 def scheduler(llm: Engine) -> Scheduler:

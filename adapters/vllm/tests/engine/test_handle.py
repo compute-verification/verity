@@ -1,6 +1,6 @@
 """`verity_vllm.engine.handle`: the scheduler, the executor and the model runner of a `verity_vllm.LLM`, a `vllm.LLM` or
-its `LLMEngine`, through vLLM's object graph (stand-ins of it here), and a refusal naming the engine core when they live
-in another process."""
+its `LLMEngine`, through vLLM's object graph (stand-ins of it here), a refusal naming the engine core when they live
+in another process, and the output lag the engine's architecture implies."""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -69,3 +69,18 @@ def test_scheduler_or_none_is_the_scheduler_that_holds_its_requests_in_a_dict_el
     assert handle.scheduler_or_none(NS(llm_engine=None)) is None
     assert handle.scheduler_or_none(NS(llm_engine=NS(engine_core=NS(scheduler=NS(requests=[]))))) is None
     assert handle.scheduler_or_none(NS(llm_engine=NS(engine_core=MultiprocClient()))) is None
+
+
+def test_the_structural_output_lag_is_one_with_an_engine_core_and_zero_with_the_engines_own_executor():
+    for kind, llm in _engines(NS()).items():
+        assert handle.structural_output_lag(llm) == 1, kind
+    v0 = NS(model_executor=object())
+    for llm in (v0, NS(llm_engine=v0), NS(vllm=NS(llm_engine=v0))):
+        assert handle.structural_output_lag(llm) == 0
+    assert handle.structural_output_lag(NS(engine_core=object(), model_executor=object())) == 1
+
+
+@pytest.mark.parametrize("engine", [NS(), NS(engine_core=None, model_executor=None)])
+def test_an_engine_of_no_known_kind_has_no_structural_output_lag(engine):
+    assert handle.structural_output_lag(engine) is None
+    assert handle.structural_output_lag(NS(llm_engine=engine)) is None

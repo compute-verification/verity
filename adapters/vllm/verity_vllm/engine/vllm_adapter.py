@@ -53,7 +53,7 @@ from verity_vllm.engine.code_identity import (  # noqa: F401
     loaded_code_objects,
     loaded_code_objects_delta,
 )
-from verity_vllm.engine.handle import scheduler_or_none
+from verity_vllm.engine.handle import engine_of, scheduler_or_none
 from verity_vllm.engine.run_facts import (  # noqa: F401
     ACCEPTED,
     ACCEPTED_PROFILE_ID,
@@ -280,7 +280,7 @@ def throwaway_requests(engine: Engine, like: list[dict], seed: int) -> list[dict
     sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
     from verity_vllm.commit import challenge
 
-    vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
+    vocab = int(getattr(engine_of(engine.llm).vllm_config.model_config.hf_config, "vocab_size", 32000))
     rng = challenge.generator(seed)
     out = []
     for i, r in enumerate(like):
