@@ -17,17 +17,28 @@ every module it was built against, whatever the sources say now. A tree keeps th
 and Lake rebuilds only what a target imports, so a product can be of a source that has changed since (names moved out
 of a module nothing imports now), or of one that is gone (`lean_changed.sync` unlinks a source and leaves `.lake`, since
 Lake replays the product when a branch brings the source back). The stub must load neither: beside the module the names
-moved into, the old product declares them a second time, a clash that is in no source (INF-667). So a module counts as
+moved into, the old product declares them a second time, a clash that is in no source. So a module counts as
 built (`plan`) only when every `.olean` a stub loads for it is of its source as it is: its own and that of every module
 it imports, directly or through others, in its package or in any package its package requires by path (`workspace`).
 Each of those has its `.olean` and the trace Lake wrote for it, that trace says the module is of the source as it is now
 (`current`), and none of them is a name some package of the workspace holds a product of with no source. One that isn't
 is listed as unchecked, with the count. An `.olean` built from a module's source names that source's imports, so the
 modules loaded are the ones the sources name, each built from its source, and no name is there twice because a product
-of another text declares it. One thing a module's own trace doesn't tell is left as it was: a build of its source made
-against an older build of an import (Lake mixes the imports' outputs into the one `depHash`, which only Lake recomputes).
-Lean imports such a build, and the names a module declares seldom depend on it, so it counts; where two of those clash,
-the line says how to rebuild them.
+of another text declares it.
+
+A sibling is checked as it is built. What a module's own trace doesn't tell is whether that build was made against the
+builds of its imports that are there now (Lake mixes the imports' outputs into the one `depHash`, which only Lake
+recomputes), and a tree holds builds that weren't: Lake rebuilds a module only for a target that imports it. Lean loads
+such a build, and the names its source declares are the same in it. The names Lean makes are not: a theorem it derives
+where it is first used (a definition's equation lemma, `f.eq_1`, under `simp [f]`) is in the build of every module that
+uses it, which Lean takes from all of them while they state one type, and refuses once an import changed that type under
+a module left as it was built, in the stub as in a root elaborated on those builds. So a refusal is final only between
+builds Lake holds current (`check`): FILE's own, which this try made, and a sibling's once the caller's `rebuild` has
+had Lake build it. Each sibling a refusal names is rebuilt and the stub elaborated again, a line a round, until a
+refusal names none that wasn't, which a root that imports both then gets too, or Lake's rebuild fails. A build made
+against an older build of an import is rebuilt when a refusal names it, and not otherwise: that is this step's limit,
+which the full check, where Lake builds every module, doesn't have. Without `rebuild` nothing is rebuilt, and the line
+says how to.
 
 What a trace says depends on how Lake came by the module. One it built states the hash of the source it built from
 (`built_from`), which is compared with the hash of the source as it is (`lake_hash`). That says what a modification time
@@ -364,30 +375,74 @@ def _listed(names: list[str]) -> str:
     return ", ".join(names[:SHOWN]) + (f" and {len(names) - SHOWN} more" if len(names) > SHOWN else "")
 
 
-def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int) -> tuple[int, str]:
-    """(the try's status, the check's line) from the stub's ``rc`` and ``output``."""
+def named(p: Plan, output: str) -> list[str]:
+    """The modules other than FILE's that Lean's refusal in ``output`` names, the refused one first; none when it holds
+    no refusal. They are the builds the refusal rests on that this try didn't make."""
+    m = CLASH.search(output)
+    return [n for n in dict.fromkeys((m.group(1), m.group(3))) if n != p.module] if m else []
+
+
+def _pair(p: Plan, output: str) -> str:
+    """`A and B both declare 'N'` of the refusal in ``output``, FILE's module first when it is one of them."""
+    refused, name, earlier = CLASH.search(output).groups()
+    first, second = (p.module, earlier if refused == p.module else refused) if p.module in (refused, earlier) else \
+        (refused, earlier)
+    return f"{first} and {second} both declare '{name}'"
+
+
+def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int, rebuilt: bool = False) -> tuple[int, str]:
+    """(the try's status, the check's line) from the stub's ``rc`` and ``output``; ``rebuilt``: Lake holds current each
+    sibling a refusal in ``output`` names, this try having had it build them (`check`)."""
     cost = f"{len(p.siblings)} imported in {seconds:.0f} s, peak {peak_mb} MB"
     left = (f"; {len(p.unchecked)} unchecked, with no build of their source as it is or importing a module with none, in "
             f"their package or one it requires: {_listed(p.unchecked)}") if p.unchecked else ""
     if rc == 0:
         return 0, f"siblings: no built module of its package that doesn't import {p.module} declares a name it does ({cost}){left}"
-    if m := CLASH.search(output):
-        refused, name, earlier = m.groups()
-        if p.module in (refused, earlier):
-            other = earlier if refused == p.module else refused
-            return 1, (f"siblings: {p.module} and {other} both declare '{name}', which Lean refuses when it imports both, "
-                       f"as the package's root does: rename one ({cost}){left}")
-        return 1, (f"siblings: {refused} and {earlier} both declare '{name}', neither of them {p.module}: a clash already "
+    if others := named(p, output):
+        again = " ".join(f"+{m}" for m in others)
+        if len(others) == 1:
+            stale = "" if rebuilt else (f"; or Lean made the name, and {others[0]} was built against an older build of a "
+                                        f"module it imports (`lake build {again}` and try again)")
+            return 1, (f"siblings: {_pair(p, output)}, which Lean refuses when it imports both, as the package's root "
+                       f"does: rename one{stale} ({cost}){left}")
+        if rebuilt:
+            return 1, (f"siblings: {_pair(p, output)}, neither of them {p.module}, and Lake holds both current: a clash "
+                       f"in the sources, which a root that imports both refuses too (rename one); {p.module}'s own names "
+                       f"are unchecked ({cost}){left}")
+        return 1, (f"siblings: {_pair(p, output)}, neither of them {p.module}: a clash already "
                    f"in the sources, which a root that imports both refuses too (rename one), since each build the stub "
                    f"loaded is of its source as it is; or one of them was built against an older build of a module it "
-                   f"imports (`lake build +{refused} +{earlier}` and try again); {p.module}'s own names are unchecked "
+                   f"imports (`lake build {again}` and try again); {p.module}'s own names are unchecked "
                    f"({cost}){left}")
     return rc or 1, f"siblings: the stub that imports {p.module} beside them failed (its output above) ({cost}){left}"
 
 
-def check(p: Plan, work: Path, lean: Callable[[list[str]], tuple[int, str, float, int]]) -> tuple[int, str, str]:
-    """(the try's status, the stub's output, the check's line), the stub elaborated by ``lean`` (`lake env lean ARGS` in
-    FILE's package, as `run` reports it)."""
-    rc, output, seconds, peak = lean(stub(p, work))
-    rc, line = verdict(p, rc, output, seconds, peak)
-    return rc, output, line
+def check(p: Plan, work: Path, lean: Callable[[list[str]], tuple[int, str, float, int]],
+          rebuild: Callable[[str], tuple[int, str, float]] | None = None) -> tuple[int, str, str]:
+    """(the try's status, the stub's last output, the check's lines: one for each round, then the verdict's), the stub
+    elaborated by ``lean`` (`lake env lean ARGS` in FILE's package, as `run` reports it).
+
+    ``rebuild``, given a stub's output, has Lake build the siblings its refusal names (`named`), each of which Lake
+    then holds current, and returns Lake's exit status, its output and the seconds it took. With it, a refusal that names
+    a sibling no round has rebuilt starts a round: those it names are rebuilt and the stub is elaborated again. Every
+    round rebuilds a module no round before it did, so they end: in a pass, in a refusal between builds Lake holds
+    current, which is the verdict, or in a rebuild that fails, whose line gives Lake's last. Without ``rebuild`` the
+    first refusal is the verdict."""
+    args, lines, done = stub(p, work), [], set()
+    while True:
+        rc, output, seconds, peak = lean(args)
+        mods = named(p, output) if rc else []
+        if rebuild is None or set(mods) <= done:
+            rc, line = verdict(p, rc, output, seconds, peak, rebuilt=bool(mods) and rebuild is not None)
+            return rc, output, "\n".join([*lines, line])
+        done.update(mods)
+        status, said, took = rebuild(output)
+        if status:
+            last = next((s.strip() for s in reversed(said.splitlines()) if s.strip()), "it printed nothing")
+            return 1, output, "\n".join([*lines, (
+                f"siblings: {_pair(p, output)} as they are built here, and Lake's rebuild of {' and '.join(mods)} failed "
+                f"(exit {status}), its last line: {last}; {p.module}'s own names are unchecked")])
+        made = said.replace("«", "").replace("»", "")
+        built = [m for m in mods if re.search(rf"\] Built {re.escape(m)}(?: \(.*\))?$", made, re.M)]
+        lines.append(f"siblings: {_pair(p, output)} as they are built here: Lake rebuilt "
+                     f"{' and '.join(built) or 'nothing'} in {took:.0f} s, and the stub is elaborated again")
