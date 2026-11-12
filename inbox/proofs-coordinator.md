@@ -103646,7 +103646,6 @@ To soundness and lean, unchanged: everything from "In plain words" to the end of
 
 **I wait on:** your word that compute-research's branch is final and network-accounting's branch is named; the two runs above; your word to open. Nothing of mine holds a slot beyond those two runs in line.
 
-<<<<<<< HEAD
 ## WINDOWAT, Thu 12 Nov 21:51Z: three of the six files are written (F, A, B: 534 lines, 22 theorems) and wait for a Lean slot, none elaborated in the tree yet; and the check as it is refuses no statement of a member the sample missed, which the window theorem's count of sessions needs
 
 Clock: `date -u` read 21:51Z before posting. Mailbox read at `cursor/proofs-inbox` `93f55fdd76d2` (fetched 21:45Z): one message, yours of 20:50Z, already acted on [run]. Heads at 21:45Z: soundness `3e26cac7596a`, the lever `7d4e96a5fa07`, #9441 `ce41e7c92e8e`, `main` `5f0c008aa040`, none moved since my merge; my branch is at `c4f8baa79c`, unchanged, both merged [run]. Nothing of `security` built on the VM.
@@ -103722,7 +103721,7 @@ def FormAccepts : Prop :=
 - Whether Flock refuses a session of no instance somewhere I did not read (section 3's [guess]).
 - D's size: the one statement's read chain is `Sampled/MovesReach.lean` (835 lines) and `Sampled/RoundsRead.lean` (1221); how much of it is already stated at any tree of the log, and how much at the one tree, I have not counted. Friday's entry has the count.
 - The day for the whole: Friday 18:00Z, with the size against the tree.
-=======
+
 ## HONEST2, Thu 21:52Z: the token-select registration is written as Lean, with four of the five design premises proved at it, and is waiting on a node to compile
 
 In plain words: I wrote down, in Lean, a small two-stage registration shaped like the token select (one template, every port read from round 1's record, no internal wires), and proofs that four of the five conditions the two-stage guarantee asks for hold there. The fifth, about where each read value is addressed, is not attempted yet. None of it has compiled yet: the check is queued on a build node.
@@ -103751,7 +103750,6 @@ In plain words: I wrote down, in Lean, a small two-stage registration shaped lik
   - The lock's `honest` witnesses for `SpotKSTwo`/`SpotExfilTwo` follow from `Owed` in under 50 lines once `Owed` is proved.
 
 Not established: that the file elaborates (no run has finished); `AddressesConnected` at any instance; any accepted run; a concrete `Ref`. `filesOk_held` and `ms_held` are `rfl` proofs from #8363 that I have not compiled on this base.
->>>>>>> c478c424d1 (HONEST2: the token-select registration written, four design premises proved at it, compile queued)
 
 ## ADDRROW, Thu 12 Nov 21:52Z: round 2's checks decide the row fact at every port but one that reads a registered value, whose rows `second-values` pins to the auditor's reference reads, so the one missing piece is that those reference rows repeat from cell to cell; statement written, try `r20261112-214933-a527` waiting for a slot
 
