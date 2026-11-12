@@ -70,13 +70,12 @@ def test_the_deployments_record_agrees_from_its_files():
     s = ta.Store(p2.P2Params(*p2.POINT, segments=p2.CERT_BLOCKS // p2.POINT[2]), b"deployment")
     doc = ta.record(s, random.Random(0), k=p2.CERT_K, deadline=p2.DELTA_NS, rtt=p2.RTT_ALLOWANCE_CAP_NS, strict=True,
                     audits=20)
-    mc = ta.challenger()
-    py = mc.verdict(s.ready, s.leaves, doc)
+    py = live.verdict(s.ready, s.leaves, doc)
     assert py["accepted"] and py["audits_accepted"] == 20 and py["gaps"] == [] and py["profile"]["blocks"] == 1 << 19
     assert ta.lean_verdict(s.ready, s.leaves, doc) == py
     a = doc["records"][-1]["answers"][-1]
     a["block"] = ta._flip(a["block"])
-    py = mc.verdict(s.ready, s.leaves, doc)
+    py = live.verdict(s.ready, s.leaves, doc)
     assert not py["accepted"] and py["audits_accepted"] == 19 and py["audits"][-1]["answers"][-1] == [False, True]
     assert ta.lean_verdict(s.ready, s.leaves, doc) == py
 
@@ -197,7 +196,6 @@ def test_without_the_lean_the_python_is_the_records_and_a_lean_failure_rejects(s
 
 def test_the_lean_is_unavailable_without_lake_or_its_server(monkeypatch):
     """The Lean runs where `lake` is on the PATH and `verity_difftest` imports; otherwise `lean_unavailable` says which."""
-    live = ta.challenger()
     monkeypatch.setattr(shutil, "which", lambda name: None)
     assert live.lean_unavailable() == "lake is not on the PATH"
     monkeypatch.setattr(shutil, "which", lambda name: f"/opt/elan/bin/{name}")

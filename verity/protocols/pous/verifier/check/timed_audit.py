@@ -40,18 +40,16 @@ from typing import Any
 
 from verity_difftest import Server, build, canonical
 
+from verity.protocols.pous.device import timed_audit as reference
+from verity.protocols.pous.verifier import protocol
+from verity.protocols.pous.verifier.schemes import p2 as P2
+from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash
+
 log = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[5]
 EXE = "pous-timed-audit"
-
-
-def challenger():
-    """`verity.protocols.pous.device.timed_audit`, the reference."""
-    from verity.protocols.pous.device import timed_audit
-
-    return timed_audit
 
 
 def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
@@ -72,8 +70,6 @@ class Store:
     """A P2 v4 store for the verdict: its labels need only match their leaves (the audit checks leaves, not codewords)."""
 
     def __init__(self, params, seed: bytes, salt: bytes = b"s" * 24) -> None:
-        from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash
-
         self.params, self.seed, self.salt = params, seed, salt
         leaves = [leaf_hash(params, salt, i, self.block(i)) for i in range(params.blocks)]
         self.leaves, self.vk = b"".join(leaves), VerifierKey.from_leaves(params, salt, leaves)
@@ -89,8 +85,6 @@ class Store:
 def record(s: Store, rng: random.Random, *, k: int, deadline: int, rtt: int, strict: bool, audits: int,
            elapsed: Callable[[int], int] | None = None) -> dict[str, Any]:
     """An honest audit document, as `memory_challenger.audit` writes it: each answer the label of the index revealed."""
-    from verity.protocols.pous.verifier import protocol
-
     limit = deadline + rtt
     elapsed = elapsed or (lambda j: rng.randint(0, limit))
     records = []
@@ -197,8 +191,6 @@ def controls(s: Store, doc: dict, other: Store) -> Iterator[tuple[str, Any, byte
 
 def instances(seed: int = 0) -> Iterator[dict[str, Any]]:
     """Every instance: `{"name", "negative", "ready", "leaves", "audit"}`."""
-    from verity.protocols.pous.verifier.schemes import p2 as P2
-
     rng = random.Random(seed)
     delta, cap = P2.DELTA_NS, P2.RTT_ALLOWANCE_CAP_NS
 
@@ -261,8 +253,6 @@ def file_instances(seed: int = 0) -> Iterator[dict[str, Any]]:
     """Records whose files hold what the server's canonical JSON can't carry, compared through the files (`lean_verdict`):
     floats Python's `json` writes in exponent form (`1e+16`, which `Json.parse` alone reads as a natural), and `NaN`,
     `Infinity` and `-Infinity` in fields the verdict reads and in fields it doesn't."""
-    from verity.protocols.pous.verifier.schemes import p2 as P2
-
     rng = random.Random(seed)
     s = Store(P2.P2Params(64, 189, 4, 2), rng.randbytes(16))
     big = 10 ** 16
@@ -287,9 +277,9 @@ def file_instances(seed: int = 0) -> Iterator[dict[str, Any]]:
     yield inst("the manifest's w the float 64.0", doc, ready={**s.ready, "params": {**s.ready["params"], "w": 64.0}})
 
 
-def python_verdict(mc, inst: dict) -> str:
+def python_verdict(inst: dict) -> str:
     try:
-        return canonical(mc.verdict(inst["ready"], inst["leaves"], inst["audit"]))
+        return canonical(reference.verdict(inst["ready"], inst["leaves"], inst["audit"]))
     except Exception as e:
         log.exception("the reference raised on %s; its output is the exception", inst.get("name"))
         return canonical({"exception": f"{type(e).__name__}: {e}"})
@@ -302,13 +292,13 @@ def _lean_side(server: Server, inst: dict) -> str:
 
 def compare(seed: int = 0) -> list[dict]:
     """Every generated instance with both outputs."""
-    mc, out = challenger(), []
+    out = []
     with Server([str(build(HERE, EXE)), "serve"]) as lean:
         for inst in instances(seed):
-            out.append({"id": inst["name"], "negative": inst["negative"], "python": python_verdict(mc, inst),
+            out.append({"id": inst["name"], "negative": inst["negative"], "python": python_verdict(inst),
                         "lean": _lean_side(lean, inst)})
     for inst in file_instances(seed):
-        out.append({"id": inst["name"], "negative": inst["negative"], "python": python_verdict(mc, inst),
+        out.append({"id": inst["name"], "negative": inst["negative"], "python": python_verdict(inst),
                     "lean": canonical(lean_verdict(inst["ready"], inst["leaves"], inst["audit"]))})
     return out
 
@@ -342,7 +332,6 @@ def replay(runs: list[Path], out: Path | None = None) -> int:
     """Each audit document of each run's record judged both ways, and each verdict the run recorded (`verdicts`, but a Lean
     `unavailable` there) held to the replay's of the same name; prints what it cannot replay and why; writes `out`, one
     JSON line per document replayed."""
-    mc = challenger()
     replayed = same = negatives = recorded = agree = 0
     rows = []
     for run in runs:
@@ -367,7 +356,7 @@ def replay(runs: list[Path], out: Path | None = None) -> int:
                 _line(f"{run.name} {arm}: cannot replay, {'; '.join(lacks)}")
                 continue
             leaves = leaves_path.read_bytes()
-            py, lean = canonical(mc.verdict(ready, leaves, doc)), canonical(lean_verdict(ready, leaves, doc))
+            py, lean = canonical(reference.verdict(ready, leaves, doc)), canonical(lean_verdict(ready, leaves, doc))
             replayed += 1
             same += py == lean
             negatives += not accepted(py)
