@@ -490,7 +490,7 @@ circuit.
 3. Measurements: the longest cache hit read back this way is 384 tokens; nothing at an agentic load or past
    131,072 context. The design does not limit context; this node's memory stops near 400,000 tokens.
 
-## Addendum, Thu 12 Nov 03:49Z, revised 05:00Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
+## Addendum, Thu 12 Nov 03:49Z, revised 05:20Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
 
 **Row 16 stays the route. For this serve none of it is shown bit for bit: every showing was at a BF16 cache, with no
 draft token, at the pin, and the FP8 cache puts another attention kernel under every layer. What serving commits
@@ -502,7 +502,7 @@ advice for every request, at most 2.585 bits a decoding request a step, until ea
 nothing outside the token's own row, so zero stand-ins stay enough for the write. For the FP8 read, and for
 anything with draft tokens, that is not established.**
 
-**Revised 05:00Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
+**Revised 05:20Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
 at vLLM `main`, `20ad1db3fe90`, which is neither the build Friday serves, the pin `d9105ea8001e` (P), nor the tag
 `v0.34.0rc1` (T).** Section 0 puts each of the 69 cited places at both: at P 34 have the same text, 26 differ and 9
 are not there; at T 66 have the same text and 3 differ. **The conflict, at each build apart: at P a hit under `mtp`
@@ -517,6 +517,8 @@ accept test and the kept count is its output, with no draft probabilities under 
 read. (b) Registered, in round 1's step record, and charged until checked: at most 2.585 bits a decode row a step
 for the kept count, and 0 for the scheduled count once the advice code models the scheduler under drafts. At P as
 entry 2's showings were served, a BF16 cache and no draft token, entry 2's row 16 stands as written.**
+`r20261112-025327-f570` ended 05:10:05Z, exit 0: the step record's and the canonical top-k's cost at saturation is
+not told from zero, and a cost under about 1% is not resolved by it (section 5).
 
 **Sources.** P: the pin `d9105ea8001e`, the build Friday's goal serves. T: the tag `v0.34.0rc1` at `52aeb5806585`.
 M: vLLM `main` at `20ad1db3fe90` (12 Nov 03:11Z), where sections 1 to 6 were first read: **a line cited "M" below
@@ -1020,13 +1022,36 @@ that nobody is building it.
 
 ### 5. `f570` and CACHE
 
-- **`r20261112-025327-f570`: not ended in its launcher's note as I last read it, the 04:09Z checkpoint** [read
-  `vllm/20261111T2113Z-checkpoint-vllm-servecost-night`]: it was serving its third arm of five, `compiled` having
-  ended at 03:27:40Z and `record` at 03:53:17Z, 25.6 minutes an arm, its end "about 05:11Z" [guess, its launcher's].
-  No verdict yet; this line is revised when it ends. It is at the pin with a BF16 cache and no drafts, so it prices
-  entry 2's item 9 and nothing of this addendum.
-- **CACHE's final is in** (entries 5 to 7, 03:49Z to 04:21Z, `origin/cursor/proofs-cache-7c3e` at `b2e01c27ba`)
-  [read; relayed in the lines under this one].
+- **`r20261112-025327-f570` ended 05:10:05Z, exit 0. Its verdict: the step record's and the canonical top-k's cost
+  on this model at saturation is not told from zero, and a cost under about 1% cannot be told by this run; the modeled
+  0.25% is neither shown nor refuted** [relayed: read in its launcher's note
+  `vllm/20261111T2113Z-checkpoint-vllm-servecost-night`, the 05:15Z and 05:19Z checkpoints; the ratios recomputed
+  from its figures, mine].
+  - Five arms of six passes each, none cut, every pass 1,024 requests sent and completed, 0 failed, about 1,425
+    steps of 143 rows, 204,022 output tokens [relayed]. Output tokens a second: `compiled` 951.8 to 988.0, `record`
+    945.3 to 1,028.3, `canonical-topk` 965.0 to 1,005.2, `no-prefix-cache` 974.7 to 999.4, `compiled-again` 975.4 to
+    1,020.7 [relayed].
+  - **Cost, as stock's output tokens a second over the arm's, less one, by pass; a negative cost is an arm that ran
+    faster than stock** [relayed, its reader's lines; recomputed from the note's 30 figures, mine, to within 0.01
+    points]: `record` median −0.36%, lowest −7.44%, highest +4.52%; `canonical-topk` +0.20%, −5.32% to +1.88%;
+    `no-prefix-cache` +0.35%, −4.76% to +1.05%. **Stock against itself, `compiled-again` over `compiled`: −1.05%, −6.75% to +0.98%.**
+    Every range holds zero, and stock differs from stock by more than any arm differs from stock. Without each arm's
+    first pass, stock against itself is −0.66%, −1.51% to +0.98%. The job's own line says "not comparable"
+    [relayed].
+  - **So entry 2's item 9 stays open at the size it was modeled:** "six paired passes at this load do not tell a
+    cost under 1% from zero" [relayed, the launcher's words]. What the run does show: each arm's median is within
+    0.36% of stock's, inside what stock's second run differs from its first by [mine].
+  - **What would settle it** [relayed; guess, the launcher's]: one of node A's eight cards is thermally throttled in
+    nearly every sample under load, in this run and in two earlier ones, and that may be the passes' noise; "the
+    same passes after infra mends the card's cooling", or more paired passes.
+  - **What it does not price** [relayed]: it has no committing arm ("Not run ... `long`, `full`, the two committing
+    arms; so no boundary reading"), so the page hash's cost at serving is not in it; and its load has almost no
+    hits, 1,664 cached prompt tokens of 222,614 (0.75%), so `no-prefix-cache` says little about the hit. It is at
+    the pin with a BF16 cache and no drafts, so it prices entry 2's item 9 and nothing of this addendum's FP8 rows
+    or draft tokens.
+- **CACHE's final is in** (entries 5 to 7, 03:49Z to 04:21Z, `origin/cursor/proofs-cache-7c3e` at `b2e01c27ba`; its
+  closing line of 05:00Z and 05:02Z, at `f0f2bba078`, changes none of them and says that nothing of its is running
+  or queued) [read; relayed in the lines under this one].
   - **The line for 07:00Z:** prove `AdmissibleTwoRankinPatterns` without its hypothesis that each request reads one
     replay block (`security/Definitions/Claims/SamplingTwoRankin.lean:79-88`), read with a session as its request.
     `RequestsCover` loses only its first clause (`security/Properties/Spot/TwoStageCheck.lean:58`); its other two
@@ -1073,3 +1098,6 @@ note a result at P says nothing of T.
    the scheduled count costs while the advice code does not model it: the same pass, the trace's row lengths.
 9. **The accept test's gate count a decode row** (section 0, a): no run on a GPU; the accept Definition under
    sampling at a vocabulary of 154,880, counted by `circuit-check`.
+10. **The step record's and the canonical top-k's cost at saturation, below about 1%** (section 5; entry 2's item
+   9): `f570`'s arms again once node A's throttled card is mended, or with more paired passes [relayed; guess, its
+   launcher's].

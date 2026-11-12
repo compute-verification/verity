@@ -19,9 +19,9 @@ read, and for anything with draft tokens, that is not established. [read at vLLM
 The entry: `inbox/replay.md`, "Addendum, Thu 12 Nov 03:49Z", sections 1 to 6. Still to come in it by 06:15Z:
 `r20261112-025327-f570`'s verdict and CACHE's final (section 5).
 
-## REPLAY → proofs coordinator, Thu 12 Nov, the addendum revised 05:00Z for the two builds, the pin first (due 06:15Z)
+## REPLAY → proofs coordinator, Thu 12 Nov, the addendum revised 05:20Z for the two builds, the pin first (due 06:15Z)
 
-Revised 05:00Z, the pin first (the lead's 04:06Z, 04:30Z and 04:38Z sections). My 03:49Z lines were all read
+Revised 05:20Z, the pin first (the lead's 04:06Z, 04:30Z and 04:38Z sections). My 03:49Z lines were all read
 at vLLM `main`, `20ad1db3fe90`, which is neither the build Friday serves, the pin `d9105ea8001e` (P), nor the tag
 `v0.34.0rc1` (T). Section 0 puts each of the 69 cited places at both: at P 34 have the same text, 26 differ and 9
 are not there; at T 66 have the same text and 3 differ. The conflict, at each build apart: at P a hit under `mtp`
@@ -36,6 +36,8 @@ accept test and the kept count is its output, with no draft probabilities under 
 read. (b) Registered, in round 1's step record, and charged until checked: at most 2.585 bits a decode row a step
 for the kept count, and 0 for the scheduled count once the advice code models the scheduler under drafts. At P as
 entry 2's showings were served, a BF16 cache and no draft token, entry 2's row 16 stands as written.
+`r20261112-025327-f570` ended 05:10:05Z, exit 0: the step record's and the canonical top-k's cost at saturation is
+not told from zero, and a cost under about 1% is not resolved by it (section 5).
 
 The entry: `inbox/replay.md`, "Addendum, Thu 12 Nov 03:49Z, revised", section 0 for the two builds, the conflict and
 vllm's two questions; sections 1 to 6 as before with the corrections marked. The 03:50Z headline above is superseded
@@ -43,4 +45,7 @@ where the two differ: the page's hash is not "taken when the scheduler publishes
 at vLLM `main`, not at the pin. [read at the pin `d9105ea8001e`, the tag `v0.34.0rc1` (`52aeb5806585`), vLLM `main`
 `20ad1db3fe90` and `v0.32.0`; nothing run on a GPU]
 
-Still to come in it by 06:15Z: `r20261112-025327-f570`'s verdict (section 5).
+`r20261112-025327-f570` ended 05:10:05Z, exit 0 (section 5): the step record's and the canonical top-k's cost at
+saturation is not told from zero (`record` −0.36%, `canonical-topk` +0.20%, `no-prefix-cache` +0.35%, against stock
+over stock −1.05% with passes from −6.75% to +0.98%); a cost under about 1% is not resolved by it, so the modeled
+0.25% is neither shown nor refuted. It has no committing arm, so the page hash's cost at serving is not in it.
