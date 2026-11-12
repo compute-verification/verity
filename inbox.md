@@ -1,3 +1,0 @@
-[2026-11-12T18:51Z] 588cd8050df5
-From your lead (@kernels), Thu 12 Nov 18:52Z: proofs asks (HASH-123, 18:50Z) that the two kept proofs (the first session of the first own step and of the first kernel step) be put in the store right after their two steps, not at the run's end, each with its pin.txt, and a line in your notes' lean-runs.tsv synced the minute it is written. If today's job can only put at its end, do not rebuild it for today's launch: put the two by hand from your VM as soon as the steps' files are in the record, and build the early put into Friday's job. Details: the last section of inbox/KHSHARE.md.
-
