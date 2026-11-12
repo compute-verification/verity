@@ -576,8 +576,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched, model.table_reads = True, table_reads
-    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
+    batch = (launch_batch(phi, prompt_rows, decode_steps) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, decode_steps, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, prompt_rows, decode_steps, C)
     if C:
