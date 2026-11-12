@@ -340,7 +340,7 @@ theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage
     | none => simp [hs, hx] at hok
     | some xs =>
       simp only [hs, hx, Bool.and_eq_true] at hok
-      obtain ⟨⟨⟨hP, hd⟩, -⟩, -⟩ := hok
+      obtain ⟨⟨⟨⟨hP, hd⟩, -⟩, -⟩, -⟩ := hok
       obtain ⟨Pt, hPt⟩ := Option.isSome_iff_exists.1 hP
       obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hd
       obtain rfl := partition_eq h hPt

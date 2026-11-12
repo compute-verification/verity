@@ -36,7 +36,7 @@ NOT_SCANNED = {
     "tests/test_module_strings.py": "its exemptions name modules that don't resolve, as data",
 }
 
-#: The public modules: module -> the interface it is (the vision note's I1..I10).
+#: The public modules: module -> the interface it is (I1..I10).
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
@@ -70,7 +70,7 @@ PUBLIC = {
                                                 "them (the session Definition, its Boolean gates by the gate table, a "
                                                 "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
-                                                  "verifier's pins of it (VLLM-113)",
+                                                  "verifier's pins of it",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
     "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
@@ -79,7 +79,7 @@ PUBLIC = {
     "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
                                                 "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
-                                               "values (VLLM-125)",
+                                               "values",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
@@ -438,6 +438,6 @@ def test_the_scan_sees_each_form_and_the_tree():
     got = {(s.module, s.name) for s in _sites_in("x.py", text)}
     assert got == {("verity_vllm.engine.handle", None), ("verity_vllm", "LLM"), ("verity_vllm.protocols", None),
                    ("verity_vllm.config", "_x"), ("verity_vllm.llm", None), ("verity_vllm.config", None), ("verity_vllm.llm", "LLM")}
-    assert ("benchmarks/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
+    assert ("benchmarks/harness/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
     assert not any(s.file.startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)
