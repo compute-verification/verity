@@ -262,6 +262,7 @@ def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_wha
 
 LIFTED = "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
 LIFTED_G = "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED_OLD = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
 LIFTED_SOURCE = """namespace Pouw.Guarantees.PearlC
 
 open Pouw.PearlC Pouw.PearlC.Assumptions
@@ -297,8 +298,7 @@ def test_a_lifted_guarantee_s_twin_is_read_from_its_recorded_definition(tmp_path
     """A twin pinned as `X : G` is the twin its old theorem was: the gap, cast, prices and cap read off `G`'s body."""
     audit, lean = lifted_audit(tmp_path)
     (row,) = P.extract(P.guarantees(audit), "t", {LIFTED: "l"}, P.lifted_definitions(audit, lean))
-    old = P.parse("Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192",
-                  PINS["Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"])
+    old = P.parse(LIFTED_OLD, PINS[LIFTED_OLD])
     assert row == old | {"pin": LIFTED, "type_hash": "l", "source": "t", "status": "pinned"}
 
 
@@ -320,7 +320,7 @@ def test_a_lifted_twin_without_a_recorded_definition_stating_its_gamma_fails_clo
 def test_a_store_pin_the_repository_holds_lifted_is_one_twin_the_store_s(tmp_path):
     """The store's pins keep their names from before the lift and the gap's rename; the repository's lifted copy of one
     is the same pin, not a second twin stating it."""
-    old = "Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"
+    old = LIFTED_OLD
     audit, lean = lifted_audit(tmp_path)
     (lean / "lean-audit.json").write_text(json.dumps(audit))
     store = tmp_path / "store"
@@ -338,8 +338,7 @@ def test_a_lemma_at_a_device_record_is_a_pinned_twin_of_its_proof_s_name(tmp_pat
     pins, defs = P.lemmas(lean)
     assert set(pins) == {LIFTED}
     (row,) = P.extract(pins, P.REPO_LEMMAS, {}, defs, proved=True)
-    old = P.parse("Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192",
-                  PINS["Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_8192"])
+    old = P.parse(LIFTED_OLD, PINS[LIFTED_OLD])
     assert row == old | {"pin": LIFTED, "type_hash": None, "source": P.REPO_LEMMAS, "status": "pinned"}
     other = LIFTED_SOURCE.replace("namespace Pouw.Guarantees.PearlC\n", "namespace Pouw.Guarantees\n")
     assert P.lemmas(lifted_audit(tmp_path / "other", lemmas=other)[1]) == ({}, {})
