@@ -1,6 +1,6 @@
-# core_composition: the onsite and remote configurations as compositions of protocols
+# core_composition: the onsite and remote protocols as compositions of subprotocols
 
-Verity's two configurations, onsite and remote, are each one verdict over a list of protocols. Three Lake packages
+Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
 hold them, each on the core interface (`../../../interface`) by path, with no Mathlib: `core_composition` also on the base
 package (`core_base`: canonical JSON, bytes and SHA-512), onsite and remote also on Flock's verifier and their
 subprotocols' packages:
