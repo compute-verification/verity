@@ -2021,3 +2021,170 @@ the replay step, and section 2.5's tie.
 Published as you ordered: this entry is one commit of `inbox/proofs-coordinator.md` alone on
 `cursor/verity-proofs-84b5`, appended at the end, no force. It is also the last section of `inbox/replay.md` on
 `cursor/proofs-replay-136d` and in my note. Nothing is posted to Linear or Slack.
+
+## Entry 5, Thu 12 Nov 20:20Z: the kept field's charge circuit in both orders, its proving time, and coded against plain (PRF-609 item 1; the answer owed on VLLM-392 by Fri 13 Nov noon PST)
+
+Read and arithmetic only, at `origin/main` `0e8d16c3b8be` (AGENTS.md unchanged since `0582899c4392` [run: `git diff --quiet`]) and at vllm's open #9424 (`8259bdf9d2`). Nothing built, nothing launched; what ran is `rg`, `git` and scratch arithmetic. Tags: [read] a file or issue I read; [run] a scratch computation of mine; [derived] arithmetic on read figures; [relayed] another lane's figure, not rerun; [guess]. network-accounting's answer to your question on VLLM-392 had not come at 20:20Z [read], so nothing here uses it. `origin/main` is `5f0c008aa040` as I publish; no file cited here changed in between [run]. #9424, which builds the by-request form, is to be marked ready when its run exits 0 (VLLM-392 20:08Z [read]): a switch is then a second change of vllm's.
+
+**Recommendation**
+
+1. **The order: by step, coded in the request's context.** Each row's count goes in its own step's window, in the order the replay reads it, each bit "c > j" under (the request's count before, j) as now. The same bits as by request [relayed: vllm's worker; section 5, item 6]. The circuit counts on what the step already holds: nothing is sorted, nothing more crosses a window than 3 bits a running request (the contexts' counts cross in either order), and `PROTOCOL.md:1438-1439` ("in the order the replay reads them, … with no routing") stays true. By request needs all of that and a tie on top: at best 1.8e8 more gates a chat window without a coin or a witness, 4.0e8 once a request outlives its window, on a count of 3.2e8 [derived, the networks' constants guesses].
+2. **Coded stands against plain.** One machine-year at the chat rate (3.07e10 output tokens, 525,600 windows, 2.52e8 GPU-seconds of serving) [derived; the bits a token relayed from vllm's worker]:
+
+| form | bits charged a machine-year | proving the count, GPU-seconds a machine-year | share of serving |
+|---|---|---|---|
+| coded, greedy passes (0.30 a token) | 9.2e9 | 2.7e4 to 1.5e6 | 0.011% to 0.58% |
+| coded, sampled passes (0.032 to 0.100) | 9.8e8 to 3.1e9 | the same: slots are per class, used or not | the same |
+| plain, greedy passes (0.66 to 0.68) | 2.0e10 to 2.1e10 | under 600 | under 0.0003% |
+| plain, sampled passes (2.9 to 3.0) | 8.9e10 to 9.2e10 | under 600 | under 0.0003% |
+
+   Coded takes 1.1e10 to 1.2e10 (greedy) or 8.6e10 to 9.1e10 (sampled) bits a machine-year off the charge, for at most 0.6% of serving in the cheaper layout and 1.5% in the simpler one. The proving range is 56 times wide because no source has measured a circuit like the count (section 2); the top of it still leaves coded standing.
+3. **No hybrid is worth its change** (section 3). Slots a row with j static is a layout of the circuit, not a form of the string: it changes nothing of vllm's, costs up to 3.0 times the gates and is the one I would build first.
+
+**What changes for vllm:** `_parse` and `_decode` become one loop (their lead already told the worker to keep that change small, VLLM-392 19:48Z [read]); the bits stay, the string's order changes. **What it needs from network-accounting:** each running request's last count in its state (3 bits), and one order for the rows inside a step that the string follows (1.6).
+
+### 1. Both orders, sized
+
+**1.1 The count's units** [read: `arith_encode.py:108-130` and its pins; the book's formula derived from `_build_book_kt`, checked against the pinned 337 at C = 3]. `ArithCountStep_v1{18, 1, 20}` 2,243; `ArithCountFinish_v1{20}` 41; `BookKT_v1{C}` = 148 + (61 + bitlen(C − 1))·C: 2,493 at the field's C = K(K + 2) = 35 contexts, 596 at 7. Two layouts, the same in either order:
+
+- **static**: a row slot is K sub-slots with j static, each a step and a book of the K + 2 contexts of its j: 2,839, so 14,195 a row slot. Sub-slot j is on where the row emits, j ≤ c and j < m (m the most the row can keep, `kept._most`). Nothing has to be lined up.
+- **flat**: one slot a decision with j dynamic, 4,736, and a network that lines a window's decisions up in the slots: an order-preserving compaction of K candidates a row, which I size as n·bitlen(n)·8 for n = K·rows [guess; a padded network is twice that].
+- Flat is the smaller only where a class caps a window's decisions under 3.0 a row slot (14,195 / 4,736). A row that keeps c drafts sends at most c + 1 bits and emits c + 1 outputs (`kept.put`: `range(min(c + 1, most))`), so a window's decisions are at most its outputs [derived].
+
+**1.2 The two classes.**
+
+- **Small, on main:** `CompileSlice_v7`'s class (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, one block of 1,021,302 ANDs, 123,120 of them the map [read: `compile-slice.md:74-86`]. 432 row slots (P·R) [derived].
+- **Chat:** 143 rows a step at 147 ms, 4.9 requests finished a second, 384 requests at once [read: the serve-tax card, measured on stock vLLM with no draft]. So 972.8 rows a second, 58,367 a 60 s window in 408 steps; 198.5 outputs a request, which runs 29.2 s; 294 requests land a window and 143 are running at each edge [derived]. As in my 19:29Z 2.3 the class is 58,367 row slots and as many decision slots. No slice on main proves a window of this class: `CompileSlice_v7` is one block a window from the empty state ("a window that opens with a request running is no slice", `compile_slice_v7.py:26`), and the split into a load block and step blocks is `replay_chain`'s, not the slice's (`served-shape.md:105-120`) [read].
+- **A block is at most 2^26 gates, not 2^28.** A proof block's slot is the least power of two above its ANDs and its rows' bits, beside its rows' slots and the mask, in a Flock block of at most 2^27 bits (`K_MAX` = 27, `interface.py:307`; `block_k_log` and `cap`, `sampling_plan/inputs.py:173-191`: `cap` is 0, "not a proof block, past Flock's 2^`K_MAX`") [read]. So a proof block holds under 2^26 = 67,108,864 ANDs with its rows' bits [derived], and the chat window's count is 5 to 15 chained blocks, each link carrying the coder and the counts (1.5).
+
+| the count alone | small (432 row slots) | chat (58,367) |
+|---|---|---|
+| static | 6,132,281: 6.0 times today's block | 828,519,606: 12.3 blocks |
+| flat | 2,045,993 (2.0 times) if the class caps a window's decisions at 432; 10,229,801 (10.0 times) at the 2,160 that K a row allows | 276,426,153, and 4.4e7 to line them up [guess]: 3.2e8, 4.8 blocks |
+
+[derived: 432 × 14,195 + 41; 432 × 4,736 + 41; 58,367 × the same]. For scale, the replay itself at the heavy async class is 651 step blocks of 739,906, 4.8e8 a window (`served-shape.md:106-107`) [read]: at the chat rate the count is of the replay's own size.
+
+**1.3 (a) By request (the body's window).** What it adds to the count, and why. The count has to run in the string's order, request by request. The replay reads each row's count at its step, requests interleaved. Both have to be the same committed values, so one of the two reads goes through a permutation the circuit holds.
+
+*The cheapest tie that needs nothing new: a sorting network, with the values committed once, in step order.* Each step hands out, for each emitting row, an entry (the request's release ordinal, its outputs done, m, the count). The charging block sorts a window's entries by (ordinal, done) and counts them in that order; the request's count before is the sorted neighbour's, so it is not state. No coin, no witness, no second commitment. The pattern is on main: `AdviceCheck_v1`'s stage 2 is "Batcher's odd-even merge sort of the L / 5 events by (request, position), one batch of `AdviceSwap` per layer" (`advice_check.py:30`, `sort_layers`, `comparators`) [read]; `PROTOCOL.md:1603-1612` picks the same network for memory checking over a coin or a hash [read].
+
+- Chat: 3,549,676 comparators for 58,367 entries [run: `sort_layers`' rule copied into scratch, comparators past the entries left out], each a compare of a 22-bit key and a swap of a 28-bit entry, about 50 ANDs [guess]: **1.8e8**. Small: 8,097 comparators, about 34 ANDs each [guess]: 2.8e5.
+- The sort is 2.6 blocks by itself at chat, so its layers are cut across blocks, and each cut hands on all 65,536 entries: 1.8e6 bits, seven times the 262,144-bit class a block's outputs fit (AGENTS.md) [derived].
+
+*The other ties.*
+
+| tie | on main | gates, chat / small | what it needs that the sort does not |
+|---|---|---|---|
+| sorting network | `AdviceCheck_v1` stage 2; `torch_embedding`'s merge network | 1.8e8 / 2.8e5 | nothing |
+| routing network, its settings a witness | `DsaWaksmanRows_v2{N,K,W,E}`, "one AND a payload bit a switch" (`registry/boolean_dsa_topk.py:26`) | 2.8e7 / 8.2e4 (983,041 and 4,097 switches [derived]) | 983,041 setting bits a window count as free input until a Lean lemma shows the outputs do not depend on them (the nondeterminism rule): 56 times the field's own 17,510 bits a window at 0.30 a token [derived]. Not usable before its lemma. |
+| multiset fingerprint | `MemCheck_v1`: two `gf128` products a row, 2,187 ANDs each (`boolean/memcheck.py`) | 2.6e8 / 1.9e6 | a coin drawn after both lists are committed, which `CompileSlice_v7` does not take, "a second round through the ZK server per session" (`PROTOCOL.md:1607-1609`), and a term in the error |
+| a second commitment in step order | two units reading the same registered rows (`calls`, `CallsEq`, `compile_slice_v6.py`) | not a fourth way | it is what the routing network or the fingerprint holds equal to the first; what main has holds two reads equal in the same order only, and the copy is itself a checked witness (175,101 bits a chat window) |
+
+*What a request that outlives its window adds.* The body's window charges every count of the request, and its rows run in later windows too: at the chat load a request runs 29 s of a 60 s window, so about half the requests cross an edge and a quarter of a window's rows are of requests that landed in the one before (14,200 of 58,367) [derived]. Two ways, neither small:
+
+- The window's sort takes the entries of every window its requests run in. At chat that is two windows' slots, 116,734, since which rows are whose is private: 8,033,221 comparators [run], **4.0e8** at the same 50. The class gains a public cap on how many windows a request spans (max_tokens × the step time / T, plus one), and a window's charging block cannot be proved before its last request has ended.
+- Or the values are committed by request and a row of the unread counts is carried to the next window: about 14,200 entries at a chat window's edge (143 running × half of 198.5 rows) [derived], 25 to 28 bits each with their tags: 3.5e5 to 4.0e5 bits, over the 262,144-bit output class, and bounded by max_tokens, not by the window. That form also needs the copy and the fetch of each request's certified O in stream order, which my 19:29Z 2.2 left out (section 4).
+- Either way a window's string cannot close before its last request ends. With one string to a phase, a request still running at the phase's edge has to be cut there and re-entered, as `CompileSlice_v6` cuts one at a window's edge [read], or its counts sit in a string that is already committed [derived]. By step a window's counts are all known when its last step is.
+
+**1.4 (b) By step.** The count reads each row where the replay reads it. What it needs from the step, for each row slot: whether it emits, the request's count before (`prev`: "first" or 0 to K, 3 bits), m = min(K, O − out − 1) from the state the slot already has (O, out), and the count c, the step's `kept` input. `prev` is the one new field of a running request's state. A5 allows the window: step s's window is "the first window whose rows a value read at step s can change" (`PROTOCOL.md:1429-1431`), so a count charged in its step's window is on time [derived].
+
+*What `charge-chain.md:48-50` took out of the step blocks, and why* [read: its "One carry for proof blocks and windows", `served-shape.md:118-120`]. It took out the per-ask charge: "no step proof block carries a coder state, KT counts, a context or a code position", the replay's 228 carried bits (coder 68, KT counts 3 × 24 each for n0 and n1, `pc` 2, position 14) becoming 0 in the state row. Three reasons are in the text:
+
+1. the window: "A per-ask charge … codes a carried decision in the window that reads it", while the load codes each decision in the window that loads it, which is `code_v1`'s;
+2. the context: `run` is "over decisions only", so the count needs nothing a step computes;
+3. the cost: 97,159 at the class's D = 32 against 1,256,873 per ask at its P·A = 486, thirteen times: most ask slots hold no decision.
+
+*Whether they apply to the kept counts* [derived]:
+
+1. No, by step: a count is read in the window that charges it and none is carried. (By request it is the reverse: rows are read in windows after the one that charged them.)
+2. No, with the request's context: which request a row is, is the replay's to know. It would apply with the stream's context, the form vllm's worker measured at 37% to 47% more bits on greedy [relayed].
+3. No: the counts are dense. Every emitting row has one, so K sub-slots a row slot cost the same inside a step as at the load.
+
+So the count either sits in the step blocks, or in blocks of its own that read what the steps hand out. Both are the same gates:
+
+- **In the step blocks:** a step block gains R row slots of 14,195: 2,029,885 at the chat step's 143 rows [derived], against the heavy class's 739,906 step block [read]. Carried between step blocks: the coder (low 32, high 32, used 1, ok 1, bits 20: 86 [read: `charge-chain.md`, "What resets"]) and the 35 contexts' counts (30 bits each: 1,050), 1,136 bits, beside `prev`. The heavy class's state row is 20,320 bits [read], so +5.6% and 408 links a chat window.
+- **In blocks of its own, after the steps:** each step hands out 7 bits a row slot (emits, `prev`, m); the count's chain reads them and the rows' counts. Carried between step blocks: `prev` only. Carried between the count's blocks: the 1,136 bits, 4 links at the flat layout's 5 blocks. This keeps `charge-chain.md:48-50` true but for "a context".
+- In the small class's one block there is no link at all.
+
+**1.5 Side by side** [derived; guesses named in 1.7].
+
+| | (a) by request | (b) by step |
+|---|---|---|
+| gates a window, small, static | 6,132,281 + 2.8e5: 6.3 times today's block | 6,132,281: 6.0 times |
+| gates a window, chat, flat | 3.2e8 + 1.8e8 = 5.0e8 (8 blocks); 7.2e8 (11) with the sort over two windows | 3.2e8 (5 blocks) |
+| gates a window, chat, static | 1.0e9 (15 blocks); more over two windows | 8.3e8 (13 blocks) |
+| carried between a window's blocks | 1,136 bits a link of the count; the sort's cuts, 1.8e6 bits each | 1,136 bits a link of the count; 3 bits a running slot in the state row |
+| carried across windows | the kept contexts' counts, 1,050 bits beside today's 149 (my 19:29Z 2.2; `window_code.KT` is one for the string [read: #9424]); and the later windows' entries or the unread counts (1.3) | the same 1,050 bits; `prev` with the state |
+| Definitions | `ChargeCount_v3`, `ChargeLink_v3`, the slice (`_v8`), `charge_chain`'s rows; the step's entries out; a comparator and a sort (new, on `AdviceSwap`'s pattern); the chain's reads across windows; `PROTOCOL.md:1438-1439` becomes false for this field | `ChargeCount_v3`, `ChargeLink_v3`, the slice (`_v8`), `charge_chain`'s rows; `ReplayStep_v2` with `prev` in state and 7 bits a row out; `charge-chain.md:48-50`'s "a context" |
+| new input class, coin, lemma | none with the sort; a lemma or a coin with the cheaper ties | none |
+| can be checked before network-accounting's step takes `kept` | no: the tie reads the step | no |
+
+**1.6 What the replay step has** (your question to network-accounting, from the code) [read]. On main: `ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW}`; a running slot's state is (valid, id, P, O, out, computed [, pfx] [, fin, cap]); it models no draft and its binding refuses a draft engine by name (#9198, merged). So: **`prev` is not in a running request's state, and there is no `kept` input.** **No routing of a window's rows by request exists**: the slice's one routing is `map`, from batch positions to slots inside one step (R rows of R bits, a witness held one-to-one, `compile_slice.py:32-49`). No open PR of theirs touched the replay step for a draft at 19:40Z, and no pushed branch that names a draft, kept or the replay does at 20:14Z (`git ls-remote --heads`, four candidates read; the GitHub API was rate-limited then) [run]. NET-358 has their word on a draft serve's advice due Tue 17 Nov [read]. What they plan is theirs to say.
+
+One thing to settle with them and vllm for (b): **the order of rows inside a step.** The circuit is cheapest where the string takes a step's rows in the order of the step's `kept` input. If the step reads by slot and the string goes by batch position, the count needs each row's 10 bits through `map`: R² × 10 a step, 34,560 a small-class window and 8.3e7 a chat window [derived].
+
+**1.7 What is a guess.** The comparator's 50 and 34 ANDs; the line-up network's 4.4e7; the widths of the tags; that a chat class has as many row slots as output tokens (measured with no draft: with a draft a row emits up to 6, and the caps a class registers for rows and decisions are nobody's yet); the heavy class's step block as a stand-in for a chat step. Not guesses: the units, the two counts' products, the comparator and switch counts.
+
+### 2. The proving time
+
+**2.1 The two sources, and a third between them.** Every price below is for a k_log-27 block in a full statement of 256.
+
+- **(i) The sampling plan.** Its model is `costfit`'s: prove GPU-s a session = f0 + f1·A + f2·A·S + b·A·D (A the ANDs a block, S the blocks staged, D drawn), fit by relative error on the `h200` card's 71 sessions (`ZK_H200`, `sampling_plan/inputs.py`; blocks of 28 to 12,778,458 ANDs) [read]. My replication of the fit [run: scratch, not the planner's own run]: f0 1.274, f1 1.818e-6, f2 1.062e-10, b 1.446e-9, σ 0.44. At A = 67,043,328 and S = D = 256: 149.8 GPU-s a statement, **0.585 a block, 8.73e-9 a gate**, 81% of it the f1·A term, paid once a statement. That is 5.2 times past the card's largest block, and a statement of one such block alone would cost 123 GPU-s. There is no block of 2^28 to 2^29 gates to price (1.2): at 8.73e-9 a gate those are 2.3 and 4.7 GPU-s, as 4 and 8 blocks.
+- **The figures' own rule for a type the card does not measure** (`total_cost.priced`: the measured types' median seconds a witness bit, and a statement's fixed seconds on their line in k_log) [read], on the proof-overhead card [run]: 0.0141 GPU-s a block and 47.3 fixed a statement: **0.199 a block**.
+- **(ii) The head block.** It is `SparseMlaHeadBlock` at NVIS 64: 37,568,903 ANDs a block, k_log 27 (the workload card's stratum [read]), 256 a statement, "256 units, 11,516 levels" [relayed: HASH-112]: 9.62e9 ANDs a statement [derived]. HASH-112's rows of today at two provers on ten cores: 2.109 GPU-s a statement with the walk off and 1.513 on [relayed; the cards have 143,771 MiB, an H200's]; main's steady fixture has 2.856 at one prover [read: `bench_prices.json`]. So **0.0059 to 0.0112 a block, 1.57e-10 to 2.97e-10 a gate** [derived].
+- **They disagree 30 to 56 times at the head block itself** (the fit gives it 84.5 GPU-s a statement). The reason is readable [derived]: the card's marginal 0.0141 a block agrees with the steady rows; the rest is a statement's fixed seconds on sessions that each start cold, which a steady prover does not pay again. So the steady figure is the honest one to carry over, if the count proves as a head block does. That "if" is section 2.3.
+
+**2.2 GPU-seconds a chat window, and the share of its serving** (60 s on eight GPUs, 480 GPU-s). Derived: gates × the price a gate; for the card's rule, whole blocks × 0.199.
+
+| | gates | blocks | steady head block (ii) | the card's rule | the fit (i) |
+|---|---|---|---|---|---|
+| plain: a count of rows | 1.2e5 [guess: 2 a row slot] | rides in a block that exists | 0.00002 to 0.00003 | | 0.001: 0.0002% |
+| coded, (b), flat | 3.2e8 | 5 | 0.050 to 0.095: 0.011% to 0.020% | 0.99: 0.21% | 2.80: 0.58% |
+| coded, (b), static | 8.3e8 | 13 | 0.13 to 0.25: 0.027% to 0.051% | 2.58: 0.54% | 7.23: 1.51% |
+| coded, (a), flat, sort over one window | 5.0e8 | 8 | 0.078 to 0.15: 0.016% to 0.031% | 1.59: 0.33% | 4.35: 0.91% |
+| coded, (a), flat, sort over two windows | 7.2e8 | 11 | 0.11 to 0.21: 0.024% to 0.045% | 2.19: 0.46% | 6.31: 1.31% |
+| coded, (a), static, sort over one window | 1.0e9 | 15 | 0.16 to 0.30: 0.033% to 0.062% | 2.98: 0.62% | 8.78: 1.83% |
+
+Every coded row is under 2% of the window's serving. By step is 0.64 (flat) to 0.82 (static) of by request with the sort over one window, and 0.44 of it (flat) with the sort over two.
+
+**2.3 Why neither carries over honestly, and the one measurement.** Neither source holds a unit like the count. The head block is 11,516 AND-levels deep; the count is one chain through every decision, each step after the last: a block of the flat layout is some 14,000 steps deep (2^26 / 4,736), each step many levels [derived]. The prover builds the witness of a deep unit on the host (`deep_unit`, `gpu_circuit.rs:386`) [read], and HASH-112's rows say the host is already the limit for the head block, the card under half busy [relayed]. The pins hold ANDs and no depth, and I built nothing, so the count's depth is not a number I have. The fit's verification and staging terms are in CPU-seconds, 4.8 and 9.2 a block of this size [run, extrapolated]: 24 and 46 CPU-s a chat window at five blocks, on every window, which I have not checked against anything.
+
+What would settle it, **not launched**: `ChargeCount_v1{N}`, which is on main, bound at N near 14,000 (about 2,553 a decision and 15,000 a window [read]: 3.6e7 ANDs, the head block's size, one k_log-27 block); a full statement of 256 of it, warm and steady as HASH-112's rows are taken (two provers on ten cores), with the deployed prover (`flock-circuit prove --zk --gpu`, the host building the witness); on **one H200**. It reads GPU-seconds a statement, the host's seconds for the witness, and whether a unit that deep lowers and stages at all at that N (its copies are about 175 rows a decision [read]). Whether `ChargeCount_v1` binds at that N I did not try. It needs a GPU, so the CPU places of your 20:11Z note do not serve it.
+
+### 3. Coded against plain, and the hybrids
+
+- **Coded stands** (the table in the first lines). At the top of the range coded pays 1.5e6 GPU-s a machine-year (0.58% of serving) to take 1.1e10 bits off a greedy year: 7,500 bits a GPU-second; at the steady price 4.2e5 [derived]. Nobody has set what a charged bit is worth, so that rate is all I can state; but the field is 92% of the string on the greedy pass [relayed], so it is the term the charge is made of.
+- **Plain where the pass is greedy-like, coded where sampled:** worth nothing as one class. Slots are fixed per class and paid used or not, so the coded count's gates stay and the greedy passes pay 2.2 to 2.3 times the bits. As two classes it saves the greedy windows' count (at most 0.6% of their serving) for 1.1e10 more bits a machine-year. It changes vllm's string: two forms, chosen by something registered.
+- **Coded with slots a row and j static** (14,195 a row): no change to the string or the bits; it is the static layout of 1.1. Up to 3.0 times the flat count's gates, no line-up network, books of 7 contexts instead of 35. At the small class it is 6.1e6 gates, six of today's blocks. I would build this one first and leave flat until a chat class is proved.
+- **By step with the stream's context** (decoded before the replay, the decisions' own pattern): keeps `_parse` then `_decode`, and the count runs whole at the load as the decisions' does; but the replay then reads the counts at a private head, a shifter over the kept row at each step (`ReplayAdvance` is 92,576 for the heavy class's 37,024-bit row [read]; a chat window's kept row is 175,101 bits), and the bits are 37% to 47% more on greedy [relayed]. It changes vllm's string and is no cheaper in the circuit than (b).
+
+### 4. Corrections to my 19:29Z entry
+
+- **2.5, "the tie is of the count's own size or more":** right for the ties that need nothing new (the sort is 0.64 of the flat count over one window and 1.45 over two; fingerprints 0.92), wrong for a routing network (0.10), which is unusable for a different reason: its witness is charged until its lemma.
+- **2.2, the glue ρ of 100 to 300 gates a decision slot:** it left out two networks. Flat slots need the decisions lined up (4.4e7 a chat window [guess]); and a by-request count at the load needs each request's certified O in stream order, which a walker cannot fetch for 300 gates a slot at 512 requests a window.
+- **The first lines' "2.8e8 gates … in a block proved on every window":** no such block; it is five or more, chained (1.2).
+
+### 5. Not established
+
+1. The count's proving time. The range is 56 times wide and neither end was measured on a deep chain (2.3). The verifier's and the stager's CPU a window are the fit's, extrapolated.
+2. network-accounting's answer. The step that takes `kept` is not on main or any open PR; (b) needs `prev` in its state and its row order (1.6).
+3. The chat class is nobody's registered class: its row and decision caps under a draft, how it splits into blocks, and how a slice loads a window that opens with requests running, which `CompileSlice_v7` refuses.
+4. The networks' constants (1.7), and the widths I gave the tags.
+5. Whether `ChargeCount_v1` binds, lowers and stages at 14,000 decisions.
+6. "The same bits" by step. vllm's worker measured it on passes of 23,363 and 5,700 tokens [relayed]. The estimate's counts halve when a context's total would pass 2^16 (`window_code.KT.update` [read]), after which the order inside a context does matter; at the chat rate the busiest contexts get there within a few windows of one string (about 0.86 decisions a token on the greedy passes, 50,000 a window over at least five values of j) [derived]. The difference is not measured and I expect it small [guess].
+7. That a lemma for the routing network or a coin for the fingerprint would be accepted: I priced them and did not ask.
+
+### 6. For VLLM-392
+
+~~~
+proofs (our worker's read; nothing built or run): the order, and coded against plain.
+
+1. The order: by step. Each row's count goes in its own step's window, in the order the replay reads it, coded in the request's context (its count before, j). Your worker measured the same bits for it. The circuit counts where the replay reads. By request it must also sort a window's rows into request order, about as many gates again at the chat rate, and hold counts that are read in later windows.
+2. Coded stands. At the chat rate the count is about 3e8 gates a 60 s window, five proof blocks. Proving it is 0.01% to 0.6% of serving by the prices we have, none measured on a circuit like it. Plain is 2.2 times the bits on greedy passes and 29 to 93 times on sampled.
+3. For you: `_parse` and `_decode` become one loop. The bits stay.
+4. @network-accounting: the step that takes `kept` needs each running request's last count in its state (3 bits), and one order of rows inside a step that the string follows. Neither is on main.
+~~~
+
+### 7. For PRF-609
+
+**Item 1: by step, coded in the request's context; coded stands against plain.** `ChargeCount_v3` counts a window's kept rows in the replay's order: for each row slot the step hands it whether the row emits, the request's count before, the most it can keep, and the count; K static sub-slots a row slot first (14,195 a row slot, 6.1e6 gates at the slice's class on main), the flat layout only if a chat class is ever proved. The kept contexts' counts (1,050 bits) join the carry of `replay-charge`'s rows. **Items 2 and 3, Tue 24 Nov holds for what is ours alone:** the count's Definition with its reference, sidecar, pins and circuit-check report, `NetTiming.WindowCharge`'s addend with its mirror and difftest vectors, and `PROTOCOL.md`'s "Sent" sentence and `SampledCharge.lean:65`. **`ChargeLink_v3` and the slice reading the step's rows have no date of ours yet:** they follow network-accounting's step that takes `kept`, which is on no branch I found; their word on NET-358 is due Tue 17 Nov, and I would set that date the day they give theirs. Until the link lands the field is charged by code and not checked, as VLLM-392 already says.

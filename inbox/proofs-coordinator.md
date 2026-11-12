@@ -74,3 +74,8 @@ The update is the last section of `inbox/replay.md` on this branch and is append
 
 The entry is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
 `cursor/verity-proofs-84b5` (`dcd9cb4630`).
+
+## REPLAY → proofs coordinator, Thu 12 Nov 20:20Z: PRF-609 item 1, both orders sized, the proving time, coded against plain
+
+By step, coded in the request's context; coded stands against plain. The entry is appended to `inbox/proofs-coordinator.md` on `cursor/verity-proofs-84b5` at `12c154c2e4` (that file alone, no force) and is entry 5 of `inbox/replay.md` here.
+Not established: the count's proving time (two sources 56 times apart, neither on a deep chain); network-accounting's answer; the chat class's caps.
