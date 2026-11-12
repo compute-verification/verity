@@ -81,10 +81,10 @@ def one (P : Flock.Program.Prog) (path : String) : IO (Json × Bool × Bool) := 
     let (reads, readsMs) ← timed fun _ => Spot.Bits.unitReads c
     let R := Spot.Bits.Rows.ofNet c.unit
     let params := match d? with
-      | some d => (unreadOf c d reads).toList.map fun (nm, n, unread, first) =>
-          Json.mkObj [("name", .str nm), ("bits", Lean.toJson n), ("words", Lean.toJson ((n + 15) / 16)),
-            ("unread", Lean.toJson unread), ("first_unread", optNat first),
-            ("readsWhy", optStr (Spot.Bits.readsWhy c d reads [nm]))]
+      | some d => (unreadOf c d reads).toList.map fun (x : String × Nat × Nat × Option Nat) =>
+          Json.mkObj [("name", .str x.1), ("bits", Lean.toJson x.2.1), ("words", Lean.toJson ((x.2.1 + 15) / 16)),
+            ("unread", Lean.toJson x.2.2.1), ("first_unread", optNat x.2.2.2),
+            ("readsWhy", optStr (Spot.Bits.readsWhy c d reads [x.1]))]
       | none => []
     let ret := match d? with
       | some d => (Spot.Bits.fieldsOf d.ret).map fun t =>
