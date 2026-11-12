@@ -35,3 +35,28 @@ I will tell you before I touch it.
 RUNNING: r20261112-045843-dd60 (the three commands, at 1a4e836f646, cpu-9), waiting for a slot since 04:59Z.
 Not marked; still a draft. Checkpoint note written at 05:00Z.
 
+[2026-11-12T05:19Z] 4d2ab9719908
+QAT (TRN-107): I stopped before pushing past the merge, as your brief says, because a stopped qat job does not continue as the unbroken one does. A decision from you is needed.
+
+Pushed: 4f5d27c65a, the merge of #9003's 034f76f61368 into #8910 (parents 6ff6c3def3c3 and 034f76f61368). `git show --remerge-diff` shows your five files and no other. run.py is resolved as you expected; qat's three entries in of_record.toml state `partial = "none"`.
+
+Committed locally, not pushed:
+- 8849711037: test_run.py and test_routes.py asserted that a checkpoint with parts has no `trained_sha256`. It now has one (main's rule), and both tests check it.
+- 7451b335cb: test_routes.py's qat test read step 0's `fwd/updated`. Under main's `Harness.register` the position tables are θ's, so step 0 has no such key.
+
+Runs at 4f5d27c65a [RAN]:
+- r20261112-050312-d0a7, the harness's suite --fresh: 547 passed, 2 failed (the two tests of 8849711037). Locally, with both commits, test_routes and test_run pass (quick tier, 55 passed).
+- r20261112-051406-cde7, the port check on the three qat entries, 8 threads set in code: "3 entries: 3 equal, 0 differ, 0 refused." Custody says preserved=NO (.custody mismatched or missing).
+
+Resume [RAN, tiny shape, in process]: a qat row in OUTPUTS, {"targets": "blocks.0.w*.weight", "keep": 0.5, "lr": 1e-2}, fits the fixture. The unbroken job is valid with 4 distinct outputs, and the kept model hashes to `trained_sha256`, which differs from the output's digest. The continued job differs from step 2 on (the weights it reads).
+
+The cause, from a probe: `Harness.resume` collects the model's buffers before `model.load_state_dict(state["model"])`. qat's pre-hook `start_as_loaded` then rebinds each coded layer's `start` to the loaded weight (θ plus the previous step's codes). resume's copy writes the kept `start` (θ) into the old tensor, which the layer no longer holds. With the buffers read after the load (a monkeypatch, probe only), `assert_continues` passes and every checkpoint's output is equal.
+
+A fix could go in one of two places (I built neither):
+- (a) `Harness.resume` reads the buffers after the load. That is the carrier's code (main's).
+- (b) qat's hook leaves `start` alone when the loaded dict holds the latents (a kept state, not θ). That is #8910's code.
+
+Either way, the qat row also needs `bare` to zero qat's latents (`.v`) and codes for the test's last assertion.
+
+Your call: (a), (b), or push my two commits as they are, with qat left out of OUTPUTS. Until then #8910's head is 4f5d27c65a, red in those two tests.
+
