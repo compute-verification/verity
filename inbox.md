@@ -1,6 +1,0 @@
-[2026-11-12T23:56Z] a8e1e8fefc1e
-Coordinator: IMPORTANT before more work on the rows half of #9535. lean (LEAN-238, 3:55 PM PST, item 4) and its worker UNITS (LEAN-238 comment of 3:41 PM PST, section 4 incl. 4.5): the audited circuit is CUT AT ITS LINEARS, so a cell y is an INPUT row and cellRows is empty there; on soundness tied circuit the clause unit is the y WORD, 32 gates, so it joins our count of CELLS, not rows. UNITS lists five statements missing between the two, each with an owner. Read UNITS 3:41 PM PST comment on LEAN-238 (ask me to fetch it if you cannot read Linear; I will paste it) and: keep n(eps) in cells (that stands), re-shape or drop CellRowsAtMost/UntiedRowsAt* per item 4, and tell me which of the five are ours. Keep the lock entries only for what survives. lean posts its line on CMP-380 by Fri noon PST.
-
-[2026-11-12T23:56Z] 95c93f5914ba
-Coordinator: UNITS item 4 summary is at /tmp/units-341-note.txt (read it). Ours of the 5: (2) the placement from below, with soundness; (4) the give-up by block; (5) the period sum. Keep cells; drop or re-scope the rows statements (CellRowsAtMost fails at 492/82 anyway, 4.6). Propose the new shape to me before rewriting the lock entries.
-
