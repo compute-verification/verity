@@ -14,11 +14,14 @@ check the stream ran on it, in the stream's order.
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
   sampled audit's soundness statement); the sample of record on the bytes of the challenger's coins (`Select.select`,
   under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
-  read any byte carries evidence (`coins`) that the bytes are exactly the coins the session the ledger opens for the
+  read any byte carries evidence (`coins`) that the bytes are exactly the coins of the verifier's family (`family`, the
+  run's own, never the evidence's) that the session the ledger opens for the
   registration's window (the verifier's `windowRoot`) released after the registration's digest, every one read and each
   opening checked against the challenger's commitment (`Challenger.coinsReason`), and one that read none carries none
-  (`coinsHold`, code `coins`), missing evidence or no window refused; then the sample is held to the registration and the
-  expanded law (`Draw.checkDraw`);
+  (`coinsCode`, code `coins`), missing evidence, no window or no family refused, and a family whose log shows a root
+  other than the registration's digest refused by its own code (`family`: a family's coins follow one registration, so a
+  second registration's coins are another family's, and an interior registration's too); then the sample is held to the
+  registration and the expanded law (`Draw.checkDraw`);
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
@@ -87,6 +90,7 @@ structure Interior where
   received : String
   source : ByteArray
   coins : Json := Json.null
+  family : Option String := none
   provedUnits : Option (Array Int)
   instances : Option Int
   served : Json
@@ -115,6 +119,7 @@ structure Input where
   served : Json
   sessionRoots : Json
   coins : Json := Json.null
+  family : Option String := none
   interior : Option Interior := none
 
 private def refused (step : String) (codes : Array String) : Json :=
@@ -158,15 +163,19 @@ def receipt (record : Json) (challenger received : String) : V Json := do
   return Json.mkObj [("format", Json.str RECEIPT), ("registration", Json.str (← Registration.digestHex record)),
     ("verifier", Json.str challenger), ("received", Json.str received)]
 
-/-- The sample's coins are the challenger's: a sample that read any byte carries evidence that holds of the bytes it read
-(`Challenger.coinsReason`, after the registration's digest, for the window whose open root `window` the verifier holds),
-so missing evidence, or a verifier that holds no window, is a refusal and never a skip; one that read none (`All`)
-carries none (`null`). -/
-def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) : Bool :=
-  if read.isEmpty then coins == Json.null else
-  match window, Registration.digest record with
-  | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
-  | _, _ => false
+/-- The sample's coins are the challenger's, or the code its step is refused with: a sample that read any byte carries
+evidence that holds of the bytes it read (`Challenger.coinsReason`, after the registration's digest, for the window whose
+open root `window` the verifier holds and the family `family` the verifier names), so missing evidence, or a verifier
+that holds no window or names no family, is a refusal (`coins`) and never a skip; one that read none (`All`) carries
+none (`null`). A family whose log shows a root other than the registration's digest has its own code (`family`,
+`Challenger.FAMILY_ROOT`). -/
+def coinsCode (coins record : Json) (window family : Option String) (read : ByteArray) : Option String :=
+  if read.isEmpty then (if coins matches .null then none else some "coins") else
+  match window, family, Registration.digest record with
+  | some w, some label, .ok after =>
+    (Challenger.coinsReason coins w label after read).map fun why =>
+      if why == Challenger.FAMILY_ROOT then "family" else "coins"
+  | _, _, _ => some "coins"
 
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
 the registration's own ports at their own roots under a two-stage rule. -/
@@ -213,7 +222,8 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
   let (draw, read) ← Select.selectSecond sample ns ks it.source
-  if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then return .error ("second", #["coins"])
+  if let some code := coinsCode it.coins it.record v.windowRoot it.family (it.source.extract 0 read) then
+    return .error ("second", #[code])
   return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
@@ -274,8 +284,8 @@ def run (i : Input) : V Json := do
   if i.closure.isSome then return refused "select" #["closure"]
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
-  if !coinsHold i.coins i.record v.windowRoot (i.source.extract 0 read) then
-    return refused "select" #["coins"]
+  if let some code := coinsCode i.coins i.record v.windowRoot i.family (i.source.extract 0 read) then
+    return refused "select" #[code]
   let codes := Draw.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes
   let drawn := Draw.proved draw

@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import itertools
 import json
+import shutil
 import sys
+import tempfile
 import threading
+import weakref
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -453,20 +457,60 @@ def _stop_class(held: bool = True) -> BR.Committed:
     return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
 
 
-class OneSession(FC.Challenger):
-    """`fake_challenger.Challenger` with every commitment on one session, as a window's first stage has: its signed
-    release log holds each commitment's coins in the order they were read."""
+class OneSession(CC.ChallengerCoins):
+    """One in-process challenger session of the window's family and ``ranks`` ranks' (`a5_coins.families`), as a
+    window's first stage has: the session's client (`open`, `open_many`, `close`), whose signed release log holds every
+    family's roots and releases in the order they were asked for; and coins that take the ranks' families in order, a
+    commitment each."""
 
-    def commit(self, after: bytes) -> CC.Segment:
-        if not self.sessions:
-            return super().commit(after)
-        self.sessions[bytes(after)] = next(iter(self.sessions.values()))
-        return CC.ChallengerCoins.commit(self, after)
+    def __init__(self, seed: str, ranks: int = 6, coins: int = 64) -> None:
+        layout = AC.families(dict.fromkeys(range(ranks), coins))
+        self.directory = Path(tempfile.mkdtemp(prefix="one-session-"))
+        weakref.finalize(self, shutil.rmtree, self.directory, True)
+        self.ledger = FC.Ledger(self.directory / "windows.jsonl", FC.at(0, 3))
+        self.ledger.open("s-1", FC.WINDOW, withheld=True)
+        self.live = Ch.LiveChallenger(FC.SCHEME, 0, layout, FC.entropy(f"{seed}/s-1"))
+        self.session = FC.R.open_session(self.live, FC.pinned_key(), f"{FC.HOST}.s-1", FC.at(1, 2), self.directory,
+                                         "s-1", withhold=True)
+        (self.directory / FC.R.HELLOS).write_text("")
+        self.commitment, self.families = self.live.commitment, self.live.families
+        self._lines: list[str] = []
+        self._clock, self._files = itertools.count(), None
+        super().__init__(*(Ch.LiveRecord(self, AC.family(r)) for r in range(ranks)))
+
+    def open_many(self, requests: list[tuple[str, int, bytes]]) -> list[Ch.LiveOpening]:
+        out = []
+        for label, index, after in requests:
+            root = {"event": "root", "index": index, "label": label, "received_at": next(self._clock),
+                    "root": bytes(after).hex()}
+            out.append(self.live.open(label, index, after))
+            release = {"after": bytes(after).hex(), "event": "release", "index": index, "label": label,
+                       "released_at": next(self._clock)}
+            self._lines += [FC.canonical_json_text(root), FC.canonical_json_text(release)]
+        return out
+
+    def open(self, label: str, index: int, after: bytes) -> Ch.LiveOpening:
+        return self.open_many([(label, index, after)])[0]
+
+    def close(self) -> None:
+        pass
+
+    def files(self) -> dict:
+        """The session's published files under the verifier's key, the auditor's ledger and the host's pins; the first
+        call closes the session."""
+        if self._files is None:
+            with open(self.directory / FC.R.RELEASES, "a", encoding="utf-8") as log:
+                log.write("".join(line + "\n" for line in self._lines))
+            self.session.lines.extend(self._lines)
+            FC.R.close_session(self.session, None)
+            self.ledger.end(self.session.id, self.session.directory, True)
+            self._files = {"key": FC.pinned_key().to_json(), "ledger": self.ledger.lines, "main": FC.MAIN,
+                           "pins": FC.HOST_PINS, "session": FC.R.session_files(self.directory)}
+        return self._files
 
     def evidence(self, digest: str) -> dict:
-        """`coins.coins_reason`'s evidence for the sample after ``digest``; the first call closes the session."""
-        closed = super().evidence(next(iter(self.sessions)).hex())
-        return {**closed, "segment": next(s for s in self.segments if s.after == bytes.fromhex(digest)).to_json()}
+        """`coins.coins_reason`'s evidence for the sample after ``digest``."""
+        return {**self.files(), "segment": next(s for s in self.segments if s.after == bytes.fromhex(digest)).to_json()}
 
 
 def _start(one: OneSession):
@@ -484,14 +528,12 @@ def _start(one: OneSession):
                 turns.refuse(f"{why}: the root's one session was not opened")
                 turns.publish({"error": f"the challenger's session was not opened: {why}", "plan": plan})
                 return
-            turns._client, turns._coins = NS(close=lambda: None, commitment=None), one
-            turns._pre = one.commit(bytes.fromhex(root))
-            one(Ch.COIN_BYTES)
+            turns._client, turns._window = one, CC.ChallengerCoins(Ch.LiveRecord(one, AC.WINDOW_FAMILY))
+            turns._pre = turns._window.commit(bytes.fromhex(root))
+            turns._window(Ch.COIN_BYTES)
             turns._opened.set()
             turns.wait_closed()
-            closed = one.evidence(root)
-            turns.publish({**{k: closed[k] for k in ("key", "ledger", "main", "pins", "session")},
-                           "segments": [s.to_json() for s in one.segments], "trusted": {}, "plan": plan})
+            turns.publish({**one.files(), "segments": turns.released()["segments"], "trusted": {}, "plan": plan})
         finisher = threading.Thread(target=finish, daemon=True)
         finisher.start()
         return NS(shutdown=lambda: None), turns, finisher
@@ -521,7 +563,8 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     assert s["sample"]["population"] == N and len(s["units"]) == Q and set(s["units"]) <= set(range(N))
     assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
     read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])
-    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, after, read, AC.lms_verify) is None
+    assert s["family"] == FC.LABEL
+    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, FC.LABEL, after, read, AC.lms_verify) is None
     other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, FC.Challenger("other"), stop=STOP)
     with pytest.raises(ValueError, match="not this commitment's values"):
         TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record)
@@ -533,39 +576,55 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
 
 def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
     """`stop_order` on a session's published evidence: it holds when the log shows the boundary registration's coins,
-    then the stop registration's, and the stop sample read exactly the latter. It names why otherwise: no published
-    log; a coin released after the stop registration left unread, or bytes that are not those coins'; the boundary
-    registration's coins handed in as the stop sample's; another window's root; a log the challenger's close does not
-    sign (a prover's own ordering of the same lines); the stop registration's coins released first; and no coin after
-    the boundary registration at all."""
+    then the stop registration's, each in a family of its own, and the stop sample read exactly the latter. It names
+    why otherwise: no published log; no family; a coin released after the stop registration left unread, or bytes that
+    are not those coins'; the boundary registration's coins handed in as the stop sample's, or the stop sample's held
+    to the boundary registration's family; another window's root; a log the challenger's close does not sign (a
+    prover's own ordering of the same lines); the stop registration's coins released first; no coin after the boundary
+    registration at all; and a stop sample whose family holds the boundary registration's coins before its own, the
+    one family a prover that registers again after reading would use."""
     b, s = "b0" * 64, "c0" * 64
 
-    def session(seed: str, *commitments: str) -> tuple[OneSession, bytes]:
-        one, read = OneSession(seed), {}
+    def session(seed: str, *commitments: str) -> tuple[OneSession, bytes, dict[str, str]]:
+        one, read, family = OneSession(seed), {}, {}
         for c in commitments:
             one.commit(bytes.fromhex(c))
-            read[c] = one(2 * Ch.COIN_BYTES)
-        return one, read[s]
+            read[c], family[c] = one(2 * Ch.COIN_BYTES), one.label
+        return one, read[s], family
 
-    def order(evidence: dict | None, read: bytes, root: str = ROOT) -> str | None:
-        return TS.stop_order(evidence, root, b, s, read, AC.lms_verify)
+    def order(evidence: dict | None, read: bytes, family: str | None, root: str = ROOT) -> str | None:
+        return TS.stop_order(evidence, root, family, b, s, read, AC.lms_verify)
 
-    one, read = session("order", b, s)
+    one, read, family = session("order", b, s)
+    assert family == {b: AC.family(0), s: AC.family(1)}
     ev = one.evidence(s)
-    assert order(ev, read) is None
-    assert "published no signed log" in order(None, read)
-    assert "a coin opened and not read" in order(ev, read[:Ch.COIN_BYTES])
-    assert "are not its coins'" in order(ev, bytes(len(read)))
-    assert "not opened after the prover's commitment the verifier holds" in order(one.evidence(b), read)
-    assert order(ev, read, "22" * 64) is not None
+    assert order(ev, read, family[s]) is None
+    assert "published no signed log" in order(None, read, family[s])
+    assert "no coins of a challenger's family" in order(ev, read, None)
+    assert "a coin opened and not read" in order(ev, read[:Ch.COIN_BYTES], family[s])
+    assert "are not its coins'" in order(ev, bytes(len(read)), family[s])
+    assert f"not the challenger's {family[s]} family's" in order(one.evidence(b), read, family[s])
+    assert f"not the challenger's {family[b]} family's" in order(ev, read, family[b])
+    assert order(ev, read, family[s], "22" * 64) is not None
     log = ev["session"]["log"]
     assert len(log) == 9
     forged = {**ev, "session": {**ev["session"], "log": [log[0], *log[5:], *log[1:5]]}}
-    assert "release log" in order(forged, read)
-    early, read = session("early", s, b)
-    assert "the boundary registration's coins come first" in order(early.evidence(s), read)
-    alone, read = session("alone", s)
-    assert "no coin released after the class's boundary registration" in order(alone.evidence(s), read)
+    assert "release log" in order(forged, read, family[s])
+    early, read, family = session("early", s, b)
+    assert "the boundary registration's coins come first" in order(early.evidence(s), read, family[s])
+    alone, read, family = session("alone", s)
+    assert "no coin released after the class's boundary registration" in order(alone.evidence(s), read, family[s])
+
+    shared = FC.Challenger("shared")
+    shared.commit(bytes.fromhex(b))
+    shared(2 * Ch.COIN_BYTES)
+    again = shared.record
+    shared.record = NS(label=again.label, roots=[])
+    segment = CC.ChallengerCoins.commit(shared, bytes.fromhex(s))
+    shared.record, segment.start = again, len(again.roots)
+    shared.sessions[bytes.fromhex(s)] = shared.sessions[bytes.fromhex(b)]
+    read = shared(2 * Ch.COIN_BYTES)
+    assert order(shared.evidence(s), read, FC.LABEL) == f"the stop sample's coins: {CC.FAMILY_ROOT}"
 
 
 def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order_refuses_the_window(tmp_path, monkeypatch):
