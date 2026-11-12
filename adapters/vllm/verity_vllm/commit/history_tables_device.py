@@ -17,9 +17,9 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
 from verity.commitments import hm96
+
 from verity_vllm.commit import row_tables_device as D
 
 __all__ = ["Hist", "Table"]

@@ -28,12 +28,11 @@ import tempfile
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from functools import cache, lru_cache
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -138,7 +137,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
 
 # --- the host's part: domains, rank order, layout ---------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def _domain_frame(n: int) -> tuple[bytes, bytes]:
     """``domain_message`` of an ``n``-row table on either side of its 64-byte binding."""
     positions = RangeIndexedDomain(0, n).identity_sha512()
