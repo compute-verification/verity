@@ -56,7 +56,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveV5_rows :
       (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
       (hscope : Discharge.Layout.scopeOkH D.unroll = true)
       (_hrows : Bridge.RowsOk D.unroll)
-      (_hdup : Flock.Registered.dupName D.unroll = none)
+      (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
       (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
       (lj : Lean.Json) (tb : Option Lean.Json),
       let law := Bridge.designAt desc qr lj tb n

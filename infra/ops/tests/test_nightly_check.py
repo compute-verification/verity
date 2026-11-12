@@ -483,12 +483,12 @@ PLANTED = {
         "`guarantees`"),
     "a Lean report's changed heartbeats": (
         lambda u, r: package(r[SHARDS[0]], "lean/x")["heartbeats"][0].update(heartbeats=901),
-        f"Lean package `lean/x`: passed here, key `{'1' * 12}`; passed in `{SHARDS[0]}` (a pass reused under cache key "
-        f"`{'9' * 12}`), its report differing in `heartbeats`"),
+        f"Lean package `lean/x`: passed here, key `{'1' * 12}`; passed in `{SHARDS[0]}` (a pass reused from lean-audit's "
+        f"cache, where its key is `{'9' * 12}`), its report differing in `heartbeats`"),
     "a reused pass of a Lean package against an uncached failure": (
         lambda u, r: (package(u, "lean/x").update(failures=["an axiom"]), u["result"]["passes"].pop(key("1"))),
-        f"Lean package `lean/x`: failed here; passed in `{SHARDS[0]}` (a pass reused under cache key `{'9' * 12}`), key "
-        f"`{'1' * 12}`, its report differing in `failures`"),
+        f"Lean package `lean/x`: failed here; passed in `{SHARDS[0]}` (a pass reused from lean-audit's cache, where its key "
+        f"is `{'9' * 12}`), key `{'1' * 12}`, its report differing in `failures`"),
     "an uncached failure of a Lean package that left no report": (
         lambda u, r: (u["audit"]["packages"].remove(package(u, "lean/y")), u["audit"]["failed"].append("lean/y"),
                       u["result"]["passes"].pop(key("2"))),
@@ -537,6 +537,25 @@ def test_how_a_check_ran_is_no_difference_and_several_differences_are_each_named
         f"suite `pkg/b`: passed here, key `{B}`; failed in `{SHARDS[0]}`, key `{'0' * 12}`",
         PLANTED["one part of a suite a shard ran in parts"][1]], "each part that differs is one line, however many ways it differs"
     assert got["agree"] == 7 and got["unstored"] == ["step `lean-agreement`"]
+
+
+def test_a_reused_lean_pass_carrying_how_the_run_that_stored_it_ran_agrees_with_the_uncached_one():
+    """A recorded check reuses a pass a records run stored, whose report names its build's facts document (`facts_key`, a
+    hash of `.olean` bytes, written only under `--facts-cache`), or one a node without the sandbox stored, which says it
+    used no replay cache; the uncached run's own node sets its threads and measures its memory. Each says how and where an
+    audit ran, not what it found, so the package agrees: under the same inputs key, with the same findings."""
+    mine, theirs = uncached(), recorded()
+    package(theirs[SHARDS[0]], "lean/x").update(facts_key="c3" * 32, judged_from=key("9"),
+                                                 facts_cache="not stored: this node builds without the sandbox")
+    package(theirs[SHARDS[1]], "lean/y").update(replay_cache="not used: this node builds without the sandbox, so a build could "
+                                                              "have written the cache")
+    package(mine, "lean/y").update(build_threads=8, peak_gib={"build": 12.5, "replay": 3.1})
+    got = tally(mine, theirs)
+    assert (got["agree"], got["disagree"]) == (12, [])
+    package(theirs[SHARDS[0]], "lean/x").update(axioms={"propext": 3, "sorryAx": 1})
+    assert tally(mine, theirs)["disagree"] == [
+        f"Lean package `lean/x`: passed here, key `{'1' * 12}`; passed in `{SHARDS[0]}` (a pass reused from lean-audit's cache, "
+        f"where its key is `{'9' * 12}`), its report differing in `axioms`"], "what it found still differs by name"
 
 
 def test_a_part_on_one_side_only_is_listed_and_neither_agrees_nor_disagrees():

@@ -743,14 +743,14 @@ private def exHolding (vs : Array String) (own : Own := exOwn) : Own :=
   let registered := Json.arr (vs.map fun v => Json.mkObj [("value", Json.str v)])
   { own with interior := own.interior.setObjVal! "registered" registered }
 
-/-- A read's template, as round 2 knows one by its id. -/
+/-- A read's template, which the auditor's params record as one (`exOpening`'s `reads`); its id is only a name. -/
 private def exRead : String := "EmbeddingRead_v1{V=8,H=2}"
 
 /-- The read's ports' links, each at a value of its own name. -/
 private def exReadLinks : Array Link :=
   (#["tok", "root", "domain", "row", "salt", "path"] : Array String).map fun p => (⟨exRead, p, p⟩ : Link)
 
-/-- Round 1's record registering tables `t` and `u` beside its port `bx`. -/
+/-- Round 1's record registering tables `t` and `u` beside its port `bx`, each of four leaves. -/
 private def exReadRec : Json := exRec 4 [("bx", 5, 6), ("t", 7, 8), ("u", 9, 3)]
 
 /-- What the verifier fills of the read: its table's root and domain id, as the bytes it computed for table `t`, its
@@ -772,14 +772,16 @@ private def exTableRows : Array Rows :=
   #[⟨exRead, "root", 1, #[⟨0, 1, 0, 0⟩]⟩, ⟨exRead, "domain", 1, #[⟨0, 1, 0, 0⟩]⟩]
 
 /-- An interior registration registering the read's parameters and the verdict's value, the read's reference
-statement reading its verdict port at that value, after a round 1 whose record registers the read's table. -/
+statement reading its verdict port at that value, after a round 1 whose record registers the read's table, the
+auditor's params recording the template as a read of the table's four rows. -/
 private def exOpening : Own :=
   { exHolding #["tok", "root", "domain", "row", "salt", "path", "one"] with
     boundary := exReadRec,
     links := some exReadLinks,
     supplied := exFilled,
     rows := exTableRows,
-    refReads := #[exRefRead exRead "o1" "one"] }
+    refReads := #[exRefRead exRead "o1" "one"],
+    reads := #[(exRead, 4)] }
 
 /-- `exOpening` with no value of the read's key registered, and no link at its key. -/
 private def exOpeningUnkeyed : Own :=
@@ -839,6 +841,16 @@ private def exRowsPer (per : Nat) : Array Rows :=
 #guard inputsFailure { exOpening with boundary := exRec 4 [("u", 9, 3)] } == some "row"
 #guard inputsFailure { exOpening with boundary := exRec 4 [("t", 7, 3)] } == some "row"
 #guard inputsFailure { exOpening with boundary := exRec 4 [("t", 7, 3), ("v", 9, 8)] } == some "row"
+-- a read is a template the auditor's params record as one, of as many rows as the table has leaves
+#guard readSize exOpening exRead == some 4 && readSize exOpening "Other_v1" == none
+#guard inputsFailure { exOpening with reads := #[] } == some "row"
+#guard inputsFailure { exOpening with reads := #[("Other_v1", 4)] } == some "row"
+#guard inputsFailure { exOpening with reads := #[(exRead, 8)] } == some "row"
+#guard inputsFailure { exOpening with reads := #[(exRead, 8), (exRead, 4)] } == some "row"
+#guard inputsFailure { exOpening with reads := #[(exRead, 4), (exRead, 8)] } == none
+#guard inputsFailure { exOpening with boundary := exRec 8 [("bx", 5, 6), ("t", 7, 8), ("u", 9, 3)] } == some "row"
+#guard inputsFailure { exOpening with boundary := exRec 8 [("bx", 5, 6), ("t", 7, 8), ("u", 9, 3)],
+                                      reads := #[(exRead, 8)] } == none
 -- a root left as a table's name is none of the verifier's bytes
 #guard inputsFailure { exOpening with supplied := exRefilled "root" #[#[("history", "t/root")]] } == some "root"
 -- and their ports place each unit alike

@@ -12,6 +12,7 @@ public import Definitions.Core.Period
 public import Definitions.Core.Structure
 public import Definitions.Core.Rec
 public import Definitions.Core.CoinBytes
+public import Definitions.Core.FirstHit
 public import Definitions.Core.Game.Tape
 public import Definitions.Core.Game.TwoRun
 public import Definitions.Core.Game.InterleaveBridge
@@ -55,6 +56,7 @@ public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingTwoRegX
 public import Definitions.Claims.SamplingTwoServedX
 public import Definitions.Claims.SamplingServed
+public import Definitions.Claims.SamplingTable
 public import Definitions.Claims.Guarantees.SamplingTwo
 public import Definitions.Claims.SamplingTwoRankin
 public import Definitions.Claims.ZKOut

@@ -727,6 +727,13 @@ class Site:
         return {"links": [k.to_json() for k in self.links], "locs": [x.to_json() for x in self.locs],
                 "sheets": [k.to_json() for k in self.sheets]}
 
+    @classmethod
+    def of_json(cls, j: Any) -> Site:
+        j = _exactly(j, ("links", "locs", "sheets"), "a site")
+        return cls(tuple(Sheet.of_json(k) for k in _list(j["sheets"], "sheets")),
+                   tuple(Loc.of_json(x) for x in _list(j["locs"], "locs")),
+                   tuple(Link.of_json(k) for k in _list(j["links"], "links")))
+
 
 def _dups(xs: Sequence[str]) -> list[str]:
     return sorted({x for x in xs if xs.count(x) > 1})

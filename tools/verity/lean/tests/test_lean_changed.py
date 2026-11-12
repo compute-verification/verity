@@ -1399,7 +1399,7 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
 
 
 def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_built_before_it(trying, tmp_path, monkeypatch):
-    """INF-667 on a slot tree. `Sec/Proofs` requires `Sec` by path; every module was built, then a sync brought a move of
+    """A clash in no source, on a slot tree. `Sec/Proofs` requires `Sec` by path; every module was built, then a sync brought a move of
     names in `Sec` that rewrote `Defs/Rows.lean`, and no build since has needed `Proofs.Y`, whose source didn't change.
     Its product loads `Defs.Rows` as it was built before the move, so the stub leaves it out, the try passes, and its
     line counts what it left unchecked. A clash the stub does report still fails the try."""

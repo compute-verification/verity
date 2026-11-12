@@ -674,7 +674,8 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any]) -
 
 def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     """Params for a development run (`service.template_circuits`' ``proofs``): by template, in the check's order, its
-    circuit file's SHA-512 and its reference statement's header and registered reads. The reference is
+    circuit file's SHA-512 and its reference statement's header and registered reads, and for a table read whose
+    circuit file the verifier's template check accepts, that record beside the digest (`read_record`). The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks (`Design.window`,
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
     sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
@@ -700,8 +701,32 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.held(m, p)), "words": int(words),
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
-        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads})
+        read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
+        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads,
+                      **({} if read is None else {"read": read})})
     return {"templates": named}
+
+
+def read_record(defn: SpecializedDefinition, circuit: Path, sha512: str) -> dict[str, int] | None:
+    """What the params record of a table read's template beside its circuit file's SHA-512 ``sha512``
+    (`service.template_reads`): ``{"V", "H"}``, the read's rows and words a row, where the verifier's template check
+    (``flock-read-tmpl check V H``, `Flock.ReadNet.check`) accepts the file ``circuit``, which must be the one of that
+    SHA-512. None for a Definition that is no read, and for a read whose file the check refuses: round 2 then takes
+    that template as no read and refuses the opened rows of its reads (``second-inputs``). The check accepts only a
+    templated statement whose unit is the verifier's own read template, so a read staged as a flat statement gets no
+    record."""
+    from verity_flock import read_tmpl
+
+    if not read_tmpl.is_read(defn):
+        return None
+    h = hashlib.sha512()
+    with open(circuit, "rb") as f:
+        while chunk := f.read(1 << 24):
+            h.update(chunk)
+    if h.hexdigest() != sha512:
+        raise ValueError(f"{circuit} is not the circuit file of SHA-512 {sha512}")
+    V, H = int(defn.statics["V"]), int(defn.statics["H"])
+    return {"V": V, "H": H} if read_tmpl.check(V, H, circuit) is None else None
 
 
 def composer(defn: SpecializedDefinition, member: CS.Member) -> Callable[[Path, str, str], dict[str, Any]]:
@@ -761,7 +786,8 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
     (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
     the audit record's verdicts of record report, what they name of each session they accepted
     (`second_stage.verified_of`), each template's reference header and registered reads the params ``proofs`` give,
-    and, of the challenger's copies the interior registration was held to (``tie``), the values it fills itself
+    the templates they record as table reads (`service.template_reads`), and, of the challenger's copies the interior
+    registration was held to (``tie``), the values it fills itself
     (``supplied``, a history table's root and domain id as the bytes its ``history`` registers:
     `registration.resolved`) and those it pinned or holds to an earlier record (``pinned``, ``outputs``), as the
     stream hands them: every other value the interior registers is the prover's, which round 2 takes only as a read's
@@ -775,7 +801,7 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
                  wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
                  returns=SS.replay_returns(replay, key, brec),
                  supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
-                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())))
+                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs))
     return SS.check(True, own, stmts).to_json()
 
 
