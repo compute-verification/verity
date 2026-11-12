@@ -352,6 +352,18 @@ def test_the_replay_takes_the_step_in_flight_when_the_last_request_finishes(tmp_
     assert len(R.replay(w, tmp_path, eager=True)["steps"]) == 2
 
 
+def test_a_capture_is_of_the_check_the_serve_committed_under_unless_told():
+    """The capture's rows are units of the check the served arm's boundary commitment names (its meta.json's, the
+    launch line's ``check`` in place of the model's), else of the model's check; one given wins, and an arm with neither
+    is refused by name before anything is replayed."""
+    served = {"model_id": "glm53", "boundary_rows": {"check": "GreedySelect_v1{V=154880,N=7744}", "inline": True}}
+    assert R.capture_template(served) == "GreedySelect_v1{V=154880,N=7744}"
+    assert R.capture_template({"model_id": "glm53", "boundary_rows": None}) == R.S.MODELS["glm53"].check
+    assert R.capture_template(served, "TokenSelect_v4{V=154880}") == "TokenSelect_v4{V=154880}"
+    with pytest.raises(SystemExit, match="--capture-template T"):
+        R.capture_template({"model_id": "qwen3-30b"})
+
+
 def test_the_replays_engine_takes_the_headers_cache_format_and_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A serve with an FP8 cache or speculative decoding is replayed on an engine with them; a header without them builds
     the engine it did."""
@@ -453,3 +465,23 @@ def test_replay_tokens_round_trip(tmp_path: Path):
     tokens = {rid("sat1", 1): [7, 9], rid("sat1", 0): [7, 0]}
     R.write_tokens(tmp_path, tokens)
     assert R.read_tokens(tmp_path) == tokens
+
+
+def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp_path):
+    """The two-stage serve's launch settings for GLM-5.3, the boundary object as ``BOUNDARY_ROWS`` (the greedy select in
+    units as its check, ``ids``, the arm's tables) and the capture's template as ``--capture-template``, say what the
+    ``two-stage`` arm and the model's check say by default: the plugin is handed the same boundary object either way,
+    and a capture is labelled with the same check whether given it, reading the serve's meta, or the model's."""
+    S, glm, two = R.S, R.S.MODELS["glm53"], R.S.ARMS["two-stage"]
+    check = "GreedySelect_v1{V=154880,N=7744}"
+    setting = {"check": check, "inline": True, "per_prompt": 0, "per_output": 1, "drained": True, "ids": True,
+               "tables": {"layers": 1, "private": S.PRIVATE}}
+
+    def handed(rows: dict | None) -> dict:
+        env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, boundary_rows=rows, check=glm.check,
+                           private=tmp_path / "private")
+        return json.loads(env[S.PLUGIN_ENV])["boundary_rows"]
+
+    assert handed(json.loads(json.dumps(setting))) == handed(None)
+    assert {R.capture_template({"model_id": "glm53", "boundary_rows": handed(None)}),
+            R.capture_template({"model_id": "glm53"}), R.capture_template({}, check)} == {check}

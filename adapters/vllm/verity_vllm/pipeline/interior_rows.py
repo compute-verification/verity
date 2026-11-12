@@ -14,8 +14,10 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
   (`engine.sampler_capture`: each sampled token's logits row and id), laid out as `span` lays a token select's units out.
   A replay on the GPU writes it for a served model the CPU `Replay` is too slow for; tests write it from a `Replay`.
-* `pieces`: a token select's span as the units Flock proves it by, each token's `TokenSelectChunk_v2` units over its
-  chunks of logits and its `TokenSelectCombine_v2`, since a served vocabulary's whole select is past one Flock block.
+* `pieces`: a token select's span as the units Flock proves it by, since a served vocabulary's whole select is past one
+  Flock block: `TokenSelect_v4`'s, each token's `TokenSelectChunk_v2` units over its chunks of logits and its
+  `TokenSelectCombine_v2`; `GreedySelect_v1`'s, each token's one unit of each chunk position's `GreedyChunk_v2` and its
+  `GreedyCombine_v2`, whose every wired row is one chunk's output row.
 * `interior`: the replay sample's spans, template t's each padded to its n_t with copies of its last instance's units
   (`Span.group`: a token's chunks), so an inlined replay block's padded instances stay whole, committed template-major
   as one window (`ml.windows.rows`, every leaf's salt fresh from the OS) of one shared-row member a template, each input
@@ -29,8 +31,9 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
   replay Definition. A commitment made on the replayed rows' device (`DeviceCommit`: a GPU commit's roots, every row's
   b || c and its salts) registers in place of committing the rows on the host (`committed`).
 * `interior_links`: the replay-block parameters the interior registers as values, the verifier's (`Supply`) and the
-  replay's own (`Operand`), the challenger's copies of them and the history tables its reads open; `interior` takes
-  them, and this module's `__all__` lists the names its callers take.
+  replay's own (`Operand`), the challenger's copies of them and the history tables its reads open, and the block's
+  returns (`Return`), read at round 1's rows where its record commits them; `interior` takes them, and this module's
+  `__all__` lists the names its callers take.
 * `register`: the record on the two-stage stream after its first stage.
 
 A `span` reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
@@ -52,15 +55,16 @@ from verity.protocols.spot.verifier.one_stage import partition as P, registratio
 from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity.definitions.registry import greedy_stages as GS
 from verity.definitions.registry.dead_free import CHUNK
 from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
-from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Link, Members, Operand, Supply,
-                                                 history, kept_table, link_schemas, link_values, link_words, links,
-                                                 sources, span_values, supplied, table_reads)
+from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Link, Members, Operand, Return,
+                                                 Supply, history, kept_table, link_schemas, link_values, link_words,
+                                                 links, returns, sources, span_values, supplied, table_reads)
 from verity_vllm.records.logits_capture import LogitsCapture
 
 #: the tag `interior_run` hashes under
@@ -204,7 +208,8 @@ def gather(pm: Mapping[str, Any], store: Any, weights: Callable) -> list[dict[st
 def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> Span:
     """Request ``rid``'s span of the capture's token-select template (`sampler_capture.write`): unit j reads logits row j and
     outputs token j, laid out as `span` reads a token select's units from a Program. ``served``: the ids serving emitted,
-    which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed."""
+    which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed: the refusal
+    names the request and how many ids differ, never an id, which is a served value."""
     cap = LogitsCapture.of(json.loads((directory / CAPTURE).read_text()), str(directory / CAPTURE))
     s, t = cap.spans[rid], cap.template
     params, ret = SRW.template(t).fn.signature()
@@ -217,8 +222,9 @@ def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> 
         raise ValueError(f"request {rid}: {s['file']} is not the capture's ({s['sha256'][:16]})")
     tokens = np.asarray(s["tokens"], dtype="<u4")
     if served is not None and [int(x) for x in served] != tokens.tolist():
-        raise ValueError(f"request {rid}: the replay selected {tokens.tolist()[:8]}..., serving emitted {list(served)[:8]}...: "
-                         "it didn't reproduce the span")
+        differ = sum(int(a) != b for a, b in zip(served, tokens.tolist())) + abs(len(served) - len(tokens))
+        raise ValueError(f"request {rid}: the replay selected {len(tokens)} ids and serving emitted {len(served)}, "
+                         f"{differ} of them different: it didn't reproduce the span")
     n = len(tokens)
     m = CS.Member(t, (("in0", ins[0]),), ((f"out.{SAMPLED_MEMBER}", 2),), n, 0)
     data = {"rows": {"in0": np.frombuffer(raw, dtype="<u2").reshape(n, ins[0]).astype(np.uint16)},
@@ -257,15 +263,45 @@ def member(template: str, n: int = 1) -> CS.Member:
     return named(CR.unit_member(SRW.template(template), n))
 
 
-def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
-    """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
-    `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
-    logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`chunk_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
-    be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
-    tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
+def _greedy(s: Span, V: int, N: int) -> tuple[Span, ...]:
+    """`pieces` of a `GreedySelect_v1{V, N}` span: a span a unit of `greedy_stages.plan`, in its order, each of one unit a
+    token. A chunk's row is its lanes of the token's logits and its output its (best, token index low, high) words; the
+    combine's rows are the last chunk's lanes and each other chunk's output row, whole, and its output the token's words
+    (`greedy_stages.twin`), which must be ``s``'s tokens, or nothing is committed."""
+    ((port, _V),), ((out, _),) = s.member.rows, s.member.outs
+    us, x = GS.plan(V, V // N), s.data["rows"][port]
+    twins = [GS.twin(V, row, V // N) for row in x]
+    tok, want = np.array([t for t, _w in twins], dtype=np.int64), s.data["outs"][out].view("<u4")[:, 0]
+    if not np.array_equal(tok, want):
+        raise ValueError(f"request {s.rid}: its units select other ids than its span's at "
+                         f"{int(np.count_nonzero(tok != want))} of its {s.n} tokens")
+    words = {u.key: np.stack([w[u.key][0] for _t, w in twins]).astype(np.uint16) for u in us}
+    got = []
+    for u in us:
+        m, wired = member(u.defn.id, s.n), {p: k for p, k, _field in u.wires}
+        rows = {p: words[wired[p]] if p in wired else x[:, u.lanes[0]:u.lanes[1]] for p, _w in m.rows}
+        (o, _wide), = m.outs
+        got.append(Span(s.rid, m, {"rows": {p: a.astype(np.uint16) for p, a in rows.items()}, "outs": {o: words[u.key]}},
+                        [list(e) for e in s.entries], s.program))
+    return tuple(got)
+
+
+def pieces(s: Span, c: int | None = None) -> tuple[Span, ...]:
+    """A token select's span ``s`` as the units Flock proves it by, as its template calls them. `TokenSelect_v4`: each
+    token's V / c `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}`
+    unit over logits[0] and the chunks' (best, idx). `GreedySelect_v1{V, N}`: each token's units of `greedy_stages.plan`,
+    one of each chunk position's `GreedyChunk_v2{N, OFF}` and its `GreedyCombine_v2{V, N}` (`_greedy`). Each piece's member
+    is its template's bit rows, as Flock stages a unit (`chunk_rows.unit_member`), each row named after its parameter
+    (`named`). `TokenSelect_v4`'s chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
+    be ``s``'s tokens, or nothing is committed. Its chunks' ``group`` is a token's V / c units, so a span pads by whole
+    tokens, as the select inlined in a replay block (one instance a served token) lays its pieces out.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs
+    fn = SRW.template(s.member.template).fn
+    if getattr(fn, "defn", None) is GS.GreedySelect:
+        if c is not None:
+            raise ValueError(f"{s.member.template}: its chunks are its own N, not {c}")
+        return _greedy(s, V, int(fn.bindings["N"]))
     c = min(CHUNK, V) if c is None else int(c)
     if not 1 <= c <= V or V % c:
         raise ValueError(f"{s.member.template}: {V} logits in chunks of {c} are not whole chunks, and a narrower last chunk "
@@ -274,7 +310,8 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     best, idx = token_select_chunk_bests(x.reshape(n * k, c))
     tok, want = _combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
     if not np.array_equal(tok, want):
-        raise ValueError(f"request {s.rid}: its chunks and combine select {tok.tolist()[:8]}..., its span {want.tolist()[:8]}...")
+        raise ValueError(f"request {s.rid}: its chunks and combine select other ids than its span's at "
+                         f"{int(np.count_nonzero(tok != want))} of its {n} tokens")
     i32 = idx.astype("<u4").view("<u2")
     split = ((f"TokenSelectChunk_v2{{C={c}}}", n * k, [x.reshape(n * k, c)], [best[:, None], i32.reshape(n * k, 2)]),
              (f"TokenSelectCombine_v2{{V={V},C={c}}}", n, [x[:, :1], best.reshape(n, k), i32.reshape(n, 2 * k)],
@@ -368,14 +405,16 @@ def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequen
 @dataclass(frozen=True)
 class Interior:
     """An interior registration: its record, its ports and leaf layer as the challenger derives them from the released
-    public bodies, the commitment it opens from, each span's index entries, a list a template, and the sampled spans'
-    tables as round 1 served them, none where no template reads one."""
+    public bodies, the commitment it opens from, each span's index entries, a list a template, the sampled spans'
+    tables as round 1 served them, none where no template reads one, and the block's returns round 1's record commits,
+    each with that port as the serve opens it (its rows, salts and tree)."""
     record: dict[str, Any]
     ports: dict[str, dict[str, Any]]
     leaf_layer: str
     committed: CS.Committed
     entries: list[list[list[list[Any]]]]
     tables: tuple[HT.HistoryTable, ...] = ()
+    returns: tuple[tuple[Return, LK.Port], ...] = ()
 
     @property
     def published(self) -> dict[str, list[str]]:
@@ -429,7 +468,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
              positions: int | None = None, links: Sequence[Link] = (), rows: Sequence[Any] = (),
-             window_root: str | None = None) -> Interior:
+             window_root: str | None = None, returns: Sequence[tuple[Return, LK.Port]] = ()) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -452,7 +491,12 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     unit whose row there is not the value's at its place (a `Supply`'s row, or the row another unit replayed for the
     same row of an `Operand`) is refused before anything is committed. Several ports may read one value, each its own
     link. ``window_root``: the open root of the challenger session the second stage samples on, where the stream
-    registers the interior under one (`Stream.register_interiors`' ``window_root``): each `Operand`'s domain binds it."""
+    registers the interior under one (`Stream.register_interiors`' ``window_root``): each `Operand`'s domain binds it.
+    ``returns``: the block's returns round 1's record commits (`Return`), each with that port as the serve opens it
+    (`links.Port`: its rows and salts). The output port that writes one is committed under the serve's salts at the
+    rows its units write (`Return.rows`), so each row's ``b || c`` is round 1's leaf there and a session reads it at
+    round 1's root (`write`). A replayed unit whose output is not round 1's row at its place is refused before
+    anything is committed, by slot and row, never by content."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -476,6 +520,10 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     if links and device is not None:
         raise ValueError("a commitment on the rows' device holds no value the interior registers: a replay block whose "
                          "ports read one commits on the host")
+    if returns and device is not None:
+        raise ValueError("a commitment on the rows' device makes its own salts: a replay block whose return round 1 "
+                         "commits is committed on the host, under the serve's salts")
+    back = _returned(window.members, cells, sample, returns)
     if tables and (served is None or positions is None):
         raise ValueError("a replay block of table reads opens the tables round 1 served: give round 1's record (served) "
                          "and its class's positions")
@@ -541,15 +589,57 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
                                      else "the value the verifier supplies it"))
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
         linked = {window.members[k].port(x.port) for x, k, _at in placed}
-        fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
-                                                   if p not in linked}
-        c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh)
+        for x, v, k, at in back:
+            off = np.flatnonzero((np.asarray(data[k]["outs"][x.port], dtype=np.uint16) != v.rows_at(at)).any(axis=1))
+            if off.size:
+                u = int(off[0])
+                raise ValueError(f"{x.template}: unit {u} (sampled span {u // cells[k]}) returns at its {x.port!r} a row that "
+                                 f"is not row {at[u]} of {x.value}, the return round 1 committed: the replay didn't "
+                                 "reproduce what was served")
+        fresh = {} if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
+                                                 if p not in linked}
+        fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in back}
+        c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R,
                           entries=[given[v].entry() for v in IL.values(links)])
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
-    return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs)
+    return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns))
+
+
+def _returned(ms: Sequence[CS.Member], cells: Sequence[int], sample: Sequence[int],
+              returns: Sequence[tuple[Return, LK.Port]]) -> list[tuple[Return, LK.Port, int, list[int]]]:
+    """Each of ``returns`` with round 1's port, its member and the row of the port each of the member's Q·n_t units
+    writes (`Return.rows`). Refused by name for a return round 1's record doesn't commit, a template the window lacks,
+    a port that is none of its outputs or is returned twice, a placement of other than its n_t units, and a port
+    opened as another value, in another row format or without the serve's rows and salts."""
+    at = {m.template: k for k, m in enumerate(ms)}
+    out, seen = [], set()
+    for x, v in returns:
+        k = at.get(x.template)
+        if k is None:
+            raise ValueError(f"{x.value} is written by {x.template}, a template the window has none of: {list(at)}")
+        m = ms[k]
+        if not x.held or v.value != x.value:
+            raise ValueError(f"{x.template}: its {x.port!r} writes {x.value}, which round 1's record doesn't commit or "
+                             f"which is opened as {v.value!r}")
+        if x.port not in dict(m.outs) or (x.template, x.port) in seen:
+            raise ValueError(f"{x.template}: {x.value} is written at its {x.port!r}, which is none of its outputs "
+                             f"{[p for p, _w in m.outs]} or is returned twice")
+        if (v.words, v.schema) != (dict(m.outs)[x.port], m.schema(x.port)):
+            raise ValueError(f"{x.template}: its {x.port!r} row is {dict(m.outs)[x.port]} words in {m.schema(x.port)}, not "
+                             f"{x.value}'s {v.words} in {v.schema}")
+        if len(x.at) != cells[k] or v.leaves % x.per:
+            raise ValueError(f"{x.template}: {x.value} places {len(x.at)} units, not its {cells[k]} a sampled span, or "
+                             f"holds {v.leaves} rows, not whole blocks of {x.per}")
+        rows = x.rows(sample)
+        if not all(0 <= r < v.leaves for r in rows) or v.rows is None or v.salts is None:
+            raise ValueError(f"{x.value}: the replay sample reads past its {v.leaves} rows, or the serve's rows and "
+                             "salts are not held")
+        seen.add((x.template, x.port))
+        out.append((x, v, k, rows))
+    return out
 
 
 def write(it: Interior, directory: str | Path) -> dict[str, Any]:
@@ -557,17 +647,23 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
     registration the one `interior` made but for the index's hiding leaf, which the written record's window names:
     -> that record, the one to register (`register`'s ``record``). Each member's header names every port's rows, so a
     session's registered reads cover its circuit: a port given as rows of a value the interior registers (a link's), that
-    value's rows with their paths to its root; any other, the rows of the port holding it (its own, or a wired port's
-    writer's output) with their paths. ``index.json`` is the spans' index entries (`Interior.entries`), prover only."""
+    value's rows with their paths to its root; an output that writes a return round 1's record commits
+    (`Interior.returns`), round 1's port, the rows its units write and their paths to round 1's root; any other, the
+    rows of the port holding it (its own, or a wired port's writer's output) with their paths. ``index.json`` is the
+    spans' index entries (`Interior.entries`), prover only."""
     c, w = it.committed, it.committed.window
     held: dict[str, LK.Port] = {}
     registered: dict[str, dict[str, Any]] = {}
+    back = {(x.template, x.port): (x, v) for x, v in it.returns}
     for k, m in enumerate(w.members):
         given, entry = c.by_value(k), {}
         for p, _w in m.all_rows:
             if p in given:
                 v, at = given[p].value, [int(x) for x in given[p].positions]
                 entry[p] = {"value": v.value, "positions": at, "paths": [v.path(x).hex() for x in at]}
+            elif (m.template, p) in back:
+                x, v = back[m.template, p]
+                entry[p] = v.header(x.rows(it.record["window"]["replay_sample"]))
             else:
                 port = w.held(m, p)
                 if port not in held:
@@ -588,7 +684,8 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Link", "Operand", "Span",
-           "Supply", "captured", "committed", "gather", "history", "interior", "interior_ports", "interior_run",
+__all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Link", "Operand", "Return",
+           "Span", "Supply", "captured", "committed", "gather", "history", "interior", "interior_ports", "interior_run",
            "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "links", "member", "named",
-           "pieces", "port_map", "register", "sources", "span", "span_values", "supplied", "table_reads", "whole", "write"]
+           "pieces", "port_map", "register", "returns", "sources", "span", "span_values", "supplied", "table_reads", "whole",
+           "write"]
