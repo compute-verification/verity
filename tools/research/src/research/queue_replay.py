@@ -959,6 +959,9 @@ class Replay:
                     if pulled:
                         saved = self._recheck(c, pulled, cause)
                     break
+        # each candidate a build of this tick rebuilt (`vq.Build.replaces`): what took its place on the chain, or what that
+        # build went on when it put nothing there, which a later build naming the candidate as its base goes on
+        rebuilt: dict[str, str] = {}
         for a in acts:
             if isinstance(a, vq.Eject):
                 self._gone((a.number, a.head), "fault")
@@ -980,10 +983,13 @@ class Replay:
             elif isinstance(a, vq.Drop) and a.outcome is not None and a.sha in saved and a.outcome.state != vq.PASS:
                 self.history.append(a.outcome)
             elif isinstance(a, vq.Build):
+                base = rebuilt.get(a.base, a.base)
+                if a.replaces is not None:
+                    rebuilt[a.replaces] = base
                 # what was kept is on the chain again: the batch the loop would build in its place is not built
                 if saved or (self.rule.period and self.t - self.last_build < self.rule.period):
                     continue
-                c = self._new([ready[m] for m in a.members], a.base)
+                c = self._new([ready[m] for m in a.members], base)
                 if a.records or (self.rule.side and any(ch.lean for ch in c.changes)):
                     c.records_at = self.t + (self.rng.choice(self.tr.records) if self.tr.records else 3600.0)
                 elif self.rule.overlap and any(ch.lean for ch in c.changes):
@@ -1005,6 +1011,8 @@ class Replay:
                     if self.rule.alone and c.base != self.main and self._busy() + 2 * SHARDS <= PLACES:
                         c.twin = (self.t, self.t + c.pass_at - c.start, self.main)
                 self.cands[c.sha] = c
+                if a.replaces is not None:
+                    rebuilt[a.replaces] = c.sha
             elif isinstance(a, vq.Commit) and a.sha in self.cands:
                 self._check(self.cands[a.sha])
             elif isinstance(a, vq.Rerun) and a.sha in self.cands:
@@ -1117,7 +1125,8 @@ class Replay:
         if self.rule.beside and self.side and any(isinstance(a, vq.Build) and self.side[-1].built == t for a in acts):
             # the Lean batch went beside the chain: this tick's build is still free for a plain batch
             snap, ready = self.snapshot(list(self.cands.values()), self.main, busy=self._beside(), pins=False)
-            self.apply([a for a in vq.decide(snap) if isinstance(a, vq.Build)], ready)
+            # a rebuild's drop is not applied here, so neither is the rebuild
+            self.apply([a for a in vq.decide(snap) if isinstance(a, vq.Build) and a.replaces is None], ready)
 
     def _beside(self) -> set[int]:
         """The changes no batch takes this tick: those of a Lean batch in its records run, and under ``hold_inputs`` every
