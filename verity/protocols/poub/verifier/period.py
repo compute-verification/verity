@@ -13,7 +13,7 @@ process, `Local`), in the protocol's order:
    each window's challenge, sent as its value and the root it was opened after (`coins.Released`), each root sent
    before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
    (`deadline_ns`) before it closes the window;
-3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them;
+3. the verifier samples each window's openings, the prover opens them, and the verifier verifies them;
 4. once the session has its outcome, the verifier sends the prover the coin commitment and every released coin's
    opening (`audit.AuditRun.disclose`), and the prover checks each challenge it was sent against them (`Prover.end`).
 
@@ -21,7 +21,7 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
-`eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
+`eps = (2^24 + S)/2^64` for S the samples, as the Lean's `certify` computes them.
 """
 
 from __future__ import annotations
@@ -234,7 +234,7 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Run:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
-    registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
+    registration it samples from `coins`, its challenger's coins, its clock and its log, which are the case."""
     n, root = prover.register()
     reg = audit.register(coins, node.encode(), n, root, codec_)
     held = _Held()

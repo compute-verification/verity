@@ -1,7 +1,7 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
-openings' pooled bound's δ, 2^-40, and S the session's draws).
+openings' pooled bound's δ, 2^-40, and S the session's samples).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
@@ -29,7 +29,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-# The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
+# The count bound is the wipe's too, held in pous: poub may import pous, and pous not it.
 from verity.protocols.pous.verifier.wipe_monitoring import short_sessions
 from verity.protocols.reporting import DELTAS, PERIODS
 

@@ -98,7 +98,7 @@ def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | N
 def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
     """The case's answer in the core interface's form from the session's own answer `session` (`p2_party.answer`'s,
     `P2Session.answer`), as `RemoteAudit.P2Protocol` answers the case: accepted, `{"eps", "q_bytes", "span_ns"}` and the
-    rest of the answer as its profile; rejected with the failure, its window and its draw; or undecided."""
+    rest of the answer as its profile; rejected with the failure, its window and its sample; or undecided."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}
     verdict = session.get("verdict")

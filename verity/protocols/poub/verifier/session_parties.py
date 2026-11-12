@@ -1,10 +1,10 @@
-"""The remote bandwidth session (`period.session`) as two parties of the deployment layer (`verity.configuration.deploy`): the
+"""PoUB's session (`period.session`) as two parties of the deployment layer (`verity.configuration.deploy`): the
 verifier and its challenger (`Verifier`), on a machine the developer doesn't control, and the prover (`Prover`) on its node.
 
 ~~~text
 prover   -> verifier   Register {blocks} + payload root; per pass Root {t, i} + root; per window Openings {t} + openings
 verifier -> prover     Hold {registration}; per pass Run {t, i, challenge} + the root before (the challenge a
-                       `coins.Released`); per window Open {t} + draws (u32be pass ‖ u64be position each); End + the
+                       `coins.Released`); per window Open {t} + samples (u32be pass ‖ u64be position each); End + the
                        session's coins disclosed once it has its outcome ({commitment, openings}, `audit.AuditRun.disclose`)
 ~~~
 
@@ -56,7 +56,7 @@ ID = "verity/remote-bandwidth/session"
 VERSION = 1
 VERIFIER, PROVER = "verifier", "prover"
 SECRET_BYTES = 64
-"""The period's live secret, which the registration's codec seed and the challenger's coins are drawn from."""
+"""The period's live secret, which the registration's codec seed and the challenger's coins come from."""
 DRAW = struct.Struct(">IQ")
 MAX_DRAWS = 1 << 20
 MAX_DISCLOSED = 1 << 24

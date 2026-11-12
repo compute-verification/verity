@@ -1,4 +1,4 @@
-"""The verifier's process: the remote bandwidth audit v0's `AuditRun` (verity/protocols/poub/verifier/audit.py)
+"""The verifier's process: PoUB v0's `AuditRun` (verity/protocols/poub/verifier/audit.py)
 driven over the wire against a prover on another process or machine, with a secret of its own.
 
 One connection serves one registration and then `--sessions` sessions over it, each of `--windows` windows of
@@ -20,7 +20,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
    fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
-   (`AuditRun.close`) as soon as its roots are final and its draws sent; the prover's openings
+   (`AuditRun.close`) as soon as its roots are final and its samples sent; the prover's openings
    checked by the Lean verifier on its threads as their frames arrive (`Pair.verify`), so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`AuditRun.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
@@ -42,18 +42,18 @@ boundary is due at its k-th root, so its coin is asked for first, after that roo
 prover waits a round trip on each coin.
 
 A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
-hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
+hello for a node with a live registration is answered `bye` with the reason and samples nothing. The process closes its
 registration after its last session, counting each session (a failed one by its failure); one left live by a
 process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
 the one in flight unended.
 
 The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
-payload tree's leaves under it (`remote_bandwidth.store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
---arena-blocks A [--engines E]` the registered store is bound to a pinned model (`remote_bandwidth.store.Binding`, the
+payload tree's leaves under it (`store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
+--arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store.Binding`, the
 remote audit's own code, so the circuit a period commits to names it): at startup
 every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
 then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
-store's under the key sent, else the hello is refused with the reason before the registry draws anything. The
+store's under the key sent, else the hello is refused with the reason before the registry samples anything. The
 Lean verifier decides it: it takes the pin's bytes and the weights blocks' digests at
 startup (`bind_lean`, `RemoteAudit.Store.bind`) and holds the hello to them (`hold_store`, `Store.hold`, its root's
 subtrees on `--layout-workers` threads), `Binding.hold` beside it as the reference (its root in as many processes),
@@ -438,7 +438,7 @@ TIME_HELD = "held over time"
 def pace_of(spec: str, pass_ms: float) -> dict:
     """`K:T_MS:DRAWS:WINDOWS[:F]` as a session's pacing: groups of K passes, each a `AuditRun` window of its own whose
     coin is a live coin, WINDOWS credited stretches of T_MS and a closing one after them, `groups` groups a stretch (at
-    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch draws as an unpaced T_MS window would;
+    `pass_ms` a pass) and `draws` = DRAWS/groups openings a group, so a stretch samples as an unpaced T_MS window would;
     F the windows in flight (`audit.Pace.in_flight`, 2 when absent, named only at 1)."""
     parts = spec.split(":")
     if len(parts) not in (4, 5):
@@ -582,7 +582,7 @@ def lean_record(session: dict) -> dict:
 
 def recorded_windows(session: dict) -> tuple[list[tuple[int, int]], float]:
     """The pooled bound's inputs (`pooled.bound`) from an accepted session's record in `verifier.json`: each sample's
-    receipts and draws (`audit.pooled_windows`: a window's own at `groups_per_coin` g = 1, its g windows' together
+    receipts and samples (`audit.pooled_windows`: a window's own at `groups_per_coin` g = 1, its g windows' together
     above), and δ, the ones the line reads off the Lean verifier's record (`lean_record`) and the session."""
     g, ws = session["record"]["public"].get("groups_per_coin", 1), session["record"]["profile"]["windows"]
     return ([(sum(sum(w["lengths"]) for w in ws[a:a + g]), sum(w["profile"]["drawn"]["receipt"] for w in ws[a:a + g]))
@@ -683,7 +683,7 @@ def bind_lean(lean: lv.Lean, b: rstore.Binding) -> dict:
 def hold_store(lean: lv.Lean, bound: dict | None, b: rstore.Binding, node: bytes, blocks, root: bytes,
                key: bytes, layout) -> tuple[tuple[str, str, int, int], ...]:
     """The hello's store held to the pinned model's under the payload key `key`: the binding's regions, else
-    `remote_bandwidth.store.Refused` with why. The Lean verifier decides (`hold`, on the binding
+    `store.Refused` with why. The Lean verifier decides (`hold`, on the binding
     `bind_lean` started and answered `bound`), `Binding.hold` beside it as the reference: the Lean's request goes out
     first and its root is computed on its threads while `Binding.hold` computes store.py's in its processes, and the
     hello is decided once both have answered, whichever is first. Where the two answer otherwise, the regions, the
@@ -1027,7 +1027,7 @@ class Verifier:
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
         covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
-        (`hold_store`'s Refused), all before the registry draws anything. Both registries draw it
+        (`hold_store`'s Refused), all before the registry samples anything. Both registries sample it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
