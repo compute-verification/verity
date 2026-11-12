@@ -54,6 +54,7 @@ from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry.dead_free import CHUNK
+from verity.definitions.registry import greedy_stages as GS
 from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay
@@ -260,15 +261,21 @@ def member(template: str, n: int = 1) -> CS.Member:
     return named(CR.unit_member(SRW.template(template), n))
 
 
-def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
+def pieces(s: Span, c: int | None = None) -> tuple[Span, ...]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
     logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
     (`chunk_rows.unit_member`), each row named after its parameter (`named`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
     be ``s``'s tokens, or nothing is committed. The chunks' ``group`` is a token's V / c units, so a span pads by whole
     tokens, as `TokenSelect_v4` inlined in a replay block (one instance a served token) lays its pieces out.
-    ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
+    ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``.
+    `GreedySelect_v1{V, N}`: its plan's units (`greedy_stages.plan`), one of each a token: the V / N - 1 chunks, each its
+    own template, on its N lanes of the logits row, then `GreedyCombine_v2{V, N}` on the last chunk's lanes and the
+    chunks' results, whole; every output is the twin's (`greedy_stages.twin`), and the combine's must be ``s``'s tokens."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs
+    fn = SRW.template(s.member.template).fn
+    if getattr(fn, "defn", None) is GS.GreedySelect:
+        return _greedy(s, fn, port, out)
     c = min(CHUNK, V) if c is None else int(c)
     if not 1 <= c <= V or V % c:
         raise ValueError(f"{s.member.template}: {V} logits in chunks of {c} are not whole chunks, and a narrower last chunk "
@@ -291,6 +298,28 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
         scale = units // n
         got.append(Span(s.rid, m, data, [[e[0] * scale, e[1] * scale, *e[2:]] for e in s.entries], s.program, group=scale))
     return got[0], got[1]
+
+
+def _greedy(s: Span, fn: Any, port: str, out: str) -> tuple[Span, ...]:
+    """`pieces` of a `GreedySelect_v1{V, N}` span: a span a unit of `greedy_stages.plan(V, V / N)`, in its order."""
+    V, N = int(fn.bindings["V"]), int(fn.bindings["N"])
+    us, x, n = GS.plan(V, V // N), s.data["rows"][port], s.n
+    twins = [GS.twin(V, row, V // N) for row in x]
+    want = s.data["outs"][out].view("<u4")[:, 0]
+    tok = np.array([t for t, _w in twins], dtype=np.int64)
+    if not np.array_equal(tok, want):
+        raise ValueError(f"request {s.rid}: its chunks and combine select other ids than its span's at "
+                         f"{int(np.count_nonzero(tok != want))} of its {n} tokens")
+    words = {u.key: np.stack([w[u.key][0] for _t, w in twins]) for u in us}
+    got = []
+    for u in us:
+        m = member(u.defn.id, n)
+        wired = {p: words[k] for p, k, _field in u.wires}
+        ins = [x[:, u.lanes[0]:u.lanes[1]] if p == "logits" else wired[p] for p, _w in m.rows]
+        data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
+                "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, [words[u.key]], strict=True)}}
+        got.append(Span(s.rid, m, data, [list(e) for e in s.entries], s.program))
+    return tuple(got)
 
 
 def whole(s: Span) -> Span:
