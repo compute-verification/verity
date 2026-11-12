@@ -267,7 +267,7 @@ def main(args: Options) -> int:
     versions: dict[str, Any] = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "effective_execution": va.effective_execution_doc(llm), "target": TT.as_json(target), "served": served,
-                "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT"))}),
+                "env": settings.redact({k: v for k, v in settings.environ().items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT"))}),
                 "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo,
                 "root_combination": "tp_run_root = SHA-512(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": RT.TP_ROOT_TAG.decode(), "commit_scheme": args.commit_scheme,
@@ -318,7 +318,7 @@ def main(args: Options) -> int:
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
-    retain_env = os.environ.get("VERITY_RETAIN")
+    retain_env = settings.raw("VERITY_RETAIN")
     if args.required_manifest and not args.no_sampled_replay:
         import re as _re
         of_record: dict[str, list[str]] = {}
@@ -342,7 +342,7 @@ def main(args: Options) -> int:
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
                                     "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
-                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, os.environ.get("VERITY_WINDOW_MB"), os.environ.get("VERITY_WINDOW_SLOTS"), retain_env)}
+                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, settings.raw("VERITY_WINDOW_MB"), settings.raw("VERITY_WINDOW_SLOTS"), retain_env)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
                                       "challenge": args.replay_challenge, "rule": "MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:

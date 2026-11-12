@@ -258,6 +258,23 @@ def test_under_a_manifest_every_rank_is_made_with_its_programs_of_record_and_the
     assert versions["weights_pin"]["required"] is True and versions["required_manifest"] == manifest
 
 
+def test_only_a_composition_the_manifest_names_puts_its_components_of_record(commit, tmp_path, capsys):
+    """Each rank's Build dir holds its own workload Program, which the manifest names.  Beside rank 0's is a composition of another
+    workload Program, whose components are not of record; beside rank 1's is one nobody can read, which the Commit says and
+    goes on with the manifest's Program alone."""
+    d0, d1 = _build(tmp_path, 0, A), _build(tmp_path, 1, B)
+    for d, own in ((d0, A), (d1, B)):
+        (Path(d) / "workload_program.json").write_text(json.dumps({"workload_digest": own}))
+        (Path(d) / "build_workload").mkdir()
+    (Path(d0) / "build_workload" / "workload_program.json").write_text(json.dumps({"workload_digest": C, "requests": [
+        {"component": {"specialization": f'Request{{program_digest="{B}"}}'}}]}))
+    (Path(d1) / "build_workload" / "workload_program.json").write_text("not a record")
+    llm, _ = commit("--required-manifest", _manifest(tmp_path, {"0": A, "1": B}), "--build-rank0", d0, "--build-rank1", d1)
+    assert llm.made["replay"]["of_record"] == {"0": [A], "1": [B]}
+    said = [line for line in capsys.readouterr().out.splitlines() if "unreadable" in line]
+    assert len(said) == 1 and said[0].startswith("[tp2commit] rank 1: GP-01 workload_program unreadable for the replay's of-record set: ")
+
+
 @pytest.mark.parametrize("env,slots", [({}, None), ({"VERITY_RETAIN": "host"}, 8), ({"VERITY_RETAIN": "host", "VERITY_WINDOW_MB": "0"}, None),
                                        ({"VERITY_RETAIN": "device", "VERITY_WINDOW_MB": "16", "VERITY_WINDOW_SLOTS": "2"}, 2)],
                          ids=["unset", "retained on the host", "on the host with no window", "on the device with a window of two slots"])
