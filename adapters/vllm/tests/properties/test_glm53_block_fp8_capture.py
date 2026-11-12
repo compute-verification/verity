@@ -6,18 +6,23 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import contextlib
 import copy
+import json
+import sys
+import types
 
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity.definitions.numerics import deepgemm_twins as DGT
 from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.rows import moe_sum
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import glm53_block_fp8_capture_gpu as X
+from verity_vllm.engine.env import SERVED_DEFAULTS
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 K, N, GQ = 256, 200, X.GROUP
 WG, MV = "HopperE4m3QgmmaDot32_v1", "HopperE4m3MmaV2Dot32_v1"
@@ -437,10 +442,6 @@ def test_required_cases_are_every_moe_case_both_probes_and_the_planted_sum() -> 
 
 
 def _stub_vllm(monkeypatch) -> None:
-    import contextlib
-    import sys
-    import types
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -456,10 +457,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     planted sum, the PTX scan) and vLLM's modules stubbed: the switches cleared before vLLM, the comparison jobs through the spawned
     worker pool, each launch at its tile's DOT, the probe's refutations, the per-case verdicts, the sealed record and the exit
     status, so a slip in the orchestration shows here and not in the H200's first hour."""
-    import json
-
-    from verity_vllm.engine.env import SERVED_DEFAULTS
-
     _stub_vllm(monkeypatch)
     for k in SERVED_DEFAULTS + ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR"):
         monkeypatch.delenv(k, raising=False)
@@ -525,10 +522,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 
 
 def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
-    import json
-
-    from verity_vllm.engine.env import SERVED_DEFAULTS
-
     _stub_vllm(monkeypatch)
     for k in SERVED_DEFAULTS + ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR"):
         monkeypatch.delenv(k, raising=False)
@@ -541,7 +534,5 @@ def test_main_stops_at_a_failed_gate(tmp_path, monkeypatch, capsys) -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_block_fp8_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

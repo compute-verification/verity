@@ -5,10 +5,15 @@ and a NaN exponential or reciprocal is 0x7FFFFFFF."""
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import random
+from pathlib import Path
 
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.registry import moe
 
 from tests.properties.router_tap_exactness_gpu import edge_rows, rows_of
 from verity_vllm.properties import record as REC
@@ -68,9 +73,6 @@ def test_a_missing_configuration_or_a_quick_run_without_live():
 
 
 def test_the_verify_cli(tmp_path):
-    import importlib.util
-    from pathlib import Path
-
     spec = importlib.util.spec_from_file_location("rte_gpu", Path(__file__).with_name("router_tap_exactness_gpu.py"))
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -86,10 +88,6 @@ def test_the_verify_cli(tmp_path):
 
 @pytest.mark.parametrize("E,renorm", [(64, False), pytest.param(128, True, marks=pytest.mark.slow)])
 def test_the_irs_outputs_are_the_record_routers_on_every_edge_row(E, renorm):
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import moe
-
     kernel_order = bind(moe.MoeRouterTopKNorm if renorm else moe.MoeRouterTopK, E=E, TOPK=8, VPT=8)
     for name, row in edge_rows(E, random.Random(5)).items():
         words, w, ids = X.ir_row(E, 8, 8, renorm, row)

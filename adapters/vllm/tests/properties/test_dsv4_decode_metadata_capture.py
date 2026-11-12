@@ -15,10 +15,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.definitions.numerics import dsv4_decode_metadata_twin as T
 
 from tests.properties import dsv4_decode_metadata_capture_gpu as X
-from verity.definitions.numerics import dsv4_decode_metadata_twin as T
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 SMALL = {"swa": "swa-4096", "c128a": "c128-4096"}
 
@@ -636,7 +636,5 @@ def test_a_failed_gate_writes_a_sealed_record_and_exits_3(tmp_path, monkeypatch,
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_decode_metadata_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

@@ -14,18 +14,22 @@ __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
 import copy
 import json
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
-
-from tests.properties import glm53_tp8_allreduce_capture_gpu as X
+from verity.circuits.defs import REGISTRY as DEFS
+from verity.circuits.defs import bind, conformance_label
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_allreduce_nodes as TN
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import glm53_tp8_allreduce_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 N = 1536
 N7 = 1792
@@ -309,8 +313,6 @@ def test_the_capture_seeds_find_every_probe_token() -> None:
     """The run's own probe operands, at GLM-5.3's width and seeds (about 20 s): every token of both probe calls tells the two
     contractions apart. Catches a seed, scale or geometry change that would leave a shot's `fma` undecided on the 8-GPU node,
     where the run can't be redone cheaply; the small-width tests can't, since the screening rate depends on the width."""
-    import tempfile
-
     with tempfile.TemporaryDirectory() as d:
         for c in X.cases(False, {"fused"}):
             if c["case"].startswith("probe"):
@@ -598,8 +600,6 @@ def test_an_nccl_launch_takes_its_probes_runs(nccl_small, tmp_path) -> None:
 
 def test_the_nccl_log_is_read() -> None:
     """NCCL's version, each collective's tuning by its bytes (named, numbered or with its channels), and device 0's init lines."""
-    import tempfile
-
     lines = {0: ["h:1:1 [0] NCCL INFO NCCL version 2.27.5+cuda12.9", "h:1:1 [0] NCCL INFO Channel 00/24 : 0 1 2 3 4 5 6 7",
                  "h:1:1 [0] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}",
                  "h:1:1 [0] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}",
@@ -928,8 +928,6 @@ def test_the_coverage_is_what_a_go_record_shows() -> None:
 # --- what is covered --------------------------------------------------------------------------------------------------------------
 
 def _bind_captured(c: T.Captured, M: int):
-    from verity.circuits.defs import bind
-
     e = X.expect("fused" if c.route == "fused" else "allreduce", M, c.setting, c.N)
     size = M * c.N
     if c.route == "fused":
@@ -1006,9 +1004,6 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
     more than not-yet-established, only when `CAPTURED` covers every call GLM-5.3's served engine makes at the workload's setting
     (`workload_setting`) up to the 2048 tokens a step batches: the fused path to FlashInfer's budget and each all-reduce on the route
     `expected_comm` names, NCCL's never.  Every H200 `CAPTURED` Definition is one its Program lists, and both notes cite `CAPTURED`."""
-    from verity.circuits.defs import REGISTRY as DEFS
-    from verity.circuits.defs import conformance_label
-
     cmap = json.loads(CMAP.read_text())
     setting = X.workload_setting()["setting"]
     Ms = range(1, X.STEP_TOKENS + 1)
@@ -1348,8 +1343,6 @@ def test_a_failed_gate_runs_nothing(tmp_path, monkeypatch, capsys) -> None:
 
 def test_the_gate_wants_flashinfer_jit_tools(monkeypatch) -> None:
     """Each rank JIT-builds FlashInfer's TRT-LLM all-reduce, so without ninja or nvcc on PATH the gate fails before a rank spawns."""
-    import subprocess
-
     import torch
 
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True, "checks": {"driver": True}})
@@ -1364,7 +1357,5 @@ def test_the_gate_wants_flashinfer_jit_tools(monkeypatch) -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_tp8_allreduce_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

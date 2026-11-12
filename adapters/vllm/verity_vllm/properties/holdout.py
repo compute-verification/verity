@@ -23,10 +23,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
 from verity_vllm.check.gates import HOLDOUT_GATES
 from verity_vllm.commit import challenge as CH
-from verity_vllm.properties.record import seal
+from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
+from verity_vllm.properties.record import REGISTRY, seal
 
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
 #: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator samples from this pool.
@@ -39,7 +39,7 @@ def make_workload(*, case: str, model: str, vocab: int, seed: int, n_requests: i
                   reserve_low: int = 100, reserve_high: int = 100) -> dict[str, Any]:
     rng = CH.stream(seed)
     lo, hi = reserve_low, max(reserve_low + 1, vocab - reserve_high)     # keep away from special / added tokens
-    reqs = []
+    reqs: list[dict[str, Any]] = []
     for i in range(n_requests):
         L = lengths[i] if lengths and i < len(lengths) else rng.choice(LENGTH_POOL)
         M = max_tokens[i] if max_tokens and i < len(max_tokens) else rng.choice(DECODE_POOL)
@@ -71,7 +71,7 @@ def generate(out_dir: Path, *, case: str, model: str, vocab: int, n: int, seed: 
 
 
 def assemble(holdouts_dir: Path) -> dict[str, Any]:
-    out: dict[str, Any] = {"schema": "verity-gen/holdouts/v1", "status": "fail", "holdouts": []}
+    out: dict[str, Any] = {"schema": REGISTRY["holdout"].schema, "status": "fail", "holdouts": []}
     for d in sorted(p for p in holdouts_dir.iterdir() if p.is_dir()):
         g = d / "gates.json"
         ent: dict[str, Any] = {"name": d.name, "run_dir": str(d), "workload": None, "gates": {}}

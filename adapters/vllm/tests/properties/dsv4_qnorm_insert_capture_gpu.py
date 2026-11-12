@@ -68,14 +68,18 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import derived_rows as DW
+from verity.definitions.numerics import dsv4_qnorm_insert_twin as W
+from verity.definitions.numerics import flashmla_twin as FT
+from verity.definitions.registry import dsa as Dsa
+from verity.definitions.registry import dsv4_qnorm_insert as R
+from verity.definitions.registry import flashmla as F
 
 from tests.properties import dsv4_flashmla_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import derived_rows as DW
-from verity.definitions.numerics import dsv4_qnorm_insert_twin as W
-from verity.definitions.numerics import flashmla_twin as FT
-from verity.definitions.registry import dsv4_qnorm_insert as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-qnorm-insert-capture/v1"
@@ -321,7 +325,8 @@ def indexer_edge(rng: np.random.Generator, o: dict[str, Any]) -> None:
 # ----------------------------------------------------------------------------------------------------------------- the twin side
 def written(slots: np.ndarray, nb: int) -> np.ndarray:
     """(nb, page_bytes(64)) bool: the bytes an insert at ``slots`` writes, each slot's 576 data bytes and 8 scale bytes."""
-    data, scale = np.ones((len(slots), M.DATA_BYTES), np.uint8), np.ones((len(slots), M.SCALE_BYTES), np.uint8)
+    data: np.ndarray = np.ones((len(slots), M.DATA_BYTES), np.uint8)
+    scale: np.ndarray = np.ones((len(slots), M.SCALE_BYTES), np.uint8)
     return W.scatter(np.zeros((nb, M.page_bytes(PBS)), np.uint8), slots, data, scale, PBS).astype(bool)
 
 
@@ -359,7 +364,7 @@ def _refs(T_: int, case: str, quick: bool) -> list[int]:
 def insert_jobs(case: str, paths: dict[str, str], T_: int, quick: bool) -> list[dict[str, Any]]:
     """The cache job; q jobs of JOB_TOKENS tokens; reference jobs on the first and the last token (every token of `edge`; under
     --quick only the first)."""
-    job = {"phase": "insert", "case": case, "paths": paths}
+    job: dict[str, Any] = {"phase": "insert", "case": case, "paths": paths}
     jobs = [{**job, "kind": "cache"}]
     jobs += [{**job, "kind": "q", "tokens": [lo, min(T_, lo + JOB_TOKENS)]} for lo in range(0, T_, JOB_TOKENS)]
     return jobs + [{**job, "kind": "insert-ref", "token": t} for t in _refs(T_, case, quick)]
@@ -409,9 +414,6 @@ def compare_cache(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_insert_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token: `Dsv4QNormRopeKvInsert_v1{NH=16,...}` (the reference) against the twin, every output word."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     t = job["token"]
     y = np.concatenate([np.asarray(v, dtype=np.int64).reshape(-1) for v in insert_twin(a, t, t + 1)])
@@ -436,9 +438,6 @@ def compare_iq(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_indexer_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token: `Dsv4IndexerQ_v1{H=64,...}` (the reference) against the twin."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     t = job["token"]
     q8, w = indexer_twin(a, t, t + 1)
@@ -531,9 +530,10 @@ class Spy:
     through; restores the attribute on exit."""
 
     def __init__(self, owner, name: str, static: bool = False):
-        self.owner, self.name, self.static, self.calls = owner, name, static, []
+        self.owner, self.name, self.static = owner, name, static
+        self.calls: list[tuple] = []
 
-    def __enter__(self) -> "Spy":
+    def __enter__(self) -> Spy:
         self.raw = vars(self.owner)[self.name] if isinstance(self.owner, type) else getattr(self.owner, self.name)
         fn = getattr(self.owner, self.name)
 
@@ -657,10 +657,6 @@ def launch_indexer(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the seams: the insert's row is `FlashMlaKvRow_v1{448, 64, 64}`'s
     input, the indexer's outputs `DsaMqaLogit_v1{H=64, D=128}`'s q and w."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa as Dsa
-    from verity.definitions.registry import flashmla as F
-
     def row_seam() -> bool:
         out = bind(R.Dsv4QNormRopeKvInsert, **R.DSV4_INSERT).signature()[1].fields
         (_, nope), (_, scale), (_, rope), _ = bind(F.FlashMlaKvRow, DN=DN, DR=DR, QT=QB).signature()[0]

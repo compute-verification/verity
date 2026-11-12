@@ -6,13 +6,17 @@ import copy
 import json
 from typing import Any
 
+import numpy as np
 import pytest
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+from verity.definitions.registry import attention_vocab
 
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
+from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.properties import fa_tap_exactness as X
 from verity_vllm.properties.record import digest_of
-from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
-from tests.properties import fa_tap_exactness_gpu as G
 
 
 def _record(**fields):
@@ -110,10 +114,6 @@ def test_quick_is_a_subset():
 
 def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
-    import numpy as np
-
-    from verity.definitions.numerics.derived_rows import guard_neg_inf_zero
-
     layout = StreamLayout(1, len(rows), 2, 128, 64)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
     R = X._row_plane(w, layout)
@@ -173,10 +173,6 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
 
 def _ms_stream(rows, row_max, scale_log2):
     """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
-    import numpy as np
-
-    from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
-
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
     R, o = X._row_plane(w, layout), layout.offsets
@@ -211,8 +207,6 @@ def test_the_ms_build_writes_its_class_at_every_visited_block_and_the_masked_dig
     assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(six, 59, iter(rows)).sum() == 5
     assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(layout, 59, iter(rows)).sum() == 5
     assert not X.expected_written(layout, 123, iter(rows))[layout.total_words:].any()
-    import numpy as np
-
     base = np.full(six.padded_words(), X.FILL, dtype=np.uint32)
     base[:six.total_words] = w[:six.total_words]
     assert X.masked_digest(w, layout) == X.masked_digest(base, six)
@@ -327,11 +321,7 @@ def _cpu_inputs(c, D, seed):
 
 def _launch_tile_out(c, D, t, geo):
     """What an exact FA3 launch writes: every row `AttentionHead_v4` at the launch's tile, on the twin."""
-    import numpy as np
     import torch
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import attention_vocab
-
     q, k, v, bt = G._words(t["q"]), G._words(t["k"]), G._words(t["v"]), t["block_table"].numpy()
     g = c["H"] // c["Hk"]
     kvh = np.arange(c["H"]) // g

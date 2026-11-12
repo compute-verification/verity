@@ -85,6 +85,7 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import argparse
+import bisect
 import itertools
 import json
 import multiprocessing
@@ -101,14 +102,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.config import RowEngine
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_allreduce_nodes as TN
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
+from verity_vllm.config import RowEngine
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v3"
@@ -235,7 +239,7 @@ def expected_comm(M: int, setting: str, N: int | None = None) -> str:
     N = HIDDEN if N is None else N
     custom, symm = T.SETTINGS[setting]
     nbytes = M * N * 2
-    if M <= T.fused_max_tokens(N, WORLD):
+    if T.fused_max_tokens(N, WORLD) >= M:
         return "fi_ar_comm"
     if custom and nbytes < (T.CUSTOM_SYMM_MAX_BYTES if symm else T.CUSTOM_MAX_BYTES):
         return "ca_comm"
@@ -336,7 +340,9 @@ def probe_slots(size: int, owners=None) -> tuple[np.ndarray, np.ndarray, np.ndar
     """Per element of a probe of `size`: its owner (`owners`, default `multimem_owners`), its slot (its index in the owner's slice
     mod `PERIOD`: a pair at slot f * 28 + p for family f and PAIRS[p], else a special) and its period's first rank (each period
     moves the specials one rank on)."""
-    owner, slot, rot = (np.zeros(size, np.int64) for _ in range(3))
+    owner: np.ndarray = np.zeros(size, np.int64)
+    slot: np.ndarray = np.zeros(size, np.int64)
+    rot: np.ndarray = np.zeros(size, np.int64)
     for lo, hi, o in T.multimem_owners(WORLD, size) if owners is None else owners:
         local = np.arange(hi - lo)
         owner[lo:hi], slot[lo:hi], rot[lo:hi] = o, local % PERIOD, (local // PERIOD) % WORLD
@@ -348,7 +354,7 @@ def probe_parts(rng, size: int, owners=None) -> np.ndarray:
     ascending rank order; at each special slot its words (`SPECIALS`) on the period's first rank, the next, and the others (None:
     random normals)."""
     _, slot, rot = probe_slots(size, owners)
-    parts = np.zeros((WORLD, size), np.uint16)
+    parts: np.ndarray = np.zeros((WORLD, size), np.uint16)
     for f, big in enumerate(BIG):
         for p, (i, j) in enumerate(PAIRS):
             at = np.flatnonzero(slot == f * len(PAIRS) + p)
@@ -462,7 +468,8 @@ def cases(quick: bool, only: set[str], spawns_: dict[str, dict[str, Any]] | None
 def make_operands(work: Path, case: dict[str, Any]) -> dict[str, Any]:
     """The case's operands, saved under `work` (bf16 words): partials, and for a fused call the residuals and the norm's weight."""
     rng = np.random.default_rng(case["seed"])
-    M, N, info = case["M"], case["H"], {}
+    M, N = case["M"], case["H"]
+    info: dict[str, Any] = {}
     if case["phase"] in PROBE_PHASES:
         arrays = {"parts": probe_parts(rng, M * N).reshape(WORLD, M, N)}
     elif case["phase"] in NCCL_PROBE_PHASES:
@@ -508,8 +515,10 @@ def decode_probe(out: np.ndarray, size: int) -> dict[str, Any]:
     out = np.asarray(out, np.uint16).reshape(-1)
     owners: dict[str, Any] = {}
     for lo, hi, o in T.multimem_owners(WORLD, size):
-        mine, slot = out[lo:hi], np.arange(hi - lo) % PERIOD
-        fams, bad = [], {}
+        mine = out[lo:hi]
+        slot: np.ndarray = np.arange(hi - lo) % PERIOD
+        fams = []
+        bad: dict[str, list[int]] = {}
         for f in range(len(BIG)):
             named: dict[tuple[int, int], set[frozenset[int]]] = {}
             for p, (i, j) in enumerate(PAIRS):
@@ -604,7 +613,7 @@ def decode_runs(out: np.ndarray, size: int) -> dict[str, Any]:
     out = np.asarray(out, np.uint16).reshape(-1)[:size]
     n, pairs = size // PERIOD, 2 * len(PAIRS)
     trees: list = []
-    per = np.empty(0, np.int64)
+    per: np.ndarray = np.empty(0, np.int64)
     if n:
         sig = np.ascontiguousarray(out[: n * PERIOD].reshape(n, PERIOD)[:, :pairs])
         keys, inv = np.unique(sig.view(np.dtype((np.void, 2 * pairs))).reshape(-1), return_inverse=True)
@@ -615,7 +624,7 @@ def decode_runs(out: np.ndarray, size: int) -> dict[str, Any]:
                 trees.append(t)
             index.append(-1 if t is None else trees.index(t))
         per = np.asarray(index, np.int64)[np.asarray(inv).reshape(-1)]
-    edges = np.flatnonzero(np.diff(per)) + 1
+    edges: np.ndarray = np.flatnonzero(np.diff(per)) + 1
     runs = [[int(s) * PERIOD, int(e) * PERIOD, int(per[s])] for s, e in zip(np.r_[0, edges], np.r_[edges, n]) if e > s]
     if n * PERIOD < size:
         runs.append([n * PERIOD, size, -1])
@@ -625,7 +634,7 @@ def decode_runs(out: np.ndarray, size: int) -> dict[str, Any]:
 
 def run_index(dec: dict[str, Any], size: int) -> np.ndarray:
     """Per element, the index of its run's tree in ``dec["trees"]`` (-1: undecoded)."""
-    tix = np.full(size, -1, np.int64)
+    tix: np.ndarray = np.full(size, -1, np.int64)
     for lo, hi, t in dec["runs"]:
         tix[lo:hi] = t
     return tix
@@ -971,9 +980,6 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare_fused(job: dict[str, Any], rec: dict[str, Any], ops: dict[str, np.ndarray]) -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     got = _rank_words(job, ("normed", "residual"))
     rec["rank_mismatch"] = sum(int((g[n] != got[0][n]).sum()) for g in got[1:] for n in ("normed", "residual"))
     if not job["model"]:
@@ -1022,11 +1028,6 @@ def nccl_sample(size: int, dec: dict[str, Any]) -> list[int]:
 def reference_word(job: dict[str, Any], parts: np.ndarray, e: int) -> int | None:
     """The plain-integer reference of element `e` of the Definition the job's launch binds; None for an NCCL element whose run's
     tree no Definition states (bf16 adds off a chain)."""
-    import bisect
-
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     size = parts.shape[1]
     if job["model"] == "mnnvl":
         d = bind(T.AllReduceMnnvlCoordinate, WORLD=WORLD, SHOT=job["shot"])
@@ -1093,7 +1094,7 @@ def jobs_of(cases_: list[dict[str, Any]], trees: Sequence[Any] | None = None, ft
             job["model"] = MODEL.get(c["comm"])
             if job["model"] == "multimem" and (tr is None or fz is None):
                 job["model"] = None
-            if nccl_modelled(c) and str(c["M"]) in (nccl or {}):
+            if nccl_modelled(c) and nccl and str(c["M"]) in nccl:
                 job.update(model="nccl", nccl=nccl[str(c["M"])])
             job.update(shot=c["shot"], stage=c["stage"], trees=tr, ftz=fz)
         out.append(job)
@@ -1104,9 +1105,6 @@ def jobs_of(cases_: list[dict[str, Any]], trees: Sequence[Any] | None = None, ft
 def bind_check(cases_: list[dict[str, Any]], trees: list | None, ftz: bool | None) -> dict[str, Any]:
     """Every Definition a launch of `cases_` binds binds at its statics, its operands at the served shapes; the multimem one at
     the probes' trees and FTZ (a chain and IEEE adds when they are not pinned, which states only the shape)."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-
     geoms = sorted({(c["shot"], c["cluster"]) for c in cases_ if c.get("path") == FUSED})
     targets = [(bind(T.AllReduceRmsNormMnnvl, WORLD=WORLD, N=HIDDEN, SHOT=s, CLUSTER=c, EPS=EPS, FMA=f),
                 [[WORLD, HIDDEN], [HIDDEN], [HIDDEN], [2 * HIDDEN]]) for s, c in geoms for f in (False, True)]
@@ -1306,7 +1304,7 @@ def probe_analysis(doc_cases: list[dict[str, Any]], phases: tuple[str, ...] = ("
                   if k.startswith("again/")}
     agree = (bool(per) and len(trees) == 1 and len(ftzs) == 1 and None not in ftzs and "null" not in trees
              and all(again_same.values()))
-    first = next(iter(per.values()), {})
+    first: dict[str, Any] = next(iter(per.values()), {})
     return {"per_probe": per, "again_words_equal": again_same, "agree": agree, "trees": first.get("trees") if agree else None,
             "ftz": first.get("ftz") if agree else None}
 
@@ -1466,6 +1464,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     tmp = tempfile.TemporaryDirectory(dir=a.scratch)
     work = Path(tmp.name)
     only = set(a.only.split(","))
+    served: dict[str, Any]
     served = (workload_setting() if a.served == "workload" else
               {"setting": "custom-off", "disable_custom_all_reduce": True, "source": "--served custom-off"})
     sp = spawns(served["setting"])

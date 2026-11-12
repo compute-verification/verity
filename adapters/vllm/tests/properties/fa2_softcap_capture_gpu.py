@@ -38,12 +38,20 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import rows as RK
+from verity.definitions.numerics import softcap_rows as SR
+from verity.definitions.ops import mufu
+from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import fa2_softcap as F2S
+from verity.definitions.registry import prims as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import rows as RK
-from verity.definitions.numerics import softcap_rows as SR
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
+from verity_vllm.properties.fa_tap_exactness import PAGE
+from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
@@ -60,8 +68,6 @@ FINITE_SAMPLE = 2
 # ------------------------------------------------------------------------------------------------------------------------ tanh
 def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
     """`MufuTanh_v1`'s table words over its shard, decoded from the in-tree blocks: (words, lo, the shard's record)."""
-    from verity.definitions.ops import mufu
-
     (s,) = mufu.mufu_tanh_shards()
     words = np.concatenate([s.block(k) for k in range(len(s.header["blocks"]))]).astype("<u4")
     sha = hashlib.sha256(words.tobytes()).hexdigest()
@@ -115,16 +121,10 @@ def case_list() -> list[dict[str, Any]]:
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against `AttentionSoftcap_v2` (a worker process: numpy words in, a record out)."""
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.circuits.defs import bind
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import b1, hopper
-    from verity.definitions.registry import fa2_softcap as F2S
-    from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
+    table: np.ndarray = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
     tanh = lambda x: mufu_tanh(x, table, job["tanh_lo"])  # noqa: E731
     c, D, q, k, v, o, bt, cap = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"], job["case"]["softcap"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"]))
@@ -180,9 +180,9 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
             rec["mismatch"] += int(bad.size)
             rec["mismatch_finite"] += int(np.count_nonzero(~nonfinite[bad]))
             if bad.size and rec["first_mismatch"] is None:
-                h = int(bad[0])
-                rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[h]),
-                                         "want": [int(x) for x in want[h][:4]], "kernel": [int(x) for x in got[h][:4]]}
+                hb = int(bad[0])
+                rec["first_mismatch"] = {"token": tok + r, "head": hb, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[hb]),
+                                         "want": [int(x) for x in want[hb][:4]], "kernel": [int(x) for x in got[hb][:4]]}
         tok += sq
     return {"case": c["name"], "D": D, **rec}
 

@@ -12,9 +12,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from tests.properties import tp4_nccl_tree_replay as X  # noqa: E402
 from verity.definitions.registry import tp_allreduce as T  # noqa: E402
 from verity.definitions.registry import tp_allreduce_check as K  # noqa: E402
+
+from tests.properties import tp4_nccl_tree_replay as X  # noqa: E402
 from verity_vllm.properties.record import DIR, PropertyRecord  # noqa: E402
 
 N = 8192

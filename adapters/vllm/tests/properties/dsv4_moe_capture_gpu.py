@@ -51,14 +51,23 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
-from verity.definitions.ops import mufu as MU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
+from verity.definitions.numerics.dsv4_moe_twin import (
+    clamp_twin,
+    hash_twin,
+    lg2_words,
+    router_twin,
+    score_words,
+)
+from verity.definitions.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import mla_check as MC
 
@@ -106,7 +115,7 @@ def _bias(kind: str, rng: np.random.Generator, k: int) -> tuple[np.ndarray, np.n
     bias == +0)."""
     c = None
     if kind == "zero":
-        b = np.zeros(E, U32)
+        b: np.ndarray = np.zeros(E, U32)
     elif kind == "small":
         b = _w(rng.standard_normal(E) * 10.0 ** rng.uniform(-4, 0))
     elif kind == "decisive":
@@ -223,7 +232,7 @@ def hash_rows(seed: int = 2027, n: int = 8192, e: int = E) -> dict[str, np.ndarr
     tokens = rng.permutation(n).astype(np.int32)
     table = np.zeros((n, TOPK), np.int32)
     x = _w(rng.standard_normal((n, e)) * 3.0)
-    kinds = np.arange(n) % len(HASH_KINDS)
+    kinds: np.ndarray = np.arange(n) % len(HASH_KINDS)
     for r in range(n):
         kind = HASH_KINDS[kinds[r]]
         ids = rng.choice(e, TOPK, replace=False)
@@ -261,7 +270,7 @@ def clamp_sweep(d: int) -> np.ndarray:
     """Every gate word against 16 up words and every up word against 16 gate words, as rows (k, 2d) (the last padded with +0)."""
     probe = np.array([LIMIT_BF16, LIMIT_BF16 | 0x8000, LIMIT_BF16 + 1, LIMIT_BF16 - 1, 0x3F80, 0xBF80, 0, 0x8000, 0x7FC0, 0x7F80,
                       0xFF80, 0x0001, 0x4000, 0xC120, 0x3E00, 0xC2B0], np.uint16)
-    every = np.arange(1 << 16, dtype=np.uint16)
+    every: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
     g = np.concatenate([np.tile(every, len(probe)), np.repeat(probe, 1 << 16)])
     u = np.concatenate([np.repeat(probe, 1 << 16), np.tile(every, len(probe))])
     k = -(-len(g) // d)
@@ -274,7 +283,7 @@ def clamp_rows(seed: int, n: int, d: int, sweep: bool) -> dict[str, np.ndarray]:
     """n rows of 2d bf16 words, row r's gate and up halves of kind `CLAMP_KINDS[r % 5]` each (the two sampled independently), then
     `clamp_sweep(d)` when asked."""
     rng = np.random.default_rng(seed)
-    kinds = np.arange(n) % (len(CLAMP_KINDS) - 1)
+    kinds: np.ndarray = np.arange(n) % (len(CLAMP_KINDS) - 1)
     gu = np.stack([np.concatenate([_halves(CLAMP_KINDS[k], rng, d), _halves(CLAMP_KINDS[int(rng.integers(len(CLAMP_KINDS) - 1))], rng, d)])
                    for k in kinds]) if n else np.zeros((0, 2 * d), np.uint16)
     if sweep:
@@ -564,8 +573,6 @@ _PROGRAMS: dict[str, Any] = {}
 
 
 def _program(path: str):
-    from verity.circuits.defs import bind
-
     if path not in _PROGRAMS:
         _PROGRAMS[path] = (bind(D.MoeRouterSqrtSoftplus, E=E, SCALE=SCALE) if path == "router" else
                            bind(D.MoeRouterHash, E=E, SCALE=SCALE) if path == "hash" else
@@ -593,8 +600,6 @@ def program_outputs(path: str, got: dict[str, np.ndarray], i: int) -> list[int]:
 
 def program_row(job: tuple[str, list[int]]) -> list[int]:
     """The Program of a path on one row's input words (the reference evaluator)."""
-    from verity.circuits.evaluation import evaluate
-
     path, words = job
     return [int(v) for v in evaluate(_program(path), words)]
 

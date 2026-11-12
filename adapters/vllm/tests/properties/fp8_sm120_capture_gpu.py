@@ -57,6 +57,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics.derived_rows import (
+    add_rn,
+    f2fp_bf16,
+    fma_rn,
+    mul_rn,
+)
+from verity.definitions.ops import fp32, prims
+from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -98,7 +109,7 @@ SPECIAL_ROWS = (0, 2, 3, 4, 5, 6)
 
 
 def dispatch_class(M: int) -> str:
-    return next(name for name, top in DISPATCH if top is None or M <= top)
+    return next(name for name, top in DISPATCH if top is None or top >= M)
 
 
 # ---------------------------------------------------------------------------------------------------------------------- models
@@ -133,8 +144,6 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
         mul_add       acc = FADD(FMUL(d, FMUL(a, b)), acc), unfused (no kernel computes it: a discriminator)
 
     from acc = +0; then acc = FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
-    from verity.definitions.numerics.derived_rows import add_rn, f2fp_bf16, fma_rn, mul_rn
-
     if form not in FORMS:
         raise ValueError(f"unknown scale form {form!r}")
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
@@ -150,7 +159,8 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
     for n0 in range(0, N, chunk):
         n1 = min(N, n0 + chunk)
         n = n1 - n0
-        wc, rows = w[n0:n1], np.arange(n0, n1) // G
+        wc = w[n0:n1]
+        rows: np.ndarray = np.arange(n0, n1) // G
         acc = np.zeros(n, dtype=np.uint32)
         for k in range(K // KB):
             d = np.zeros(n, dtype=np.uint32)
@@ -178,21 +188,20 @@ def reference_word(xq, sx, wrow, wsrow, *, G: int, KB: int, form: str, g: int | 
     """`block_row`'s word at one output coordinate (`dot` Blackwell's) as the plain-integer chain of the registered primitives
     `BlackwellE4m3QmmaDot32_v1`, `F32Mul_v1`, `F32Fma_v1`, `F32Add_v1` and `F2fpBf16_v1`; wrow the coordinate's weight row, wsrow its
     weight-scale row."""
-    from verity.definitions.ops import fp32, prims
-
     xq, wrow = [int(v) for v in np.asarray(xq).reshape(-1)], [int(v) for v in np.asarray(wrow).reshape(-1)]
     sx, wsrow = [int(v) for v in np.asarray(sx).reshape(-1)], [int(v) for v in np.asarray(wsrow).reshape(-1)]
     _check(len(xq), G, KB)
     mul, fma = fp32.F32Mul.evaluate, fp32.F32Fma.evaluate
+    step = {"cutlass": lambda d, a, b, acc: fma(d, mul(a, b), acc), "triton": lambda d, a, b, acc: fma(mul(d, a), b, acc),
+            "triton_swap": lambda d, a, b, acc: fma(mul(d, b), a, acc),
+            "mul_add": lambda d, a, b, acc: fp32.F32Add.evaluate(mul(d, mul(a, b)), acc)}[form]
     acc = 0
     for k in range(len(xq) // KB):
         d = 0
         for st in range(KB // 32):
             lo = k * KB + 32 * st
             d = prims.BlackwellE4m3QmmaDot32.evaluate(d, *xq[lo:lo + 32], *wrow[lo:lo + 32])
-        a, b = sx[k * KB // G], wsrow[k * KB // G]
-        acc = {"cutlass": lambda: fma(d, mul(a, b), acc), "triton": lambda: fma(mul(d, a), b, acc),
-               "triton_swap": lambda: fma(mul(d, b), a, acc), "mul_add": lambda: fp32.F32Add.evaluate(mul(d, mul(a, b)), acc)}[form]()
+        acc = step(d, sx[k * KB // G], wsrow[k * KB // G], acc)
     if g is not None:
         acc = mul(acc, int(g))
     return prims.F2fpBf16.evaluate(acc)
@@ -214,11 +223,6 @@ def _row_operands(a: dict[str, np.ndarray], job: dict[str, Any], i: int):
 def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one GEMM launch against `block_row` at the job's statics; on its reference rows the plain-integer chain on
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fp8 as F
-
     a = H._load(job["paths"])
     K, N, Gs, KB, form = job["K"], job["N"], job["G"], job["KB"], job["form"]
     rec = _zero()
@@ -258,11 +262,6 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fp8 as F
-
     a = H._load(job["paths"])
     K, Gq = job["K"], job["G"]
     rec = _zero()
@@ -615,6 +614,7 @@ def _words_ok(t: dict[str, Any], phase: str) -> bool:
 def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's verdict: its launches' checks, its words (every comparison of its key), its first mismatch."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(case_key(x), {"phase": x["phase"], "launches_ok": True, "totals": {k: 0 for k in TOTALS}, "first_mismatch": None})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

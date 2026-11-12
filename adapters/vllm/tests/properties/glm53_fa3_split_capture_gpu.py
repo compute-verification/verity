@@ -267,7 +267,7 @@ COMPARE = {"attn": compare_attn, "lg2": compare_lg2, "mufu": compare_mufu}
 
 
 def compare(job: dict[str, Any]) -> dict[str, Any]:
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "differing": []}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "differing": []}
     try:
         COMPARE[job["kind"]](job, rec)
     except Exception as e:  # noqa: BLE001
@@ -380,6 +380,7 @@ def bind_check() -> dict[str, Any]:
     from verity.definitions.registry import sparse_mla_split as W
 
     mla = _mla()
+    targets: dict[str, Any]
     targets = {"MufuLg2Ftz_v1": lambda: W.MufuLg2Ftz,
                f"SparseMlaSplit_v1{{T={TOPK},NS=16,NH={NH},...}}": lambda: bind(W.SparseMlaSplit, T=TOPK, NS=16, **M.SPARSE_MLA_GLM53)}
     for T, NS in ((130, 2), (1001, 8), (TOPK, 16), (TOPK, 28)):
