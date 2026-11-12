@@ -107116,3 +107116,32 @@ And one design question before any of it: P5. An offline check cannot replay a s
 - [run: `git fetch origin main`, 22:48Z] #9375 is open and not on `main` (`417526501974`). #9237 is untouched at `9d4aec0111fb`; its merge comes first when #9375 lands.
 - [relayed: your points 4, 5, 9] `drawCoins`' `main` is the next change, its own pull request; this one stays unmarked until Daniel's word; I send nothing to vy-nebius-2.
 - **What I wait on:** `2774` for the Lean; nothing else. I write the drivers now.
+
+
+## RUNCOINS, Thu 22:57Z: the Honest.lean split is made, so the top theorem has no premise of mine left; FRAME's premise is carried
+
+I made the split in `Honest.lean`. The top theorem `spotRunAcceptsPlay : SpotRunAcceptsPlay` now takes no premise of its own, and FRAME's premise about the interior record is carried in the statement. None of it has compiled yet, because every check slot on the cpu nodes is blocked on memory.
+
+On `cursor/proofs-runcoins-2d88`:
+- `83155094dc`: one commit touching only `SpotFlock/Honest.lean`. `accepts_seqCoins` is the goal after `refine Pr_pos_of (seqCoins …) ?_`. `accepts_seq` becomes the one term `Pr_pos_of (seqCoins …) (accepts_seqCoins …)`. No statement changes and nothing is copied. FRAME can take it. [derived]
+- `38d32687da`: `SeqAccepts` is gone, and `spotRunAcceptsPlay` uses `accepts_seqCoins` directly. [derived]
+
+On the coordinator's 22:50Z points:
+- The rule: `HeldMatches.first` hands the model the rule after the rate is resolved. `h.reg.first = ⟨{ verifier with law, workTable }, resolved, closure⟩`, where `law` comes from `rule.lawOver n` with `rule = i.rule.over n (strataSizes …)` (`Spot/Run.lean:262`'s step), and `resolved` comes from `Select.resolve i.rule …`. So `i.rule` itself never reaches `lawOver`. `RegHolds` reads `two h s`, which reads `h.reg.first`, so it gets the resolved rule too. [read]
+- FRAME's premise is now `RegistersNone i it`, a hypothesis of `SpotRunAcceptsPlay` and named in its docstring. It says `inputsFailure` finds nothing at the run's own once `fixed` and `supplied` are emptied. `inputsFailure` reads only `interior`, `links`, `refReads`, `fixed` and `supplied` (`SecondStage.lean:1263`), none of the draws, so it is decided on the run's records, the replay's program and the reference statements. My base's `Own` has no `reads` field, so the premise empties only `fixed` and `supplied`. When FRAME's base adds `reads`, I add it. [read]
+- RUNSAS: `RoundTwo` now takes `inputsFailure { own with fixed := #[], supplied := #[] } = none` before round 2's codes. That is the premise above, at round 2's `own`; part 3 needs it as a premise. This changes the statement RUNSAS proves. [derived]
+- The family label: `CheckReadsDraw` and `FromDevice` now say in their docstrings that `∃ label` is the base's reading, and that each stage's own label replaces it where `coinsReason` takes it as an argument. [derived]
+
+Runs:
+- try4 r20261112-223154-7e2e exited 79 without starting: every check slot on vy-nebius-cpu-9 was blocked on negative free memory, with about 500 GB reserved by other live runs. [run]
+- I cancelled try7 r20261112-224934-5cb1, which was superseded and had not started. [run]
+- Waiting: try5 r20261112-223622-d553 (Coins, cpu-5), try6 r20261112-224228-01ca (Proved, cpu-11), and try8 r20261112-225338-7491 (Top at `38d32687da`, cpu-3, which builds every file of mine and the `Honest.lean` split). If they hit the same memory block, the next compile is vy-nebius-2 after you clear it. [guess]
+
+To post: nothing.
+
+Not established:
+- None of Steps, Coins, Proved, Top or the `Honest.lean` split has compiled.
+- `CheckReadsDraw` is open until REDRAW lands.
+- The outer `acceptedTwo_of_check` is unwritten until TWOLEG's `SampledTwo.lean` is on my base.
+- FRAME's five clauses are unwritten.
+- The replayed earlier-period signature counts as a forgery under `Break`, as in my 22:52Z entry.
