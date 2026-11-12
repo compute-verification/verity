@@ -9,11 +9,12 @@ from typing import Any
 import pytest
 from verity.protocols.spot.device.challenger import OPENING_FORM, LiveCommitment
 
-from tests.protocols.test_credit_gate import _descriptor
+from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.protocols.pouw.h1.challenger import drawn_of
 from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME
 from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
 from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason
+from verity_vllm.protocols.pouw.h1.served import declared, descriptor
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
 COUNTS = {"expected_tensors": 2, "committed_tensors": 2, "errors_n": 0}
@@ -103,8 +104,14 @@ def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_firs
     assert (tap.took, tap.refused) == ([("site/0", 2, None)], ["engine step 2: a rank's input ids are not the first rank's"])
 
 
+def _descriptor() -> bytes:
+    """The descriptor bytes of a declared window of one call (N = 64 over K = 64, 32 slots, one step) on the served
+    test's stand-in proof block: a window whose layout core reads, so a refusal below is the record's."""
+    return descriptor(declared([(64, 64)], {0: "q"}, 32, 1, unit=_unit()))
+
+
 def _sampled(record: dict[str, Any]) -> tuple[Any, Any]:
-    """What core samples from the window's `record` at K = 1 over the served test's descriptor, or its refusal."""
+    """What core samples from the window's `record` at K = 1 over that descriptor, or its refusal."""
     return drawn_of(record, {"root": "00"}, 1, _descriptor())
 
 
