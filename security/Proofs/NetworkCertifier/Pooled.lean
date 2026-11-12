@@ -37,6 +37,9 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Periods
+import Proofs.Flock.Soundness.Game
 import Proofs.NetworkCertifier.PeriodSum
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -47,7 +50,7 @@ A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(
 `(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its wrong
 set fixed before its own sample, every sample missing its window's set while the sets hold `F` units in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
-(`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
+(`pr_adaptive_le`, the monitoring-period step `prCoin_forall_sum_le_pow` read in `Pr`). With
 each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`.
 -/
 
@@ -57,35 +60,7 @@ namespace NetTiming
 
 open Claims Finset
 
-/-! ### `Pr` over products and equivalences -/
-
-theorem Pr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (p : β → Prop) :
-    Pr (fun a => p (e a)) = Pr p := by
-  classical
-  unfold Pr Claims.prUniform
-  rw [Fintype.card_congr e]
-  congr 2
-  rw [← Fintype.card_subtype, ← Fintype.card_subtype]
-  exact_mod_cast Fintype.card_congr (e.subtypeEquiv fun _ => Iff.rfl)
-
-theorem Pr_prod_eq_Ex {α β : Type} [Fintype α] [Fintype β] (p : α × β → Prop) :
-    Pr p = Ex fun a => Pr fun b => p (a, b) := by
-  classical
-  unfold Ex
-  rw [Pr_eq_sum p, Fintype.sum_prod_type, Fintype.card_prod, Finset.sum_div]
-  simp only [Pr_eq_sum (fun b : β => p (_, b))]
-  push_cast
-  rw [Finset.sum_div]
-  refine Finset.sum_congr rfl fun a _ => ?_
-  ring
-
-theorem Ex_ite_const {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] (c : ℝ) :
-    (Ex fun a => if p a then c else 0) = Pr p * c := by
-  unfold Ex
-  rw [Pr_eq_sum p, div_mul_eq_mul_div, Finset.sum_mul]
-  congr 1
-  refine Finset.sum_congr rfl fun a _ => ?_
-  by_cases h : p a <;> simp [h]
+/-! ### The union bound in `Pr` -/
 
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a ∨ q a) ≤ Pr p + Pr q := by
   classical
@@ -201,61 +176,35 @@ theorem sampleUniform_val (n k : ℕ) :
 
 /-! ### The escapes multiply over windows on independent coins -/
 
+open FlockSoundness.Game in
+/-- **The escapes multiply**: windows whose audits, given the earlier windows' coins, accept with probability at most
+`r^(f i)`, `f i` fixed before window `i`'s coins, all accept with `Σ_i f i ≥ F` with probability at most `r^F`: the
+monitoring-period step at predictable weights. -/
 theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
     ∀ (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ),
       (∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω') →
       (∀ i ω ω', (∀ j, j < i → ω j = ω' j) → f i ω = f i ω') →
       (∀ i ω, Pr (A i ω) ≤ r ^ f i ω) → ∀ F : ℕ,
       Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F := by
-  intro m
-  induction m with
-  | zero =>
-    intro A f _ _ _ F
-    rcases Nat.eq_zero_or_pos F with rfl | hF
-    · simpa using Pr_le_one (fun ω : Fin 0 → Ω => (∀ i, A i ω (ω i)) ∧ 0 ≤ ∑ i, f i ω)
-    · calc _ ≤ Pr (fun _ : Fin 0 → Ω => False) := Pr_mono fun ω h => by simp at h; omega
-        _ = 0 := Pr_false
-        _ ≤ r ^ F := pow_nonneg hr0 F
-  | succ m ih =>
-    intro A f hA hf hesc F
-    classical
-    let e : Ω × (Fin m → Ω) ≃ (Fin (m + 1) → Ω) :=
-      { toFun := fun p => (Fin.cons p.1 p.2 : Fin (m + 1) → Ω), invFun := fun ω => (ω 0, Fin.tail ω),
-        left_inv := fun p => by simp, right_inv := fun ω => by simp }
-    let ω₀ : Fin (m + 1) → Ω := fun _ => Classical.arbitrary Ω
-    have hA0 : ∀ ω, A 0 ω = A 0 ω₀ := fun ω => hA 0 ω ω₀ fun j hj => absurd hj (Fin.not_lt_zero j)
-    have hf0 : ∀ ω, f 0 ω = f 0 ω₀ := fun ω => hf 0 ω ω₀ fun j hj => absurd hj (Fin.not_lt_zero j)
-    have hcons : ∀ (x : Ω) (ω₁ ω₂ : Fin m → Ω) (i : Fin m), (∀ j, j < i → ω₁ j = ω₂ j) →
-        ∀ j, j < i.succ → (Fin.cons x ω₁ : Fin (m + 1) → Ω) j = (Fin.cons x ω₂ : Fin (m + 1) → Ω) j := by
-      intro x ω₁ ω₂ i h j hj
-      cases j using Fin.cases with
-      | zero => simp
-      | succ j => simpa only [Fin.cons_succ] using h j (Fin.succ_lt_succ_iff.1 hj)
-    have hx : ∀ x, (Pr fun ω' => (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) (e (x, ω'))) ≤
-        if A 0 ω₀ x then r ^ (F - f 0 ω₀) else 0 := by
-      intro x
-      split_ifs with h0
-      · refine (Pr_mono ?_).trans (ih (fun i ω' => A i.succ (Fin.cons x ω')) (fun i ω' => f i.succ (Fin.cons x ω'))
-          (fun i ω₁ ω₂ h => hA i.succ _ _ (hcons x ω₁ ω₂ i h)) (fun i ω₁ ω₂ h => hf i.succ _ _ (hcons x ω₁ ω₂ i h))
-          (fun i ω' => hesc i.succ _) (F - f 0 ω₀))
-        rintro ω' ⟨hall, hF⟩
-        refine ⟨fun i => by simpa only [e, Equiv.coe_fn_mk, Fin.cons_succ] using hall i.succ, ?_⟩
-        have := hF
-        simp only [e, Equiv.coe_fn_mk, Fin.sum_univ_succ, hf0] at this
-        omega
-      · calc _ ≤ Pr (fun _ : Fin m → Ω => False) := Pr_mono fun ω' h => by
-              obtain ⟨hall, -⟩ := h
-              have := hall 0
-              simp only [e, Equiv.coe_fn_mk, Fin.cons_zero] at this
-              rw [hA0] at this
-              exact h0 this
-          _ = 0 := Pr_false
-    rw [← Pr_equiv e, Pr_prod_eq_Ex]
-    calc _ ≤ Ex fun x => if A 0 ω₀ x then r ^ (F - f 0 ω₀) else 0 := Ex_mono hx
-      _ = Pr (A 0 ω₀) * r ^ (F - f 0 ω₀) := Ex_ite_const _ _
-      _ ≤ r ^ f 0 ω₀ * r ^ (F - f 0 ω₀) := mul_le_mul_of_nonneg_right (hesc 0 ω₀) (pow_nonneg hr0 _)
-      _ = r ^ (f 0 ω₀ + (F - f 0 ω₀)) := (pow_add _ _ _).symm
-      _ ≤ r ^ F := pow_le_pow_of_le_one hr0 hr1 (by omega)
+  intro m A f hA hf hesc F
+  have hle1 : ∀ p : Ω → Prop, prCoin p ≤ 1 := fun p =>
+    (prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans_eq (by simp [prCoin, avg_const])
+  have hstep : ∀ (t : Fin m) (ω : Fin m → Ω), prCoin (fun a : Ω => A t (Function.update ω t a)
+      (Function.update ω t a t)) ≤ ENNReal.ofReal r ^ f t ω := fun t ω => by
+    have hupd : (fun a : Ω => A t (Function.update ω t a) (Function.update ω t a t)) = A t ω := funext fun a => by
+      rw [Function.update_self, hA t (Function.update ω t a) ω fun j hj => Function.update_of_ne (ne_of_lt hj) _ _]
+    rw [hupd, ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (hle1 _)),
+      ← Claims.Sampling.Pr_eq_toReal_prCoin, ← ENNReal.ofReal_pow hr0]
+    exact ENNReal.ofReal_le_ofReal (hesc t ω)
+  have key := FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow (Ω := fun _ : Fin m => Ω)
+    (fun t ω => A t ω (ω t)) f
+    (fun t ω ω' h => by
+      show A t ω (ω t) = A t ω' (ω' t)
+      rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
+    (fun t ω ω' h => hf t ω ω' h) (ENNReal.ofReal_le_one.2 hr1) hstep F
+  rw [Claims.Sampling.Pr_eq_toReal_prCoin]
+  refine (ENNReal.toReal_mono (ENNReal.pow_ne_top ENNReal.ofReal_ne_top) key).trans_eq ?_
+  rw [ENNReal.toReal_pow, ENNReal.toReal_ofReal hr0]
 
 /-! ### The monitoring period -/
 
