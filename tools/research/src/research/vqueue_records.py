@@ -14,9 +14,11 @@ refuses nothing.  The records commit names each such change (`_changes`), and th
 A records commit is a lock commit: the records the run regenerated (`regenerated_locks`, from the store, else from its run dir
 on its node), each at its path in the tree (`lock_path`), committed on top of the candidate with a lock commit's message
 (`lock_message`: `Lock records regenerated for #N...`, each change to what a guarantee says with the owners of what it names,
-the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as `queue.IDENTITY`, and
+the bookkeeping the run repaired, `Checked:` the run of `queue/<sha12>` and `Regenerated:` the files) as the queue
+(`Queue.identity`: the author its repository's rules name, else `queue.IDENTITY`), and
 vouched for by the merge gate against the run (`unvouched`, `merge.regenerated_parent`), so post_train reads it as a lock
-commit; the loop tells the bookkeeping the run repaired (`bookkeeping_told`: to `lean` and each owner a warning names).  A run
+commit, and neither reads who made it; the loop tells the bookkeeping the run repaired (`bookkeeping_told`: to `lean` and
+each owner a warning names).  A run
 that regenerated nothing, or only the records the candidate holds, makes none, and the candidate is checked as built.  It is
 made in a scratch index, without a checkout or a ref.  The candidate is a staged batch, off main's chain; when the chain's top
 it goes onto is another base, its members are merged again there, and the records commit, made and vouched for on the staged
@@ -266,14 +268,14 @@ def commit(driver: Landing, sha: str, rid: str, prs: Iterable[int],
                 "couldn't name what its records change of what a guarantee says")
     prs = " ".join(f"#{n}" for n in prs) or f"`{into}` {sha[:12]}"
     warned = bookkeeping_warnings(driver.q.store, rid, driver.fetch)
-    message = lock_message(prs, rid, into, sha, warned, files, changed)
-    made = _git(repo, "commit-tree", tree, "-p", sha, "-m", message, env=IDENTITY).stdout.strip()
+    message, identity = lock_message(prs, rid, into, sha, warned, files, changed), driver.q.identity
+    made = _git(repo, "commit-tree", tree, "-p", sha, "-m", message, env=identity).stdout.strip()
     if not made:
         raise QueueError(f"git commit-tree of {sha[:12]}'s records commit printed no commit")
     if why := unvouched(driver, rid, made):
         return why
     if onto is not None:
-        made = _carry(repo, made, onto, files, lock_message(prs, rid, into, sha, warned, files, changed, onto))
+        made = _carry(repo, made, onto, files, lock_message(prs, rid, into, sha, warned, files, changed, onto), identity)
     return made, files, bookkeeping_told(rid, into, sha, prs, made, warned) if warned else None
 
 

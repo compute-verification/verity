@@ -172,7 +172,9 @@ publishes what it builds for the candidate's audit), from a clean checkout, eith
 failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and its candidate's check is the head's first full check.  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label.  Ready marks are read after
+`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label, and may name the author
+and committer of the queue's commits (`author = { name = "NAME", email = "ADDRESS" }`, `Rules.identity`): `IDENTITY` where it
+names none.  Ready marks are read after
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
 that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.  A head with no
 ready mark (or land verdict) of its own that counts takes those of each other head of its PR whose own change is the same: the
@@ -349,6 +351,7 @@ PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.jso
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
 AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
+#: the author and committer of the queue's commits where the repository's rules name none (`Rules.identity`)
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
 DATES = ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE")
@@ -444,7 +447,9 @@ class Restacking(Exception):
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     full = git_env(GIT_TERMINAL_PROMPT="0", **(env or {}))
-    if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
+    # an identity and nothing else (`IDENTITY`, or a repository's own: `Rules.identity`): the queue's commits carry the time
+    # they're made, since a date a caller pins stops `log --since`; an identity given with its dates keeps them
+    if env is not None and env.keys() == IDENTITY.keys():
         for k in DATES:
             full.pop(k, None)
     with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
@@ -697,17 +702,57 @@ class Rules:
     source: str = RULES
     #: ready marks older than this don't count (`--marked-after` overrides it), so every VM's queue admits what drive admits
     marked_after: str | None = None
+    #: the (name, address) the queue's commits in this repository carry as author and committer (`identity`), which a
+    #: repository names when what builds its branches refuses a commit by no account of its host; None: `IDENTITY`
+    author: tuple[str, str] | None = None
 
     @classmethod
     def parse(cls, text: str, source: str = RULES) -> "Rules":
         doc = tomllib.loads(text)
-        unknown = set(doc) - {"hold_label", "marked_after"}
+        unknown = set(doc) - {"hold_label", "marked_after", "author"}
         if unknown:
             raise QueueError(f"{source}: unknown keys {sorted(unknown)}")
         cut = doc.get("marked_after")
         if cut is not None and not (isinstance(cut, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cut)):
             raise QueueError(f"{source}: marked_after {cut!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-        return cls(doc.get("hold_label", "hold"), source, cut)
+        author = doc.get("author")
+        if author is not None:
+            if why := _author_why(author):
+                raise QueueError(f'{source}: author {why}: write `author = {{ name = "NAME", email = "ADDRESS" }}`, the two '
+                                 "the queue's commits carry as author and committer, or leave `author` out and they carry "
+                                 f"{IDENTITY['GIT_AUTHOR_NAME']} <{IDENTITY['GIT_AUTHOR_EMAIL']}>")
+            author = (author["name"], author["email"])
+        return cls(doc.get("hold_label", "hold"), source, cut, author)
+
+    @property
+    def identity(self) -> dict[str, str]:
+        """The author and committer of the commits the queue makes under these rules, as git's environment: `author`'s, else
+        `IDENTITY` itself.  What reads a queue's commit reads its message, its parents and its tree, never who made it, so one
+        made as `IDENTITY` before the rules named an author is read as one made since."""
+        if self.author is None:
+            return IDENTITY
+        name, email = self.author
+        return {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
+
+
+def _author_why(author: object) -> str | None:
+    """Why the rules' ``author`` names no author and committer: both a name and an address, each a non-empty string git writes
+    as given (it drops a newline, `<` and `>` from either without a word); None when it names them."""
+    if not isinstance(author, dict):
+        return f"is {author!r}, not a table"
+    if unknown := sorted(set(author) - {"name", "email"}):
+        return f"has unknown keys {unknown}"
+    for key in ("name", "email"):
+        if key not in author:
+            return f"names no {key}"
+        value = author[key]
+        if not isinstance(value, str):
+            return f"names {key} {value!r}, not a string"
+        if not value.strip():
+            return f"names an empty {key}"
+        if bad := sorted(set(value) & set("\n<>")):
+            return f"names {key} {value!r}, which holds {' and '.join(repr(c) for c in bad)}"
+    return None
 
 
 #: drive's ways of landing (`DriveFlags.land`): `check`, which landed trains on their own check, was deleted with
@@ -1835,6 +1880,13 @@ class Queue:
         return self._rules
 
     @property
+    def identity(self) -> dict[str, str]:
+        """The author and committer of the commits this queue puts on its branches (a member's merge, a regenerated move, a
+        records commit and its carry): the rules' as last read (`Rules.identity`), which a sync reads before its first merge
+        (`entries`) and the loop each tick (`World.at_main`); `IDENTITY` where none are read."""
+        return IDENTITY if self._rules is None else self._rules.identity
+
+    @property
     def into(self) -> str:
         """The branch drive's review landing fast-forwards and `next` is built on: `land_into`, else drive.toml's at `main` as
         last fetched.  `checked`: `main` follows it only to each commit
@@ -2316,7 +2368,7 @@ class Queue:
             self.log(f"research queue: #{pr.number}'s merged tree holds Lean made before the module system: {', '.join(files)} "
                      f"ported by `{MODULES}`" + (f", and the pins {', '.join(pins)} rebuilt" if pins else ""))
         commit = _git(self.workdir, "commit-tree", rec["tree"], "-p", tip, "-p", head, "-m", _message(pr),
-                      env=IDENTITY).stdout.strip()
+                      env=self.identity).stdout.strip()
         self._merged_from[commit] = (self._merge_key(tip, head), head)
         return commit, ""
 
@@ -2478,7 +2530,7 @@ class Queue:
                     return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
                                   "its map moves nothing there"), None
                 commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
-                              env=IDENTITY).stdout.strip()
+                              env=self.identity).stdout.strip()
                 # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
                 check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
                 c = subprocess.run([sys.executable, str(check), tip, commit, *(f"--map={o}={n}" for o, n in rows), "--json"],
@@ -3529,8 +3581,9 @@ def move_of(repo: Path, commit: str) -> str | None:
 
 
 def _script_env() -> dict[str, str]:
-    """The environment a move's script runs in: the queue's identity for the commits it makes, and no bytecode written into the
-    tree it runs on (`rename.py` refuses a dirty one)."""
+    """The environment a move's script runs in: `IDENTITY` for the commits it makes (a head `restack.py` carries across a
+    move, whatever author the repository's rules name: `Rules.author`), and no bytecode written into the tree it runs on
+    (`rename.py` refuses a dirty one)."""
     env = git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1", **IDENTITY)
     for k in DATES:
         env.pop(k, None)

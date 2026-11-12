@@ -36,6 +36,12 @@ from research.store.model import Label
 from test_merge_gate import CHECK_FILES
 
 RULES = 'hold_label = "hold"\n'
+#: rules naming the author of the queue's commits (`Rules.author`), a dummy; `NAMED`: such a commit's author and committer, and
+#: `OWN`: those of one made where the rules name none (`Q.IDENTITY`)
+AUTHOR = ("rules-bot[bot]", "7+rules-bot[bot]@users.noreply.invalid")
+AUTHORED = RULES + f'author = {{ name = "{AUTHOR[0]}", email = "{AUTHOR[1]}" }}\n'
+NAMED = "{0} <{1}> | {0} <{1}>".format(*AUTHOR)
+OWN = "research queue <queue@research.invalid> | research queue <queue@research.invalid>"
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
 
@@ -202,6 +208,58 @@ def test_the_queues_merges_carry_the_time_they_are_made_whatever_date_the_caller
     q = world.queue()
     [m] = q.sync()[0]
     assert "2026-09-28" not in _git(q.workdir, "log", "-1", "--format=%aI %cI", m.commit)
+
+
+def _who(repo: Path, commit: str) -> str:
+    """``commit``'s author and committer."""
+    return _git(repo, "log", "-1", "--format=%an <%ae> | %cn <%ce>", commit)
+
+
+def test_a_commit_made_as_an_identity_alone_carries_the_time_it_is_made_and_one_given_its_dates_keeps_them(tmp_path, monkeypatch):
+    """`_git` drops the dates a caller pins from a commit made as the queue, `IDENTITY` or the author a repository's rules name
+    (the object passed isn't what says so: its keys are), and keeps the dates given with the identity."""
+    _git(tmp_path, "init", "-q")
+    tree, given = _git(tmp_path, "write-tree"), "2026-01-01T00:00:00+00:00"
+    for k in Q.DATES:
+        monkeypatch.setenv(k, "2026-09-28T23:00:00+0000")
+    for identity in (Q.IDENTITY, dict(Q.IDENTITY), Rules.parse(AUTHORED).identity):
+        made = Q._git(tmp_path, "commit-tree", tree, "-m", "m", env=identity).stdout.strip()
+        assert "2026-09-28" not in _git(tmp_path, "log", "-1", "--format=%aI %cI", made)
+        dated = Q._git(tmp_path, "commit-tree", tree, "-m", "m", env={**identity, **dict.fromkeys(Q.DATES, given)}).stdout.strip()
+        assert _git(tmp_path, "log", "-1", "--format=%aI %cI", dated) == f"{given} {given}"
+
+
+def test_the_queues_merges_carry_the_author_the_rules_name_and_its_own_where_they_name_none(world, monkeypatch):
+    """A repository whose rules name an author (`Rules.author`) gets the queue's merges as that author and committer, at the
+    time they're made, as any of its merges; while they name none it gets them as `IDENTITY`, and the chain reads both alike:
+    the members merged as `IDENTITY` before the rules named an author are still the queue's."""
+    base = _git(world.origin, "rev-parse", "refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"ci/queue.toml": AUTHORED}))
+    q = world.queue()
+    one, two = q.sync()[0]
+    assert q.identity is Q.IDENTITY and _who(q.workdir, one.commit) == _who(q.workdir, two.commit) == OWN
+    _git(world.origin, "update-ref", "refs/heads/main", two.commit)                    # they land, the rules with them
+    world.gh.put(3, world.change({"c.txt": "c3\n"}))
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2026-09-28T23:00:00+0000")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-09-28T23:00:00+0000")
+    q = world.queue()
+    [three] = q.sync()[0]
+    assert _who(q.workdir, three.commit) == NAMED
+    assert "2026-09-28" not in _git(q.workdir, "log", "-1", "--format=%aI %cI", three.commit)
+    assert Q.chain_of(q.workdir, base, three.commit) == [one, two, three] and world.on_next(q) == [3]
+
+
+def test_a_queue_given_its_rules_merges_as_the_author_they_name_and_keeps_the_members_merged_before(world):
+    """`--rules FILE` names the author as the rules on `main` do; a member merged as `IDENTITY` keeps its place and its commit
+    under rules that name another author."""
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    [one] = world.queue().sync()[0]
+    world.gh.put(2, world.change({"b.txt": "b2\n"}))
+    q = world.queue(rules=Rules.parse(AUTHORED))
+    kept, two = q.sync()[0]
+    assert kept == one and (_who(q.workdir, one.commit), _who(q.workdir, two.commit)) == (OWN, NAMED)
+    assert world.on_next(q) == [1, 2]
 
 
 def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(world):
@@ -850,6 +908,25 @@ def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(wo
     assert Path(ran.read_text()).is_relative_to(fast), ran.read_text()
     assert not list(fast.iterdir()) and not list(tmp.iterdir())
     assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_regenerated_move_carries_the_author_the_rules_name_and_is_read_as_the_queues_move_either_way(world, monkeypatch):
+    """A move the queue regenerates is its commit as a merge is: `IDENTITY`'s where the rules name no author, the named
+    author's where they do, and its `Move:` trailer and its PR, not who made it, say it is the queue's move."""
+    from research import queue
+
+    q, main, pr = _regeneration(world, world.tmp / "ran")
+    monkeypatch.setattr(queue, "MERGED_ROOT", world.tmp / "fast")
+    own, why, _ = q._regenerated(main, pr, main)
+    q._rules = Rules.parse(AUTHORED)
+    named, why_named, _ = q._regenerated(main, pr, main)
+    assert own and named and (why, why_named) == ("", ""), (why, why_named)
+    assert (_who(q.workdir, own), _who(q.workdir, named)) == (OWN, NAMED)
+    for commit in (own, named):
+        body = _git(q.workdir, "log", "-1", "--format=%B", commit)
+        assert Q.queue_commit(commit, main, body) == Q.Member(1, main, "lane-1", commit)
+        assert Q.move_of(q.workdir, commit) == "tools/move/x_map.toml"
+    assert _git(q.workdir, "rev-parse", f"{own}^{{tree}}") == _git(q.workdir, "rev-parse", f"{named}^{{tree}}")
 
 
 def test_a_moves_regeneration_adds_and_removes_its_worktree_under_the_clones_worktree_lock(world, monkeypatch):
@@ -2331,6 +2408,33 @@ def test_rules_name_the_hold_label_and_refuse_anything_else():
     for bad in ('[[grant]]\nrole = "red-team"\npaths = ["x/"]\n', 'colour = "red"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
+
+
+def test_rules_name_the_author_of_the_queues_commits_with_a_name_and_an_address_or_name_none():
+    """Rules that name no author leave the queue's commits as `IDENTITY`, the same object, so nothing about them changes;
+    rules that name one name both its name and its address, and half of one, an empty one, or one git would write otherwise
+    (it drops a newline, `<` and `>` without a word) is refused when the rules load, saying what to write."""
+    for unnamed in (Rules.parse(RULES), Rules.parse(""), Rules()):
+        assert unnamed.author is None and unnamed.identity is Q.IDENTITY
+    name, email = AUTHOR
+    for text in (AUTHORED, f'[author]\nname = "{name}"\nemail = "{email}"\n'):
+        rules = Rules.parse(text)
+        assert rules.author == AUTHOR and rules.hold_label == "hold"
+        assert rules.identity == {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
+                                  "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
+    write = ('write `author = { name = "NAME", email = "ADDRESS" }`, the two the queue\'s commits carry as author and committer, '
+             "or leave `author` out and they carry research queue <queue@research.invalid>")
+    for bad, why in (('author = { name = "n" }', "names no email"), ('author = { email = "e@x.invalid" }', "names no name"),
+                     ("author = {}", "names no name"), ('author = { name = "", email = "e@x.invalid" }', "names an empty name"),
+                     ('author = { name = "n", email = " " }', "names an empty email"),
+                     ('author = { name = "a\\nb", email = "e@x.invalid" }', r"names name 'a\nb', which holds '\n'"),
+                     ('author = { name = "n", email = "<e@x.invalid>" }', "names email '<e@x.invalid>', which holds '<' and '>'"),
+                     ('author = { name = 7, email = "e@x.invalid" }', "names name 7, not a string"),
+                     ('author = { name = "n", email = "e@x.invalid", date = "d" }', "has unknown keys ['date']"),
+                     ('author = "n <e@x.invalid>"', "is 'n <e@x.invalid>', not a table")):
+        with pytest.raises(QueueError) as refused:
+            Rules.parse(bad, "queue.toml")
+        assert str(refused.value) == f"queue.toml: author {why}: {write}", bad
 
 
 def test_until_the_move_the_rules_are_read_from_tools_check(world):
