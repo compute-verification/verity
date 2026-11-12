@@ -15,11 +15,11 @@ stops included (`_kept_prover`).
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
   are no auditor's.
 * **The sessions' coin trees.** Under FLOCK_CHALLENGER=1 the two sessions run on that same challenger session
-  (`a5.window_trees`): each verifier takes its tree through the audit's relay, and each session's tree is closed
-  there after its evidence before the next session starts. The audit then writes its case in v2's per-member form
-  with the challenger's key, the window's root and the coins, and v2 refuses it for its form alone
-  (`members.ALL_PASSED`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
-  (``--deployed-key``), over the machine's cores.
+  (`a5.window_trees`): each of the kept prover's verifiers takes its tree through the audit's relay, and each
+  session's tree is closed there after its evidence before the next session starts. The audit then writes its case in
+  v2's per-member form with the challenger's key, the window's root and the coins, and v2 refuses it for its form
+  alone (`members.ALL_PASSED`). v2 reads a key at the deployed parameters only, so that audit's local key is made at
+  them (``--deployed-key``), over the machine's cores.
 * **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
@@ -201,6 +201,9 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     assert rc == 0 and row.get("ok") is True, said
     assert row["audit"]["accepted"] is True, (row["audit"], said)
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in (*VERDICTS, "challenger") for k in (0, 1)}
+    # on the window's challenger session too the members are the kept prover's and the kept verifier's
+    assert _kept_prover(out) == ["session-m0", "session-m1"]
+    assert _kept_verifier(out) == [(0, True), (1, True)]
     assert row["coins_session"]["error"] is None, row["coins_session"]
     case = json.loads((out / "window" / "case-v2-members.json").read_text())
     params, evidence = case["params"], json.loads(bytes.fromhex(case["evidence"]))
