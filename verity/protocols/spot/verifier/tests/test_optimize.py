@@ -21,7 +21,7 @@ import pytest
 
 from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table
-from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
+from verity.protocols.spot.optimize import (HM96_ANDS, KAPPAS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
                                                            Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
                                                            MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier,
@@ -853,6 +853,33 @@ def test_a_margin_samples_the_strata_that_cost_little_above_their_rule():
         cells, replay_blocks, delta, **uniform)
     with pytest.raises(ValueError, match="margin"):
         two_stage_design(cells, replay_blocks, delta, margin=-0.125, **kw)
+
+
+def test_a_design_held_to_some_kappas_is_the_best_among_them():
+    """`kappas` holds the family to those κ of `KAPPAS`.  All of them is the planner as it was, the best design's own
+    κ gives it back, and each κ alone gives the least bound at that κ, never under the best's.  k_t grows with κ, so a
+    κ below the best's proves fewer proof blocks a sampled replay block and samples more replay blocks for the same
+    budget.  A κ off `KAPPAS`, or none, is refused."""
+    delta, replay_blocks, served = 2.0 ** -20, 10 ** 8, 4096.0
+    cells = [Cell(1000, 16.0, prove=1e-5, commit_bytes=2.0), Cell(2000, 2100.0, prove=1e-2, commit_bytes=300.0),
+             Cell(40, 512.0, prove=1e-4, commit_bytes=64.0), Cell(40, 1024.0, prove=1e-4, commit_bytes=128.0),
+             Cell(4, 4096.0, prove=1e-3, commit_bytes=512.0)]
+    kw = {"budget": 1e7, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "served": served, "union": True, "widths": True}
+    best = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert two_stage_design(cells, replay_blocks, delta, kappas=KAPPAS, **kw) == best
+    assert two_stage_design(cells, replay_blocks, delta, kappas=(best["kappa"],), **kw) == best
+    alone = {kappa: two_stage_design(cells, replay_blocks, delta, kappas=(kappa,), **kw) for kappa in KAPPAS}
+    assert all(row["kappa"] == kappa and row["total"] <= kw["budget"] * (1 + 1e-12) for kappa, row in alone.items())
+    assert min(row["bound"] for row in alone.values()) == best["bound"]
+    assert two_stage_design(cells, replay_blocks, delta, kappas=(2.0 ** -4, 2.0 ** -3), **kw)["bound"] == min(
+        alone[2.0 ** -4]["bound"], alone[2.0 ** -3]["bound"])
+    low = alone[best["kappa"] / 8]
+    assert low["bound"] > best["bound"] and low["q"] > best["q"]
+    assert all(low["k"][t] <= k for t, k in best["k"].items()) and sum(low["k"].values()) < sum(best["k"].values()) / 4
+    assert alone[0.0]["k"] == dict.fromkeys(best["k"], 1)
+    for kappas in ((), (0.3,), (0.5, 3.0)):
+        with pytest.raises(ValueError, match="KAPPAS"):
+            two_stage_design(cells, replay_blocks, delta, kappas=kappas, **kw)
 
 
 def test_a_capped_design_charges_what_a_request_serves():
