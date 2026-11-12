@@ -28,6 +28,7 @@ theorem remote_soundness_of_targets (V : Vocab d α) {K : Sampled.Constructions 
     (hCov : Sampled.Covers V .remote S) (hC : ∀ θ F A, S θ F = some A → Sampled.CouplingTarget V .remote K A θ F)
     (hW : V.PouwSound .remote) (hI : V.InferenceOnlySound .remote) :
     V.SoundnessAt .remote :=
-  remote_soundness_of_subprotocols ι α d V (Sampled.spotSound_of_targets V .remote hD hCov hC) hW hI
+  remote_soundness_of_subprotocols ι α d V
+    (V.targets_remote (Sampled.spotSound_of_targets V .remote hD hCov hC) hW hI)
 
 end Verity

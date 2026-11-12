@@ -43,11 +43,11 @@ event is the verifier's acceptance (`Accepts k`) while the claim of one of `k`'s
 strategy is its published `δ` plus its collision term at the probability that its fixed finder outputs a SHA-512
 collision (`Vocab.error`).
 
-`SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
-with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
-(`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same statement at remote, whose subprotocols are a subset
-of onsite's, from its three (sampled proofs, PoUW and the inference-only policy). They are proved by
+`SoundnessOf` is the one statement, at every composite, a list of its subprotocols' ids: each of its subprotocols'
+targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols. `Soundness` is it at onsite's list,
+whose seven targets have names (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
+`BandwidthAuditSound`, `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` is it at remote's, whose subprotocols
+are three of onsite's (sampled proofs, PoUW and the inference-only policy). They are proved by
 `Properties.Composition` (a composite's acceptance is its subprotocols' and its record's) and the union bound over one
 strategy in one game.
 
@@ -74,24 +74,23 @@ def SoundnessOf : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (k : Verity.Registration.Composite),
     (∀ a ∈ subprotocols k, V.Target k a) → V.SoundnessAt k
 
-/-- **Soundness at onsite's verifier, from its seven subprotocols' targets.** If sampled proofs, PoUW, the
-inference-only policy, PoUS, PoUB-P2, the network certifier and the wipe each meet their target at onsite, then the
-probability that onsite's compiled verifier accepts files that passed the commit phase's check while one of the
-period's claims fails (more than an `ε` share of the units unbound in the extractor's transcript, fewer than `W` gates
-computed after their coin, a declaration that doesn't comply with the policy, fewer than `S` bits held on average,
-fewer than `Q` bits read, more than `K` bits through the network certifiers, or foreign content kept across the wipe past
-its survivor threshold) is at most the seven errors at that strategy summed. -/
+/-- **Soundness at onsite's verifier, from its seven subprotocols' targets**: `SoundnessOf` at onsite's list. If
+sampled proofs, PoUW, the inference-only policy, PoUS, PoUB-P2, the network certifier and the wipe each meet their
+target at onsite, then the probability that onsite's compiled verifier accepts files that passed the commit phase's
+check while one of the period's claims fails (more than an `ε` share of the units unbound in the extractor's transcript,
+fewer than `W` gates computed after their coin, a declaration that doesn't comply with the policy, fewer than `S` bits
+held on average, fewer than `Q` bits read, more than `K` bits through the network certifiers, or foreign content kept
+across the wipe past its survivor threshold) is at most the seven errors at that strategy summed. -/
 def Soundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
-      V.BandwidthAuditSound .onsite → V.NetworkCertifierSound .onsite → V.WipeSound .onsite → V.SoundnessAt .onsite
+    (∀ a ∈ subprotocols .onsite, V.Target .onsite a) → V.SoundnessAt .onsite
 
-/-- **Soundness at remote's verifier: onsite's statement restricted to remote's subprotocols.** If sampled
-proofs, PoUW and the inference-only policy each meet their target at remote, then the probability that remote's
+/-- **Soundness at remote's verifier, from its three subprotocols' targets**: `SoundnessOf` at remote's list. If
+sampled proofs, PoUW and the inference-only policy each meet their target at remote, then the probability that remote's
 compiled verifier accepts files that passed the commit phase's check while one of their claims fails is at most their
 three errors at that strategy summed. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
-    V.SpotSound .remote → V.PouwSound .remote → V.InferenceOnlySound .remote → V.SoundnessAt .remote
+    (∀ a ∈ subprotocols .remote, V.Target .remote a) → V.SoundnessAt .remote
 
 end Verity

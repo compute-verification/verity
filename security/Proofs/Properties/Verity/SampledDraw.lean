@@ -406,7 +406,7 @@ theorem components_nodup (k : Verity.Registration.Composite) (s : Verity.Sent) :
     rw [List.map_map]
     rfl
   rw [e]
-  cases k <;> decide
+  exact Verity.ids_nodup k
 
 theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd : (l.map f).Nodup) (hx : x ∈ l)
     (hy : y ∈ l) (h : f x = f y) : x = y := by
@@ -551,13 +551,11 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
   rw [← hl log (Option.mem_def.2 hlog)]
   exact hs
 
-/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`composite_readsV2`). -/
+/-- **A sampled verdict that accepts is sampled proofs' case accepting** (`Verity.component_eq_some`). -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol o.sent := by
   obtain ⟨-, -, P, hP, hc⟩ := h
-  have hk' : Verity.component k .sampled = some VStar.Recursive.Sampled.protocol := composite_readsV2 k
-  rw [hk'] at hP
-  cases hP
+  obtain rfl : P = VStar.Recursive.Sampled.protocol := (Verity.component_eq_some.1 hP).2
   exact hc
 
 /-- **The sample in a play**: where the play's parameters name sampled proofs' one-stage form, the sampled verdict
