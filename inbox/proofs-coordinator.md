@@ -77071,3 +77071,17 @@ Mailbox read 07:48Z: no section after 07:17Z [read].
 **Checkpoint for the 12:00Z entry** (the two things PRF-580 leaves open): the F = 2 calculation is done, and a one-file try for the first question, `r20261112-074115-0a8e`, ended exit 0 in 148 s with no axiom beyond the three. The entry follows this one. No run of mine is out. [run]
 
 Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now; [derived] reasoned, not compiled.
+
+## LAND2, Thu 12 Nov 07:52Z: `5fc6` passed (exit 0): #8915's and #9149's Lean files build together, the root module included; no records, count or kernel replay ran with both in; `main` moved and touches none of it [5fc6]
+
+No statement, premise or record moved. #8915 is at `3b8adbc4d315`, marked and admitted; nothing is pushed to it. Its body carries what follows, read back equal.
+
+**`r20261112-065929-5fc6`, exit 0.** A try of `security/Proofs/Flock.lean` on `vy-nebius-cpu-11` at a local merge of `main` `d6075b75d289`, #8915's head `3b8adbc4d315` and #9149's head `93937aab616d` (`c444d76bd304`, not pushed). It took its slot at 07:07Z and ended at 07:42Z: "Build completed successfully (12447 jobs)", "lean exit 0 in 2112 s", no error in its log.
+
+- **It shows** that the two pull requests' Lean builds together. Of the 25 Lean files that differ from `main` at that merge, its log has a `Built` line for 23, and the 24th is `Proofs/Flock.lean` itself, compiled last. Among the 23 are the two my 07:05Z entry named, `SpotFlock/OneWaitClassAt.lean` and `SpotFlock/OneWaitTwo.lean` (#9149's guarantee), built with #8915's `TwoFirstHitKS.lean` among their imports; both witness files; `Claims/Witnesses.lean`; and `SpotFirstHit.lean`. None of the 23 was built with a warning.
+- **It does not show:** `security/Definitions.lean` (no module imports it; a try cannot reach it). No axiom probe read a theorem with both in: `Proofs/Flock.lean` holds none, and this probe reads the tried file only. No records, no kernel replay.
+- **The count of unread modules of `Proofs/Flock` with both in is still not run.** The merged allowance is #9149's, 266 modules and 2,138 declarations, under #8915's 267 and 2,141. A records run's log does not print the count, so I cannot read it off `43e5`. By AGENTS.md's Lean section an allowance of `unread-caps.json` is bookkeeping: a candidate's records run repairs it in its records commit and warns, and it holds nothing.
+
+**`main` moved to `bcaf58a45d53`** (31 landings since `d6075b75d289`). None changes a Lean file, a Lean toolchain or manifest, a lock, `unread-caps.json` or a file under `tools/verity/lean`, so my runs' Lean results carry over and I repeated none. #9097, #8915 and #9149 each merge with it without conflict (`git merge-tree`). At #8915 merged onto it the two gates that read git alone say what they said: `unread_gate.py` exits 0; `ratchet_gate.py` exits 1 on the same 11 sites and is in `off_gate`. The quick tier `ef98` was not repeated on the new `main`; five files under `tests/` changed there.
+
+**For #9149's mark:** the build with #8915 in no longer waits on a run of mine. What is left with both in is the candidate's check. Order as before: #9097, #8915, #9149. No run of mine is out and my timer is spent.
