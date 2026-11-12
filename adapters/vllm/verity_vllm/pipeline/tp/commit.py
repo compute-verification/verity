@@ -83,7 +83,10 @@ def schedule(pairs: int, only_arm: str | None) -> list[tuple[int, str]]:
 def ring_slots(committer: str, window_mb: str | None, window_slots: str | None, retain: str | None) -> int | None:
     """The ranks' window ring slots as their committers read VERITY_WINDOW_MB / VERITY_WINDOW_SLOTS / VERITY_RETAIN (an unset window
     is `native_collect.window_mb_default`), None when they stage in per-step blocks."""
-    from verity_vllm.commit.committer.native_collect import WINDOW_SLOTS, window_mb_default
+    from verity_vllm.commit.committer.native_collect import (
+        WINDOW_SLOTS,
+        window_mb_default,
+    )
 
     window = (window_mb or "").strip() or window_mb_default(committer == "native_collect_v2b", retain or "device")
     return int(window_slots or WINDOW_SLOTS) if float(window) > 0 else None
@@ -165,16 +168,16 @@ class Options:
     required_manifest: str | None = option("--required-manifest", default=None, help="the merged TP manifest (verity_vllm.pipeline.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
     relabel_rank: str | None = option("--relabel-rank", default=None, help="NEGATIVE ('relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
     wrong_root_rank: int | None = option("--wrong-root-rank", type=int, default=None, help="NEGATIVE ('wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
-    xrank_per_stratum: int = option("--xrank-per-stratum", type=int, default=2, help="cross-rank collective-output pass: picks per (site, kind, phase) stratum, seeded by the pair's combined root; " "each pick evaluates the committed received output against the definition over the two ranks' COMMITTED partials (all_reduce: bf16(f32+f32); " "all_gather: concat) on a row subset; a FAIL names the site; 0 disables (component result None)")
-    flip_partial: str | None = option("--flip-partial", default=None, help="NEGATIVE: `<rank>:<module suffix>[:ulp]` -- that rank commits its genuine partial at that ONE site but feeds the collective a different " "tensor (element 0: 2x+1024, or with `:ulp` ONE bf16 ulp -- the discriminating case where tokens stay equal and only the cross-rank pass can name it); " "every per-rank record stays self-consistent; the cross-rank collective-output pass must FAIL naming the site")
+    xrank_per_stratum: int = option("--xrank-per-stratum", type=int, default=2, help="cross-rank collective-output pass: picks per (site, kind, phase) stratum, seeded by the pair's combined root; each pick evaluates the committed received output against the definition over the two ranks' COMMITTED partials (all_reduce: bf16(f32+f32); all_gather: concat) on a row subset; a FAIL names the site; 0 disables (component result None)")
+    flip_partial: str | None = option("--flip-partial", default=None, help="NEGATIVE: `<rank>:<module suffix>[:ulp]` -- that rank commits its genuine partial at that ONE site but feeds the collective a different tensor (element 0: 2x+1024, or with `:ulp` ONE bf16 ulp -- the discriminating case where tokens stay equal and only the cross-rank pass can name it); every per-rank record stays self-consistent; the cross-rank collective-output pass must FAIL naming the site")
     omit_partial_site: str | None = option("--omit-partial-site", default=None, help="NEGATIVE: `<rank>:<module suffix>` -- that rank drops the partial of ONE collective site only (e.g. 1:layers.3.mlp.down_proj); coverage must FAIL naming the rank and the site")
     omit_rank_partials: int | None = option("--omit-rank-partials", type=int, default=None, help="NEGATIVE ('omit rank 1's partials'): this rank collects collective outputs only; coverage must FAIL naming this rank")
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run per rank: committed bytes vs hook-time reference clones + re-execution (module outputs and TP partials)")
-    match_dir: str | None = option("--match-dir", default=None, help="tp2_match run dir (<dir>/capture/tokens.json = the Match record's per-request generated ids): per rank, " "every committed sampled-ids row is attributed to its request by the rank's request->rows map and compared to the record; a mismatch FAILS the row")
-    swap_requests: str | None = option("--swap-requests", default=None, help="NEGATIVE: `<rank>:<ra>:<rb>[:<lo>-<hi>]` -- that rank labels request ra's rows as rb and rb's as ra (equal-count requests keep " "the identity counts; with `:<lo>-<hi>` the swap applies ONLY on engine steps lo..hi = the decode-only swap: prefill rows untouched, each swapped row one token, " "coverage/composition blind -- the per-(step, request) attribution alone must FAIL naming the rank)")
-    no_match_oracle: bool = option("--no-match-oracle", default=False, action="store_true", help="with --match-dir: skip the per-rank compare of every committed TP partial / MoE received output against " "the capture recorder's stored collectives (TP family); default = run it and gate on it")
-    require_fold_match: bool = option("--require-fold-match", default=False, action="store_true", help="the --match-dir MUST carry the per-rank fold Match (fold_match/tp2_fold_match.json + " "tp2_rank_match.json): its peer_binding digests are bound to the recorder rows the match oracle compared the committed partials against, " "both ranks, every (step, k); absence or any mismatch FAILs the row by name (default: absent = component None, Match collective-level ◐)")
-    no_sampled_replay: bool = option("--no-sampled-replay", default=False, action="store_true", help="skip the per-rank sampled exact replay + boundary linkage (default with " "--required-manifest: run it on every rank and gate on it -- O1: absence / partial / mismatch = FAIL named)")
+    match_dir: str | None = option("--match-dir", default=None, help="tp2_match run dir (<dir>/capture/tokens.json = the Match record's per-request generated ids): per rank, every committed sampled-ids row is attributed to its request by the rank's request->rows map and compared to the record; a mismatch FAILS the row")
+    swap_requests: str | None = option("--swap-requests", default=None, help="NEGATIVE: `<rank>:<ra>:<rb>[:<lo>-<hi>]` -- that rank labels request ra's rows as rb and rb's as ra (equal-count requests keep the identity counts; with `:<lo>-<hi>` the swap applies ONLY on engine steps lo..hi = the decode-only swap: prefill rows untouched, each swapped row one token, coverage/composition blind -- the per-(step, request) attribution alone must FAIL naming the rank)")
+    no_match_oracle: bool = option("--no-match-oracle", default=False, action="store_true", help="with --match-dir: skip the per-rank compare of every committed TP partial / MoE received output against the capture recorder's stored collectives (TP family); default = run it and gate on it")
+    require_fold_match: bool = option("--require-fold-match", default=False, action="store_true", help="the --match-dir MUST carry the per-rank fold Match (fold_match/tp2_fold_match.json + tp2_rank_match.json): its peer_binding digests are bound to the recorder rows the match oracle compared the committed partials against, both ranks, every (step, k); absence or any mismatch FAILs the row by name (default: absent = component None, Match collective-level ◐)")
+    no_sampled_replay: bool = option("--no-sampled-replay", default=False, action="store_true", help="skip the per-rank sampled exact replay + boundary linkage (default with --required-manifest: run it on every rank and gate on it -- O1: absence / partial / mismatch = FAIL named)")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2)
     replay_max: int = option("--replay-max", type=int, default=2000, help="cap on the stratified sample per rank (never below one VU per stratum)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="targeted seed, prover-chosen (default: each rank's run root's first 8 bytes, no coin: a measurement, O6)")
@@ -185,13 +188,13 @@ class Options:
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
                                               "verdict stays PENDING (exit 0 when every check this process runs passes) until `verity-vllm tp-commit-replay <out>` "
                                               "replays the bundles on CPU against the checkpoint and decides it as this process would have (TP2 and TP8 only: `c2.deferral_skipped`)")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the PINNED checkpoint snapshot (safetensors shards + config.json): each rank builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless --no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (default: the repo's) -- the shard sha256s of record")
     checkpoint_model: str | None = option("--checkpoint-model", default=None, help="HF repo id selecting the checkpoints.json entry when --checkpoint-dir is not its local_path")
     no_weights_pin: bool = option("--no-weights-pin", default=False, action="store_true", help="do not require the weights pin (the record stays 'weights unpinned (MAN-09)'; verdict FAIL closed)")
-    serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE ('TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves " "rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the " "world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). " "The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
-    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
-    replay_challenge: str | None = option("--replay-challenge", default=None, help="a challenge string (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; who issued it is not checked, and --challenger-gate refuses this flag; without it the seed is the rank's run root alone, no coin (a measurement)")
+    serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE ('TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
+    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
+    replay_challenge: str | None = option("--replay-challenge", default=None, help="a challenge string (hex/string): each rank's replay seed = sha256(challenge | that rank's run root)[:8]; who issued it is not checked, and --challenger-gate refuses this flag; without it the seed is the rank's run root alone, no coin (a measurement)")
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string: the Commit reserves one session before its engine and opens it on its first instrumented pair's TP run root, and each pair's opening positions and population identities are its coins, opened after that pair's TP run root (verity_vllm.pipeline.commit_coins); without it each pair's coins are this process's own, a measurement that credits nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
@@ -524,6 +527,8 @@ def main(args: Options) -> int:
                                   "openings": {k2: op_r.get(k2) for k2 in ("n", "verified", "generate_s", "verify_s", "bytes_mean", "error")},
                                   "classes": f["classes"], "weight_registration": f["weight_registration"],
                                   "persistent_bytes": f["persistent_bytes"], "temporary_bytes_peak": f["temporary_bytes_peak"]}
+                        ok: bool | None
+                        why: str | None
                         ok, why = commit_verdict(cblock, row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=f["declaration"],
                                                  required_classes=required_classes)
                         # the rank's binding map + coverage against its expected population gate the verdict too
@@ -573,7 +578,7 @@ def main(args: Options) -> int:
                     # population-sampled openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
                     pop_open = {}
                     if all((f.get("binding") or {}).get("map_digest") for f in fin):
-                        po = []
+                        po: list[dict[str, Any]] = []
                         for rk_c, croot in sorted(claimed.items()):
                             # one RPC per rank so each rank verifies against ITS claimed root (the commitment-vector entry)
                             po_r = llm.collective_rpc("tp2_commit_open_population", timeout=args.rpc_timeout,
@@ -596,7 +601,7 @@ def main(args: Options) -> int:
                     # each rank COMMITTED, evaluated bit-exactly against the definition over the two ranks' COMMITTED partials (picks seeded by the
                     # combined root, stratified per site x kind x phase).  The only evaluator of the collective-output VUs from committed bytes (the
                     # per-rank replay has none); a FAIL names the site and fails the ranks whose received output is not the definition.
-                    xr = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
+                    xr: dict[str, Any] = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
                     if xrank_on:
                         try:
                             import torch as _torch
