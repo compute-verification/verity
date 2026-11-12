@@ -25,7 +25,7 @@ def test_101s_fifth_build_is_addressed_as_its_component_is_compared(tmp_path):
     store_io._cli("fetch", BUILD_101_TRY5, "--to", str(root), "--path", "*build_request/*", "--path", "*build_workload/workload_program.json")
     req = next(Path(p).parent for p in root.rglob("build_request/descriptor.json.gz"))
     wp = next(root.rglob("build_workload/workload_program.json"))
-    declared = next(r["n_instances"] for r in json.load(open(wp))["address_map"]["requests"] if r["request_id"] == "r0")
+    declared = next(r["n_instances"] for r in json.loads(wp.read_text())["address_map"]["requests"] if r["request_id"] == "r0")
     A = load_derived(str(req), "component")
     assert (declared, len(A.inst), A.n_splits_consts_bound) == (46686, 46654, 32)
     assert addressed_instances(A) == declared

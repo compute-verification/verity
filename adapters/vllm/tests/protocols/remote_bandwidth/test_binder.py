@@ -10,7 +10,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.protocols.remote_bandwidth.binder import (  # noqa: E402
-    Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
+    KERNEL_BLOCK_SIZES, Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
 )
 from verity_vllm.protocols.remote_bandwidth.interface import Append  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
@@ -81,7 +81,7 @@ def runner(shared: bool = False, interleaved: bool = False):
     else:
         caches = [torch.zeros(2, PAGES, SLOTS, HEADS, DIM, dtype=torch.bfloat16) for _ in range(3)]
     return SimpleNamespace(model=model, kv_caches=caches, cache_config=SimpleNamespace(block_size=SLOTS),
-                           _kernel_block_sizes=[SLOTS])
+                           kernel_block_sizes=[SLOTS])
 
 
 def test_a_layer_of_a_shared_storage_reads_as_its_own_pages():
@@ -108,6 +108,34 @@ def test_registration_from_a_runner(shared, interleaved):
     assert st["unregistered"] == 2 and st["unregistered_bytes"] == 2 * 32 * 4
     assert [x.name for x in s.layout().regions][:1] == ["0.weight"]
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
+
+
+@pytest.mark.parametrize("name", KERNEL_BLOCK_SIZES)
+def test_a_kernel_block_size_other_than_the_managers_is_refused(name):
+    """Under either runner's name for them.  vLLM gives a cache group whose backend doesn't take the manager's block size
+    a kernel block size that divides it, and the pages registered here are the manager's; the same runner with the
+    manager's size under that name registers."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    del r.kernel_block_sizes
+    setattr(r, name, [SLOTS, SLOTS // 2])
+    with pytest.raises(NotImplementedError, match=rf"kernel block sizes \[{SLOTS}, {SLOTS // 2}\] other than the manager's {SLOTS}$"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
+    setattr(r, name, [SLOTS])
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert b.stats()["bytes_by_kind"]["kv"] == 3 * 2 * PAGES * 2048
+
+
+@pytest.mark.parametrize("named", [{}, {"kernel_block_sizes": None}, {"_kernel_block_sizes": []}])
+def test_a_runner_that_names_no_kernel_block_sizes_is_refused(named):
+    """A runner with neither name, or with one that holds no size, is refused, by a message that says both names: it is
+    never taken to use the manager's block size."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    del r.kernel_block_sizes
+    vars(r).update(named)
+    with pytest.raises(RuntimeError, match=r"names no kernel block sizes \(kernel_block_sizes or _kernel_block_sizes\)"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
 
 
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])

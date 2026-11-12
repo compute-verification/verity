@@ -7,6 +7,7 @@ and, for the greedy select, cuts one segment per event.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import tomllib
 
@@ -91,6 +92,29 @@ def test_recompute_counts_the_sampling_events_of_a_flat_request(family):
     if family == "TokenSelect_v1":                     # every segmentation rule names the greedy select: one segment per event
         assert got["step_nodes"] == [[0, 1], [1, 3]]
     # the Gumbel body's `steps` is the rule under test (request_component's): 2 when the rule names GumbelTokenSelect_v1, 1 when not
+
+
+def test_the_self_check_decodes_each_component_the_workload_program_names(tmp_path, monkeypatch):
+    """`actual` with no candidate: every derived component's descriptor, read from the row by its Build dir's basename and decoded."""
+    row_dir = tmp_path / "rows" / "stand-in-row"
+    (row_dir / "build_workload").mkdir(parents=True)
+    (row_dir / "build_request").mkdir()
+    request = {"request_id": "r0", "prompt_len": 1, "cap": 2, "component": {}}
+    wp = row_dir / "build_workload" / "workload_program.json"
+    wp.write_text(json.dumps({"inputs": {"derived": {"1,1": "/pod/row/build_request/"}}, "requests": [request]}))
+    with gzip.open(row_dir / "build_request" / "descriptor.json.gz", "wt") as f:
+        json.dump(_flat_request("TokenSelect_v1"), f)
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
+    row = resolver.Row("stand-in-row", {"row": 900}, fixtures={})
+    act = SS.actual(row)
+    got = act["requests"]["r0"]
+    assert act["source"] == "request_component" and act["component_steps_equal_cap"] is True and act["unsegmented_members"] == 0
+    assert (got["cap"], got["component"], got["n_nodes"], got["steps"], got["sampling_events"]) == (2, "build_request", 3, 2, 2)
+    assert act["consistent"] == {"r0": {"steps_eq_cap": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
+    wp.write_text(json.dumps({"inputs": {"derived": {"1,1": "/pod/row/build_request/"}}, "requests": [dict(request, cap=3)]}))
+    with pytest.raises(resolver.NotResolvable, match="request r0 names no derived component dir"):
+        SS.actual(row)
 
 
 def test_rows_the_index_does_not_name_are_carried_over(tmp_path):

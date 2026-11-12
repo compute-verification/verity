@@ -68,14 +68,16 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import dsv4_indices_twin as T
+from verity.definitions.registry import dsv4_indexer as I
+from verity.definitions.registry import dsv4_indices as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import dsv4_indices_twin as T
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_indices as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-indices-capture/v1"
@@ -176,7 +178,7 @@ def requests(case: str, kind: str, seed: int) -> dict[str, Any]:
         er = edge_requests(c)
         seq, ql, gather = (np.array([r[i] for r in er], dtype=np.int64) for i in (0, 1, 2))
         n, m = EDGE_N, EDGE_M
-    b = np.repeat(np.arange(seq.size), ql)
+    b: np.ndarray = np.repeat(np.arange(seq.size), ql)
     pos = (seq - ql)[b] + (np.arange(b.size) - np.concatenate([[0], np.cumsum(ql)[:-1]])[b])
     o = {"seq": seq, "qlen": ql, "gather": gather, "M": m, "N": n, "pos": pos, "b": b, "mb": _w(m * b), "n": _w(np.full(b.size, n)),
          "gs": _w((seq - gather)[b])}
@@ -208,7 +210,7 @@ def short_rows(pos, K: int, ratio: int) -> np.ndarray:
     with np.errstate(over="ignore"):
         t = np.asarray(pos, dtype=np.int64) + np.int64(1)
     q = np.where(t >= 0, t // ratio, -1)
-    i = np.arange(K, dtype=np.int64)[None, :]
+    i: np.ndarray = np.arange(K, dtype=np.int64)[None, :]
     return _w(np.where(i < q[:, None], i, -1))
 
 
@@ -392,9 +394,6 @@ def observe(work: Path, case: str, ops: dict[str, Any], c128a: dict[str, Any] | 
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_combine(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [lo, hi): each row and length against the twin, the reference `Dsv4CombineTopkSwa_v1` on every ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -414,9 +413,6 @@ def compare_combine(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_c128a(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Rows [lo, hi): each against `short_rows`, the reference `Dsv4ShortContextTopK_v1{K,ratio}` on every ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     pos = np.asarray(a["pos"][lo:hi])
@@ -461,7 +457,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
         tool = shutil.which("cuobjdump")
     rec: dict[str, Any] = {"kernels": {}}
     for key, kernel in KERNELS.items():
-        entries = []
+        entries: list[dict[str, Any]] = []
         for f in sorted(glob.glob(str(triton_cache / "**" / f"{kernel}.ptx"), recursive=True)):
             text = Path(f).read_text(errors="replace")
             sha = hashlib.sha256(text.encode()).hexdigest()
@@ -489,8 +485,6 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics."""
-    from verity.circuits.defs import bind
-
     targets = {}
     for case in CASES_L:
         st = statics(case)

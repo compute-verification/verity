@@ -17,11 +17,14 @@ plane-fed FAIL still leads when both are present; greedy rows (TokenSelect_v1 HA
 from __future__ import annotations
 
 import pytest
+from verity.definitions.numerics.rows import EVALUATORS
 
-from verity_vllm.check.c2_rules import _complete_replay_population_gap, _form_b_selector_coverage
+from verity_vllm.check.c2_rules import (
+    _complete_replay_population_gap,
+    _form_b_selector_coverage,
+)
 from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity.definitions.numerics.rows import EVALUATORS
 
 
 def _bnd(n_req):

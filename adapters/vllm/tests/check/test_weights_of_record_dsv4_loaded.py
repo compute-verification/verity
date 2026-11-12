@@ -10,12 +10,11 @@ import re
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
-
-from verity_vllm.check import weights_of_record as WR
-
 from tests.check.test_weights_of_record import live_digests, write_safetensors
 from tests.check.test_weights_of_record_routed_experts import _program
+from verity_vllm.check import weights_of_record as WR
+
+torch = pytest.importorskip("torch")
 
 H, G, GROUPS, R, HEADS, NH, M, WORLD, RANK = 256, 128, 4, 128, 8, 16, 24, 2, 1
 L0 = "model.layers.0"

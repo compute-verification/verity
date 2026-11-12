@@ -36,10 +36,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.registry import boolean_tp_allreduce as BA
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
+
+from verity_vllm.properties.record import DIR, seal
 
 SCHEMA = "verity-vllm/tp4-nccl-tree-capture/v1"
 RECORD = "tp4_nccl_tree_capture.json"
@@ -128,19 +133,14 @@ def route_for(facts: dict[str, Any], M: int, N: int):
     device = facts["device"]
     c = T.covered(s, N, route, M, world=facts["world"], device=device, transport=settings["nccl_transport"]) if s else None
     if c is None:
-        return None, f"no CAPTURED entry for setting={s!r} N={N} route={route!r} M={M} world={facts['world']} device={device!r} " \
-                     f"transport={settings['nccl_transport']!r}"
+        return None, (f"no CAPTURED entry for setting={s!r} N={N} route={route!r} M={M} world={facts['world']} device={device!r} "
+                      f"transport={settings['nccl_transport']!r}")
     return c, T.route_binding(c, facts["world"], M, N)[1]
 
 
 def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
     """One step's calls `items` ([(k, rows, statics)]): every rank's words against each order."""
     import torch
-
-    from verity.circuits import evaluation as E
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import bits as BS
-    from verity.definitions.registry import boolean_tp_allreduce as BA
 
     dumps = [torch.load(Path(capture) / f"coll.rank{r}.step{step}.pt", map_location="cpu", mmap=True, weights_only=True)
              for r in range(WORLD)]
@@ -168,8 +168,6 @@ def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
 
 
 def replay(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm.properties.record import DIR, seal
-
     capture, outdir = Path(a.capture), Path(a.out)
     (outdir / DIR).mkdir(parents=True, exist_ok=True)
     facts = capture_facts(capture)
