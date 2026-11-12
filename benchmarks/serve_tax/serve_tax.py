@@ -539,7 +539,8 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
-    published = (*model.published, "--tokenizer-mode", model.published_tokenizer[front]) if arm.published else ()
+    mode = model.published_tokenizer.get(front)
+    published = (*model.published, *(("--tokenizer-mode", mode) if mode else ())) if arm.published else ()
     return [sys.executable, "-m", *serve, "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *published, *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
