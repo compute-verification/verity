@@ -41,7 +41,9 @@ ticks but what the next snapshot reads (the refs, the labels, graph2's results, 
 repeats nothing that matters: a candidate's ref is named by its sha and enqueueing a check twice queues it once.
 
 Only the lowest candidate's verdict is read whole: one above it is checked on a base that may still fail, so its pass counts
-once the candidates below it are on `main`.  Its fail counts at once, as the lowest's would, once its base's word on each of
+once the candidates below it are on `main`, in the tick that advances to the one below it too: a tick advances through the
+passed candidates at the chain's bottom in order, one `Advance` and drop each, up to the first that hasn't passed or whose
+check waits for its records run.  Its fail counts at once, as the lowest's would, once its base's word on each of
 its own failures is known (`Failed.base_tests`), or, for a failure whose inputs meet its own members and none below it,
 `main`'s (`Failed.main_tests`, `_said`); until then it waits, since its base may yet fail the same.  The lowest fail
 on the chain is the one read, and nothing is built on a candidate that failed.  A fail is read as soon as a gating task has
@@ -303,7 +305,8 @@ BASE_DROPPED = "its base was dropped"
 
 def decide(s: Snapshot) -> list[Action]:
     """The actions ``s`` calls for, in the order they are applied: the drops of the candidates off main's chain, what the
-    lowest candidate's verdict calls for, what the lowest fail above it calls for (as the lowest's fail would, once its base's
+    lowest candidate's verdict calls for (a pass advances `main` through it and each passed candidate above it in turn, up to
+    the first that hasn't passed or whose check waits), what the lowest fail above it calls for (as the lowest's fail would, once its base's
     word on each of its own failures is known, or `main`'s where only its own members meet the failure: `_said`; until then
     nothing, and nothing is built above it), the rebuilds of what a red or a leave dropped (`_restack`), then, while the
     chain is shorter than `depth`, one batch built on its top.  While the chain holds a wide member (`Snapshot.wide`), the
@@ -336,9 +339,11 @@ def decide(s: Snapshot) -> list[Action]:
             acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s verdict is fail but names no failed task: nothing is blamed or dropped "
                                      "until it names one"))
         elif reading == PASS:
-            acts += _red(c1, _outcomes(s, acts))
-            acts += [Advance(c1.sha), Drop(c1.sha, ON_MAIN, _passed(c1))]
-            main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
+            while chain and not chain[0].waits and _reading(chain[0].verdict) == PASS:
+                c, chain = chain[0], chain[1:]
+                acts += _red(c, _outcomes(s, acts))
+                acts += [Advance(c.sha), Drop(c.sha, ON_MAIN, _passed(c))]
+                main, landed = c.sha, landed | set(c.members)
         elif reading == FAIL and (rerun := _rerun(c1, built)) is not None:
             acts.append(rerun)
         elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
