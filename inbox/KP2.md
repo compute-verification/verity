@@ -838,3 +838,8 @@ Its comment on HASH-120 (04:13Z), read whole by me. **The node stops at 08:00Z a
 - **The sweep's table** (by 16:00Z) and the candidate come after the lease.
 
 Return at your release with the arms' table, or at 07:30Z if no line has come.
+- **Added 04:28Z: infra answered Thursday's question (INF-660, 04:22Z), so you need not read it there:**
+  nothing is booked for Thu 21:00Z to 23:30Z, nothing needs booking, and a booking would not refuse
+  your starts: only a slot line that names the windows file pauses ahead of a booked window, and no
+  live line on the node does (the gpu pool's slots `g0` to `g7` have none). The fill runner is up
+  with an empty queue. The eight CPU places are closed 19:30Z to 23:30Z.

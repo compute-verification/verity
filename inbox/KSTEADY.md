@@ -1766,3 +1766,14 @@ that the pins agree.** What it adds, in order:
    that is a later job, on proofs' ring.
 5. **The kit follow-up stays first** where the two do not collide; item 2's read is an hour of yours
    at most.
+- **Added 04:28Z, two facts for the spec (HASH-115, 04:17Z and 04:25Z):**
+  - **Node A has `main`'s `gpu-lease` on the path since 04:16Z:** `/usr/local/bin/gpu-lease`, the
+    script as of `main` `62bf29346f76`, sha256 `5bfd43d8ce7f…`; it shares its state directory with a
+    tree's own copy (infra read vllm's eight leases through it by bare name). **Not checked: a lease
+    taken by bare name.** It is a file on the pod's own disk and is gone if RunPod resets the pod, so
+    the spec's start says so when it is missing, with the fix (infra puts it back on our word).
+  - **Benchmarks' runner verified the kept head-block proof with `main`'s Lean verifier, three of
+    three** (`r20261112-033326-ef6c`, labelled `run_of_record=prove-glm53-lean-verify`): 230.6 to
+    287.2 s, 40.9 GiB. Its program check was dropped (`16555afd…` hashes the staged Boolean
+    Definition's id, which `program-word.json` does not hold). Nothing for you to do; the kit keeps
+    making a kept proof the way that one was made.

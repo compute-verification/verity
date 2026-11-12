@@ -1055,3 +1055,10 @@ you remake the dry runs, so they are remade once. What it adds, in the order to 
    only by `main`'s changes (and the test of item 1). Post the head in your worker comment; I ring.
 
 Your return is as before, plus: the test's name and its run, item 2's answer, item 4's answer.
+- **Added 04:28Z, for item 6 (the two kept proofs under Lean):** benchmarks ran `main`'s Lean verifier on
+  kernels' kept head-block proof three times on a CPU node (HASH-115, 04:25Z; its run
+  `r20261112-033326-ef6c`): accepted three of three, 230.6 to 287.2 s a session on a shared slot, 84 s of
+  it reading the statement, 40.9 GiB at peak. **Use its runner for your two proofs, not a script of
+  your own:** read that run's command; it records which Program it was handed and checks the partition
+  and the circuit's SHA-512 against `stage.json`, and its line carries the label word for word. Size
+  the job for 41 GiB. If its runner cannot take a proof of yours as it is, say what it lacks.
