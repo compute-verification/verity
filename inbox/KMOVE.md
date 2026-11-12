@@ -1173,3 +1173,17 @@ A design note that says what it costs either way and what was tried before is wh
 
 **Thursday is unchanged:** I resume you at 15:25Z with the go; after the screen, #8671 on lean's merge
 head. Return at 15:00Z with where the wide path is, or earlier when test 5 passes.
+- **Added 07:26Z: compute-accounting said YES to the design (CMP-380, 07:25Z), and it wants one host
+  guard, in the same pull request:**
+  - **The refusal at 129 segments or more moves from `pearl_c_sm90/run.py:550-551` into the host
+    launch wrapper of the three hashing kernels** (`hash_h3`, `hash_fast`), so every caller meets it
+    before any launch, not only `run.py`. Host code only: no cubin changes, nothing is gated or
+    timed again; **show the cubins' sha256 unchanged.** "A silent wrong digest with exit 0 must not
+    be reachable from any host path."
+  - **Once the wide path exists, the wrapper sends a row over 128 segments to it instead of refusing
+    it:** the same change, the same pull request. A test holds each: over 128 to the wide path, over
+    1,024 refused, and no host path reaching today's kernels with more than 128.
+  - **The digest's definition stays.** The fold's 0.56 ms is to be MEASURED on the H200 at the head's
+    shape when the wide path runs there; compute-accounting reads it against the head's credit.
+  - This overrides one line of my ruling: you still add no trap to today's device code, but the
+    host guard is now in scope.
