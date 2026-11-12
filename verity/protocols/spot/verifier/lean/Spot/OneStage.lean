@@ -49,6 +49,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   the window registers for it (`HistoryTable.rootsOf`), and a supplied value's source `{"history": "H/root"}` or
   `{"history": "H/domain"}` then the bytes of the root or domain id it computed for table `H` (`HistoryTable.resolve`),
   refused in any other form;
+  and it may add `certified`, `{value: {"domain", "leaves", "root", "words"}}`, with `word_bits` (16 or 32, 16 when
+  left out): the entries it built from registrations it read under the deployment's key, each of a value it expects
+  no parameter registered under, `root` lowercase hex of 64 bytes, `leaves` and `words` naturals and `domain` a
+  string, which R7 holds the record's entries for those values to (`Registration.certifiedHeld`), with which it
+  expects a v2 record whatever it expects registered (`Registration.Verifier.v2`), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -162,6 +167,31 @@ def design (program : Program) (query : Json) (law : Json) (table : Option Json)
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
   "registered", "scheme", "work_table"]
 
+/-- A certified entry's keys (`registration.CERTIFIED_KEYS`), with `Registered.WIDTH_KEY` for leaves that are not 16
+bits. -/
+def CERTIFIED_KEYS : Array String := sortStrings #["root", "leaves", "words", "domain"]
+
+/-- The parameters' certified entries (`registration._certified`): an object of values none of `registered` names, each
+exactly `CERTIFIED_KEYS` and, optionally, `word_bits`, one of `Registered.WIDTHS`, 16 when left out; `root` lowercase
+hex of 64 bytes, `leaves` and `words` naturals and `domain` a string. -/
+private def certifiedOf (cj : Json) (registered : Array (String × Nat)) : V (Array (Registered.Entry × String)) := do
+  let .obj kvs := cj | throw "certified entries are not an object"
+  kvs.toArray.mapM fun (v, e) => do
+    let fail := s!"certified value {v}: not a value it expects no parameter registered under, with a root of 64 bytes, " ++
+      "its leaves, words and domain, and word_bits when not 16"
+    if registered.any (·.1 == v) then throw fail
+    if keys? e != some CERTIFIED_KEYS && keys? e != some (sortStrings (CERTIFIED_KEYS.push Registered.WIDTH_KEY)) then
+      throw fail
+    let wordBits ← match field? e Registered.WIDTH_KEY with
+      | none => pure Registered.WORD_BITS
+      | some w => match nat? w with
+        | some w => if Registered.WIDTHS.contains w then pure w else throw fail
+        | none => throw fail
+    match getD e "root", nat? (getD e "leaves"), nat? (getD e "words"), getD e "domain" with
+    | .str root, some leaves, some words, .str domain =>
+      if root.length == 128 && isHex root then pure ({ value := v, leaves, words, wordBits, domain }, root) else throw fail
+    | _, _, _, _ => throw fail
+
 /-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value`, `root` and
 `domain`, which `Registration.heldRoots` reads (Python's `held_roots` raises on anything else). -/
 private def logRecord (j : Json) : V Json := do
@@ -245,6 +275,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
   let keys := if (field? j "history").isSome then keys.push "history" else keys
+  let keys := if (field? j "certified").isSome then keys.push "certified" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -381,12 +412,15 @@ def paramsParsed (j : Json) : V Params := do
       | some n, .str p => pure (n, p)
       | _, _ => throw "a declaration's day is not a natural number or its program not a string"
     pure (some (day, ds))
+  let certified ← match field? j "certified" with
+    | none => pure #[]
+    | some cj => certifiedOf cj registered
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, tied },
+                                    declared, seedSalt, pool, tied, certified },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
