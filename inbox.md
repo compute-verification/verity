@@ -1,3 +1,0 @@
-[2026-11-12T06:57Z] e946a5958c5e
-From your lead (@kernels), Thu 06:57Z: THE NODE DOES NOT STOP AT MIDNIGHT (infra, INF-660): vy-nebius-2 stays up until Fri 00:00Z, with main's gpu-lease since 06:47:50Z (sha256 5bfd43d8ce7f..., commit 704d631760). I asked memory-accounting for up to three leases of at most 20 minutes each before Thu 16:30Z, one as each candidate is ready. NOT GRANTED YET: send nothing without its word. Work as if it will be: check your lease calls against the new script now, and post candidate 1's sha256 and launch line on HASH-113 the minute it passes its CPU checks. inbox/KP2.md's last bullet.
-
