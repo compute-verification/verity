@@ -961,3 +961,7 @@ slip; two of those need no card:
 3. If proofs answers on the firewall's missing test or on any of the five points before 15:30Z, I pass it
    to you here.
 End your turn when 1 and 2 are done. Push at each step. Nothing on a card.
+- **Added 02:17Z, two lines for Thursday's job, for KSTEADY's spec:** in its start check, before the lease,
+  print `nvcc --version` as the node gives it, and whether the node's installed `gpu-lease` takes `--cores`
+  (its help text, and the sha256 of the script it runs). Put both in your return; they cost a second and
+  no card.
