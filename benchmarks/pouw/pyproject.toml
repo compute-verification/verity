@@ -109,6 +109,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py",
           "integrations/vllm/verity_vllm/protocols/pouw/native.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/epoch.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/parts.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",

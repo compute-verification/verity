@@ -37,6 +37,8 @@ from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.challenger import LiveCommitment, LiveOpening
 
+from verity_vllm.protocols.pouw.pearl_c.parts import Parts
+
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
 #: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
@@ -397,13 +399,15 @@ def _copies(device: Any) -> _Copies:
     return _copiers[key]
 
 
-def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = False, here: bool = False) -> list[dict]:
+def write_behind(files: tuple[tuple, ...], pending: list[Future], parts: Parts, fresh: bool = False,
+                 here: bool = False) -> list[dict]:
     """`_write`'s entries for tensors' bytes, each file (path, tensor, digest[, then, *also]), with the files written
     behind the caller: the bytes are copied as they are now on the current stream (a device's to the host on a stream of its
     own, through `_Copies`' arena, with no wait on the caller's), and one of `WRITE_THREADS` threads writes the files in
     order, its future appended to `pending`, which the pass's end joins (`joined`) before its manifest names them; a
     digest's ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its
-    `also` tensors (uint8 host tensors, copied with it) once they are written.  `fresh` and `here`: `_Copies.start`'s."""
+    `also` tensors (uint8 host tensors, copied with it) once they are written.  The writer's seconds land in `parts`, the
+    pass's, behind it (`_landed`).  `fresh` and `here`: `_Copies.start`'s."""
     import torch
     files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
     srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
@@ -422,14 +426,18 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
         entries.append(entry)
         at += k
     if batch:
-        pending.append(_writers[1].submit(_landed, batch, done, gives))
+        pending.append(_writers[1].submit(_landed, batch, done, gives, parts))
     return entries
 
 
-def _landed(batch: list[tuple], done: Any, gives: list[Callable[[], None]]) -> None:
+def _landed(batch: list[tuple], done: Any, gives: list[Callable[[], None]], parts: Parts) -> None:
+    """A writer thread's batch: the wait for its copies (``copies``), then its files (``writes``), behind `parts`."""
+    own = Parts()
+    own.switch("copies")
     try:
         if done is not None:
             done.synchronize()
+        own.switch("writes")
         for path, hosts, digest, entry, then in batch:
             _write_host(path, hosts[0], digest, entry)
             if then is not None:
@@ -437,6 +445,7 @@ def _landed(batch: list[tuple], done: Any, gives: list[Callable[[], None]]) -> N
     finally:
         for give in gives:
             give()
+        parts.behind(own)
 
 
 def _write_host(path: Path, host: Any, digest: bool, entry: dict) -> None:

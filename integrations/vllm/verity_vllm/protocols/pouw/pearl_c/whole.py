@@ -129,7 +129,8 @@ class WholeStep:
         finally:
             self.preparing = False
         self.stack.passes.pop()
-        self.run.details["passes"].pop()
+        if self.run.details["passes"].pop()["units"]:
+            self.run.details["seconds"].pop()
         return bool(keys)
 
     def _capture(self, key: tuple) -> None:

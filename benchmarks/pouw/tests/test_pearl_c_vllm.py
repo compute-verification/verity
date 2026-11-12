@@ -973,6 +973,51 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
     assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
 
 
+#: a retained step's pass of two calls on the host, under `_thread_ticks`: how many times its thread left each part, and
+#: the writers' three batches (a call's files each, the end's) behind it
+STEP_PARTS = {"forward": 3.0, "stage": 2.0, "launch": 2.0, "screen": 4.0, "retain": 4.0, "y_tree": 2.0, "tree": 1.0,
+              "readback": 1.0, "files": 2.0, "weights": 1.0, "next": 1.0, "behind_copies": 3.0, "behind_writes": 3.0}
+
+
+def _thread_ticks(monkeypatch) -> None:
+    """`parts.Parts`' clock as a count of the reading thread's readings: a part's seconds are how many times its thread
+    left it, whatever the other threads read meanwhile."""
+    ticks: dict[int, int] = {}
+
+    def clock() -> float:
+        me = threading.get_ident()
+        ticks[me] = ticks.get(me, 0) + 1
+        return float(ticks[me])
+    monkeypatch.setattr(PH.Parts, "clock", staticmethod(clock))
+
+
+def test_a_served_passs_seconds_are_its_threads_parts_and_what_other_threads_spent_behind_it(monkeypatch, tmp_path):
+    """`parts.Parts` on the run: each served step's pass with calls adds its seconds to ``details["seconds"]``, in order,
+    and a step with no call adds none.  The step's thread is in one part at a time, from the forward's begin
+    (``forward``, which each call's parts come out of) through the end's parts to the next pass's begin (``next``); the
+    writers' seconds land behind it, a batch a call and one for the end; and the pass's completion (``join``,
+    ``manifest``) is the step's thread's where the end waits for it and behind it where it doesn't.  No pass's
+    commitment holds any of it."""
+    _thread_ticks(monkeypatch)
+    rng = np.random.default_rng(23)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps, cls = [[(0, 200), (1, 200)], [], [(0, 3), (1, 3)]], PPD.PearlCDeviceRun
+    for behind in (False, True):
+        monkeypatch.setattr(cls, "retain_behind", behind)
+        (runner,) = _runners(monkeypatch)
+        model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+                                      {"transcript_dir": str(tmp_path / f"behind-{behind}")}, capacity=32, flag_rows=512)
+        core = _Core(runner(), _Engine(model, steps))
+        for _ in steps:
+            core.step()
+        comp.close()
+        passes, seconds = option.details["passes"], option.details["seconds"]
+        assert [p["units"] for p in passes] == [2, 0, 2] and not any("seconds" in p for p in passes)
+        completed = {"behind_join": 1.0, "behind_manifest": 1.0} if behind else {"join": 1.0, "manifest": 1.0}
+        assert seconds == [STEP_PARTS | completed] * 2, seconds
+
+
 def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(monkeypatch, tmp_path):
     """`PearlCDeviceRun.poison`: each retained pass begins with every shape's buffers at the poison byte, but a shape no call
     took since the last poison holds it already and isn't filled again; one a call took is."""
