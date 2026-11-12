@@ -192,6 +192,11 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
   after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
   until the tie has the server's record.
+- A lost release stops the tries. Under `--watermark` (a rehearsal flag, after `--`) the network certifier names on
+  its watermark each release that its server connection lost, and a server whose gate reads a line as `t n` alone
+  stops ordering there, for every run after it too. So after each try the command reads the network certifier's own
+  log (`warden.json`'s `watermark`): when it names a lost release, or the network certifier ran with the watermark
+  and wrote no log, no later class is tried, the command says which try it stopped at, and it exits 5.
 
 ## The chain's run of record
 

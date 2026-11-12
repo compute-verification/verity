@@ -49,10 +49,19 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
 kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
 it was whole; the egress record's cells, each as
-(bucket, slot, kind, stream, id); and the size and SHA-256 of every file of the try's run directory. The table is made
+(bucket, slot, kind, stream, id); the releases its watermark named lost; and the size and SHA-256 of every file of the
+try's run directory. The table is made
 from these files alone. The run directory itself (the relay's records and their salts, the traffic, the logs) is under
 ``--scratch``, by default a temporary directory removed when the command ends. No key is in either: `rehearse` keeps
 its own in a directory it removes.
+
+**A lost release stops the tries** (`lost_stop`). Under ``--watermark`` (a flag of the rehearsal's, after ``--``)
+the network certifier names on its watermark each release that its server connection lost (`release.watermark_chunk`),
+and its own log of the run keeps them (`warden.json`'s `watermark`). A server whose gate reads a watermark line as
+``t n`` alone stops ordering at such a line, for every run after it too, so no try after it would be served in the
+release order. After each try the log is read, whether or not the try wrote a check: when it names a lost release, or
+when the network certifier ran with the watermark and wrote no log, no later class is tried, the command says which
+try it stopped at and exits `LOST_EXIT`.
 
     python deviations.py try (--stand-in | --front-env NAME) --out DIR [--class all|CLASS] [--ids FILE] [--seed S]
         [--tag T] [--requests 8] [--bucket-requests 64] [--rate 2] [--max-tokens 16] [--tail 8] [--hold-ms 500]
@@ -70,6 +79,7 @@ its own in a directory it removes.
   or not shown to the client. It exits 1 when a class didn't, when honest was refused and the rest weren't tried, or
   when a try wrote no check (it has no row, and the classes after it are still tried); and 2 when none of those and a
   row is shown neither way: the tie it aims at wasn't run (no ``--ids`` yet), or its deviation changed no response.
+  It exits 5, whatever the rows, when it stopped at a lost release.
   ``--tail`` covers a connection admitted at the last request's time, the delay and its cells.
   `deviations.sh` is `try` as a job, behind one ssh forward to a front that listens on its own node's loopback.
 - A try's request i is named ``<class>-<tag>-<i>`` (its `user`), the tag ``--tag`` or a random one a command: the
@@ -82,7 +92,8 @@ its own in a directory it removes.
   its response as the class says, as the front's bytes arrive; every other connection it relays byte for byte. Once it
   listens it writes ``{"listening": [HOST, PORT]}`` on stdout. ``--log`` gets one JSON line an id request when its
   connection ends: its release number, the bits it planted, the bytes it read and sent. It holds no id.
-- `table` makes the table again from what the tries in a directory kept, with `try`'s exit code.
+- `table` makes the table again from what the tries in a directory kept, with `try`'s exit code: 5 where a try it
+  kept named a lost release.
 """
 from __future__ import annotations
 
@@ -149,6 +160,9 @@ PLANTED, STAND_IN_ENV = "planted.jsonl", "DEVIATIONS_STAND_IN_FRONT"
 #: how long the deviating process keeps a connection it withholds, should the network certifier never close it
 LINGER_S = 600.0
 NOT_RUN = "not-run"
+#: why the tries stop at a refused control, and the exit of a command whose tries stopped at a lost release
+HONEST_STOP = "the honest control was refused or had no check: no deviation was tried"
+LOST_EXIT = 5
 ADDRESS = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b(?::\d+)?")
 
 
@@ -336,7 +350,8 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     `DATA` and `END` cells of the egress record, where their SHA-256 is the one its client logged of what it got
     (`held`; else none). An egress cell is [bucket, slot, kind, stream, id] where `io_tie.parse_cell` reads it, else
     [bucket, slot, its bytes in hex without their zero fill]; stream 0's padding isn't listed. Under `stand_in` a
-    connection also has the stand-in endpoint's own ids of its request (`warden_serve.fake_ids`)."""
+    connection also has the stand-in endpoint's own ids of its request (`warden_serve.fake_ids`). `lost` is the
+    releases the network certifier's watermark named lost (`lost_releases`)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     B, blank = params.cell_bytes, IT.pad_cell(params.cell_bytes)
@@ -383,7 +398,38 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
             "windows": dep.get("windows"), "hold_ms": hold_ms,
             "seconds": None if seconds is None else round(seconds, 1),
             "check": {k: v for k, v in check.items() if k != "upstream"} | {"words": ws.table(check)},
-            "connections": connections, "egress": egress, "files": digests(run)}
+            "connections": connections, "egress": egress, "lost": lost_releases(run), "files": digests(run)}
+
+
+def lost_releases(run: Path) -> list[int] | None:
+    """The releases a try's network certifier named lost on its watermark, by its own log in the run directory `run`
+    (`warden.json`'s `watermark`, which `warden_serve.serve` writes at the run's end): none where the run sent no
+    watermark, and None where it wrote no log."""
+    path = run / "warden.json"
+    if not path.exists():
+        return None
+    return [int(n) for n in (json.loads(path.read_text()).get("watermark") or {}).get("lost") or []]
+
+
+def lost_words(cls: str, lost: Sequence[int]) -> str:
+    """What the command says of a try whose watermark named `lost`."""
+    more = "" if len(lost) <= 8 else f" and {len(lost) - 8} more"
+    return (f"{cls}: STOPPED at a lost release: its network certifier's log names {len(lost)} lost on the watermark "
+            f"({', '.join(map(str, lost[:8]))}{more}), a line a server that reads `t n` alone stops ordering at")
+
+
+def lost_stop(cls: str, run: Path, watermark: bool) -> str | None:
+    """Why the tries stop after class `cls`'s try in the run directory `run` (the module docstring's "A lost release
+    stops the tries"), None when they go on: its network certifier's log names a lost release, or, under `watermark`,
+    the network certifier ran (it wrote its `deployment.json`) and left no log, so what its watermark named isn't
+    known."""
+    lost = lost_releases(run)
+    if lost:
+        return lost_words(cls, lost)
+    if lost is None and watermark and (run / "deployment.json").exists():
+        return (f"{cls}: STOPPED: its network certifier ran with the watermark and wrote no log (warden.json), so "
+                "whether a line named a lost release isn't known")
+    return None
 
 
 def cell_of(entry: Sequence, cell_bytes: int) -> bytes:
@@ -625,7 +671,7 @@ def row(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
     return {"class": cls, "changed": CASES[cls][0], "check": CASES[cls][1],
             "relay": "accepted" if accepted else "refused", "tie": tied["verdict"], "words": words,
             "refusals": refusals, **result, "charged": cost, "connections": len(conns), "seconds": kept["seconds"],
-            "run_id": kept["run_id"], "ok": ok}
+            "run_id": kept["run_id"], "lost": list(kept.get("lost") or ()), "ok": ok}
 
 
 def lane_seconds(args) -> float:
@@ -697,34 +743,40 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     return clock() - start
 
 
-def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], float] = one_try) -> tuple[list[str], bool]:
+def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], float] = one_try
+          ) -> tuple[list[str], str | None]:
     """Each class of `classes` as one try (`attempt`) in the scratch directory, what it keeps written to ``--out``
-    (`keep`): the classes tried to their check, and whether the tries stopped at an honest control that was refused
-    or had no check, the rest untried. A deviation's try with no check (`NoCheck`) has no row, and the classes after
-    it are still tried."""
+    (`keep`): the classes tried to their check, and why the tries stopped with the rest untried, None when they
+    didn't: at a try whose watermark named a lost release (`lost_stop`, read after every try, with a check or
+    without), or at an honest control that was refused or had no check (`HONEST_STOP`). A deviation's try with no
+    check (`NoCheck`) has no row, and the classes after it are still tried."""
     scratch = args.scratch or Path(tempfile.mkdtemp(prefix="deviations-"))
     sampled = None if args.ids is None else read_commit(args.ids)
     args.out.mkdir(parents=True, exist_ok=True)
-    tried = []
+    tried, watermark = [], "--watermark" in args.rehearse
     try:
         for cls in classes:
             try:
                 seconds = attempt(cls, scratch / cls, args)
             except NoCheck as e:
                 print(f"{e}\n{cls}: no row", flush=True)
+                if stop := lost_stop(cls, scratch / cls, watermark):
+                    return tried, stop
                 if cls == "honest" and len(classes) > 1:
-                    return tried, True
+                    return tried, HONEST_STOP
                 continue
             kept = keep(cls, scratch / cls, stand_in=args.stand_in, seconds=seconds, hold_ms=args.hold_ms)
             (args.out / f"{cls}.json").write_text(json.dumps(kept))
             tried.append(cls)
             print(f"{cls}: tried in {seconds:.1f} s, the certifier's run {str(kept['run_id'])[:12]}", flush=True)
+            if stop := lost_stop(cls, scratch / cls, watermark):
+                return tried, stop
             if cls == "honest" and len(classes) > 1 and not row(kept, committed_of(kept, sampled, args.stand_in))["ok"]:
-                return tried, True
+                return tried, HONEST_STOP
     finally:
         if args.scratch is None:
             shutil.rmtree(scratch, ignore_errors=True)
-    return tried, False
+    return tried, None
 
 
 def committed_of(kept: dict, sampled: Mapping[str, Sequence[int]] | None, stand_in: bool) -> dict | None:
@@ -743,6 +795,9 @@ def table(rows: Sequence[dict]) -> str:
                 f"    words:   {r['words'] or 'none'}" + (f" ({r['refusals']} in all)" if r["refusals"] > 1 else ""),
                 f"    bits:    {r['planted']} planted over {r['connections']} connections, {r['right']} read right, "
                 f"information {r['information']}; charged {r['charged']}{took}"]
+        if r.get("lost"):
+            out.append(f"    lost:    {len(r['lost'])} release(s) named lost on the watermark: no class was tried after "
+                       "this one")
     return "\n".join(out)
 
 
@@ -812,7 +867,7 @@ def main(argv=None) -> int:
                           hold_s=args.hold_ms / 1000, log=log))
         return 0
     classes = asked = list(CLASSES if args.cls == "all" else (args.cls,))
-    stopped = False
+    stopped = None
     if args.command == "try":
         if not args.stand_in:
             front_of(args.front_env)
@@ -833,8 +888,11 @@ def main(argv=None) -> int:
     print(table(rows))
     if args.command == "try":
         print(f"{len(rows)} tries in {sum(r['seconds'] for r in rows):.1f} s")
+    stopped = stopped or next((lost_words(r["class"], r["lost"]) for r in rows if r["lost"]), None)
     if stopped:
-        print("the honest control was refused or had no check: no deviation was tried")
+        print(stopped, flush=True)
+    if stopped and stopped != HONEST_STOP:
+        return LOST_EXIT
     untried = args.command == "try" and len(classes) < len(asked)
     return 1 if untried or any(r["ok"] is False for r in rows) else 2 if any(r["ok"] is None for r in rows) else 0
 
