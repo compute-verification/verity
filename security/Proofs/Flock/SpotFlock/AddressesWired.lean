@@ -39,7 +39,8 @@ no more than `Addresses` of a design with no wire.
 
 The property is a premise only where every source bit of a member is at a port a link or a wire names
 (`sourcesNamed`, decided on what the verifier holds): round 2 reads any other port off the interior record, and the
-wired program opens its gates under the statement's roots.
+wired program opens its gates under the statement's roots. `AddressesConnected h` is the premise in that form: the
+property at the code's own wiring map (`wireMap h`, returning `returned h`), asked only of such a held code.
 -/
 
 @[expose] public section
@@ -217,7 +218,8 @@ under the statement's roots (`CheckedRun.rootsWired`). `AddressesWired` asks the
 only where this holds. -/
 def sourcesNamed : Bool :=
   (sourceBits h.ms).all fun s =>
-    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome || (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
+    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
+      (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
 
 /-- **Only source bits at a port a link names stay inputs**: where every source bit is at a port a link or a wire
 names and every wired source bit has a gate to go to (`wiresMove`), a source bit at a port no link names has one
@@ -233,6 +235,14 @@ theorem wireTarget_of_sourcesNamed (hn : sourcesNamed h = true) (hc : wiresMove 
     rw [hw] at hall
     simp at hall
   | some w => exact wireTarget_of_wiresMove h hc hs hl hw
+
+/-- **The premise at the code's own wiring**: where every source bit is at a port a link or a wire names
+(`sourcesNamed`), the property holds at the wiring map the code's wires give (`wireMap`), returning the gates the
+boundary record holds (`returned`). Of a held code with a source bit at a port neither names it asks nothing:
+round 2 reads such a port off the interior record and the wired program opens its gate under the statement's roots
+(`sourcesNamed`). So a guarantee that takes this premise holds the code to `sourcesNamed` itself. -/
+def AddressesConnected : Prop :=
+  sourcesNamed h = true → AddressesWired h (wireMap h) (returned h)
 
 /-! ## A connected instance: the gates and their roots
 
