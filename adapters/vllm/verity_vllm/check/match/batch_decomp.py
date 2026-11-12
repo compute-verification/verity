@@ -429,7 +429,6 @@ class Options:
     oracle: str = option("--oracle", help="match dir: program.json + instances.jsonl (+ capture/log.jsonl.gz)")
     derived: list[str] = option("--derived", action="append", default=[],
                                 help="derived request-wrapper dir (repeatable; shape read from artifact.json)")
-    log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     out: str = option("--out")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
                               help="within-step criterion of record: dag (live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
@@ -438,7 +437,7 @@ class Options:
 def main(a: Options) -> int:
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
-    res = decompose(a.oracle, a.derived, a.log, within_step=a.within_step)
+    res = decompose(a.oracle, a.derived, within_step=a.within_step)
     json.dump(res, open(a.out, "w"), indent=1, default=str)
     brief = {"verdict": res["verdict"], "within_step": res["within_step_criterion"], "reasons": res["reasons"],
              "requests": [{k: e.get(k) for k in ("request_id", "LP", "T", "n_instances", "steps", "canonical_equal", "sequence_equal", "dag_multiset_equal", "criterion", "chunked_steps")}

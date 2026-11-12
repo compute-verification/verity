@@ -34,8 +34,6 @@ from typing import Any, Iterable, Mapping
 
 from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AcquireCorrespondence, ReturnSlot, RuntimeTree
 
-AnnotationCorrespondence = AcquireCorrespondence
-
 SCHEMA = "acquisition-plan/v1"
 SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "analytic_table", "prescribed")
 HOOK_KINDS = ("producer_output", "consumer_input", "runner_return")      # the kinds `install_from_plan` installs as hooks / wraps
@@ -415,7 +413,6 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
 
     if fam == WEIGHTS_FAMILY:
         owner = module.rsplit(".", 1)[0] if "." in module else module
-        leaf = module.rsplit(".", 1)[-1]
         if rt.has_module(owner) or module in rt.buffers:
             legal.append(AcquisitionSite("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
@@ -507,7 +504,7 @@ def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) ->
 
 
 def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *, tables: Mapping[str, Any] | None = None,
-                     with_residuals: bool = True, padding_identities: Iterable[Mapping[str, Any]] = ()) -> AcquisitionPlan:
+                     padding_identities: Iterable[Mapping[str, Any]] = ()) -> AcquisitionPlan:
     values = value_classes(manifest, padding_identities)
     for v in values:
         legal, refused = sites_of(v, correspondence)
@@ -519,15 +516,12 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
     prov = correspondence.provenance()
     prov["modules"] = confirm_modules(values, correspondence)
     rt = correspondence.runtime
-    if with_residuals:
-        tabs = tables if tables is not None else _lifetime_tables()
-        for v in values:                                     # lifetime of a module-output site from the table when the annotations carry none
-            if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
-                v.chosen = AcquisitionSite(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
-                v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
-        residuals = residuals_of(values, rt, tabs)
-    else:
-        residuals = []
+    tabs = tables if tables is not None else _lifetime_tables()
+    for v in values:                                         # lifetime of a module-output site from the table when the annotations carry none
+        if v.chosen is not None and v.chosen.kind == "producer_output" and v.chosen.lifetime == "unknown" and hazard_by_table(v.chosen.module, v.chosen.slot, tabs["HAZARD_LEAVES"]):
+            v.chosen = AcquisitionSite(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
+            v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
+    residuals = residuals_of(values, rt, tabs)
     notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
              "the plan's runtime sites are for the executed steps"]
     pdig = str(manifest.get("program_digest") or "")
