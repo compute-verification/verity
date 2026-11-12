@@ -14,12 +14,15 @@ per head, four 64-key first blocks, one 16-key one, forty column ends and eight 
 run exits 0 only when the outcome is accepted and every negative refused. ``--out`` holds the window serving wrote
 (``window/``, its private files too) and a5's records (``rank0/``, ``challenger/``, ``summary.json``).
 
-``--units`` audits the row at DV = 64 (the fixture's ``HALF``) with each key block served as its scores unit and its values
-units on 32 columns, the fixture's ``UNITS_BITS``: per head and key block the Boolean ``SparseMlaHeadScores_v2`` and two
-``SparseMlaHeadValues_v2``, each values unit's probabilities (and past a split's first block its rescale and the O before)
+``--units`` audits the row at DV = 64 and DR = 32 (the fixture's ``HALF``) with each key block served as its scores unit and
+its values units on 32 columns, the fixture's ``UNITS_BITS``: per key block and column block of 32 of its key rows the Boolean
+``SparseMlaHeadKeysWire_v2`` that writes it, and per head and key block the Boolean ``SparseMlaHeadScoresCols_v2`` and two
+``SparseMlaHeadValues_v2``, which read their key rows from those writers' committed rows (no tree of their own,
+`chain_rows.held_rows`), each values unit's probabilities (and past a split's first block its rescale and the O before)
 wired to the unit that wrote them, each split's end on a column block and the two-split combine of one. It stands in for
-step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) names them: at T = 272, per head, five scores
-units, forty values units and forty split ends on 64 columns, and eight combines.
+step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) names them: at T = 272, per row, forty-five key
+rows' writers on 64 columns, and per head, five scores units, forty values units and forty split ends on 64 columns, and
+eight combines.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
@@ -44,6 +47,7 @@ import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
+from verity_vllm.pipeline import chain_rows as CH  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
 
 RULE = "stratified-rate:1/64"
@@ -64,8 +68,9 @@ def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
 
 def committed(w: CS.Binding, got: list, out: Path, of: dict, module: str) -> CS.Binding:
     """Window ``w`` on its members' values ``got`` (`serving_rows.read_all`'s) committed into ``out`` as serving commits it, its
-    salts fresh: a stand-in of ``of``, committed by ``module``."""
-    c = CS.commit(w, [g for g, _e in got])
+    salts fresh, each port a member holds in its writer's tree given as its writer's (`chain_rows.held_rows`): a stand-in of
+    ``of``, committed by ``module``."""
+    c = CS.commit(w, CH.held_rows(w, [g for g, _e in got]))
     CS.write(c, out, {"of": of, "committer": {"module": module}}, IX.index_doc(w.members, [e for _g, e in got], w.run),
              kind="stand-in", registrar=R)
     return w
