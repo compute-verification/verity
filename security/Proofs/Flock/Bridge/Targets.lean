@@ -118,14 +118,14 @@ is `Spot.FilePart.ofCircuit`'s blocks in the registration's strata (`Bridge.relD
 def RelDeployTarget : Prop :=
   ∀ {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
     {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
-    (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ) (ns : List ℕ) (r : Claims.Sampling.OneStage)
-    (κ : Fin C.N → Option Bool) (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg)
-    (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),
-    LayoutIs C rows c nl roots cd →
+    (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (ns : List ℕ)
+    (r : Claims.Sampling.OneStage) (κ : Fin C.N → Option Bool) (desc : Claims.Msg) (q : Claims.Sampling.Query)
+    (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),
+    LayoutIs C rows c pub nl roots cd →
     cd.parse x = some (stmtOf P κ r desc q roots) → cd.partition (stmtOf P κ r desc q roots) = some (partOf P κ ns) →
-    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep C rows c nl roots) δ (stmtOf P κ r desc q roots)
-      (partOf P κ ns) (witDep C (commitDep C rows c nl roots) Claims.Sampling.sha512Msg roots Xr) →
+    ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg (commitDep C rows c pub nl roots) δ (stmtOf P κ r desc q roots)
+      (partOf P κ ns) (witDep C (commitDep C rows c pub nl roots) Claims.Sampling.sha512Msg roots Xr) →
     ¬ Claims.Sampling.R Claims.Sampling.sha512Msg (SamplingDeploy.deployOf F cd).commit cd.parse cd.partition δ x
-      (witDep C (commitDep C rows c nl roots) Claims.Sampling.sha512Msg roots Xr)
+      (witDep C (commitDep C rows c pub nl roots) Claims.Sampling.sha512Msg roots Xr)
 
 end Flock.Bridge

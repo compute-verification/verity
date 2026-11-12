@@ -195,9 +195,8 @@ def unlike(argv, command) -> str | None:
 SHARD_KIND = "check-shard/v1"
 
 
-def declared(repo: Path, commit: str) -> list[dict] | None:
-    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
-    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
+def _ci_toml(repo: Path, commit: str) -> dict | None:
+    """``commit``'s own `tools/verity/check/ci.toml`, parsed, or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -206,12 +205,33 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
                                   lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
     r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
-        jobs = tomllib.loads(r.stdout).get("job", []) if r.returncode == 0 else None
-    except (tomllib.TOMLDecodeError, TypeError, AttributeError):
-        jobs = None
+        return tomllib.loads(r.stdout) if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError):
+        return None
+
+
+def declared(repo: Path, commit: str) -> list[dict] | None:
+    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
+    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
+    jobs = doc.get("job", []) if (doc := _ci_toml(repo, commit)) is not None else None
     if not isinstance(jobs, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in jobs):
         return None
     return jobs
+
+
+def shard_plans(repo: Path, commit: str) -> dict[int, list[list[str]]] | None:
+    """The `[[plan]]` tables of ``commit``'s own `tools/verity/check/ci.toml` by their number of shards, as check.py's
+    `--shard K/N` takes them: {N: each shard's parts}, or None when it can't be read."""
+    plans = doc.get("plan", []) if (doc := _ci_toml(repo, commit)) is not None else None
+    if not isinstance(plans, list):
+        return None
+    out = {}
+    for p in plans:
+        shards = p.get("shards") if isinstance(p, dict) else None
+        if not (isinstance(shards, list) and all(isinstance(s, list) and all(isinstance(x, str) for x in s) for s in shards)):
+            return None
+        out.setdefault(len(shards), shards)
+    return out
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
@@ -1717,11 +1737,16 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
-    None when ``repo`` can't make one."""
+    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
+    under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
+    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
     import shutil
 
-    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    from .settings import train_trees
+
+    if root := train_trees():
+        os.makedirs(root, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
     if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
         shutil.rmtree(tree, ignore_errors=True)
         return None

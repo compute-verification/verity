@@ -399,9 +399,10 @@ def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
 
 
 @pytest.mark.parametrize("name", DRAFT_CASES)
-def test_kept_count_is_charged_at_its_entropy_or_derived(name):
-    """The kept count's class, both ways: charged, each row that verified drafts and emitted sends its count at the
-    counts' measured entropy, which is at most log2(K + 1) a row; derived, nothing is sent."""
+def test_kept_count_is_charged_at_its_code_or_derived(name):
+    """The kept count's class, both ways: charged, the bits of the counts' code, which decode back to the trace's counts
+    from K and the output lengths alone, and from which the replay gives the trace's steps; derived, nothing is sent.
+    The entropy of the counts each alone, at most log2(K + 1) a row, is beside it and is not what is charged."""
     t = trace(name, DRAFT)
     K = t.engine.num_speculative_tokens
     # the trace's own record: a row's `drafts`, and `emitted` less the row's own token
@@ -410,7 +411,14 @@ def test_kept_count_is_charged_at_its_entropy_or_derived(name):
     assert (b["K"], b["rows"], b["counts"]) == (K, len(kept), [kept.count(k) for k in range(K + 1)])
     assert b["derived"] == 0 and b["max"] == math.log2(K + 1)
     assert b["entropy"] == pytest.approx(-sum(c / len(kept) * math.log2(c / len(kept)) for c in b["counts"] if c))
-    assert 0 < b["entropy"] <= b["max"] and b["charged"] == pytest.approx(b["rows"] * b["entropy"])
+    assert 0 < b["entropy"] <= b["max"] and b["alone"] == pytest.approx(b["rows"] * b["entropy"])
+    bits, ideal = R.kept_encode(K, t.requests)
+    assert b["charged"] == len(bits) <= ideal + 2 and b["ideal"] == ideal
+    back = R.kept_decode(K, [q.output_len for q in t.requests], bits)
+    assert back == [q.kept for q in t.requests]
+    reqs = [dataclasses.replace(q, kept=k) for q, k in zip(t.requests, back)]
+    again = R.replay(t.engine, reqs, admit=t.before_step, passed=t.passed)
+    assert [(s.rows, s.drafts) for s in again.steps] == [(s.rows, s.drafts) for s in t.steps]
     d = R.draft_table(t, contexts=R.CONTEXTS)
     assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
     assert d["arrivals"] == {c: sum(len(x) for x in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
@@ -425,6 +433,42 @@ def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
     other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])
     with pytest.raises(ValueError, match="the replay diverges from the trace at step 0"):
         R.kept_bits(other)
+
+
+def test_kept_code_round_trips_and_pays_less_for_runs():
+    """The kept count's code on counts no fixture has: outputs of every length from none, a request's last rows, whose
+    counts its output bounds, and counts that come in runs, which cost less than the same counts shuffled."""
+    rng = random.Random(7)
+
+    def requests(K: int, stay: float, n: int = 40) -> list:
+        out = []
+        for _ in range(n):
+            left, kept, c = rng.randint(0, 200), [], rng.randint(0, K)
+            while left:
+                c = c if rng.random() < stay else rng.randint(0, K)
+                kept.append(min(c, left - 1))
+                left -= 1 + kept[-1]
+            out.append(R.RequestIO(prompt_len=1, max_tokens=256, output_len=len(kept) + sum(kept), eos=False,
+                                   kept=tuple(kept)))
+        return out
+
+    for K in (1, 2, 5, 8):
+        for stay in (0.0, 0.5, 0.95):
+            reqs = requests(K, stay)
+            bits, ideal = R.kept_encode(K, reqs)
+            assert R.kept_decode(K, [q.output_len for q in reqs], bits) == [q.kept for q in reqs]
+            assert len(bits) <= ideal + 2
+    runs = requests(5, 0.95, n=200)
+    shuffled = []
+    for q in runs:
+        kept = list(q.kept)
+        rng.shuffle(kept)
+        shuffled.append(dataclasses.replace(q, kept=tuple(kept)))
+    assert len(R.kept_encode(5, runs)[0]) < 0.8 * len(R.kept_encode(5, shuffled)[0])
+    none = [R.RequestIO(prompt_len=1, max_tokens=4, output_len=0, eos=False, kept=())]
+    assert R.kept_encode(5, none) == ([], 0.0) and R.kept_decode(5, [0], []) == [()]
+    with pytest.raises(ValueError, match="add up to 4 outputs, not its 3"):
+        R.kept_encode(5, [R.RequestIO(prompt_len=1, max_tokens=4, output_len=3, eos=False, kept=(3,))])
 
 
 def _second_serve(recs: list[dict], after: int, empty: int) -> list[dict]:
@@ -460,6 +504,23 @@ def test_a_span_of_a_longer_serve_is_a_trace_of_its_own(name):
     assert R.kept_bits(t) == R.kept_bits(whole)
     first = R.load_step_trace(R.span(both, lambda i: not i.endswith("-again")))
     assert (first.ids, first.passed, [s.rows for s in first.steps]) == (whole.ids, whole.passed, [s.rows for s in whole.steps])
+
+
+def test_the_table_reads_one_load_of_a_longer_serve(tmp_path):
+    """`--span` reads each step trace as the span of the requests whose id holds it: the second load of a serve that
+    ran two gives the table the load gives served alone."""
+    name = "async-draft3-prefix-cache"
+    recs = R.records(DRAFT / f"{name}.jsonl")
+    toks = json.loads((DRAFT / f"{name}.tokens.json").read_text())
+    both = recs + _second_serve(recs, sum(r["kind"] == "step" for r in recs), 2)
+    (tmp_path / "both.jsonl").write_text("".join(json.dumps(r) + "\n" for r in both))
+    (tmp_path / "both.tokens.json").write_text(json.dumps(toks | {f"{i}-again": v for i, v in toks.items()}))
+    R.main([str(tmp_path / "both.jsonl"), "--span=-again", "--out", str(tmp_path / "span.json")])
+    R.main([str(DRAFT / f"{name}.jsonl"), "--out", str(tmp_path / "alone.json")])
+    table = json.loads((tmp_path / "span.json").read_text())["both"]
+    assert table == json.loads((tmp_path / "alone.json").read_text())[name] and table["kept_count"]["charged"] > 0
+    with pytest.raises(ValueError, match="not from a trace-corpus directory"):
+        R.read_any(tmp_path, within="-again")
 
 
 def test_a_span_that_is_not_a_serve_of_its_own_is_refused():

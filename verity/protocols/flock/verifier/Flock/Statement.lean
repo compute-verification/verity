@@ -270,24 +270,100 @@ private theorem getElem!_map_of_lt {α β} [Inhabited α] [Inhabited β] (f : α
     (h : i < xs.size) : (xs.map f)[i]! = f xs[i]! := by
   rw [getElem!_pos (xs.map f) i (by simpa using h), getElem!_pos xs i h, Array.getElem_map]
 
-/-- `tensor` from each `lw[s]`'s table (`F128.mulBy_mulTableL`) once `eq(ρ)` has 1024 entries. -/
+/-- `out[s + n·u] = mulBy tabs[s] x` for `s, …, s + fuel − 1`: one entry `x` of `eq(ρ)` times every `lw[s]`, each from
+its table. -/
+def tensRow (tabs : Array (Array F128)) (x : F128) (n u : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, s, out => tensRow tabs x n u fuel (s + 1) (out.set! (s + n * u) (F128.mulBy tabs[s]! x))
+
+/-- `tensRow` for the entries `u, …, u + fuel − 1` of `eq(ρ)`. -/
+def tensRows (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, u, out => tensRows tabs eIn n fuel (u + 1) (tensRow tabs eIn[u]! n u n 0 out)
+
+/-- `tensor` once `eq(ρ)` has 1024 entries, from each `lw[s]`'s table (`F128.mulBy_mulTableL`), in the array's order by
+two loops: an entry of `eq(ρ)` is read once for its `lw.size` products, and no element costs a closure call or a
+division. -/
 def tensorFast (lw : Array F128) (rho : Array F128) : Array F128 :=
   let eIn := eqTable rho
   if eIn.size < 1024 then Array.ofFn (n := lw.size * eIn.size) fun k => lw[k.val % lw.size]! * eIn[k.val / lw.size]!
-  else
-    let tabs := lw.map F128.mulTableL
-    Array.ofFn (n := lw.size * eIn.size) fun k => F128.mulBy tabs[k.val % lw.size]! eIn[k.val / lw.size]!
+  else tensRows (lw.map F128.mulTableL) eIn lw.size eIn.size 0 (Array.replicate (lw.size * eIn.size) 0)
+
+theorem tensRow_size (tabs : Array (Array F128)) (x : F128) (n u : Nat) : ∀ (fuel s : Nat) (out : Array F128),
+    (tensRow tabs x n u fuel s out).size = out.size
+  | 0, _, _ => rfl
+  | fuel + 1, s, out => by
+    rw [tensRow, tensRow_size tabs x n u fuel, Array.set!_eq_setIfInBounds, Array.size_setIfInBounds]
+
+theorem tensRows_size (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) : ∀ (fuel u : Nat) (out : Array F128),
+    (tensRows tabs eIn n fuel u out).size = out.size
+  | 0, _, _ => rfl
+  | fuel + 1, u, out => by rw [tensRows, tensRows_size tabs eIn n fuel, tensRow_size]
+
+/-- Position `s + n·u` is the one whose remainder by `n` is `s` and whose quotient is `u`. -/
+theorem tensPos_iff (s n u k : Nat) (hs : s < n) : s + n * u = k ↔ k % n = s ∧ k / n = u := by
+  constructor
+  · intro h
+    subst h
+    exact ⟨by rw [Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt hs],
+      by rw [Nat.add_mul_div_left _ _ (by omega), Nat.div_eq_of_lt hs, Nat.zero_add]⟩
+  · intro ⟨h1, h2⟩
+    rw [← h1, ← h2, Nat.mod_add_div]
+
+/-- `tensRow` writes the positions of quotient `u` whose remainder it covers, and leaves the others. -/
+theorem tensRow_get (tabs : Array (Array F128)) (x : F128) (n u : Nat) :
+    ∀ (fuel s : Nat) (out : Array F128) (k : Nat), s + fuel ≤ n →
+      (tensRow tabs x n u fuel s out)[k]? =
+        if k / n = u ∧ s ≤ k % n ∧ k % n < s + fuel ∧ k < out.size then some (F128.mulBy tabs[k % n]! x) else out[k]?
+  | 0, s, out, k, _ => by rw [tensRow, if_neg (by omega)]
+  | fuel + 1, s, out, k, hs => by
+    rw [tensRow, tensRow_get tabs x n u fuel (s + 1) _ k (by omega), Array.set!_eq_setIfInBounds,
+      Array.size_setIfInBounds, Array.getElem?_setIfInBounds]
+    by_cases h : k / n = u ∧ s + 1 ≤ k % n ∧ k % n < s + 1 + fuel ∧ k < out.size
+    · rw [if_pos h, if_pos (by omega)]
+    · rw [if_neg h]
+      by_cases hk : s + n * u = k
+      · have hq := (tensPos_iff s n u k (by omega)).1 hk
+        rw [if_pos hk]
+        by_cases hlt : k < out.size
+        · rw [if_pos (by omega), if_pos ⟨hq.2, by omega, by omega, hlt⟩, hq.1]
+        · rw [if_neg (by omega), if_neg (by omega), Array.getElem?_eq_none (by omega)]
+      · rw [if_neg hk, if_neg]
+        intro ⟨h1, h2, h3, h4⟩
+        exact hk ((tensPos_iff s n u k (by omega)).2 ⟨by omega, h1⟩)
+
+/-- `tensRows` writes the positions whose quotient it covers, and leaves the others. -/
+theorem tensRows_get (tabs : Array (Array F128)) (eIn : Array F128) (n : Nat) (hn : 0 < n) :
+    ∀ (fuel u : Nat) (out : Array F128) (k : Nat),
+      (tensRows tabs eIn n fuel u out)[k]? =
+        if u ≤ k / n ∧ k / n < u + fuel ∧ k < out.size then some (F128.mulBy tabs[k % n]! eIn[k / n]!) else out[k]?
+  | 0, u, out, k => by rw [tensRows, if_neg (by omega)]
+  | fuel + 1, u, out, k => by
+    have hm := Nat.mod_lt k hn
+    rw [tensRows, tensRows_get tabs eIn n hn fuel (u + 1), tensRow_size, tensRow_get tabs eIn[u]! n u n 0 out k (by omega)]
+    by_cases h : u + 1 ≤ k / n ∧ k / n < u + 1 + fuel ∧ k < out.size
+    · rw [if_pos h, if_pos (by omega)]
+    · rw [if_neg h]
+      by_cases h2 : k / n = u ∧ 0 ≤ k % n ∧ k % n < 0 + n ∧ k < out.size
+      · rw [if_pos h2, if_pos (by omega), h2.1]
+      · rw [if_neg h2, if_neg (by omega)]
 
 @[csimp] theorem tensor_eq_fast : @tensor = @tensorFast := by
   funext lw rho
   simp only [tensor, tensorFast]
   split
   · rfl
-  · congr 1
-    funext k
-    have hk := k.isLt
-    have hs : 0 < lw.size := Nat.pos_of_ne_zero fun h => by simp [h] at hk
-    rw [getElem!_map_of_lt _ _ _ (Nat.mod_lt _ hs), F128.mulBy_mulTableL]
+  · apply Array.ext
+    · rw [Array.size_ofFn, tensRows_size, Array.size_replicate]
+    · intro k h1 h2
+      rw [Array.size_ofFn] at h1
+      have hn : 0 < lw.size := Nat.pos_of_ne_zero fun h => by simp [h] at h1
+      have hq : k / lw.size < (eqTable rho).size := Nat.div_lt_of_lt_mul h1
+      have h := tensRows_get (lw.map F128.mulTableL) (eqTable rho) lw.size hn (eqTable rho).size 0
+        (Array.replicate (lw.size * (eqTable rho).size) 0) k
+      rw [if_pos ⟨Nat.zero_le _, by omega, by rw [Array.size_replicate]; exact h1⟩,
+        getElem!_map_of_lt _ _ _ (Nat.mod_lt _ hn), F128.mulBy_mulTableL, Array.getElem?_eq_getElem h2] at h
+      rw [Option.some.inj h, Array.getElem_ofFn]
 
 /-- `α·Aᵀe_lo + Bᵀe_lo` on a slot of `2^sl` bits, the product rows' B side read from the table for a lookup slot. -/
 def baseOf (alpha : F128) (eLo : Array F128) (a b : Sparse) (lk : Option LookupTable) (sl : Nat) : Array F128 :=
@@ -405,6 +481,105 @@ def sumUpTo (n : Nat) (f : Nat → F128) : F128 := Nat.fold n (fun i _ acc => ac
 /-- A slot type's share of the 64 entries: `Σ_{y mod 64 = s} base[y] · eLo[⌊y/64⌋]` at `s`. -/
 def project (base eLo : Array F128) : Array F128 :=
   Array.ofFn (n := 64) fun s => sumUpTo eLo.size fun u => base[s.val + 64 * u]! * eLo[u]!
+
+/-- `F128.mulW`'s body, inline where it is used: the product's two words never become a cell. -/
+@[inline] def mulWords (al ah bl bh : UInt64) : F128 :=
+  let (p0l, p0h) := F128.clmul al bl
+  let (p2l, p2h) := F128.clmul ah bh
+  let (ml, mh) := F128.clmul (al ^^^ ah) (bl ^^^ bh)
+  let m1l := ml ^^^ p0l ^^^ p2l
+  let m1h := mh ^^^ p0h ^^^ p2h
+  F128.reduce p0l (p0h ^^^ m1l) (p2l ^^^ m1h) p2h
+
+theorem mulWords_eq (a b : F128) : mulWords a.lo a.hi b.lo b.hi = a * b := rfl
+
+/-- `v + ⟨al, ah⟩ * ⟨bl, bh⟩` as an out-of-line call that owns `v`: the product is added into `v`'s own cell, as
+`Sparse.addCell` adds a matrix entry's coin. -/
+@[noinline] def addMul (al ah bl bh : UInt64) (v : F128) : F128 :=
+  let p := mulWords al ah bl bh
+  ⟨v.lo ^^^ p.lo, v.hi ^^^ p.hi⟩
+
+theorem addMul_eq (a b v : F128) : addMul a.lo a.hi b.lo b.hi v = v + a * b :=
+  (rfl : addMul a.lo a.hi b.lo b.hi v = v + mulWords a.lo a.hi b.lo b.hi).trans (congrArg (v + ·) (mulWords_eq a b))
+
+/-- Entries `s, …, s + fuel − 1` of the 64 from `o`, each times `⟨xl, xh⟩` and added into its sum's own cell
+(`addMul`). -/
+def projRow (base : Array F128) (xl xh : UInt64) (o : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, s, acc =>
+    let b := base[s + o]!
+    projRow base xl xh o fuel (s + 1) (acc.modify s (addMul b.lo b.hi xl xh))
+
+/-- Blocks `u, …, u + fuel − 1` of 64 entries, block `u` times `eLo[u]`. -/
+def projRows (base eLo : Array F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, u, acc =>
+    let x := eLo[u]!
+    projRows base eLo fuel (u + 1) (projRow base x.lo x.hi (64 * u) 64 0 acc)
+
+/-- `project` (`project_eq_fast`) with the base read in its own order: a block's 64 entries one after another, each
+product added to its sum, where `project` reads every 64th entry of the whole base for one sum at a time. -/
+def projectFast (base eLo : Array F128) : Array F128 :=
+  projRows base eLo eLo.size 0 (Array.replicate 64 0)
+
+theorem sumUpTo_succ (n : Nat) (f : Nat → F128) : sumUpTo (n + 1) f = sumUpTo n f + f n := by
+  simp only [sumUpTo, Nat.fold_succ]
+
+/-- `projRow` adds entry `j`'s product to sum `j`, for each `j` it covers, and leaves the others. -/
+theorem projRow_get (base : Array F128) (x : F128) (o : Nat) : ∀ (fuel s : Nat) (acc : Array F128) (j : Nat),
+    (projRow base x.lo x.hi o fuel s acc)[j]? =
+      if s ≤ j ∧ j < s + fuel then acc[j]?.map (· + base[j + o]! * x) else acc[j]?
+  | 0, s, acc, j => by rw [projRow, if_neg (by omega)]
+  | fuel + 1, s, acc, j => by
+    rw [projRow, projRow_get base x o fuel (s + 1), Array.getElem?_modify]
+    by_cases h : s = j
+    · subst h
+      rw [if_neg (by omega), if_pos rfl, if_pos (by omega)]
+      exact congrArg (Option.map · acc[s]?) (funext (addMul_eq base[s + o]! x))
+    · rw [if_neg h]
+      by_cases h2 : s + 1 ≤ j ∧ j < s + 1 + fuel
+      · rw [if_pos h2, if_pos (by omega)]
+      · rw [if_neg h2, if_neg (by omega)]
+
+/-- Sum `j` after blocks `0, …, u + fuel − 1`, from sum `j` after blocks `0, …, u − 1`. -/
+theorem projRows_get (base eLo : Array F128) (j : Nat) (hj : j < 64) : ∀ (fuel u : Nat) (acc : Array F128),
+    acc[j]? = some (sumUpTo u fun u => base[j + 64 * u]! * eLo[u]!) →
+      (projRows base eLo fuel u acc)[j]? = some (sumUpTo (u + fuel) fun u => base[j + 64 * u]! * eLo[u]!)
+  | 0, _, _, h => h
+  | fuel + 1, u, acc, h => by
+    rw [projRows, show u + (fuel + 1) = u + 1 + fuel by omega]
+    apply projRows_get base eLo j hj fuel (u + 1)
+    rw [projRow_get, if_pos (by omega), h, sumUpTo_succ]
+    rfl
+
+theorem projRows_size (base eLo : Array F128) : ∀ (fuel u : Nat) (acc : Array F128),
+    (projRows base eLo fuel u acc).size = acc.size
+  | 0, _, _ => rfl
+  | fuel + 1, u, acc => by
+    rw [projRows, projRows_size base eLo fuel (u + 1)]
+    have h : ∀ (fuel s : Nat) (acc : Array F128),
+        (projRow base eLo[u]!.lo eLo[u]!.hi (64 * u) fuel s acc).size = acc.size := by
+      intro fuel
+      induction fuel with
+      | zero => intro s acc; rfl
+      | succ k ih => intro s acc; rw [projRow, ih, Array.size_modify]
+    exact h 64 0 acc
+
+/-- Compiled code runs `projectFast`; the kernel and every proof see `project`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `partialRanges`. -/
+@[csimp] theorem project_eq_fast : @project = @projectFast := by
+  funext base eLo
+  apply Array.ext
+  · rw [project, projectFast, Array.size_ofFn, projRows_size, Array.size_replicate]
+  · intro j h1 h2
+    rw [project, Array.size_ofFn] at h1
+    have h : (projectFast base eLo)[j]? = some (sumUpTo eLo.size fun u => base[j + 64 * u]! * eLo[u]!) := by
+      have := projRows_get base eLo j h1 eLo.size 0 (Array.replicate 64 0)
+        (by rw [Array.getElem?_replicate, if_pos h1, sumUpTo, Nat.fold_zero])
+      rwa [Nat.zero_add] at this
+    rw [Array.getElem?_eq_getElem h2] at h
+    rw [Option.some.inj h]
+    simp only [project, Array.getElem_ofFn]
 
 /-- `folded`'s ranges: each range's slot type folded once (`slotBase`, cached as `foldRanges` caches it), its share of
 entry `s` the base projected on `eq(r[.. sl − 6], ·)`, times `Σ_q eq(ρ[sl − 6 ..], q) · eq(r[sl − 6 ..], q)` over the
