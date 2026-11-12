@@ -85,10 +85,10 @@ CLIENT=${CLIENT:-corpus}
 if [ "$CLIENT" = vllm-bench ]; then
   ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}
   [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows canonical-topk two-stage"
-  # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit window shorter than a
-  # pass: a pass then holds the commits of the requests it finishes. At a window longer than a pass they would fall
-  # between passes, where no request waits on them, and the cost would leave the commitment's work out; a short window
-  # counts a window's fixed work more often than a long one, so the cost errs high.
+  # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit period shorter than a
+  # pass: a pass then holds the commits of the requests it finishes. At a period longer than a pass they would fall
+  # between passes, where no request waits on them, and the cost would leave the commitment's work out; a short period
+  # counts a period's fixed work more often than a long one, so the cost errs high.
   REPS=${REPS:-6}; WINDOW_S=${WINDOW_S:-30}
   export ARMS LOADS
 fi

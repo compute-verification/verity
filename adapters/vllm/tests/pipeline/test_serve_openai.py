@@ -830,7 +830,7 @@ HOT = dict(CERTIFIER_BODY, temperature=0.8, user="u-hot")
 
 def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_derived_seed_and_a_seeded_one_its_own(tmp_path):
     """The derived seed is the one `engine.served_seed.derived` makes of the coin the request's window names and its user,
-    never `DEFAULT_SEED` or one the engine draws."""
+    never `DEFAULT_SEED` or one of the engine's own."""
     with Serving(tmp_path) as s:
         serve_concurrently(s, [CERTIFIER_BODY, dict(CERTIFIER_BODY, prompt=[5, 6], seed=1234), dict(HOT, prompt=[7, 8])])
     by_rule = {r["ingress"]["seed_rule"]: r for r in records(tmp_path, "requests.jsonl")}
@@ -845,12 +845,12 @@ def test_a_seedless_greedy_request_commits_the_default_a_stochastic_one_its_deri
     assert all(r["check"]["passed"] for r in by_rule.values()) and s.windows.summary()["passed"]
 
 
-def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
+def test_each_busy_period_flips_a_fresh_seed_coin_that_every_window_cut_from_it_keeps(tmp_path, monkeypatch):
     """One user's two requests, each into an idle engine, are seeded under two coins, so differently; the windows
     ``--window-steps`` cuts from a request's run keep the coin of the one before them, so every window holding one of its
     rows names the coin it was seeded under."""
-    draws = iter(range(1, 100))
-    monkeypatch.setattr(served_seed, "in_process", lambda: (next(draws).to_bytes(64, "big"), "test"))
+    flips = iter(range(1, 100))
+    monkeypatch.setattr(served_seed, "in_process", lambda: (next(flips).to_bytes(64, "big"), "test"))
     with Serving(tmp_path, window_steps=2) as s:
         for _ in range(2):
             assert s.post("/v1/completions", dict(HOT, max_tokens=5, min_tokens=5))[0] == 200
@@ -865,7 +865,7 @@ def test_each_busy_period_draws_a_fresh_seed_coin_that_every_window_cut_from_it_
 
 
 def test_a_committed_seed_other_than_the_one_admitted_fails(tmp_path):
-    """The engine sampling under a seed of its own (vLLM's drawn one) rather than the default or the derived one fails the
+    """The engine sampling under a seed of its own (vLLM's, from ``np.random``) rather than the default or the derived one fails the
     request's check, naming the seed it committed."""
     for i, body in enumerate((CERTIFIER_BODY, HOT)):
         (tmp_path / str(i)).mkdir()
@@ -1053,7 +1053,9 @@ def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_pa
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
 
-    ninja = lambda _: "/v/bin/ninja"  # noqa: E731
+    def ninja(_: str) -> str:
+        return "/v/bin/ninja"
+
     so.preflight(opts(), which=ninja)
     monkeypatch.setenv("VERITY_POOL_ROW", "18")
     with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):

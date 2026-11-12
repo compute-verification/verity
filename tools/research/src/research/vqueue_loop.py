@@ -12,11 +12,12 @@ its refs are left as drive keeps them.  `ready` is the open PRs drive would land
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
 `main` landed since, as `tools/move/restack.py` carries a branch, from an older head with a land verdict of its own only, since
-mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working
-out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land verdict by a non-owner (its head's, or with
+mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working out, `--move-carry-jobs` heads
+at once in jobs detached from the tick, which outlive it), with a land verdict by a non-owner (its head's, or with
 drive.toml's `verdict_carry` "on" at `main` one the verdict carry takes from another of its heads whose commits since only
-merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
-`lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by its merge), not on
+merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule
+(`queue.lands_on_mark`, which `research queue review`'s rows read too: drive.toml's `lowrisk_lane` and `lowrisk_excludes` at
+`main`; never a held PR's, nor a move PR's, which is otherwise any PR, built by its merge), not on
 `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains, and held by no candidate
 on `main`'s chain it isn't a member of (one that is reaches `main` with that candidate: it is logged once a head and
 candidate, `riding`, and nobody is told); `files` is its change against its merge base with `main`, `lean` drive's
@@ -100,18 +101,21 @@ first failure was written and when it was dropped (`early_red`).  graph2's check
 retried with the check and cancelled at a drop as before, in shadow: its verdict (`Judged.shadow`) holds, ejects and
 advances nothing, no candidate is held or rung for a task the loop and graph2 dispute or a base graph2 hasn't listed, and
 once it and the check have both ended they are compared in one logged line, `agree` or `disagree` with the tasks graph2
-failed or erred on and the steps the check failed (`Loop._compare`).  The graph2 check of a candidate `main` advanced to
-before it ended isn't cancelled at its drop: the loop reads it on (`Loop._followed`) until it ends, and compares it with the
-check's verdict as its drop logged it, or until `FOLLOW_S` after its enqueue, when it is cancelled and the line says
-`unfinished`; one line a candidate either way.  Each compare line holds, in seconds, how long graph2's verdict took from
+failed or erred on and the steps the check failed (`Loop._compare`).  The graph2 check of a candidate dropped before it
+ended, whose check had ended in a pass or a fail (`main` advanced to it, or it failed; not an early red), isn't cancelled at
+its drop: the loop reads it on (`Loop._followed`) until it ends, and compares it with the check's verdict as its drop logged
+it, or until `FOLLOW_S` after its enqueue, or until `KEPT_MAX` newer ones run beside it, when it is cancelled and the line
+says `unfinished`; one line a candidate either way.  Each compare line holds, in seconds, how long graph2's verdict took from
 its enqueue (`graph2_s`; to the give-up, of an unfinished one) and the check's from its launch (`check_s`).  The steps the
 check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run: once a candidate's verdict is pass or fail,
 what it failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the
 lane of each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`); a red
 its base shares rings nobody.
 
-The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
-owner told once per head and base, a conflict with members merged above `main` naming them where it merges onto `main`;
+The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
+rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
+out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
+naming them where it merges onto `main`;
 nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
@@ -187,8 +191,8 @@ from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, cancel_r
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git, _out, _who, base_drivers,
-                    conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk, merged_tree,
-                    moves_between, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
+                    conflicting_files, flags_at, forces_cold, label_verifier, lands_on_mark, lean_change, merged_tree,
+                    moves_between, own_files, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -222,9 +226,12 @@ WINDOW_S = 48 * 3600
 #: shards unless `--shards` says another; the second is also the ``gate`` of that check's record (`vqueue_slim.CHECK`)
 GATES = GRAPH2_GATE, CHECK_GATE = "graph2", "check"
 SHARDS = 3
-#: how long after its enqueue the loop still reads, in shadow, the graph2 check of a candidate `main` advanced to
-#: (`Loop._followed`), and a compare line's ``graph2`` when it stopped reading one that hadn't ended
+#: how long after its enqueue the loop still reads, in shadow, the graph2 check of a dropped candidate (`Loop._followed`), and
+#: a compare line's ``graph2`` when it stopped reading one that hadn't ended
 FOLLOW_S, UNFINISHED = 24 * 3600, "unfinished"
+#: the most graph2 checks of dropped candidates the loop follows at once (`Loop._followed`): graph2's slots run them beside the
+#: live candidates', so past them the oldest is given up as at `FOLLOW_S`
+KEPT_MAX = 2
 INTERVAL_S = 60
 #: the most members a candidate holds, candidates stacked at once and members of a candidate whose Lean change compiles (a
 #: spec's or Lean source's, not a lock's alone: `World._judge`)
@@ -268,7 +275,7 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 JOBS = 8
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
 OFF_SAID = 10
-#: the old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and no tick waits on
+#: the old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and no tick waits on
 #: (`Queue.work_out_mapped`; `--move-carry-jobs`): each runs every move's script on a whole tree, so few, leaving the control
 #: pod's few cores room for the loop
 MAPPED_JOBS = 2
@@ -802,7 +809,6 @@ class World:
         landed = (main, old) if old else (main,)
         pulled = {n for n, e in entries.items() if e.state != "ready" and self._pulled(e, state["ejected"].get(str(n)))}
         flags = flags_at(self.repo, main)
-        excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
         self._deltas = {k: v for k, v in self._deltas.items() if k[2] == landed}
@@ -821,7 +827,7 @@ class World:
             took = []
             for n in admitted:
                 p, held = entries[n].pr, (why[n] or "").startswith("held")
-                if why[n] is None or n in carried or not p.move and not held and lowrisk(files[n], excludes):
+                if why[n] is None or n in carried or lands_on_mark(flags, p, why[n], files[n]):
                     took.append(n)
                 elif held:
                     left[n] = (p.head, why[n])
@@ -1027,9 +1033,9 @@ class World:
         return out
 
     def _changed(self, main: str, head: str) -> frozenset[str]:
-        """The files ``head`` changes against its merge base with ``main``."""
+        """The files ``head`` changes against its merge base with ``main`` (`own_files`)."""
         if (key := (head, main)) not in self._files:
-            self._files[key] = frozenset(_out(self.repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
+            self._files[key] = own_files(self.repo, main, head)
         return self._files[key]
 
     def _tree(self, sha: str) -> list[str]:
@@ -1937,6 +1943,9 @@ class Tick:
     riding: dict[int, tuple[str, str]] = field(default_factory=dict)
     #: the candidate this tick advanced `main` to, what its build reads as `main`
     advanced: str | None = None
+    #: each candidate a build this tick rebuilt (`vqueue.Build.replaces`): what that build pushed, or what it went on when
+    #: no member merged, which a later build naming the candidate as its base goes on
+    rebuilds: dict[str, str] = field(default_factory=dict)
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
 
@@ -2016,7 +2025,8 @@ class Loop:
                     if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
                         j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
                                          below if base == main else ((judged[base].record if base in judged else None)
-                                                                     or p.slim(base)[1], p.slim_started(base)[1]), lent)
+                                                                     or p.slim(base)[1], p.slim_started(base)[1]), lent,
+                                         on_main=below[0])
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha),
@@ -2105,7 +2115,8 @@ class Loop:
 
     def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
                 heads: tuple[str, ...], j: Judged, wrote: list[dict], chained: bool,
-                below: tuple[dict | None, float | None] = (None, None), lent: Lent | None = None) -> Judged:
+                below: tuple[dict | None, float | None] = (None, None), lent: Lent | None = None,
+                on_main: dict | None = None) -> Judged:
         """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`), which its build starts
         beside each candidate's check, and here, once, one on ``main``'s chain (``chained``) the log holds no start of (its
         build's tick stopped first); again by a retry of its infra or a rerun of its failure.  Judged each tick, its record
@@ -2115,7 +2126,9 @@ class Loop:
         and start, `_below` for ``main``, a base candidate's as judged this tick), which `vqueue.decide` takes as inherited
         when that run failed it too, a base candidate's still running by what it failed so far (`vqueue_slim.based`); a fail
         whose every other failure is inherited waits (pending) while the run beside ``main``, started at most `pending_s`
-        ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says.  Where the
+        ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says, or, where
+        only its own members meet the step, until the run beside ``main``'s check says (``on_main``, its record, read as a
+        base's into `vqueue.Failed.main_tests`).  Where the
         check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), a run started while graph2 gated counts as none started, and a check that took lean-audit's verdict
         from the check of a candidate below reads lean-audit as pending while that candidate is in flight, and, once it has
@@ -2142,6 +2155,10 @@ class Loop:
         if gates and j.verdict.state == LIST_FAILED and v.state == PENDING:
             return replace(j, slim=v, record=rec)
         v = self.slim.based(v, below[0], so_far=base != main)
+        if base != main and on_main is not None and v.failed:
+            unsaid = replace(v, failed=tuple(replace(f, base_tests=None) for f in v.failed))
+            v = replace(v, failed=tuple(replace(f, main_tests=m.base_tests)
+                                        for f, m in zip(v.failed, self.slim.based(unsaid, on_main).failed)))
         both = self.slim.combine(j.verdict, v) if gates else v
         if not gates:
             j = replace(j, shadow=j.verdict, note=f"graph2, in shadow, reads {j.verdict.state}: {j.note}" if j.note else "")
@@ -2332,11 +2349,12 @@ class Loop:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
-        tip, merged, left = w.build([w.prs[n] for n in a.members], a.base, t.advanced or t.main)
+        base = t.rebuilds.get(a.base, a.base)
+        tip, merged, left = w.build([w.prs[n] for n in a.members], base, t.advanced or t.main)
         recs = []
         for s in left:
-            p, key = s.pr, f"{s.pr.head}@{a.base}"
-            line = dict(base=a.base, members=[p.number], heads=[p.head], number=p.number)
+            p, key = s.pr, f"{s.pr.head}@{base}"
+            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number)
             if s.held:                                      # it reaches `main` with what holds it
                 recs.append(self.record(t, "skip", **line, why=s.why, held=True, done=False))
                 continue
@@ -2347,24 +2365,29 @@ class Loop:
             names = ", ".join(f"#{n}" for n in s.by)
             fix = f"merge `main` into it once {names} {'is' if len(s.by) == 1 else 'are'} on it" if s.by else "merge `main` into it"
             text = None if key in t.told else (
-                f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {s.why}. "
+                f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {base[:12]}: {s.why}. "
                 f"It is left out until it merges: {fix}")
             posts = text is not None and not self.shadow
-            done = posts and self._say(t, "skip", text, self.owner(p.number), base=a.base, heads=[p.head], number=p.number)
+            done = posts and self._say(t, "skip", text, self.owner(p.number), base=base, heads=[p.head], number=p.number)
             if done or (text and self.shadow):
                 t.told.add(key)
             recs.append(self.record(t, "skip", **line, why=s.why, text=text, done=done, **({"by": list(s.by)} if s.by else {}),
                                     **({"posted": done} if posts else {})))
+        again = {"replaces": a.replaces} if a.replaces is not None else {}
         if not merged:
-            recs.append(self.record(t, "build", base=a.base, priority=a.priority, why="no member merges onto its base"))
+            if a.replaces is not None:
+                t.rebuilds[a.replaces] = base
+            recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again))
             return recs
         if adopted := next((sha for name, sha in sorted(t.foreign.items())
-                            if name == sha[:12] and w.rebuilt(sha, tip, a.base, merged)), None):
+                            if name == sha[:12] and w.rebuilt(sha, tip, base, merged)), None):
             tip = adopted                                   # pushed before by a build whose line the log never got
         else:
             w.push(tip, branch(tip))
-        line = {"sha": tip, "base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
-                "priority": a.priority, **({"adopted": True} if adopted else {})}
+        if a.replaces is not None:
+            t.rebuilds[a.replaces] = tip
+        line = {"sha": tip, "base": base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
+                "priority": a.priority, **({"adopted": True} if adopted else {}), **again}
         if a.records:
             return [*recs, self.record(t, "build", **line, why="its records run first: its check waits for it", enqueued=False,
                                        records_first=True, done=True), *self._regenerate(t, line)]
@@ -2527,7 +2550,7 @@ class Loop:
         when it was dropped (``early_red``)."""
         w, j = self.world, t.judged.get(c.sha)
         shadow = j.shadow if j is not None else None
-        follow = self._follow(a, c, t)
+        follow = self._follow(c, t)
         cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
         why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
         rec = _running(j)
@@ -2552,13 +2575,14 @@ class Loop:
                            **({"early_red": {"failed_at": stamp(early), "dropped_at": stamp(self.now())}}
                               if early is not None else {}))
 
-    def _follow(self, a: Drop, c: Candidate, t: Tick) -> dict | None:
+    def _follow(self, c: Candidate, t: Tick) -> dict | None:
         """What a later tick compares graph2's verdict of ``c`` with (`_followed`), where the check gates and ``c`` is dropped
-        on `main` with its check ended (`_ended`: not an early red) and graph2's, in shadow, not: the check's reading and what
-        it failed as this drop reads them, how long it took (`_check_s`), and when graph2's check was enqueued.  None for any
-        other drop: its graph2 check is cancelled, and it gets no compare line it hasn't had."""
+        with its check ended in a pass or a fail (`_ended`: not an early red; on `main`, or failed) and graph2's, in shadow,
+        not: the check's reading and what it failed as this drop reads them, how long it took (`_check_s`), and when graph2's
+        check was enqueued.  None for any other drop: its graph2 check is cancelled, and it gets no compare line it hasn't
+        had."""
         j, mine = t.judged.get(c.sha), _ended(c.verdict)
-        if (self.gate != CHECK_GATE or a.why != vqueue.ON_MAIN or j is None or j.shadow is None or _ended(j.shadow) is not None
+        if (self.gate != CHECK_GATE or j is None or j.shadow is None or _ended(j.shadow) is not None
                 or mine not in (PASS, FAIL) or c.enqueued is None):
             return None
         return {"check": mine, "said": _brief(c.verdict), "check_s": self._check_s(t, c.sha, j.record),
@@ -2944,29 +2968,33 @@ class Loop:
         return rec
 
     def _followed(self, t: Tick) -> list[dict]:
-        """The graph2 check of each candidate dropped on `main` before it ended (`Past.followed`), read as a candidate's is
+        """The graph2 check of each candidate dropped before it ended (`Past.followed`), read as a candidate's is
         (`World.verdict`) once graph2's own verdict no longer says it runs (`_runs`): ended, it is compared with the check's
-        verdict as the drop logged it (`_versus`).  `FOLLOW_S` after its enqueue it is read once more, and one that still
-        hasn't ended is cancelled and gets its compare line all the same: `unfinished`, with how long it ran and how many of
-        its tasks on the merge gate ended.  Either line closes it: a candidate has one.  A read that fails is logged and
-        reads as pending: graph2 only shadows here, so it stops no tick."""
-        w, recs = self.world, []
+        verdict as the drop logged it (`_versus`).  `FOLLOW_S` after its enqueue, or while it runs beside `KEPT_MAX` newer
+        ones graph2 says still run (read newest first, so the oldest give way; its line names them, ``followed``), it is
+        read once more, and one that still hasn't ended is cancelled and gets its compare line all the same: `unfinished`,
+        with how long it ran and how many of its tasks on the merge gate ended.  Either line closes it: a candidate has one.  A read that fails is
+        logged and reads as pending: graph2 only shadows here, so it stops no tick."""
+        w, recs, kept = self.world, [], []
         w._theirs, w._listed = {}, {}
         try:
-            for sha, drop in t.past.followed().items():
+            for sha, drop in reversed(t.past.followed().items()):
                 f, base = drop["follow"], drop.get("base") or ""
                 line = dict(base=base, members=drop.get("members") or (), heads=drop.get("heads") or ())
                 enqueued = unstamp(f.get("enqueued"))
-                late = enqueued is None or self.now() - enqueued >= FOLLOW_S
+                late, over = enqueued is None or self.now() - enqueued >= FOLLOW_S, False
                 try:
                     if not late and _runs(w._verdict_of(sha)):
-                        continue
+                        if len(kept) < KEPT_MAX:
+                            kept.append(sha)
+                            continue
+                        over = True
                     j = w.verdict(sha, base, t.past.since(sha), t.past.since(base))
                 except Exception as e:  # noqa: BLE001 -- the gate's tick goes on whatever reading the shadow raises
                     j = Judged(Verdict(PENDING), note=f"its read failed ({type(e).__name__}: {e})"[:300])
                     w.log(f"research queue vqueue: ready:{sha[:12]}, followed in shadow: {j.note}")
                 rec = self._versus(t, sha, line, j.verdict, enqueued, f.get("check"), f.get("said") or "", f.get("check_s"))
-                if rec is None and late:
+                if rec is None and (late or over):
                     did = f"{j.tasks[0]} of its {j.tasks[1]} tasks on the merge gate ended" if j.tasks else j.note or "no graph"
                     try:
                         cancel = w.cancel(sha)
@@ -2975,12 +3003,15 @@ class Loop:
                     rec = self.record(t, "compare", sha=sha, **line, graph2=UNFINISHED, check=f.get("check"),
                                       graph2_s=self._since(enqueued), check_s=f.get("check_s"), cancel=cancel, done=True,
                                       why=f"{UNFINISHED}: graph2 {j.verdict.state} {self._since(enqueued)} s after its enqueue "
-                                          f"({did}), the check {f.get('said')}", **({"tasks": list(j.tasks)} if j.tasks else {}))
+                                          f"({did}), the check {f.get('said')}"
+                                          + (f"; at most {KEPT_MAX} are followed, and newer ones are" if over else ""),
+                                      **({"tasks": list(j.tasks)} if j.tasks else {}),
+                                      **({"followed": list(kept)} if over else {}))
                 if rec is not None:
-                    recs.append(self._shown(t, rec))
+                    recs.append(rec)
         finally:
             w._theirs = w._listed = None
-        return recs
+        return [self._shown(t, rec) for rec in reversed(recs)]
 
     def _since(self, at: float | None) -> int | None:
         return None if at is None else round(self.now() - at)
@@ -3137,7 +3168,8 @@ def main(argv: list[str]) -> int:
                          f"`{CHECK_GATE}`, its whole check (`check.py --record`), every step as --shards shards (but "
                          "lean-audit where no member changes a Lean input and it is built on a candidate in flight whose check "
                          "runs it or took it from the one below that ran it, whose verdict on it it takes once that one has "
-                         "landed), with graph2's check in shadow: read, compared with the check's verdict in one logged line, "
+                         "landed), with graph2's check in shadow: read, compared with the check's verdict in one logged line "
+                         f"once both end, a drop's after it (at most {KEPT_MAX} so at once, the oldest cancelled past them), "
                          "and deciding nothing")
     ap.add_argument("--shards", type=_shards, default=SHARDS,
                     help=f"with --gate {CHECK_GATE}, the shards each check runs as, one launch each: an N ci.toml has a shard "
@@ -3157,8 +3189,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
-                    help=f"old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and none "
-                         f"waits on, running every move's script on a scratch worktree under --merged-root, so an old head's "
+                    help=f"old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and none "
+                         f"waits on, running every move's script on a scratch worktree under --merged-root and writing the "
+                         f"mapping, or its refusal, into mapped-changes.d/ beside the log, so an old head's "
                          f"land verdict and mark carry to a head whose own change is theirs mapped (`Queue.mapped_change`), "
                          f"from a head with a land verdict of its own only (`StoreLabels.lands`); those "
                          f"`research queue map-moves` mapped elsewhere count once copied into mapped-changes.d/ beside the "

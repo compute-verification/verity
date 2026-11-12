@@ -414,16 +414,115 @@ def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tm
     assert doc["credited_macs"] == CREDITED
 
 
-def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp_path, capsys, monkeypatch):
-    out = tmp_path / "run" / "out"
-    monkeypatch.setenv("OUT", str(out))
+#: the bench run's own id and host stamp, which the kit's writer stamps each measurement with
+BENCH = "r20000101-000001-bbbb"
+STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
+
+
+@pytest.fixture
+def stamped(monkeypatch):
+    """The kit's writer under a `research run` of its own, stamping with `STAMP` rather than asking the host."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
+    monkeypatch.setattr(C.kit, "host_stamp", lambda: dict(STAMP))
+
+
+def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp_path, capsys, monkeypatch, stamped):
     store.add(RUN, a_record(tmp_path))
     assert bench(store, "--from", RUN) == 0
-    _, doc, _ = printed(capsys)
+    alone = capsys.readouterr()
+    out = tmp_path / "run" / "out"
+    monkeypatch.setenv("OUT", str(out))
+    assert bench(store, "--from", RUN) == 0
+    # what it prints is the same to the byte with the shared result written beside it
+    assert capsys.readouterr() == alone
+    doc = json.loads(alone.out.splitlines()[-1])
     assert json.loads((out / "compute.json").read_text()) == doc
+    assert list(doc) == ["value", "unit", "commit", "run", "target", "met", "credited_macs", "model_macs", "macs",
+                         "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "record", "withdrawn",
+                         "model", "class", "policy_agrees", "tokens", "tokens_from", "wall_s", "capacity_share"]
+    written = (out / "result.json").read_bytes()
     store.add(RUN, a_record(tmp_path / "run", ANSWER=to("verdict", value="reject")))
     (out / "compute.json").unlink()
     assert bench(store, "--from", RUN) == 1 and not (out / "compute.json").exists()
+    assert (out / "result.json").read_bytes() == written
+
+
+def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_free_absent(store, tmp_path, capsys,
+                                                                                         monkeypatch, stamped):
+    """The record holds no registration of the run's hardware and no span the verifier holds its passes to, so
+    capacity and free are written with no value, each with why, and no reading is named."""
+    out = tmp_path / "out"
+    monkeypatch.setenv("OUT", str(out))
+    store.add(RUN, a_record(tmp_path))
+    assert bench(store, "--from", RUN) == 0
+    result = json.loads((out / "result.json").read_text())
+    assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
+    got = {m["name"]: m for m in result["measurements"]}
+    assert list(got) == ["metric", "verified", "capacity", "free", "error"]
+    assert (got["metric"]["value"], got["metric"]["unit"], got["metric"]["target"], got["metric"]["verdict"]) == (
+        0.75, C.UNIT, 0.97, "below target")
+    assert (got["verified"]["value"], got["verified"]["unit"]) == (CREDITED, "MAC")
+    why = f"absent: {C.NO_SITE}; and {C.NO_SPAN}"
+    for name in ("capacity", "free"):
+        assert (got[name]["value"], got[name]["unit"], got[name]["why"]) == (None, "MAC", why)
+    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone
+    assert (got["error"]["value"], got["error"]["unit"]) == (0.01, C.DELTA_S) and "why" not in got["error"]
+    assert "the answer's δ_s, sampling's alone" in C.DELTA_S
+    for m in got.values():
+        assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
+        assert m["inputs"] == ([RUN, "delta_s"] if m["name"] == "error" else [RUN])
+    assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
+                         "developer's node")
+
+
+def h200_site(devices: int):
+    """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
+    from verity.hardware import site as S
+    sheet = S.Sheet.of_file(C.cards.load("h200-sxm-141gb"))
+    locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
+    locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
+    return S.Site((sheet,), tuple(locs))
+
+
+def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_times_the_span(store, tmp_path):
+    """The H200's card file gives two readings, its tensor clock (1830 MHz) and its SM clock (1980 MHz): two devices
+    over 600 s are 2 x 132 SMs x 4,096 e4m3 MACs a clock at each, free is capacity less the credit, and a span that
+    leaves a fraction of a MAC rounds capacity up."""
+    store.add(RUN, a_record(tmp_path))
+    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
+    tensor, sm = 2 * 132 * 4096 * 1_830_000_000 * 600, 2 * 132 * 4096 * 1_980_000_000 * 600
+    assert C.capacity(h200_site(2), Fraction(600)) == {"tensor": tensor, "sm": sm}
+    assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
+    got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
+    assert list(got) == ["metric", "verified", "capacity at clock.tensor", "free at clock.tensor", "capacity at clock.sm",
+                         "free at clock.sm", "error"]
+    assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
+        tensor, tensor - CREDITED, sm, sm - CREDITED]
+    assert not any("why" in m for m in got.values())
+    # with either missing, capacity and free are absent and say which
+    assert {m["name"]: m.get("why") for m in C.amounts(doc, h200_site(2))}["capacity"] == f"absent: {C.NO_SPAN}"
+    assert {m["name"]: m.get("why") for m in C.amounts(doc, None, Fraction(600))}["free"] == f"absent: {C.NO_SITE}"
+
+
+def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
+    from verity.hardware import site as S
+    with pytest.raises(C.Unreadable, match="the registered hardware holds no device"):
+        C.capacity(S.Site(), Fraction(1))
+    one = h200_site(1)
+    unnamed = S.Site(one.sheets, (*one.locs[:2], S.Loc("gpu0", "device", "host", sheet="00" * 64)))
+    with pytest.raises(C.Unreadable, match="the registered device gpu0 names no registered sheet"):
+        C.capacity(unnamed, Fraction(1))
+    other = S.Sheet(S.DeviceFigures("no-such-card", Fraction(1), Fraction(1)), 1, 1, 1)
+    unknown = S.Site((other,), (*one.locs[:2], S.Loc("gpu0", "device", "host", sheet=other.digest())))
+    with pytest.raises(C.Unreadable, match="the registered device gpu0's SKU has no card file"):
+        C.capacity(unknown, Fraction(1))
+
+
+def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp_path):
+    store.add(RUN, a_record(tmp_path, ANSWER=lambda d: d.pop("profile")))
+    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
+    got = {m["name"]: m for m in C.amounts(doc)}["error"]
+    assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
 
 
 #: the fixture's give-up, TOTAL less CREDITED, by cause: the verify document's split puts 4 excluded A rows in call 6

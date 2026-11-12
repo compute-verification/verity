@@ -17,7 +17,8 @@ class _FakeKernel:
     """Stands in for a Triton JITFunction: `kernel[grid](*args, **kw)`; records what it was launched with."""
 
     def __init__(self, name: str) -> None:
-        self.name, self.launches = name, []
+        self.name = name
+        self.launches: list[tuple] = []
 
     def __getitem__(self, grid):
         def run(*args, **kw):

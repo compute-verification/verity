@@ -11,9 +11,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build, Candidate, Commit, Drop, Eject,
-                             Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait,
-                             decide, meets)
+from research.vqueue import (BASE_DROPPED, FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build, Candidate, Commit,
+                             Drop, Eject, Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot,
+                             Verdict, Wait, decide, meets)
+from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
 
@@ -123,18 +124,19 @@ def test_the_chain_is_ordered_from_main_and_only_its_lowest_verdict_is_read_whol
 @pytest.mark.parametrize("lowest", [PENDING, PASS])
 def test_a_fail_above_the_lowest_candidate_is_decided_at_once_and_nothing_is_built_on_it(lowest):
     """A candidate above the lowest whose check failed, still running or not, on tests its base passed, is decided as the
-    lowest's fail is: its lone suspect ejected, the candidates above it dropped as a base failure, and the next batch built
-    on the candidate below it (`main`, once the lowest passed), never on it.  While its base hasn't said, it waits, and
-    nothing is built above it."""
+    lowest's fail is: its lone suspect ejected, the candidates above it dropped as a base failure and built again in the same
+    tick on the candidate below it (`main`, once the lowest passed), never on it, and the next batch on them.  While its base
+    hasn't said, it waits, and nothing is built above it."""
     ready = [pr(1), pr(2, None, "pkg/x.py"), pr(3), pr(4)]
     t = by_tests("step pytest", {"pkg::t"}, set(), "pkg/x.py")
     s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(t,), ended=False),
              cand("c3", "c2", 3), ready=ready, depth=3)
     passed = [Advance("c1"), Drop("c1", "on main", Outcome((1,), heads(1), PASS))] if lowest == PASS else []
+    deep = 3 if lowest == PASS else 2
     assert decide(s) == [*passed, Eject(2, "h2", "step pytest failed, and its changed files meet their inputs, no other "
                                                 "member's", (t,)),
                          Drop("c2", "failed: step pytest", Outcome((2,), heads(2), FAIL, (2,), "c1")),
-                         Drop("c3", "its base failed"), Build((3, 4), "c1", 3 if lowest == PASS else 2)]
+                         Drop("c3", "its base failed"), Build((3,), "c1", deep, replaces="c3"), Build((4,), "c3", deep - 1)]
     unsaid = by_tests("step pytest", {"pkg::t"}, None, "pkg/x.py")
     s = snap(cand("c1", MAIN, 1, state=lowest), cand("c2", "c1", 2, state=FAIL, failed=(unsaid,), ended=False),
              ready=ready, depth=3)
@@ -156,6 +158,61 @@ def test_a_fail_above_the_lowest_candidate_bisects_its_suspects_reruns_a_lone_on
     assert decide(s) == [Build((4,), "c2", 1)]
 
 
+def by_main(name: str, tests: set[str], main_tests: set[str] | None, *inputs: str, base_tests: set[str] | None = None
+            ) -> Failed:
+    """A failure of a candidate above another, with ``tests`` failing where `main` fails ``main_tests`` of it and its base
+    ``base_tests`` (None: not said yet)."""
+    return replace(by_tests(name, tests, base_tests, *inputs), main_tests=None if main_tests is None else frozenset(main_tests))
+
+
+def test_a_fail_above_the_lowest_on_tests_main_fails_too_is_inherited_on_main_s_word():
+    """Only its own member meets the failure, and `main` fails the same tests: its base, which leaves them as `main` has
+    them, fails them too, so it fails nothing of its own and the next batch goes on it."""
+    t = by_main("step pytest", {"pkg::t"}, {"pkg::t"}, "pkg2/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(t,), ended=False), ready=prs(1, 2, 3), depth=3)
+    assert decide(s) == [Build((3,), "c2", 1)]
+
+
+def test_a_fail_above_the_lowest_decided_on_main_s_word_suspects_only_its_own_failures():
+    """Two failures meet only its own members, one `main` passes and one `main` fails too: only the first suspects anyone,
+    so #2 is ejected and #3 built again at once on the candidate below; a lone member whose own failure (its base passed it)
+    meets none of its files is rerun, the one `main` fails too set aside."""
+    a, b = by_main("step a", {"a::x"}, set(), "pkg2/"), by_main("step b", {"b::y"}, {"b::y"}, "pkg3/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(a, b)), ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s) == [Eject(2, "h2", "step a failed, and its changed files meet their inputs, no other member's",
+                               (replace(a, base_tests=frozenset()),)),
+                         Drop("c2", "failed: step a, step b", Outcome((2, 3), heads(2, 3), FAIL, (2,), "c1")),
+                         Build((3,), "c1", 2, replaces="c2"), Build((4,), "c2", 1)]
+    lone = by_main("step a", {"a::x"}, None, "elsewhere/", base_tests=set())
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(lone, replace(b, inputs=frozenset({"pkg2/"})))),
+             ready=prs(1, 2, 3), depth=3)
+    assert decide(s) == [Rerun("c2", (lone.key,)), Build((3,), "c2", 1)]
+
+
+def test_a_rebuild_whose_records_run_goes_first_is_the_last_built_again():
+    """A Lean member's candidate rebuilt on a new base runs its records again, and nothing is built on a candidate whose check
+    waits: the members above it go into the batches after it."""
+    s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(task("suite:1", "pkg1/"),)), cand("c2", "c1", 2), cand("c3", "c2", 3),
+             ready=[pr(1), lean(2), pr(3), pr(4)], depth=3, records=True)
+    assert decide(s)[-4:] == [Drop("c1", "failed: suite:1", Outcome((1,), heads(1), FAIL, (1,), MAIN)),
+                              Drop("c2", "its base failed"), Drop("c3", "its base failed"),
+                              Build((2,), MAIN, 3, records=True, replaces="c2")]
+    s = snap(waiting("c1", MAIN, 1, records=RecordsRun(PENDING, "r1 runs")), cand("c2", "c1", 2, 5), ready=[lean(1), pr(5)],
+             records=True, left=((2, "h2", "held by top (no reason)"),), pulled=frozenset({2}))
+    assert not [a for a in decide(s) if isinstance(a, Build)]
+
+
+def test_a_rebuild_leaves_out_a_member_on_main_or_in_a_candidate_below():
+    """Built again, a candidate holding a member that landed below it, or one a rebuild below it holds, leaves it out."""
+    s = snap(cand("c1", MAIN, 1, state=PASS), cand("c2", "c1", 2, 1, heads=heads(2, 1)), ready=prs(1, 2, 3))
+    assert decide(s) == [Drop("c2", "#1 is in a candidate below it too"), Advance("c1"),
+                         Drop("c1", "on main", Outcome((1,), heads(1), PASS)), Build((2,), "c1", 2, replaces="c2"),
+                         Build((3,), "c2", 1)]
+    s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(task("suite:1", "pkg1/"),)), cand("c2", "c1", 2),
+             cand("c3", "c2", 3, 2, heads=heads(3, 2)), ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s)[-3:] == [Build((2,), MAIN, 3, replaces="c2"), Build((3,), "c2", 2, replaces="c3"), Build((4,), "c3", 1)]
+
+
 def test_a_candidate_off_the_chain_is_dropped_with_every_candidate_above_it():
     s = snap(cand("y", "x", 3), cand("c1", MAIN, 1), cand("x", "gone", 2, state=PASS), ready=prs(1, 2, 3), depth=3)
     assert decide(s) == [Drop("x", "not on main's chain: its base gone is neither main nor a chain member"),
@@ -172,13 +229,19 @@ def test_of_two_candidates_on_one_base_the_one_whose_members_come_first_in_rank_
 @pytest.mark.parametrize(("left", "why"), [
     (((1, "h1", "held by top (no reason)"), (4, "h4", "no land verdict")), "#1 isn't taken now: held by top (no reason)"),
     (((1, "h1", "its ready mark was withdrawn by ci"),), "#1 isn't taken now: its ready mark was withdrawn by ci"),
+    (((1, "h1", "ejected by top at h1, the head it was built at: broke main"),),
+     "#1 isn't taken now: ejected by top at h1, the head it was built at: broke main"),
 ])
-def test_a_chain_candidate_holding_a_member_others_took_from_the_queue_is_dropped_with_everything_above_saying_why(left, why):
-    ready = prs(2, 3)
-    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left, pulled=frozenset({1}))
-    assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build((2, 3), MAIN, 2)]
+def test_a_chain_candidate_holding_a_member_others_took_from_the_queue_is_rebuilt_without_it_with_everything_above(left, why):
+    """A hold or a withdrawal by someone else takes out that PR alone: its candidate and those above it are dropped saying
+    why and, in the same tick, built again in order without it, each keeping its other members."""
+    ready = prs(2, 3, 4)
+    s = snap(cand("c1", MAIN, 1, 2, state=PASS), cand("c2", "c1", 3), ready=ready, left=left, pulled=frozenset({1}),
+             depth=3)
+    assert decide(s) == [Drop("c1", why), Drop("c2", "its base was dropped"), Build((2,), MAIN, 3, replaces="c1"),
+                         Build((3,), "c1", 2, replaces="c2"), Build((4,), "c2", 1)]
     s = snap(cand("c1", MAIN, 3), cand("c2", "c1", 1, 2), ready=ready, left=left, pulled=frozenset({1}))
-    assert decide(s) == [Drop("c2", why), Build((2,), "c1", 1)]
+    assert decide(s) == [Drop("c2", why), Build((2,), "c1", 1, replaces="c2")]
 
 
 @pytest.mark.parametrize(("ready", "left"), [
@@ -199,14 +262,15 @@ def test_a_chain_candidate_whose_member_its_owner_pushed_unmarked_or_closed_land
 def test_a_fail_blames_a_member_its_owner_took_out_by_its_files_as_built_and_ejects_nobody():
     t = task("suite:pkg1", "pkg1/")
     s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(2, 3), flying=(pr(1),))
-    assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2, 3), MAIN, 2)]
+    assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)),
+                         Build((2,), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
     s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(t,)), ready=prs(2, 3), flying=(pr(1),))
     assert decide(s) == [Drop("c1", "failed: suite:pkg1", Outcome((1,), heads(1), FAIL, (1,), MAIN)), Build((2, 3), MAIN, 2)]
 
 
 def test_a_pr_in_a_candidate_below_makes_the_one_above_stale():
     s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 1, heads=heads(2, 1)), ready=prs(1, 2))
-    assert decide(s) == [Drop("c2", "#1 is in a candidate below it too"), Build((2,), "c1", 1)]
+    assert decide(s) == [Drop("c2", "#1 is in a candidate below it too"), Build((2,), "c1", 1, replaces="c2")]
 
 
 def test_when_main_moves_elsewhere_every_candidate_is_dropped_and_rebuilt_on_it():
@@ -252,16 +316,17 @@ def test_a_failure_whose_inputs_meet_one_members_files_ejects_it():
     assert decide(s) == [
         Eject(2, "h2", "suite:a failed, and its changed files meet their inputs, no other member's", (t1, t2)),
         Drop("c1", "failed: suite:a, lean:b", Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (2,), MAIN)),
-        Drop("c2", "its base failed"), Build((1, 3, 4), MAIN, 2)]
+        Drop("c2", "its base failed"), Build((1, 3), MAIN, 2, replaces="c1"), Build((4,), "c1", 1, replaces="c2")]
 
 
 def test_a_failure_whose_inputs_meet_several_members_suspects_only_them():
+    """The others are built again at once in their order, and the suspects bisected in the batch after them."""
     t = task("t", "pkg1/mod.py", "pkg3")
     s = snap(cand("c1", MAIN, 1, 2, 3, 4, state=FAIL, failed=(t,)), ready=prs(1, 2, 3, 4))
     assert decide(s) == [Drop("c1", "failed: t", Outcome((1, 2, 3, 4), heads(1, 2, 3, 4), FAIL, (1, 3), MAIN)),
-                         Build((1,), MAIN, 2)]
+                         Build((2, 4), MAIN, 2, replaces="c1"), Build((1,), "c1", 1)]
     s = snap(cand("c1", MAIN, 1, 2, 3, 4, state=FAIL, failed=(t,)), ready=[pr(1, rank=9), *prs(2, 3, 4)])
-    assert decide(s)[-1] == Build((2, 4), MAIN, 2)
+    assert decide(s)[1:] == [Build((2, 4), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
 
 
 def test_a_failure_whose_inputs_meet_no_member_suspects_every_member():
@@ -339,10 +404,11 @@ def test_without_tree_ejects_infra_that_persists_is_bisected_on_its_inputs_eject
     assert decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 3, 4, 5))) == [Retry("c1")]
     for tries, rings in ((2, 2), (2, 3), (5, 2), (1, 1)):
         acts = decide(snap(replace(c, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 3, 4), rings=rings))
-        suspects, rebuilt = ((2,), (1, 3, 4)) if state == INFRA else ((1, 2, 3), (1,))
+        suspects, rebuilt = ((2,), [Build((1, 3), MAIN, 2, replaces="c1"), Build((4,), "c1", 1, replaces="c2")]) if (
+            state == INFRA) else ((1, 2, 3), [Build((4,), MAIN, 2, replaces="c2"), Build((1,), "c2", 1)])
         assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them, ejecting nobody",
                                               Outcome((1, 2, 3), heads(1, 2, 3), FAIL, suspects, MAIN)),
-                        Drop("c2", "its base failed"), Build(rebuilt, MAIN, 2)], (tries, rings)
+                        Drop("c2", "its base failed"), *rebuilt], (tries, rings)
 
 
 def test_infra_that_persists_is_retried_at_every_reading_and_rings_in_the_same_words_from_the_second():
@@ -377,8 +443,9 @@ def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner
     aside = Outcome((3,), heads(3), INFRA, (3,), MAIN)
     why = f"{infra.why}, with only #3 merged: it goes behind the PRs waiting, and nobody is ejected for it"
     assert decide(snap(c, ready=prs(3, 4))) == [infra, owner, Drop("c1", why, aside), Build((4,), MAIN, 2)]
-    assert decide(snap(c, cand("c2", "c1", 4), ready=prs(3, 4))) == [infra, owner, Drop("c1", why, aside),
-                                                                     Drop("c2", "its base failed"), Build((4,), MAIN, 2)]
+    assert decide(snap(c, cand("c2", "c1", 4), ready=prs(3, 4))) == [
+        infra, owner, Drop("c1", why, aside), Drop("c2", "its base failed"), Build((4,), MAIN, 2, replaces="c2"),
+        Build((3,), "c2", 1)]
     assert decide(snap(c, ready=prs(3), history=(aside,))) == [Retry("c1"), infra]
     assert decide(snap(c, ready=prs(3, 4), history=(aside,))) == [Drop("c1", why, aside), Build((4,), MAIN, 2)]
     assert decide(snap(c, ready=prs(3, 4), tree_ejects=True)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
@@ -405,7 +472,7 @@ def test_a_launch_that_outran_its_wait_is_retried_until_launch_tries_then_handle
         assert decide(snap(replace(pair, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 4), **on)) == [Retry("c1"), infra]
         assert decide(snap(replace(lone, tries=tries), ready=prs(3, 4), **on)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
     for c in (replace(pair, tries=3), replace(pair, verdict=Verdict(INFRA, (), exited), tries=2)):
-        assert kinds(decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 4)))) == [Ring, Drop, Drop, Build], c
+        assert kinds(decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 4)))) == [Ring, Drop, Drop, Build, Build], c
     for c in (replace(lone, tries=3), replace(lone, verdict=Verdict(INFRA, (), exited), tries=2)):
         acts = decide(snap(c, ready=prs(3, 4)))
         assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome.state == INFRA, (c, acts)
@@ -427,7 +494,7 @@ def test_with_tree_ejects_infra_errors_that_follow_the_tree_are_bisected_at_once
     acts = decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 3, 4), tree_ejects=True))
     why = "c1's check ended in infra errors on two or more nodes, which follow its tree: test-file:pkg2/tests/test_hang.py"
     assert acts == [Drop("c1", why, Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (2,), MAIN)), Drop("c2", "its base failed"),
-                    Build((1, 3, 4), MAIN, 2)]
+                    Build((1, 3), MAIN, 2, replaces="c1"), Build((4,), "c1", 1, replaces="c2")]
     nowhere = replace(c, verdict=Verdict(INFRA, (), (replace(hang, inputs=frozenset({"elsewhere/"})),)))
     acts = decide(snap(nowhere, ready=prs(1, 2, 3, 4), tree_ejects=True))
     assert acts[0].outcome == Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 2, 3), MAIN) and acts[1:] == [Build((1,), MAIN, 2)]
@@ -446,10 +513,12 @@ def test_without_tree_ejects_infra_errors_that_follow_the_tree_are_bisected_like
         if len(members) > 1:
             assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them, ejecting "
                                                         "nobody", Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 2), MAIN)),
-                            Drop("c2", "its base failed"), Build((1,), MAIN, 2)]
+                            Drop("c2", "its base failed"), Build((3,), MAIN, 2, replaces="c1"),
+                            Build((4,), "c1", 1, replaces="c2")]
         else:
-            assert kinds(acts) == [Ring, Ring, Drop, Drop, Build] and acts[0] == Ring("c1", why) and acts[1].pr == 2
-            assert acts[2].outcome == Outcome((2,), heads(2), INFRA, (2,), MAIN) and acts[-1] == Build((1, 3, 4), MAIN, 2)
+            assert kinds(acts) == [Ring, Ring, Drop, Drop, Build, Build] and acts[0] == Ring("c1", why) and acts[1].pr == 2
+            assert acts[2].outcome == Outcome((2,), heads(2), INFRA, (2,), MAIN)
+            assert acts[-2:] == [Build((4,), MAIN, 2, replaces="c2"), Build((1, 3), "c2", 1)]
 
 
 def test_a_lone_member_whose_check_errs_on_two_or_more_nodes_is_ejected_at_once_with_the_errors_with_tree_ejects():
@@ -543,7 +612,7 @@ def test_a_mixed_failure_ejects_or_bisects_on_its_own_failures_alone_and_rings_r
     assert acts == [Red("c1", MAIN, acts[0].why, (red,)),
                     Eject(2, "h2", "suite:a failed, and its changed files meet their inputs, no other member's", (own,)),
                     Drop("c1", "failed: suite:a, suite:r", Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (2,), MAIN, (red,))),
-                    Build((1, 3, 9), MAIN, 2)]
+                    Build((1, 3), MAIN, 2, replaces="c1"), Build((9,), "c1", 1)]
     nobody = task("suite:x", "elsewhere/")
     acts = decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red, nobody)), ready=prs(1, 2, 4)))
     assert acts == [Red("c1", MAIN, acts[0].why, (red,)),
@@ -556,7 +625,8 @@ def test_a_failure_not_at_its_bases_key_is_the_batchs_own(base_key):
     t = Failed("t", "key:t", frozenset({"pkg2/"}), base_key)
     s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=prs(1, 2, 3))
     assert decide(s) == [Eject(2, "h2", "t failed, and its changed files meet their inputs, no other member's", (t,)),
-                         Drop("c1", "failed: t", Outcome((1, 2), heads(1, 2), FAIL, (2,), MAIN)), Build((1, 3), MAIN, 2)]
+                         Drop("c1", "failed: t", Outcome((1, 2), heads(1, 2), FAIL, (2,), MAIN)),
+                         Build((1,), MAIN, 2, replaces="c1"), Build((3,), "c1", 1)]
 
 
 @pytest.mark.parametrize(("tests", "base_tests", "inherits"), [
@@ -686,13 +756,14 @@ def test_a_passed_records_run_starts_its_candidates_check_and_a_commit_held_past
 
 
 def test_a_records_run_that_failed_drops_its_candidate_ejects_its_lean_members_and_builds_the_rest():
-    """Each Lean member is ejected with the run's reason, out of the next batch until it is marked again; the others go into
-    that batch, which has no Lean member left, so its check starts at once; the outcome suspects the Lean members."""
+    """Each Lean member is ejected with the run's reason, out of the next batch until it is marked again; the others are built
+    again at once without them, with no Lean member left, so its check starts at once; the outcome suspects the Lean
+    members."""
     r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
     acts = decide(snap(waiting("c1", MAIN, 1, 2, 3, records=r), ready=[lean(1), pr(2), lean(3), pr(4)], records=True, lean=2))
     why = "its records run refused its records: it failed: r1 failed rc=1"
     assert acts == [Eject(1, "h1", why), Eject(3, "h3", why), Drop("c1", why, Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 3), MAIN)),
-                    Build((2, 4), MAIN, 2)]
+                    Build((2,), MAIN, 2, replaces="c1"), Build((4,), "c1", 1)]
 
 
 def test_a_records_run_that_ended_in_infra_twice_refuses_and_rings_infra():
@@ -700,36 +771,39 @@ def test_a_records_run_that_ended_in_infra_twice_refuses_and_rings_infra():
     acts = decide(snap(waiting("c1", MAIN, 1, 2, records=r), ready=[lean(1), pr(2)], records=True))
     refused = "its records run ended in infra twice: it never ran or was stopped (r1)"
     assert acts == [Ring("c1", "c1's records run ended in infra twice: it never ran or was stopped (r1)"), Eject(1, "h1", refused),
-                    Drop("c1", refused, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2)]
+                    Drop("c1", refused, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2, replaces="c1")]
 
 
 def test_a_refusal_ejects_no_member_its_owner_moved_on_from_and_suspects_it_whatever_its_change():
     """A member whose owner withdrew its mark or pushed a new head stays in its candidate in flight: the refusal suspects it,
     as its change as built may be the Lean one, and ejects only the Lean members still marked at the heads they were built
-    at.  With the only Lean member withdrawn, nobody is ejected."""
+    at.  With the only Lean member withdrawn, nobody is ejected.  Neither is built again in its place: a new head goes into
+    the next batch."""
     r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
     why = "its records run refused its records: it failed: r1 failed rc=1"
     assert decide(snap(waiting("c1", MAIN, 1, 2, records=r), ready=[pr(2)], records=True)) == [
-        Drop("c1", why, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2)]
+        Drop("c1", why, Outcome((1, 2), heads(1, 2), FAIL, (1,), MAIN)), Build((2,), MAIN, 2, replaces="c1")]
     assert decide(snap(waiting("c1", MAIN, 1, 2, 3, records=r), ready=[pr(1, "h1b"), pr(2), lean(3)], records=True)) == [
-        Eject(3, "h3", why), Drop("c1", why, Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 3), MAIN)), Build((1, 2), MAIN, 2)]
+        Eject(3, "h3", why), Drop("c1", why, Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 3), MAIN)),
+        Build((2,), MAIN, 2, replaces="c1"), Build((1,), "c1", 1)]
 
 
-def test_a_refused_candidate_above_another_is_dropped_alone_and_the_next_batch_goes_on_the_one_below():
+def test_a_refused_candidate_above_another_is_rebuilt_without_its_lean_members_on_the_one_below():
     r = RecordsRun(FAIL, "it failed: r2 failed rc=1")
     s = snap(cand("c1", MAIN, 1), waiting("c2", "c1", 2, 3, records=r), ready=[pr(1), lean(2), pr(3)], depth=3, records=True)
     why = "its records run refused its records: it failed: r2 failed rc=1"
     assert decide(s) == [Eject(2, "h2", why), Drop("c2", why, Outcome((2, 3), heads(2, 3), FAIL, (2,), "c1")),
-                         Build((3,), "c1", 2)]
+                         Build((3,), "c1", 2, replaces="c2")]
 
 
-def test_a_candidate_above_a_refused_one_is_dropped_with_it():
-    """None is built on a candidate whose check waits, but should a log hold one, it goes with it, as above any that fails."""
+def test_a_candidate_above_a_refused_one_is_dropped_with_it_and_rebuilt():
+    """None is built on a candidate whose check waits, but should a log hold one, it goes with it, as above any that fails,
+    and is built again on what is left below."""
     r = RecordsRun(FAIL, "it failed: r1 failed rc=1")
     s = snap(waiting("c1", MAIN, 1, records=r), cand("c2", "c1", 2), ready=[lean(1), pr(2)], records=True)
     why = "its records run refused its records: it failed: r1 failed rc=1"
     assert decide(s) == [Eject(1, "h1", why), Drop("c1", why, Outcome((1,), heads(1), FAIL, (1,), MAIN)),
-                         Drop("c2", "its base failed"), Build((2,), MAIN, 2)]
+                         Drop("c2", "its base failed"), Build((2,), MAIN, 2, replaces="c2")]
 
 
 def test_a_records_commit_is_checked_in_place_of_the_candidate_it_repairs_with_every_candidate_above_that_dropped():
@@ -771,7 +845,8 @@ def test_the_pool_is_in_rank_order_ties_by_number_up_to_batch():
 def test_the_pool_leaves_out_chain_members_conflicts_and_the_ejected():
     t = task("t", "pkg2/")
     ready = [pr(1), pr(2), pr(3, conflict=True), pr(4)]
-    assert decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=ready))[-1] == Build((1, 4), MAIN, 2)
+    assert decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), ready=ready))[-2:] == [
+        Build((1,), MAIN, 2, replaces="c1"), Build((4,), "c1", 1)]
     assert decide(snap(cand("c1", MAIN, 1), ready=ready)) == [Build((2, 4), "c1", 1)]
 
 
@@ -1021,6 +1096,7 @@ class Play:
         dropped = {a.sha for a in acts if isinstance(a, Drop)}
         if any(c.waits and c.sha not in dropped for c in self.cands.values()) and any(isinstance(a, Build) for a in acts):
             self.built_on_waiting.append(len(self.acts))
+        rebuilds: dict[str, str] = {}
         for a in acts:
             if isinstance(a, Advance):
                 self.main = a.sha
@@ -1037,9 +1113,11 @@ class Play:
                 self.cands[a.sha] = replace(self.cands[a.sha], verdict=Verdict(), reruns=self.cands[a.sha].reruns + 1)
             elif isinstance(a, Build):
                 self.built += 1
-                sha = f"c{self.built}"
-                self.trees[sha] = self.trees[a.base] | set(a.members)
-                c = Candidate(sha, a.base, a.members, tuple(f"h{m}" for m in a.members), enqueued=now)
+                sha, base = f"c{self.built}", rebuilds.get(a.base, a.base)
+                if a.replaces is not None:
+                    rebuilds[a.replaces] = sha
+                self.trees[sha] = self.trees[base] | set(a.members)
+                c = Candidate(sha, base, a.members, tuple(f"h{m}" for m in a.members), enqueued=now)
                 self.cands[sha] = replace(c, tries=0, enqueued=None, records=RecordsRun(), waits=True) if a.records else c
             elif isinstance(a, Regenerate):
                 c = self.cands[a.sha]
@@ -1275,6 +1353,35 @@ def reads(v: Verdict) -> str:
     return v.state
 
 
+#: the tree a check of the world ran in, which its logs' frames name
+ROOT = "/workspace/research/scratch/r-world/tree"
+
+
+@dataclass(frozen=True)
+class Records:
+    """What a check's records say of one failure (`World.records`), as `vqueue_slim.failing` reads them: its step; of a suite,
+    the report its row is in (``at``: suites.json once the check ended, suites.failed.json while it runs, `-lean` of
+    lean-suites), the row, its log, its guard's report and its children's reads, and what it declares; of another step, its
+    log and what it declares (None: the whole tree)."""
+    step: str
+    log: str
+    at: str | None = None
+    row: dict | None = None
+    report: dict | None = None
+    trace: str = ""
+    declared: frozenset[str] | None = None
+    dirs: frozenset[str] = frozenset()
+
+
+def read_records(r: Records, rest: str) -> Read:
+    """``r`` read as `vqueue_slim.failing` reads a failed step's records: a suite's row by `read_suite`, ``rest`` alone when no
+    row says it failed (`joined` of none), another step's log by `read_step`."""
+    if r.at is None:
+        return read_step(r.step, {"step": r.step, "rc": 1}, r.log, rest, ROOT, r.declared)
+    return joined([read_suite(r.row["name"], r.row, r.log, rest, r.declared, r.dirs, ROOT, r.report, r.trace)] if r.row else [],
+                  rest)
+
+
 class World:
     """The loop's world, scripted by a seed: `main`, the ready marks, the live candidates with graph2's verdicts, and the outcomes
     the loop recorded.  A bad PR fails every candidate whose tree holds it, on a task whose inputs meet its files (and
@@ -1289,11 +1396,14 @@ class World:
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
-    on the way."""
+    on the way.  Each failure a verdict holds is read from the records a check writes of it (`records`), as ``fetch``
+    hands them to the loop's reader (`read`)."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
-                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False):
+                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False,
+                 fetch: Callable[[Records], Records] | None = None):
         self.seed, self.policy, self.tree_ejects = seed, policy, seed % 2 == 0
+        self.fetch = fetch or (lambda r: r)
         rng = self.rng = random.Random(seed)
         numbers = sorted(rng.sample(range(10, 90), rng.randint(3, 12)))
         self.batch, self.depth, self.rings = rng.choice((1, 2, 3, 4, 6)), rng.choice((1, 2, 3)), rng.choice((1, 2, 3))
@@ -1318,6 +1428,8 @@ class World:
                     files[m].add(f"red{i}/break{m}.py")
         self.marks = {m: Ready(m, f"h{m}", frozenset(files[m]), rng.random() < 0.25, rng.randint(0, 4), rng.random() < 0.1)
                       for m in numbers}
+        self.universe = frozenset({p for fs in files.values() for p in fs} | {
+            "shared/x.py", "elsewhere/untouched.py", "elsewhere/flaky.py", "docs/index.md", "pyproject.toml"})
         # the wide file: about half the Lean PRs, and now and then a PR with no Lean change, which isn't wide
         self.wide = frozenset(m for m in numbers if rng.random() < (0.5 if self.marks[m].lean else 0.05)) if wide else frozenset()
         # the pins file: about half the Lean PRs, and now and then a PR with no Lean change, which goes as any other
@@ -1335,6 +1447,8 @@ class World:
         self.crashes = rng.randint(0, 4)
         self.holds = {rng.randint(1, 30): (rng.choice(numbers), rng.randint(1, 6)) for _ in range(rng.randint(0, 2))}
         self.main, self.tick, self.made = MAIN, 0, 0
+        self.main_since = 0                           # the tick `main` last moved
+        self.rebuilds: dict[str, str] = {}            # this tick's: each candidate a build rebuilt -> what that build made
         self.cands: dict[str, Candidate] = {}
         self.tree: dict[str, frozenset[int]] = {MAIN: frozenset()}
         self.due: dict[str, int | None] = {}
@@ -1357,7 +1471,8 @@ class World:
                      and (m not in self.merged or self.lag is None or self.tick < self.merged[m] + self.lag))
 
     def snapshot(self) -> Snapshot:
-        cands = list(self.cands.values())
+        cands = [c if c.base == self.main else replace(c, verdict=replace(c.verdict, failed=tuple(
+            replace(f, main_tests=self.word(f)) for f in c.verdict.failed))) for c in self.cands.values()]
         self.rng.shuffle(cands)
         ready = self.ready()
         at = {(r.number, r.head) for r in ready}
@@ -1375,6 +1490,17 @@ class World:
 
     def key(self, name: str, m: int, sha: str) -> str:
         return f"{name}@{'with' if m in self.tree[sha] else 'without'} #{m}"
+
+    def word(self, f: Failed) -> frozenset[str] | None:
+        """`main`'s word on ``f``'s task, as the run beside its check gives it to a candidate above another: its failing tests,
+        none where it passes it; None in the tick `main` moved and the next, before that run has said, and of a red task
+        whose failing tests graph2 doesn't report."""
+        if self.tick <= self.main_since + 1:
+            return None
+        if f.task.startswith("suite:red"):
+            i = int(f.task.removeprefix("suite:red"))
+            return self.red_tests(i, self.main) if self.detail[i] else None
+        return frozenset()
 
     def touches(self, m: int, i: int) -> bool:
         return meets(self.marks[m].files, (f"red{i}/",))
@@ -1434,17 +1560,71 @@ class World:
         if cached and c.sha not in self.early and rng.random() < 0.3:
             self.early.add(c.sha)
             self.due[c.sha] = self.tick + rng.randint(1, 2)
+            self.read(cached, ended=False)
             return Verdict(FAIL, cached)
         if failed:
+            self.read(failed, ended=True)
             return Verdict(FAIL, failed, infra, ended=True)
         return Verdict(INFRA, (), infra) if infra else Verdict(PASS)
+
+    def records(self, f: Failed, ended: bool) -> Records:
+        """What a check writes of ``f``, by coins of its own (so the world's are the same with and without its records): of a
+        suite (``suite:M``, lean-suites' when M's change is Lean; a red task's; the flake's), its row naming its failing tests
+        (now and then none, failed beyond them), its log's frames through the check's tree and out of it, what it declares
+        (its directory, `shared/`, `docs/` and the workspace's file) and what its run traced: each file it read, but now and
+        then the one a program no tracer sees into read, its module `untraced`, and now and then nothing traced; of an
+        interaction, a step's log naming nothing."""
+        rng = random.Random(f"{self.seed} {f.task} {f.key}")
+        kind, _, name = f.task.partition(":")
+        if kind == "interaction":
+            return Records("lean-agreement", "lean-agreement: the verifiers disagree on 3 of 40 vectors\n")
+        suite = f"pkg{name}" if name.isdigit() else "elsewhere" if kind == "flaky" else name
+        step = "lean-suites" if name.isdigit() and self.marks[int(name)].lean else "pytest"
+        tests = sorted(f"tests/test_{suite}.py::{t.rpartition('::')[2]}" for t in f.tests) or (
+            [f"tests/test_{suite}.py::test_it"] if rng.random() < 0.85 else [])
+        row = {"name": suite, "suite": suite, "status": "failed", "step": step, "failed_tests": tests,
+               "beyond_tests": not tests, "nondeterministic": tests if kind == "flaky" else []}
+        read = sorted(p for p in self.universe if meets((p,), f.inputs))
+        log = ("=" * 20 + " FAILURES " + "=" * 20 + "\n" + "".join(
+            f"tests/test_{suite}.py:4: in {t.rpartition('::')[2]}\n" for t in tests)
+            + "".join(f"{ROOT}/{p}:3: in f\n" for p in read) + "/usr/lib/python3.12/runpy.py:9: in g\nE   AssertionError\n"
+            + "=" * 20 + " short test summary info " + "=" * 20 + "\n" + "".join(f"FAILED {t} - AssertionError\n" for t in tests))
+        blind = bool(read) and bool(tests) and rng.random() < 0.2
+        report = None if rng.random() < 0.1 else {
+            "traced": [f"F\t{p}" for p in (read[:-1] if blind else read)],
+            "untraced": {f"{suite}/{tests[0].partition('::')[0]}": ["git"]} if blind else {}}
+        at = f"suites{'-lean' if step == 'lean-suites' else ''}{'' if ended else '.failed'}.json"
+        return Records(step, log, at, row, report, "", frozenset({suite, "shared", "docs", "pyproject.toml"}),
+                       frozenset({suite, "shared", "docs"}))
+
+    def read(self, failed: tuple[Failed, ...], ended: bool) -> None:
+        """Each of ``failed`` read from its records (`records`) as the loop's reader reads them, through ``fetch``: one whose
+        report names its failing tests, failed for nothing more, is read as those tests and never as unnamed, and what it
+        read is among what any one's records bound its reads to."""
+        for f in failed:
+            r, rest = self.records(f, ended), unnamed(f.key)
+            got = read_records(self.fetch(r), rest)
+            where = f"seed {self.seed} tick {self.tick}: {f.task}"
+            if r.row and r.row["failed_tests"] and not r.row["beyond_tests"]:
+                named = {f"{r.row['name']}::{t}" for t in r.row["failed_tests"]}
+                assert named <= got.tests and not {rest, f"{r.row['name']}::{rest}"} & got.tests, (
+                    f"{where}: its report names {sorted(named)}, read as {sorted(got.tests)}")
+                self.seen["a failure read as the tests its report names"] += 1
+            if got.reads is None:
+                self.seen["a failure read with its reads unbounded"] += 1
+                continue
+            missed = sorted(p for p in self.universe if meets((p,), f.inputs) and not meets((p,), got.reads))
+            assert not missed, f"{where}: it read {missed}, which its reads {sorted(got.reads)} miss"
+            self.seen["a suite's reads narrowed by what its run traced" if got.reads != r.declared
+                      else "a suite's reads its declared inputs"] += 1
+            self.seen["an untraced program's module read as its declared inputs"] += bool(r.report and r.report["untraced"])
 
     def events(self) -> str | None:
         """What happens before the tick's snapshot; the new `main` when someone else moved it."""
         moved = None
         if self.tick in self.elsewhere:
             moved = f"x{self.tick}"
-            self.tree[moved], self.main = self.tree[self.main], moved
+            self.tree[moved], self.main, self.main_since = self.tree[self.main], moved, self.tick
             self.seen["main moved elsewhere"] += 1
         for m in self.pushes.get(self.tick, ()):
             if m not in self.merged and m not in self.ejected:
@@ -1476,8 +1656,11 @@ class World:
             self.crashes -= 1
             n = self.rng.randrange(len(acts))
             self.seen["the loop stopped early"] += 1
+        self.rebuilds = {}
         for a in acts[:n]:
             self.apply(a)
+        if n == len(acts):
+            self.restacked(s, acts)
         recorded = {a.sha for a in acts[:n] if isinstance(a, Drop) and a.outcome is not None}
         self.again |= {(f.task, f.key) for a in acts[:n] if isinstance(a, Red) and a.sha not in recorded for f in a.failed}
         live = [m for c in self.cands.values() for m in c.members]
@@ -1487,6 +1670,33 @@ class World:
         repeated = [a for a in set(again) & set(acts[:n]) if not isinstance(a, (Ring, Wait))
                     and not (isinstance(a, Red) and a.sha not in dropped)]
         assert not repeated, f"seed {self.seed} tick {self.tick}: a restart repeats {repeated}"
+
+    def restacked(self, s: Snapshot, acts: list) -> None:
+        """Once a tick's actions are all applied, every member of a candidate it dropped for a red, a member set aside or a
+        leave, that is neither a suspect of the tick's outcomes nor itself left (not ready at the head it was built at: a
+        reviewer's hold, an unmark, a push), is in a live candidate: a red takes out only its suspects, and a leaving member
+        takes no other PR out of the chain.  A drop on `main` lands its members; one off main's chain, a second candidate on
+        a base, a candidate a records commit replaces, and every candidate above them, are no red or leave."""
+        by, ready = {c.sha: c for c in s.candidates}, {r.number: r.head for r in s.ready}
+        live = {m for c in self.cands.values() for m in c.members}
+        out = {m for a in acts if isinstance(a, Drop) and a.outcome is not None for m in a.outcome.suspects}
+        excused = set()
+        for a in acts:
+            if isinstance(a, Drop) and (a.why == ON_MAIN or a.why.startswith((
+                    "not on main's chain", "a second candidate on", "its records were regenerated")) or (
+                    a.why == BASE_DROPPED and by[a.sha].base in excused)):
+                excused.add(a.sha)
+        for a in acts:
+            if not isinstance(a, Drop) or a.sha in excused:
+                continue
+            c = by[a.sha]
+            kept = {m for m, h in zip(c.members, c.heads) if m not in out and ready.get(m) == h}
+            assert kept <= live, (f"seed {self.seed} tick {self.tick}: {a.sha}, dropped ({a.why}), takes "
+                                  f"{sorted(kept - live)} out of the chain: {acts}")
+            left = set(c.members) - kept - out
+            self.seen["a red's others rebuilt in its tick" if a.outcome is not None else
+                      "a leaver's others rebuilt in its tick" if left else "others rebuilt above a drop in its tick"] += bool(kept)
+            self.seen["a leaver subtracted"] += bool(left & s.pulled)
 
     def check(self, s: Snapshot, acts: list, moved: str | None) -> None:
         where = f"seed {self.seed} tick {self.tick}: {acts}"
@@ -1508,13 +1718,24 @@ class World:
                 d = next(d for d in acts if isinstance(d, Drop) and d.outcome is not None and d.outcome.state == FAIL
                          and a.number in d.outcome.members)
                 assert not [f for f in a.failed if inherits(f)], where
-                assert s.tree_ejects or set(a.failed) <= set(by[d.sha].verdict.failed), f"{where}: ejected for infra errors"
+                assert s.tree_ejects or {(f.task, f.key) for f in a.failed} <= {(f.task, f.key) for f in by[d.sha].verdict.failed}, (
+                    f"{where}: ejected for infra errors")
                 self.seen["ejected by inputs" if "meet their inputs" in a.why else "ejected after a rerun"
                           if "rerun afresh" in a.why else "ejected for erring"] += 1
             elif isinstance(a, Red):
                 c = by[a.sha]
                 assert a.base == c.base == s.main and a.sha in decided and a.failed and all(map(inherits, a.failed)), where
                 self.seen["a red rung"] += 1
+            elif isinstance(a, Build) and a.replaces is not None:
+                c, out = by[a.replaces], {m for d in acts if isinstance(d, Drop) and d.outcome is not None
+                                          for m in d.outcome.suspects}
+                assert any(isinstance(d, Drop) and d.sha == c.sha for d in acts), f"{where}: a rebuild of a live candidate"
+                assert a.members == tuple(m for m in c.members if m in a.members), f"{where}: a rebuild takes another PR"
+                assert all(ready[m].head == h for m, h in zip(c.members, c.heads) if m in a.members), (
+                    f"{where}: a rebuild takes a PR at another head than it was built at")
+                assert not set(a.members) & (out | s.pulled), f"{where}: a rebuild keeps a suspect or a held PR"
+                self.seen["rebuilt without a suspect" if set(c.members) & out else "rebuilt without a leaver"
+                          if len(a.members) < len(c.members) else "rebuilt whole above a drop"] += 1
             elif isinstance(a, Build):
                 waiting = {r.number: r.lean for r in self.pool(s, acts)}
                 pins = [m for m in a.members if ready[m].lean and m in s.pinned and m in waiting]
@@ -1553,6 +1774,12 @@ class World:
                 persists = reads(c.verdict) == INFRA and c.tries >= min(s.rings, 2) and len(c.members) > 1
                 assert own or (reads(c.verdict) == INFRA and s.tree_ejects and any(f.tree for f in c.verdict.infra)) or (
                     persists and not s.tree_ejects), where
+                if c.base != s.main:
+                    under = [p for m in self.under(s, c) for p in built[m].files]
+                    unsaid = [f for f in own if f.base_tests is None]
+                    assert not [f for f in unsaid if f.main_tests is None or meets(under, f.inputs)], (
+                        f"{where}: a fail above decided before its base's word on a failure a member below it meets")
+                    self.seen["a fail above decided at once on main's word"] += bool(unsaid)
                 self.seen["bisected"] += len(a.outcome.suspects) > 1
                 self.seen["bisected on infra errors"] += not own and len(a.outcome.suspects) > 1
                 self.seen["bisected on infra errors, ejecting nobody"] += not own and not s.tree_ejects
@@ -1583,7 +1810,7 @@ class World:
                 self.seen["dropped for a reviewer's hold"] += 1
             elif isinstance(a, Wait):
                 waiting, on = self.pool(s, acts), self.chain_top(s, acts)
-                assert not any(isinstance(b, Build) for b in acts), where
+                assert not any(isinstance(b, Build) and b.replaces is None for b in acts), where
                 assert any(r.lean and r.number in s.pinned for r in waiting), f"{where}: a wait with no pinned Lean PR waiting"
                 assert all(r.lean for r in waiting), f"{where}: nothing built while a PR with no Lean change waited"
                 assert [m for m in self.top(s, acts, on) if built[m].lean] or [
@@ -1616,6 +1843,11 @@ class World:
                 assert (Retry(c.sha) in acts) == (waited > s.pending_s and c.tries == 1), where
                 assert any(isinstance(a, Ring) and a.sha == c.sha for a in acts) == (waited > 2 * s.pending_s), where
                 self.seen["waited for the rest of a check"] += c.verdict.state == FAIL
+        for c in by.values():
+            unsaid = [f for f in c.verdict.failed if not inherits(f) and f.base_tests is None]
+            if c.base != s.main and reads(c.verdict) == FAIL and unsaid and c.sha not in decided:
+                under = [p for m in self.under(s, c) for p in built[m].files]
+                self.seen["a fail above waited for the word of the one below"] += any(meets(under, f.inputs) for f in unsaid)
         if moved:
             drops = [a for a in acts if isinstance(a, Drop)]
             assert sorted(d.sha for d in drops) == sorted(by) and all(d.outcome is None for d in drops), where
@@ -1628,28 +1860,49 @@ class World:
         dropped = {a.sha: a.why for a in acts if isinstance(a, Drop)}
         busy = {m for c in s.candidates if c.sha not in dropped or dropped[c.sha] == ON_MAIN for m in c.members}
         busy |= {a.number for a in acts if isinstance(a, Eject)}
+        busy |= {m for a in acts if isinstance(a, Build) and a.replaces is not None for m in a.members}
         now = [a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None]
         newest = {(m, h): o.state for o in [*s.history, *now] for m, h in zip(o.members, o.heads)}
         return [r for r in s.ready if not r.conflict and r.number not in busy and newest.get((r.number, r.head)) not in (
             PASS, INFRA)]
 
+    @staticmethod
+    def rebuilt(acts: list) -> dict[str, Build]:
+        """The builds of ``acts`` that rebuild a candidate, by the candidate they rebuild: a build on it goes on them."""
+        return {a.replaces: a for a in acts if isinstance(a, Build) and a.replaces is not None}
+
     def below(self, s: Snapshot, acts: list, sha: str) -> set[int]:
         """The members of the candidates a build on ``sha`` sits on that aren't on `main`: down main's chain to `main`, or to
-        the candidate ``acts`` advances it to."""
+        the candidate ``acts`` advances it to, through what ``acts`` rebuilds."""
         by, advanced, out = {c.sha: c for c in s.candidates}, {a.sha for a in acts if isinstance(a, Advance)}, set()
-        while sha in by and sha != s.main and sha not in advanced:
+        again = self.rebuilt(acts)
+        while sha in again or sha in by and sha != s.main and sha not in advanced:
+            c = again.get(sha) or by[sha]
+            out |= set(c.members)
+            sha = c.base
+        return out
+
+    def under(self, s: Snapshot, c: Candidate) -> set[int]:
+        """The members of the candidates of ``s`` below ``c``, down to `main`."""
+        by, out, sha = {d.sha: d for d in s.candidates}, set(), c.base
+        while sha in by and sha != s.main:
             out |= set(by[sha].members)
             sha = by[sha].base
         return out
 
     def top(self, s: Snapshot, acts: list, sha: str) -> tuple[int, ...]:
         """The members of candidate ``sha``, which a build on it sits on directly: none when ``sha`` is `main` or the candidate
-        ``acts`` advances it to."""
+        ``acts`` advances it to; what ``acts`` rebuilds it as, when it does."""
+        if (again := self.rebuilt(acts).get(sha)) is not None:
+            return again.members
         c = next((c for c in s.candidates if c.sha == sha), None)
         return () if c is None or sha == s.main or Advance(sha) in acts else c.members
 
     def chain_top(self, s: Snapshot, acts: list) -> str:
-        """What a build in ``acts`` would sit on: the top of main's chain once ``acts`` drops and advances what it does."""
+        """What a build in ``acts`` would sit on: the top of main's chain once ``acts`` drops, advances and rebuilds what it
+        does."""
+        if again := self.rebuilt(acts):
+            return list(again)[-1]
         dropped = {a.sha for a in acts if isinstance(a, Drop)}
         on = {c.base: c.sha for c in s.candidates if c.sha not in dropped}
         sha = next((a.sha for a in reversed(acts) if isinstance(a, Advance)), s.main)
@@ -1661,11 +1914,14 @@ class World:
         where = f"seed {self.seed} tick {self.tick}: {a}"
         rng = self.rng
         if isinstance(a, Build):
-            assert a.base == self.main or a.base in self.cands, where
+            base = self.rebuilds.get(a.base, a.base)
+            assert base == self.main or base in self.cands, where
             sha, self.made = f"q{self.made}", self.made + 1
-            self.cands[sha] = Candidate(sha, a.base, a.members, tuple(self.marks[m].head for m in a.members),
+            if a.replaces is not None:
+                self.rebuilds[a.replaces] = sha
+            self.cands[sha] = Candidate(sha, base, a.members, tuple(self.marks[m].head for m in a.members),
                                         enqueued=self.tick * TICK_S)
-            self.tree[sha] = self.tree[a.base] | set(a.members)
+            self.tree[sha] = self.tree[base] | set(a.members)
             self.due[sha] = None if rng.random() < 0.06 else self.tick + rng.randint(1, 3)
             self.seen["wedged"] += self.due[sha] is None
             if rng.random() < 0.04:
@@ -1677,7 +1933,7 @@ class World:
             assert not set(c.members) & (set(self.bad) | set(self.erring)), f"{where}: a bad PR reaches main"
             assert self.reds(a.sha) <= self.reds(self.main), f"{where}: main advances to a new failure"
             self.seen["a fix cleared a red"] += self.reds(a.sha) < self.reds(self.main)
-            self.main = a.sha
+            self.main, self.main_since = a.sha, self.tick
             self.merged |= dict.fromkeys(c.members, self.tick)
             self.landed |= set(zip(c.members, c.heads))
         elif isinstance(a, Drop):
@@ -1732,10 +1988,14 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     pending past the bound is retried once and rung past twice it; a lone member's own failure is rerun once
     before it is ejected; a batch holds at most `lean` Lean PRs, and none beside a PR with no Lean change or while one it may
     take waits; a move of main by someone else drops the stale candidates
-    and rebuilds on it; an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
-    a red whose drop it didn't apply; and every good PR reaches main and every bad one is ejected within `ticks`, every
-    erring one too with `tree_ejects`, and without it only erring PRs stay live, each with its owner rung.  Each situation
-    the invariants are about happens in some seed."""
+    and rebuilds on it; a red or a leave takes out only its suspects or that member, every other member of what it dropped
+    built again in its tick, in order, and a fail above the lowest is decided before its base's word only on `main`'s, where
+    no member below meets it (`World.restacked`);
+    an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
+    a red whose drop it didn't apply; every failure is read from its check's records as the loop reads them, never as
+    unnamed where its report names its tests, its reads covering every file it read; and every good PR reaches main and
+    every bad one is ejected within `ticks`, every erring one too with `tree_ejects`, and without it only erring PRs stay
+    live, each with its owner rung.  Each situation the invariants are about happens in some seed."""
     seen: Counter[str] = Counter()
     for seed in SEEDS:
         w = World(seed)
@@ -1754,8 +2014,30 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
                  "a mixed failure", "waited for the rest of a check", "a fix cleared a red", "landed as built",
-                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change"):
+                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change",
+                 "a failure read as the tests its report names", "a failure read with its reads unbounded",
+                 "a suite's reads narrowed by what its run traced", "a suite's reads its declared inputs",
+                 "an untraced program's module read as its declared inputs", "rebuilt without a suspect",
+                 "rebuilt without a leaver", "rebuilt whole above a drop", "a red's others rebuilt in its tick",
+                 "a leaver's others rebuilt in its tick", "a leaver subtracted", "a fail above decided at once on main's word",
+                 "a fail above waited for the word of the one below"):
         assert seen[what], f"no seed exercised: {what}"
+
+
+def _unstacked(s: Snapshot) -> list:
+    """`decide` building nothing again in the tick that drops a red or a leaver's candidate, as before the subtraction: the
+    rebuilds and what it builds on them go, and the rest waits for the pool."""
+    acts = decide(s)
+    again = {a.replaces for a in acts if isinstance(a, Build) and a.replaces is not None}
+    return [a for a in acts if not (isinstance(a, Build) and (a.replaces is not None or a.base in again))]
+
+
+def test_decide_rebuilding_nothing_a_red_or_a_leave_dropped_breaks_the_subtraction_invariant():
+    """The subtraction invariant (`World.restacked`) holds `decide` to building again, in the same tick, every member of a
+    candidate a red or a leave dropped that isn't a suspect or the leaver."""
+    with pytest.raises(AssertionError, match="out of the chain"):
+        for seed in SEEDS:
+            _settle(World(seed, policy=_unstacked))
 
 
 def test_a_red_main_keeps_landing_good_prs_its_reds_never_grow_and_its_fixes_clear_them():
@@ -1843,7 +2125,19 @@ def _failures(s: Snapshot, f: Callable[[Failed], Failed], field: str = "failed")
     return _candidates(s, lambda c: replace(c, verdict=replace(c.verdict, **{field: tuple(map(f, getattr(c.verdict, field)))})))
 
 
-MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
+@dataclass(frozen=True)
+class Fetch:
+    """A misread of the records the loop's reader gets (`World.fetch`), where the others misread the snapshot `decide` gets."""
+    f: Callable[[Records], Records]
+
+
+def _cut(*reports: str) -> Callable[[Records], Records]:
+    """A suite's records with its row's report never fetched (one of ``reports``), and so nothing the reader fetches beside a
+    failed suite's row: its log, its guard's report, its children's reads."""
+    return lambda r: replace(r, row=None, log="", report=None, trace="") if r.at in reports else r
+
+
+MISREADS: dict[str, Callable[[Snapshot], Snapshot] | Fetch] = {
     "tries as one": lambda s: _candidates(s, lambda c: replace(c, tries=1)),
     "tree ejects flipped": lambda s: replace(s, tree_ejects=not s.tree_ejects),
     "reruns as none": lambda s: _candidates(s, lambda c: replace(c, reruns=0)),
@@ -1857,21 +2151,33 @@ MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
     "no failing tests": lambda s: _failures(s, lambda f: replace(f, tests=frozenset())),
     "the base failing what the candidate fails": lambda s: _failures(
         s, lambda f: f if f.base_tests is None else replace(f, base_tests=f.base_tests | f.tests)),
+    "main passing what a candidate above another fails": lambda s: _failures(s, lambda f: replace(f, main_tests=frozenset())),
     "no history": lambda s: replace(s, history=()),
     "no Lean cap": lambda s: replace(s, lean=s.batch),
     "every change as Lean": lambda s: replace(s, ready=tuple(replace(r, lean=True) for r in s.ready)),
     "nothing pulled": lambda s: replace(s, pulled=frozenset()),
     "no files as built": lambda s: replace(s, flying=()),
+    "an untraced program's module as traced": Fetch(
+        lambda r: replace(r, report={**r.report, "untraced": {}}) if r.report else r),
+    # records as a fetch gave them when it named a file twice, which cut off every file sorted after it: a check that ended
+    # with lean-suites failing one parametrized test of the vLLM suite (and lean-audit one module), each read as unnamed
+    "an ended check's suite reports, cut off": Fetch(_cut("suites.json", "suites-lean.json")),
+    # a check that ended with lean-suites failing 16 tests under one directory of the vLLM suite, read as every member's
+    "an ended check's lean-suites report, cut off": Fetch(_cut("suites-lean.json")),
+    # a shard that failed the repository's own suite on one boundary test while the check ran: its failures so far never
+    # reached the loop, so its early red never read them
+    "a running check's failures so far, cut off": Fetch(_cut("suites.failed.json", "suites-lean.failed.json")),
 }
 
 
 @pytest.mark.parametrize("misread", MISREADS)
 def test_decide_misreading_a_field_of_the_snapshot_breaks_an_invariant_of_the_simulated_queue(misread):
-    """The invariants hold `decide` to every field it reads: handed snapshots with one field misread, it breaks one of them,
-    or doesn't settle, in some seed."""
+    """The invariants hold `decide` to every field it reads, and the loop's reader to every record it reads: handed snapshots
+    with one field misread, or records misread (`Fetch`), it breaks one of them, or doesn't settle, in some seed."""
+    m = MISREADS[misread]
     with pytest.raises(AssertionError):
         for seed in SEEDS:
-            w = World(seed, policy=lambda s: decide(MISREADS[misread](s)))
+            w = World(seed, fetch=m.f) if isinstance(m, Fetch) else World(seed, policy=lambda s: decide(m(s)))
             while not w.done():
                 assert w.tick < ticks(w), f"seed {seed}: not settled after {ticks(w)} ticks"
                 w.step()
