@@ -202,3 +202,30 @@ Read at the line only. I did not trace the callers.
 - **Not traced:** the callers of section 4's lines, `report.py`'s use of the fixtures, and whether any deployment's caller of `network_verdict` gives both the roots and the count.
 - **Not built:** the scan's `--rule`. Its size is an estimate.
 
+[2026-11-12T12:01Z] 6dc30392d644
+ONSITEMAIN, Thu 12 Nov 4:05 AM PST. The 3:05 AM ruling is built, and item 2 with its measurement is in, early. Branch `cursor/net-onsite-memory-reads-84f9`, head `7ada237d60b89abe384d09e4a4335451db6266b3`. Suites on that head: `r20261112-115107-f004`, done, exit 0: 8 suites, 7 passed, 0 failed, `repository` 176 passed with the 4 the runner reads as known red on `main` [ran].
+
+**1. The ruling: an attempt that drew is the directory's only attempt** (`019ad77d5a51`, its own commit).
+- The mark is `window/receipt.json`. `a5.py` line 991 writes it [read]: before the return that refuses on the checks before the draw (997), before the verifier's own draw (1008) and before the stream's (`coins_draw`, where the challenger's session opens and `stream.select`, line 417, reads its coins). Written early enough in every path, so no new marker.
+- **It over-covers, and you should know before you take it:** line 991 is also before the refusal on the checks before the draw, so an attempt refused there, which never drew, spends its directory too. I kept the stricter mark over a new write in a5. The exact mark is one write in a5 after line 1002, in proofs' file: say if you want it.
+- `records_audit.py audit` refuses to start on it, before the directory is made, before a5 and before the challenger's session; nothing changed. No flag, no way to clear it, no fallback.
+- `served_integrity.answer` rejects where an attempt reached its draw and left no summary, or a summary with neither a record nor a refusal. Both were errors before.
+- **Past your words:** an accepting record whose audit died before its summary is that reject too (was an error). A negative's worker that dies leaves that state. Say if you want it back.
+- Negatives for each; with the refusal off 5 tests fail, with the mark the record alone 5 fail, with the answer's rejects off 2 fail [ran]. The two-attempt run, before and after, is kept: before, exits 1 then 0 and an accepting answer with the first verdict in no record; as built, the second exits 1 before a5 and the answer is the first's reject [ran].
+- Left: an attempt that dies before line 991 leaves the directory open (it has not drawn); two audits started at once on one directory both pass the check.
+
+**2. Item 2: `--negative-workers`** (`0e25f0083a95`, `25ea0abba311`, `0026e8ecbbe5`). Default 1, today's order exactly; N workers each forked from the audit with a Lean of its own; 1 and 4 workers hold `negatives.json` to the same bytes, with the memo and without [ran, test]; no retry, no fallback; a negative that passes fails the audit by the same line; the bound is memory read at run time. The driver's switch is `V3C_NEGATIVE_WORKERS`.
+
+**3. The measurement** (`r20261112-110703-c258`, done, exit 0 [ran]; small execution phase, the stand-in audit, 1 worker, 4 workers, 4 workers on two ranks at once).
+- All three accepted; 31 negatives, all refused, same names and order with 1 and 4 workers.
+- A worker's private memory as it ended: 2.8 to 12.4 MiB, **1.1 % to 4.6 % of the audit's 267 MiB**. Its own Lean: 84 to 93 MiB. The gate's estimate was 3.4 times what a worker used.
+- **650 GB takes 7 workers, by the gate as built** [argued]: its estimate is the worst case, a worker un-sharing all of the audit's memory, 77.5 GiB a worker at the kept scale beside the audit's own 77.5. If the small phase's share held, all 12 tasks would fit; I do not claim it does. Set 7 or more: the gate holds it to what fits.
+- What 7 buys, argued from the kept run's times and not measured: the negatives in about 1,500 s where they took 8,610 s.
+- **The timed rehearsal can go sooner than Wed 18 Nov as far as this change goes.** Its first read should be the summary's `negative_workers`.
+
+**Reds and slips, mine.** The suites on `019ad77d5a51` (`r20261112-113935-12ff`) had a fifth red, mine: the retired-terms test on the README sentence I added ("draw"); fixed in `7ada237d60b8`, the README alone. My first measurement launch (`r20261112-103325-b3e9`) measured nothing: I asked both ranks of one session one at a time, which a5 refuses. Its log printed the timer's command line into my transcript, paths only, no machine's name or secret; nothing pushed or posted.
+
+**Least sure of:** the un-shared share at the kept scale (one small phase and one toy; transparent huge pages not read). **Not looked at:** a real a5 killed between lines 991 and 1008; an audit killed outright while workers run (they outlive it); the kept case; proofs' hunks; (b).
+
+Note: `lanes/network-accounting/20261112T1151Z-report-onsite-negative-workers-and-the-draws-one-attempt.md`, synced. #9188's head is unmoved.
+
