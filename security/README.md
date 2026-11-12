@@ -61,10 +61,9 @@ incorrect set of the trace the extractor recovers.
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
      `FillRoundEq`; and `OuterViewZK`.
 4. **Composed soundness.** `Verity.SoundnessOf` (`Properties/Verity/Soundness.lean`), proved as
-   `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`) at every composite, a list of its
-   subprotocols' ids; `Verity.Soundness` and `Verity.RemoteSoundness` are it at onsite's list and at remote's
-   (`Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols`): if each of the composite's
-   subprotocols meets its target, then
+   `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`) at every composite, a list of
+   subprotocols' ids; `Verity.Soundness` and `Verity.RemoteSoundness` are it at onsite's list and remote's: if each
+   of the composite's subprotocols meets its target, then
    Pr[the composite's verifier accepts files that passed the commit phase's check ∧ some subprotocol's claim fails]
    ≤ Σ_a error_a, where error_a is a's δ plus ε_forge plus its loss at the probability that a's finder outputs a
    SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
@@ -521,9 +520,9 @@ with each changed definition's source; nothing waits on it, and a guarantee that
 ## The guarantees to read first
 
 **Protocol soundness** is one theorem (Start here, item 4), the union bound over a composite's subprotocols at its
-compiled verifier, for any list of subprotocols (`Verity.soundness_at_of_targets`): `Verity.soundness_of_subprotocols`
-at onsite's seven and `Verity.remote_soundness_of_subprotocols` at remote's three, each subprotocol's target a
-hypothesis until its own proof discharges it. Start at
+compiled verifier, for any list of them: `Verity.soundness_of_subprotocols` at onsite's seven and
+`Verity.remote_soundness_of_subprotocols` at remote's three, each subprotocol's target a hypothesis until its own
+proof discharges it. Start at
 `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
