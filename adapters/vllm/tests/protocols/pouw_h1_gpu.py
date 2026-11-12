@@ -1128,7 +1128,19 @@ def negatives_of(layers: list[Any]) -> tuple[str, ...]:
     return NEGATIVES + ((EXPERT_NEGATIVE,) if PHK.expert_names(layers) else ())
 
 
-def editor(kind: str) -> Any:
+class Edit:
+    """An edit of the arm's codes, called as ``codes(layer, xq)`` is (`edited`); ``at`` names the expert site it zeroed,
+    None while it has zeroed none."""
+
+    def __init__(self, codes: Callable[[Any, Any], Any]) -> None:
+        self.codes = codes
+        self.at: str | None = None
+
+    def __call__(self, layer: Any, xq: Any) -> Any:
+        return self.codes(layer, xq)
+
+
+def editor(kind: str) -> Edit:
     """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
@@ -1136,7 +1148,7 @@ def editor(kind: str) -> Any:
     from verity_vllm.engine import int8_experts as X
     done = [False]
 
-    def edit(layer: Any, xq: Any) -> Any:
+    def codes(layer: Any, xq: Any) -> Any:
         if kind == "a-zero":
             return torch.zeros_like(xq)
         if kind == EXPERT_NEGATIVE:
@@ -1149,7 +1161,7 @@ def editor(kind: str) -> Any:
         done[0], xq = True, xq.clone()
         xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
         return xq
-    edit.at = None
+    edit = Edit(codes)
     return edit
 
 
@@ -1447,6 +1459,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
     its tree), from which its sampling coin is read (none refuses it)."""
     from verity.protocols.spot.device import remote
+
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

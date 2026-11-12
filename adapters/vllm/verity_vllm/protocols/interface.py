@@ -71,14 +71,14 @@ class Context:
         return next((e.partition(":")[2] for e in self.enabled if e.partition(":")[0] == name), None)
 
     def settings_of(self, name: str) -> Mapping[str, Any]:
-        """Protocol ``name``'s settings: none when the config has no entry for it."""
+        """Protocol ``name``'s settings: none when the config has no entry for it, or an empty one."""
         own = self.settings.get(name)
-        return {} if own is None else own
+        return own if own else {}
 
     def filled_of(self, name: str) -> tuple[str, ...]:
         """The settings of ``name`` the built engine will supply: none when it names none."""
         own = self.filled.get(name)
-        return () if own is None else tuple(own)
+        return tuple(own) if own else ()
 
 
 @dataclass(frozen=True)

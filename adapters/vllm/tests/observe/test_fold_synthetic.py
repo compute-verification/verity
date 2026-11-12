@@ -39,12 +39,14 @@ from verity_vllm.observe.fold.resolver import (
     Gather,
     GatherMany,
     Group,
+    Pattern,
     PerRow,
     Profile,
     Shared,
     Supplied,
     Transparent,
 )
+from verity_vllm.observe.fold.supplied import SuppliedInputs
 
 # ---------------------------------------------------------------------------------------------------------
 # toy configuration
@@ -517,7 +519,11 @@ def test_the_header_supplies_the_configuration_a_profile_does_not_state(memory):
         assert r.weights_type == own.weights_type == b1.weights_type(C) and r.report.by_spec == own.report.by_spec
 
 
-@pytest.mark.parametrize("workload", [None, {}, {"requests": None}, {"requests": []}])
+#: what reads as no document: a null, and each empty or zero value
+EMPTY: tuple = (None, {}, [], 0, "", False)
+
+
+@pytest.mark.parametrize("workload", [*EMPTY, *({"requests": empty} for empty in EMPTY)])
 def test_a_header_without_requests_is_refused(memory, workload):
     import dataclasses
 
@@ -538,15 +544,15 @@ def test_a_weight_root_ahead_of_the_run_header_is_refused(memory):
 
 
 def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
-    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null and empty each read as none."""
+    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null, and empty or zero each read as none."""
     import dataclasses
 
     hdr = toy_log()[0]
     own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
     more: dict
     notes: dict | None
-    for more in ({}, {"children": None, "sampling": None}, {"children": [], "sampling": {}}):
-        for notes in (None, {}, {"tp2": None}, {"tp2": {}}, {"tp2": {"world_size": 1}}):
+    for more in ({}, *({"children": empty, "sampling": empty} for empty in EMPTY)):
+        for notes in (None, {}, *({"tp2": empty} for empty in EMPTY), {"tp2": {"world_size": 1}}):
             evs = toy_log()
             evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
             r = fold(evs, toy_profile(), strict=True, with_program=False)
@@ -595,6 +601,50 @@ def test_a_supplied_value_must_agree_with_its_first_use(memory, monkeypatch):
     pats = [Pat(p.name, p_bad_fused) if p.name == "fused_norm" else p for p in PATTERNS]
     with pytest.raises(FoldError, match="value 'eps' is 32-bit 0x3f800000 here"):
         fold(toy_log(), Profile("toy", pats, dict(C), weight_field, False, registered_values=True), strict=True)
+
+
+def test_a_run_value_is_a_field_of_its_requests_parameter_and_a_registered_one_of_values():
+    """`SuppliedInputs.leaf`: one field a name in its owner's parameter, at the next offset, the same leaf at each later use."""
+    s, index = SuppliedInputs(), {"req-a": 0, "req-b": 1}
+    params: list = []
+    s.declare(params, 2)
+    assert [name for name, _ in params] == ["run_0", "run_1", "values"]
+    temperature = Supplied("run", "temperature", 32, 0x3F800000, "req-b")
+    assert list(s.leaf(temperature, Value(32), "T", index)) == [("p", 1, 0)]
+    assert list(s.leaf(Supplied("run", "top_p", 32, 0x3F000000, "req-b"), Value(32), "P", index)) == [("p", 1, 1)]
+    assert list(s.leaf(Supplied("run", "temperature", 32, 0x3F800000, "req-a"), Value(32), "T", index)) == [("p", 0, 0)]
+    assert list(s.leaf(Supplied("registration", "eps", 32, 1), Value(32), "eps", index)) == [("p", 2, 0)]
+    assert list(s.leaf(temperature, Value(32), "T", index)) == [("p", 1, 0)]
+    assert [f["name"] for f in s.fields[1]] == ["temperature", "top_p"] and [f["name"] for f in s.fields["values"]] == ["eps"]
+
+
+@pytest.mark.parametrize("op, width, message", [
+    (Supplied("run", "temperature", 32, 1, "req-a"), 16, "T: a 32-bit supplied value for a parameter of type"),
+    (Supplied("run", "temperature", 32, 1, "req-z"), 32, "T: run value 'temperature' names request 'req-z', which is not in the run header"),
+    (Supplied("step", "temperature", 32, 1, "req-a"), 32, "T: a value is bound per run or at registration, not 'step'"),
+    (Supplied("run", "temperature", 32, 2, "req-b"), 32, "T: value 'temperature' is 32-bit 0x2 here and 32-bit 0x3f800000 at its first use"),
+])
+def test_a_supplied_value_off_its_contract_raises_the_callers_error(op, width, message):
+    s, index = SuppliedInputs(), {"req-a": 0, "req-b": 1}
+    s.declare([], 2)
+    s.leaf(Supplied("run", "temperature", 32, 0x3F800000, "req-b"), Value(32), "T", index)
+    with pytest.raises(FoldError, match=message):
+        s.leaf(op, Value(width), "T", index, err=FoldError)
+    with pytest.raises(ValueError, match="T: a Supplied operand under a profile without registered_values"):
+        SuppliedInputs().leaf(Supplied("registration", "eps", 32, 1), Value(32), "T", index)
+
+
+def test_a_move_between_widths_is_refused(memory):
+    """`_Fold._move_reads`: a move's two operands hold words of one width."""
+    import dataclasses
+
+    def p_wide_index(node, ctx):
+        t = p_index(node, ctx)
+        return None if t is None else dataclasses.replace(t, dst=PerRow(dataclasses.replace(node.outs, dtype="float32")))
+
+    pats: list[Pattern] = [Pat(p.name, p_wide_index) if p.name == "index" else p for p in PATTERNS]
+    with pytest.raises(FoldError, match=r"move between widths bfloat16 -> float32 \(logits_indices\)"):
+        fold(toy_log(), Profile("toy", pats, dict(C), weight_field, False), strict=True, with_program=False)
 
 
 def test_step_link_and_kv_provenance(memory):

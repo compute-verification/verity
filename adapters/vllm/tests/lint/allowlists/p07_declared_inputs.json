@@ -1,8 +1,6 @@
 {
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "CompiledGraphSource.prepare", "detail": "except Exception"},
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "_register_op", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "compile_settings", "detail": "except Exception"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
@@ -38,7 +36,6 @@
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
     {"file": "verity_vllm/engine/build.py", "kind": "broad-except", "symbol": "vllm_has_flashinfer", "detail": "except Exception"},
     {"file": "verity_vllm/engine/build.py", "kind": "environ", "symbol": "compilation_facts", "detail": "VLLM_DISABLE_COMPILE_CACHE"},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "seed-default", "symbol": "compare", "detail": "seed"},
     {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_is_fake", "detail": "except Exception"},

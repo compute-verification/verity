@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm import gc_tuning
 from verity_vllm.pipeline import build as B
-from verity_vllm.pipeline import gc_tuning
 
 WL = Path(__file__).resolve().parents[2] / "workloads"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"

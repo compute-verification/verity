@@ -27,11 +27,31 @@ from verity_vllm.config import option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import source_identity as SI
 from verity_vllm.query.manifest import format as MF
-from verity_vllm.query.required import QUERIES
+
+__all__ = ["Options", "key", "keyed", "main", "write"]
 
 logger = init_logger(__name__)
 
 SCHEMA = "verity-vllm/commit-plan/v1"
+
+
+def digests_of_record(args: Any, required_manifest: dict[str, Any] | None) -> set[str]:
+    """The Program digests of record for the Commit `args` describes: its `--program-digest`, the manifest's `component_digests`
+    and each of its `components`' `program_digest`.  A manifest may hold neither block, and names no digest then."""
+    of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
+    listed = required_manifest.get("component_digests") if required_manifest else None
+    components = required_manifest.get("components") if required_manifest else None
+    if listed:
+        of_record.update(str(x) for x in listed)
+    if components:
+        of_record.update(str(c["program_digest"]) for c in components.values() if isinstance(c, dict) and c.get("program_digest"))
+    return of_record
+
+
+def program_digest(program: dict[str, Any]) -> str:
+    """A loaded Program's digest: its Build result's `program_digest`, else its instances' `digest`; "" where it records neither."""
+    result, instances = program.get("result"), program.get("instances")
+    return str((result.get("program_digest") if result else None) or (instances.get("digest") if instances else None) or "")
 
 
 def oracle_producers_of_record(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],
@@ -39,6 +59,9 @@ def oracle_producers_of_record(args: Any, required_manifest: dict[str, Any] | No
     """The oracle's producer facts from the Programs of record (`oracle_compare.producers_of_programs`, under the manifest's query) for a
     manifest the query path built (`query.query_id` in `required.QUERIES`), which carries none: (facts | None, record).  The Programs are
     the replay's (same lookup, same of-record digest check); None + the named reason for any other manifest, no Program dir or one not of record."""
+    # `required` loads numpy and the core `verity`, which this module does not at import: it is read here, where the facts are derived
+    from verity_vllm.query.required import QUERIES
+
     q = required_manifest.get("query") if isinstance(required_manifest, dict) else None
     if not (isinstance(q, dict) and q.get("query_id") in QUERIES):
         return None, {"used": False, "why": "manifest is not the query path's: its rows carry the producer annotations"}
@@ -54,12 +77,8 @@ def oracle_producers_of_record(args: Any, required_manifest: dict[str, Any] | No
         loaded = {labels[str(r.get("request_id"))]: one for r in reqs}
     else:
         return None, {"used": False, "why": "no --programs-root / --program-dir: producer facts not derivable"}
-    of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
-    of_record.update(str(x) for x in (required_manifest or {}).get("component_digests") or [])
-    of_record.update(str(c["program_digest"]) for c in ((required_manifest or {}).get("components") or {}).values()
-                     if isinstance(c, dict) and c.get("program_digest"))
-    digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
-    bad = sorted(k for k, d in digs.items() if d not in of_record)
+    of_record = digests_of_record(args, required_manifest)
+    bad = sorted(k for k, v in loaded.items() if program_digest(v) not in of_record)
     if bad:
         return None, {"used": False, "why": f"Program(s) {bad[:4]} not of record (of-record {sorted(x[:16] for x in of_record)})"}
     facts = OC.producers_of_programs(loaded, aliases=(required_manifest or {}).get("op_path_aliases"), query=q["query_id"])
@@ -141,7 +160,9 @@ def keyed(path: str, args: Any, schema: str) -> tuple[dict[str, Any] | None, dic
         return None, {**rec, "used": False, "plan_recomputed": True, "why": f"plan unreadable: {type(e).__name__}: {e}"[:300]}
     if not isinstance(doc, dict) or doc.get("schema") != schema:
         return None, {**rec, "used": False, "plan_recomputed": True, "why": f"plan schema {doc.get('schema') if isinstance(doc, dict) else None!r} != {schema}"}
-    want, have = key(args), doc.get("key") or {}
+    want, have = key(args), doc.get("key")
+    if not have:
+        have = {}  # a plan that holds no key was planned for no Commit: every field of this one's differs
     diff = sorted(k for k in set(want) | set(have) if want.get(k) != have.get(k))
     rec.update(key=want, planned_utc=doc.get("utc"), plan_wall_s=doc.get("wall_s"))
     if diff:
@@ -158,8 +179,9 @@ def use(path: str, args: Any) -> tuple[tuple[dict[tuple[str, str], dict[str, Any
     doc, rec = keyed(path, args, SCHEMA)
     if doc is None:
         return None, rec
-    pf = doc.get("producer_facts") or {}
-    out = (facts_of_json(pf.get("facts")), dict(pf.get("record") or {}))
+    pf = doc.get("producer_facts")  # a plan that holds none planned none: no facts, and an empty record of them
+    facts, record = (pf.get("facts"), pf.get("record")) if pf else (None, None)
+    out = (facts_of_json(facts), dict(record) if record else {})
     return out, {**rec, "used": True, "plan_recomputed": False, "members": len(out[0] or {}), "check_s": round(time.monotonic() - t0, 3)}
 
 

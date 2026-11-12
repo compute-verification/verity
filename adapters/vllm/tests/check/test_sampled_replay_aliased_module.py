@@ -70,7 +70,7 @@ def _aliased_world():
 
 def test_without_the_alias_table_the_aliased_identities_are_missing_by_name_and_the_replay_is_partial():
     world, bmap, committed, _manifest, attn = _aliased_world()
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=5, workers=0)
     assert rep["result"] is None and rep["grade"] == "partial", json.dumps(rep, indent=1, default=str)[:2000]
     ne = rep["not_evaluated"]
     assert ne and all(x["why_class"] == "missing-input" for x in ne), ne[:3]
@@ -84,7 +84,7 @@ def test_without_the_alias_table_the_aliased_identities_are_missing_by_name_and_
 
 def test_with_the_manifest_alias_table_the_replay_reads_invocation_one_of_the_canonical_path_and_is_complete():
     world, bmap, committed, manifest, attn = _aliased_world()
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=5, manifest=manifest)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=5, manifest=manifest, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps(rep, indent=1, default=str)[:3000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"]
     rope = {k: v for k, v in rep["strata"].items() if k.startswith("RoPE_v1")}

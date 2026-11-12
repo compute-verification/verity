@@ -47,17 +47,18 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
-from verity_vllm.pipeline.row_json import load_json
+from verity_vllm.pipeline.row_json import field_of, load_json
+from verity_vllm.records.schema_ids import CONFIG_RECORD_SCHEMA, RECORDS_INDEX_SCHEMA
 
 __all__ = ["INDEX", "KIND", "NAME", "TIERS", "aot_of", "index_refusal", "load_index", "record", "write_index"]
 
-SCHEMA = "verity-vllm/config-record/v1"
+SCHEMA = CONFIG_RECORD_SCHEMA
 NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
 MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
 INDEX = RECORDS
-INDEX_SCHEMA = "verity-vllm/records-index/v1"
+INDEX_SCHEMA = RECORDS_INDEX_SCHEMA
 #: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
 TIERS = ("fast", "heavy")
 INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned "
@@ -89,7 +90,7 @@ def write_index(doc: dict[str, Any], path: Path) -> None:
 def aot_of(row: str, path: Path = INDEX) -> dict[str, Any] | None:
     """A switched row's `aot` (`comparison`: the run that found its predicted Programs equal to its traced Build's on every rank;
     `trace`: that Build, a `vllm-build/v1`), None for a row on the trace."""
-    return (load_index(path)["rows"].get(row) or {}).get("aot")
+    return field_of(load_index(path)["rows"].get(row), "aot")   # a row the index does not list has no entry, and is on the trace
 
 
 def _jsonl(p: Path) -> list[dict]:
@@ -139,8 +140,9 @@ def match_part(d: Path, world: int) -> dict[str, Any] | None:
         fm = load_json(d / "match" / "fold_match" / "tp2_fold_match.json")
         if not fm:
             return None
+        problems = fm.get("problems")   # the fold Match's findings; one that found none may leave the list out
         return {"ok": fm.get("pass") is True, "schema": fm.get("schema"), "profile": fm.get("profile"), "world": fm.get("world"),
-                "legs": fm.get("legs"), "problems": (fm.get("problems") or [])[:16]}
+                "legs": fm.get("legs"), "problems": problems[:16] if problems else []}
     gm = load_json(d / "global_match.json")
     return {"ok": gm.get("verdict") == "PASS", "schema": gm.get("schema")} if isinstance(gm, dict) else None
 
@@ -158,25 +160,29 @@ def _gate(v: Any) -> bool | None:
 def summary_part(sm: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """(commit, replay) of a Commit of record from its summary (`commit/summary.json`, every pair): its pass, each pair's verdict and
     run root (per rank too), the openings, each gate's result, the walls and the required manifest it committed against."""
-    rm = sm.get("required_manifest") or {}
-    roots = sm.get("tp_run_roots") or sm.get("run_roots") or []
+    rm = sm.get("required_manifest")   # the manifest the Commit committed against; a summary without the block names none
+    stated = sm.get("tp_run_roots") or sm.get("run_roots")   # per pair, a TP Commit's combined run root, else a single-GPU one's
+    roots = stated if stated else []
     gates = {k: _gate(sm.get(k)) for k in SUMMARY_GATES if k in sm}
     if isinstance(sm.get("match_oracle"), dict):
         gates["match_oracle"] = all(_gate(v) is True for v in sm["match_oracle"].values()) and bool(sm["match_oracle"])
-    per_pair = [p for p in sm.get("per_rank_roots") or [] if isinstance(p, dict)]
-    sr = sm.get("sampled_replay") or {}
+    per_rank_roots = sm.get("per_rank_roots")   # per pair, each rank's run root; only a TP Commit states them
+    per_pair = [p for p in per_rank_roots if isinstance(p, dict)] if per_rank_roots else []
     commit = {"ok": sm.get("pass") is True, "pairs": sm.get("pairs"), "pass_per_pair": sm.get("commit_pass"), "run_root": roots[0] if roots
               and len(set(roots)) == 1 else None, "run_roots": roots, "openings": sm.get("openings"), "tokens_equal": sm.get("tokens_equal"),
-              "gates": gates, "manifest": {k: rm.get(k) for k in ("manifest_digest", "identities", "program_digest_per_rank")},
+              "gates": gates, "manifest": {k: field_of(rm, k) for k in ("manifest_digest", "identities", "program_digest_per_rank")},
               "wall": {k: sm.get(k) for k in ("control_wall", "treatment_wall", "delta_wall_pct")}, "schema": sm.get("schema"),
               "per_rank": {r: {"run_roots": [p.get(r) for p in per_pair]} for r in sorted({r for p in per_pair for r in p}, key=int)}
               if per_pair else None}
-    smp = sr.get("sample") or {}
-    replay = {"ok": sr.get("result") is True and int(smp.get("mismatch_n") or 0) == 0, "result": sr.get("result"),
-              **{k: smp.get(k) for k in ("picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n")},
-              "population": (sr.get("population") or {}).get("by_family"),
-              "per_rank": {r: {k: v.get(k) for k in ("result", "grade")} for r, v in sorted((sr.get("per_rank") or {}).items(), key=lambda kv: int(kv[0]))
-                           if isinstance(v, dict)} or None}
+    sr = sm.get("sampled_replay")
+    if not sr:
+        sr = {}   # a summary without the replay's block: no result, so the replay is not ok, with no sample, population or rank
+    smp, by_rank = sr.get("sample"), sr.get("per_rank")
+    replay = {"ok": sr.get("result") is True and int(field_of(smp, "mismatch_n") or 0) == 0, "result": sr.get("result"),
+              **{k: field_of(smp, k) for k in ("picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n")},
+              "population": field_of(sr.get("population"), "by_family"),
+              "per_rank": ({r: {k: v.get(k) for k in ("result", "grade")} for r, v in sorted(by_rank.items(), key=lambda kv: int(kv[0]))
+                            if isinstance(v, dict)} or None) if by_rank else None}
     return commit, replay
 
 
@@ -207,10 +213,10 @@ def build_part(d: Path) -> dict[str, Any]:
     bs = load_json(d / "build_summary.json") or {}
     programs = {k: (v or {}).get("program_digest") for k, v in sorted(bs.items()) if k not in ("workload",) and isinstance(v, dict)}
     man = load_json(d / "manifest_header.json") or load_json(d / "manifest.json") or {}
-    q = man.get("query") or {}
+    query = man.get("query")   # a Build that stopped before its manifest names no query, and one before GP-01 no workload digest
     return {"ok": bool(bs) and all((v or {}).get("ok") for v in bs.values() if isinstance(v, dict)),
-            "programs": programs, "census_digests": census_digests(bs), "workload_digest": (bs.get("workload") or {}).get("workload_digest"),
-            "manifest_digest": man.get("manifest_digest"), "query_id": q.get("query_id")}
+            "programs": programs, "census_digests": census_digests(bs), "workload_digest": field_of(bs.get("workload"), "workload_digest"),
+            "manifest_digest": man.get("manifest_digest"), "query_id": field_of(query, "query_id")}
 
 
 def word_check_part(d: Path) -> dict[str, Any]:
@@ -224,16 +230,19 @@ def commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     if not runs:
         return {"ok": None, "runs": 0}, {"ok": None}
     r = runs[-1]
-    c = r.get("commit") or {}
-    ops = c.get("openings") or {}
+    c = r.get("commit")
+    if not c:
+        c = {}   # a run that ended before its Commit: it did not pass, and has no root, openings, coverage or replay
+    ops = c.get("openings")
     commit = {"ok": bool(c.get("commit_pass")), "reason": c.get("commit_fail_reason"), "runs": len(runs), "run_root": c.get("run_root"),
-              "openings": {"n": ops.get("n"), "verified": ops.get("verified")},
+              "openings": {"n": field_of(ops, "n"), "verified": field_of(ops, "verified")},
               "tensors": {"expected": c.get("expected_tensors"), "committed": c.get("committed_tensors")},
-              "coverage_ok": (c.get("coverage") or {}).get("ok"), "wall_s": r.get("wall_s"), "engine_steps": r.get("engine_steps"),
+              "coverage_ok": field_of(c.get("coverage"), "ok"), "wall_s": r.get("wall_s"), "engine_steps": r.get("engine_steps"),
               "host_mem_kb": r.get("host_mem_kb")}
     if c.get("weights_attest"):
         commit["weights_attest"] = c["weights_attest"]
-    return commit, replay_of(c.get("sampled_replay") or {})
+    replayed = c.get("sampled_replay")
+    return commit, replay_of(replayed if replayed else {})
 
 
 def single_gpu_commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -246,29 +255,30 @@ def single_gpu_commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def replay_of(sr: dict[str, Any]) -> dict[str, Any]:
-    """One sampled replay's result (`check.replay.driver.sampled_replay`), with the units that differed."""
-    smp = sr.get("sample") or {}
-    mism = sr.get("mismatch") or []
-    return {"ok": sr.get("result") is True and int(smp.get("mismatch_n") or 0) == 0, "result": sr.get("result"), "grade": sr.get("grade"),
-            "strata_by": smp.get("strata_by"), "k": smp.get("k"), "picked": smp.get("picked"), "evaluated": smp.get("evaluated"),
-            "equal": smp.get("equal"), "mismatch_n": smp.get("mismatch_n"), "not_evaluated_n": smp.get("not_evaluated_n"),
-            "seed": smp.get("seed"), "seed_source": smp.get("seed_source"),
-            "differed": [{k: m.get(k) for k in ("i", "family", "request_id", "step", "op_path") if k in m} for m in mism[:64]],
-            "by_family": (sr.get("mismatch_by") or {}).get("by_family"), "why": sr.get("why")}
+    """One sampled replay's result (`check.replay.driver.sampled_replay`), with the units that differed.  An empty block (a Commit that
+    recorded no replay) has no result: it is not ok, and states no sample and no unit."""
+    smp, mism = sr.get("sample"), sr.get("mismatch")   # a replay that stopped before it drew states no sample; one all equal, no mismatch
+    sample = {k: field_of(smp, k) for k in ("strata_by", "k", "picked", "evaluated", "equal", "mismatch_n", "not_evaluated_n", "seed", "seed_source")}
+    return {"ok": sr.get("result") is True and int(sample["mismatch_n"] or 0) == 0, "result": sr.get("result"), "grade": sr.get("grade"),
+            **sample,
+            "differed": [{k: m.get(k) for k in ("i", "family", "request_id", "step", "op_path") if k in m} for m in mism[:64]] if mism else [],
+            "by_family": field_of(sr.get("mismatch_by"), "by_family"), "why": sr.get("why")}
 
 
 def tp_build_part(d: Path, world: int) -> dict[str, Any]:
     """A TP row's Build (`row_records.tp_build_summary`): per rank its Program digests and GP-01 workload digest, and the global manifest."""
-    ranks = (load_json(d / "build_summary.json") or {}).get("ranks") or {}
+    ranks = field_of(load_json(d / "build_summary.json"), "ranks")   # each rank's Build parts; None where no summary states them
     per = {}
     for r in range(world):
-        rk = ranks.get(f"rank{r}") or {}
+        rk = field_of(ranks, f"rank{r}")
+        if not rk:
+            rk = {}   # a rank the Build did not reach: not ok, with no Program
         per[str(r)] = {"ok": bool(rk) and all((v or {}).get("ok") for v in rk.values() if isinstance(v, dict)),
                        "programs": {k: (v or {}).get("program_digest") for k, v in sorted(rk.items()) if k != "workload" and isinstance(v, dict)},
-                       "census_digests": census_digests(rk), "workload_digest": (rk.get("workload") or {}).get("workload_digest")}
+                       "census_digests": census_digests(rk), "workload_digest": field_of(rk.get("workload"), "workload_digest")}
     man = load_json(d / "manifest_header.json") or load_json(d / "manifest.json") or {}
     return {"ok": all(p["ok"] for p in per.values()), "world": world, "per_rank": per, "manifest_digest": man.get("manifest_digest"),
-            "query_id": (man.get("query") or {}).get("query_id"), "program_digest_per_rank": man.get("program_digest_per_rank")}
+            "query_id": field_of(man.get("query"), "query_id"), "program_digest_per_rank": man.get("program_digest_per_rank")}
 
 
 def _sum(parts: list[dict[str, Any]], key: str) -> int | None:
@@ -283,20 +293,23 @@ def tp_commit_part(d: Path, world: int) -> tuple[dict[str, Any], dict[str, Any]]
     if not runs:
         return {"ok": None, "runs": 0}, {"ok": None}
     r = runs[-1]
-    c = r.get("commit") or {}
-    ranks = sorted((c.get("per_rank") or {}).items(), key=lambda kv: int(kv[0]))
+    c = r.get("commit")
+    if not c:
+        c = {}   # a run that ended before its Commit: it did not pass, and has no rank's block, root or openings
+    by_rank = c.get("per_rank")   # each rank's Commit and replay; a Commit that failed before its ranks states none
     per_c, per_r = {}, {}
-    for rk, b in ranks:
-        ops, ex = b.get("openings") or {}, b.get("extra") or {}
+    for rk, b in sorted(by_rank.items(), key=lambda kv: int(kv[0])) if by_rank else ():
+        ops, ex = b.get("openings"), b.get("extra")
         per_c[str(rk)] = {"ok": b.get("commit_pass") is True, "reason": None if b.get("commit_pass") else b.get("commit_fail_reason"),
-                          "run_root": b.get("run_root"), "openings": {"n": ops.get("n"), "verified": ops.get("verified")},
-                          "tensors": {"expected": ex.get("expected_tensors"), "committed": ex.get("committed_tensors")},
-                          "coverage_ok": (((b.get("binding") or {}).get("coverage")) or {}).get("ok")}
-        per_r[str(rk)] = replay_of(b.get("sampled_replay") or {})
+                          "run_root": b.get("run_root"), "openings": {"n": field_of(ops, "n"), "verified": field_of(ops, "verified")},
+                          "tensors": {"expected": field_of(ex, "expected_tensors"), "committed": field_of(ex, "committed_tensors")},
+                          "coverage_ok": field_of(field_of(b.get("binding"), "coverage"), "ok")}
+        replayed = b.get("sampled_replay")
+        per_r[str(rk)] = replay_of(replayed if replayed else {})
     ok = c.get("commit_pass") is True
-    ops = c.get("openings") or {}
+    ops = c.get("openings")
     commit = {"ok": ok, "reason": None if ok else c.get("commit_fail_reason"), "runs": len(runs), "run_root": c.get("tp_run_root"),
-              "openings": {"n": ops.get("n"), "verified": ops.get("verified")}, "tensors": {"committed": c.get("tensors")},
+              "openings": {"n": field_of(ops, "n"), "verified": field_of(ops, "verified")}, "tensors": {"committed": c.get("tensors")},
               "coverage_ok": all(p["coverage_ok"] is True for p in per_c.values()) if per_c else None, "wall_s": r.get("wall_s"),
               "engine_steps": r.get("engine_steps"), "per_rank": per_c}
     rs = list(per_r.values())
@@ -318,7 +331,7 @@ def engine_part(d: Path) -> dict[str, Any] | None:
     """The batch-invariant configuration the instrumented run's replay measured in the engine's process (`engine_of_record`): the
     cuBLAS(Lt) workspace pin its kernel selection is conditioned on, among the rest.  None when the Commit recorded no replay."""
     runs = [r for r in _jsonl(d / "commit" / "runs.jsonl") if r.get("arm") != "control"]
-    eor = (((runs[-1].get("commit") or {}).get("sampled_replay") or {}).get("engine_of_record") if runs else None) or None
+    eor = field_of(field_of(runs[-1].get("commit"), "sampled_replay"), "engine_of_record") if runs else None
     return {k: eor.get(k) for k in ENGINE_KEYS} if eor else None
 
 
@@ -328,8 +341,8 @@ def timing_part(d: Path) -> dict[str, Any]:
     arms = {r.get("arm"): r for r in _jsonl(d / "commit" / "runs.jsonl")}
     t: dict[str, Any] = {a: {"wall_s": r.get("wall_s"), "prefill_s": r.get("step_wall_prefill_s"), "decode_mean_s": r.get("step_wall_decode_mean_s"),
              "engine_steps": r.get("engine_steps")} for a, r in sorted(arms.items()) if a in ("control", "instrumented")}
-    i, c = t.get("instrumented") or {}, t.get("control") or {}
-    t["slowdown"] = {k: (i[f] / c[f] if i.get(f) and c.get(f) else None)
+    i, c = t.get("instrumented"), t.get("control")   # an arm the run did not have is None; one it had states all four fields
+    t["slowdown"] = {k: (i[f] / c[f] if i and i.get(f) and c.get(f) else None)
                      for k, f in (("prefill", "prefill_s"), ("decode", "decode_mean_s"), ("wall", "wall_s"))} if c else None
     return t
 
@@ -356,7 +369,8 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
               ("replay", replay.get("ok")), switches)
     why = next((f"{name} {'FAIL' if ok is False else 'not run'}" for name, ok in checks if ok is not True), None)
     if why == "served switches FAIL":
-        why = f"served switches FAIL: {'; '.join((served or {}).get('problems') or [])}"
+        problems = field_of(served, "problems")   # what the serving processes read back that the row does not declare
+        why = f"served switches FAIL: {'; '.join(problems) if problems else ''}"
     if why == "build FAIL" and programs_ok and stage and stage["manifest_rc"] not in (None, 0):
         why = f"build FAIL: the in-stage manifest exited {stage['manifest_rc']} and no manifest of record supersedes it (evidence.manifest)"
     if why == "commit FAIL" and commit.get("reason"):

@@ -7,6 +7,7 @@ from verity_vllm.records import schema_ids
 
 #: the ids as the records on disk have them
 ON_DISK = {
+    "ADMISSION_BOUND_SCHEMA": "verity-sweep/admission/f-da-15/v1",
     "ADMISSION_PLAN_SCHEMA": "verity/admission-plan/v1",
     "AOT_COMPARISON_SCHEMA": "verity-vllm/aot-comparison/v1",
     "BATCH_DECOMP_SCHEMA": "cb-a/batch-decomp/v1",
@@ -15,6 +16,7 @@ ON_DISK = {
     "BUILD_RELABEL_SCHEMA": "verity-vllm/build-relabel/v1",
     "CALL_BOUNDARIES_GATE_SCHEMA": "verity-vllm/call-boundaries-gate/v1",
     "CAPTURE_LOG_SCHEMA": "verity-capture/log/v1",
+    "CAPTURE_MAP_SCHEMA": "verity-vllm/capture-map/v0",
     "CAPTURE_SNAPSHOTS_SCHEMA": "verity-capture/snapshots/v1",
     "CENSUS_RANK_SCHEMA": "verity-capture/census-rank/v0",
     "COMMITTED_STORE_SCHEMA": "verity-vllm/committed-store/v1",
@@ -38,10 +40,12 @@ ON_DISK = {
     "INSTANCE_SEQUENCE_SCHEMA": "cb-a/instance-sequence/v2",
     "INT8_ERROR_REPORT_SCHEMA": "verity-vllm/int8-error-report/v1",
     "INT8_K_SCALES_SCHEMA": "verity-vllm/int8-k-scales/v1",
+    "KERNEL_IDENTITY_SCHEMA": "verity-vllm/kernel-identity/v1",
     "LATE_READ_CHECK_SCHEMA": "verity/commit-integ/t6_4-check/v1",
     "MANIFEST_VERIFY_SCHEMA": "verity-sweep/manifest-verify/v1",
     "MATCH_RUN_SCHEMA": "verity-gen/run/v1",
     "MATCH_STAGES_SCHEMA": "verity-gen/stages/v1",
+    "META_INVENTORY_SCHEMA": "verity-vllm/meta-inventory/v1",
     "MOE_PLANE_ALIAS_CHECK_SCHEMA": "verity-sweep/moe-plane-alias-check/v1",
     "NEUTRALITY_REPORT_SCHEMA": "verity-vllm/neutrality/v1",
     "NODE_REGISTRATION_SCHEMA": "verity-vllm/node-registration/v1",
@@ -55,6 +59,7 @@ ON_DISK = {
     "PROFILE_FALLBACK_SCHEMA": "verity-capture/profile-fallback/v1",
     "PROGRAM_CACHE_ENTRY_SCHEMA": "verity-vllm/program-cache-entry/v1",
     "PROGRAM_COMPARE_SCHEMA": "cb-a/compare/v1",
+    "PROTOCOL_COMPOSITION_SCHEMA": "verity-vllm/protocol-composition/v0",
     "QUERY_USE_SCHEMA": "verity-ir/query-use/v1",
     "RANK_COMMIT_BINDING_SCHEMA": "verity/tp2/commit-binding/v1",
     "RANK_MATCH_SCHEMA": "tp2/rank_match/v1",
@@ -81,9 +86,12 @@ ON_DISK = {
     "TP_RANK_REPLAY_SCHEMA": "verity-vllm/tp-rank-replay/v1",
     "TP_REPLAY_DEFERRED_SCHEMA": "verity-vllm/tp-replay-deferred/v1",
     "TP_SAMPLED_REPLAY_SCHEMA": "verity-sweep/tp-sampled-replay/v1",
+    "TP_VALUE_CHECK_SCHEMA": "verity/commit-integ/value-check-tp/v1",
+    "TP_WEIGHTS_PIN_SCHEMA": "verity-sweep/tp-weights-pin/v1",
     "WEIGHTS_OF_RECORD_PRIOR_SCHEMA": "verity/commit/weights-of-record/v1",
     "WEIGHTS_OF_RECORD_SCHEMA": "verity/commit/weights-of-record/v2",
     "X09_PROFILE_SCHEMA": "cb-a/x09-profile/v1",
+    "XRANK_COLLECTIVES_FOLD_SCHEMA": "verity/tp2/xrank-collectives-fold/v1",
     "XRANK_PICKS_SCHEMA": "verity/tp2/xrank-picks/v1",
 }
 

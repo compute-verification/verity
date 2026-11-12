@@ -31,6 +31,9 @@ COMMITTED_STORE_SCHEMA = "verity-vllm/committed-store/v1"
 SERVING_ROWS_INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 #: the reconciliation of what a Commit did not execute, which `commit.executed_prefix.reconcile_not_executed` writes
 NOT_EXECUTED_RECONCILIATION_SCHEMA = "verity-sweep/not-executed-reconciliation/v3"
+#: a capture map (`commit.capture_map.SCHEMA`), a JSON under `manifests/capture-maps/`, which `load` refuses any other
+#: than
+CAPTURE_MAP_SCHEMA = "verity-vllm/capture-map/v0"
 
 # --- the Commit's driver (`verity_vllm.pipeline`)
 #: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes; `use` takes no plan of another
@@ -47,6 +50,10 @@ SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 #: a row's admission plan, the host memory reserved for each part of the row (`pipeline.telemetry.admission.SCHEMA`),
 #: which `predict` writes
 ADMISSION_PLAN_SCHEMA = "verity/admission-plan/v1"
+#: the Commit's admission bound (`pipeline.admission_bound.SCHEMA`): a launch's predicted host bytes against the
+#: container's limit, which the Commit's driver writes as `admission_<kind>.json`, and the record of the scheduled steps
+#: inside it
+ADMISSION_BOUND_SCHEMA = "verity-sweep/admission/f-da-15/v1"
 
 # --- the Build (`verity_vllm.pipeline`)
 #: the Build's result, a derive dir's `result.json`, which `pipeline.build.run` makes
@@ -177,6 +184,12 @@ CENSUS_RANK_SCHEMA = "verity-capture/census-rank/v0"
 #: the late-read check on a fused-MoE block's received output, which `acquire.sources.partial_source.late_read_check`
 #: writes for one rank, and `pipeline.tp.rank_worker` and `pipeline.tp.commit` for the ranks
 LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
+#: the TP Commit's value check, `value_check.json`, which `pipeline.tp.commit`'s `main` writes
+TP_VALUE_CHECK_SCHEMA = "verity/commit-integ/value-check-tp/v1"
+#: the pairs' cross-rank checks folded, `xrank_collectives.json`, which `pipeline.tp.commit`'s `main` writes
+XRANK_COLLECTIVES_FOLD_SCHEMA = "verity/tp2/xrank-collectives-fold/v1"
+#: the ranks' weights pins folded, `weights_pin.json`, which `pipeline.tp.commit`'s `main` writes
+TP_WEIGHTS_PIN_SCHEMA = "verity-sweep/tp-weights-pin/v1"
 
 # --- the engine (`verity_vllm.engine`)
 #: the engine's profile manifest, which `engine.engine_profile.build_manifest` writes and `pipeline.tp.rank_worker` reads
@@ -196,6 +209,11 @@ INT8_ERROR_REPORT_SCHEMA = "verity-vllm/int8-error-report/v1"
 #: a served run's step trace (`engine.step_trace.SCHEMA`): `StepTrace` writes it in the header, the trace's first record,
 #: and `load` refuses a trace that opens with any other
 STEP_TRACE_SCHEMA = "verity-vllm/step-trace/v1"
+#: the inventory of the modules vLLM builds for a checkpoint, by rank (`engine.meta_inventory.SCHEMA`), which
+#: `live_document` and the `meta-inventory` command write
+META_INVENTORY_SCHEMA = "verity-vllm/meta-inventory/v1"
+#: the generated kernels of one process by content hash, which `engine.kernel_identity.collect` writes
+KERNEL_IDENTITY_SCHEMA = "verity-vllm/kernel-identity/v1"
 
 # --- the target-family preflight (`verity_vllm.target_family`)
 #: the preflight's record, which `target_family.check` writes
@@ -217,3 +235,8 @@ POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
 #: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
 #: any other than
 POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
+
+# --- the protocol options (`verity_vllm.protocols`)
+#: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and
+#: `into_verdict` writes as a Commit's `protocols.json`
+PROTOCOL_COMPOSITION_SCHEMA = "verity-vllm/protocol-composition/v0"

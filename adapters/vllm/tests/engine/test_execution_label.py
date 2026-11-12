@@ -10,6 +10,8 @@ import json
 
 import pytest
 
+from tests import fake_vllm
+
 pytest.importorskip("verity_vllm.pipeline.match")
 from verity_vllm.pipeline import match as rc
 
@@ -58,6 +60,11 @@ def test_adapter_execution_of_workload_and_labels():
     assert va.execution_of_workload({"execution": "bi-compiled", "sweep": {"row_id": EAGER_ROW}}) == "bi-compiled"
     assert va.execution_of_workload({"requests": []}) is None
     assert va.execution_of_workload(None) is None
+    # the row id's own grammar: a top-level id is read as the sweep's is, the sweep's first; an id of one field names no execution
+    assert va.execution_of_workload({"row_id": COMPILED_ROW}) == "bi-compiled"
+    assert va.execution_of_workload({"row_id": COMPILED_ROW, "sweep": {"row_id": EAGER_ROW}}) == "bi-eager"
+    assert va.execution_of_workload({"sweep": {"row_id": "one-field"}}) is None
+    assert va.execution_of_workload({"sweep": {"row_id": 7}}) is None
     assert va.execution_label_of(True) == "bi-eager" and va.execution_label_of(False) == "bi-compiled" and va.execution_label_of(None) is None
     assert va.execution_label_of(True, False) == "eager" and va.execution_label_of(False, False) == "compiled"
     assert va.execution_label_of(False, None) is None
@@ -74,15 +81,11 @@ def test_load_workload_carries_row_id_and_execution(tmp_path):
 def _no_llm(monkeypatch):
     """LLM() must never be reached by the refusal paths: make the vllm import site explode if it is."""
     _va()
-    import sys
-    import types
-    fake = types.ModuleType("vllm")
 
     class LLM:
         def __init__(self, **kw):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
-    fake.__dict__.update(LLM=LLM)
-    monkeypatch.setitem(sys.modules, "vllm", fake)
+    fake_vllm.install(monkeypatch).set("vllm:LLM", LLM)
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")             # build_engine applies the label's; the test's process gets its own back
     from verity_vllm.engine import engine_profile as prof
     monkeypatch.setattr(prof, "apply_env", lambda: {})
