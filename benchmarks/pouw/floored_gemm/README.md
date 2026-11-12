@@ -71,6 +71,6 @@ check; `DIFF_TRIALS` sets its trials), and writes `regs.txt` (ptxas's register a
 Later kernels are built on this one: `masked_gemm/mgemm.cu` includes `fgemm.cu`. Their CPU references import `ref.py`
 (the names in its `__all__`: the duo keys and rotations, `mix32`, and the tensor-core receipts), as do `derive.py` and
 `edited_gemm/egemm_ref.py`. Four references of `edited_gemm/` and `benchmarks/pouw/tests/test_segment_h1.py` import
-`derive.py`'s `tile_receipts` and the tile's shape. `tb_table.py` imports `table.py`'s `LINEAR` and `ncu_tensor`.
-The Python here starts no process and touches no GPU: only the two job scripts do. Its tests are
-`benchmarks/pouw/tests/test_floored_gemm_table.py` and `test_floored_gemm_scripts.py`.
+`derive.py`'s `tile_receipts` and the tile's shape (its `__all__`, with the `mix32` it passes on). `tb_table.py` imports
+`table.py`'s `LINEAR` and `ncu_tensor`. The Python here starts no process and touches no GPU: only the two job scripts
+do. Its tests are `benchmarks/pouw/tests/test_floored_gemm_table.py` and `test_floored_gemm_scripts.py`.

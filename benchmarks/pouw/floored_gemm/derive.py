@@ -9,6 +9,8 @@ from __future__ import annotations
 import numpy as np
 from ref import key_mul, key_xor, mix32, rot_of, rotl
 
+__all__ = ["BN", "NCT", "TM", "U_TAG", "WM", "mix32", "tile_receipts"]
+
 U_TAG = 6
 TM = BN = 128
 WM, NCT = 32, 512
