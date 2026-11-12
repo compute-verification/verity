@@ -54,6 +54,10 @@ from typing import Any
 
 from verity_vllm.records.commit_binding import CommitBinding
 
+__all__ = ["ACTIVE_REFERENCE_ONLY", "RULE", "executed_prefix_facts", "executed_prefix_of_record", "facts_accepted_by",
+           "new_classification", "reconcile_not_executed", "request_steps_of_record", "restrict_engine_steps",
+           "restrict_manifest_identities", "rows_past_the_stop"]
+
 ACTIVE_REFERENCE_ONLY = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                          "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
                          "there is no not-required-because-not-executed category. (COORD R17-27)")
