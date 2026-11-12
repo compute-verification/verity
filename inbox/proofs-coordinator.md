@@ -77649,3 +77649,95 @@ The table gives each kind's share of a sampled replay block's proving seconds, a
 - This machine restarted at 07:41Z: `/tmp` and the fetched runs were lost, nothing pushed was. The scratch tools came back from the runs' inputs.
 - `r20261112-072155-f420` (#9185's quick suites) is still running at 08:00Z; #9112 is not on `main` (`bcaf58a45d53`).
 - Mailbox read: 25 sections, through 07:17Z.
+
+## MEMBERS, Thu 12 Nov 08:01Z: (i-a) compiles, and so does its proof: `Verity.Sampled.Window.unboundWrong` on `cursor/proofs-ia-statement-42e4` at `354001af85dd`, axioms the three. The PRF-490 comment is below, to post as it is. It rests on every member's files passing the ports check, drawn or not, which the per-member check does not run for an undrawn member
+
+Clock: `date -u` read 08:01Z before writing. Task 2 of your 05:58Z message; this is the entry you post from. Nothing written to Linear or Slack.
+
+Tags: [run] a command of this hour; [read]; [relayed]; [derived]; [guess].
+
+**Two corrections to my 07:53Z entry.** Its last section says of the branch "None of it has compiled yet; a build of that tip may fail": both runs have since passed, as below. And its 1(b) promised the Lean line: it is in the last section here, and it agrees with the mirror in all seven cases.
+
+### What ran
+
+- [run] **The statement**, `Security/Proofs/Properties/Verity/Sampled/Window/Unbound.lean` at `3daad2acc3f4`: run `r20261112-072634-5e93` on vy-nebius-cpu-9, `verity lean try FILE --on auto --as proofs` from a worktree at that commit. Package `security_proofs` (old paths, `Security/Proofs/lakefile.toml`): `lake build +Proofs.Properties.Verity.Sampled.Window.Unbound:deps` (11,557 jobs, "Build completed successfully"), then `lake env lean` on the file with the axiom probe. "lean exit 0 in 1570 s"; "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- [run] **The proof**, `…/Window/UnboundLaid.lean` at `354001af85dd`: run `r20261112-072634-4f53` on vy-nebius-cpu-9, the same command. Its build made the statement's module and `…/Window/UnboundMember.lean` as dependencies (11,559 jobs, both `✔ Built`), then the file: "lean exit 0 in 1526 s"; "none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The probe's lines name `JointAuditV5.unboundWrong` and `Verity.Sampled.Window.unboundWrong`, which use the member file's two theorems, so their axioms are counted there.
+- [run] The branch is `cursor/proofs-ia-statement-42e4` at `354001af85dd82381ec4544c53f9d8f810dadfdc`, cut from soundness's `cursor/soundness-multileg-8fb2` at `c7e54ba54c`: three new files (247, 122 and 144 lines) and their three roots in the lakefile. The statement's file has not changed since `3daad2acc3f4` [run: `git diff --quiet`], so **sections 1 to 4 of my 07:33Z entry stand as written**: the statement's text in full, each hypothesis against `ClaimTransfers`, the eight choices, and S4.
+- Of the lean-proofs skill's four checks for "proved": it elaborates; it uses no axiom past the three. **Not done:** no full `check.py` replayed it through the kernel, and nobody but me has attacked the statement. It is in no lock and on no PR: the branch is cut from soundness's, in the old paths.
+
+### What is proved
+
+- `MemberV5.unboundFaulty : m.UnboundFaulty` (`UnboundMember.lean:88`): at one member whose read, openings, constants and trace are as `ReadAt` says, a unit the trace doesn't bind is faulty in the member's sampling statement.
+- `MemberV5.faultyWrong : m.FaultyWrong` (`UnboundMember.lean:101`): at a member that is `Checked`, a faulty unit is one of its incorrect proof blocks, at every registration and every trace.
+- `JointAuditV5.unboundWrong : w.UnboundWrong` (`UnboundLaid.lean:113`) and `Verity.Sampled.Window.unboundWrong (W) : W.UnboundWrong` (`:142`): across the members, in order, unbound ⊆ faulty ⊆ `JointAuditV5.wrongSet`, as sets of the population's unit numbers. `UnboundWrong.card_le` (`Unbound.lean`) is the count `ClaimTransfers` ends on.
+- None of it reads anything S4 adds: `Circuit.beside`, `FileRead.circuitWith` and `Verity.unbound_beside` are on `c7e54ba54c` already.
+
+### What it does not say [derived]
+
+1. **It is conditional on `ReadsAt` at every member, drawn or not, and for an undrawn member nothing the per-member check runs gives it.** `ReadsAt` asks of each member `Checked` (`Unbound.lean:128`: its files parse to its `⟨D, hU, n⟩`; no public input port; no published domain twice; `RootFixesDomainL`) and `OpensUnder` (`:137`). At one statement both come from the files passing `Flock.PortRoots.checkOf` (`v5Files_of_checks`, `Flock/Bridge/V5/Accepted.lean:202`; `OpensReady.ports`, `Sampled/OpensAt.lean:117`). [read] On `main` (`bcaf58a45d53`) that check is `ksFiles`, built by `StepAt.ofOwn` (`Spot/OneStageZk.lean:1109`) and run inside a session's verdict (`verdictOf`, `:550`, at `:564`); a member with no statement has no session, and `runMembers`' docstring says "a member no statement names is never read" (`:1160-1161`). The public file is the prover's, named by digest in the parameters before the draw. [derived] So a prover may give a member a public file that publishes one domain for two ports; if the draw misses that member the run accepts, and (i-a) says nothing of that window. This is the hole of section 5 of my 06:13Z entry, seen from the proof, with the same two ways to close it and neither mine to pick: (a) the check runs the parse and `PortRoots.checkOf` on every member's files, drawn or not, reading each member's circuit and public file once, which it avoids today; (b) a member whose files fail them counts as incorrect in whole, which changes `JointAuditV5.wrongSet` and the sampling step, both soundness's. It is question 2 below.
+2. **Its `opens` hypothesis is not discharged at a window.** `OpensUnder` is what `Live.opens_rowLeaf` gives at one statement from `OpensReady`, at least two leaves a port among it (my 07:53Z entry, answer 2).
+3. **No witness yet.** I have not exhibited a window at which `ReadsAt` holds. `WindowFiles.one r` with one seat is today's one-statement case, and I expect `ReadAt` there from `Live`'s own lemmas (`parsed_eq`, `Cc_eq`, `consts_eq`), but that is [guess] until it is a lemma.
+4. It never reads the commitment `c` or the registration's record: members' roots only, as you asked.
+
+### The comment for PRF-490, to post as it is
+
+> **(i-a) is stated and its proof elaborates, against `cursor/soundness-multileg-8fb2` at `c7e54ba54c` as it is.** Branch `cursor/proofs-ia-statement-42e4` at `354001af85dd`: `Security/Proofs/Properties/Verity/Sampled/Window/Unbound.lean` (the statement), `UnboundMember.lean`, `UnboundLaid.lean` (the proof).
+>
+> ```lean
+> -- in Flock.Guarantees
+> def JointAuditV5.UnboundWrong (w : JointAuditV5) : Prop :=
+>   w.Laid → ∀ (R : Verity.WindowFiles) (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop)
+>     (tr : R.circuit.Trace) (τ : Strategy w.game), w.ReadsAt R op tr τ →
+>       (Accounting.unbound R.parts op tr).image Fin.val ⊆ (w.wrongSet τ).image Fin.val
+>
+> def Verity.Sampled.Window.UnboundWrong (W : Window) : Prop := ∀ t : ℕ, (W.joint t).UnboundWrong
+> theorem Verity.Sampled.Window.unboundWrong (W : Window) : W.UnboundWrong
+> ```
+>
+> `ReadsAt` asks of each member, in order: its read is its `fileRead`; `Checked` (its files parse to its `⟨D, hU, n⟩`, no public input port, no published domain twice, `RootFixesDomainL`); `op` holds of what its deployed commitment opens (`OpensUnder`); `ConstsOpen`; its part of `tr` is its transcript at `memberX τ`. `UnboundWrong.card_le` is `ClaimTransfers`' count.
+>
+> It elaborates with the three axioms only (run `r20261112-072634-4f53`). Not replayed by `check.py`, no second reader, no lock.
+>
+> @soundness, please confirm:
+> 1. The place at a window is each member's public file's (`placeOfRead`): members' roots only.
+> 2. `SetsUp` gives `Checked` and `OpensReady` for every member, **drawn or not** (the per-member check reads no file of an undrawn member today). If not: does the check read every member's files, or does such a member count as incorrect in whole?
+> 3. `Laid` at the live window, at every cost (`Laid.extend`).
+> 4. `(certOf θ).ε = W.ε` and `units = nJ`.
+> 5. After S4, `read θ F` is the members' `fileRead`s in order, and `extract` their transcripts at `memberX`, side by side.
+
+[run: 197 words outside the code block, counted with `wc -w`.]
+
+### The five questions, each with why it is asked
+
+1. **The place.** The statement reads no `c`, so `ClaimTransfers`' `Opens θ F c` must be at a place that is a function of the files: each member's `placeOfRead`. If soundness wants the place to read the record, (i-a) changes and needs the lemma of my 06:13Z section 2.
+2. **Every member, drawn or not.** Point 1 of "What it does not say". Beside it: at one statement the bound pays for `RootFixesDomainL` with the roots finder's `ecr/sha-512` term (`Live.rootsErr`, `Sampled.lean:427`); `Window.sessionDelta` (`Sampled/Window.lean:269`) is `drawMiss + (joint t).eps` with no such term, and `Member` has none of `Live`'s `pubO`, `hpubO`, `hdup`, `hn`, `hnO`. So even for a drawn member, `fixes` needs either that term in the window's δ or a field of `Member`.
+3. **`Laid`.** `ClaimTransfers` reads `(K.live W θ F c σ).joint (cost …)`, another window than `W` at a cost the strategy picks; `Laid.extend` (`Members/Widen.lean:69`) is theirs, their (i-b).
+4. **ε and the units.** The last line of `ClaimTransfers` compares `(certOf θ).ε · units` with `ε · nJ`; the statement leaves both outside.
+5. **S4's definitions.** `ReadAt.read` and `ReadAt.trace` are then true by how `Vocab.read` and `extract` are defined at a window; if `extract` is anything other than the members' transcripts at the plurality trace `memberX`, `trace` is a lemma soundness owes.
+
+### Sizes, as they came out
+
+- Step 1, one member: 60 lines with its three bridging lemmas. Step 2: 20 lines. Step 3, the members in order: 90 lines. They elaborated at the first try of the proof; the one failed try was the statement's `X`, a token there.
+- The 15 proofs through `checkBlobsAt_accept` and S6a's merge: as in the 07:33Z entry, sections 5 and 6, unchanged.
+
+### NET-352, answer 1(b): the Lean, as promised at 07:53Z [run]
+
+Run `r20261112-074829-ad93` on vy-nebius-cpu-7, `verity lean try` on a scratch file at `main`'s `bcaf58a45d53` (`Spot/Scratch/RegisteredProbe.lean`, in a worktree of mine, pushed nowhere): it imports `Spot.Record` and evaluates the `registered` clause of `Record.checks` at `Record.ownRegistered rec (Record.sessionRegistered verdicts)`, as `recordChecks` does, on a record that registers `scan/state` and `rows/in/8` and has one root port `a/o0`. "lean exit 0 in 4 s" after a 92-job build; its seven `#guard`s pass. The clause's own output, `none` meaning it passes:
+
+~~~text
+PROBE both: none
+PROBE oneOnly: (some {"codes":["registered"],"detail":{"opened":["scan/state"],"registered":["rows/in/8","scan/state"],"wrong":["rows/in/8"]},"ok":false})
+PROBE noReads: (some {"codes":["registered"],"detail":{"opened":[],"registered":["rows/in/8","scan/state"],"wrong":["rows/in/8","scan/state"]},"ok":false})
+PROBE otherRoot: (some {"codes":["registered"],"detail":{"opened":["rows/in/8","scan/state"],"registered":["rows/in/8","scan/state"],"wrong":["rows/in/8"]},"ok":false})
+PROBE twoRoots: (some {"codes":["registered"],"detail":{"opened":["rows/in/8","scan/state"],"registered":["rows/in/8","scan/state"],"wrong":["scan/state"]},"ok":false})
+PROBE ownPort: (some {"codes":["registered"],"detail":{"opened":["a/o0","rows/in/8","scan/state"],"registered":["rows/in/8","scan/state"],"wrong":[]},"ok":false})
+PROBE unnamed: none
+~~~
+
+So the answer stands, now on the Lean the verifier compiles and not only its mirror: **a listed value that no accepted verdict reports fails `registered`** (`oneOnly`, `noReads`), and the other five cases are as the 07:53Z entry gave them. What the probe is not: it calls `Record.checks` directly on verdicts I wrote by hand, not `checkMembersAt` on a run's files, since the per-member form accepts nothing yet (`checkMembersAt_refuses`).
+
+### Next, unless you say otherwise
+
+1. The witness for point 3 of "What it does not say": `ReadAt` at `WindowFiles.one` from the one-statement `Live`, on the same branch. [guess] 80 to 150 lines; it shows the statement is not empty and that today's `ClaimTransfers` is its case.
+2. Then S6a's merge with `main`, if you have not given it to another worker by then.
+3. The next entry at 12:00Z, or when the witness compiles.
