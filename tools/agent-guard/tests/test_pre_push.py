@@ -149,6 +149,17 @@ def test_the_hook_the_push_would_have_run_still_runs_and_neither_no_verify_nor_a
     assert p.returncode == 0 and not (vm.tmp / "own-ran").exists()
 
 
+def test_a_pushs_options_never_hide_where_it_goes_from_the_hook(vm):
+    """git hands the hook the remote and the URL it pushes to, whatever words named them, so an option that takes a value
+    (`--recurse-submodules check`, `--receive-pack P`, `--repo R`) moves nothing the hook reads."""
+    for args in (["--recurse-submodules", "check", "origin", "HEAD:refs/heads/main"],
+                 ["--receive-pack", "git-receive-pack", "origin", "HEAD:refs/heads/main"], ["--repo", "origin"],
+                 ["--repo=origin"], ["--push-opt=x", "origin", "HEAD:refs/heads/theirs"]):
+        p = vm.push(*args)
+        assert p.returncode != 0 and ("only drive and the lander move" in p.stderr or "belongs to agent" in p.stderr), args
+    assert not vm.heads()
+
+
 def test_a_child_process_push_is_judged_like_a_scripts(vm):
     code = "import subprocess, sys; sys.exit(subprocess.run(['git', 'push', 'origin', 'HEAD:refs/heads/theirs']).returncode)"
     p = subprocess.run(["python3", "-c", code], cwd=vm.ws, capture_output=True, text=True,

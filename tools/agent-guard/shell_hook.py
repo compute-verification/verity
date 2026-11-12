@@ -77,6 +77,8 @@ there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends i
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent or of `main`, `checked` or `next`, to the repositories whose queue drive runs
 (`compute-verification/verity` and `compute-verification/infra`) and no other: the notes' `main` is every agent's to push.
+It is given each command's shell operator (`flattened`), so a `cd` in a subshell, a pipe or a carrier never places a push
+after it, and the git variables each command sets (`git_env`); a push whose repository it can't tell is judged as theirs.
 
 It also carries messages to running agents, the one channel that reaches a subagent mid-run, on any VM (`inbox.py send
 AGENT_ID`). A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next
@@ -1099,14 +1101,37 @@ def block_reason(command: str) -> str | None:
             f"`research run --wait` stops after {BLOCK_CAP_S} s on its own and names the command to check back with.")
 
 
-def flattened(text: str) -> list[list[str]]:
-    """`text`'s simple commands without redirections, each followed by those it carries (`carried`), in the order they run."""
+def flattened(text: str, ops: list[str] | None = None) -> list[list[str]]:
+    """`text`'s simple commands without redirections, each followed by those it carries (`carried`), in the order they run;
+    `ops` gets the shell operator after each, and `carried` for each a carrier runs (worktree_guard.CARRIED)."""
     out = []
-    for words, _ in words_of(text):
+    for words, op in words_of(text):
         words = strip_redirections(words)
         out.append(words)
-        for inner in carried(unwrap(words)):
-            out.extend(flattened(inner))
+        inner = [w for t in carried(unwrap(words)) for w in flattened(t)]
+        out.extend(inner)
+        if ops is not None:
+            ops.extend([op] + ["carried"] * len(inner))
+    return out
+
+
+#: the variables that change which repository or configuration git reads
+GIT_VARIABLES = re.compile(r"GIT_\w+|HOME|XDG_CONFIG_HOME")
+
+
+def git_env(raw: list[list[str]]) -> list[dict[str, str] | None]:
+    """The GIT_VARIABLES each of the simple commands `raw` assigns ahead of what it runs (`GIT_DIR=D git push`), or None once an
+    earlier one may have changed them for it (an assignment alone, `export`, `declare`, `unset`)."""
+    out: list[dict[str, str] | None] = []
+    changed = False
+    for words in raw:
+        run = unwrap(words)
+        ahead = dict(w.split("=", 1) for w in words[:len(words) - len(run)] if GIT_VARIABLES.fullmatch(w.split("=", 1)[0])
+                     and "=" in w)
+        out.append(None if changed else ahead)
+        names = [a.split("=", 1)[0] for a in run[1:]] if run[:1] and run[0] in ("export", "declare", "typeset", "readonly",
+                                                                                 "local", "unset") else []
+        changed = changed or (not run and bool(ahead)) or any(GIT_VARIABLES.fullmatch(n) for n in names)
     return out
 
 
@@ -1116,12 +1141,14 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import worktree_guard
 
+    ops: list[str] = []
     try:
-        raw = flattened(command)
+        raw = flattened(command, ops)
     except ValueError:
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
-    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok)
+    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok,
+                                 None if "`" in command else ops, git_env(raw))
 
 
 def delivery(conversation: str) -> str | None:
