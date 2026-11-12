@@ -777,10 +777,10 @@ def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_
     manifest, pid, notes = profile_manifest(engine, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256,
                                             vllm_commit=vllm_commit, sampling=workload["sampling"])
     notes["reenter_impls"] = {op: reenter_impl_name(op) for op in ("vllm.unified_attention_with_output", "vllm.unified_kv_cache_update")}
-    notes["phases"] = "forward = inside the model's root forward; other = the runner's input preparation / post-forward work inside " \
-                      "execute_model; sample = runner.sample (lm_head GEMM + sampler)"
-    notes["observer_sync"] = "no observer-issued synchronisation; step facts + sampled ids are copied D2H asynchronously behind a " \
-                             "CUDA event and read at the next step start; torch.cuda.synchronize only at the end of snapshot steps"
+    notes["phases"] = ("forward = inside the model's root forward; other = the runner's input preparation / post-forward work inside "
+                       "execute_model; sample = runner.sample (lm_head GEMM + sampler)")
+    notes["observer_sync"] = ("no observer-issued synchronisation; step facts + sampled ids are copied D2H asynchronously behind a "
+                              "CUDA event and read at the next step start; torch.cuda.synchronize only at the end of snapshot steps")
     if extra_notes:
         notes.update(extra_notes)
     model = {"repo": engine.cp["repo"], "revision": engine.cp["revision"], "local_path": engine.cp.get("local_path"),

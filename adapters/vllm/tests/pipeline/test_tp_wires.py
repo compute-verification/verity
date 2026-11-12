@@ -233,13 +233,19 @@ def test_every_peer_row_of_a_tp_window_is_wired_from_its_ranks_gathered_row(toy)
     assert I.window_of_record({**rec, "run": RUN, "context": ""}, LAW, fns.__getitem__).members == I.members(tp.circuit, CAP)
 
 
-def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_wiring_check(toy):
+@pytest.mark.parametrize("before", [4, pytest.param(None, marks=pytest.mark.slow)])
+def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_wiring_check(toy, before):
     """The headline: a prover commits, as the parts row of rank 1 at an attention all-reduce's combine unit, rank 1's
     gathered row there with one bit of one coordinate flipped. In rank 0's window alone (today's per-rank form) the row is a
     free input: the window closes and its wiring check passes. In the TP window the honest prover refuses to commit it, and
     the same committed string in the TP window's public body is caught by the verifier's wiring check, and by `check_drawn`
-    when the sample draws that combine unit, only then."""
-    tp = TW.sites_circuit(toy, "tp")
+    when the sample draws that combine unit, only then. The windows are of that site and the ``before`` sites before it,
+    or (None) of the request's 45: three closes of the whole request's units, which only the slow tier pays for."""
+    first = next(j for j, s in enumerate(toy[0].sites) if toy[0].fns[1][s.own[1][0][0]].id.startswith("Gemm_v2{K=32"))
+    lo = 0 if before is None else first - before
+    request = [toy[0] if before is None else replace(toy[0], sites=toy[0].sites[lo:first + 1])]
+    j = first - lo
+    tp = TW.sites_circuit(request, "tp")
     values = _values(tp)
     win = _window(tp, values)
     got = win.close(salt_key=bytes(32))
@@ -247,8 +253,7 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
     publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
     assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(sum(m.n for m in ms))) == {}
 
-    j = next(j for j, s in enumerate(toy[0].sites) if toy[0].fns[1][s.own[1][0][0]].id.startswith("Gemm_v2{K=32"))
-    site, q = toy[0].sites[j], 5
+    site, q = request[0].sites[j], 5
     (tid, at, _), = tp.units[0, j, TW.COMBINE, TW.ALL]
     forged = {t: ({p: a.copy() for p, a in ins.items()}, outs) for t, (ins, outs) in values.items()}
     forged[tid][0]["parts"][at, 64 + q] ^= 1
@@ -256,7 +261,7 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
                                          r"AllGather_v1\{WORLD=64,N=1\}/c\d+ unit that wrote it"):
         _window(tp, forged).close(salt_key=bytes(32))
 
-    rank0 = TW.sites_circuit(toy, "rank0", ranks=[0])
+    rank0 = TW.sites_circuit(request, "rank0", ranks=[0])
     mine = _values(rank0)
     (tid0, at0, _), = rank0.units[0, j, TW.COMBINE, TW.ALL]
     mine[tid0][0]["parts"][at0, 64:] = forged[tid][0]["parts"][at, 64:]

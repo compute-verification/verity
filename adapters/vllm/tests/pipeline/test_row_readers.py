@@ -5,7 +5,9 @@ the Match and Build records' fields
 the workload's (`is_stochastic`, `tp_world`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
+(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the config record of a row that
+ran nothing (`verity_vllm.pipeline.config_record.record`), the timeline report's window and its command, which report a file's
+last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
 a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`) and the one that writes the rows' digests
 (`verity_vllm.pipeline.epoch`: `main` for `digests`).
@@ -24,6 +26,7 @@ from typing import Any
 
 import pytest
 
+import verity_vllm.pipeline.config_record as CR
 import verity_vllm.pipeline.epoch as EP
 import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
@@ -231,6 +234,11 @@ def test_the_card_names_each_stage_that_is_not_ok():
     assert "stages not ok" not in card({"build": {"status": "ok"}, "commit": {}})
 
 
+def test_the_config_record_of_a_row_that_ran_nothing_fails_at_its_build(tmp_path):
+    rec = CR.record(tmp_path, "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager")
+    assert (rec["schema"], rec["outcome"], rec["why"]) == ("verity-vllm/config-record/v1", "FAIL", "build FAIL")
+
+
 def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it_has_several_requests(tmp_path):
     several = [{"prompt_len": 8, "max_tokens": 3}, {"prompt_len": 5, "max_tokens": 2}]
     varies = {"engine": {"target": {"batch_invariant": False}}}
@@ -255,7 +263,7 @@ def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes
 def test_the_timeline_reports_its_window_or_none_without_a_timed_event():
     start = {"t": 10.0, "proc": "row", "pid": 1, "stage": "build", "ev": "start"}
     rep = TL.report([start, {**start, "t": 12.5, "ev": "end"}])
-    assert (rep["events"], rep["spans"], rep["elapsed_s"]) == (2, 1, 2.5)
+    assert (rep["schema"], rep["events"], rep["spans"], rep["elapsed_s"]) == ("verity-sweep/timeline/v1/report", 2, 1, 2.5)
     assert (rep["t_first_utc"], rep["t_last_utc"]) == ("1970-01-01T00:00:10Z", "1970-01-01T00:00:12Z")
     for events in ([], [{"proc": "row", "pid": 1, "stage": "build", "ev": "mark"}]):
         rep = TL.report(events)

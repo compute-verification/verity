@@ -1,6 +1,6 @@
-"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's and
-lean-changed's, off the gate and in no plan), each shard holds what its jobs need or runs it beside their parts, a shard runs
-only its parts (lean-audit on its packages, lean-suites on its suites), and its result names what it ran."""
+"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate and
+in no plan), each shard holds what its jobs need or runs it beside their parts, a shard runs only its parts (lean-audit on its
+packages, lean-suites on its suites), and its result names what it ran."""
 from __future__ import annotations
 
 import importlib.util
@@ -72,20 +72,6 @@ def test_the_plans_are_the_documented_ones():
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
-def test_no_shard_runs_lean_changed_of_a_plan_or_an_auto_one_gated_or_after_landing(n):
-    """lean-changed catches nothing the audit doesn't: it is off the gate, so a recorded check skips it, and in no shard, so a
-    candidate's sharded check (`--deferred` naming it, hand plan or auto) doesn't run it either; the job stays declared."""
-    assert CHECK.SHARDS.NO_SHARD == ("lean-changed",) and set(CHECK.SHARDS.NO_SHARD) <= set(CHECK.OFF_GATE)
-    every = ",".join(j.name for j in CHECK.JOBS)
-    assert "lean-changed" in every.split(",")
-    for gated in (True, False):
-        assert not any("lean-changed" in CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1))
-        assert "lean-changed" not in CHECK.auto_parts(gated)
-        plan = CHECK.auto_plan(({}, {}, {}), CHECK.SHARDS.MAX_SHARDS, deferred=None if gated else every, n=n)
-        assert not any("lean-changed" in s["parts"] or "lean-changed" in s["builds"] for s in plan["shards"])
-
-
-@pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
     """verity-core-composition and verity-pouw-benchmarks declare three parts by test id: lean-suites' parts are its suites with
     each of those as its three, and every plan's shards, gated and after landing, hold one of each, so no shard runs either
@@ -131,14 +117,13 @@ def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_the
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
-    """Every part but ratchet-gate's and lean-changed's, which are off the gate and in no plan: circuit-check, off the gate too,
-    stays planned."""
+    """Every part but ratchet-gate's, which is off the gate and in no plan: circuit-check, off the gate too, stays planned."""
     every = D.all_parts(CHECK.JOBS, _parts())
     assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and {"lean-audit", "lean-suites"}.isdisjoint(every)
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
-    planned = [p for p in every if p not in ("ratchet-gate", "lean-changed")]
+    planned = [p for p in every if p != "ratchet-gate"]
     assert len(shards) == n and all(shards) and sorted(flat) == sorted(planned) and len(set(flat)) == len(flat)
     assert _resolved(n) == shards == _resolved(n, list(reversed(PACKAGES))), "deterministic, whatever order git lists"
     assert all(s == [p for p in every if p in s] for s in shards), "each shard's parts in the unsharded check's order"
