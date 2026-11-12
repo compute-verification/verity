@@ -97240,3 +97240,63 @@ Mailbox read at `52e37590b5` (your 19:06Z section). I am at a point that can pau
 3. The layout's working copy is `7c2636e740e0`'s `interior_rows.py`, and its rehearsals are `r20261112-191810-df04` and `r20261112-191841-86b4`.
 
 Run 1 on VLLM-300 at 19:19Z [read: vllm's 19:11Z]: in its slot since 19:05Z and building; vllm expects it to end near 21:10Z. Mailbox read at 19:19Z: nothing new since 09:57Z.
+
+## TABLEEXT, Thu 12 Nov 19:25Z: the 18 are 28 sites and none is prose: 20 use four names a listed guarantee's statement reads, 5 use three theorems named for those, 2 import `Flock.Firewall` (a row of lean's map), 1 is older than #9256; nothing at them comes off without a statement, and 23 of #9265's 25 are Flock's own "cap", which the Glossary does not retire. ci's seven on #9362 do come off: 5 reworded, 2 by one literal less
+
+**How the two merges moved the list** [run: `git diff d612fb0cde5b^1 d612fb0cde5b` and `git diff 7d7557220aea^1 7d7557220aea` on `tests/lint/allowlists/repo_retired_terms.json`; each side's sites found with that side's own lint and `GLOSSARY.md`]
+
+- #9256, +3: `Flock/Firewall/Hello.lean` 49 → 50, `Flock/Firewall/Values.lean` 16 → 18, `Flock/Witness.lean` 27 → 20, new `Flock/WitnessZk.lean` 7. The seven in `WitnessZk.lean` are the seven that left `Witness.lean`, line for line.
+- #9265, +15: 25 sites in six new files, and `KS/ZkBoundW.lean` 82 → 72. The ten that left are uses of `cap₀ : Model.Cap D` in the deleted `Gen.mean_epsSZ_le_rawJ`.
+
+**#9256's three** [run, as above]
+
+1. `Firewall/Hello.lean:17`, `public import Flock.Firewall`: a module's name. lean's `tools/move/terms_map.toml` at #9375's head `e209a56847d4` holds the row `"Flock.Firewall" = "Flock.ZkServer"` (line 26), and LEAN-262 runs that map over the whole tree after the merge [read]. Left.
+2. `Firewall/Values.lean:40`, the same line. Left.
+3. Not a site #9256 added. `Values.lean` held 17 sites against an entry of 16 at #9256's base and already at the layout move's parent `5c095bb4ab^1`; the merge wrote the file's true count, 18. Which of the 17 was the uncounted one can't be said.
+
+**#9265's 25, by the name each site uses** [run: the lint's `sites` on `main` `4a90174415b7`; `reads` read in `security/lean-audit.json`]
+
+| name | what it is | sites | in the lock's `reads` |
+| --- | --- | --- | --- |
+| `Claims.Flock.Deploy.cap` | field: the most reruns one wait of the extractor makes | 15: `SamplingTable.lean` 79, 85, 122; `KSTable.lean` 129, 138, 331, 338, 350, 359, 361, 371, 413; `KSTableOne.lean` 135; `ZkKSTableNumbers.lean` 79, 87 | yes, under `Definitions.Claims` |
+| `Claims.SamplingGeneric.Arg.cap` | field: the same bound, of a proof system | 1: `SamplingTable.lean` 134 | yes |
+| `Claims.Flock.Numbers.cap` | definition, `2 ^ 256` | 2: `ZkKSTableNumbers.lean` 79, 87 | yes, under `Proofs.Flock.Claims.Numbers` |
+| `Claims.SamplingGeneric.Compiled.stage2` | field: the second stage's sample | 2: `OneVerifierTables.lean` 121, both sides of `stage2 := L.stage2` | yes |
+| `FlockDeploy.cap_deploy` | theorem: the deployed records' `cap` is `Numbers.cap` | 3: `ZkKSTableNumbers.lean` 120, 142, 144 | no, a theorem |
+| `FlockDeploy.KS.cap_pos` | theorem: `0 < Numbers.cap` | 1: `ZkKSTable.lean` 233 | no |
+| `FlockDeploy.KS.zkSimForkLeCapTau` | theorem: the fork bound at `IsCapTauZ`, the Merkle caps and `τ` | 1: `ZkKSTable.lean` 172 | no |
+
+- **The first four, 20 sites: left.** A listed guarantee's statement reads each (`MaskedKS` and `MaskedKSTable` read `Deploy.cap` through `κ`), so a rename moves lock records.
+- **The three theorems, 5 sites: I can rename them and recommend not to.** No listed statement reads a theorem, and neither lean's maps at #9375's head nor HASH-125 (scope `window`, `session`; its list is not posted yet [read, 19:20Z]) hold them. But each is named for what it states, by Lean's convention (`cap_pos : 0 < cap`), and what it states stays. Renaming them takes 29 sites out of 14 files [run: `rg`], and is undone or redone the day the fields move. Say the word and I do it.
+
+**What the word is at 23 of the 25** [read: the lint, `GLOSSARY.md` line 261]
+
+- The Glossary retires Pearl's "cap" (now the inert-work bound). Flock has two "caps" of its own: the bound on an extractor's reruns, and a commitment's Merkle cap (`Model.Cap`, `IsCapTauZ`). The lint cannot tell senses apart, so it counts every "cap" outside `OTHER_SENSES` and `OWN_CAPS`, which today keep PoUS's and PoUB's (#9093).
+- No file under `security/Proofs/Flock/Claims/KS/`, `security/Proofs/Flock/SamplingGeneric/` or `security/Definitions/Claims/` says "Pearl" [run: `rg -il pearl`].
+- Measured on `main` `4a90174415b7` [run: the lint's `scan`]: 108,753 sites in the tree; 35,108 are "cap" or "caps" (that one counted at `0582899c4392`); 18,854 under `security/Proofs/Flock/`, 4,681 of those in `KS/`'s 149 files; 1,834 under `verity/protocols/flock/`.
+
+**So three ways to take these off the count, my recommendation first**
+
+1. **The lint keeps Flock's own caps by place**, as #9093 did for PoUS's and PoUB's: `KS/`, `SamplingGeneric/`, `security/Definitions/Claims/` and `Claims/Numbers*.lean` in `OWN_CAPS`, Pearl's `CAP`, `capOK`, `Device.cap`, "cap check" and "over-cap" still counted there. That frees 5,171 sites, 23 of them ours [run]. It is the fix of the kind: every later landing that names `D.cap` or a Merkle cap fails the gate the same way. The lint is top's (#9093 and #9131 are `Lane top`) and this changes what a gate accepts, so it needs top's yes; I open nothing on that file without your word. To keep the gate green it is two pull requests: the lint and its test with the list untouched, then the lowered entries. I can have the first ready on a branch tonight.
+2. Rename the three theorems: 29 sites, against the naming. Not recommended.
+3. Leave them: the 20 wait for a rename of the fields, which is a statement change through the lock and is not planned anywhere I can read.
+
+**Prose elsewhere does not pay it back** [run: sites under `KS/`, `SamplingGeneric/`, `security/Definitions/Claims/`, `Proofs/Flock/Masked/` split into comment and code]. The retired words left in prose there are "draw law", "proof units", "drawn", "draws" and "draw", 23 sites. Each is a row of `terms_map.toml` (lines 72 to 75 and 212 to 226), so they are lean's rename's.
+
+**ci's seven on #9362** (on `main` since 19:13Z as `556c228316`) [run: the same diff]
+
+| site | what | what I do |
+| --- | --- | --- |
+| `served_integrity.py:7` "drawn" | the docstring cites the output's key | reword: the four outputs said by what they are |
+| `served_integrity.py:28` "verifier of record" | prose | reword: "the compiled check" |
+| `test_audit_two_members.py:146, :162, :248` "sampled proofs" | prose | reword: SPOT |
+| `test_served_integrity.py:99`, two "draw" | the keys `checks_before_draw`, `fixed_before_draw`, record keys that stay | the same literal stands at line 70: line 70 reads the constant, two sites fewer |
+| `test_served_integrity.py:76` "drawn" | the output's key in an assert; the line changed, the count there did not | left: a record key |
+
+The list then goes down by 3, not 7: `served_integrity.py` 20 → 18 and `test_served_integrity.py` 34 → 33 (the tree holds 35 there against 34 listed), and `test_audit_two_members.py` has no entry (15 in the tree, 0 listed), so its three leave the tree and not the list [run].
+
+**One fact about the list's total, so nobody reads a falling total as sites removed** [run, `main` `4a90174415b7`]. The list holds 106,815 and the tree 108,753. 636 files hold 8,629 sites more than their entries, new files with no entry among them; 1,086 files hold 6,691 fewer. `--prune` alone would lower the total by 6,691 and remove nothing.
+
+**The asserts ci asks about.** `row["coins"]["verified"]` and its two siblings are in `test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier`, suite `benchmarks/one_stage`, module mark `slow` [read]. The suite is in `AFTER_LEAN`: check runs it in its lean-suites step after lean-build, and `suites.py` on its own builds Flock's Lean before it [read: `suites.py` lines 212 and 2501]. The test then still skips on a machine with no Flock checkout to build `flock-circuit` on [read: the fixture]. My pull request changes that file, so its pre-mark run (`--changed`, `--quick`) keeps the module's slow tests: I report from that run whether they ran or skipped, and on which machine.
+
+**Next, unless your mailbox says otherwise:** the pull request with ci's seven on `cursor/proofs-ratchet-forward-3e91` (three Python files and the list; no Lean file, so it does not wait behind #9375), its pre-mark run through `research run --on auto`, then the ready line. Then item 2.
