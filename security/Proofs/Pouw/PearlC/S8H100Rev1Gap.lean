@@ -32,10 +32,10 @@ theorem ttOutTilePearlCH100Rev1_of_s8 {CM : CostModel Q R S} {salt : S → List 
 end Pouw.PearlC
 
 theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192 :=
-  fun CM salt sem hW1 hTT =>
+  fun CM _ sem hW1 hTT =>
     Pouw.PearlC.pearlCSampledH100Rev1_8192 CM sem (Pouw.PearlC.ttOutTilePearlCH100Rev1_of_s8 hW1 hTT)
 
 theorem Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b :
     Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b :=
-  fun CM salt sem hW1 hTT =>
+  fun CM _ sem hW1 hTT =>
     Pouw.PearlC.pearlCSampledH100Rev1_llama32_1b CM sem (Pouw.PearlC.ttOutTilePearlCH100Rev1_of_s8 hW1 hTT)
