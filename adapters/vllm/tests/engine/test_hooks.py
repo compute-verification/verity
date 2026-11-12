@@ -326,6 +326,8 @@ def test_export_shims_restore_torch_and_vllm() -> None:
 def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() -> None:
     """A plain kernel object keeps the original scale object; the shim refreshes it after export swaps the module Parameter."""
     torch = pytest.importorskip("torch")
+    from torch import nn
+
     from verity_vllm.program.frontend.export_compat import (
         _expert_weight_scales_through_owner,
     )
@@ -348,7 +350,7 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
         def apply(self, x):
             return x * self.w1_scale + self.w2_scale
 
-    class Layer(torch.nn.Module):
+    class Layer(nn.Module):
         def __init__(self) -> None:
             super().__init__()
             self.w13_weight_scale_inv = torch.nn.Parameter(torch.ones(4), requires_grad=False)
@@ -378,6 +380,8 @@ def test_fp8_expert_scales_are_exported_from_their_registered_parameter_owner() 
 def test_a_routers_parameters_are_exported_from_their_registered_owner() -> None:
     """A plain router keeps the gate's correction bias and DeepSeek-V4's hash table; the shim reads both from the gate."""
     torch = pytest.importorskip("torch")
+    from torch import nn
+
     from verity_vllm.program.frontend.export_compat import _router_params_through_owner
 
     class Router:
@@ -387,7 +391,7 @@ def test_a_routers_parameters_are_exported_from_their_registered_owner() -> None
         def select_experts(self, logits, ids):
             return logits + self.e_score_correction_bias, self._hash_indices_table[ids]
 
-    class Moe(torch.nn.Module):
+    class Moe(nn.Module):
         def __init__(self) -> None:
             super().__init__()
             self.gate = torch.nn.Module()
