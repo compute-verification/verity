@@ -365,8 +365,8 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     if rec["outcome"] != "PASS":
         raise UsageError(f"{row}: the record is {rec['outcome']} ({rec['why']}): the database keeps rows whose circuit is faithful")
     cm = rec["commit"].get("manifest") if summary is not None else None   # what the Commit committed against, where it says
-    served = cm.get("program_digest_per_rank") if cm else None
     workloads = {str(r): ps.get("workload") for r, ps in parts(rec).items()}
+    served = cm.get("program_digest_per_rank") if cm else None
     if cm and (cm.get("manifest_digest") not in (None, rec["build"].get("manifest_digest")) or any(
             workloads.get(str(r)) != v for r, v in (served.items() if served else ()))):
         raise UsageError(f"{row}: the Commit committed against manifest {str(cm.get('manifest_digest'))[:16]}… and its Programs, not the "

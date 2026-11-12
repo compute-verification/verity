@@ -195,11 +195,11 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     # (`fold._attribution`; X-09's `meta` channel reads exactly these keys -- without them here the record never carried them and the
     # decomposition always fell through to the data-flow / row-count channels).
     reqs_tab = []
-    sampled = getattr(result, "sampled", None)   # request id -> its served samples; a fold of no sampler has none
     for i, r in enumerate(getattr(result, "requests", None) or []):
-        rid = r.get("request_id")
-        prompt, served = r.get("prompt_token_ids"), sampled.get(rid) if sampled else None
-        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(prompt) if prompt else 0,
+        rid, prompt = r.get("request_id"), r.get("prompt_token_ids")
+        prompt_len = len(prompt) if prompt else 0
+        served = (getattr(result, "sampled", None) or {}).get(rid)   # request id -> its served samples; a fold of no sampler has none
+        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": prompt_len,
                          "served_samples": len(served) if served else 0, "max_tokens": r.get("max_tokens")})
     _form = instances_form()
     if _form == "progressions":
