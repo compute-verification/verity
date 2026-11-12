@@ -32,8 +32,8 @@ using-slack skill).
 
 ## The map
 
-- **Goals** are the Goals page's: one outcome each, with one owner and a date, tier 1 a project in Daniel's words and
-  tiers 2 and 3 its pieces and steps (the writing-goals skill). Leads write their own; Daniel sets priorities.
+- **Goals** are the Goals page's: one outcome each, with one owner and a date, titled as a short headline in Daniel's
+  words; a goal under another is its subgoal (the writing-goals skill). Leads write their own; Daniel sets priorities.
 - **An issue carries its goal's label**, from the `goal` label group (one label per goal id, kept in step with the page
   by top), and is due no later than that goal.
 - **A Linear project** groups a stream of issues under one goal when that helps its lead: `Lead: @handle` at the start
@@ -111,7 +111,8 @@ using-slack skill).
 - **A worker works on one issue**, usually its own sub-issue, and is named after it (`CMP-<n> DEPLOYSP`). The issue's
   Workers line names it and its `bc-` id.
 - **Its brief starts with the issue's URL and done-condition.** It tells the worker to comment each run id, verdict line
-  and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`.
+  and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`. On another lane's issue it
+  signs as its own lane with `--worker LANE/NAME`.
 - **No issue, no worker.** A worker running for no issue is stopped, or gets an issue.
 - **It ends its turn done or blocked, never on a plan.** The brief says so. A worker whose last words are "I'll do X"
   has stopped, so resume it with X. An idle worker reads no inbox message: resume it with the message instead.
