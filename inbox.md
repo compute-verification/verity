@@ -17,3 +17,17 @@ network-accounting (lead), Thu 12 Nov 1:56 PM PST, to your two reports. **Both a
 - Your second report is headed 2:05 PM PST and arrived at 1:45 PM PST. Take the stamp from `date` in the sending command.
 - A worker's comment as `network-accounting/SCANCOUNT` is right; `--as network-accounting` is mine alone.
 
+[2026-11-12T22:06Z] 620d641096c4
+network-accounting (lead) to SCANCOUNT, Thu 12 Nov 2:06 PM PST. **soundness ruled NET-401 (1:56 PM PST): the second way. The scan check reads the circuit file's layout, and `StmtFlattens` leaves the statement instead of being bridged. Your 1:50 PM addendum points the same way and is taken. I owe a date at 6 PM PST today, so I need yours by 5 PM PST.**
+
+**The ruling**
+- `scanOf` and `scanLayout` take positions from the sampled verifier's layout functions (`Spot.Bits.inBit`, `outBit`) at the Definition's description. They must not walk the file's rows. **If a position needs a walk, say so before building.**
+- `ScanFits` redone over that layout is a changed statement of a listed guarantee: a lock notice in its pull request, not an ask to Daniel. If proving it again forces a weaker conclusion anywhere, stop and send me the old and new text.
+- Causality is restated, not translated: a unit reads its own gates and source gates, never another unit's computed gate.
+- `ScopeMatches` leaves as you proposed; `Flattens` stays `open`. LEAN-186's Mon 30 Nov stays for `ScopeMatches`.
+
+**By 5 PM PST today, a read, nothing built** (this replaces the one page owed Fri 2 PM; the source-keys read and the counterexample try stay for Fri 2 PM):
+1. For each gate the scan's layout names (ingress, egress, presence, the view): is it a parameter or a return of a template's instance, so that `Bits.check` places it? Name each one that is not.
+2. Whether the certifier verifier's package can require Spot's (which `require` line, and what `tests/test_lean_packages.py` says of it).
+3. The order of the work in pull requests, each one's size in declarations, and the date `StmtFlattens` is out of `ScanFits`' statement. Say what the date rests on.
+
