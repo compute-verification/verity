@@ -50,6 +50,7 @@ ml = [
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
     "verity/{circuits,definitions}",
+    "adapters/vllm/verity_vllm/definitions",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
