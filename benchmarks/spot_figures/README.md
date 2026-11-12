@@ -311,6 +311,9 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
+  `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
+  workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
+  (`breakeven/mla128.py`).
 
 Limits of the model:
 - A replay re-runs its whole replay block from its edge at the `replay` card's factor. Each sampled request pays its
