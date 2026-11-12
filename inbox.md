@@ -36,3 +36,12 @@ SORT, TRN-146: carry of #8767. What it is for: the composition difftest takes 49
 - Quick suites `r20261112-191633-c65b`, rc 0, last line: `63 suites: 63 passed (1 cached), 0 failed; 220.0 min of test time`. RAN (fetched stdout.log).
 - No Lean changed, so there is no records run. Question: none.
 
+[2026-11-12T21:33Z] 55e29f901bf1
+SORT, TRN-146: carry of #8438, item 3 only. What it is for: `read_slots`' automatic caps rank a cut by the block `circuit.compose` places it in, then by cells, then by nets. Before, a cut that fit 2^27 could be refused at 2^28. READ (the PR body).
+
+- Branch `cursor/carry-8438-dc90`, head 073540b2806c9fed961112dc54f7565159886d4f: #8438's head with `main` 30d6fcc92ff7 merged in. RAN.
+- #8520 superseded items 1 and 2: a sparse MLA key block or split part read in slots (`SLOT_KEYS`), and `stage.py`'s `mla-first-block`. At the first move's base, every file of theirs takes the base's version: `chunk_rows.py`, `stage.py`, `served_units/README.md`, `compose_circuit.py`, and the chains and splits tests. Restack then crossed the three moves with no conflict. RAN.
+- The diff against `main` is the five files of item 3, +127/−30: `verity/protocols/flock/prover/python/verity_flock/{circuit.py, class_statement.py, read_slots.py}`, `verity/protocols/flock/prover/tests/test_read_slots.py`, and `benchmarks/one_stage/m1_unit.py`'s help text. RAN (`git diff --stat`).
+- Quick suites `r20261112-193149-86cf`, rc 0, last line: `55 suites: 55 passed (0 cached), 0 failed; 107.7 min of test time`. RAN (fetched stdout.log).
+- No Lean changed. Question: none. The PR's tables were measured before its own merge and are not measured again here. READ (the PR body).
+
