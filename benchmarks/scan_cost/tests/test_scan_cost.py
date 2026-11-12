@@ -1,5 +1,6 @@
 """The scan's cost (`result.py`, `run.sh`) on a scan's kept files: the two numbers are the round's sessions and staging,
-and its Lean verifier's seconds, over the group's execution phases; each session's stages sum to its process; the
+and its pinned Lean verifier processes' CPU seconds, over the group's execution phases, with the verifier's wall
+beside its number and not in it; each session's stages sum to its process; the
 guard holds only on an exit 0 with every execution phase's public part the pinned one; a result whose guard does not
 hold has no measurement; and a comparison refuses two results whose identities differ.
 
@@ -41,7 +42,8 @@ def members(ticks: int, group: int) -> list[tuple[str, int]]:
 def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: bool = True, public: dict | None = None) -> Path:
     """A scan's kept files under `out`. Member i's prover process takes 12 + i s: 2 s to Register, 4 s from there to the
     repetitions, 2 s of level 0, 3 + i s of repetitions and a 1 s tail; its staging takes 0.5 s; its Lean verifier
-    takes 4 + i s, of which 1 s reading inputs, 2 s of setup and 0.5 + i/10 s of checks."""
+    takes 4 + i s of wall, of which 1 s reading inputs, 2 s of setup and 0.5 + i/10 s of checks, and 3 + i s of CPU.
+    Another round's verifier process, 9 s, is in `lean.jsonl` beside the honest round's."""
     ticks, names = TICKS[cls], members(TICKS[cls], group)
     timing, rnd, base = {}, {}, 0
     for i, (name, n) in enumerate(names):
@@ -72,8 +74,11 @@ def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: boo
     (out / "rss.jsonl").write_text("".join(json.dumps({"command": ["prove"], "rc": 0, "wall_s": 12, "peak_gb": gb}) + "\n"
                                            for gb in (1.5, 3.5)), encoding="utf-8")
     if pin:
-        rows = [{"command": [c], "core": 8, "rc": 0, "wall_s": w, "cpu_s": w, "peak_gb": 1.0}
-                for i in range(len(names)) for c, w in (("archive-put", 1), ("verify", 4 + i))]
+        rows = [{"command": [c], "archive": a, "core": 8, "rc": 0, "wall_s": w, "cpu_s": cpu, "peak_gb": 1.0}
+                for i, (name, _) in enumerate(names)
+                for c, a, w, cpu in (("archive-put", None, 1, 1),
+                                     ("verify", f"sczk/{R.ROUND}/session-{name}/archive", 4 + i, 3 + i))]
+        rows.append({**rows[-1], "archive": "sczk/chain/session-first/archive", "wall_s": 9, "cpu_s": 9})
         (out / "lean.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
     return out
 
@@ -103,13 +108,15 @@ def test_the_two_numbers_are_the_round_over_its_execution_phases(tmp_path):
     assert doc["identity"] == {"class": "test", "sample": "every unit", "ticks": 16, "tick_ms": 100, "source": SOURCE,
                                "cores": 21, "verifier_cores": 1}
     assert (doc["group"], doc["phase_s"], doc["guard"]) == (1, 1.6, {"holds": True, "scan_exit": 0, "why": []})
-    # four sessions of 12, 13, 14 and 15 s and 4 × 0.5 s of staging over 1.6 s; a Lean verifier of 4, 5, 6 and 7 s
-    assert doc["numbers"] == {"proving": 35.0, "proving_s_a_tick": 3.5, "verifier": 13.75}
+    # four sessions of 12, 13, 14 and 15 s and 4 × 0.5 s of staging over 1.6 s; a Lean verifier of 3, 4, 5 and 6 s of
+    # CPU and 4, 5, 6 and 7 s of wall
+    assert doc["numbers"] == {"proving": 35.0, "proving_s_a_tick": 3.5, "verifier": 11.25, "verifier_wall": 13.75}
     assert doc["round"] == {"sessions_s": 54, "staging_s": 2.0, "to_register_s": 8, "register_to_reps_s": 16, "level0_s": 8,
-                            "reps_s": 18, "tail_s": 4, "lean_s": 22, "lean_inputs_s": 4.0, "lean_setup_s": 8.0,
-                            "lean_check_s": 2.6}
+                            "reps_s": 18, "tail_s": 4, "lean_cpu_s": 18, "lean_s": 22, "lean_inputs_s": 4.0,
+                            "lean_setup_s": 8.0, "lean_check_s": 2.6}
     assert doc["lowering_s"] == {"first": 3.0, "ingress": 3.0, "egress": 3.0}
-    assert (doc["peak_gb"], doc["verifier"]) == (3.5, {"cores": 1, "processes": 4, "wall_s": 22, "cpu_s": 22})
+    # the whole scan's verifier processes, the other round's among them; the number is the honest round's alone
+    assert (doc["peak_gb"], doc["verifier"]) == (3.5, {"cores": 1, "processes": 5, "wall_s": 31, "cpu_s": 27})
 
 
 def test_a_session_is_read_in_the_rounds_order_and_its_stages_sum_to_its_process(tmp_path):
@@ -130,10 +137,10 @@ def test_a_log_without_its_lines_gives_no_stage_and_the_number_stands(tmp_path):
     doc = R.document(out, 0, RUN)
     assert doc["sessions"][2]["prover"] == {"process_s": 14.0}
     assert doc["sessions"][2]["lean"] == {"process_s": None, "inputs_s": None, "setup_s": None, "check_s": None}
-    assert doc["numbers"] == {"proving": 35.0, "proving_s_a_tick": 3.5, "verifier": 13.75}
+    assert doc["numbers"] == {"proving": 35.0, "proving_s_a_tick": 3.5, "verifier": 11.25, "verifier_wall": 13.75}
     assert doc["round"]["reps_s"] is None and doc["round"]["lean_setup_s"] is None
     names = [m["name"] for m in R.measurements(doc)]
-    assert "sessions" in names and "the repetitions" not in names and "Lean verifier: setup" not in names
+    assert "sessions" in names and "the repetitions" not in names and "Lean verifier wall: setup" not in names
 
 
 def test_a_group_is_its_execution_phases_and_every_blocks_answer(tmp_path):
@@ -151,10 +158,20 @@ def test_a_group_is_its_execution_phases_and_every_blocks_answer(tmp_path):
 def test_an_unpinned_verifier_has_no_number_and_says_why(tmp_path):
     doc = doc_of(tmp_path, "a", pin=False)
     assert doc["identity"]["verifier_cores"] is None and doc["numbers"]["verifier"] is None
-    assert doc["numbers"]["proving"] == 35.0 and doc["round"]["lean_s"] == 22
+    assert doc["numbers"]["proving"] == 35.0 and (doc["round"]["lean_s"], doc["numbers"]["verifier_wall"]) == (22, 13.75)
     m = next(m for m in R.measurements(doc) if m["name"] == R.VERIFIER)
-    assert (m["value"], m["why"]) == (None, R.NOT_PINNED)
+    assert (m["value"], m["why"], m["inputs"]) == (None, R.NOT_PINNED, [])
     assert "not pinned" in R.table(doc)
+
+
+def test_a_pinned_verifier_with_no_line_for_a_session_has_no_number(tmp_path):
+    out = kept(tmp_path / "a")
+    lines = (out / "lean.jsonl").read_text(encoding="utf-8").splitlines()
+    (out / "lean.jsonl").write_text("".join(x + "\n" for x in lines if "session-last/" not in x), encoding="utf-8")
+    doc = R.document(out, 0, RUN)
+    assert (doc["identity"]["verifier_cores"], doc["round"]["lean_cpu_s"], doc["numbers"]["verifier"]) == (1, None, None)
+    m = next(m for m in R.measurements(doc) if m["name"] == R.VERIFIER)
+    assert (m["value"], m["why"]) == (None, R.NO_LINE)
 
 
 @pytest.mark.parametrize(("change", "why"), [
@@ -202,12 +219,15 @@ def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
     assert result["measurement_files"] == ["out/scan_cost.json"]
     got = {m["name"]: (m["value"], m["unit"]) for m in result["measurements"]}
     assert got[R.PROVING] == (35.0, "proving seconds a second of execution phase")
-    assert got[R.VERIFIER] == (13.75, "Lean verifier seconds a second of execution phase, on one core")
+    assert got[R.VERIFIER] == (11.25, "Lean verifier CPU seconds a second of execution phase, on one core")
+    assert got["Lean verifier wall seconds a second of execution phase"] == (13.75, "s")
     assert got["proving seconds a tick"] == (3.5, "s") and got["execution phases"] == (1.6, "s")
     assert {k: v[0] for k, v in got.items() if v[1] == "s a round"} == {
         "sessions": 54, "staging": 2.0, "to Register": 8, "Register to the repetitions": 16, "level 0": 8,
-        "the repetitions": 18, "the tail": 4, "Lean verifier": 22, "Lean verifier: inputs": 4.0,
-        "Lean verifier: setup": 8.0, "Lean verifier: checks": 2.6}
+        "the repetitions": 18, "the tail": 4, "Lean verifier CPU": 18, "Lean verifier wall": 22,
+        "Lean verifier wall: inputs": 4.0, "Lean verifier wall: setup": 8.0, "Lean verifier wall: checks": 2.6}
+    by = {m["name"]: m["inputs"] for m in result["measurements"]}
+    assert by[R.VERIFIER] == ["Lean verifier CPU", "execution phases"]
     names = {m["name"] for m in result["measurements"]}
     assert all(set(m["inputs"]) <= names for m in result["measurements"])
     text = capsys.readouterr().out
@@ -269,8 +289,8 @@ def test_a_comparison_at_one_identity_is_a_second_of_execution_phase_beside_anot
     assert text.splitlines()[:3] == [
         f"scan_cost: {OTHER} (group 2) beside {RUN} (group 1), at one identity",
         "  proving seconds a second of execution phase: 28.1 beside 35.0, 0.804 of the baseline",
-        "  Lean verifier seconds a second of execution phase, on one core: 12.2 beside 13.8, 0.886 of the baseline"]
-    assert "    sessions: 27.2 beside 33.8" in text and "    Lean verifier: setup: 3.8 beside 5.0" in text
+        "  Lean verifier CPU seconds a second of execution phase, on one core: 10.3 beside 11.2, 0.917 of the baseline"]
+    assert "    sessions: 27.2 beside 33.8" in text and "    Lean verifier wall: setup: 3.8 beside 5.0" in text
 
 
 def test_the_baseline_names_a_run_and_holds_no_number(tmp_path, monkeypatch, capsys):
@@ -300,7 +320,10 @@ def test_a_document_is_a_file_a_directory_or_a_run(tmp_path, capsys):
     doc = doc_of(tmp_path, "a")
     (tmp_path / "a" / R.DOC).write_text(json.dumps(doc), encoding="utf-8")
     assert R.opened(str(tmp_path / "a" / R.DOC)) == R.opened(str(tmp_path / "a")) == R.opened(RUN, store({RUN: doc})) == doc
-    assert R.main(["table", str(tmp_path / "a")]) == 0 and "the round, in seconds:" in capsys.readouterr().out
+    assert R.main(["table", str(tmp_path / "a")]) == 0
+    text = capsys.readouterr().out
+    assert "  Lean verifier CPU seconds a second of execution phase, on one core: 11.2; its wall beside it: 13.8\n" in text
+    assert "the round, in seconds" in text and "first           1     12.0" in text
     with pytest.raises(R.Refused, match="names no run record \\(no such run\\)"):
         R.opened(OTHER, store({}))
     with pytest.raises(R.Refused, match="no scan_cost.json, no directory holding one and no run's id"):
@@ -355,7 +378,7 @@ def test_run_sh_pins_the_job_runs_the_scan_at_the_identity_and_writes_the_result
         "cores": 1, "verifier_cores": 1, "group": 1}
     assert result["validation"]["status"] == "passed"
     got = {m["name"]: m["value"] for m in result["measurements"]}
-    assert (got[R.PROVING], got[R.VERIFIER], got["execution phases"]) == (17.5, 6.875, 3.2)
+    assert (got[R.PROVING], got[R.VERIFIER], got["execution phases"]) == (17.5, 5.625, 3.2)
     assert "scan_cost: pinned to 1 cores" in r.stdout and "guard: holds" in r.stdout
 
 

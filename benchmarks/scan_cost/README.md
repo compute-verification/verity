@@ -18,9 +18,11 @@ tick's ingress block) and `egress-0` … `egress-(G−1)`: 2G + 2 sessions over 
 | Number | What it is |
 | --- | --- |
 | proving seconds for each second of execution phase | (the round's sessions' seconds + their staging) / (G · T · tick). A session's seconds are its prover process's, start to exit, with the ZK server's work and the waits on the live verifier inside them; staging is each member's statement made ready for its session |
-| the Lean verifier's seconds for each second of execution phase, on one core | the round's `flock-verify verify` seconds / (G · T · tick), each verifier process pinned to one core |
+| the Lean verifier's CPU seconds for each second of execution phase, on one core | the round's `flock-verify verify` processes' CPU seconds, user and system, / (G · T · tick), each verifier process pinned to one core |
 
-The first is also written a tick (`proving seconds a tick`). Lowering the class's three Definitions is paid once a
+The verifier's wall seconds are written beside its number and are not the number: the core a verifier process is
+pinned to, the job's lowest, is one of the 21 the prover's work also runs on, so its wall is contended. The first
+number is also written a tick (`proving seconds a tick`). Lowering the class's three Definitions is paid once a
 class, whatever the traffic, and is in the result beside the number (`lowering_s`), not in it. The scan's other
 rounds (the block's audit and the rounds it expects refused) are run, since the guard reads the whole scan's exit,
 and are not counted.
@@ -36,9 +38,9 @@ record) into five stages, in order, that sum to its process:
 | the repetitions | the sum of each repetition's `t.prove` |
 | the tail | `tp_s` − `prove_total_s` |
 
-The Lean verifier's are split by its `lean-verify.log` into reading its inputs, the sampled statement's setup and
-the session's checks. The round's sum of each stage is a measurement the two numbers name as an input, and
-`result.py table` prints the round a session a line.
+The Lean verifier's wall is split by its `lean-verify.log` into reading its inputs, the sampled statement's setup
+and the session's checks. The round's sum of each stage is a measurement, the prover's named by the proving number
+as its inputs, and `result.py table` prints the round a session a line.
 
 ## The identity
 
@@ -53,9 +55,11 @@ Two results compare only at one identity, and `result.py compare` refuses any ot
 | `cores` | 21 | the job is pinned to its first 21 cores, the least a slot of the network pool gives, and its provers size their threads by that |
 | `verifier_cores` | 1 | each Lean verifier process is pinned to one core (`scan_zk.sh`'s `SC_LEAN_ONE`) |
 
-The group is a setting, written beside the identity: the numbers are for a second of execution phase at any G, which
-is what lets a grouped run be compared with the baseline. The machine is not in the identity; the result's host stamp
-and `out/host.txt` say what it was.
+The group is a setting, written in the result beside the identity: the numbers are for a second of execution phase
+at any G, which is what lets a grouped run be compared with the baseline. The period check's rows form reads one
+execution phase a registration (`benchmarks/network_traces/scan_period.py`'s `rows_case` refuses a group of more), so
+a result at a group above 1 is the cost of a form the period check does not read today. The machine is not in the
+identity; the result's host stamp and `out/host.txt` say what it was.
 
 ## The guard
 
@@ -110,12 +114,14 @@ run compared with the baseline at the identity:
 
 1. **The grouping.** A setting, with no change to the scan: at `SC_GROUP=G` the round has 2G + 2 sessions for G
    execution phases, so `first` and `last` are paid once a group. The target is the proving number below the
-   baseline's at G = 8, with the comparison's stage lines saying which stages fell.
+   baseline's at G = 8, with the comparison's stage lines saying which stages fell. A group above 1 does not count
+   toward the target until the period check reads a group: until then its number says what that change to the
+   period check would buy.
 2. **One session for a template over the whole group.** A change to the scan's layout: a template's blocks over all G
    execution phases in one session, so the round's sessions no longer grow with G and what a session pays once (to
    Register, Register to the repetitions, the tail, the Lean verifier's inputs and setup) is divided by G. The target
    is both numbers falling with G until the repetitions and the verifier's checks, which are paid a block, are what is
-   left.
+   left. It is a group's form too, and counts on the same condition.
 
 A candidate lands only if the guard holds on its run: a faster scan that answers anything but the pinned public part
 has no number.

@@ -10,9 +10,9 @@ document is fetched from the evidence store (`research data show`, `research dat
 
 **What is read.** Everything is the scan's own (`benchmarks/network_traces/scan_zk.sh`), under RUN_DIR/out:
 `sczk/summary.json` (the class, the execution phases in the registration, T and the tick, and for each session of the
-honest round its prover's seconds, its staging and the Lean verifier's seconds), each of those sessions' `prove.log`
+honest round its prover's seconds, its staging and the Lean verifier's wall), each of those sessions' `prove.log`
 and `lean-verify.log` (the stages), `sczk/answers.json` (the guard), `host.txt` (the cores the job had) and
-`lean.jsonl` (the core each Lean verifier process was pinned to, `SC_LEAN_ONE`).
+`lean.jsonl` (each Lean verifier process's core and CPU seconds, `SC_LEAN_ONE`).
 
 **The numbers.** A round is the honest round: every block of the group's G execution phases proved, a session a
 member. With `phase_s` = G · T · tick:
@@ -21,8 +21,10 @@ member. With `phase_s` = G · T · tick:
   seconds are its prover process's, from its start to its exit, the ZK server's inside them and the live verifier's
   replies inside its waits. Staging is each member's statement staged for its session. Lowering the class's three
   Definitions is paid once a class, whatever the traffic, and is beside the number, not in it.
-- the Lean verifier's seconds for each second of execution phase, on one core: the sessions' `flock-verify verify`
-  seconds / `phase_s`, each process pinned to one core. A scan whose verifier was not pinned has no such number.
+- the Lean verifier's CPU seconds for each second of execution phase, on one core: the sessions' `flock-verify
+  verify` processes' CPU seconds (user and system) / `phase_s`, each process pinned to one core. Its wall seconds are
+  beside the number and are not it: the core is one of those the prover's work runs on, so the wall is contended. A
+  scan whose verifier was not pinned has no such number.
 
 **The stages** of a session's seconds, from its `prove.log` (the process's line and the prover's `LIVE` record), in
 order and summing to the process's seconds: to Register (the process's seconds less `e2e_s`: its start, with its
@@ -67,10 +69,12 @@ ROUND = "honest"
 #: the round's seconds, each a measurement: its name and its key in a document's `round`
 PARTS = (("sessions", "sessions_s"), ("staging", "staging_s"), ("to Register", "to_register_s"),
          ("Register to the repetitions", "register_to_reps_s"), ("level 0", "level0_s"), ("the repetitions", "reps_s"),
-         ("the tail", "tail_s"), ("Lean verifier", "lean_s"), ("Lean verifier: inputs", "lean_inputs_s"),
-         ("Lean verifier: setup", "lean_setup_s"), ("Lean verifier: checks", "lean_check_s"))
+         ("the tail", "tail_s"), ("Lean verifier CPU", "lean_cpu_s"), ("Lean verifier wall", "lean_s"),
+         ("Lean verifier wall: inputs", "lean_inputs_s"), ("Lean verifier wall: setup", "lean_setup_s"),
+         ("Lean verifier wall: checks", "lean_check_s"))
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 NOT_PINNED = "the Lean verifier was not pinned to one core (scan_zk.sh's SC_LEAN_ONE): its seconds are no core's"
+NO_LINE = "lean.jsonl has no line for a session's verify process: its CPU seconds are not known"
 
 
 class Refused(Exception):
@@ -135,18 +139,20 @@ def _cores(out: Path) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def _verifier(out: Path) -> dict:
-    """The Lean verifier's processes as `lean.jsonl` holds them: the cores each `verify` was pinned to (1, or None
-    where the scan pinned none), and their wall and CPU seconds over the whole scan."""
+def _verifier(out: Path) -> tuple[dict, dict]:
+    """The Lean verifier's `verify` processes as `lean.jsonl` holds them: the cores each was pinned to (1, or None
+    where the scan pinned none) with their wall and CPU seconds over the whole scan, and each one's line by the
+    session archive it verified."""
     try:
         rows = [json.loads(x) for x in (out / "lean.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
     except (OSError, ValueError):
         rows = []
     rows = [r for r in rows if r.get("command") == ["verify"]]
     pinned = bool(rows) and all(isinstance(r.get("core"), int) for r in rows)
-    return {"cores": 1 if pinned else None, "processes": len(rows),
-            "wall_s": round(sum(r.get("wall_s") or 0 for r in rows), 2),
-            "cpu_s": round(sum(r.get("cpu_s") or 0 for r in rows), 2)}
+    return ({"cores": 1 if pinned else None, "processes": len(rows),
+             "wall_s": round(sum(r.get("wall_s") or 0 for r in rows), 2),
+             "cpu_s": round(sum(r.get("cpu_s") or 0 for r in rows), 2)},
+            {r["archive"]: r for r in rows if r.get("archive")})
 
 
 def _peak_gb(out: Path) -> float | None:
@@ -158,8 +164,9 @@ def _peak_gb(out: Path) -> float | None:
     return max((p for p in peaks if p is not None), default=None)
 
 
-def sessions(out: Path, summary: dict) -> list[dict]:
-    """The honest round's sessions in its members' order, each with its summary's figures and its logs' stages."""
+def sessions(out: Path, summary: dict, verified: dict) -> list[dict]:
+    """The honest round's sessions in its members' order, each with its summary's figures, its logs' stages and its
+    Lean verifier process's CPU seconds (`verified`, `_verifier`'s lines by archive)."""
     rnd = summary["rounds"][ROUND]
     rows = []
     for name, t in rnd["audit"]["timing"].items():
@@ -169,8 +176,9 @@ def sessions(out: Path, summary: dict) -> list[dict]:
         live = t.get("timing") or {}
         rows.append({"member": name, "blocks": t.get("drawn"), "k_log": live.get("k_log"), "dense_m": live.get("dense_m"),
                      "session_s": t["session_s"], "stage_s": (rnd.get(name) or {}).get("stage_s"),
-                     "lean_verify_s": t.get("lean_verify_s"), "prover": prover(text["prove.log"]),
-                     "lean": lean(text["lean-verify.log"])})
+                     "lean_verify_s": t.get("lean_verify_s"),
+                     "lean_cpu_s": (verified.get(f"sczk/{ROUND}/session-{name}/archive") or {}).get("cpu_s"),
+                     "prover": prover(text["prove.log"]), "lean": lean(text["lean-verify.log"])})
     order = {m["name"]: i for i, m in enumerate((summary.get("members") or {}).get(ROUND) or [])}
     return sorted(rows, key=lambda r: order.get(r["member"], len(order)))
 
@@ -242,11 +250,12 @@ def document(out: Path, scan_exit: int, run: str | None = None, commit: str | No
 def _document(out: Path, summary: dict, scan_exit: int, run: str | None, commit: str | None, pins: dict | None) -> dict:
     group, ticks, tick_ms = summary["group"], summary["T"], summary["params"]["bucket_ms"]
     phase_s = group * ticks * tick_ms / 1000
-    verifier = _verifier(out)
-    rows = sessions(out, summary)
+    verifier, verified = _verifier(out)
+    rows = sessions(out, summary, verified)
     rnd = {"sessions_s": _sum(rows, "session_s"), "staging_s": _sum(rows, "stage_s"),
-           **{k: _sum(rows, "prover", k) for k in STAGES}, "lean_s": _sum(rows, "lean_verify_s"),
-           **{f"lean_{k}": _sum(rows, "lean", k) for k in LEAN_STAGES}}
+           **{k: _sum(rows, "prover", k) for k in STAGES}, "lean_cpu_s": _sum(rows, "lean_cpu_s"),
+           "lean_s": _sum(rows, "lean_verify_s"), **{f"lean_{k}": _sum(rows, "lean", k) for k in LEAN_STAGES}}
+    one = verifier["cores"] == 1 and rnd["lean_cpu_s"] is not None
     proving = None if None in (rnd["sessions_s"], rnd["staging_s"]) else rnd["sessions_s"] + rnd["staging_s"]
     lowering = {k.split("/", 1)[1]: v.get("lower_s") for k, v in (summary.get("stagers") or {}).items() if k.startswith("joint/")}
     return {
@@ -257,7 +266,15 @@ def _document(out: Path, summary: dict, scan_exit: int, run: str | None, commit:
         "sessions": rows, "round": rnd, "lowering_s": lowering, "verifier": verifier, "peak_gb": _peak_gb(out),
         "numbers": {"proving": None if proving is None else round(proving / phase_s, 3),
                     "proving_s_a_tick": None if proving is None else round(proving / (group * ticks), 3),
-                    "verifier": None if rnd["lean_s"] is None or verifier["cores"] != 1 else round(rnd["lean_s"] / phase_s, 3)}}
+                    "verifier": round(rnd["lean_cpu_s"] / phase_s, 3) if one else None,
+                    "verifier_wall": None if rnd["lean_s"] is None else round(rnd["lean_s"] / phase_s, 3)}}
+
+
+def no_verifier(doc: dict) -> str | None:
+    """Why a document has no verifier number, None where it has one."""
+    if doc["numbers"]["verifier"] is not None:
+        return None
+    return NOT_PINNED if doc["identity"]["verifier_cores"] != 1 else NO_LINE
 
 
 def measurements(doc: dict) -> list[dict]:
@@ -269,9 +286,12 @@ def measurements(doc: dict) -> list[dict]:
             "inputs": ["sessions", "staging", "execution phases", *stages]},
            {"name": "proving seconds a tick", "value": n["proving_s_a_tick"], "unit": "s",
             "inputs": ["sessions", "staging"]},
-           {"name": VERIFIER, "value": n["verifier"], "unit": "Lean verifier seconds a second of execution phase, on one core",
-            "inputs": ["Lean verifier", "execution phases", *(name for name, key in PARTS[8:] if r[key] is not None)],
-            **({"why": NOT_PINNED} if n["verifier"] is None and r["lean_s"] is not None else {})},
+           {"name": VERIFIER, "value": n["verifier"],
+            "unit": "Lean verifier CPU seconds a second of execution phase, on one core",
+            "inputs": [] if n["verifier"] is None else ["Lean verifier CPU", "execution phases"],
+            **({"why": why} if (why := no_verifier(doc)) else {})},
+           {"name": "Lean verifier wall seconds a second of execution phase", "value": n["verifier_wall"], "unit": "s",
+            "inputs": ["Lean verifier wall", "execution phases"]},
            {"name": "execution phases", "value": doc["phase_s"], "unit": "s", "inputs": []}]
     out += [{"name": name, "value": r[key], "unit": "s a round", "inputs": []} for name, key in PARTS if r[key] is not None]
     return [m for m in out if m["value"] is not None or "why" in m]
@@ -328,11 +348,13 @@ def table(doc: dict) -> str:
     """A document as text: its identity, the guard, the numbers, then the round, a session a line."""
     i, n, r = doc["identity"], doc["numbers"], doc["round"]
     head = ["member", "blocks", "session", "staging", "to Register", "Register to reps", "level 0", "reps", "tail",
-            "Lean verifier", "inputs", "setup", "checks"]
+            "Lean CPU", "Lean wall", "inputs", "setup", "checks"]
     rows = [[s["member"], str(s["blocks"]), _f(s["session_s"]), _f(s["stage_s"]), *(_f(s["prover"].get(k)) for k in STAGES),
-             _f(s["lean_verify_s"]), *(_f(s["lean"].get(k)) for k in LEAN_STAGES)] for s in doc["sessions"]]
+             _f(s.get("lean_cpu_s")), _f(s["lean_verify_s"]), *(_f(s["lean"].get(k)) for k in LEAN_STAGES)]
+            for s in doc["sessions"]]
     rows.append(["the round", str(sum(s["blocks"] or 0 for s in doc["sessions"])), _f(r["sessions_s"]), _f(r["staging_s"]),
-                 *(_f(r[k]) for k in STAGES), _f(r["lean_s"]), *(_f(r[f"lean_{k}"]) for k in LEAN_STAGES)])
+                 *(_f(r[k]) for k in STAGES), _f(r["lean_cpu_s"]), _f(r["lean_s"]),
+                 *(_f(r[f"lean_{k}"]) for k in LEAN_STAGES)])
     width = [max(len(x[c]) for x in [head, *rows]) for c in range(len(head))]
     lines = [
         f"scan_cost: run {doc['run'] or 'local'}, commit {doc['commit'] or 'unknown'}",
@@ -341,9 +363,9 @@ def table(doc: dict) -> str:
         f"  group {doc['group']}: {doc['phase_s']:g} s of execution phase a round",
         "  guard: " + ("holds" if doc["guard"]["holds"] else "does not hold: " + "; ".join(doc["guard"]["why"])),
         f"  proving seconds a second of execution phase: {_f(n['proving'])} ({_f(n['proving_s_a_tick'])} s a tick)",
-        f"  Lean verifier seconds a second of execution phase, on one core: {_f(n['verifier'])}"
-        + ("" if n["verifier"] is not None or r["lean_s"] is None else f" ({NOT_PINNED})"),
-        "  the round, in seconds:",
+        f"  Lean verifier CPU seconds a second of execution phase, on one core: {_f(n['verifier'])}"
+        + (f" ({why})" if (why := no_verifier(doc)) else "") + f"; its wall beside it: {_f(n['verifier_wall'])}",
+        "  the round, in seconds (the Lean verifier's inputs, setup and checks are its wall's):",
         *("  " + "  ".join(c.rjust(w) if k else c.ljust(w) for k, (c, w) in enumerate(zip(x, width, strict=True)))
           for x in [head, *rows])]
     return "\n".join(lines)
@@ -367,7 +389,7 @@ def compare(base: dict, cand: dict) -> str:
     lines = [f"scan_cost: {cand['run'] or 'local'} (group {cand['group']}) beside {base['run'] or 'local'} (group "
              f"{base['group']}), at one identity"]
     for name, key in (("proving seconds a second of execution phase", "proving"),
-                      ("Lean verifier seconds a second of execution phase, on one core", "verifier")):
+                      ("Lean verifier CPU seconds a second of execution phase, on one core", "verifier")):
         b, c = base["numbers"][key], cand["numbers"][key]
         ratio = "" if None in (b, c) or not b else f", {c / b:.3f} of the baseline"
         lines.append(f"  {name}: {_f(c)} beside {_f(b)}{ratio}")

@@ -1,5 +1,5 @@
-# The scan's cost (`run.sh`, `result.py`): proving seconds and the Lean verifier's seconds for each second of execution
-# phase, read from one scan's kept files. Not a package: the suite holds the result's arithmetic, the guard and the
+# The scan's cost (`run.sh`, `result.py`): proving seconds and the Lean verifier's CPU seconds for each second of
+# execution phase, read from one scan's kept files. Not a package: the suite holds the result's arithmetic, the guard and the
 # comparison on files built in the tests in the form a scan keeps them, with a stand-in for the evidence store and one
 # for the scan, so no scan runs in it (`uv run tools/verity/check/suites.py benchmarks/scan_cost`).
 [tool.pytest.ini_options]
