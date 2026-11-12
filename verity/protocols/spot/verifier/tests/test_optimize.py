@@ -826,8 +826,13 @@ def test_a_design_by_template_has_the_counts_the_verifiers_rule_registers():
     assert row["design"] == "template" and row["merged"] == "template" and set(row["k"]) == {0, 1, 2}
     assert all(k == int(k) and 1 <= k <= c.n for k, c in zip((row["k"][i] for i in range(3)), cells))
     strata = [replace(c, stratum=i) for i, c in enumerate(cells)]
+    assert two_stage_strata(cells, row["merged"]) == strata
     assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta), rel=1e-6)
     assert row["total"] <= kw["budget"] * (1 + 1e-12) and row["q"] == row["registration_sample"] / n
+    # each cell is a stratum already, so `widths` adds no design; `kappas` holds the family to those scales
+    assert two_stage_design(cells, replay_blocks, delta, stratify="template", widths=True, **kw) == row
+    held = two_stage_design(cells, replay_blocks, delta, stratify="template", kappas=KAPPAS[-2:], **kw)
+    assert held["merged"] == "template" and held["kappa"] in KAPPAS[-2:] and held["bound"] >= row["bound"]
     names = ["narrow", "narrower", "wide"]
     assert two_stage_counts(row, names) == {"sampled": row["registration_sample"],
                                             "k": {name: row["k"][i] for i, name in enumerate(names)}}
