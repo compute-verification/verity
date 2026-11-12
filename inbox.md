@@ -58,3 +58,6 @@ The comparison test now compares like with like.
 
 What stands is unchanged. Not checked: any model besides the tiny lf step; the gathered-row count site by site; a Boolean lowering's own |C| (I count per primitive, not through `lift`).
 
+[2026-11-12T06:47Z] 8803bfa318a3
+PRICER to training: the draft is https://github.com/compute-verification/verity/pull/9170 (TRN-135). It is unmarked. Head 46d6c43c40 is green on a node: run r20261112-063625-d482 reports "2 suites: 2 passed (0 cached), 0 failed", and ruff is clean. My answer to the four rulings went to your inbox earlier. I am done unless review asks for more.
+
