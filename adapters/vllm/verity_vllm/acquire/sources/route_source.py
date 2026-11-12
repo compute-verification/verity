@@ -101,19 +101,11 @@ def find_map(model: Any, world: int | None = None) -> dict[str, Any] | None:
 def manifest_map(manifest: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """The capture map with a `route_site` a manifest's TP Commit attaches on every rank (`find_map` on the served model): its pinned
     checkpoint is the manifest's model (`fixture.model`) and its target runs the manifest's ranks; None when none is."""
-    fixture = None if manifest is None else manifest.get("fixture")
-    model, ranks = (None if fixture is None else fixture.get("model")), int((manifest or {}).get("ranks") or 1)
+    model, ranks = ((manifest or {}).get("fixture") or {}).get("model"), int((manifest or {}).get("ranks") or 1)
     if not model:
         return None
     return next((m for m in (CM.load(p) for p in sorted(MAPS.glob("*.json"))) if m.get("route_site")
-                 and _pinned_repo(m) == model and m["target"]["tensor_parallel_size"] == ranks), None)
-
-
-def _pinned_repo(cmap: Mapping[str, Any]) -> Any:
-    """The repo of the checkpoint a capture map pins; None where it pins none."""
-    pins = cmap.get("pins")
-    checkpoint = None if pins is None else pins.get("checkpoint")
-    return None if checkpoint is None else checkpoint.get("repo")
+                 and ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == model and m["target"]["tensor_parallel_size"] == ranks), None)
 
 
 class UnbuiltBinders(ValueError):
@@ -286,7 +278,7 @@ class RouteSource:
             return None, NO_ROUTE
         taken: set[str] = set()
         for d, layers in self.decisions.items():
-            got = rec.get(d)
+            got = rec.get(d) or {}
             why = "" if d is None else f" ({d})"
             if not got:
                 return None, NO_ROUTE[:-1] + why + ">"
