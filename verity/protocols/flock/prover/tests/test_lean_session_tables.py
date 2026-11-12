@@ -232,9 +232,9 @@ def test_plain_tables_holds_the_program_to_the_circuit(rope, tmp_path):
     other = _program(tmp_path / "other.json", 32)
     s = _session(rope, "j2-draw")
     [v] = _verify(rope, 2, s, flags=("--plain-tables", "--program", str(other)))
-    assert not v["accepted"] and v["program_sha512"] != _meta(rope)["program_sha512"], v
-    assert v["why"] == (f"refused: the verifier's program (--program, program_sha512 {v['program_sha512']}) is not the "
-                        f"circuit's (META program_sha512 {_meta(rope)['program_sha512']})"), v["why"]
+    assert not v["accepted"] and "program_sha512" not in v and "not held to the circuit" in v["program_note"], v
+    assert v["why"] == (f"refused: the verifier's program (--program, program_sha512 {v['program_handed_sha512']}) is "
+                        f"not the circuit's (META program_sha512 {_meta(rope)['program_sha512']})"), v["why"]
     [v] = _verify(rope, 2, s, flags=("--plain-tables",))
     assert not v["accepted"] and v["why"].startswith("refused: a session without the verifier's program (--program)"), v["why"]
 
