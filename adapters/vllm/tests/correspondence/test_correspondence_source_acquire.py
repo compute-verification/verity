@@ -11,7 +11,6 @@ from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
-    AnnotationCorrespondence,
     read_program_correspondence,
 )
 
@@ -50,7 +49,7 @@ MODULES = ["body.embed", "body.blocks.0.norm_in", "body.blocks.0.proj_a", "body.
 
 def test_same_plan_under_both_sources_and_the_source_is_recorded():
     man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
-    fallback = AnnotationCorrespondence(rt, wrapper_prefix="model.")
+    fallback = AcquireCorrespondence(rt, wrapper_prefix="model.")
     canonical = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"build_request": RC.RuntimeCorrespondence.from_json(_record(MODULES))},
                                       digests={"build_request": "d" * 64})
     assert fallback.source == "v1_annotations" and canonical.source == "correspondence"
@@ -70,7 +69,7 @@ def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
     partial = [m for m in MODULES if m != "body.blocks.0.act"]                     # the record owns no Call under body.blocks.0.act
     corr = AcquireCorrespondence(rt, wrapper_prefix="model.", tables={"build_request": RC.RuntimeCorrespondence.from_json(_record(partial))})
     plan = P.acquisition_plan(man, corr, tables=TABLES)
-    assert plan.digest == P.acquisition_plan(man, AnnotationCorrespondence(rt, wrapper_prefix="model."), tables=TABLES).digest
+    assert plan.digest == P.acquisition_plan(man, AcquireCorrespondence(rt, wrapper_prefix="model."), tables=TABLES).digest
     unc = plan.correspondence["modules"]["unconfirmed"]
     assert [u["value"] for u in unc] == ["body.blocks.0.act/out"] and unc[0]["module"] == "body.blocks.0.act" and unc[0]["role"] == "owning module"
     act = next(v for v in plan.values if v.value_id == "body.blocks.0.act/out")
@@ -92,7 +91,7 @@ def test_global_manifest_without_wrapper_prefix_determines_it_from_the_runtime_t
     assert pa.digest == pb.digest and pb.correspondence["modules"]["unconfirmed"] == [] and pb.correspondence["modules"]["confirmed"] == pa.correspondence["modules"]["confirmed"] > 0
     assert pb.correspondence["wrapper_prefix"] == "model." and pb.correspondence["wrapper_prefix_source"] == "runtime_tree"
     # the fallback has no record to confirm against: no prefix is determined
-    fb = AnnotationCorrespondence(rt, wrapper_prefix="")
+    fb = AcquireCorrespondence(rt, wrapper_prefix="")
     assert fb.wrapper_prefix == "" and fb.wrapper_prefix_source is None
     # any wrapper attribute chain is determined the same way; a record whose paths meet the tree under NO prefix gets "" and every module
     # reads unconfirmed (shown in the provenance, not hidden)
@@ -109,7 +108,7 @@ def test_owning_module_by_call_id_reads_the_record():
     assert corr.owning_module({"call": 3, "program": "p"}) == "body.blocks.0.norm_in"     # op_path_aliases apply to the record's path too
     assert corr.owning_module({"i": 6, "name": "argmax[0]"}) == "" and corr.owning_module({"name": "model.body.embed/e[0]"}) == "body.embed"
     assert corr.confirmed("body.embed") is True and corr.confirmed("runner.sampler") is False
-    assert AnnotationCorrespondence(tree()).confirmed("body.embed") is None
+    assert AcquireCorrespondence(tree()).confirmed("body.embed") is None
 
 
 def test_from_programs_presence_test_digest_check_and_uniform_fallback(tmp_path):
