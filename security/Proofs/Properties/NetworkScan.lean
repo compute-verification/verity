@@ -161,6 +161,6 @@ theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] 
   obtain rfl := Option.some.inj (hx.symm.trans hx')
   unfold layOf at hF
   rw [hP, hC] at hF
-  exact not_fits_of_no_outs _ [] (by decide) 0 ⟨0, by decide⟩ hF
+  exact not_fits_of_no_outs _ [] (show 0 < oneSlot.window by decide) 0 ⟨0, by decide⟩ hF
 
 end Properties.NetworkScan
