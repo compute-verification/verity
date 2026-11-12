@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
+THEORY = Path(__file__).resolve().parents[1] / "theory"
+sys.path.insert(0, str(THEORY))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/receipts"))
 
 import fold_root_check as fr
@@ -65,7 +66,7 @@ def test_not_symmetric_words_open_k2(tmp_path):
 
 
 def test_cut_join_settles(tmp_path):
-    """A structured word at a scaled-KJ pair cuts the join at the default 3 probes and 2^16 candidates; 6 probes and 2^28
+    """A structured word at a scaled-KJ pair cuts the join at the default 3 probes and cap 2^16; 6 probes and cap 2^28
     settle it as K_R = K_1 = P/X/N, and the sweep's recut set picks out exactly the cut jobs."""
     exe, job = fr.build(tmp_path), (77, 219, 0, 0, 0, 0)
     cut, _ = fr.root_kernels(exe, 10, 4, 6, 6, [job])

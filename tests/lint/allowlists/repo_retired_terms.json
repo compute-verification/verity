@@ -3368,6 +3368,7 @@
     {"file": "benchmarks/pouw/tests/test_served_h1.py", "count": 75},
     {"file": "benchmarks/pouw/tests/test_served_units_summarize.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_served_zk.py", "count": 135},
+    {"file": "benchmarks/pouw/tests/test_theory_fold_root.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_theory_isa_cap.py", "count": 2},
     {"file": "benchmarks/pouw/theory/a2u_sat.sh", "count": 1},
     {"file": "benchmarks/pouw/theory/cpw_routes.sh", "count": 1},
