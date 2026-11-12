@@ -5,10 +5,10 @@ A node is a host and the GPUs it carries. Its file names the GPU card and how ma
 (``device.sku``, ``device.count``), the host card (``host.sku``), and the host's own memory, one table a leaf
 (``memory.NAME``: its ``tier``, ``dram`` or ``disk``, and its ``bytes``). A card's own memory is its card's
 ``store.dram``, whole, and no rate, clock or peak is here: those are the cards'. Every number is an entry
-``{value, unit, mark, source}`` under the cards' rules (``verity.hardware.cards``), and a leaf no run has read has no
-entry. A kind is the card and its count, never a host's name: whoever registers a node gives its host's id
-(``verity.hardware.site.Registration.node_entry``, which gives no entry of a file with no ``dram`` or no ``disk``
-leaf). Stdlib and the cards only.
+``{value, unit, mark, source}`` under the cards' rules (``verity.hardware.cards``), and a leaf with no read on record
+has no entry. A kind is the card and its count, never a host's name, and a file names no machine, no address and no
+provider: whoever registers a node gives its host's id (``verity.hardware.site.Registration.node_entry``, which gives
+no entry of a file with no ``dram`` or no ``disk`` leaf). Stdlib and the cards only.
 
 ~~~python
 from verity.hardware import cards, nodes
