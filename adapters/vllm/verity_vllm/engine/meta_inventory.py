@@ -353,7 +353,10 @@ class Options:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
+    from verity_vllm.program.frontend.target_profile import (
+        TargetProfile,
+        parse_target_arg,
+    )
 
     target = parse_target_arg(a.target, base=TargetProfile.default())
     model_dir = Path(a.config_dir) if a.config_dir else fetch_config(a.repo, a.revision,
@@ -365,7 +368,10 @@ def main(a: Options) -> int:
     from verity_vllm.engine import sparse_mla
     sparse_mla.install()             # as a serving process does before its model's first forward (`_selections` reads it)
 
-    from verity_vllm.program.frontend.export_compat import apply_target_profile, read_back_applied
+    from verity_vllm.program.frontend.export_compat import (
+        apply_target_profile,
+        read_back_applied,
+    )
 
     doc: dict[str, Any] = {"schema": SCHEMA, "repo": a.repo, "revision": a.revision,
                            "config_sha256": hashlib.sha256((model_dir / "config.json").read_bytes()).hexdigest(),

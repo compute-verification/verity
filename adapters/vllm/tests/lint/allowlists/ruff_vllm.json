@@ -503,7 +503,6 @@
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "T201", "symbol": "run", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/engine/int8_checkpoint.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/engine/int8_vllm.py", "kind": "UP037", "symbol": "Int8ExactConfig.from_config", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/engine/meta_inventory.py", "kind": "I001", "symbol": "main", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/glue.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/observe/capture.py", "kind": "E741", "symbol": "Capture._emit_step", "detail": "Ambiguous variable name: `l`"},
