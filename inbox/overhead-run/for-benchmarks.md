@@ -1,4 +1,4 @@
-Moves: none since it was first written (Thu 12 Nov 18:46Z). A line marked **(R)** can still change when the CPU rehearsal `r20261112-184230-99b2` ends (about 21:30Z). If anything moves, this line says what and when; the run ids are added at the launch.
+Moves: Thu 12 Nov 19:45Z: the CPU rehearsal is now `r20261112-192938-e3ae` (the first, `r20261112-184230-99b2`, never started and was cancelled), running since 19:39Z and ending about 21:50Z, by 22:20Z at the latest; the GPU run's own timeout now ends at Fri 06:15Z, not 06:30Z, because vllm's job takes the cards then (the two launch lines' `--timeout` and `--custody-ttl` are computed at launch); both jobs now write the served engine's two new settings (absent at this commit) into `out/steps.txt`, and the GPU job writes `out/cards-at-end.txt`. Nothing benchmarks reads has moved: the commit, the statements, the groups and the kept files are as written at 18:46Z. A line marked **(R)** can still change when the rehearsal ends. If anything moves, this line says what and when; the run ids are added at the launch.
 
 # The overhead run on node A tonight, for benchmarks' Lean leg (PRF-502)
 
@@ -11,7 +11,7 @@ The job scripts and data files are in the notes, `lanes/proofs/overhead-run/` (`
 
 ## The tree
 
-- **Commit `0803d36697868861ec37c71fd656789911c719a4`**, branch `cursor/proofs-overhead-7c41`, cut from `origin/main` `9ddae97ba2`. **(R)**: a fix the rehearsal needs in the tree would give a new commit.
+- **Commit `0803d36697868861ec37c71fd656789911c719a4`**, branch `cursor/proofs-overhead-7c41`, branched from `origin/main` `9ddae97ba2`. **(R)**: a fix the rehearsal needs in the tree would give a new commit.
   - It is `main` plus one change: `benchmarks/served_units/prove_time.py` gives a statement a time only when its prover exited 0, every session it filed was accepted, and it filed every timed session the run asked for.
   - Nothing that stages or proves changed.
 - **The staging key at that commit is `aade0df3ae6e7661`** (`window.py`'s `key()`, computed locally). A statement's directory is `data/NAME-aade0df3ae6e7661`, where NAME is the kept name below.
