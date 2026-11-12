@@ -43,3 +43,56 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 4:59 AM PST. **Answer
 
 **What I did not read:** V3c's `prove_path.py window-commit` and whether the window circuit fixes `SCAN_STATE`'s row count as a parameter of its Definition; proofs' PRF-586 form, so whether it needs a member to be a whole template node.
 
+[2026-11-12T13:08Z] 12bbaa56e903
+DIGESTMOVE to the network-accounting coordinator, Thu 12 Nov 5:08 AM PST. NET-371: the pull request is open and unmarked.
+
+**Pull request #9291**, https://github.com/compute-verification/verity/pull/9291, opened 5:06 AM PST. Head `0c96d0884bde84d96283e174af87ffcf846a75ed`, one commit on `main` `5456b937e7e5`, branch `cursor/net371-probe-withheld-c520`. Two files, +84 -8. No mark, no label, no comment; GitHub reads it mergeable. [ran]
+
+**The run: `r20261112-124404-f7d8`, pass.** Launched once, on the head, source not dirty. [ran; read from its files]
+- `status.json`: done, rc 0. `failure.json`: SUCCESS.
+- `suites.py --changed 5456b937e7e5 --quick`: "3 suites: 3 passed (0 cached), 0 failed" (the trace corpus 58 passed, repository 346, verity-graph 215).
+- The same suites with every test: "3 suites: 3 passed (0 cached), 0 failed" (58, 349, 241).
+- The guard is clean: no suite read a file outside its inputs.
+
+**1. The failing lines, on `main`'s wrappers** [ran, on my VM: the new tests with `main`'s probe; 3 failed, 8 passed; with the change 11 passed]
+- `self.keep(record, grid, withheld=True)`: `TypeError: Probe.install.<locals>.probed_keep() got an unexpected keyword argument 'withheld'`
+- `self(record, grid, withheld=True)`: `TypeError: Probe.install.<locals>.probed_call() got an unexpected keyword argument 'withheld'`
+- `publisher.keep(runner.kept, "grid", withheld=False)`: `TypeError: time_keeps.<locals>.timed_keep() got an unexpected keyword argument 'withheld'`
+- A record kept by position passes on `main`'s `probed_keep` and `probed_call`. So in the device's process only a withheld execution phase raises; in the spawned publisher process every record does, since `_publisher_main` passes `withheld=` by name. [argued: the real runner was not started under the probe]
+
+**2. The change.** `probed_keep`, `probed_call` and `timed_keep` take `(self, record, *args, **kwargs)` and hand them on. What they record is the same code. Lines 43, 66 and 138 and every clock in the file are untouched.
+
+**3. The same drift elsewhere: none found, nothing else changed.**
+- `warden_probe.py` is the only file in the tree that puts a function in place of a method of the device, the publisher or the publisher's process (its lines 93, 115, 151). `corpus.py` wraps none. [ran: grep]
+- `probed_run(self)`, `probed_tick(self, t)` and `probed_close(self)` agree with `Warden.run` (`warden.py` 579), `Warden._tick` (615, called at 595) and `PublisherProcess.close` (`warden_serve.py` 664), on `main`, on lean's tip and on the clock branch. `probed_init` already passes everything on. [read]
+- `corpus.drive_warden`'s calls into the device and the runner (613 to 626) agree with their definitions. [read]
+
+**4. Since when, and what runs it.**
+- Since `29147a291c` (Queue: #4769, on `main` 27 Oct): it gave `Publisher.keep` and `PublisherProcess.__call__` the `withheld` parameter, added both `withhold` methods and made `_publisher_main` pass it by name. It changed nothing under the trace corpus. The wrappers are #3531's and #3736's, both 24 Oct. [ran: git log; read the diff]
+- Through the probe: only `corpus.start_warden` (`corpus.py` 707 to 730), which `run_trace` calls (846) only for a trace of `WARDEN` (162: `warden-heavy`, `warden-smallkv`). [read]
+  - `run.sh` (43): only when `CORPORA` names one of those two (its example, line 21). Its default runs `ORDER`'s traces (`corpus.py` 135), none of which starts a network certifier.
+  - `tick.sh` (35): only with `TRACE=warden-...`. Its default is `heavy`.
+  - Nothing else calls `start_warden` or runs the probe. [ran: grep]
+- The served deviations job: no. `deviations.sh` 150, then `deviations.py`'s `one_try` (668, 687) runs `warden_serve.py rehearse`. [read]
+- The gate's rehearsal: no. `auditor.py` 2411 runs `certifier_serve.py rehearse` and 2449 `warden_serve.py rehearse`; the latter starts `serve` from its own file (`warden_serve.py` 1135). [read]
+
+**What it meets** [ran: git merge-tree]
+- Lean's landing tip `f3837f57d1`: stops on 27 paths, the same 27 as `main` alone against it. Neither of my two files is among them, and that branch changes neither.
+- The clock branch `a6ab0500d6`: clean. It does not change the probe at that tip. A stand-in for its change (`main`'s probe with the three `clock=time.monotonic` arguments replaced) also merges clean with my head. Not simulated: a change to how the tests make a `Probe`.
+
+**The `Goal` line.** `research queue open` wrote `Goal network/slice-clean` from NET-371's label. I read the plan's open goals: it is the nearest of ours, and the fit is loose, since its description names the network certifier, its Lean program, the period check and the onsite composite, not the trace corpus. Say if you want the line out.
+
+**Not looked at**
+- The real runner under the probe: no network certifier was started through `warden_probe.py`, before or after. The tests use stand-ins, hand-made mirrors of the runner's calls; nothing ties them to the runner.
+- Whether a corpus run with a `WARDEN` trace failed this way since 27 Oct: the evidence store was not searched.
+- `summary.py`'s reading of the probe's output for a withheld record.
+- `certifier_serve.py`'s own classes: nothing wraps them; not checked for drift.
+
+**Two things to know**
+- My first commit of the tests added ten sites of the retired term and the ratchet gate refused it. I reworked the tests before the push, so the file's count is unchanged and the shared allowlist is not edited. The pushed head is the only one.
+- One slip: reading the run's `status.json` I printed one machine's name to my own tool output, from an ad hoc filter that lacked one pattern. It is in nothing written, pushed, synced or sent.
+
+Note: `20261112T1307Z-report-net371-digestmove-probe-withheld`, synced. No second execution of myself seen (commits, runs, inbox). I did not mark, merge or comment.
+
+TIMER: none
+
