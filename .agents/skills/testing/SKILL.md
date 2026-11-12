@@ -75,9 +75,10 @@ reused only while everything its tests read is unchanged. When it fails:
   entry; a dependency's own dependency groups don't come with it. A dependency that lists `[tool.verity.tests] exports`
   (research does) is those paths of it: add a file importing code reads there.
 - **Only the tests need it** (a cross-check against another package, a shared fixture, the census): list it under
-  `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why, as narrowly as a directory or
-  file allows. A listed workspace package is its directory alone, not its dependencies, and every listed path adds the
-  suite to the quick tier of each change under it.
+  `[tool.verity.tests] inputs` in the suite's pyproject.toml, as narrowly as a directory or file allows, with its
+  reason in a comment line right above it, inside the list: two branches that each add one then merge, and a
+  paragraph above the list that both extend conflicts. A listed workspace package is its directory alone, not its
+  dependencies, and every listed path adds the suite to the quick tier of each change under it.
 - **One test file reads what its source doesn't name** (a tree it walks, a module it loads by a computed name, what a
   program it starts reads): the graph's test-file family keys each file on its own inputs, so add a
   `[[tool.verity.tests.reads]]` entry with `tests` (the files, from the suite's directory) and `paths` (what they read,
