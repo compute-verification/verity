@@ -15,7 +15,8 @@ its own:
   The requests of `plan` (greedy and sampled, each under its own seed, some sharing a cached prefix, more than fit one
   batch, and where the process's top-k is canonical one longer than the indexer's top-k: `LONG`) arrive between engine
   iterations. After each step's forward, `Rows` reads at
-  every layer with a KV cache the rows the step wrote: the layer's cache at the step's slots. The phase writes the trace, each
+  every layer with a KV cache (each attention layer's latent rows, each indexer's key rows) the rows the step wrote: the
+  layer's cache at the step's slots. The phase writes the trace, each
   request's tokens, a digest of each request's rows at each layer, what the engine chose (`chosen`: the cache format its
   config holds once built, each layer's attention backend, cache dtype and row bytes, and each backend's read path) and how
   its first attention layer attended (`Routes`).
@@ -183,11 +184,14 @@ def params(sampling: dict[str, Any], max_tokens: int) -> Any:
 
 
 def kv_layers(model: Any) -> dict[str, Any]:
-    """Layer name -> the module the engine bound that layer's KV cache to (the outermost under each name)."""
+    """Layer name -> the module the engine bound that layer's KV cache to (the outermost under each name). The name is
+    the one vLLM's forward context and a step's slot mappings hold the layer under: an attention layer's ``layer_name``,
+    and the ``prefix`` of an indexer's key cache, which has no ``layer_name``."""
     out: dict[str, Any] = {}
     for _path, m in model.named_modules():
-        name, cache = getattr(m, "layer_name", None), getattr(m, "kv_cache", None)
-        if isinstance(name, str) and hasattr(cache, "stride") and cache.numel() and name not in out:
+        cache = getattr(m, "kv_cache", None)
+        name = next((n for n in (getattr(m, "layer_name", None), getattr(m, "prefix", None)) if isinstance(n, str)), None)
+        if name is not None and hasattr(cache, "stride") and cache.numel() and name not in out:
             out[name] = m
     return out
 

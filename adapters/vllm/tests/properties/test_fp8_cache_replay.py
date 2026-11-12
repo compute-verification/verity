@@ -22,11 +22,16 @@ FORMATS = {"auto": (torch.bfloat16, 576), "fp8_ds_mla": (torch.uint8, 656)}
 
 
 class Layer(torch.nn.Module):
+    """A layer with a bound cache, named as vLLM names it: an MLA attention layer (``fmt``) by its ``layer_name``, an
+    indexer's key cache by its ``prefix`` alone."""
+
     def __init__(self, name: str, dtype: torch.dtype, width: int, fmt: str | None) -> None:
         super().__init__()
-        self.layer_name, self.kv_cache = name, torch.zeros(16, BLOCK, width, dtype=dtype)
-        if fmt is not None:
-            self.kv_lora_rank, self.qk_rope_head_dim, self.kv_cache_dtype = 512, 64, fmt
+        self.name, self.kv_cache = name, torch.zeros(16, BLOCK, width, dtype=dtype)
+        if fmt is None:
+            self.prefix = name
+        else:
+            self.layer_name, self.kv_lora_rank, self.qk_rope_head_dim, self.kv_cache_dtype = name, 512, 64, fmt
 
 
 class Runner:
@@ -40,13 +45,13 @@ class Runner:
         self.model.layers = torch.nn.ModuleList([Layer("model.layers.0.self_attn.attn", dtype, width, fmt),
                                                  Layer("model.layers.0.self_attn.indexer.k_cache", torch.uint8, 132, None),
                                                  Layer("model.layers.3.self_attn.attn", dtype, width, fmt)])
-        self.bytes = {m.layer_name: m.kv_cache.shape[-1] * m.kv_cache.element_size() for m in self.model.layers}
+        self.bytes = {m.name: m.kv_cache.shape[-1] * m.kv_cache.element_size() for m in self.model.layers}
         self.blocks, self.free, self.gen, self.flip, self.execute_model_state = {}, list(range(16)), {}, flip, None
 
     def row(self, request: str, position: int, layer: str) -> np.ndarray:
         seed = [sum(map(ord, request)), position, sum(map(ord, layer)), self.gen.get(request, 0)]
         out = np.random.default_rng(seed).integers(0, 256, self.bytes[layer], dtype=np.uint8)
-        if self.flip is not None and self.flip[:2] == (request, position) and layer == self.model.layers[0].layer_name:
+        if self.flip is not None and self.flip[:2] == (request, position) and layer == self.model.layers[0].name:
             out[self.flip[2]] ^= 1
         return out
 
@@ -67,7 +72,7 @@ class Runner:
                     bs.append(self.free.pop(0))
                 slot = bs[p // BLOCK] * BLOCK + p % BLOCK
                 for m in self.model.layers:
-                    m.kv_cache.view(torch.uint8).view(-1, self.bytes[m.layer_name])[slot] = torch.from_numpy(self.row(rid, p, m.layer_name))
+                    m.kv_cache.view(torch.uint8).view(-1, self.bytes[m.name])[slot] = torch.from_numpy(self.row(rid, p, m.name))
                 slots.append(slot)
             qsl.append(qsl[-1] + n)
             nct.append(start)
