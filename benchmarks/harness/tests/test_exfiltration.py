@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import runpy
 import sys
 from collections.abc import Mapping
@@ -1163,6 +1164,34 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
             E.served_share(SERVED | bad)
     with pytest.raises(ValueError, match="a served run's record is one JSON object, not list"):
         E.served_share([SERVED])
+
+
+def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_path):
+    """The audit's driver writes 0 GPUs for a step that started no process on a card (staging, the interior commitment,
+    a session proved on a CPU): it is read and adds no GPU-seconds, and a part whose entries are all on 0 GPUs is
+    printed `ON_CPUS` beside its 0 wherever its 0 is printed, so the row doesn't read as GPU time given free. A part
+    with one entry on a GPU is not marked; a count that is not a whole number is refused."""
+
+    cpu = SERVED | {"staging": [{"seconds": 20.0, "gpus": 0}], "interior": [{"seconds": 5.0, "gpus": 0}],
+                    "prove": [{"seconds": 300.0, "gpus": 1}, {"seconds": 180.0, "gpus": 0}]}
+    doc = E.build(served=cpu, store=recorded(tmp_path).store, root=REPO)
+    cs = doc["compute_share"]
+    assert {k: (p["gpu_s"], p["on_cpus"]) for k, p in cs["parts"].items()} == {
+        "prove": (300.0, False), "staging": (0.0, True), "replay": (240.0, False), "interior": (0.0, True),
+        "serving_charge": (200.0, False)}
+    assert cs["missing"] == [] and cs["value"] == pytest.approx(740 / 8000)
+    text = E.render(doc)
+    assert (f"in parts prove 3.750%, staging 0.000% ({E.ON_CPUS}), replay 3.000%, interior 0.000% ({E.ON_CPUS}), "
+            "serving charge 2.500%.") in text
+    assert f"| staging | {E.SERVED_PARTS['staging'][0]} | 0, {E.ON_CPUS} | 0.000% | measured | `staging` |" in text
+    assert f"| prove | {E.SERVED_PARTS['prove'][0]} | 300 | 3.750% | measured | `prove` |" in text
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert by["served_interior_gpu_s"]["source"].endswith(f"`interior`; {E.ON_CPUS}")
+    assert E.ON_CPUS not in by["served_prove_gpu_s"]["source"] and E.ON_CPUS not in E.render(
+        E.build(served=SERVED, store=recorded(tmp_path / "gpus").store, root=REPO))
+    for bad in (True, 1.0, "1"):
+        with pytest.raises(ValueError, match=re.escape(f"holds staging at 20.0 seconds on {bad!r} GPUs")):
+            E.served_share(SERVED | {"staging": [{"seconds": 20.0, "gpus": bad}]})
 
 
 # ---- the stop class's verdicts -----------------------------------------------------------------------------------------------

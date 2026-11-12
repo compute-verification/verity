@@ -8,7 +8,10 @@ store, with no GPU and no node.
   replay and interior commitment, and the serving charge over stock vLLM on the same load) over the window's serving
   GPU-seconds, each read from the run's record and marked measured, a field the record lacks marked missing with its
   gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
-  given share. Without a record it prints the share as `NO_RUN`.
+  given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
+  Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
+  own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
+  is printed between the figures and the holes.
 
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
   the store, never in code (`served_table`'s rule): the runs that carry `run_of_record=RECORD` and no `superseded_by`,
@@ -222,6 +225,9 @@ SERVING_GAP = ("the window's serve is not tied to the audit's record: its load's
                "`meta.json`: `wall_s`, `gpu`) are in the serve's own run")
 #: what the command prints for the share a served run measures where no record is given
 NO_RUN = "not measured: no served run's record"
+#: what the command prints beside a served run's part whose entries are all on 0 GPUs, so its 0 doesn't read as GPU
+#: time given free
+ON_CPUS = "on CPUs: no GPU-seconds"
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
           "token_macs", "world_requests", "request_count", "weights")
@@ -684,11 +690,19 @@ def _gpu_s(entries: Any, field: str, run: str) -> tuple[float | None, list[str]]
         seconds, gpus = e.get("seconds"), e.get("gpus")
         lacks += [f"{field}.{k}" for k, v in (("seconds", seconds), ("gpus", gpus)) if v is None]
         if None not in (seconds, gpus):
-            if not (seconds >= 0 and isinstance(gpus, int) and gpus >= 0):
+            if not (seconds >= 0 and isinstance(gpus, int) and not isinstance(gpus, bool) and gpus >= 0):
                 raise ValueError(f"{run}'s record holds {field} at {seconds!r} seconds on {gpus!r} GPUs: an entry is "
                                  "seconds of 0 or more on a whole count of GPUs, 0 or more")
             total += seconds * gpus
     return (None if lacks else total), sorted(set(lacks))
+
+
+def _on_cpus(entries: Any) -> bool:
+    """Whether every entry of a record's field is on 0 GPUs: the part ran on CPUs alone, and its 0 GPU-seconds are not
+    GPU time it was given free."""
+
+    its = [entries] if isinstance(entries, Mapping) else entries or []
+    return bool(its) and all(isinstance(e, Mapping) and e.get("gpus") == 0 for e in its)
 
 
 def served_share(record: Mapping[str, Any] | None) -> dict:
@@ -705,7 +719,9 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
     serve_tax`'s cost of the served arm over stock on its own loads, as a fraction (stock's output tokens a second over
     the arm's, less one), with its ``serving_cost_source`` (the run and load it is of). A field absent or None is one
     the record lacks; so is an entry's key. The serving charge is the served GPU-seconds less stock's, measured; or
-    from the serving cost c, the served GPU-seconds times c / (1 + c), modeled, since its loads are not the window's."""
+    from the serving cost c, the served GPU-seconds times c / (1 + c), modeled, since its loads are not the window's.
+    A part whose entries are all on 0 GPUs is read as 0 GPU-seconds and held `on_cpus`, which the print says beside
+    its 0 (`ON_CPUS`)."""
 
     if record is None:
         return {"run": None, "value": None, "mark": None, "why": NO_RUN, "serving_gpu_s": None, "parts": {},
@@ -736,7 +752,8 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
         if lacks:
             gaps.append({"field": name, "lacks": lacks, "why": why})
         parts[name] = {"what": what, "gpu_s": gpu_s, "mark": "missing" if gpu_s is None else mark, "source": source,
-                       "share": None if None in (gpu_s, serving) or not serving else gpu_s / serving}
+                       "share": None if None in (gpu_s, serving) or not serving else gpu_s / serving,
+                       "on_cpus": name != "serving_charge" and gpu_s is not None and _on_cpus(record.get(name))}
     if serving is not None and not serving > 0:
         raise ValueError(f"{run}'s record holds the window's serving at {serving!r} GPU-seconds: the share is of more "
                          "than none")
@@ -821,7 +838,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
                     f"{whose} `serving`: the window's serving, which the share is of"
                     + (f"; it lacks {', '.join(gaps['serving']['lacks'])}: {SERVING_GAP}" if "serving" in gaps else "")),
                 *(one(audit, f"served_{name}_gpu_s", p["gpu_s"], "GPU-second", p["mark"],
-                      f"{whose}: {p['what']}, {p['source']}"
+                      f"{whose}: {p['what']}, {p['source']}" + (f"; {ON_CPUS}" if p["on_cpus"] else "")
                       + (f"; it lacks {', '.join(gaps[name]['lacks'])}: {gaps[name]['why']}" if name in gaps else ""))
                   for name, p in served["parts"].items()),
                 one(audit, "served_compute_share", served["value"], "", served["mark"] or "missing",
@@ -1116,7 +1133,8 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
     if cs["value"] is None:
         lines = [f"**The audit's share of compute: {cs['why']}.** Every figure below is read at {given}.", ""]
     else:
-        parts = ", ".join(f"{name.replace('_', ' ')} {_part(p['share'])}" for name, p in cs["parts"].items())
+        parts = ", ".join(f"{name.replace('_', ' ')} {_part(p['share'])}" + (f" ({ON_CPUS})" if p["on_cpus"] else "")
+                          for name, p in cs["parts"].items())
         there = (f"its part has no figure at that share: {cs['no_GB']}" if cs["GB"] is None else
                  f"at that share, β = {_part(cs['beta'])}{'' if cs['inside'] else ' (extrapolated)'}, the compute "
                  f"audit's part over the world's year is {_n(cs['GB'])} GB")
@@ -1139,7 +1157,8 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
             *_table(("part", "what", "GPU-seconds", "share of the window's serving", "mark", "source"),
                     [("serving", "the window's serving", _n(cs["serving_gpu_s"]), "",
                       "missing" if "serving" in gaps else "measured", source("serving", "`serving`")),
-                     *((name, p["what"], _n(p["gpu_s"]), _part(p["share"]), p["mark"], source(name, p["source"]))
+                     *((name, p["what"], _n(p["gpu_s"]) + (f", {ON_CPUS}" if p["on_cpus"] else ""), _part(p["share"]),
+                        p["mark"], source(name, p["source"]))
                        for name, p in cs["parts"].items())]), ""]
 
 
