@@ -53,6 +53,7 @@ class FakeScheduler:
         self.requests: dict[str, FakeRequest] = {}
         self.waiting: list[str] = []
         self.running: list[str] = []
+        self.finished_req_ids: frozenset[str] = frozenset()     # vLLM frees these at its next schedule: none, each is freed as it ends
         self.budget, self.max_seqs = budget, max_seqs
         self.preempt_at = dict(preempt_at or {})
         self.resend_resumed = resend_resumed
@@ -157,8 +158,8 @@ class FakeScheduler:
     def finish_requests(self, request_ids: Any, finished_status: Any) -> list[FakeRequest]:
         done = []
         for rid in ([request_ids] if isinstance(request_ids, str) else request_ids):
-            q = self.requests[rid]
-            if q.status in ("waiting", "running"):
+            q = self.requests.get(rid)                  # an id it never saw is skipped, as vLLM's skips it
+            if q is not None and q.status in ("waiting", "running"):
                 q.status = "aborted"
                 (self.running if rid in self.running else self.waiting).remove(rid)
                 done.append(q)

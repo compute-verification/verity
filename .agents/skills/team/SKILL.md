@@ -46,47 +46,49 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 `main` holds only fully checked commits. ci's verified queue (`research queue vqueue`: `research.vqueue_loop`'s docstring
 has the rules, `tools/verity/check/drive.toml` the settings) merges the PRs ready to land onto `main` as a candidate, checks
-it, and fast-forwards `main` only to a candidate with no new failure, each gating task passed or failing on its base too:
+it, and fast-forwards `main` only to a candidate with no new failure:
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
-  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY`
-  and linked by the Linear app, as Linear's GitHub integration is off; a failed link prints its retry, `research queue
-  link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals page),
-  which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A body
-  with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a refusal
-  (`research queue edit N --body-file F` fixes it). A new head needs a new mark and review unless its own diff,
-  whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`. `research queue status` says what
-  each PR waits for and lists the PRs naming no issue. The mark's preflight refuses a head that conflicts or that
-  drive.toml's `landing_gates` refuse; a Markdown file over its cap (trim it in your next PR) and the vLLM ratchet gate
-  only warn. A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
-  team's Apps and Daniel, is refused at its mark and at admission.
-- Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
-  pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
+  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
+  linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
+  queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
+  page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
+  body naming neither a live goal (`Goal <id>`) nor `Issue: none: REASON` only warns (fix: `research queue edit N
+  --body-file F`). A new head needs a new mark and a new review unless its own diff, whitespace too, is unchanged (`git
+  patch-id --verbatim`), as after merging `main`. `research queue status` says what each PR waits for and lists the PRs
+  naming no issue. The mark's preflight refuses a head that conflicts or that drive.toml's `landing_gates` refuse; a
+  Markdown file over its cap and the vLLM ratchet gate only warn. A `hold` label keeps a PR out. A PR from a fork, or by
+  an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at admission.
+- Before marking, run the Lean check of the packages and the suites your change touches (the testing skill's pre-mark
+  run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
-  LANE`); no other per-head grant exists. A PR whose change touches nothing drive.toml's `lowrisk_excludes` names (Lean,
-  locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark alone, with no verdict (the
-  low-risk lane); a layout move's PR (`Move: tools/move/MAP.toml` in its body) never does.
-- The loop builds candidates from the marked PRs with a land verdict or in the low-risk lane, in the priority file's order
+  LANE`); no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
+  `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark
+  alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
+  once the loop certifies its map, from `main`, rerun on its batch's tip; under `signed_verdicts`, not one changing
+  `SIGNED_GUARDS`.
+- The loop builds candidates from the marked PRs with a land verdict or on their mark alone, in the priority file's order
   and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate
   below, and one `Queue: #N` merge per PR. Stack only on your own unlanded PR, two deep at most: hand a longer chain in
   as one head, marked once, with the marks below withdrawn. A PR that doesn't merge onto `main` is left out, and its
   owner told the fix. A candidate holding a change to a
   `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
   Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
-  run) off the chain, while batches with no Lean change are built and checked beside it; it then goes onto the chain's
-  top, the records it regenerated committed as `Lock records regenerated for #N...` (regenerated again if that top
-  changed a Lean input), and is checked on that commit, so `main` moves only to regenerated records; a records run that
-  fails is a failure like any other.
+  run) off the chain, while batches of PRs touching no Lean input (what the audit's and records' keys read, what a lock
+  run writes, the code that runs `lean-audit`: `vqueue_slim.lean_inputs`) are built and checked beside it; it then goes
+  onto the chain's top, the records it regenerated committed as `Lock records regenerated for #N...` (regenerated again if
+  that top changed a Lean input), and is checked on that commit, so `main` moves only to regenerated records; a records
+  run that fails is a failure like any other.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate run beside them on the queue's
   machines (under `--gate check`, `check.py --record` of every step, in shards), judged on the merge gate, where an
   unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it. A failure
   its base shares blames no PR and holds nothing: @ci
   and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
-  suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks
-  and their logs, several are bisected, and in the same tick the candidate and those above it are built again in order
-  without the suspects; a PR a reviewer holds or someone else ejects or unmarks leaves the same way, taking no other PR
-  out. A failure above the lowest candidate waits for its base's check unless only its own PRs meet it, where `main`'s
-  word decides it. A failure of the machines
+  suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks'
+  logs, several are bisected, and in the same tick the candidate and those above it are built again in order without the
+  suspects; a PR a reviewer holds or someone else ejects or unmarks leaves the same way, taking no other PR out. A failure
+  above the lowest candidate waits for its base's check unless only its own PRs meet it, where `main`'s word decides it. A
+  failure of the machines
   is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) holds nothing; under `--gate check`, one
   its base's run doesn't share is rung to who acts on it, and under graph2 to no one.
   Only the loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
