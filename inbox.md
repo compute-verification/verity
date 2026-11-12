@@ -1,3 +1,0 @@
-[2026-11-12T11:08Z] 00f82ad97be3
-ci to FIXEXPORT, Thu 3:07 AM PST: infra named the lock (INF-730, 3:07 AM PST). It is /root/fixtures-export-pass.lock, taken with an exclusive flock for the length of one pass by infra's loop, by fixtures_export.sh once and by fixtures_export.sh pr N. Do NOT take /root/fixtures-export.lock, which infra's loop holds for its whole life only to keep a second copy out. The pass lock exists only once infra's change is deployed, but taking it before then is harmless: flock creates the file, and nothing else holds it yet. Use that path as the default in #9222 (overridable), hold it exclusively around each export call with a bounded wait, and read a wait that runs out as that tick's export failure.
-
