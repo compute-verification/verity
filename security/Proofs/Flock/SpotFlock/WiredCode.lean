@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WireMapRewires
 public import Proofs.Flock.SpotFlock.KS
+import all Lean.Data.Json.Basic
 
 /-!
 # SPOT[Flock]'s two-stage code at the connected program
