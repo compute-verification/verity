@@ -5,7 +5,8 @@
 #   research run --on auto --cwd source -- bash benchmarks/pouw/dc/emp_cuda.sh RELEASE SRC...
 #
 # RELEASE 12.4.1 is nvcc and ptxas 12.4.131, the H100 price rounds' pin; 13.0.1 is 13.0.88. $OUT/toolkit.txt holds
-# the release, each component's version and sha256, nvcc's and ptxas's --version and the host compiler.
+# the release, each component's version and sha256, nvcc's and ptxas's --version, the host compiler and flags, and
+# the glibc symbol versions each binary needs.
 set -euo pipefail
 OUT=${OUT:?run under research run}
 REL=${1:?usage: emp_cuda.sh RELEASE SRC...}
@@ -37,8 +38,22 @@ ln -s .. "$C/targets/x86_64-linux"
 [ -e "$C/lib64" ] || ln -s lib "$C/lib64"
 gcc_major=$(gcc -dumpversion | cut -d. -f1)
 nvcc_major=$("$C/bin/nvcc" --version | sed -n 's/.*release \([0-9]*\)\..*/\1/p')
-# nvcc 12.4 takes host GCC up to 13; a newer one changes host code only, not the SASS the probes time.
-[ "$nvcc_major" != 12 ] || [ "$gcc_major" -le 13 ] || export NVCC_APPEND_FLAGS=-allow-unsupported-compiler
-{ "$C/bin/nvcc" --version; "$C/bin/ptxas" --version; echo "host gcc $(gcc -dumpversion) ${NVCC_APPEND_FLAGS:-}"; } \
+# Host code only, so the SASS is the same: libstdc++ linked in, and glibc_compat.h, so the binaries run on a node
+# whose libc is older than the build node's (node A's is 2.35).
+flags="--pre-include $HERE/glibc_compat.h -Xcompiler -static-libstdc++,-static-libgcc"
+# nvcc 12.4 takes host GCC up to 13; a newer one changes host code only.
+[ "$nvcc_major" != 12 ] || [ "$gcc_major" -le 13 ] || flags+=" -allow-unsupported-compiler"
+export NVCC_APPEND_FLAGS=$flags
+{ "$C/bin/nvcc" --version; "$C/bin/ptxas" --version; echo "host gcc $(gcc -dumpversion); NVCC_APPEND_FLAGS=$flags"; } \
   >>"$OUT/toolkit.txt"
-NVCC="$C/bin/nvcc" bash "$HERE/emp.sh" build "$@"
+rc=0
+NVCC="$C/bin/nvcc" bash "$HERE/emp.sh" build "$@" || rc=$?
+if [ -f "$OUT/bins.tgz" ]; then
+  mkdir "$T/bins"
+  tar -C "$T/bins" -xzf "$OUT/bins.tgz"
+  for b in "$T/bins"/sm*; do
+    need=$(objdump -T "$b" | grep -o 'GLIBC_[0-9.]*\|GLIBCXX_[0-9.]*' | sort -uV | tr '\n' ' ')
+    echo "$(basename "$b") needs $need" >>"$OUT/toolkit.txt"
+  done
+fi
+exit $rc
