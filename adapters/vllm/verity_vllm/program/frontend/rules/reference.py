@@ -231,7 +231,7 @@ class ElementwiseRefRule(OpRule):
                 t = tensors.get(nm)
                 if t is not None and t.device.type != "meta":
                     return float(t.detach().to(torch.float32).item())
-        except Exception:  # noqa: BLE001 — provenance only; the program does not depend on it
+        except (AttributeError, RuntimeError):  # no source module, or a tensor torch cannot read: provenance only
             return None
         return None
 

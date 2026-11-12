@@ -25,7 +25,6 @@ from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import shape
 from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
@@ -339,7 +338,7 @@ class HFRMSNormPatternRule(OpRule):
 
     def applies(self, node, ctx):
         m = self._match(node, ctx)
-        return True if isinstance(m, dict) else f"not the HF RMSNorm pattern ({m})"
+        return True if isinstance(m, dict) else f"not the HF RMS norm pattern ({m})"
 
     def emit(self, node, ctx):
         from verity_vllm.program.frontend.rules.common import from_rows, rows_of
@@ -462,7 +461,7 @@ def _buffer_source(node):
 
 
 def _stack_path(node) -> str:
-    stack = node.meta.get("nn_module_stack") or {}
+    stack = node.meta.get("nn_module_stack")
     return list(stack.values())[-1][0] if stack else ""
 
 

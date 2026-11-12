@@ -333,7 +333,6 @@
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "F841", "symbol": "_moe_c_fake_impls", "detail": "Local variable `op` is assigned to but never used"},
     {"file": "verity_vllm/program/frontend/rules/base.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Callable` imported but unused"},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
-    {"file": "verity_vllm/program/frontend/rules/patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.program.frontend.value_types.shape_of` imported but unused"},
     {"file": "verity_vllm/program/frontend/rules/views.py", "kind": "F401", "symbol": "<module>", "detail": "`operator` imported but unused"},
     {"file": "verity_vllm/program/frontend/rules/views.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.Value` imported but unused"},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.program.frontend.derive.StaticIndex` imported but unused"},
