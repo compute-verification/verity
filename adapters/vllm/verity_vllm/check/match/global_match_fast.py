@@ -687,7 +687,7 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
             continue
         for j, r in payload["results"].items():
             results[j] = r
-        for k, v in (payload.get("stats") or {}).items():
+        for k, v in payload["stats"].items():
             if not k.startswith("worker."):   # the child's own counters only (it inherited the parent's, including earlier workers')
                 stats[f"worker.{k}"] += v
         stats["legs_on_workers"] += len(payload["results"])

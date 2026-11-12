@@ -128,9 +128,16 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity.protocols.pouw.verifier import verifier
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
+from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
 from tests.engine.int8_exact_gpu import generate, pin, scratch_checkpoints
+from verity_vllm import protocols as PO
+from verity_vllm.engine.hooks import patched
 
 SCHEMA = "verity-vllm/pouw-h1-gpu/v1"
 RECORD = "pouw_h1_gpu.json"
@@ -419,10 +426,6 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "draw_session": draw_session, "gate": gate,
                          "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.pouw.verifier.coins import Challenger
-    from verity.protocols.spot.device.challenger import LiveRecord
     rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
     return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
                      "steps": steps, **kw}}
@@ -467,7 +470,6 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm import protocols as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -628,7 +630,6 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
 
 
 def fill(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm import protocols as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -1174,10 +1175,6 @@ def record_reason(record: dict[str, Any]) -> str | None:
     """`pouw_h1_challenger.manifest_reason` of a window's record, its Program salt read from in-process coins too: their
     coin commitment is `coins.CoinCommitment`'s rather than the live challenger's, and their salt coin opens after the
     weights' root `pouw` keys it on (`audit.Epoch.start`'s, the opening's ``after``), not the served one."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-    from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-
-    from verity_vllm.engine.hooks import patched
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     c = record["commitment"]

@@ -195,10 +195,11 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
                                        "served_output_len = a_r); the record must attest the same async_scheduling; undeclared -> refuse by name",
                            "evidence": "the recorder's SampleEnd token, cross-checked against the driver's tokens.json (output association); "
                                        "the fold TokenSelect VALUE is Commit territory (C3 openings of the sampled ids), not Match's"}
+    chron = gp.get("chronology")
     c.info["lag"] = {"declared": decl_lag, "declared_source": decl_src if lag_declared else None, "record_attests": rec_lag, "record_source": rec_lag_src,
                      "agree": (decl_lag == rec_lag) if (lag_declared and rec_lag is not None) else None,
                      "exercised": False, "eos_stop_requests": [], "lag_rows_observed": {}, "variable_lag": False,
-                     "lengths": gp.get("lengths") or ((gp.get("chronology") or {}).get("lengths") if isinstance(gp.get("chronology"), dict) else None)}
+                     "lengths": gp.get("lengths") or (chron.get("lengths") if isinstance(chron, dict) else None)}
     # the driver's tokens.json carries the same recorded fact (doc.lag.value from resolved_async_scheduling) and per request its
     # served_output_len / executed_prefix_len claims: one record, one fact -- a tokens.json whose lag disagrees with the header's attestation
     # is a record that does not attest one execution (named); the per-request claims are checked against the observed rows below
@@ -458,7 +459,7 @@ def _achieved_concurrency(c: NamedCheck, res: dict, gp: dict, steps: dict, prese
     expected_per_step: dict[int, int] = collections.defaultdict(int)
     for e in res["requests"]:
         rid = e["request_id"]
-        ps_r = present.get(rid) or []
+        ps_r = present.get(rid, [])   # the steps with its rows; a request never scheduled has no entry
         occ = set(ps_r)
         if e.get("finish") == "eos" and e.get("eos_verified") is not True and ps_r:
             short = int(e.get("max_tokens") or 0) - int(e.get("output_events") or 0)
