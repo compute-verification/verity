@@ -92931,3 +92931,62 @@ In plain words: the phase lemma is built and proved in all three stage forms, an
 ## FRAME, Thu 12 Nov 16:10Z: the fourth candidate records run reads `pass` too: all four pass on the moved `main`
 
 #9229's candidate, `r20261112-152245-3500` (`main` `2eb974c8ea00` with `9e075516baff`, in no branch): rc 0, outcome `pass`, `security/Proofs`, `security` and `security/Properties` each `pass`, three `AUDIT: PASS`, 15:23:17Z to 16:06:12Z [run: its OUTCOME and AUDIT lines]. It ran longer than the other three because that node's cache held 5,001 of the proofs tree's 5,067 modules and it built the rest [run: its `stage:` line]. With `494f`, `d62b` and `f136` (my 16:04Z entry) that is `pass` for #9176, #9080, #9212 and #9229. Nothing is pushed and no run of mine is in flight. I wait on your marks.
+
+## FREEWORDS, Thu 12 Nov 16:11Z: with the sums committed (circuits' CIR-265 branch) the 40,960-key positions unit stages in 7.67 GiB where `main`'s `ir_lower.py` takes 23.94, and the whole mask in 13.76 where it takes 20.65, each to circuits' pin both ways; both blocks at 16,384 keys equal circuits' three values; head is `1125cf1008`; the quick tier passed at the head before it, and the checks at this head are running
+
+Mailbox read at `ea14f7bfa6` (my file last changed in `645c6f1562`): 15:26Z's note is acted on below.
+
+**Head.** `cursor/proofs-freewords-7c3e` at `1125cf1008`, three commits on `main` `8252fe8dff65`; it merges into `main` `87fec6c6491b` with no conflict [run: local `git merge-tree`, 16:11Z]. The third commit adds one test and changes no code: `ir_lower.py` is the same file (sha256 `4162d32e…`) at `22b2f5df8f`, `4af462922f` and `1125cf1008` [read: the runs' `tree.txt` and `git diff`].
+
+- **Why a third commit:** I ran twelve one-line mutations of `ir_lower.py` against the new test file. Eleven failed it and one passed: "a builder's returns are not among the words a later activation can read". No test had one builder's returns as the next builder's parameter leaves with no gate between them. `test_an_activation_fed_by_another_is_lowered_by_its_builder_either_way` is that case; now 12 of 12 fail, 15 tests, 0.4 s [run: local at `1125cf1008`]. My 15:20Z entry's "eight hand mutations" stands as what I did then; the twelve are the list I can name, and it goes in the body.
+
+**With the sums committed** (15:26Z). Circuits' `scratch/cir265/stage_keep.py`, their file unchanged (blob `b8163cc2d0` at `e39ad449a67a`), run in my tree at `1125cf1008` by a driver that records the process's `VmHWM`; "before" loads `main`'s `ir_lower.py` in place of the tree's. Their base `fcc1b239d0b` is an ancestor of mine, with no difference between the two under the prover's Python, `verity/definitions/registry/`, `verity/circuits/` or `verity/commitments/` [read: `git diff --stat fcc1b239d0b 8252fe8dff65`].
+
+| unit, 40,960 keys | peak GiB, before → after | whole script s | `lower_gates` s | words left in `wires` | ANDs | `circuit_bytes` | pin |
+|---|---|---|---|---|---|---|---|
+| `DsaMaskPositions_v2{N=40960,AT=0,K=2048}` | 23.937 → 7.670 | 541.7 → 508.8 | 434.9 → 386.7 | 23,387,004 → 65,554 | 3,999,607 | 909,522,891 | circuits' `4d17db98…a12424ff`, both ways |
+| `DsaTopKMaskWhole_v2{N=40960,TOPK=2048}` | 20.653 → 13.755 | 523.5 → 526.1 | 199.9 → 219.8 | 7,491,358 → 40,960 | 6,754,056 | 4,232,531,472 | circuits' `49bc5483…179b90b2`, both ways |
+
+- [run: `r20261112-155036-36f3`, vy-nebius-cpu-12, done, rc 0 (positions); `r20261112-155104-029d`, vy-nebius-cpu-13, done, rc 0 (whole)]. Every field of `staged.json` is equal before and after (pin, class, bytes, `k_log`, ANDs, rows, nonzeros, ranges, the instance's files), and each pin equals the value in circuits' 15:09Z comment on CIR-251, whole values compared [read: that comment, by me].
+- My "before" reproduces circuits' peaks: 23.94 and 20.69 GiB in their comment, 23.937 and 20.653 here.
+- Where each peak is: positions, before, at the end of the gates (resident memory when `lower_gates` returns is the peak); after, later than the gates (6.2 GiB when `lower_gates` returns). The whole mask, before and after, after the gates (19.4 and 8.8 GiB when `lower_gates` returns).
+
+**At 16,384 keys, as the blocks are written today** [run: `r20261112-150156-71e3`, done, rc 0]: the mask block `DsaTopKMaskBlock_v2{N=16384,AT=16384,TOPK=2048}` stages in **41.309 GiB** (circuits' plain 48.662, their wrapper 40.801), stager 756.1 s, 1,544,046 ANDs, `circuit_bytes` 11,123,479,699; positions in 40.933 GiB as I said at 15:20Z. For both, `pin`, `class_sha512` and `circuit_bytes` equal circuits' plain run's, whole values compared [read: `r20261112-102208-aaad` and `r20261112-111042-1e37` `out/`]. So their caution about the base did not bite on either block.
+
+**The probe** [run: `r20261112-151802-7e13`, done, rc 0; the three values equal circuits' again]:
+
+| at 16,384 keys | positions | mask block |
+|---|---|---|
+| steps kept | 3,005,429 | 4,734,960 |
+| the walk that makes them, s (of `lower_gates`' s) | 117.1 (of 346.0) | 37.2 (of 180.7) |
+| resident memory before → after that walk, GiB | 0.066 → 2.118 | 0.401 → 1.775 |
+| highest sample inside `lower_gates`, GiB; steps left there | 40.822; 23,480 | 40.846; 1,005 |
+| words `wires` held there; most at any sample | 543,244; 617,094 | 31,486; 531,197 |
+
+- The steps and counts cost 1.4 to 2.1 GiB when made. Resident memory is highest at the very end of lowering, with under 1% of the steps left, so the steps are not held there. Whether the memory they gave back was used again, I did not measure.
+- The most words held at once agrees with circuits' wrapper (620,592 and 540,751 [read: their `free_words.most_at_once`]).
+- **Seen, not changed:** at 16,384 keys, as written today, what is left after this change (about 40 GiB in both blocks) is not words the lowering is done with: 65,552 and 16,384 words are left when `lower_gates` returns. How it divides between the circuit's rows, words alive at the end and memory freed but not returned, I did not measure.
+
+**Checks.**
+
+| check | run | head | state at 16:10Z |
+|---|---|---|---|
+| `suites.py --changed 8252fe8dff65 --quick` | `r20261112-150522-db6c`, vy-nebius-cpu-13 | `4af462922f` | **done, rc 0: 55 suites, 55 passed, 0 failed, none cached**; `verity-flock` 1,469 passed, `verity-vllm` 14,293 passed |
+| the same | `r20261112-155216-44eb`, vy-nebius-cpu-5 | `1125cf1008` | running: 36 passed, 7 cached, 0 failed of 55 |
+| `suites.py verity-flock`, slow tests included | `r20261112-153632-83b4`, vy-nebius-cpu-2 | `1125cf1008` | running; its last line since before 15:42Z is the Lean build that precedes the suite, no test output yet |
+| `circuit-check --all --jobs 20` | `r20261112-145923-2a32`, vy-nebius-cpu-7 | `22b2f5df8f` | running since 15:13Z; it prints nothing until it ends |
+
+- The slow run at `4af462922f` (`r20261112-150547-9904`) never started (it waited on the quick run's tree); I cancelled it at 15:36Z when the head moved.
+
+**Next.** I open the pull request now, unmarked, with `--issue PRF-597`: the body has the tests, the runs by id and the tables above, and says which checks are still running. When the three end I put their results and circuit-check's report in the body and write the ready line here.
+
+**Not established.**
+- The quick tier and the Flock slow tier at `1125cf1008`, and `circuit-check --all` (running).
+- circuit-check ran at `22b2f5df8f`; the two commits after it touch one test file, which I take no target to read [derived, not checked].
+- Seconds are one sample each on shared nodes. With the sums committed the times do not move by more than that noise; I claim memory only.
+- With the sums committed at other sizes, and the CIR-265 pull request's own circuits (circuits say these are the scratch wrapper's): not measured.
+- `lean-agreement`: the train's.
+
+**To post** (PRF-597, if you want it there): with the sums committed the 40,960-key positions unit stages in 7.67 GiB against 23.94 and the whole mask in 13.76 against 20.65, each to circuits' pin, with `main`'s `ir_lower.py` and with this change [`r20261112-155036-36f3`, `r20261112-155104-029d`].
+
+Next entry by 17:05Z.
