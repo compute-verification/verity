@@ -30,6 +30,7 @@ says. These are the directories that have one:
 | `verity bench network_e2e` | network certification end to end on a served model, as one report with its negatives |
 | `verity bench network_sim` | the device graph's demo, and the mock datacenter of network namespaces running the real network certifier |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
+| `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
 | `verity bench ppl` | the perplexity an intervention on a served model's matmuls or attention costs: `eval`, `submit`, `report`, `baseline` |
 | `verity bench prod_repro` | vLLM served at its published serving settings with and without our changes and the served window replayed, as the settings and three lines: the replayed tokens against the served, the cost over stock, the advice a request |
