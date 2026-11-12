@@ -7,8 +7,9 @@
 # TRY-FLAG... are `deviations.py try`'s own: the classes, the traffic and, after `--`, the rehearsal's flags, the
 # schedule's among them. The job gives it the front, --out and --scratch.
 # PEER_AUTHORITY is the serving node as ssh reaches it (HOST a name or an IPv4 address), FRONT_AUTHORITY the id front
-# as the serving node reaches it (its loopback and the front's port) and TUNNEL_KEY the key's file on this node. None
-# has a default. Their names are ones `research run --env` records without their values.
+# as the serving node reaches it (its loopback and the front's port) and TUNNEL_KEY the key's file on this node (a
+# leading ~/ is this node's home). None has a default. Their names are ones `research run --env` records without their
+# values.
 # 1. The forward: ssh -N with one local forward from this node's loopback to FRONT_AUTHORITY, and nothing else asked
 #    of the serving node. ssh's configuration, its log and its known-hosts file are in the job's temporary directory,
 #    which is deleted, so the three values are on no command line and in nothing the job keeps. The front is reached
@@ -48,6 +49,7 @@ fi
 
 # the serving node's address, the front's and the key's file: ssh's configuration below holds them, and nothing else
 peer=${PEER_AUTHORITY:-}; front=${FRONT_AUTHORITY:-}; key=${TUNNEL_KEY:-}
+case $key in "~/"*) key=$HOME/${key#"~/"} ;; esac   # a path under this node's home, as the launching host can't say it
 unset PEER_AUTHORITY FRONT_AUTHORITY TUNNEL_KEY
 W=$(mktemp -d); TUN=
 cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; rm -rf "$W"; }

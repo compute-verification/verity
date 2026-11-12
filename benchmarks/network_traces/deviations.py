@@ -68,6 +68,7 @@ its own in a directory it removes.
   or not shown to the client. It exits 1 when a class didn't, or honest was refused and the rest weren't tried, and 2
   when none didn't and a row is shown neither way: the tie it aims at wasn't run (no ``--ids`` yet), or its deviation
   changed no response. ``--tail`` covers a connection admitted at the last request's time, the delay and its cells.
+  `deviations.sh` is `try` as a job, behind one ssh forward to a front that listens on its own node's loopback.
 - A try's request i is named ``<class>-<tag>-<i>`` (its `user`), the tag ``--tag`` or a random one a command: the
   server's record names a request by its `user`, so one record over every try, and over what the server served before
   them, holds each of a try's requests once, and ``--ids`` reads the right row.
