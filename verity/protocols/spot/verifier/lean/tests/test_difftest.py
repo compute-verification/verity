@@ -7036,9 +7036,10 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
     released after the registration's digest, Lean's the Python's. The sample from those coins is accepted; it is rejected
     for another sample, the evidence's coins carrying a key (`coins_reason`'s form, where the prover named the key), none,
     coins under another key, on another window, of another family, opened after another digest, each mutation of the
-    segment, a family whose log shows another root before the sample's coins or after them (`FAMILY_ROOT`), or a session the ledger doesn't open withheld (one whose challenger may have released its root before the
-    prover's commitment), and refused for a challenger without a window. A verifier that names no challenger decides as
-    before, and rejects evidence that carries coins."""
+    segment, a family whose log shows another root before the sample's coins or after them (`FAMILY_ROOT`), or a session
+    the ledger doesn't open withheld (one whose challenger may have released its root before the prover's commitment),
+    and refused for a challenger without a window. A verifier that names no challenger decides as before, and rejects
+    evidence that carries coins."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     mine = DR.derive(s.program, s.query, law, None)
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -7104,13 +7105,13 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
                      if name not in ("before", "unread", "read-tampered", "other-after")]
         for shape in ("before", "later"):
             again = Drawn(rng, after=after, reads=reads, **{shape: True})
-            mine = {k: v for k, v in again.evidence(again.segment.to_json()).items() if k != "key"}
-            rejected.append(audit_of(again, drawn_from(again.read), mine))
+            held = {k: v for k, v in again.evidence(again.segment.to_json()).items() if k != "key"}
+            rejected.append(audit_of(again, drawn_from(again.read), held))
             with pytest.raises(CoinError, match=re.escape(FAMILY_ROOT)):
-                draw_coins(again.s.key, again.ledger.window["root"], "draw", after, mine, lms_verify)
+                draw_coins(again.s.key, again.ledger.window["root"], "draw", after, held, lms_verify)
             if shape == "before":
                 rejected.append(audit_of(again, drawn_from(again.read),
-                                         {**mine, "segment": _mutated(rng, again, "before")[0]}))
+                                         {**held, "segment": _mutated(rng, again, "before")[0]}))
         bare = Drawn(rng, after=after, reads=reads, withheld=False)
         bare_coins = {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"}
         rejected.append(audit_of(bare, drawn_from(bare.read), bare_coins))
