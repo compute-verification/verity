@@ -698,6 +698,7 @@ class Rule:
     gate: bool = False             # a change is marked only once the suites it reruns pass on it merged onto `main`: a real
                                    # failure in a suite that reads the files of each change blamed for it never reaches the queue
     overlap: bool = False          # a Lean batch's check starts with its records run and stands when the run ends
+    locks_whole: bool = False      # only the suites that read the whole tree read a lock record (as declared, most do)
     back: bool = False             # under `first`, a failure naming several changes reverts each, back to the queue's check;
                                    # else the change at fault stays on `main` as long as it really stayed in the queue
     pin_all: bool = True           # every Lean change the queue may take is pinned; else one is while a real candidate held it
@@ -989,7 +990,12 @@ class Replay:
                     self._check(c)
                     took = self.rng.choice(self.tr.records) if self.tr.records else 3600.0
                     self._use(self.t, self.t + took, RECORDS_PLACES)
-                    c.pass_at = max(c.pass_at, self.t + took)
+                    # the records commit changes its packages' lock records: what reads them is checked again on it
+                    reads = self.tr.suites.whole if self.rule.locks_whole else \
+                        self.tr.suites.touched(frozenset().union(*(ch.files for ch in c.changes if ch.lean)))
+                    again = self.tr.suites.wall(reads)
+                    self._use(self.t + took, self.t + took + again, SHARDS)
+                    c.pass_at = max(c.pass_at, self.t + took + again)
                 elif self.rule.beside and any(ch.lean for ch in c.changes):
                     c.records_at = self.t + (self.rng.choice(self.tr.records) if self.tr.records else 3600.0)
                     self.side.append(c)
@@ -1386,7 +1392,8 @@ RULES = (
     Rule("5c. Row 5 with four checks of `main` at once", "the same", beside=True, keep=True, keep_all=True, first="plain", after=4),
     Rule("5d. Row 5, and a change is marked only once the suites it reruns pass on it merged onto `main`", "the same",
          beside=True, keep=True, keep_all=True, first="plain", gate=True),
-    Rule("5e. Rows 5 and 6f together", "those rows'", beside=True, keep=True, keep_all=True, first="plain", overlap=True),
+    Rule("5e. Rows 5 and 6j together", "those rows'", beside=True, keep=True, keep_all=True, first="plain", overlap=True,
+         locks_whole=True),
     Rule("6a. Row 2, and a change of prose only (every file Markdown) lands on its mark and verdict", "a revert",
          beside=True, keep=True, keep_all=True, first="prose"),
     Rule("6b. Row 2, and a change of tests only (every file under a tests directory) lands on its mark and verdict", "a revert",
@@ -1396,13 +1403,16 @@ RULES = (
     Rule("6d. Row 2 with batch 16", "none", beside=True, keep=True, keep_all=True, batch=16),
     Rule("6e. Row 2 with batch 64, depth 3", "none", beside=True, keep=True, keep_all=True, batch=64, depth=3),
     Rule("6f. Row 2, and a Lean batch's check starts with its records run, not after it, and the next Lean batch is built "
-         "above it without waiting", "the check is run again when the records commit changes more than the records (not "
-         "priced: here it never does)", beside=True, keep=True, keep_all=True, overlap=True),
+         "above it without waiting", "none: once the records are committed, the suites that read the batch's lock records "
+         "are checked again on them", beside=True, keep=True, keep_all=True, overlap=True),
     Rule("6g. Row 2, and a change is marked only once the suites it reruns pass on it merged onto `main`",
          "none: the run before the mark is the cost", beside=True, keep=True, keep_all=True, gate=True),
-    Rule("6h. Rows 6c, 6f and 6g together: `main` never red", "those rows'", beside=True, keep=True, keep_all=True,
-         period=600.0, overlap=True, gate=True),
-    Rule("6i. Rows 6c and 6f together", "those rows'", beside=True, keep=True, keep_all=True, period=600.0, overlap=True),
+    Rule("6j. Row 6f, if only the suites that read the whole tree read a lock record", "the same", beside=True, keep=True,
+         keep_all=True, overlap=True, locks_whole=True),
+    Rule("6h. Rows 6c, 6j and 6g together: `main` never red", "those rows'", beside=True, keep=True, keep_all=True,
+         period=600.0, overlap=True, locks_whole=True, gate=True),
+    Rule("6i. Rows 6c and 6j together", "those rows'", beside=True, keep=True, keep_all=True, period=600.0, overlap=True,
+         locks_whole=True),
     Rule("7. Row 1b, and with nothing in check the plain batch is built before a Lean batch", "none", plain_first=True,
          pin_all=False),
 )
@@ -1425,7 +1435,9 @@ ASSUMPTIONS = (
     "side, one in its records run or its check; where a Lean batch's check starts with its records run, each Lean batch in "
     "the chain has its own records run, several at once.",
     "A kept pass: a candidate rebuilt without some changes ends when its check would have, or after a check of the suites "
-    "that read the removed files, whichever is later.  A union's check never fails.",
+    "that read the removed files, whichever is later.  A union's check never fails.  A Lean batch checked from its build on ends "
+    "when its check does, or after its records run and then a check of the suites its Lean changes rerun (they read its lock records), whichever is "
+    "later.",
     "Landing before the check: a check of `main` covers what landed since the one before it and fails only for a change at "
     "fault among those; a red is found when that check fails.",
 )
