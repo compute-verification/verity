@@ -60,7 +60,7 @@ def committed(w: CS.Binding, got: list, out: Path, of: dict, module: str) -> CS.
 def commit(out: Path) -> CS.Binding:
     """The fixture's window of one row under ``<ROOT>/rank0`` committed into ``out`` (`committed`)."""
     s = TS.Served()
-    w = a5.rated(replace(TS.window(s, TS.BITS, TS.BITS_CAPS), run=f"{ROOT}/rank0"), RULE)
+    w = a5.rated(replace(TS.window(s, TS.BITS, TS.BITS_PER_CHUNK), run=f"{ROOT}/rank0"), RULE)
     return committed(w, TS.read(s, w.members, TS.BITS), out, OF, "a5_sparse_mla.py")
 
 

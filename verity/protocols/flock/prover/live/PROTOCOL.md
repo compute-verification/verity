@@ -865,7 +865,16 @@ auditor's sample (or `null`) is answered `ok N` and the `Hello`, or `refused WHY
 
 The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,
 `firewall::LeanSession`) per verifier address and table count, on the same statement arguments, listens on loopback and
-holds the auditor's connection for every session the prover opens to it. No byte the prover sends reaches the auditor:
+holds the auditor's connection for every session the prover opens to it. A `prove --stream` process, whose sessions are of
+different statements, starts its tap before its first sample, as `prove` does, and one loop for each session instead, on
+the circuit and the tables the session's line names: the loop starts at the session's turn, once the session before it
+has its verdict, and ends once its own verdict is emitted, so the stream proves one session at a time (it refuses
+`FC_VERIFY_AHEAD` above 0, and no session's front runs ahead). The statement's name and the `Hello` flags are the
+process's for every session, so one stream serves sessions of one partition and one program. The stream itself does not
+check that: a line has no field for them. A session whose circuit binds another partition or program is refused by its own
+Lean loop when its statement is set up (`HmRow.checkPartition`). A line the reader refuses ends the process at once, under
+the session then being proved, which gets no verdict. A session left without a verdict is failed and never proved again,
+since a second session for it has new coins. No byte the prover sends reaches the auditor:
 every frame that leaves is the loop's own encoding of what it decided (`Session.roundFrame`, `Session.commitFrame`,
 `Session.State.wire`). `Register` and `Finish` leave as their tags, a `Link` as zeros at the session's link points, an
 `Open` as its rep stream's at the stream's domain, a `Round` as the schedule's stream and count around the frame's release

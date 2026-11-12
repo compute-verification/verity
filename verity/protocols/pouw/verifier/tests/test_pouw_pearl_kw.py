@@ -13,7 +13,7 @@ import pytest
 
 import pearl_vectors as PV
 from verity.commitments.crypto.blake3 import blake3
-from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
+from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
@@ -46,14 +46,14 @@ def test_hash_labelled_and_noise_lines():
 
 
 def test_bf16_ops():
-    def safe(f, *a):
-        try:
-            return f(*a)
-        except P.Reject:
-            return None
-
+    """Each BF16 operation is the pinned word, and where Pearl's own refuses (a pinned null) it raises `Reject`."""
     for (a, b, c), want in zip(IN["bf16_ops"], OUT["bf16_ops"]):
-        assert [safe(P.bf16_mul, a, b), safe(P.bf16_div, a, b), safe(P.bf16_fma, a, b, c)] == want
+        for f, args, word in zip((P.bf16_mul, P.bf16_div, P.bf16_fma), ((a, b), (a, b), (a, b, c)), want, strict=True):
+            if word is None:
+                with pytest.raises(P.Reject):
+                    f(*args)
+            else:
+                assert f(*args) == word, (f.__name__, args)
 
 
 def test_b200_matmul_and_partials():

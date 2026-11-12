@@ -43,7 +43,7 @@ from verity.protocols.certifier.verifier import compile_slice as CS
 from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v6 as V6
 from verity_vllm.engine import pool_row as PR
 
-#: the coins each window's memory check is drawn under
+#: the seed each window's memory check flips its coins from
 COIN_SEED = 0
 #: the replay's scheduler, under the name the advice decoder's module gives it where it has it
 SCHED = getattr(RP, "_Sched", None) or RP.Scheduler
@@ -130,7 +130,8 @@ def cut_replay(engine: RP.Engine, requests: Sequence[RP.RequestIO], admit: Seque
 
 def statics(inp: CPV.Input, windows: Sequence[Sequence[int]]) -> dict[str, int]:
     """`pool_row_trace.statics`' class for the trace, its arrival slots K the most members a window has, CU the most
-    blocks a request's tokens fill, holders to the engine's running cap and stream and M run widths no window passes."""
+    blocks a request's tokens fill, holders to the most requests the engine runs and stream and M run widths no window
+    passes."""
     e = inp.engine
     cu = max(-(-len(r.tokens) // e.block_size) for r in inp.requests)
     st = {**PRT.statics(inp), "K": max(map(len, windows)), "CU": cu, "R": e.max_num_seqs, "NS": 1 << 32, "NM": 1 << 32}
