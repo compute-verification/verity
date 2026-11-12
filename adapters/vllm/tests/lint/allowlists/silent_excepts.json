@@ -2,8 +2,8 @@
   "rule": "Recorded outcomes (in check/ and commit/, a caught exception is recorded, never dropped)",
   "entries": [
     {"file": "verity_vllm/check/commit_rules.py", "kind": "silent-except", "symbol": "_int", "detail": "except (TypeError, ValueError): return default"},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_extra_norm_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_moe_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
+    {"file": "verity_vllm/check/fold_sources.py", "kind": "silent-except", "symbol": "_extra_norm_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
+    {"file": "verity_vllm/check/fold_sources.py", "kind": "silent-except", "symbol": "_moe_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
     {"file": "verity_vllm/check/match_oracle.py", "kind": "silent-except", "symbol": "MatchOracle._view_bytes_range", "detail": "except (KeyError, TypeError, ValueError): return None"},
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._end_step", "detail": "except OSError: pass"},
