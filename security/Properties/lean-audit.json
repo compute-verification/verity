@@ -275,7 +275,7 @@
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ProofSoundAt": {
-   "owner": "@soundness",
+   "owner": "@compute-accounting",
    "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
