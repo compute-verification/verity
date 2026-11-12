@@ -1,7 +1,7 @@
 module
 
 public import Properties.Spot.Rate
-public import Proofs.Properties.Verity.Sampled.Record.Reg
+public import Proofs.Properties.Spot.DesignText
 public import Proofs.Flock.SpotFlock.Jeq
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -33,7 +33,6 @@ import all Init.Data.Repr
 
 open Lean (Json)
 open Spot
-open Verity.Sampled.Record (split1_colon split1_slash digits_repr toNat!_repr not_mem_repr parseDesign_count)
 
 namespace Properties.Spot.SecurityProofs
 
