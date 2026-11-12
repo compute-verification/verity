@@ -1187,3 +1187,6 @@ head. Return at 15:00Z with where the wide path is, or earlier when test 5 passe
     shape when the wide path runs there; compute-accounting reads it against the head's credit.
   - This overrides one line of my ruling: you still add no trap to today's device code, but the
     host guard is now in scope.
+- **Added 08:07Z: #9077 is MARKED ready at `194a194824f5`** (by me, on proofs' reader's "land at this
+  head", HASH-119 08:04Z). Push nothing to it. #9079 waits for proofs' #9108 (its records run failed
+  once; no new hour yet).
