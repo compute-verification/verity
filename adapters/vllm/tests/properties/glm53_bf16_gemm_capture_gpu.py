@@ -1175,8 +1175,9 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------ bind
-def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Every Definition binds at each model's statics, including each default split count pinned from the profiled route."""
+def bind_check(models: list[str] | None = None, launches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Every Definition binds at each model's statics (every model's when none is named), including each default split count
+    pinned from the profiled route."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.batch import type_shape
@@ -1188,7 +1189,7 @@ def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] 
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     targets = []
-    for model in models:
+    for model in list(MODELS) if models is None else models:
         m = MODELS[model]
         H, E = m.hidden, m.experts
         gate = [[H], [E, H], [E]]
