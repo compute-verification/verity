@@ -105554,3 +105554,38 @@ Mailbox read at `0b285b5c90` (your 22:22Z). **I can pause now.**
 - PR 1's last 8 suites `r20261112-215441-6715`: holds a slot, running. PR 2's quick tier `r20261112-221328-8e84`: in line on cpu-10, 3 ahead at 22:25Z.
 
 **Not established:** as above; and nothing is proved.
+
+## GATHER, Thu 12 Nov 22:29Z: the second try's branch is `cursor/proofs-gather-second-try-5a28` at `bdf9fd1086283f147234059462f6c6c6cc77637a`; `4978` is cancelled, no session of it had begun
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `bdf9fd1086283f147234059462f6c6c6cc77637a`.** [run: `git worktree add -b`, `git push`, 22:27Z] It is made from Friday's tree's head and is equal to it for now; #9176, #9212, the stand-in serve's `logits` port and the driver's links go on it next, and I give each new head in an entry. Friday's tree, `cursor/proofs-gather-served-select-b88b`, is untouched by it and stays the first try's. [run: `research cancel r20261112-201421-4978 --on vy-nebius-cpu-8`, 22:26Z] `4978` is cancelled and its 128.8 GB is free: it was not near its end, since no session of it had begun.
+
+**Tags.** [run] a command of mine, with the time I read it; [read] a file or record, named; [relayed] another's word; [derived] my inference from the tagged facts beside it; [guess] judgement only. Times are `date -u`'s.
+
+### What `4978` had reached when I cancelled it
+
+[run: `research fetch --all`, its `resources.jsonl` read as JSON, and `research pods ssh vy-nebius-cpu-8 -- ls` of its scratch directory, names, sizes and times only, 22:25Z; kept as `served-select/4978/scratch-at-cancel.txt`] It was this tree at `f461ac0edeb2`: V = 154,880, 4 spans of 256 output tokens, 2 spans sampled, so 512 units a template.
+
+| Stage | From | To | What it wrote |
+|---|---|---|---|
+| waiting for a slot | 20:14:50Z | 20:34:08Z | |
+| builds | 20:34:08Z | 20:40:41Z | |
+| the stand-in serve, 1,024 tokens | 20:40:41Z | 21:39:21Z | 58 min 40 s; the stand-in's evaluator, not on Friday's path |
+| `first` | 21:39:23Z | 21:43:24Z | 4 min 1 s; sampled spans 2 and 3 |
+| `second`: the interior of the two sampled spans | 21:43:27Z | 21:48:34Z | 5 min 7 s; 190 MB, the 20 members' units and the window |
+| `second`: the challenger's session | 21:46:53Z | 21:50:25Z | |
+| `second`: the 20 members' circuit files | 21:50:25Z | 22:25:29Z | 35 min 4 s, 95 to 120 s each, one after another; 128 MB each, 2.4 GB in all |
+| `second`: the audit | 22:25:31Z | cancelled 22:26Z | its registration and program written; the first member's directory just made |
+
+- **Sessions done: none** [run: same]. The audit had begun 30 seconds before I read it, so there are no sessions' seconds to give. [derived] After it came the audit's own staging, the 20 sessions and Lean's verifier, which took 35 minutes in `c30d` at 4 units a template; so it was not within 20 minutes of ending.
+- **The job's peak memory** [run: `resources.jsonl`, 1,270 samples]: 9.9 GiB summed over its processes' resident memory (at 21:50Z) and 6.9 GiB by proportional share (in `first`); 5.7 GiB and flat from 21:51Z to the end. It never came near the 128.8 GB it reserved, because the stage that uses memory, the sessions, had not begun.
+- **What it does show for Friday** [derived]: `first` takes 4 minutes whether 12 tokens were served or 1,024; the interior of 512 sampled tokens takes 5 minutes and 190 MB; and writing the 20 circuit files took 35 minutes on cpu-8 where `c30d` on cpu-7 spent about 11 minutes on everything outside its staging, sessions and Lean's verifier. That last difference is the machine or its load, not the sample: the circuits are the same 20 at the same V. What m = 33 and 34 cost a session it does not show; `b876` (m = 31 and 32) is now the only run that will.
+
+### Three other things since my 21:54Z entry
+
+- **`d5f8313e35` held too** [run: `research fetch r20261112-215813-c5d4 --all --on vy-nebius-cpu-12`, 22:28Z]. `c5d4`, a twin of `0aa9` that I put in cpu-12's line at 21:58Z, exited 0 at 22:09:56Z: all seven of `expect`'s checks true, each of the three verdicts 20 of 20, round 2 no code, the outcome refused by `two-stage-form` alone, `accepted: true`, `record: {"failed": []}`, `held: true`, first-stage sample spans 1 and 3. [run: `research cancel`, 22:28Z] `0aa9` is cancelled as you said; it never had a slot.
+- **One more run of mine is out** [run: `research run`, 21:59Z]: `r20261112-215935-8cac`, the head at V = 154,880, 6 spans of 4 output tokens, `--k 3`, so 6 units proved a session where every other run proves 2. It measures what a larger sample costs, for the largest sample that ends inside Fri 14:00Z to 19:00Z. It is on cpu-12 (96 GB, 5 ahead at 22:28Z).
+- **The serve's branch moved four commits** [run: `git log cc0cef0cccc4..origin/cursor/vllm-select20-5b1e`, 22:26Z], to `3c8714c64b82`: two tests of a class committing its ids beside history tables, a `--tables` rehearsal in `two_stage_small.py`, and its test. None is the `logits` port. I merge it into Friday's tree and rehearse, as agreed, after the second try's branch has its merges; the first try's head then moves from `bdf9fd1086` and I say so.
+
+### Runs
+
+[run: `research fetch`, 22:27Z to 22:28Z] Waiting: `5326` (the head under a stop rule, cpu-12, 3 ahead), `b876` (Friday's shape, cpu-12, 4 ahead), `8cac` (cpu-12, 5 ahead), `9e10` (the toy, cpu-10, 8 ahead), `5640` (the class of whole instances at `d5f8313e35`, cpu-10, next for memory). Done: `c5d4`, `7ad8`. Cancelled: `4978`, `0aa9`. [relayed: your item 2] I send nothing to vy-nebius-2 until you say a try has passed on it, and plan nothing on cpu-12 after 07:00Z.
