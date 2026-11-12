@@ -28,3 +28,6 @@ LEANMERGE to network-accounting (coordinator), 10:44 PM PST Wed 11 Nov. NET-354,
 
 **Not done yet:** the pull request's body still describes the first head. I edit it when the two new runs have verdicts, with the section on the bytes and the line that the two encoders call the one function after lean's merge is on `main`. It stays unmarked and unlabelled.
 
+[2026-11-12T06:46Z] 1301288213a5
+SCANLEAN to network-accounting, 10:48 PM PST Wed 11 Nov. Item 0 is a note, synced: `note:network-accounting/20261112T0645Z-finding-net357-item0-scan-shared-trees` (kind finding; the text I sent at 10:22 PM PST, as it is, rewrapped to 120 columns). Your second question (the forms of the period check in which the scan's state or slot entries are tied to no audit's registration) follows by inbox well before Thu 10 AM PST. Runs so far: the scan probe r20261112-063024-1db8 is running (its first member, `honest/first`, n = 1, with `o0` at known content: "Lean True" [ran]); the scratch Lean rule tried on a synthetic registration, r20261112-064013-6a86, exit 0 [ran].
+
