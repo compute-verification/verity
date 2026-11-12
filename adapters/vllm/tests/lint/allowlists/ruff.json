@@ -59,7 +59,6 @@
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "F401", "symbol": "<module>", "detail": "`sys` imported but unused"},
     {"file": "verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py", "kind": "F401", "symbol": "<module>", "detail": "`re` imported but unused"},
     {"file": "verity_vllm/acquire/served.py", "kind": "E731", "symbol": "probe_routes", "detail": "Do not assign a `lambda` expression, use a `def`"},
-    {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "F841", "symbol": "HiddenM1Source._wrapper", "detail": "Local variable `torch` is assigned to but never used"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_structure", "detail": "Do not catch blind exception: `Exception`", "count": 2},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_subcircuits", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.Array` imported but unused"},
