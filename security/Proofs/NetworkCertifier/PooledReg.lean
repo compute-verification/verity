@@ -86,19 +86,19 @@ openings give that they pass under each statement's roots and that every registe
 phase's layout fits, and its record is complete over its statement's steps, because its statement is registered as the
 period's. Each `e i` is not negative, since it bounds an error that is not. -/
 theorem pooledLeakRegistered : Guarantees.PooledLeakRegistered := by
-  intro Coin _ _ _ A H D hA hb hS Lk K S lay k reg Dj m kV Tp Sec _ _ sw Pw ρ op Zs x Pv hk ops obs had hops q hq0
-    hq1 hrate e he hfit hcert Fmax z hz
+  intro Coin _ _ _ A H D hA hb hS Lk K S lay k reg Dj m kV Tp Sec _ _ sw Pw ρ op x Pv hk ops obs had hops q hq0 hq1
+    hrate e he hfit hcert Fmax z
   have he0 : ∀ i, 0 ≤ e i := fun i =>
-    le_trans' (he z hz (fun _ => (Classical.arbitrary Tp, fun _ => default)) i)
+    le_trans' (he z (fun _ => (Classical.arbitrary Tp, fun _ => default)) i)
       (add_nonneg (Compiled.εregX_nonneg H _ _ _) (Claims.Pr_nonneg _))
-  refine pooled_of_event hS lay k reg Dj sw Pw ρ op Zs x Pv hk ops obs
+  refine pooled_of_event hS lay k reg Dj sw Pw ρ op Set.univ x Pv hk ops obs
     (fun z ω i => PhaseRegistered D lay k reg sw Pw ρ x ops z ω i ∧ RecordComplete k Dj sw obs z ω i) had hq0 hq1
-    hrate he0
-    (fun z hz ω i hsc =>
+    (fun z _ => hrate z) he0
+    (fun z _ ω i hsc =>
       (Compiled.ksRegR_of_sessionKS (hb (x z ω i)) (hS (x z ω i))
         (Claims.SamplingGeneric.sessionKSOf Coin A (D (x z ω i)) H hA (hS (x z ω i))) (ops z ω i) hsc
-        (fun s hs => (hops z hz ω i s hs).1) Tp (Pv z ω i)).trans (he z hz ω i))
-    (fun z hz ω i s hs hacc hR => ?_) Fmax z hz
+        (fun s hs => (hops z ω i s hs).1) Tp (Pv z ω i)).trans (he z ω i))
+    (fun z _ ω i s hs hacc hR => ?_) Fmax z (Set.mem_univ z)
   obtain ⟨⟨s', hs', hsame, hPw, hval⟩, hcov, hlen, hj⟩ := hR
   have hss : s' = s := Option.some.inj (hs'.symm.trans hs)
   rw [hss] at hsame hPw hval
@@ -109,7 +109,7 @@ theorem pooledLeakRegistered : Guarantees.PooledLeakRegistered := by
   have hcov' : Covered (k s) (obs z ω i) := by
     rw [hks]
     exact hcov
-  exact ⟨hsame, hPw, hfit', hcert z hz ω i s hs hacc, hcov', hlen.trans hks.symm, hj,
-    fun g hg => ⟨(hops z hz ω i s hs).2 g hg, hval g hg⟩⟩
+  exact ⟨hsame, hPw, hfit', hcert z ω i s hs hacc, hcov', hlen.trans hks.symm, hj,
+    fun g hg => ⟨(hops z ω i s hs).2 g hg, hval g hg⟩⟩
 
 end NetTiming

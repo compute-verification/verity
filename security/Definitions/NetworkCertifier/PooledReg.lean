@@ -126,15 +126,15 @@ def PhasesAdaptive (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m �
     (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → Pv z ω i = Pv z ω' i) ∧
     ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → ops z ω i = ops z ω' i
 
-/-- **`e i` bounds execution phase `i`'s error**: at every secret of `Zs` and every history, the committed form's
+/-- **`e i` bounds execution phase `i`'s error**: at every secret and every history, the committed form's
 error at the trace read at the statement (`Compiled.εregX`) plus the registered openings' binding term (`BopsX`'s
 probability), both at the statement's verifier, is at most `e i`. -/
-def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A) (Zs : Set Sec)
+def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A)
     (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) (e : Fin m → ℝ) :
     Prop :=
-  ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) +
+  ∀ z ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) +
     (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i
 
 /-- **Execution phase `i` is registered as the period's**, at the secret `z` and the period's coins `ω`: its

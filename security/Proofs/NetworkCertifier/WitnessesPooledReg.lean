@@ -107,7 +107,7 @@ theorem PooledLeakRegistered_honest :
       PhasesAdaptive x₂ P₂ ops₂ ∧
       (∀ s, (twoL Bool).parse [] = some s → RegOpens shaD (twoL Bool).commit s {1} certOps) ∧
       (∀ s Pt, (twoL Bool).parse [] = some s → (twoL Bool).partition s = some Pt → RateAt s Pt 1) ∧
-      PhaseErrors shaD D₂ Set.univ x₂ P₂ ops₂ e₂ ∧ (twoLay).Fits twoStmt.prog 1 ∧
+      PhaseErrors shaD D₂ x₂ P₂ ops₂ e₂ ∧ (twoLay).Fits twoStmt.prog 1 ∧
       (∀ s, (twoL Bool).parse [] = some s →
         CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) ∧
       ∀ (ω : Ω₂) (i : Fin 1), phaseAcc shaD D₂ x₂ P₂ (fun _ _ _ => le_rfl) () i ω (ω i) ∧
@@ -117,7 +117,7 @@ theorem PooledLeakRegistered_honest :
   obtain ⟨hA, hb, hS, -, hacc⟩ := twoSessions_meets (Coin := Bool) shaD
   refine ⟨hA, hb, hS, fun _ _ _ => le_rfl, ⟨fun _ _ _ _ _ => rfl, fun _ _ _ _ _ => rfl, fun _ _ _ _ _ => rfl⟩,
     fun s hs => ⟨fun o ho => ?_, fun g hg => ⟨⟨1, true, []⟩, by simp [certOps], (Finset.mem_singleton.1 hg).symm⟩⟩,
-    fun s Pt hs hPt => ?_, fun _ _ _ _ => le_rfl, twoLay_fits, fun s hs => ?_,
+    fun s Pt hs hPt => ?_, fun _ _ _ => le_rfl, twoLay_fits, fun s hs => ?_,
     fun ω i => ⟨(hacc _).2, twoPhase_registered ω i, twoPhase_record ω i⟩⟩
   · simp only [certOps, List.mem_cons, List.not_mem_nil, or_false] at ho
     rcases ho with rfl | rfl <;> rfl
@@ -138,9 +138,9 @@ example (h : Guarantees.PooledLeakRegistered) :
   obtain ⟨hA, hb, hS, -, had, hops, hrate, he, hfit, hcert, hev⟩ := PooledLeakRegistered_honest
   refine le_trans (Claims.Pr_mono fun ω hω => ?_)
     (h shaD D₂ hA (fun _ => hb) (fun _ => hS) (fun _ => twoLay) (fun _ => 1) (fun _ => {1}) 1 (fun _ => twoStmt)
-      (fun _ => twoPart) (fun _ _ => true) (fun _ _ _ _ => [true]) Set.univ x₂ P₂ (fun _ _ _ => le_rfl) ops₂ obs₂ had
-      (fun _ _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl (fun _ _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he
-      (fun _ => hfit) (fun _ _ _ _ s hs _ => hcert s hs) 1 () (Set.mem_univ _))
+      (fun _ => twoPart) (fun _ _ => true) (fun _ _ _ _ => [true]) x₂ P₂ (fun _ _ _ => le_rfl) ops₂ obs₂ had
+      (fun _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl (fun _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he
+      (fun _ => hfit) (fun _ _ _ s hs _ => hcert s hs) 1 ())
   exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
 
 /-! The instance the bound fails at: one step's record over one egress link that holds no frame, jitter class `0`,
