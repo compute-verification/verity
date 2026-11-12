@@ -6,8 +6,9 @@ commit shares: a cancelled duplicate's EXIT trap there can remove `PKG/.lake/pac
 source's objects and so costs one checkout (about a second for the repository), detached at the source root's HEAD; on a machine
 that must be the commit the run was shipped for.  The clone lives outside the run dir, so custody never reads it:
 <root>/scratch/<run id>/tree beside src/ on a machine, a temporary directory locally.  The runner removes it once the workload has
-exited, however it ended; on a machine, one it could not remove goes when the next clone is made there (`sweep`).  A source root that is not a git checkout's top level (a tree the archive stream shipped has no .git)
-is refused, never guessed at.
+exited, however it ended; on a machine, one it could not remove, or was killed before removing, goes when the next clone is made
+there (`sweep`) or at the node's next eviction pass (`store.leftovers.evict_clones`), once its run is over (`not_over`).  A source
+root that is not a git checkout's top level (a tree the archive stream shipped has no .git) is refused, never guessed at.
 """
 from __future__ import annotations
 
@@ -116,16 +117,16 @@ def home(runs_root: Path, run_id: str, *, machine: bool) -> Path:
 
 
 def sweep(runs_root: Path, scratch: Path) -> None:
-    """Remove each scratch/<run id> whose run is over (`_over`): a runner that could not remove its clone, or was killed before it
-    did, leaves it on the machine's disk, and nothing else ever removes it.  A live run's clone is never touched.  Each removal,
-    and each failure, is one line on stderr."""
+    """Remove each scratch/<run id> whose run is over (`not_over`): a runner that could not remove its clone, or was killed before
+    it did, leaves it on the machine's disk, and only this and a node's eviction pass (`store.leftovers.evict_clones`) remove it.
+    A live run's clone is never touched.  Each removal, and each failure, is one line on stderr."""
     try:
         entries = list(os.scandir(scratch))
     except OSError:
         return
     for e in entries:
         try:
-            if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not _over(runs_root / e.name):
+            if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not_over(runs_root / e.name) is not None:
                 continue
         except OSError:
             continue
@@ -135,25 +136,41 @@ def sweep(runs_root: Path, scratch: Path) -> None:
               file=sys.stderr)
 
 
-def _over(run_dir: Path) -> bool:
-    """The run is over: its runner (launch.json runner_pid) has exited, and it refused (refused.json) or its status.json is final
-    with nothing left in the workload's process group (its pgid).  Anything unreadable, or a process that may still be the run's
-    (a recycled pid included), is not over."""
+def not_over(run_dir: Path, proc: str | os.PathLike[str] = "/proc") -> str | None:
+    """Why the run may still use its clone, or None when it is over: its runner (launch.json runner_pid) has exited, and it
+    refused (refused.json), or nothing is left in the workload's process group (status.json's pgid) and either its status.json
+    is final or the process that status records is gone.  The last is a runner killed with its workload, or lost with the
+    machine: it never writes a final status, and its clone would otherwise stay for good.  Gone is decided from the recorded
+    pid and its start time (`procs.gone`): the pid has no /proc entry, or names a process started at another time.  A pid alone
+    never says its process exited, so a status with no start time under a live pid, anything unreadable, or a process that may
+    still be the run's (a recycled pid included) is not over.  The reason starts with its kind: `2:` a process runs,
+    `unknown:` a record is missing."""
     from .runs import TERMINAL
-    from .telemetry.procs import live_group, running
+    from .telemetry.procs import gone, live_group, running
 
     try:
-        if running(int(json.loads((run_dir / "launch.json").read_text())["runner_pid"])):
-            return False
+        runner = int(json.loads((run_dir / "launch.json").read_text())["runner_pid"])
     except (OSError, ValueError, KeyError, TypeError):
-        return False
+        return "unknown: no launch.json names its runner"
+    if running(runner, proc):
+        return f"2: its runner (pid {runner}) runs"
     if (run_dir / "refused.json").exists():
-        return True
+        return None
     try:
         st = json.loads((run_dir / "status.json").read_text())
-        return st["state"] in TERMINAL and not live_group(int(st["pgid"]))
+        state, pgid = st["state"], int(st["pgid"])
     except (OSError, ValueError, KeyError, TypeError):
-        return False
+        return "unknown: no status.json names its workload's process group"
+    transitions = st["transitions"] if isinstance(st.get("transitions"), list) else []
+    if left := live_group(pgid, proc):
+        return f"2: {len(left)} process(es) of its workload's group {pgid} run"
+    if state in TERMINAL:
+        return None
+    rec = next((t for t in reversed(transitions) if isinstance(t, dict) and t.get("pid") is not None), st)
+    if gone(pid := rec.get("pid"), rec.get("starttime_ticks"), proc):
+        return None
+    return f"2: its status is {state} and " + ("it records no process" if pid is None else
+                                               f"the process it records (pid {pid}) is not known to have exited")
 
 
 @functools.lru_cache(maxsize=1)

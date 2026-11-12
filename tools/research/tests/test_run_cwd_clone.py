@@ -337,7 +337,9 @@ def test_a_machine_clone_first_removes_what_finished_runs_left_in_scratch_and_ne
     (victim / "keep").mkdir(parents=True)
     runs = {"done": (exited.pid, {"state": "done", "pgid": exited.pid}), "refused": (exited.pid, None),
             "runner": (os.getpid(), {"state": "done", "pgid": exited.pid}), "group": (exited.pid, {"state": "failed", "pgid": member.pid}),
-            "running": (exited.pid, {"state": "running", "pgid": exited.pid}), "link": (exited.pid, {"state": "done", "pgid": exited.pid})}
+            "running": (exited.pid, {"state": "running", "pgid": exited.pid}), "link": (exited.pid, {"state": "done", "pgid": exited.pid}),
+            # a runner killed with its workload wrote no final status: the process its status records is gone, so the run is over
+            "lost": (exited.pid, {"state": "running", "pgid": exited.pid, "pid": exited.pid, "starttime_ticks": 1})}
     try:
         for rid, (runner, status) in runs.items():
             (root / "runs" / rid).mkdir(parents=True)
@@ -355,6 +357,7 @@ def test_a_machine_clone_first_removes_what_finished_runs_left_in_scratch_and_ne
     assert (victim / "keep").is_dir()
     err = capsys.readouterr().err
     assert f"removed {root / 'scratch' / 'done'}, the clone of finished run done" in err and "finished run refused" in err
+    assert "finished run lost" in err
 
 
 def test_on_a_machine_the_clone_is_the_shipped_commit_beside_src_and_the_shared_tree_is_untouched(tmp_path, repo, machine, outlivers,
