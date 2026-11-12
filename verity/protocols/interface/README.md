@@ -147,7 +147,8 @@ the Site (`Account.Part.capacity`), at each reading the registration can be read
 A flow has one row for the period; an amount at a moment has one for each accepted answer and one for the period. An
 error of 1 or more prints "no bound at this period", and what no accepted answer covers is "not audited: charged at
 capacity". `Account.Example.account` is the example protocol's value; every other protocol's is written with that
-protocol.
+protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
+`Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
 
 ## Properties
 
