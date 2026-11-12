@@ -74,7 +74,7 @@ count `K`, the gates the checked proof blocks need number at most the always-che
 theorem code_card_biUnion_le_count (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
     {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
-      (src (r (order h x).second)) = .ok (draw, n)) {K : ℕ} (hK : firstK h.reg.first = some K)
+      (stageSrc (stageCoins h x r)) = .ok (draw, n)) {K : ℕ} (hK : firstK h.reg.first = some K)
     (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
     (((code h).checked x r).toFinset.biUnion needs).card ≤
       ∑ v ∈ (Finset.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter

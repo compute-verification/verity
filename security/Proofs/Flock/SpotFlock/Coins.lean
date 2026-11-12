@@ -61,10 +61,6 @@ statement. -/
 theorem callsUniform : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte := fun _ E =>
   FlockSoundness.ZK.prCoin_congr_equiv coinEquiv E
 
-/-- Byte `i` of a stage's `R` coins, coin by coin: byte `i % L` of coin `i / L`. -/
-def stageByte {R : ℕ} (cs : Fin R → FlockDeploy.Coin) (i : Fin (R * L)) : Fin 256 :=
-  coinByte (cs (finProdFinEquiv.symm i).1) (finProdFinEquiv.symm i).2
-
 /-- **A stage's bytes and its coins, one for one** (`stageByte`): each coin's bytes (`coinEquiv`), laid end to end. -/
 noncomputable def stageEquiv (R : ℕ) : (Fin R → FlockDeploy.Coin) ≃ (Fin 1 → Fin (R * L) → Fin 256) :=
   ((Equiv.piCongrRight fun _ : Fin R => coinEquiv.trans (Equiv.funUnique (Fin 1) (Fin L → Fin 256))).trans
