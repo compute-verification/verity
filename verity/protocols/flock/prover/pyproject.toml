@@ -97,8 +97,8 @@ inputs = [
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/protocols/flock/verifier/Flock/Zk.lean", "verity/protocols/flock/verifier/Flock/RecVStar.lean",
-    # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
+    # test_lean_rec_cap_guards.py builds Flock.Test.RecCap where VERITY_FLOCK_SLOW asks (the nightly cold check, by name), which
+    # neither the Lean check nor any other check does; its imports reach it through the flock-verify artifact
     "verity/protocols/flock/verifier/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/flock/prover/live/PROTOCOL.md",

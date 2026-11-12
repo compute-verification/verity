@@ -12,4 +12,7 @@ REGISTRY = Registry(
     __file__, (),
     S("VERITY_FLOCK_STRUCT_TYPES", flag, False, WHERE, "which tests run: 1 stages each served type that reads a table, "
                                                        "flat and structural (test_tmpl_statement; about ten minutes, 40 GB)"),
+    S("VERITY_FLOCK_SLOW", flag, False, WHERE, "which tests run: 1 runs the tests that take minutes each, which skip otherwise "
+                                               "and so stay out of `check` (the Lean verifier's `#guard`s at the deployed "
+                                               "shapes; about 20 minutes)"),
 )
