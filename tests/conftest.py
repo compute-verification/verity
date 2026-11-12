@@ -1,8 +1,8 @@
 """The repository suite's bookkeeping tests (`BOOKKEEPING`) report what they find as a `Bookkeeping` warning and pass:
 the tree stays landable, and a later PR fixes the finding.  Bookkeeping is what can be put right after
 landing without any claim being false meanwhile: lane names in code text, retired terms, dead doc paths, naming conventions,
-stale allowlist entries, Markdown over its cap, a Lean file with no module docstring, past its length or with a heartbeat
-override that says no reason.  A scan's own tests (that it reads each form) stay plain tests and fail, and
+stale allowlist entries, Markdown over its cap, an ignore line over a tracked file, a Lean file with no module docstring,
+past its length or with a heartbeat override that says no reason.  A scan's own tests (that it reads each form) stay plain tests and fail, and
 so does a bookkeeping test that raises anything but a failed check (its scan broke), and anything that can make a claim false
 or can't be undone (a secret, a blob over its cap, an import across the boundaries): ruff's errors among them, which
 `test_repo_ruff.py`'s `test_no_ruff_error` keeps failing, and a new `maxHeartbeats 0`, which `test_lean_bar.py`'s
@@ -43,7 +43,8 @@ BOOKKEEPING = {
     "tests/test_shell_verifier_env.py": ("test_allowed_names_only_scripts_that_keep_the_default",),
     "tests/test_repository.py": ("test_tracked_markdown_is_maintained_documentation", "test_no_report_genre_basenames",
                                  "test_oversize_skills_only_shrink", "test_markdown_size_caps",
-                                 "test_allowlists_name_tracked_files", "test_owned_paths_exist", "test_every_path_has_owner"),
+                                 "test_allowlists_name_tracked_files", "test_owned_paths_exist", "test_every_path_has_owner",
+                                 "test_no_ignore_line_covers_a_tracked_file"),
 }
 
 

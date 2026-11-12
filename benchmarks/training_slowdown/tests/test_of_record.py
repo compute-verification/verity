@@ -5,7 +5,7 @@ import math
 import pytest
 from synthetic import SHAPE, tiny_registry, write_config
 
-from training_slowdown import as_math, config, library, of_record, starts
+from training_slowdown import as_math, codecs, config, library, of_record, starts
 
 CTX, D = SHAPE["ctx"], SHAPE["d_model"]
 X, S, G = [1, CTX, D], [1, CTX, 1], [D]
@@ -215,6 +215,23 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
         "scaledquant, 1,200 B after 2 steps; the record's quant, 1,000 B after 30")
 
 
+def test_sparse_ternary_codes_are_a_records_quant_and_their_packing_is_named():
+    """The codes a run trained are deltas in codes with a scale a group, a record's `quant`, so a plan of the
+    library's sparse ternary codec is of that kind, alone or beside a rounding of the trained delta. The codec packs
+    them another way than the records' program did, which the E line says beside the two sizes; every codec the
+    tables name is one the library has."""
+    kind = codecs.SparseTernary(0.5, 0).kind
+    assert of_record.e_kind([kind], "quant") == [] == of_record.e_kind(sorted(["scaledquant", kind]), "quant")
+    assert of_record.e_kind([kind], "full") == [
+        "E's kind: the config's plan is sparseternary, the record's format full (identity)"]
+    assert of_record.e_sizes([kind], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
+        "sparseternary, 1,200 B after 2 steps; the record's quant, 1,000 B after 30; expected to differ in size by "
+        "the packing too: sparseternary is one xz stream a matrix at one setting, where the record's program kept "
+        "the smallest of several settings' streams of all its matrices")
+    library_kinds = {c.kind for c in vars(codecs).values() if isinstance(c, type) and issubclass(c, codecs.Codec)}
+    assert {k for kinds in of_record.E_KINDS.values() for k in kinds} | set(of_record.E_PACKING) <= library_kinds
+
+
 def losses(n: int) -> tuple[tuple, tuple]:
     """The loss's products `n` times a step: as a program arranges it that means each row, then as a route does."""
     return ((("bwd", "grad", "div", [[1, CTX]], n, n * CTX), ("fwd", "theta", "div", [[]], n, n),
@@ -287,13 +304,16 @@ def test_the_routes_average_of_its_trained_tensors_is_expected_for_a_programs_of
         assert got["expected"] == [] and any("_foreach_lerp_" in d for d in got["differences"])
 
 
-def test_32_bits_for_the_records_16_is_expected_and_any_other_use_differs():
+def test_a_use_of_an_updated_weight_is_the_records_by_its_bits_too():
+    """A route casts to bf16 on a CPU as on CUDA, so a use that reads its weight at other bits than the record's is
+    a difference, 32 for the record's 16 as much as 16 for its 32."""
     record = [(D * D, D, 16), (D * D, D, 16), (D, 0, 32)]
     same = log(*BOTH)
+    got = of_record.compare(step(same, record), step(same, record), SHAPE)
+    assert got["differences"] == got["expected"] == [] and got["uses"] == 3
     got = of_record.compare(step(same, [(D * D, D, 32), (D * D, D, 32), (D, 0, 32)]), step(same, record), SHAPE)
-    assert got["differences"] == [] and got["uses"] == 3
-    assert [e["rule"] for e in got["expected"]] == ["width"] and got["expected"][0]["what"].startswith("2 of the uses")
-    assert of_record.compare(step(same, record), step(same, record), SHAPE)["expected"] == []
+    assert got["expected"] == [] and got["uses"] == 0 and got["differences"] == [
+        "updated, the weights' bits: the config's (256, 16) at 32 x2; the record's (256, 16) at 16 x2"]
     got = of_record.compare(step(same, [(D * D, D, 16), (D * D, D, 16), (D, 0, 16)]), step(same, record), SHAPE)
     assert got["expected"] == [] and got["differences"] == [
         "updated, the weights' bits: the config's (16, 0) at 16 x1; the record's (16, 0) at 32 x1"]
@@ -365,8 +385,9 @@ def count(*more, updated=((D * D, D),), macs=None) -> dict:
 
 def as_cuda(struct: dict, rows: int) -> dict:
     """A CPU step's structure as the records hold CUDA's step: attention one fused kernel a call at torch's formula
-    (`fused`), the norm one fused kernel counted at its updated gains alone, the weights read at 16 bits. The step's
-    every attention backward asks for q's, k's and v's, or this refuses to write it."""
+    (`fused`), the norm one fused kernel counted at its updated gains alone, each weight read at the bits this step
+    reads it at (a route casts on a CPU as on CUDA). The step's every attention backward asks for q's, k's and v's,
+    or this refuses to write it."""
     x, s = [rows, CTX, D], [rows, CTX, 1]
     kernel = {(*e[:3], json.dumps(e[3])): e[4] for e in attention(rows, calls=1)}
     calls, out = {}, []
@@ -382,8 +403,7 @@ def as_cuda(struct: dict, rows: int) -> dict:
         out.append([phase, kind, op, json.dumps(at), count, macs])
     forward, backward = ({n for (phase, *_), n in calls.items() if phase == which} for which in ("fwd", "bwd"))
     assert len(calls) == len(kernel) and len(forward) == len(backward) == 1  # every row of the kernel's, of one count
-    return {"updated": [[*u[:4], 16] for u in struct["updated"]],
-            "log": out + fused(rows, forward.pop(), backward.pop())}
+    return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
 
 
 def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None):
@@ -405,7 +425,7 @@ def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = N
 def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp_path, capsys):
     """A made-up run of record: the config's own counted step at two rows a forward, written as the records hold CUDA's
     step, attention one fused row a kernel and no trace. With the ask stated, the command writes that kernel as the
-    counter does, divides the rows out, counts the config at one row a forward and names the two expected differences.
+    counter does, divides the rows out, counts the config at one row a forward and names the expected difference.
     With no ask stated the entry is refused, naming the key; with a wrong one, a call for q's alone where the step's
     every call asks for all three, it differs. A config that trains another set, beside a record of another start and
     length, differs and exits 1. It counts and traces a route's steps, so slow; what the rules' own tests can't show is
@@ -429,9 +449,8 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     argv = ["--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main([str(path), *argv, "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 2 expected differences\n")
-    for rule in ("width: ", "norm: "):
-        assert f"  expected  {rule}" in out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 1 expected difference\n")
+    assert "  expected  norm: " in out and out.count("  expected  ") == 1
     assert "  attention the record holds a fused kernel as one row: compared as the ops the math kernel" in out
     assert "`none` at [4, 1024, 8], of_record.toml's word (`partial`) and not the record's" in out
     assert "2 forwards of one row" in out and "2 of its 3 steps have, 2 rows a forward divided out" in out

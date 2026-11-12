@@ -78,15 +78,16 @@ value the verifier supplies is not its yet.
 
 Usage::
 
-    two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K --challenger local \\
-        --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] [--proof-deadline S] \\
-        [--stop RULE [--stop-design rate:NUM/DEN]]
+    two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K|COUNTS.json \\
+        --challenger local --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] \\
+        [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
         [--unlinked] [--stop RULE]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
-files); FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
+files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
+FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
 registration registers as values, ``[[name, rows a sampled span, leaf type], ...]`` (`interior_rows.span_values`);
 REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
@@ -134,6 +135,8 @@ ORDER_REFUSED = "cross-stream-order"
 STOP_REFUSED = "stop-stage"
 #: the salts' key of a reference statement (`references`): its rows are stand-ins, so its salts hide nothing
 REFERENCE_KEY = hashlib.sha512(b"verity-vllm/two-stage/reference/v0").digest()
+#: a design's counts as a record (`benchmarks/spot_figures`' ``total_cost.py counts``): its ``k`` is the rule's
+COUNTS = "spot-two-stage-counts/v1"
 #: seconds on the challenger's clock from the sample to the proofs: the replay, the interior registration and the second
 #: stage's proofs all come inside it
 PROOF_DEADLINE_S = 86400.0
@@ -148,14 +151,15 @@ def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
 @dataclass(frozen=True)
 class Rule:
     """A class's two-stage rule: the first stage's law over its spans (``replay``, a rate law ``rate:NUM/DEN[:T]``), the
-    proof blocks ``k`` the second stage samples of each check template in each sampled span, the interior values the replay
-    side commits, the proof deadline, and the replay block's parameters the interior registration registers as values
+    proof blocks ``k`` the second stage samples of each check template in each sampled span (one count for every
+    template, or ``{descriptor id: k_t}``, `service.TwoStage.k`), the interior values the replay side commits, the
+    proof deadline, and the replay block's parameters the interior registration registers as values
     (``span_values``: as round 2 names them, each ``(name, rows a sampled span, leaf type)``, the stream's per-span
     values, `interior_rows.span_values`: those the verifier supplies and those the replay gives). A fixed count
     ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
 
     replay: str
-    k: int
+    k: int | Mapping[str, int]
     interior: tuple[tuple[str, str], ...]
     proof_deadline: float = PROOF_DEADLINE_S
     span_values: tuple[tuple[str, int, tuple[int, ...]], ...] = ()
@@ -166,18 +170,61 @@ class Rule:
                              f"not {self.replay!r}")
 
     def to_json(self) -> dict[str, Any]:
-        return {"replay": self.replay, "k": self.k, "interior": [list(v) for v in self.interior],
+        return {"replay": self.replay, "k": dict(self.k) if isinstance(self.k, Mapping) else self.k,
+                "interior": [list(v) for v in self.interior],
                 "proof_deadline": self.proof_deadline,
                 "span_values": [[n, rows, list(leaf)] for n, rows, leaf in self.span_values]}
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> Rule:
-        return cls(d["replay"], int(d["k"]), tuple((str(n), str(s)) for n, s in d["interior"]), float(d["proof_deadline"]),
+        k = d["k"]
+        return cls(d["replay"], {str(t): int(n) for t, n in k.items()} if isinstance(k, Mapping) else int(k),
+                   tuple((str(n), str(s)) for n, s in d["interior"]), float(d["proof_deadline"]),
                    _span_values(d["span_values"]))
 
 
 def _span_values(values: Any) -> tuple[tuple[str, int, tuple[int, ...]], ...]:
     return tuple((str(n), int(rows), tuple(int(x) for x in leaf)) for n, rows, leaf in values)
+
+
+def counts(text: str) -> int | dict[str, int]:
+    """``--k``'s value: a whole number, the count of every check template, or a JSON file of each one's,
+    ``{descriptor id: k_t}`` (`service.TwoStage.k`), alone or as the ``k`` of a counts record (`COUNTS`). ValueError
+    for a file that names a template twice or gives one a count that is no whole number of at least one."""
+    if text.isdecimal():
+        return int(text)
+
+    def once(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        twice = sorted({n for i, (n, _) in enumerate(pairs) if any(n == m for m, _ in pairs[:i])})
+        if twice:
+            raise ValueError(f"{text} names {', '.join(twice)} twice: a counts file names each of the check's "
+                             "templates once")
+        return dict(pairs)
+    doc = json.loads(Path(text).read_text(), object_pairs_hook=once)
+    if isinstance(doc, dict) and "schema" in doc:
+        if doc["schema"] != COUNTS:
+            raise ValueError(f"{text} is a record of schema {doc['schema']!r}, not a {COUNTS} one")
+        doc = doc.get("k")
+    if not (isinstance(doc, dict) and doc):
+        raise ValueError(f"{text} is no counts file: {{descriptor id: k_t}}, a count for each of the check's templates")
+    bad = {t: k for t, k in doc.items() if not (type(k) is int and k >= 1)}
+    if bad:
+        raise ValueError(f"{text}: a template's count is a whole number of at least one, not {bad}")
+    return doc
+
+
+def counts_refused(k: int | Mapping[str, int], templates: Sequence[SpecializedDefinition]) -> str | None:
+    """Why counts by template aren't a check's of ``templates``, which they name each once (`service.second_counts`
+    refuses them): the templates they miss and the names that are none of its templates. None for one count, which is
+    every template's."""
+    if not isinstance(k, Mapping):
+        return None
+    ids = [P.template_id(t) for t in templates]
+    missing, other = [t for t in ids if t not in k], [t for t in k if t not in ids]
+    if not (missing or other):
+        return None
+    return "the counts name each of the check's templates once: " + "; ".join(
+        [f"missing {t}" for t in missing] + [f"{t} is no template of the check" for t in other])
 
 
 def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
@@ -465,7 +512,8 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
     return Design(key, members, cells, links, tuple(wires), returns)
 
 
-def rule_of(layout: BR.Layout, replay: str, k: int, proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
+def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
+            proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
     """The class's rule from its `design`: the interior values the replay side commits (its templates' ports as an
     interior window lays them out) and the replay block's parameters its interior registers as values
     (`interior_rows.span_values`, sized by the class: its rows a sampled span). A class round 2 derives no wires from
@@ -705,17 +753,19 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
               record: Mapping[str, Any], proofs: Mapping[str, Any]) -> dict[str, Any]:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
     replay block ``replay`` defines under descriptor id ``key`` makes (`second_stage.replay_links`, at the boundary
-    record's ports, and `second_stage.replay_wires`, as the stream derives them) and their rows
-    (`second_stage.replay_rows`), the reads the audit record's verdicts of record report, what they name of each
-    session they accepted (`second_stage.verified_of`), and each template's reference header and registered reads the
-    params ``proofs`` give."""
+    record's ports, and `second_stage.replay_wires`, as the stream derives them), their rows
+    (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
+    the audit record's verdicts of record report, what they name of each session they accepted
+    (`second_stage.verified_of`), and each template's reference header and registered reads the params ``proofs``
+    give."""
     verdicts = record.get("verdicts") or {}
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
                  SS.replay_links(replay, key, brec), A.session_registered(verdicts),
                  verified=SS.verified_of(verdicts),
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
-                 wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key))
+                 wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
+                 returns=SS.replay_returns(replay, key, brec))
     return SS.check(True, own, stmts).to_json()
 
 
@@ -1024,7 +1074,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--boundary", nargs="+", required=True, help="each class's directory (w<window>/p<P>-o<O>/), one window's")
     f.add_argument("--check", required=True, help="the check template's descriptor id (serving_templates.template)")
     f.add_argument("--replay", required=True, help="the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T")
-    f.add_argument("--k", type=int, required=True, help="proof blocks the second stage samples of each check template in each sampled span")
+    f.add_argument("--k", required=True, help="proof blocks the second stage samples of each check template in each sampled span: "
+                                              "a whole number, or a JSON file of each template's, {descriptor id: k_t}, "
+                                              "which names each template of every class's check once")
     f.add_argument("--interior", help="the interior values, a JSON list of [name, schema]; without it each class's "
                                       "rule is its replay block's (rule_of), and --span-values is not taken")
     f.add_argument("--advice", help="the window's advice registration, whose binding the records' windows name")
@@ -1079,12 +1131,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")
     window = {"binding": json.loads(Path(a.advice).read_text())["binding"]} if a.advice else None
-    check = template_fn(a.check)
+    check, stop = template_fn(a.check), _stop(a.stop)
+    try:
+        a.k = counts(a.k)
+    except (ValueError, OSError) as e:
+        ap.error(f"--k: {e}")
+    for d, pub in zip(a.boundary, pubs, strict=True) if isinstance(a.k, Mapping) else ():
+        try:
+            why = counts_refused(a.k, BR.layout_of(pub, check, stop).templates)
+        except ValueError as e:  # no class of this check and stop rule: the counts name no template of it
+            why = str(e)
+        if why:
+            ap.error(f"--k: class {Path(d).name}: {why}")
     rule = None if a.interior is None else Rule(
         a.replay, a.k, tuple((str(n), str(s)) for n, s in json.loads(Path(a.interior).read_text())),
         a.proof_deadline, _span_values(json.loads(Path(a.span_values).read_text())) if a.span_values else ())
     out = Path(a.out)
-    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, _stop(a.stop)), strict=True):
+    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, stop), strict=True):
         dest = out / Path(d).name
         dest.mkdir(parents=True, exist_ok=True)
         (dest / STAGE1).write_text(json.dumps(s, indent=1) + "\n")

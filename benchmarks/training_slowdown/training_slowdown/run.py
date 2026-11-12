@@ -23,7 +23,9 @@ served those lists them (`windows`). A checkpoint is taken after
 every 5% of the steps, uncounted: the output model's bits per byte on the job's split (`training_slowdown.evaluate`)
 and its E, the weights that differ from θ encoded by the route's plan (rebuilt from its spec, so only the codec
 library's code runs). The output model a checkpoint scores is the one E rebuilds from θ: the trained weights under a
-plan that keeps them whole, the model the kept bits give under one that keeps less. Tokens computed outside a step, or a run with no step,
+plan that keeps them whole, the model the kept bits give under one that keeps less. A weight the route hands over as
+its trained parts (the route contract) is packed by the plan's codec as they are, and is scored as that codec decodes
+it on θ. Tokens computed outside a step, or a run with no step,
 make the run invalid. c is `C_PER_FORWARD_TOKEN` times the start's forward MACs per token (`block_c`), measured on
 the registered model.
 
@@ -386,7 +388,9 @@ class Harness:
         return out
 
     def output(self, fn) -> None:
-        """`fn()` returns the output model's state dict (default: the registered model's)."""
+        """`fn()` returns the output model's state dict (default: the registered model's). A weight of θ's may be
+        given as the tuple of the parts the run trained of it, which the plan's codec packs into E as they are
+        (`Codec.encode_trained`): the output model's weight is then what E rebuilds, whatever the run holds."""
         self.output_fn = fn
 
     def encode_with(self, plan: Plan) -> None:
@@ -416,9 +420,9 @@ class Harness:
 
     # -- the harness's side
 
-    def _state(self) -> dict[str, torch.Tensor]:
+    def _state(self) -> dict[str, torch.Tensor | tuple]:
         state = self.output_fn() if self.output_fn else self.model.state_dict()
-        return {k: v.detach() for k, v in state.items()}
+        return {k: tuple(p.detach() for p in v) if isinstance(v, tuple) else v.detach() for k, v in state.items()}
 
     def _checkpoint(self, step: int) -> None:
         """The checkpoint after step `step`: of the registered model's state, or of what the route's `output` makes
@@ -428,55 +432,72 @@ class Harness:
             trained = None if self.output_fn is None or self.model is None else self.trained()["model"]
         self.checkpoint_state(step, state, {"source": "output"}, trained)
 
-    def _encode(self, step: int, state: dict[str, torch.Tensor], digests: dict[str, str]) -> tuple[dict, bytes | None, dict]:
-        """E of `state`: its weights that differ from θ (a weight θ lacks against zeros), by `encoding`, with its size,
-        digest and rebuild MACs; E's bytes; and the weights E rebuilds to other bits than `state`'s, as it rebuilds
-        them (none under a plan that keeps the weights whole)."""
+    def _encode(self, step: int, state: dict[str, torch.Tensor | tuple], digests: dict[str, str]) -> tuple[dict, bytes | None, dict]:
+        """E of `state`: its weights that differ from θ (a weight θ lacks against zeros) and each weight handed over
+        as its trained parts (`digests` has none of it), by `encoding`, with its size, digest and rebuild MACs; E's
+        bytes; and the weights E rebuilds to other bits than `state`'s, as it rebuilds them: none under a plan that
+        keeps the weights whole, and every weight handed over as parts."""
         if self.theta_digests is None:
             self.theta_digests = {k: digest(v) for k, v in self.theta.items()}
-        changed = sorted(k for k in state if digests[k] != self.theta_digests.get(k))
+        parts = [k for k in state if k not in digests]
+        changed = sorted(k for k in state if k in parts or digests[k] != self.theta_digests.get(k))
+        if lacks := [k for k in parts if k not in self.theta]:
+            self.problems.append(f"checkpoint {step}: the output hands over the trained parts of {lacks[:3]}, which θ "
+                                 f"lacks: parts are of a weight of the start; hand a new weight over whole")
+            return {"e_bytes": None}, None, {}
         bases = {k: self.theta[k] if k in self.theta else torch.zeros(state[k].shape, dtype=state[k].dtype)
                  for k in changed}
         try:
             enc = self.encoding.encode({k: state[k] for k in changed}, bases)
-        except Unencodable as e:
+            rebuilt = self.encoding.decode(enc, bases)
+        except (Unencodable, ValueError) as e:
             self.problems.append(f"checkpoint {step}: the route's plan has no E of its output ({e})")
             return {"e_bytes": None}, None, {}
-        rebuilt = self.encoding.decode(enc, bases)
         stored = all(isinstance(c, Identity) for _, c in self.encoding.rules)
         return ({"e_bytes": len(enc), "e_sha256": hashlib.sha256(enc).hexdigest(), "format": "full" if stored else "codecs",
-                 "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}, enc,
-                {k: rebuilt[k] for k in changed if digest(rebuilt[k]) != digests[k]})
+                 "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}
+                | ({"parts": len(parts)} if parts else {}), enc,
+                {k: rebuilt[k] for k in changed if k in parts or digest(rebuilt[k]) != digests[k]})
 
-    def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None,
+    def checkpoint_state(self, step: int, state: dict[str, torch.Tensor | tuple], extra: dict | None = None,
                          trained: dict[str, torch.Tensor] | None = None) -> dict:
         """Encode `state`, the model after step `step` (inclusive), and score the output model, uncounted. The
         output model is what E rebuilds from θ: `state` itself under a plan that keeps the weights whole, and under
         one that keeps less (a quantized delta) the model its bits give, which is then what is hashed, scored and
         kept. `trained_sha256` is the digest of the model the route trains, which a job continues from (`Kept.load`),
         wherever that is not the output model: of `trained`, the registered model's state where `state` is a
-        route's `output` of it, else of `state` under a plan that keeps less. Of the planned steps' last checkpoint
-        the job keeps E under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and with `keep_weights` the
-        whole output under `checkpoints/` (`path`); of any other, nothing."""
+        route's `output` of it, else of `state` under a plan that keeps less. A weight `state` gives as a tuple is
+        the parts the run trained of it: E packs them as they are, the output model's weight is what E rebuilds, and
+        the checkpoint says how many weights came so (`parts`); its `trained_sha256` is then `trained`'s alone, since
+        `state` holds no weight for those parts to digest. An output with parts and no E of them is not a model: its checkpoint
+        has no digest and no score, and the run is invalid. Of the planned steps' last checkpoint the job keeps E
+        under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and with `keep_weights` the whole output under
+        `checkpoints/` (`path`); of any other, nothing."""
         with self.uncounted(), torch.no_grad():
-            digests = {k: digest(v) for k, v in state.items()}
+            digests = {k: digest(v) for k, v in state.items() if not isinstance(v, tuple)}
+            parts = len(state) - len(digests)
             fields, enc = {}, None
             if self.encoding is not None:
                 fields, enc, rebuilt = self._encode(step, state, digests)
                 if rebuilt:
-                    fields["trained_sha256"] = state_sha256(digests)
+                    if not parts:
+                        fields["trained_sha256"] = state_sha256(digests)
                     state = state | rebuilt
                     digests = digests | {k: digest(v) for k, v in rebuilt.items()}
+            elif parts:
+                self.problems.append(f"checkpoint {step}: the output hands over trained parts and the run has no plan "
+                                     f"to pack them with (te.encode_with)")
             if trained is not None:
                 fields["trained_sha256"] = theta_sha256(trained)
-            out_sha256 = state_sha256(digests)
-            score = self.evaluator(state, out_sha256) if self.evaluator else None
+            whole = len(digests) == len(state)
+            out_sha256 = state_sha256(digests) if whole else None
+            score = self.evaluator(state, out_sha256) if self.evaluator and whole else None
             cp = {"step": step, "macs": self.macs_so_far(), "bpb": score["bpb"] if score else None, "score": score,
                   "elapsed_s": self.elapsed(), "output_sha256": out_sha256} | (extra or {}) | fields
             if self.n_steps and step == max(self.cp_steps, default=-1):
                 if enc is not None and len(enc) < E_KEEP_BYTES:
                     cp["e_path"] = self._keep(f"e/step{step:07d}.bin", lambda path: path.write_bytes(enc))
-                if self.keep_weights:
+                if self.keep_weights and whole:
                     cp["path"] = self._keep(f"checkpoints/step{step:07d}.pt",
                                             lambda path: torch.save({k: v.cpu() for k, v in state.items()}, path))
             self.checkpoints.append(cp)

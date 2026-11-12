@@ -16,8 +16,8 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   θ as in every later step. Both sides are stated per row a forward (`per_row`): the record's rows a forward are
   divided out of its token shapes and their MACs, and the config is stepped at one row a forward, its batch over the
   record's rows a forward, so a step has the config's own forwards. `updated` must be equal as its `(MACs a token,
-  upstream)` pairs, and `log` by phase, kind, op, shapes, count and MACs. The start and the steps must be the
-  record's too.
+  upstream)` pairs and in the bits each use reads its weight at (a route casts to bf16 on a CPU as on CUDA), and
+  `log` by phase, kind, op, shapes, count and MACs. The start and the steps must be the record's too.
 - **Attention's kernel.** The counter writes a fused attention kernel as the ops the math kernel computes attention
   by (`flops.Counter._attention`), so a config's step holds those. A record that holds the kernel as one row is
   rewritten the same way before it is compared (`as_math.rewrite`, on its modal structure). The row does not say
@@ -33,11 +33,11 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   the config takes on the start's θ and data whenever that step is one fixed graph. The capture decides that: the
   step is traced (`run.trace_step`), and an entry whose trace the capture refuses, or whose step reads a value back
   that decides what it computes, is refused here. No route says of itself that it branches on values.
-- **Expected differences.** A route's CPU count differs from a program's CUDA record in ways that are the device's
-  (`width`, `norm`) and in ways that are the program's own arrangement of a computation the route
+- **Expected differences.** A route's CPU count differs from a program's CUDA record in a way that is the device's
+  (`norm`) and in ways that are the program's own arrangement of a computation the route
   takes too: the loss as the rows' means over the rows kept where a route means over the tokens (`loss`), and the
   average of the weights as one op over every tensor of the model where a route averages each tensor it trains
-  (`average`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`); the output names
+  (`average`). Each is named by a rule that fires only on its own exact case (`RULES`); the output names
   each one that fired with the MACs on both sides. Anything else is printed as a difference, and the command exits
   1: a route that steps AdamW otherwise than the record's program did, in torch's default step where the program
   asked for the fused kernel, differs, and its entry sets the route's dial for the kernel.
@@ -47,7 +47,7 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   of the differences. A named line that the record's step does not have over the config's as named is a difference.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
-  checkpoint's.
+  checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
 
 `--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted record (`DIR/ENTRY/run.json`).
 """
@@ -73,8 +73,13 @@ from .model import LM
 HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
-#: tensors whole, and their deltas in codes with a scale a group. A format may have several kinds
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant",)}
+#: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
+#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`). A format may have several kinds
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary")}
+#: a codec that packs the same encoding another way than the records' program did, so that its size is expected to
+#: differ from a record's by the packing alone: named in the entry's E line
+E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the record's program kept the smallest "
+                              "of several settings' streams of all its matrices"}
 #: how many of a config's steps are counted; the last is the one compared
 STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
@@ -185,29 +190,25 @@ def per_row(struct: dict, shape: dict) -> dict:
     return {"rows": r, "updated": sorted((u[0], u[1], u[4]) for u in struct["updated"]), "log": log}
 
 
-# -- the expected differences: each rule takes what it covers out of the two sides' unequal entries, `cfg` and `rec`,
-# given the start's `shape` and the record's program's arguments `args`
-
-
-def width(mine: list, theirs: list) -> tuple[dict | None, list[str]]:
-    """The uses of an updated weight, the config's beside the record's: the expected difference, if it fired, and the
-    differences. The `(MACs a token, upstream)` pairs must be equal. Expected: uses that read their weight at 32 bits
-    where the record's read it at 16, since a route casts to bf16 on CUDA alone."""
+def uses(mine: list, theirs: list) -> list[str]:
+    """The uses of an updated weight, the config's beside the record's: the differences. The `(MACs a token,
+    upstream)` pairs must be equal, and so must the bits each use reads its weight at: a route casts to bf16 on a CPU
+    as on CUDA."""
     a, b = (collections.Counter(u[:2] for u in side) for side in (mine, theirs))
     if a != b:
-        return None, [f"updated, the {who}'s step only: " + ", ".join(
+        return [f"updated, the {who}'s step only: " + ", ".join(
             f"({p:,} MACs a token, {u:,} upstream) x{n}" for (p, u), n in sorted(only.items()))
             for who, only in (("config", a - b), ("record", b - a)) if only]
     mine, theirs = collections.Counter(mine), collections.Counter(theirs)
-    wide, narrow = mine - theirs, theirs - mine
-    if not wide:
-        return None, []
-    if {u[2] for u in wide} == {32} and {u[2] for u in narrow} == {16}:
-        return {"rule": "width", "what": f"{sum(wide.values())} of the uses read their weight at 32 bits where the "
-                                         f"record's read it at 16: a route casts to bf16 on CUDA alone"}, []
-    return None, ["updated, the weights' bits: " + "; ".join(
+    if mine == theirs:
+        return []
+    return ["updated, the weights' bits: " + "; ".join(
         f"the {who}'s " + ", ".join(f"({p:,}, {u:,}) at {bits} x{n}" for (p, u, bits), n in sorted(only.items()))
-        for who, only in (("config", wide), ("record", narrow)))]
+        for who, only in (("config", mine - theirs), ("record", theirs - mine)))]
+
+
+# -- the expected differences: each rule takes what it covers out of the two sides' unequal entries, `cfg` and `rec`,
+# given the start's `shape` and the record's program's arguments `args`
 
 
 def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
@@ -381,17 +382,16 @@ def named(lines: list[dict], cfg: dict, rec: dict) -> tuple[list[dict], list[str
 
 def compare(mine: dict, theirs: dict, shape: dict, lines=(), args=()) -> dict:
     """The config's step (`mine`) beside the record's (`theirs`), each `per_row`'s: how many `uses` of an updated
-    weight and `products` of the log are equal, the `expected` differences (`width`, `RULES`: each with what it
+    weight and `products` of the log are equal, the `expected` differences (`RULES`: each with what it
     covers and the MACs on each side), the `named` lines of the record's own program (`lines`: the entry's
     `record_only`) and the `differences`, everything else. `args` are the record's program's arguments, where the
     record keeps them."""
-    wide, differences = width(mine["updated"], theirs["updated"])
+    differences = uses(mine["updated"], theirs["updated"])
     cfg, rec = dict(mine["log"]), dict(theirs["log"])
     same = [k for k in cfg if rec.get(k) == cfg[k]]
     for k in same:
         del cfg[k], rec[k]
-    expected = [wide] if wide else []
-    expected += [found for rule in RULES if (found := rule(cfg, rec, shape, list(args)))]
+    expected = [found for rule in RULES if (found := rule(cfg, rec, shape, list(args)))]
     only, unnamed = named(lines, cfg, rec)
     differences += unnamed
     for k in sorted(set(cfg) | set(rec)):
@@ -502,9 +502,11 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
 
 def e_sizes(kinds: list[str], e_bytes: int, last: dict, steps: int) -> str:
     """An entry's E line: the plan's `kinds` and E's size after the counted steps beside the record's format and its
-    last checkpoint's size after its `steps`, which are not compared."""
+    last checkpoint's size after its `steps`, which are not compared, and each packing that differs (`E_PACKING`)."""
     return (f"{', '.join(kinds)}, {e_bytes:,} B after {STEPS} steps; the record's {last['format']}, "
-            f"{last['e_bytes']:,} B after {steps}")
+            f"{last['e_bytes']:,} B after {steps}"
+            + "".join(f"; expected to differ in size by the packing too: {k} is {E_PACKING[k]}"
+                      for k in kinds if k in E_PACKING))
 
 
 def e_kind(kinds: list[str], fmt: str) -> list[str]:

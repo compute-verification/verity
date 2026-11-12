@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import hashlib
 import json
@@ -15,7 +16,7 @@ from torch import nn
 
 from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
-from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
+from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
 from training_slowdown.evaluate import Evaluator
@@ -218,6 +219,60 @@ def test_each_checkpoint_carries_its_e_and_its_output_is_what_e_rebuilds(tmp_pat
     assert any("has no E of its output" in p for p in rec["invalid"])
 
 
+def test_a_weight_handed_over_as_its_trained_parts_is_what_the_plans_codec_rebuilds_from_them(tmp_path, theta):
+    """An output may give a weight of θ's as the parts the run trained of it. E is the plan's codec's packing of
+    those parts, and the output model's weight is what that codec decodes from E on θ: here codes the run's own
+    weight was never made from, so the model scored is E's, not the one the run holds. The checkpoint says how many
+    weights came as parts, and its `trained_sha256` is the digest of the model the run trains, which took no step
+    here and is θ. Parts with no E leave no model to score, and the run is invalid: parts of a weight θ lacks, parts
+    that are not of the weight's size, and parts with no plan."""
+    codes = SparseTernary.round(torch.randn(D, D, generator=torch.Generator().manual_seed(3)), 0.25)
+    scored, ternary = [], Plan([("w1.*", SparseTernary(0.25))])
+
+    def handing(parts, plan=ternary):
+        def train(te):
+            m = te.load(Small())
+            if plan:
+                te.encode_with(plan)
+            te.output(lambda: m.state_dict() | parts)
+            te.plan(1)
+            with te.step():
+                loss_of(m, batch(0)).backward()
+        return train
+
+    def run_one(name, *a):
+        te = run.Harness(theta, tmp_path / name, clock=lambda: 0.0, keep_weights=True,
+                         evaluator=lambda state, sha: scored.append((sha, dict(state))) or {"bpb": 1.0})
+        with te.counter:
+            handing(*a)(te)
+        return te.finish({})
+
+    rec = run_one("parts", {"w1.weight": codes})
+    (cp,) = rec["checkpoints"]
+    assert rec["invalid"] == [] and cp["trained_sha256"] == run.theta_sha256(theta) != cp["output_sha256"]
+    assert (cp["format"], cp["changed"], cp["parts"], cp["rebuild_macs"]) == ("codecs", 1, 1, 2 * D * D)
+    (sha, output), = scored
+    want = SparseTernary.apply(theta["w1.weight"], *codes)
+    assert torch.equal(output["w1.weight"], want) and not torch.equal(want, theta["w1.weight"])
+    assert torch.equal(output["emb"], theta["emb"]) and set(output) == set(theta)
+    assert sha == cp["output_sha256"] == run.theta_sha256(theta | {"w1.weight": want})
+    enc = (tmp_path / "parts" / cp["e_path"]).read_bytes()
+    assert len(enc) == cp["e_bytes"] and hashlib.sha256(enc).hexdigest() == cp["e_sha256"]
+    assert torch.equal(ternary.decode(enc, theta)["w1.weight"], want)
+    assert run.theta_sha256(torch.load(tmp_path / "parts" / cp["path"], weights_only=True)) == sha
+
+    small = SparseTernary.round(torch.ones(D), 0.25)
+    for name, a, why in (("lacks", ({"w2.weight": codes},), "which θ lacks"),
+                         ("size", ({"w1.weight": small},), f"for a weight of {D * D}"),
+                         ("whole", ({"w1.weight": codes}, Plan([("w1.*", Identity())])), "packs no trained parts"),
+                         ("planless", ({"w1.weight": codes}, None), "no plan to pack them")):
+        rec = run_one(name, *a)
+        (cp,) = rec["checkpoints"]
+        assert any(why in p for p in rec["invalid"]), (name, rec["invalid"])
+        assert cp["output_sha256"] is None and cp["bpb"] is None and "path" not in cp and "e_path" not in cp
+    assert len(scored) == 1
+
+
 def test_a_route_reaching_past_the_codecs_and_the_model_is_refused(tmp_path, monkeypatch):
     assert run.screen("from training_slowdown.codecs import Plan\nfrom training_slowdown import model\n") == []
     assert run.screen("from training_slowdown import flops\n")
@@ -315,21 +370,27 @@ def test_the_job_traces_its_routes_step(ran):
     assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
     for block in (tr, *tr["at"].values()):
         assert block["rows"] and all(set(r) == RAW for r in block["rows"])
-    # the three trained matrices of block 0's MLP: each one's forward product reads it, and their MACs a token add up
-    trained = [u for u in tr["updated"] if u[2:] == [u[2], tr["tokens"], 32]]
-    assert len(tr["updated"]) == len(trained) >= 3
-    priced = [products.priced(r) for r in tr["rows"]]
+    # the forward's ops that read the update, each over the step's tokens: block 0's MLP reads its three trained
+    # matrices in products at the 16 bits the route's autocast runs them in, on this CPU as on a GPU, and the norms
+    # above it, which autocast runs in fp32, read what it wrote at 32. Attention's products (`bmm`) are traced in
+    # fp32, as torch's math path computes them from upcast operands, and every other product in bf16
+    assert all(u[2:4] == [u[2], tr["tokens"]] for u in tr["updated"])
+    assert sorted({u[4] for u in tr["updated"]}) == [16, 32] and len([u for u in tr["updated"] if u[4] == 16]) >= 3
+    assert {(r["op"] == "bmm", tuple(r["dtypes"])) for r in tr["rows"]} == {
+        (False, ("bfloat16", "bfloat16")), (True, ("float32", "float32"))}
+    priced = [products.priced(r, tr["capture"]) for r in tr["rows"]]
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
     # the step's circuit, raw: the gradient's cut and a token group's partial are the trained matrices' dW at the
-    # accumulator's 32 bits, the carried state no token op reads AdamW's two moments, and a window's tokens are read
-    # at its inputs and its last target
+    # accumulator's 32 bits, the update the forward reads those matrices at the 16 bits autocast casts them to, the
+    # carried state no token op reads AdamW's two moments, and a window's tokens are read at its inputs and its last
+    # target
     weights = sum(p.numel() for p in config.route(cfg.route).build(cfg.start.shape, cfg.dials)[0].parameters()
                   if p.requires_grad)
     c = tr["circuit"]
     assert {*formalism.TRACED_STRUCTURE, "tau_ids", "tau_other_bits", "a_bits", "u_in", "u1_bits", "tail_share"} < set(c)
     assert not {"parts", "labels", "u", "trace", *formalism.READ_BACKS} & set(c)
-    assert c["grad_cut_bits"] == c["partial_cut_bits"] == c["u1_bits"] == 32 * weights > 0
+    assert c["grad_cut_bits"] == c["partial_cut_bits"] == 32 * weights > 0 and c["u1_bits"] == 16 * weights
     assert c["state_bits"] == 2 * 32 * weights and c["delta_grad_bits"] == 3 * 32 * weights
     assert (c["region"], c["tokens"], c["token_factor"], c["tau_ids"]) == (1, tr["tokens"], 1, 1025 / 1024)
     assert 0 < c["affected_share"] < c["sigma"] < 1
@@ -360,7 +421,7 @@ def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_tra
         if r["phase"] == "forward" and r["token_dims"] == ["m"]:
             d = r["dims"]
             add(traced, "updated" if r["affected"][1] else "theta", (r["op"], d["m"], d["k"], d["n"]), r["count"],
-                r["count"] * products.priced(r)["macs"])
+                r["count"] * products.priced(r, tr["capture"])["macs"])
     assert counted == traced and counted["updated"] and counted["theta"]
     assert step["by"]["fwd/updated"] == sum(macs for _, macs in counted["updated"].values())
     assert {row[1] for row in log if row[2] != "mm"} <= {"theta", "act"}
@@ -408,19 +469,32 @@ def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_p
     assert traced["circuit"]["gates"] > bare["circuit"]["gates"]
 
 
-@pytest.mark.parametrize("steps, width", [(3, 16), (5, 32)])
-def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps(tmp_path, steps, width):
-    """Muon casts its update to 16 bits on its way into a 32-bit weight. A run of three steps is traced at its
-    second, whose weight is θ plus that update: a block makes it from the update alone, so the operand is passed at
-    16 bits. A longer run is traced mid-run, where the weight the update is added to is the run's own: the operand is
-    passed at its 32 bits."""
+def in_float32(step):
+    """A route's `step` with its forward in float32: torch's autocast is a no-op while it runs."""
+    def stepped(*args):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(torch, "autocast", lambda *a, **k: contextlib.nullcontext())
+            return step(*args)
+
+    return stepped
+
+
+@pytest.mark.parametrize("steps, cast, widths", [(3, False, [32, 16]), (5, False, [32, 32]),
+                                                 (3, True, [16, 16]), (5, True, [16, 16])])
+def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps(tmp_path, steps, cast, widths):
+    """Muon casts its update to 16 bits on its way into a 32-bit weight. With the forward in float32 (the route's
+    autocast off), a run of three steps is traced at its second, whose weight is θ plus that update: a block makes
+    it from the update alone, so the operand is passed at 16 bits; a longer run is traced mid-run, where the weight
+    the update is added to is the run's own, and the operand is passed at its 32 bits. Under the route's bf16
+    autocast the forward reads every weight at 16 bits, so the operand is passed at 16 either way."""
     cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": steps, "batch": 2},
                                    dials={"trainable": "blocks.0.w_*", "lr": 1e-2, "opt": "muon"}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)
-    tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    stepped = SimpleNamespace(step=route.step if cast else in_float32(route.step))
+    tr = trace_step(cfg, stepped, *route.build(cfg.start.shape, cfg.dials), "cpu")
     read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
-    assert read and all(w == [32, width] for w in read)
+    assert read and all(w == widths for w in read)
 
 
 COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")

@@ -4,19 +4,28 @@
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
-- `writer(out).measurement(name, value, unit, ...)`: appends one measurement to `out/result.json`.
+- `writer(out).measurement(name, value, unit, ...)`: appends one measurement to the run's result: under a research run
+  (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
+  `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
+  `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
+  `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 
-**A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id` and `measurements`. Each
+**A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
+`validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
+directory: under a research run, the run's). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its 95% interval
 (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from
-(other measurements' names, run or `art:` ids) and the `host` stamp it was written under. The writer appends: `out` may be
-a run's own directory, where a benchmark that writes the run's validation writes it first, or its `$OUT`. A result holds
-one run's measurements and one a name, so a rerun writes a fresh directory.
+(other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with no value
+(`value` None) may say why (`why`, held only where given). The writer appends: every
+writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+A result holds one run's measurements, one a name, and one validation, so a rerun writes a fresh directory.
 
 **A measurement is a number, and its verdict is its target check.** Nothing under `benchmarks/` writes a verdict of record or
 a seal: a verdict of record is its protocol's verifier's, and a seal its Commit's. So the writer refuses a value that isn't
 a number, a verdict with no target, and a verdict in a verifier's or a seal's words (`OF_RECORD`); a target check says
-where the value stands against its target (``"within target"``).
+where the value stands against its target (``"within target"``). **A validation is the run's own gates**, never a
+protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, which is the
+whole guard, and its `detail` says in the gates' own words what passed or failed.
 
 Standard library and `verity_bench.settings` only, so a kernel's runner imports it without vLLM or torch.
 """
@@ -52,6 +61,12 @@ QUERY_TIMEOUT_S = 60
 #: verdict takes (the verb's and its noun's), which no measurement's verdict uses
 OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejects rejected rejecting rejection "
                       "pass passes passed passing fail fails failed failing failure seal seals sealed sealing".split())
+#: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
+#: result with no validation)
+VALIDATION_STATUSES = ("passed", "failed")
+#: the result's two lists of files relative to its directory, which `research` keeps with the run: the detailed records and
+#: what else is worth keeping
+FILES = ("measurement_files", "artifacts")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -208,6 +223,12 @@ def _target_check(verdict: Any, target: Any) -> str | None:
     return verdict
 
 
+def _inside(rel: Any) -> bool:
+    """Whether `rel` is a path relative to a result's directory and inside it, as a string."""
+
+    return isinstance(rel, str) and bool(rel) and not Path(rel).is_absolute() and ".." not in Path(rel).parts
+
+
 @contextlib.contextmanager
 def _locked(directory: Path) -> Iterator[None]:
     """One appender at a time in `directory`: two processes of a job each keep their measurement."""
@@ -222,25 +243,30 @@ def _locked(directory: Path) -> Iterator[None]:
 
 @dataclass(frozen=True)
 class Writer:
-    """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`."""
+    """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`. `out` is the
+    directory the result is in: under a research run the run's own, whatever `writer` was given."""
 
     out: Path
     run: str
     stamp: Mapping
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
-                    target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = ()) -> dict:
+                    target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
+                    why: str | None = None) -> dict:
         """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has no
-        finite value to give), its 95% `interval` (low, high), which the result holds as `ci95`, the key `paired` gives it
-        under, its `target`, the `verdict` of its check against that target, and the `inputs` it was computed from, with
-        this run, its commit and the host stamp. It refuses what isn't a measurement (a value that isn't a number, a
-        verdict with no target or in a verdict of record's or a seal's words), a name the result already holds, and a
-        result of another run."""
+        finite value to give, and then `why`, in words, where given), its 95% `interval` (low, high), which the result
+        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check against that target, and
+        the `inputs` it was computed from, with this run, its commit and the host stamp. It refuses what isn't a
+        measurement (a value that isn't a number, a verdict with no target or in a verdict of record's or a seal's words,
+        a `why` beside a value), a name the result already holds, and a result of another run."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
         if not isinstance(unit, str):
             raise ValueError(f"{name}'s unit is a string, not {unit!r}")
+        if why is not None and (value is not None or not isinstance(why, str) or not why.strip()):
+            raise ValueError(f"{name}'s why says in words why it has no value, beside a value of None, not {why!r} beside "
+                             f"{value!r}")
         inputs = [inputs] if isinstance(inputs, (str, bytes)) else list(inputs)
         if not all(isinstance(i, str) and i for i in inputs):
             raise ValueError(f"{name}'s inputs are the names of what it was computed from, each a string, not {inputs!r}")
@@ -256,18 +282,116 @@ class Writer:
                  "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
                  "target": None if target is None else _number("target", target),
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
-        self.out.mkdir(parents=True, exist_ok=True)
-        path = self.out / RESULT
-        with _locked(self.out):
-            doc = self._read(path)
+        if why is not None:
+            entry["why"] = why
+        with self._open() as (path, doc):
             if any(m.get("name") == name for m in doc["measurements"]):
                 raise ValueError(f"{path} already holds a measurement named {name}: a result holds one a name (a rerun writes "
                                  "a fresh directory)")
             doc["measurements"].append(entry)
+        return entry
+
+    def validation(self, status: str, checker: str, detail: str, evidence: Sequence[str] = ()) -> dict:
+        """Writes the run's validation into `out/result.json` and returns it: `status`, ``"passed"`` or ``"failed"``, whether
+        the run's own gates held; the `checker` that says so, by name; its `detail` in words; and the `evidence`, the files
+        it stands on, as paths relative to `out`, in a list. It refuses a second validation in one result, any other status,
+        a checker or a detail that isn't a string, evidence that isn't a list of relative paths inside `out`, and a result
+        of another run. The status is the whole guard against a protocol's security verdict, which is its verifier's to
+        write: a detail says what passed or failed in the gates' own words, and the writer takes any."""
+
+        if not isinstance(status, str) or status not in VALIDATION_STATUSES:
+            raise ValueError(f"a validation's status is {' or '.join(map(repr, VALIDATION_STATUSES))}, whether the run's own "
+                             f"gates held, not {status!r}: a verdict of record or a seal is never a run's validation, and "
+                             "nothing under benchmarks/ writes one")
+        for what, text in (("checker", checker), ("detail", detail)):
+            if not isinstance(text, str):
+                raise ValueError(f"a validation's {what} is a string, not {text!r}")
+        if not isinstance(evidence, (list, tuple)):
+            raise ValueError(f"a validation's evidence is a list of paths relative to {self.out}, not {evidence!r}")
+        for rel in evidence:
+            if not _inside(rel):
+                raise ValueError(f"a validation's evidence is a list of paths relative to {self.out} and inside it, each a "
+                                 f"string, not {rel!r}")
+        block = {"status": status, "checker": checker, "detail": detail, "evidence": list(evidence)}
+        with self._open() as (path, doc):
+            if doc.get("validation") is not None:
+                raise ValueError(f"{path} already holds a validation: a result holds one, the run's own (a rerun writes a "
+                                 "fresh directory)")
+            doc["validation"] = block
+        return block
+
+    def fingerprint(self, **fields: Any) -> dict:
+        """Adds `fields` to the result's `workload_fingerprint`, what actually ran (a script, its arguments, a mode), and
+        returns the fingerprint. It always holds `source_sha`, the commit `research run` shipped (`RESEARCH_SOURCE_SHA`;
+        None outside one), which the writer reads, so it refuses a field of that name, a field the fingerprint already
+        holds and a value that isn't JSON. Like `measurement_file` and `artifact`, it writes all three of the keys."""
+
+        if "source_sha" in fields:
+            raise ValueError("a fingerprint's source_sha is the commit research run shipped, which the writer reads "
+                             "(RESEARCH_SOURCE_SHA), not a field to give")
+        for key, value in fields.items():
+            try:
+                json.dumps(value, allow_nan=False)
+            except (TypeError, ValueError):
+                raise ValueError(f"a fingerprint's {key} is a JSON value, not {value!r}") from None
+        with self._open() as (path, doc):
+            held = self._attach(path, doc)["workload_fingerprint"]
+            if again := sorted(held.keys() & fields.keys()):
+                raise ValueError(f"{path}'s fingerprint already holds {', '.join(again)}: a fingerprint holds each once")
+            held.update(fields)
+        return dict(held)
+
+    def measurement_file(self, rel: str) -> str:
+        """Names one file of the run's detailed records in the result's `measurement_files` and returns it: a path relative
+        to `out` and inside it, as `evidence` is, which `research` keeps with the run. A file is named once, here or as an
+        artifact."""
+
+        return self._name("measurement_files", rel)
+
+    def artifact(self, rel: str) -> str:
+        """Names one file or directory worth keeping in the result's `artifacts` and returns it, as `measurement_file`
+        does."""
+
+        return self._name("artifacts", rel)
+
+    def _name(self, key: str, rel: str) -> str:
+        if not _inside(rel):
+            raise ValueError(f"a result's {key} are paths relative to {self.out} and inside it, each a string, not {rel!r}")
+        rel = Path(rel).as_posix()
+        with self._open() as (path, doc):
+            named = self._attach(path, doc)
+            if any(Path(p).as_posix() == rel for k in FILES for p in named[k]):
+                raise ValueError(f"{path} already names {rel}: a file is named once, as a measurement file or an artifact")
+            named[key].append(rel)
+        return rel
+
+    @staticmethod
+    def _attach(path: Path, doc: dict) -> dict:
+        """`doc` with the three keys `research` reads besides its measurements and validation: `workload_fingerprint` with
+        its `source_sha`, and `FILES`' two lists, each added where it is missing."""
+
+        if not isinstance(doc.setdefault("workload_fingerprint", {}), dict):
+            raise ValueError(f"{path}'s workload_fingerprint isn't an object: the writer adds only to a {RESULT_SCHEMA} result")
+        doc["workload_fingerprint"].setdefault("source_sha", settings.RESEARCH_SOURCE_SHA)
+        for key in FILES:
+            held = doc.setdefault(key, [])
+            if not isinstance(held, list) or not all(isinstance(p, str) for p in held):
+                raise ValueError(f"{path}'s {key} aren't a list of paths: the writer adds only to a {RESULT_SCHEMA} result")
+        return doc
+
+    @contextlib.contextmanager
+    def _open(self) -> Iterator[tuple[Path, dict]]:
+        """`out/result.json`'s path and this run's result to change, under `out`'s lock: what the caller leaves in the
+        result replaces the file whole, and a caller that raises leaves the file as it was."""
+
+        self.out.mkdir(parents=True, exist_ok=True)
+        path = self.out / RESULT
+        with _locked(self.out):
+            doc = self._read(path)
+            yield path, doc
             tmp = path.with_name(f"{RESULT}.tmp.{os.getpid()}")
             tmp.write_text(json.dumps(doc, indent=1, allow_nan=False) + "\n", encoding="utf-8")
             os.replace(tmp, path)
-        return entry
 
     def _read(self, path: Path) -> dict:
         """The result at `path` to append to: this run's, or a new one where there is none."""
@@ -289,6 +413,10 @@ class Writer:
 
 
 def writer(out: str | os.PathLike) -> Writer:
-    """The writer of `out/result.json`: this run's (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now."""
+    """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now. Under a
+    research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a
+    run's result from, whatever `out` is, so its evidence paths are relative to the run's directory; outside one it is
+    `out/result.json`."""
 
-    return Writer(Path(out), settings.RESEARCH_RUN_ID, host_stamp())
+    where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
+    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp())

@@ -31,12 +31,17 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
 1. **Pick the cwd:** `--cwd source` (or `source/SUB`) to read the checkout, `--cwd clone` (or `clone/SUB`) to write into
    it (a build, a Lean `.lake`), or an absolute path; never a relative path that resolves against the run dir. On a machine
    every run of a commit shares the source tree, while a clone is the run's own, removed when it ends, and the workload
-   imports its Python from it. Locally only the cwd moves: an editable install imports from, and writes beside `__file__`
-   in, the invoking checkout.
+   imports its Python from it. A `--cwd source` run that builds Lean (`lake`, `check.py`, `suites.py`, `lean_changed.py`)
+   waits for the tree's lock until the run building there ends (`research/treelock.py`); `--cwd clone` doesn't wait.
+   Locally only the cwd moves: an editable install imports from, and writes beside `__file__` in, the invoking checkout.
 2. **Keep results in `$OUT`, small:** numbers, JSON, logs, digests of big things. A large artifact that must survive (a
    model, a proof, a trace past about 100 MiB) goes there too: a node holds no store write key, so `research data put` in
    a job fails. Cite it as the run id and its path under `out/`; an uncited run record leaves the store 7 days after upload
    (the store README §7.4), and a label or note naming the run keeps it. Don't copy in what the commit regenerates (a circuit, a build).
+   A small record that can't wait for the run's end (coins, a digest) is preserved while the job runs: `research
+   run-preserve PATH` has the run's runner, which holds the custody key, put one closed file of `$OUT` (at most 1 MiB, 64
+   requests a run) and prints its art id, or says why not and exits 1 within `--timeout` (150 s unless given). Stop the job
+   on a non-zero exit if it must not go on without the record; the file stays in `$OUT` either way.
 3. **Scratch, caches, build trees (`target/`, `.lake/`, `node_modules/`), datasets and checkpoints stay out of the run
    dir**, in a `mktemp -d` directory you delete. `$TMPDIR` may be unset (queued jobs on vy-nebius-1): `$TMPDIR/x` is `/x`.
 4. **Data kept outside the run dir** is registered once it exists, `research keep DIR --owner @LANE --expires never

@@ -1,7 +1,7 @@
 # Two Intel Xeon Platinum 8468 sockets, the H200 nodes' host: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host and firmware exceeds it, what
-# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host exceeds it, whatever firmware
+# it runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
 
 kind = "host"
 sku = "xeon-platinum-8468-2s"
@@ -34,6 +34,26 @@ bus = { value = 64, unit = "bit/channel", mark = "ceiling", source = "a DDR5 cha
 bandwidth = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed x memory.bus / 8 (307.2e9 a socket)" }
 read = { value = 6.144e11, unit = "B/s", mark = "placeholder", source = "no read measured on the H200 nodes: memory.bandwidth until a measured read (the RTX node's mix of pinned H2D and CPU readers) replaces it" }
 write = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "memory.bandwidth: the channels' rate bounds writes as it does reads; no write measured on the H200 nodes" }
+# The part's own ceiling, a second reading of speed, bandwidth and write: the channels at the fastest memory the
+# processor takes, whatever DIMMs the server has. This part takes none faster than memory.speed, so the two agree.
+speed_max = { value = 4800, unit = "MT/s", mark = "ceiling", source = "the fastest memory the part takes: Intel ARK 231735, 'Memory Types Up to DDR5 4800 MT/s 1DPC, Up to DDR5 4400 MT/s 2DPC', which is memory.speed" }
+bandwidth_max = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed_max x memory.bus / 8 (307.2e9 a socket), which is memory.bandwidth" }
+write_max = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "memory.bandwidth_max: the channels' rate bounds writes as it does reads" }
+
+# The PCI Express lanes into the sockets, and what a socket takes from devices apart from them (other). A device
+# outside the sockets (a disk, a network port, a GPU) gives the server its bytes over one of those, each way at most
+# its rate less its coding.
+[pcie]
+lanes = { value = 80, unit = "lane/socket", mark = "ceiling", source = "Intel ARK 231735: 'Max # of PCI Express Lanes 80'" }
+speed = { value = 32, unit = "GT/s", mark = "ceiling", source = "Intel ARK 231735: 'PCI Express Revision 5.0', whose lanes carry at most 32 GT/s each way (PCI Express Base Specification 5.0)" }
+other = { value = 128, unit = "GT/s/socket", mark = "ceiling", source = "what a socket takes from devices apart from its lanes: the chipset link, 8 lanes of DMI to the C741 chipset, which carries the board's SATA, USB and PCI Express 3.0 ports. A server's technical guide gives it as 'DMI - 3.0 speed (port width x8, x4)', 8 GT/s a lane (Dell PowerEdge R760xs Technical Guide, the C741's features); the ceiling takes 16 GT/s a lane, the larger reading on record (Wikipedia, 'LGA 4677', the table of its chipset: 'Bus interface DMI 4.0 x8'), and counts the link on both sockets though a server has one chipset, since nothing on record says the second socket's port carries nothing" }
+bandwidth = { value = 661661538462, unit = "B/s", mark = "ceiling", source = "cpu.sockets x (pcie.lanes x pcie.speed + pcie.other) x 128/130 / 8, rounded up to a whole byte: 128b/130b is the coding of every PCI Express rate from 8 GT/s up (PCI Express Base Specification 5.0), which DMI's lanes share, and a packet's framing, header and CRC take more. The sockets' remaining pins give the server no device's bytes at a rate that counts: the memory channels are memory.bandwidth_max's, UPI joins the two sockets, and the sideband buses to the board's management controller carry megabits a second, under what a packet's framing takes off this figure" }
+
+# The host's disks, read back at most, all of them together. read_max is the server's: a disk's bytes are outside the
+# sockets and enter them over a lane, whatever the disk is and whatever a guest runs. No run has read an H200 node's
+# disks, so the card has no measured read beside it.
+[disk]
+read_max = { value = 661661538462, unit = "B/s", mark = "ceiling", source = "pcie.bandwidth: every byte a disk gives the server enters its sockets over a lane or the chipset link counted with them, so they together bound each disk's read and all the disks' at once. A byte of a disk that the server's memory already holds (a hypervisor's cache) is read from DRAM, within memory.bandwidth_max. A limit a provider sets on a disk is a setting, not this" }
 
 # The host's on-chip storage at most, for the whole server whatever share of it a VM gets.
 [store]
