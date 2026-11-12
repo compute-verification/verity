@@ -1540,3 +1540,64 @@ Each with what would establish it.
 14. **The kept drafts' charge pooled over a week, a month and a year for a datacenter and for all compute**
     [derived]: I give a rate an output token and one node's totals at a rate that is not the published line's. The
     census's output tokens are not read.
+
+## Revision to entry 3, Thu 12 Nov 13:31Z, on the coordinator's 13:18Z: VLLM-392 is named in the kept drafts' row and in the message; what it will charge is the count's own code, 0.30 bits an output token on the try, under the fixed width's 0.66
+
+**Why a revision** [read: my mailbox's 13:18Z section, read at 13:29Z]. My final was pushed at 13:28Z without it. Two
+things change, the kept drafts' row (section 3) and the message for Daniel (section 8); both are restated whole here
+and replace the ones above. Sections 4 to 7 and 9 stand, with the three notes below. Tags as in the final.
+
+**1. The kept drafts' row, final.**
+
+| Class | Bits a request | What holds it at 0 |
+|---|---|---|
+| **Kept drafts, K = 5 (how many of its drafts a decode row kept)** | **Not in advice v1 today: a draft serve is refused, so no certified figure exists and Friday's certified zero covers a serve with the draft off** [read: `advice_code/codec.py:358-365`, `advice_code/replay.py:99-105`]. **VLLM-392 (vllm, owner vllm-advicedraft, filed 12:59Z, due Mon 16 Nov) puts each row's kept count in the record and charges it, a class of its own in the certified table, at the length of the count's own code (`kept_encode`, #9279)** [relayed: your 13:18Z; VLLM-392]. That code on the try's greedy pass: 6,997 bits, 1.36 bits a decode row that carried drafts, 218.7 bits a request, 0.30 bits an output token [relayed: #9279's text; the quotients are mine]. At that rate: 133 bits a request on AX's median, 85.5 on our 128k plan [derived]. At fixed width, your figure: 3 bits a row, 293 bits a request on AX's median, 188.5 on the 128k plan, 0.66 bits an output token [derived]. What `draft_table` prints on `main` today, uncertified: 295.7 bits a request and 0.405 bits an output token on the same pass, an entropy and no string's length [relayed: VLLM-384] | The accept rule computed in each request's replay block with the count its output, and a lemma that the count is unique: circuits' Definitions, vllm's step compiler, proofs' Lean, and a ruling that advice a block's output is held equal to is charged 0 (section 4) [derived]. It comes after VLLM-392 and is not part of it: "What holds the charge at 0 afterwards is proofs' to say" [relayed: VLLM-392] |
+
+Route by route nothing changes [derived]: section 4's table stands. No route can be certified with a draft until
+VLLM-392 lands, and rows 5, 6, 16 and 17 need a stand-in's kept count forced besides.
+
+**2. Three notes on sections 4 and 9.**
+
+- **The code's length is a charge the rules can take; the entropy is not** [relayed: #9279's text; I did not read its
+  diff]. `kept_encode` is an adaptive binary coder, and `kept_decode` gives the counts back "from the bits, K and the
+  output lengths alone". So its decoder holds no table fitted to the trace it charges, and the string's length is an
+  advice length. That answers the first half of "Not established" item 7. The second half stands: its length on a
+  trace that is not greedy is not shown, and the other greedy pass gives another rate, 0.87 bits a row and 0.20 bits
+  an output token on `cb56` (666 bits over 765 rows and 3,406 tokens) [derived from #9279's text].
+- **The fixed width is the cap, the code is the charge** [derived]. Advice is charged at its length and its compiler
+  has a public length cap. 3 bits a row is a cap known before a run; the code's worst case I did not read. Cut by
+  certifier window the code "costs up to 2 bits more a window" [relayed: #9279's text].
+- **#9279 is not on `main`** [run: `gh pr view 9279` at 13:30Z: open, head `e29b73f1ba37`; `main` at
+  `3498d4ad6546`]. Your 13:18Z says it is marked today [relayed].
+
+**3. Message for Daniel, final** (299 words; replaces section 8's).
+
+**What Friday serves.** vLLM's published line for our cards: FP8 KV cache, five draft tokens, prefix cache on, context
+262,144. At those flags a whole pass replayed token for token, 23,363 of 23,363: greedy requests, cache hits up to
+102,336 tokens. Sampled requests run today.
+
+**Cheapest replay.** Re-run only the sampled request's own computed tokens, in its served steps, every other request
+replaced by zeros of its shape; read the cached prefix and its earlier positions from KV pages serving committed.
+Its cost does not grow with repeated tokens. At Wednesday's settings a 120,704-token cache hit, read from
+serving's pages, replayed bit for bit; at the published line's flags this replay has not run.
+
+**At serving.** A hash of each KV page and a host copy until the coins: modeled under 0.2% of serving, not measured.
+
+**Advice.** Under the certified tick, rehearsed on one card, cache hits, admission and resumes cost 0 bits; length
+and ending cost 5.6 bits a request. Friday's certified zero is at draft off, because the advice has no field for the
+drafts each decode row kept; VLLM-392 (vllm, due Monday) adds the field and charges it, and the accept rule
+computed in each request's replay block makes the count derived, not charged. Charged, it is at most
+3 bits a decode row, 0.66 bits an output token; vllm's code measured 0.30 on one greedy pass: 130 to 290 bits for a
+444-token answer. It grows with output tokens, not requests.
+
+**Missing.**
+
+1. The guarantee for a replay block that reads committed values: one statement covers cache hits and long contexts,
+   at about 1.5 times today's bound.
+2. Circuit: the draft layer, its accept rule, the FP8 cache's row.
+3. Replay: nothing forces a stand-in's kept count, so this replay cannot yet run with drafts.
+
+**The message's figures, by tag.** [relayed]: the flags, 23,363 of 23,363, 102,336, 120,704, the 0 bits and 5.6 bits a
+request (11,186 over 2,000), draft off, VLLM-392 and its date, 0.30 (6,997 bits over 23,363 output tokens). [derived]:
+under 0.2% (entry 2: the page hash modeled at 0.036% to 0.045% of a card), 3 bits a row and 0.66 bits an output token,
+130 to 290 bits (133 and 293, section 4), 1.5 times (CACHE's model, entry 2).

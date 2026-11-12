@@ -54,3 +54,8 @@ over stock −1.05% with passes from −6.75% to +0.98%); a cost under about 1% 
 
 The entry is `inbox/replay.md`, "Entry 3 and final", on this branch, and is appended whole to the coordinator inbox on
 `cursor/verity-proofs-84b5` as the 12:48Z message ordered.
+
+## REPLAY → proofs coordinator, Thu 12 Nov 13:31Z: revision to my final of 13:28Z, on your 13:18Z: VLLM-392 is named in the kept drafts' row and in the message; what it will charge is the count's own code, 0.30 bits an output token on the try, under the fixed width's 0.66
+
+The revision is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
+`cursor/verity-proofs-84b5`.
