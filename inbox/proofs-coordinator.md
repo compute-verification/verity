@@ -103646,6 +103646,7 @@ To soundness and lean, unchanged: everything from "In plain words" to the end of
 
 **I wait on:** your word that compute-research's branch is final and network-accounting's branch is named; the two runs above; your word to open. Nothing of mine holds a slot beyond those two runs in line.
 
+<<<<<<< HEAD
 ## WINDOWAT, Thu 12 Nov 21:51Z: three of the six files are written (F, A, B: 534 lines, 22 theorems) and wait for a Lean slot, none elaborated in the tree yet; and the check as it is refuses no statement of a member the sample missed, which the window theorem's count of sessions needs
 
 Clock: `date -u` read 21:51Z before posting. Mailbox read at `cursor/proofs-inbox` `93f55fdd76d2` (fetched 21:45Z): one message, yours of 20:50Z, already acted on [run]. Heads at 21:45Z: soundness `3e26cac7596a`, the lever `7d4e96a5fa07`, #9441 `ce41e7c92e8e`, `main` `5f0c008aa040`, none moved since my merge; my branch is at `c4f8baa79c`, unchanged, both merged [run]. Nothing of `security` built on the VM.
@@ -103721,3 +103722,33 @@ def FormAccepts : Prop :=
 - Whether Flock refuses a session of no instance somewhere I did not read (section 3's [guess]).
 - D's size: the one statement's read chain is `Sampled/MovesReach.lean` (835 lines) and `Sampled/RoundsRead.lean` (1221); how much of it is already stated at any tree of the log, and how much at the one tree, I have not counted. Friday's entry has the count.
 - The day for the whole: Friday 18:00Z, with the size against the tree.
+=======
+## HONEST2, Thu 21:52Z: the token-select registration is written as Lean, with four of the five design premises proved at it, and is waiting on a node to compile
+
+In plain words: I wrote down, in Lean, a small two-stage registration shaped like the token select (one template, every port read from round 1's record, no internal wires), and proofs that four of the five conditions the two-stage guarantee asks for hold there. The fifth, about where each read value is addressed, is not attempted yet. None of it has compiled yet: the check is queued on a build node.
+
+- Branch `cursor/proofs-honest2-7c4e` at `7a279914902a` holds one new file, `security/Proofs/Flock/SpotFlock/Honest/Instance.lean`: 369 lines and 29 theorems [read]. The base has moved to `cb0dbe2ba3df` and is merged in, not rebased [run: git].
+- The statements [read: Instance.lean]:
+  - `Premises h` is `SpotKSTwo`'s five premises, in its order.
+  - `InScope h` is `∃ x, (compiled h).Scope x`, the open `CompiledTwo.Scope` premise at the compiled code the guarantee names.
+  - `Accepts h` is `∃ r : CheckedRun h.stage, CheckedRun.Ok h r`.
+  - `Honest` is `∃ h, Premises h ∧ InScope h ∧ Accepts h`, which is non-vacuity.
+  - `Owed` is `∃ R B desc q c₀, AddressesConnected (held …) ∧ Accepts (held …)`.
+  - `honest_of_owed : Owed → Honest` says the instance owes only the address premise and an accepted run.
+- At `held R B desc q c₀`, for every reference statement `R` and boundary `B` [derived; not yet compiled]:
+  - `wiresFirst_held` and `wiresMove_held` hold, since there are no wires.
+  - `sourcesNamed_held` holds from `Ref.named`, a Boolean saying each source bit is at one of `R`'s ports, each of which is linked.
+  - `builtWired_held` holds by `builtWired_spot`.
+  - `wireMap_held` shows the wiring map is `id`.
+  - `scope_held` shows that every statement that decodes is in the two-stage scope at the compiled code. It goes through `scopeOk_sound` and a new `inScopeTwo_filter`, which says a program returning fewer of its gates keeps `InScopeTwo`.
+  - `inScope_of_accepts` follows: an accepted run gives `InScope`.
+- The base's move adds `SecondStage.namesOk` to the statement check [read: `SpotFlock/Code.lean`, the `readsOk` conjunct]. It means round 1's record registers no name the statement's record has. That is the interior half of the address condition in my 21:40Z map, so the verifier now checks it, and the serving design under that entry's `To post` stands as written.
+- Run `r20261112-215044-8e96` is `verity lean try` of the file on vy-nebius-cpu-12, in the proofs pool, waiting for a slot [run]. An earlier launch, `r20261112-214544-0bbd`, was cancelled before it took a slot because the file grew [run]. A cold build of the package's imports took 45 minutes on #8363's branch [relayed], so I expect the verdict at about 23:00Z if a slot frees soon [guess].
+- Left, with sizes [guess]:
+  - Fix whatever the run reports in `Instance.lean`: 0–100 lines, by 03:00Z.
+  - `AddressesConnected` at the instance: `RowAt` and the read facts at a linked port with no interior value of its name. Unknown, likely 400–1,200 lines. It is not promised by Sat 02:00Z.
+  - A concrete `Ref` and an honest session of it, which `Accepts` needs: a copy16 variant with hidden outputs, `sha512/row/v2` ports and a registered read. 1,500–3,000 lines. It is not promised by Sat 02:00Z.
+  - The lock's `honest` witnesses for `SpotKSTwo`/`SpotExfilTwo` follow from `Owed` in under 50 lines once `Owed` is proved.
+
+Not established: that the file elaborates (no run has finished); `AddressesConnected` at any instance; any accepted run; a concrete `Ref`. `filesOk_held` and `ms_held` are `rfl` proofs from #8363 that I have not compiled on this base.
+>>>>>>> c478c424d1 (HONEST2: the token-select registration written, four design premises proved at it, compile queued)
