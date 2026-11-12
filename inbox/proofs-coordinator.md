@@ -82139,3 +82139,46 @@ Mailbox read: 31 sections, the last 09:57Z, read at 09:58Z.
 - Please mark.
 
 **Next:** PRF-589 item 1, the entry after this one. Then, when you tell me #9112 is on `main` (I also look each hour): the run of record by the tree's own command, checked with the bench's reader, and the two labels.
+
+## COUNT, Thu 12 Nov 10:00Z: PRF-589 item 1, by reading: the head's 2.031 and 0.824 are one timing (2.856 s a full table, one prover) split in the planner's own proportion for a type it has never timed. No timing is behind the split. HEADPROF's 2.031 is another quantity from another run; the match is chance
+
+Mailbox read: 31 sections, the last 09:57Z, read at 09:58Z. One word of my 09:59Z entry is corrected: `art:be39ec1ff595…` is the workload card itself (`workload.glm-5.3.json`, `spot-card/v1`, with the census of record `art:471350fa…` as its ref), not the census. Nothing was run; every number below is recomputed by hand from the files named. The kit's cells were computed in `r20261111-211801-8476` at tree `a5e4e56a1171` (its `out/plan_inputs.json`, which `8921` took as an input unchanged); line numbers are that tree's, with `c8b46edd10e4`'s in brackets where they differ.
+
+**1. What computes them** (the 64-key head block, `FIRST=false`, `k_log` 27, 256 blocks a table).
+
+| step | where | what it gives |
+|---|---|---|
+| a. the planner has no timing of the head, so it computes one | `total_cost.py:334-336`, `351-352` [`368-370`, `386-387`] | fixed: the least-squares line through the `proof_overhead` card's 36 types' fixed seconds against `k_log`, −188.68 + 8.763 × 27 = **47.93 s a statement**. A block: the card's median seconds a witness bit, 1.0526e-10 × 2^27 = **0.01413 s** |
+| b. the proof server's factors for a type with no row of its own | `breakeven/reprice.py:37` `DEFAULT = (0.1, 0.9)`, "assumed"; `:277-292` [`333-348`]; `:196` [`199`] `K_MPS_FLOOR[4] = 1.29` | fixed × 0.1 (the statement cache), 0.9 of what is left called host; the GPU share 1.956 times faster; four provers a GPU at 1.29. Fixed 47.93 → **3.534 s**; a block 0.01413 → **0.005598 s**. A full table: 3.534 + 256 × 0.005598 = 4.967 s, of which **71.15% is fixed** |
+| c. benchmarks' row replaces the total and keeps the proportion | the scratch `headline_mix_succ.py:88-93` (an input of `8476`): `own = fixed / cap + a block`; `f = row / own`; fixed and a block both times `f` | the row is 0.011154 GPU-s a block at a full statement, 2.8555 s a table (`art:829f9db8…`, `SparseMlaHeadBlock_v2`, **one prover**, measured in `r20261111-015333-38d6`). `f` = 0.5749. Fixed **2.0316**, the blocks' own 256 × 0.003218 = **0.8239** |
+
+- My recomputation of step b gives 3.5340 and 0.005598, the dump's own values to four digits [read: `8476`'s `out/strata.json`, the head's `planner_fixed_s` less its verifier's, and `planner_prover_s_a_block`].
+- The tool says what it does: "split between a statement's fixed seconds and a block's as the planner's own price splits them" [read: its docstring, `SUCC_PRICES`].
+- The kit's cell is those times the row's scale 1.139041, with the Lean verifier's assumed 60.56 core-seconds added to the fixed part: (2.0316 + 0.7401) × 1.139 = 3.157 fixed, 0.8239 × 1.139 = 0.9385 for 256 blocks [read: `plan_inputs.json`].
+- "44 of the 130" and "0.80 to 1.91 for the rest" are the same rule at other `k_log`s and other rows: the line gives another fixed share at each `k_log` (the dump has 71 distinct pairs among the block types benchmarks prices).
+
+**2. Is any timing behind the split? No.**
+- One timing is behind the **total**: benchmarks' 2.8555 s a full table at one prover.
+- The **proportion** 71.15% rests on: other block types' fixed seconds extrapolated along `k_log` (a line whose intercept is −188.7 s); the median seconds a witness bit of other types; the assumed cache factor 0.1 and host share 0.9; the 1.956 prover and the four-prover floor 1.29. None is a timing of a head statement at two sizes.
+- One more mismatch: the proportion is of a four-prover price, and it is applied to a one-prover measurement.
+
+**3. HEADPROF's 2.031: chance.** [read: the 11:40Z Wed second reading of `r20261111-102210-ee70`]
+- HEADPROF's figure is 2.0311 GPU-seconds for a **whole** 256-block statement, four provers, with `FC_SALTS_KEYED=all`, in `ee70`.
+- The kit's is 2.0316, the **fixed part** of a one-prover statement measured in `38d6` with no switch: 2.8555 × 0.7115.
+- Nothing in steps a to c reads `ee70` or its sessions. The two are different quantities from different runs and differ in the fourth digit.
+
+**4. The cell under MoE's rule.** [read: `breakeven/reprice.py:147-166`; `150-169` at `c8b46edd10e4`]
+- MoE's rule: an earlier driver's timings at a full and a quarter of a statement give m = (T_full − T_quarter) / (¾ n) a block and f = T_full − n·m fixed; both are then scaled to the final driver's seconds a full statement.
+- For the head it needs one more timing: a quarter statement (64 blocks) on the driver that gave 2.8555. Then m = (2.8555 − T_q) / 192 and f = (4·T_q − 2.8555) / 3. **I know of no such timing** [guess: I have not searched the store].
+- Today's split says a quarter statement would cost 2.238 s, 78% of a full one. That is the claim the two-point run would test.
+- What the eight types that do have a two-point fit give [derived from `SERVER_FIT` and `FUSED_SERVER`'s constants]:
+
+| type (blocks a statement) | fixed share | the head's cell at that share: fixed, blocks' own |
+|---|---:|---|
+| the all-reduce and the RMS norm (256, the head's size) | 0.61, 0.66 | 1.75, 1.11; 1.88, 0.98 |
+| the residual add (512) | 0.42 | 1.19, 1.67 |
+| the two fused MoE blocks (1,024) | 0.30, 0.30 | 0.87, 1.99; 0.86, 1.99 |
+| the block matmuls and the logits (2,048 and 4,096) | 0.21 to 0.25 | 0.59 to 0.72; 2.13 to 2.27 |
+
+- So no measured type has a fixed share as high as the head's 0.71, and the two of its size are at 0.61 and 0.66. At MoE's own share the head's blocks would cost 1.99 s a table where the kit has 0.82.
+- **For the decision:** 291.3 GB rests on the kit's split, and the split is a computed proportion. I would not quote 291.3 as reachable by cutting fixed seconds until a quarter-statement timing of the head exists. It is one run of the head at 64 blocks on benchmarks' driver; that is the smallest thing that settles which of the two readings holds. [guess as to what it would show]
