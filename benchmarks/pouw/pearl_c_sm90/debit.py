@@ -15,16 +15,29 @@ blocks of words, so A′ and B̃ run padded with zero rows, whose words are drop
 from __future__ import annotations
 
 import ctypes as C
+import importlib.util
 import json
 import os
 import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import run
-
+HERE = os.path.dirname(os.path.abspath(__file__))
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32
+
+
+def _driver():
+    """This directory's run.py, loaded from its file as `pearl_c_sm90_run` once a process: other directories hold a
+    run.py too, so its name alone does not say which."""
+    name = "pearl_c_sm90_run"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, "run.py"))
+        module = sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+run = _driver()
 
 
 class Debit:
@@ -140,7 +153,7 @@ def check(cubin: bytes, shapes: list[tuple[int, int, int]], timed: list[tuple[in
     `reps` bodies of `Debit.resident` between events (the launches alone)."""
     import time
 
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pearl_c_vllm"))
+    sys.path.insert(0, os.path.join(HERE, "..", "pearl_c_vllm"))
     import fast_tile as FT
     from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 
