@@ -53,3 +53,6 @@ def verdict(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings
         raise ValueError(f"the Lean verdict refuses the record: {body}")
     out = json.loads(body)
     return mc.Verdict(out["accepted"], tuple(out["reasons"]), out["late"], out["wrong"])
+
+
+__all__ = ["EXE", "record", "verdict"]

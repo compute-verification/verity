@@ -48,7 +48,6 @@ from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash
 log = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
-ROOT = Path(__file__).resolve().parents[5]
 EXE = "pous-timed-audit"
 
 
@@ -392,6 +391,8 @@ def main(argv: list[str] | None = None) -> int:
         return replay(a.replay, a.out)
     return report(compare(), a.out)
 
+
+__all__ = ["Store", "compare", "lean_verdict", "main", "record", "replay", "report"]
 
 if __name__ == "__main__":
     sys.exit(main())
