@@ -25,8 +25,8 @@ define (`Vocab`), if sampled proofs, PoUW and the inference-only policy each mee
 parameters `θ`, committed files `F` and commitments `c` and for every prover strategy, the probability that remote's
 compiled verifier (`Core.Remote.protocol`, `verity/remote/v0`) accepts files that passed the commit phase's check while
 one of the three claims fails is at most the three errors at that strategy summed. Onsite's is the same statement over
-its seven. Each takes the target of every subprotocol its list names (`∀ a ∈ subprotocols k, V.Target k a`), which the
-named targets give (`Vocab.targets_remote`, `Vocab.targets_onsite`).
+its seven. Each takes its targets by name, which are the target of every subprotocol its list names, `SoundnessOf`'s
+hypothesis (`Vocab.targets_remote`, `Vocab.targets_onsite`).
 
 The lock (`security/Properties/lean-audit.json`) records each with no named assumption among its hypotheses, which are
 the targets alone, and with its two witnesses at the idle deployment (`Idle.lean`): `*_honest`, every target holds at

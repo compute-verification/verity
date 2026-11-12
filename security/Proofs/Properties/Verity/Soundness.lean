@@ -18,8 +18,8 @@ composition and every component's on its own case (`accepts_same`, `accepts_comp
 `Verity.SoundnessOf` bounds at a composite lies inside the union of its subprotocols' events, each at most its target's
 error at the strategy: the union bound over the composite's subprotocols in one game (`soundness_at_of_targets`).
 `soundness_of_subprotocols` is it at onsite's list, and `remote_soundness_of_subprotocols` at remote's, whose three
-subprotocols are among onsite's seven; `Vocab.targets_onsite` and `Vocab.targets_remote` give their hypothesis from
-the named targets.
+subprotocols are among onsite's seven: each takes its list's targets by name, which are the target of each subprotocol
+the list names (`Vocab.targets_onsite`, `Vocab.targets_remote`).
 
 Beside it, the two checks every guarantee carries, for any names `V`: `soundness_honest_of`, at the honest deployment
 (the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -135,10 +135,11 @@ theorem targets_remote (V : Vocab d α) (hS : V.SpotSound .remote) (hW : V.PouwS
 end Vocab
 
 theorem soundness_of_subprotocols : Soundness :=
-  fun ι α _ d V => soundness_at_of_targets ι α d V .onsite
+  fun ι α _ d V hS hW hI hP hB hN hX =>
+    soundness_at_of_targets ι α d V .onsite (V.targets_onsite hS hW hI hP hB hN hX)
 
 theorem remote_soundness_of_subprotocols : RemoteSoundness :=
-  fun ι α _ d V => soundness_at_of_targets ι α d V .remote
+  fun ι α _ d V hS hW hI => soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW hI)
 
 open Classical in
 /-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
@@ -477,13 +478,12 @@ idle deployment whose errors are all `0`. -/
 theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
   Idle.nontrivial_at .onsite (mem_subprotocols.2 (by decide))
 
-/-- **`Soundness`'s honest lemma**: its hypothesis holds at the idle deployment's compiled onsite composite, each of
-onsite's seven subprotocols meeting its target. -/
+/-- **`Soundness`'s honest lemma**: its seven hypotheses hold at the idle deployment's compiled onsite composite. -/
 theorem soundness_of_subprotocols_honest :
-    Idle.unbounded.Target .onsite .sampled ∧ Idle.unbounded.Target .onsite .pouw ∧
-      Idle.unbounded.Target .onsite .inferenceOnly ∧ Idle.unbounded.Target .onsite .pous ∧
-      Idle.unbounded.Target .onsite .poub ∧ Idle.unbounded.Target .onsite .network ∧
-      Idle.unbounded.Target .onsite .wipe :=
+    Idle.unbounded.SpotSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
+      Idle.unbounded.InferenceOnlySound .onsite ∧ Idle.unbounded.PousSound .onsite ∧
+      Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkCertifierSound .onsite ∧
+      Idle.unbounded.WipeSound .onsite :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
@@ -492,11 +492,11 @@ idle deployment whose errors are all `0`. -/
 theorem soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
   Idle.nontrivial_at .onsite (mem_subprotocols.2 (by decide))
 
-/-- **`RemoteSoundness`'s honest lemma**: its hypothesis holds at the idle deployment's compiled remote composite, each
-of remote's three subprotocols meeting its target. -/
+/-- **`RemoteSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled remote
+composite. -/
 theorem remote_soundness_of_subprotocols_honest :
-    Idle.unbounded.Target .remote .sampled ∧ Idle.unbounded.Target .remote .pouw ∧
-      Idle.unbounded.Target .remote .inferenceOnly :=
+    Idle.unbounded.SpotSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
+      Idle.unbounded.InferenceOnlySound .remote :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
 
 /-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
