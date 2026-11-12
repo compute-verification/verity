@@ -62,9 +62,9 @@ from typing import Any
 
 from verity.configuration.wire import canonical
 
-SITE = "verity/registration/site/v1"
+SITE = "verity/registration/site/v2"
 """A site entry's format: the tag its digest is taken under."""
-SHEET = "verity/registration/sheet/v1"
+SHEET = "verity/registration/sheet/v2"
 GENESIS = "verity/registration/genesis/v1"
 OUTSIDE = "outside"
 """The rest of the world: an end every site has, whose id no location may take."""

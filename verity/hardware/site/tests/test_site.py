@@ -6,14 +6,15 @@ and figures from its files, and the log's encoding."""
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from dataclasses import replace
 from fractions import Fraction
 
 import pytest
 
-from verity.hardware.site import (CHECKS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, SCHEMES, STORAGE_PATH,
-                                  TIME_UNIT, Auditor, DeviceFigures, Entry, HostFigures, Link, Loc, Malformed,
+from verity.hardware.site import (CHECKS, GENESIS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, SCHEMES, SHEET,
+                                  SITE, STORAGE_PATH, TIME_UNIT, Auditor, DeviceFigures, Entry, HostFigures, Link, Loc, Malformed,
                                   MemoryFigures, Refused, Registration, Sheet, Site, check, check_registration, genesis,
                                   incomplete, node_figures, refusal)
 from verity.configuration.wire import canonical
@@ -644,6 +645,20 @@ def test_a_nodes_figures_are_the_ones_its_entry_states() -> None:
     assert all(x.bw is None and x.chip is None and x.shared == () for x in entry.locs if x.id != "n0" and
                x.parent != "n0" or x.kind == "device")
     assert [(k.id, k.beta) for k in entry.links] == list(figures.ways)
+
+
+def test_the_digests_are_v2s_tags() -> None:
+    """A sheet's digest and a site entry's are SHA-512 of the second version's tag, a 0 byte and the canonical JSON,
+    recomputed here from the tag rather than typed; the genesis keeps its first version's. An entry's JSON names its
+    format, and an entry of the first version's is malformed."""
+    assert (SITE, SHEET, GENESIS) == (
+        "verity/registration/site/v2", "verity/registration/sheet/v2", "verity/registration/genesis/v1")
+    entry = grown().entries[1]
+    assert SHEET_A.digest() == hashlib.sha512(b"verity/registration/sheet/v2\0" + canonical(SHEET_A.to_json())).hexdigest()
+    assert entry.digest() == hashlib.sha512(b"verity/registration/site/v2\0" + canonical(entry.to_json())).hexdigest()
+    assert entry.to_json()["format"] == SITE and Entry.of_json(entry.to_json()) == entry
+    with pytest.raises(Malformed, match="is not verity/registration/site/v2"):
+        Entry.of_json({**entry.to_json(), "format": "verity/registration/site/v1"})
 
 
 GENESIS_ONSITE = ("d6356b427985ba6dab9a8deb46447a8108cdd9ca3fafa720f5b51af748999cc2"

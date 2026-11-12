@@ -6,7 +6,7 @@ A deployment's registration is one append-only log of entries, each naming the h
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
 An entry is one of three kinds:
 
-* a site entry, the Site's own (`verity.hardware.site.Entry`, `verity/registration/site/v1`): the sheets, locations and
+* a site entry, the Site's own (`verity.hardware.site.Entry`, `verity/registration/site/v2`): the sheets, locations and
   links it adds to the Site, its JSON, digest and check the Site's;
 * an information entry (`Information`, `verity/registration/information/v1`): its items, each registered once in the
   log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
