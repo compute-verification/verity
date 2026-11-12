@@ -55,7 +55,7 @@ from verity.definitions.ops.scalar import BIT, I32, I32Eq, I32Le, SelectI32
 from .common import Unexpressible
 from .domain import cache_refusal
 
-__all__ = ["ENGINE_ARG", "ROLES", "KeptCheck", "Role", "StandIn", "accept", "drive", "launch", "schedule", "src_config"]
+__all__ = ["ENGINE_ARG", "ROLES", "KeptCheck", "Role", "StandIn", "accept", "drive", "launch", "refuse_sampled", "schedule", "src_config"]
 
 #: the engine arg that states a launch's drafts: the most a decode row carries
 ENGINE_ARG = "num_speculative_tokens"
@@ -177,6 +177,12 @@ def accept(policy_kind: str, d: int, who: str = "") -> Any:
     role = ROLES["sampled_accept"]
     raise Unexpressible(f"{who}a {policy_kind} request with a draft row: its accept is the role sampled_accept's, {role.definition} "
                         f"{role.ports}, which reads {role.reads}; no Definition is bound to it")
+
+
+def refuse_sampled(i: int, drafts: tuple, policy_kind: str) -> None:
+    """`Unexpressible` for request i where it has a draft schedule and is sampled (`accept`)."""
+    if drafts and policy_kind != "greedy":
+        accept(policy_kind, 1, f"request {i}: ")
 
 
 def launch(registered: Any) -> int:

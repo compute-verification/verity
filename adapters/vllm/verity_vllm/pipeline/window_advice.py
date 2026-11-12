@@ -591,9 +591,9 @@ def decode(data: bytes) -> Advice:
     if not advice.version:
         raise MalformedAdvice("a window that carries nothing in or out and aborts nothing is I1 v0's, version 0")
     if advice.version != version:
-        raise MalformedAdvice(f"a window that aborts no request is version {advice.version}, not {version}" if version == ABORTS else
-                              f"a window with {'a' if advice.version == DRAFTS else 'no'} draft row is version {advice.version}, "
-                              f"not {version}")
+        raise MalformedAdvice(f"a window with {'a' if advice.version == DRAFTS else 'no'} draft row is version {advice.version}, "
+                              f"not {version}" if DRAFTS in (advice.version, version) else
+                              f"a window that aborts no request is version {advice.version}, not {version}")
     if _widths(advice) != (w_req, w_len, w_rel, w_src):
         raise MalformedAdvice(f"widths (len {w_len}, release {w_rel}, sources {w_src}) aren't the least that hold the window's "
                               f"values, {_widths(advice)[1:]}")

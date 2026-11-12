@@ -582,7 +582,7 @@ def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any], 
 
 def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: bytes | None, recompute_hits: bool = False) -> Plan:
     phi0 = registered.phi
-    K = DR.launch(registered)
+    K, counts = DR.launch(registered), WA.drafts(adv)
     if not (bi := phi0.target_profile().batch_invariant):
         launch_class(phi0)
     if not isinstance(ingress, Mapping):
@@ -626,7 +626,6 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
     carried = dict(enumerate(adv.carried))
     idle = tuple(i for i in carried if not rows[i])
     left = {c.request for c in WA.close(adv) if c.must}
-    counts = WA.drafts(adv)
     prompts, params, wired = {}, {}, set()
     for i, q in enumerate(adv.requests):
         if i in idle:
@@ -684,8 +683,7 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                 edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], phi0.target_profile().num_sms, request_id=q.id, salt=salt,
                                          carried=carry is not None)
-                if drafts and policy["kind"] != "greedy":
-                    DR.accept(policy["kind"], 1, f"request {i}: ")
+                DR.refuse_sampled(i, drafts, policy["kind"])
                 if bi and C and not hit and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
                                         f"request wrapper isn't ported)")

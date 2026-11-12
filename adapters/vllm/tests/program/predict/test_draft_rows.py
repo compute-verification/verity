@@ -205,6 +205,10 @@ def test_the_advice_reads_a_draft_rows_kept_count_off_the_next_rows_start():
     assert len(WA.outputs(advice)) == 8
     with pytest.raises(WA.MalformedAdvice, match="holds a draft row isn't I1 v0 advice"):
         advice.i1()
+    stated = bytearray(WA.encode(advice))
+    stated[0] = WA.ABORTS
+    with pytest.raises(WA.MalformedAdvice, match="a window with a draft row is version 3, not 2"):
+        WA.decode(bytes(stated))
     plain = WA.Advice((R("a", 4, 2, "length"),), (steps[0], St((Row(0, "decode", 4, 1),))), (0,) * 2)
     assert plain.version == 0 and WA.drafts(plain) == {}
     for bad, why in (((steps[0], steps[1]), "is its last here and leaves it outputs to keep"),
