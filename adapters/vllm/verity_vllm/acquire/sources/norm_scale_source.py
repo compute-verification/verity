@@ -27,6 +27,7 @@ from typing import Any
 
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION
+from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
@@ -107,7 +108,6 @@ class NormScaleSource:
             so_sha256 = _file_sha256(so_path)
         self.words_per_token = int(words_per_token or len(self.modules))
         self._hooks = hooks.Hooks()
-        self._handles: list[Any] = []
         self._scope: list[tuple[str, tuple[int, ...]]] = []
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "by_kind": {k: 0 for k in self.kinds}, "errors": 0, "modules": len(self.modules),
@@ -126,8 +126,8 @@ class NormScaleSource:
             if not envs.VLLM_BATCH_INVARIANT:
                 raise RuntimeError("norm scales: the tapped kernels are vLLM's batch-invariant ones and this engine runs without VLLM_BATCH_INVARIANT")
         for op in self.modules:
-            self._handles.append(mods[op].register_forward_pre_hook(self._enter(op)))
-            self._handles.append(mods[op].register_forward_hook(self._leave(op), always_call=True))
+            forward_pre_hook(self._hooks, mods[op], self._enter(op))
+            forward_hook(self._hooks, mods[op], self._leave(op), always_call=True)
         if "cuda" in self.kinds:
             self._hooks.patch(torch.ops._C, "fused_add_rms_norm", self._fused(torch.ops._C.fused_add_rms_norm))
         if "triton" in self.kinds:
@@ -146,9 +146,6 @@ class NormScaleSource:
         self.active = True
 
     def uninstall(self) -> None:
-        for h in self._handles:
-            h.remove()
-        self._handles = []
         self._hooks.uninstall()
         self._scope.clear()
         self._held.clear()

@@ -17,6 +17,7 @@ import torch
 
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.engine import hooks
 
 ROOT = Path(__file__).parents[2]
 CMAP = CM.load(ROOT / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json")
@@ -520,6 +521,11 @@ def module_hooks(model: torch.nn.Module, c: Committer) -> list:
     return [m.register_forward_hook(hook(n)) for n, m in model.named_modules() if isinstance(m, Norm)]
 
 
+def hook_counts(model: torch.nn.Module) -> list[int]:
+    """Each module's forward hooks and forward pre-hooks, counted."""
+    return [len(m._forward_pre_hooks) + len(m._forward_hooks) for m in model.modules()]
+
+
 class FarRun:
     """One rank's TP partial source on the model above, with the committer's module hooks on every norm; `step` runs one forward."""
 
@@ -537,6 +543,7 @@ class FarRun:
         c, src = self.c, self.src
         c._cur = types.SimpleNamespace(step=len(self.steps))
         handles = module_hooks(self.root, c)
+        live, hooked = hooks.live(), hook_counts(self.root)
         src.install()
         assert self.v.user.fused_allreduce_rms_norm is not self.orig and self.v.home.fused_allreduce_rms_norm is not self.orig
         n0 = len(c.log)
@@ -544,12 +551,15 @@ class FarRun:
             src.on_step_begin()
             self.root.model(M)
             src.on_step_end(c._cur)
+            # a norm the fused call was given is hooked when it is first seen: that hook is an entry of the source's too
+            assert all(any(h is e for e in src._hooks.entries) for h in src.far._hooked.values())
         finally:
             src.uninstall()
+            left = hook_counts(self.root)
             for h in handles:
                 h.remove()
         assert self.v.user.fused_allreduce_rms_norm is self.orig and self.v.home.fused_allreduce_rms_norm is self.orig
-        assert not src.far._hooked
+        assert not src.far._hooked and hooks.live() == live and left == hooked
         self.steps.append([n for kind, n in c.log[n0:] if kind == "acquire"])
         return self.steps[-1]
 

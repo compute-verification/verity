@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
+from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.engine import hooks
 from verity_vllm.query.manifest.bind import Port
 
@@ -48,7 +49,6 @@ class LinearQuantSource:
         if not self.sites:
             raise ValueError("linear quant: the model has no block-FP8 linear module")
         self._hooks = hooks.Hooks()
-        self._handles: list[Any] = []
         self._scope: list[list[Any]] = []
         self.stats: dict[str, Any] = {"calls": 0, "bytes": 0, "rows": 0, "sites": len(self.sites), "errors": 0}
         self.active = False
@@ -56,8 +56,8 @@ class LinearQuantSource:
     def install(self) -> None:
         mods = dict(self.model.named_modules())
         for op in self.sites:
-            self._handles.append(mods[op].register_forward_pre_hook(self._enter(op)))
-            self._handles.append(mods[op].register_forward_hook(self._leave(op), always_call=True))
+            forward_pre_hook(self._hooks, mods[op], self._enter(op))
+            forward_hook(self._hooks, mods[op], self._leave(op), always_call=True)
         ops_c = self.torch.ops._C
         if not hasattr(ops_c, GROUP_QUANT_OP):
             raise RuntimeError(f"linear quant: torch.ops._C has no {GROUP_QUANT_OP}")
@@ -65,9 +65,6 @@ class LinearQuantSource:
         self.active = True
 
     def uninstall(self) -> None:
-        for h in self._handles:
-            h.remove()
-        self._handles = []
         self._hooks.uninstall()
         self._scope.clear()
         self.active = False

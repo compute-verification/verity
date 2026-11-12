@@ -22,6 +22,7 @@ from typing import Any
 
 from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
+from verity_vllm.acquire.sources.forward_hooks import forward_hook, forward_pre_hook
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
@@ -60,7 +61,6 @@ class RouterSoftmaxSource:
         self.modules = moe_layers_of(model) if model is not None else {}
         self.words_per_token = sum(int(g["width"]) for g in self.layers.values())
         self._hooks = hooks.Hooks()
-        self._handles: list[Any] = []
         self.cur_layer: int | None = None
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "rows": 0, "layers": len(self.layers), "errors": 0, "so": so_path,
@@ -74,15 +74,12 @@ class RouterSoftmaxSource:
             raise RuntimeError(f"router softmax: the manifest's MoE layers {missing[:4]} are not MoE modules of the model")
         mods = dict(self.model.named_modules())
         for name, k in self.modules.items():
-            self._handles.append(mods[name].register_forward_pre_hook(self._enter(k)))
-            self._handles.append(mods[name].register_forward_hook(self._leave(k), always_call=True))
+            forward_pre_hook(self._hooks, mods[name], self._enter(k))
+            forward_hook(self._hooks, mods[name], self._leave(k), always_call=True)
         self._hooks.patch(self.torch.ops._moe_C, "topk_softmax", self._wrap(self.torch.ops._moe_C.topk_softmax))
         self.active = True
 
     def uninstall(self) -> None:
-        for h in self._handles:
-            h.remove()
-        self._handles = []
         self._hooks.uninstall()
         self.cur_layer = None
         self._held.clear()

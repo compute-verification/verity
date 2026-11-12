@@ -4,8 +4,10 @@
 are CPU ones and the ops are stand-ins set on `torch.ops` (vLLM is not installed where the CPU suites run, and the router's and the
 norm's taps are CUDA builds), so what is held here is the wiring: a launch commits only from inside a manifest site during a committed
 step, a site that raises leaves no site marked, and `uninstall` puts back the op and leaves no hook on a module and no entry in
-`engine.hooks.live()`.  The values themselves are the sources' own tests' and the GPU properties'.  Last, the forward pre-hooks of
-`verity_vllm.acquire.sources.call_boundary_source`, which replaces no op: installed on its bodies' modules, gone when uninstalled."""
+`engine.hooks.live()`.  The values themselves are the sources' own tests' and the GPU properties'.  Then the forward pre-hooks of
+`verity_vllm.acquire.sources.call_boundary_source`, which replaces no op: installed on its bodies' modules, gone when uninstalled.  Last,
+`verity_vllm.acquire.sources.forward_hooks`, through which the four sources' forward hooks are entries of their `engine.hooks.Hooks`: while
+one is installed `engine.hooks.live()` lists them before its op, and a source that cannot uninstall keeps them on with its op."""
 from __future__ import annotations
 
 import hashlib
@@ -24,6 +26,7 @@ from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.acquire.sources import call_boundary_source as CB
+from verity_vllm.acquire.sources import forward_hooks as FH
 from verity_vllm.acquire.sources import norm_scale_source as N
 from verity_vllm.acquire.sources import router_softmax_source as R
 from verity_vllm.acquire.sources import scale_products_source as S
@@ -57,6 +60,10 @@ class FusedMoE(Launches):
 
 def _hooked(module: Any) -> int:
     return len(module._forward_pre_hooks) + len(module._forward_hooks)
+
+
+def _kinds(entries: Any) -> list[str]:
+    return [type(e).__name__ for e in entries]
 
 
 def _two_modules(launch: Any, site: str) -> Any:
@@ -97,6 +104,7 @@ def test_the_vocab_range_source_installed_commits_from_its_site_and_uninstalled_
     ids = torch.tensor([3, VS, 2 * VS - 1, 2 * VS], dtype=torch.int64)
     src.install()
     assert src.active and c_ops.vocab_parallel_embedding is not installed and _hooked(model.embed_tokens) == 2
+    assert _kinds(hooks.live()[len(live):]) == ["Service", "Service", "Patch"]      # the site's two forward hooks, then the op
     model.embed_tokens(ids)                                     # the site, no step
     com._cur = STEP
     model.other(ids)                                            # a step, a module that is no site
@@ -145,6 +153,7 @@ def test_the_scale_products_source_installed_commits_from_its_site_and_uninstall
     ws = torch.tensor([[0.5, 4.0], [1.0, 0.125], [2.0, 8.0]], dtype=torch.float32).t()
     src.install()
     assert src.active and c_ops.cutlass_scaled_mm is not installed and _hooked(model.down_proj) == 2
+    assert _kinds(hooks.live()[len(live):]) == ["Service", "Service", "Patch"]
     model.down_proj(xs, ws)                                     # the site, no step
     com._cur = STEP
     model.other(xs, ws)                                         # a step, a module that is no site
@@ -231,6 +240,7 @@ def test_the_router_softmax_source_installed_taps_its_layer_and_uninstalled_leav
     mlp0, mlp1 = model.model.layers[0].mlp, model.model.layers[1].mlp
     src.install()
     assert src.active and router.moe.topk_softmax is not router.installed and _hooked(mlp0) == 2 and _hooked(mlp1) == 2
+    assert _kinds(hooks.live()[len(live):]) == ["Service"] * 4 + ["Patch"]
     mlp1(gating)                                                # the manifest's layer, no step
     com._cur = STEP
     mlp0(gating)                                                # a step, a layer the manifest does not name
@@ -366,6 +376,7 @@ def test_the_fused_norm_source_installed_taps_its_module_and_uninstalled_leaves_
     x, residual = torch.zeros(2, 3, H), torch.zeros(2, 3, H)
     src.install()
     assert src.active and norm.c.fused_add_rms_norm is not norm.installed and _hooked(model.norm) == 2
+    assert _kinds(hooks.live()[len(live):]) == ["Service", "Service", "Patch"]
     model.norm(x, residual)                                     # the manifest's module, no step
     com._cur = STEP
     model.other(x, residual)                                    # a step, a module that is no norm of the manifest
@@ -426,3 +437,38 @@ def test_the_call_boundary_source_installed_hooks_its_bodies_modules_and_uninsta
     assert not gone.active and _hooked(model.site) == 0
     with pytest.raises(ValueError, match="no module body to evaluate"):
         CB.CallBoundarySource(com, model, CBP.Plan())
+
+
+# --- the forward hooks as entries of a source's Hooks ----------------------------------------------------------------------------------------
+
+def test_a_forward_hook_is_an_entry_named_for_its_module_and_comes_off_with_it():
+    seen: list[str] = []
+    module, into, live = Launches(lambda *a, **kw: None), hooks.Hooks(tag="a-source"), hooks.live()
+    pre = FH.forward_pre_hook(into, module, lambda mod, args, kwargs: seen.append(f"pre {sorted(kwargs)}"), with_kwargs=True)
+    post = FH.forward_hook(into, module, lambda mod, args, out: seen.append("post"), always_call=True)
+    assert (pre.name, post.name) == ("forward_pre_hook of Launches", "forward_hook of Launches")
+    assert hooks.live("a-source") == (pre, post) == into.entries and _hooked(module) == 2
+    module(hidden=1)                                            # torch got the hook and its keywords as they were passed
+    assert seen == ["pre ['hidden']", "post"]
+    pre.uninstall()                                             # one entry takes off its own hook alone
+    assert len(module._forward_pre_hooks) == 0 and len(module._forward_hooks) == 1 and into.entries == (post,)
+    into.uninstall()
+    assert _hooked(module) == 0 and hooks.live() == live
+    module(hidden=1)
+    assert seen == ["pre ['hidden']", "post"]
+
+
+def test_a_source_whose_op_another_component_replaced_later_keeps_its_forward_hooks_until_it_can_uninstall(c_ops):
+    model, installed = _two_modules(_embed, "embed_tokens"), c_ops.vocab_parallel_embedding
+    src = V.VocabRangeSource(Recorder(), model, {"embed_tokens": {"start": VS, "shard_rows": VS}})
+    live = hooks.live()
+    src.install()
+    later = hooks.wrap(c_ops, "vocab_parallel_embedding", lambda site: lambda *a: site(*a))
+    with pytest.raises(RuntimeError, match="nothing was uninstalled"):
+        src.uninstall()
+    assert src.active and _hooked(model.embed_tokens) == 2
+    assert _kinds(hooks.live()[len(live):]) == ["Service", "Service", "Patch", "Patch"]
+    later.uninstall()
+    src.uninstall()
+    assert not src.active and _hooked(model.embed_tokens) == 0 and hooks.live() == live
+    assert c_ops.vocab_parallel_embedding is installed
