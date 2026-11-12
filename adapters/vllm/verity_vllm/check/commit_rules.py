@@ -159,9 +159,12 @@ def _d(x: Any) -> dict:
     return x if isinstance(x, dict) else {}
 
 
-def _int(x: Any) -> int:
-    """A count as `commit_pass.commit_verdict` reads it: 0 where the record states none.  A count that is no number raises, there and here."""
-    return int(x or 0)
+def _int(x: Any, default: int = 0) -> int:
+    """A count as its record states it; `default` where the record states none, or one that is no number."""
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return default
 
 
 def _first(seq: Any) -> Any:

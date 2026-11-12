@@ -15,7 +15,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1430},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "openings_after_release", "detail": "lines", "count": 179},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2541},
-    {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 397},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 168},
     {"file": "verity_vllm/pipeline/match.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1163},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 687},

@@ -40,6 +40,9 @@ from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm import settings
+from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
+
+__all__ = ["EXTENSION"]
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -271,7 +274,7 @@ class TP2CaptureWorkerExtension:
         # engine.kwargs["tensor_parallel_size"] to build_manifest)
         man = header.profile
         pid_adapter = header.profile_id
-        if isinstance(man, dict) and man.get("schema") == "verity-vllm/profile/v1":
+        if isinstance(man, dict) and man.get("schema") == ENGINE_PROFILE_SCHEMA:
             from verity_vllm.engine import engine_profile as prof
             man.setdefault("parallelism", {})["tensor_parallel_size"] = world
             man.setdefault("engine_kwargs", {})["tensor_parallel_size"] = world
@@ -305,7 +308,7 @@ class TP2CaptureWorkerExtension:
     def tp2_close(self) -> dict[str, Any]:
         import torch
 
-        v = self._tp2
+        v: dict[str, Any] = self._tp2
         cap, rank = v["cap"], v["rank"]
         torch.cuda.synchronize()
         stats = cap.close()
@@ -1291,7 +1294,7 @@ class TP2CaptureWorkerExtension:
         evs = kernel_trace.load_trace(tr)
         ks = kernel_trace.kernels_of_trace_events(evs)
         summary = kernel_trace.summarize_kernels(ks)
-        cpu_ops = {}
+        cpu_ops: dict[str, int] = {}
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":
                 cpu_ops[e.get("name", "")] = cpu_ops.get(e.get("name", ""), 0) + 1

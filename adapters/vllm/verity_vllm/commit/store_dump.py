@@ -37,11 +37,12 @@ from verity_vllm.commit.committer.native_host import NativeHostCommitter, Tensor
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.commit.opened import meta_by_name
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
+from verity_vllm.records.schema_ids import COMMITTED_STORE_SCHEMA
 
 __all__ = ["Touched", "as_bytes", "dump", "dump_files", "held_of", "load", "nbytes", "not_retained", "not_retained_of", "touch",
            "touched", "write_doc"]
 
-SCHEMA = "verity-vllm/committed-store/v1"
+SCHEMA = COMMITTED_STORE_SCHEMA
 NODE = step_rows.ROOT_BYTES                                     # a tree node
 #: bytes written between flushes: the dirty pages of a dump are charged to the writer's memory cgroup, beside a pinned store
 FLUSH = 1 << 30

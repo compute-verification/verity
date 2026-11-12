@@ -679,13 +679,15 @@ def main(a: Options) -> int:
         gd = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "seconds": round(time.time() - t_phase, 3), "config_id": a.config_id,
               "stages": {r["stage"]: {"status": r["status"], "seconds": r.get("seconds")} for r in recs if r["stage"] in GPU_STAGES}}
         plan.p("gpu_done").write_text(json.dumps(gd, indent=1) + "\n")
+    # the phase's last word on the realized shape is a print, with no logger's head: `ops/cov_pod.sh` shows a GPU phase's
+    # first "[realized]" line as it is written, and these two are the ones a GPU phase writes
     try:
         real = write_realized(plan)          # realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)
         if real:
-            logger.info("[realized] prompt_lens=%s n_generated=%s steps capture/control=%s/%s max_concurrent=%s", real["prompt_lens"],
-                        real["n_generated"], real["engine_steps_capture"], real["engine_steps_control"], real["max_concurrent_requests"])
+            print(f"[realized] prompt_lens={real['prompt_lens']} n_generated={real['n_generated']} steps capture/control="
+                  f"{real['engine_steps_capture']}/{real['engine_steps_control']} max_concurrent={real['max_concurrent_requests']}", file=sys.stderr)
     except Exception as e:  # noqa: BLE001 - informational
-        logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
+        print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
     try:
         EXP.write_experiment(plan.run, repo=Path(a.tree), spec_note=spec_note)   # the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational

@@ -77,6 +77,19 @@ class Probe(torch.nn.Module):
         return None
 
 
+#: the sources a test installed, which `_uninstalled` takes off at its end
+INSTALLED: list = []
+
+
+@pytest.fixture(autouse=True)
+def _uninstalled():
+    """A source comes off at the end of the test that installed it: its forward hooks are entries of `engine.hooks.live()`, which a
+    later test of the process reads."""
+    yield
+    while INSTALLED:
+        INSTALLED.pop().uninstall()
+
+
 def _bf16(rng, n, scale=1.0):
     return (np.asarray(rng.standard_normal(n) * scale, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
@@ -163,6 +176,7 @@ def _dense_source(world, man=None, root=None, plan=None):
                           programs=(None, root or os.path.dirname(world.pdir)), call_boundary_plan=plan)  # under the root
     assert classes == ("instance_outputs", CB.FAMILY) and len(com.sources) == 1
     com.sources[0].install()
+    INSTALLED.append(com.sources[0])
     return com, com.sources[0]
 
 
@@ -308,6 +322,7 @@ def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(
     classes, src = CB.attach(com, True, fp8.man, ("instance_outputs",), programs=(fp8.pdir,))
     assert classes == ("instance_outputs", CB.FAMILY)
     src.install()
+    INSTALLED.append(src)
     mods = dict(model.named_modules())
     quant = specialization("Fp8GroupQuant_v1", {"K": fp8.H, "G": fp8.G})
     served: dict[tuple[int, str], np.ndarray] = {}

@@ -85,7 +85,7 @@ class GemmLaunch:
             launches = [n for n in node.walk() if n.is_triton and triton_name(n) == self.kernel]
             if len(launches) != 1:
                 return unsupported(node, f"{base_op(node.op)} without exactly one batch-invariant {self.kernel} launch",
-                                   launches=[n.enter.fn for n in launches])
+                                   launches=[n.triton.fn for n in launches])
             launch = launches[0]
             before, bad = scope_transparents(node, ctx, {launch.id}, self.name)
             if bad is not None:

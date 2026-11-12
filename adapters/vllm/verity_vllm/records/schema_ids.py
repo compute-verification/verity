@@ -196,6 +196,11 @@ INT8_ERROR_REPORT_SCHEMA = "verity-vllm/int8-error-report/v1"
 #: a served run's step trace (`engine.step_trace.SCHEMA`): `StepTrace` writes it in the header, the trace's first record,
 #: and `load` refuses a trace that opens with any other
 STEP_TRACE_SCHEMA = "verity-vllm/step-trace/v1"
+#: the inventory of the modules vLLM builds for a checkpoint, by rank (`engine.meta_inventory.SCHEMA`), which
+#: `live_document` and the `meta-inventory` command write
+META_INVENTORY_SCHEMA = "verity-vllm/meta-inventory/v1"
+#: the generated kernels of one process by content hash, which `engine.kernel_identity.collect` writes
+KERNEL_IDENTITY_SCHEMA = "verity-vllm/kernel-identity/v1"
 
 # --- the target-family preflight (`verity_vllm.target_family`)
 #: the preflight's record, which `target_family.check` writes

@@ -2187,6 +2187,17 @@ def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on
     assert "ntn-dummy-not-a-secret" not in out + err
 
 
+def test_page_uploads_a_one_line_display_equation_with_each_dollar_dollar_on_its_own_line(route, notion, fake, registry, tmp_path,
+                                                                                          capsys):
+    """Notion shows `$$ x $$` on one line as its literal text (INF-640); inline math and a block already split stay as written."""
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD.replace("$$\n\\gamma \\le 0.01\n$$", "Inline $`\\delta`$ stays.\n  $$ \\gamma \\le 0.01 $$"))
+    rc, out, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    made = notion.requests[0][2]
+    assert rc == 0 and "Inline $`\\delta`$ stays.\n  $$\n  \\gamma \\le 0.01\n  $$\n## The design" in made["markdown"]
+    assert slack.display_math(PAGE_MD) == PAGE_MD
+
+
 def test_the_reply_callout_sits_above_the_problem_once():
     ours = slack.with_reply(PAGE_MD)
     assert ours.index("**Your reply.**") < ours.index("## The problem") and ours.index("**Question.**") < ours.index("**Your reply.**")
