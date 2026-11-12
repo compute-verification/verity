@@ -169,10 +169,10 @@ def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_
     assert kinds["bound"]["token"] == pytest.approx(b["terms"]["token"], rel=1e-3)
     assert (kinds.get("partial", False), kinds.get("why")) == (one["partial"], one["why"])
     assert p["note"] == (
-        f"Training's slowdown code {VERSION}, reading A. Headline rho_own: own session (4,096 in + 1,024 out on the "
-        f"served model; distill's teacher), {algorithm_policy.OWN_K_LABEL}. Sensitivities: rho_default = rho_console "
-        "(45M), rho_served (serving block). rho_HE: theorem of record, given (H), (E); fresh_old rests on P-width "
-        "extended, false on honest circuits.")
+        "Reading A. rho_own: own session (4,096 in + 1,024 out; distill's teacher), k = 65,536; at the packed 61,440 "
+        "rho is at least this. Sensitivities: rho_default = rho_console (45M), rho_served (serving block). fresh_old "
+        "rests on P-width extended, false on honest circuits. Attention's products are priced at 16 bits, as the card "
+        f"computes them; at 32 bits a measured rho is {SW.ATTENTION_32} of this.")
     assert algorithm_policy.OWN_K_LABEL == "k = 65,536 (16-bit ids); at the packed 61,440 rho is at least this"
     assert formalism.RESTS_ON_CELL["fresh_products"].startswith("theorem of record, given (H): ")
     assert formalism.CELL_SENSITIVITIES[-1] == "fresh_old" and formalism.SENSITIVITIES["fresh_old"].startswith(
@@ -572,7 +572,7 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
     student = [{"student_session": {"published": {"rho": 110_662.4}}}]
     notes = [SW.note({"rows": [[{"reading": x, "model": "20M"}.get(c) for c in SW.COLUMNS]]}, TABLES, student)
              for x in ("A", "B")]
-    assert "; distill at its student's session: 20M 110,662. " in notes[0]
+    assert "; distill at its student's: 20M 110,662. " in notes[0]
     words = [SW.IDLE, SW.NO_AXIS, *SW.ROUNDS.values(), *SW.LEARNER.values(), SW.LEARNER_W_FIT,
              SW.split({"rollouts": 0.01, "learner": 0.99}), *gaps, *st.values(), *said, *notes]
     assert len(gaps) == 3 and [s for s in words if SW.CODE.search(s)] == []
@@ -625,7 +625,7 @@ def test_the_headline_is_the_served_models_own_session_and_a_distillation_rows_s
     assert cells["rho_own"] != cells["rho_console"] and s["gates"] < session["gates"] < algorithm_policy.CONSOLE[0]
     got = details[0]["student_session"]
     assert (got["gates"], got["k_bits"], got["published"]) == (s["gates"], 61_440, SW.finite(student))
-    assert f"; distill at its student's session: 20M {SW.figure(student['rho'])}. rho_HE: " in p["note"]
+    assert f"; distill at its student's: 20M {SW.figure(student['rho'])}. fresh_old " in p["note"]
     assert not SW.refused(p | {"note": SW.note(p, TABLES, details)})
     real = formalism.published
     monkeypatch.setattr(formalism, "published",

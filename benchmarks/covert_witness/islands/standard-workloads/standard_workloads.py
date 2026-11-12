@@ -791,24 +791,30 @@ def figure(rho: float | None) -> str:
     return "unmeasured" if rho is None else f"{float(algorithm_policy.num(rho)):,.10g}"
 
 
+#: a measured row's ρ's least and greatest ratio, at 32-bit attention's products over 16-bit, in each of its ρ columns:
+#: the as-if re-pricing's standard-workloads/out/{control,asif}/console/standard-workloads.json
+ATTENTION_32 = "0.21 to 0.52"
+
+
 def note(p: dict, tables: str | None = None, details: list[dict] = ()) -> str:
     """The panel's note: its readings as its rows have them, the headline first (rho_own, each row's own session at
-    algorithm_policy's `OWN_K`, as its `OWN_K_LABEL` says), then the sensitivities beside it (the console's default,
-    the serving block, and a distillation row's ρ at its student's own session, the rows' `details`'
-    `student_session`), the products term the theorem of record's ρ_HE and the old figure beside it (published's
-    `fresh_old`), and `tables` the stored tables (`cite`'s)."""
+    algorithm_policy's `OWN_K`, and at its `V3_PACKED_K` at least that), then the sensitivities beside it (the
+    console's default, the serving block, and a distillation row's ρ at its student's own session, the rows'
+    `details`' `student_session`), the old figure beside them (published's `fresh_old`), the price of attention's
+    products (`ATTENTION_32`), and `tables` the stored tables (`cite`'s)."""
     into, out = policy.CONSOLE_SESSION
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
-    how = "reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else "reading A"
+    how = "Reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else "Reading A"
     model = COLUMNS.index("model")
     students = [f"{r[model]} {figure(d['student_session']['published']['rho'])}"
                 for r, d in zip(p["rows"], details) if d.get("student_session")]
-    return (f"Training's slowdown code {VERSION}, {how}. Headline rho_own: own session ({into:,} in + {out:,} out on "
-            f"the served model; distill's teacher), {algorithm_policy.OWN_K_LABEL}. Sensitivities: rho_default = "
-            f"rho_console ({policy.REFERENCE_PARAMS / 1e6:.0f}M), rho_served (serving block)"
-            + (f"; distill at its student's session: {', '.join(students)}" if students else "")
-            + ". rho_HE: theorem of record, given (H), (E); fresh_old rests on P-width extended, false on honest "
-              "circuits." + (f" Tables {tables}." if tables else ""))
+    return (f"{how}. rho_own: own session ({into:,} in + {out:,} out; distill's teacher), k = "
+            f"{algorithm_policy.OWN_K:,.0f}; at the packed {algorithm_policy.V3_PACKED_K:,} rho is at least this. "
+            f"Sensitivities: rho_default = rho_console ({policy.REFERENCE_PARAMS / 1e6:.0f}M), rho_served (serving "
+            "block)" + (f"; distill at its student's: {', '.join(students)}" if students else "")
+            + ". fresh_old rests on P-width extended, false on honest circuits. Attention's products are priced at 16 "
+              f"bits, as the card computes them; at 32 bits a measured rho is {ATTENTION_32} of this."
+            + (f" Tables {tables}." if tables else ""))
 
 
 def refused(p: dict) -> list[str]:
