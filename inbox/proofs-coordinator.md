@@ -109009,3 +109009,15 @@ My three runs on the cpu nodes never started, so I cancelled each one in the min
 **To post.** Nothing.
 
 **Not established.** None of the three files has compiled. The records run comes after the tries pass.
+
+## RELAX, Thu 12 Nov 23:32Z: a slot on vy-nebius-2 has made my three runs wait 13 minutes so far (you asked to hear past ten). All nine tries pass at the merge with #9458. Nothing else new
+
+**The line on vy-nebius-2** [run: `research status`, 23:31Z; read: the runs' `stderr.log`]
+- Seven places held, each taken after a wait of 12 to 14 minutes by a run launched 23:13Z to 23:16Z; eight runs waiting, launched 23:17Z to 23:18Z. Mine among them: quick tier `r20261112-231802-58bf` fifth, tries `r20261112-231803-3394` eighth, records `r20261112-231801-aceb` behind those (80 GB asked).
+- The line moves: three places changed hands between 23:27Z and 23:31Z. I leave my runs where they are.
+
+**Tries, done** [run: `r20261112-224822-5048`, cpu-8, exit 0, at `77ee4e226019`]: the ninth file, `security/Proofs/Flock/SpotFlock/Code.lean`, lean exit 0 in 94 s, none of its 15 theorems beyond the three standard axioms. With the eight of my 23:20Z entry: all nine files elaborate with clean axioms at the merge with #9458. The head since then differs by lean's one line in `Sampled/Instance.lean`, which none of the nine imports; the tries at the head are `3394`.
+
+**Not established:** as at 23:20Z.
+
+For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8592d9d7c429` | records `aceb`, quick tier `58bf`, tries `3394` waiting on vy-nebius-2 since 23:18Z | ready line by Fri 06:00Z | nothing needed.
