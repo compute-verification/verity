@@ -12,7 +12,7 @@ file).
     verity bench prove lean-verify --lean VERIFIER --proof TREE      the Lean verifier timed on one kept proof, as the
                                                                      record the table's Lean verifier figures read
 
-Under a research run, `--system flock` also writes `METRICS` into the run's result (`prove_records.record`).
+Under a research run, `--system spot` also writes `METRICS` into the run's result (`prove_records.record`).
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ import sys
 
 from verity_bench.cli import main
 
-#: the metrics `benchmarks/metrics.toml` holds this benchmark to, by id: each the total of the table with every block
-#: proved that its value names (`prove_records.FIGURES`)
+#: the metrics `benchmarks/metrics.toml` holds this benchmark to, by id: each the total of SPOT's table at the
+#: workload's sampling plan of record that its value names (`prove_records.FIGURES`)
 METRICS = {"benchmarks/prover-gpus-per-serving-gpu": "gpus_per_serving_gpu",
            "benchmarks/prover-gpu-seconds-per-token": "gpu_seconds_per_token",
            "benchmarks/lean-verifier-seconds-per-token": "lean_verifier_seconds_per_token",

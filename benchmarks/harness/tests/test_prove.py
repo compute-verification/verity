@@ -2160,12 +2160,13 @@ def test_verity_bench_prove_lean_verify_is_the_lean_verifiers_runner_and_the_tab
     assert t["lean_verify"][0]["seconds"] == [9.0] and t["lean_verify"][0]["proof_bytes"] == 500
 
 
-def test_under_a_research_run_the_runner_records_its_metrics_and_prints_the_same_table(tmp_path, monkeypatch, capsys):
-    """Under a research run, `verity bench prove --system flock` writes run.py's metrics into the run's result through
-    the kit: each total in its unit with its mark first among its inputs, the Lean verifier's seconds and the proof's
-    bytes with no value and why until a Lean verifier run of record measures a type and then modeled with what its
-    accept holds, the six checks as the validation and the table as its evidence. What it prints is byte for byte the
-    table outside a run, where it writes nothing; under a sampling plan it records nothing."""
+def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_same_table(tmp_path, monkeypatch, capsys):
+    """Under a research run, `verity bench prove --system spot` writes run.py's metrics into the run's result through
+    the kit: each total of SPOT's table at the plan of record in its unit with its mark first among its inputs, the Lean
+    verifier's seconds and the proof's bytes with no value and why until a Lean verifier run of record measures a type
+    and then modeled with what its accept holds, the six checks as the validation and the table as its evidence. What
+    it prints is the same in a run as outside one, where it writes nothing; with every block proved it records
+    nothing."""
 
     s, arts = recorded(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
@@ -2176,7 +2177,7 @@ def test_under_a_research_run_the_runner_records_its_metrics_and_prints_the_same
     writers, writer = [], kit.writer
     monkeypatch.setattr(kit, "writer", lambda out: writers.append(out) or writer(out))
     metrics = runpy.run_path(str(RUNNER))["METRICS"]
-    flock = ("--system", "flock", "--workload", "glm53")
+    spot = ("--system", "spot", "--workload", "glm53")
 
     def run(*argv: str, within: Path | None = None) -> str:
         if within is None:
@@ -2192,15 +2193,14 @@ def test_under_a_research_run_the_runner_records_its_metrics_and_prints_the_same
     def result(within: Path) -> dict:
         return json.loads((within / kit.RESULT).read_text())
 
-    outside, table = run(*flock), run(*flock, "--json")
-    doc = json.loads(table)
-    assert outside == R.render(doc) and writers == []
+    outside, doc = run(*spot), json.loads(run(*spot, "--json"))
+    assert outside.startswith(R.render(doc)) and writers == []
     first = tmp_path / "run-1"
-    assert run(*flock, within=first) == outside and writers == [str(first)]
-    got = result(first)
-    assert got["run_id"] == "r20261112-000000-0000" and (first / R.TABLE).read_text() == table
-    assert got["workload_fingerprint"] == {"source_sha": None, "benchmark": "prove", "system": "flock", "workload": "glm53",
-                                           "provers": 1, "cores": 10}
+    assert run(*spot, within=first) == outside and writers == [str(first)]
+    got, kept = result(first), json.loads((first / R.TABLE).read_text())
+    assert got["run_id"] == "r20261112-000000-0000" and kept["rows"] and kept.items() <= doc.items()
+    assert got["workload_fingerprint"] == {"source_sha": None, "benchmark": "prove", "system": "spot[flock]",
+                                           "workload": "glm53", "sampling": arts[R.SAMPLING], "provers": 1, "cores": 10}
     assert got["measurement_files"] == [R.TABLE] and got["artifacts"] == []
     by = {m["name"]: m for m in got["measurements"]}
     assert list(by) == list(metrics) == [
@@ -2208,10 +2208,11 @@ def test_under_a_research_run_the_runner_records_its_metrics_and_prints_the_same
         "benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"]
     assert [m["unit"] for m in by.values()] == [R.FIGURES[f] for f in metrics.values()]
     t, targets = doc["totals"], [*dict.fromkeys(x for i in doc["inputs"] for x in i["targets"])]
+    assert arts[R.SAMPLING] in targets
     head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
-    assert (head["value"], seconds["value"]) == (t["gpus_per_serving_gpu"], t["gpu_seconds_per_token"])
-    assert head["inputs"][0].startswith("modeled: steady-state measurements cover 23.3% of the proving time; range ")
-    assert head["inputs"][0].endswith(f", the other end {t['range_basis']}")
+    assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
+    assert head["inputs"][0] == (f"modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                                 f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")
     assert head["inputs"][1].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][2:] == targets
     assert seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
     assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
@@ -2219,15 +2220,16 @@ def test_under_a_research_run_the_runner_records_its_metrics_and_prints_the_same
         assert by[name]["value"] is None and by[name]["inputs"] == targets
         assert by[name]["why"] == "not measured: no Lean verifier run of record measures a block type " \
                                   "(`run_of_record=prove-glm53-lean-verify`)"
+    steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
     assert got["validation"] == {
         "status": "passed", "checker": "verity_bench.prove_records.CHECKS", "evidence": [R.TABLE],
-        "detail": "8 block type(s), 23.3% of the proving time, priced from steady-state rows that each passed `accepted`, "
-                  "`exits`, `not_void`, `flat`, `no_throttling`, `every_prover_warmed`; a row that didn't prices "
-                  "nothing and is named on its type's row"}
+        "detail": f"{steady} block type(s), {t['steady_time_share']:.1%} of the proving time, priced from steady-state "
+                  "rows that each passed `accepted`, `exits`, `not_void`, `flat`, `no_throttling`, "
+                  "`every_prover_warmed`; a row that didn't prices nothing and is named on its type's row"}
 
     lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"))
     second = tmp_path / "run-2"
-    run(*flock, within=second)
+    run(*spot, within=second)
     lean = {m["name"]: m for m in result(second)["measurements"]}
     t = json.loads((second / R.TABLE).read_text())["totals"]
     for name, key in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token"),
@@ -2238,9 +2240,20 @@ def test_under_a_research_run_the_runner_records_its_metrics_and_prints_the_same
             f"r20261110-000000-0001); scaled: the other {t[key]['scaled_block_types']} block types, ")
         assert "r20261110-000000-0001" in lean[name]["inputs"][1:]
 
-    spot = tmp_path / "run-3"
-    run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], within=spot)
-    assert not spot.exists()
+    every = tmp_path / "run-3"
+    run("--system", "flock", "--workload", "glm53", within=every)
+    assert not every.exists()
+
+
+def test_the_proving_totals_marks_give_the_plans_own_prices_where_its_record_states_them(tmp_path):
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    marks = [m["inputs"][0] for m in R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})]
+    planned = doc["totals"]["planned"]
+    assert [m.rsplit("; ", 1)[1] for m in marks] == [
+        f"at the sampling plan's own prices, which its planner sized the sample at: {planned[k]:.6g}"
+        for k in ("gpus_per_serving_gpu", "gpu_seconds_per_token")]
 
 
 def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():

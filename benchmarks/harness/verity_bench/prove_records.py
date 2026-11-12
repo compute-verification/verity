@@ -58,8 +58,9 @@ The serving rate isn't a record: it is modeled from the census's MACs a served t
 (`FLEETS`) and the card's data-sheet peak, and the output says so.
 
 Under a research run, a runner that names metric ids for the table's totals (`benchmarks/prove/run.py`'s `METRICS`)
-has `record` write them through the harness kit: a measurement a total with every block proved, its mark (measured,
-modeled or partial, as the table says it) the first of its inputs, and `CHECKS` as the run's validation.
+has `record` write them through the harness kit: a measurement a total of SPOT's table at the workload's sampling plan
+of record, its mark (measured, modeled or partial, as the table says it) the first of its inputs, and `CHECKS` as the
+run's validation. A table with every block proved records nothing.
 """
 
 from __future__ import annotations
@@ -109,8 +110,9 @@ LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "veri
 #: each fleet's assumed serving MFU
 FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
-#: the totals of a table with every block proved that a runner records under its metric ids, by their key in the
-#: table's `totals`, with the unit each measurement carries
+#: the proof system whose table a runner records under its metric ids: SPOT, at the workload's sampling plan of record
+RECORDED = "spot"
+#: the totals of that table a runner records, by their key in the table's `totals`, with the unit each measurement carries
 FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
            "gpu_seconds_per_token": "prover GPU-seconds a served token",
            "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
@@ -637,8 +639,10 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
                   if t["missing"] else t["status"])
         low, high = t[f"{figure}_range"]
         other = "" if low == high else f"; range {low:.6g} to {high:.6g}, the other end {t['range_basis']}"
+        own = (f"; at the sampling plan's own prices, which its planner sized the sample at: {t['planned'][figure]:.6g}"
+               if t.get("planned") else "")
         return t[figure], (f"{status}: steady-state measurements cover {t['steady_time_share']:.1%} of the proving time"
-                           f"{' it prices' if t['missing'] else ''}{other}")
+                           f"{' it prices' if t['missing'] else ''}{other}{own}")
     v = t[figure]
     if v is None:
         return None, ("not measured: no Lean verifier run of record measures a block type "
@@ -652,7 +656,7 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
 
 
 def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:
-    """The kit writer's measurements of a table with every block proved, one a metric id of `metrics`: the total its
+    """The kit writer's measurements of a table, one a metric id of `metrics`: the total its
     key names (`FIGURES`), in that total's unit. A total with a value has its mark as the first of its inputs, since
     the kit holds a `why` only for a measurement with no value, then (for the prover GPUs a serving GPU) the stated
     serving rate, then the records the table read; a total with none has its mark as its `why`."""
@@ -688,18 +692,20 @@ def validation(doc: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
-    """Writes a table with every block proved into this research run's result (`kit.writer`): the table as `TABLE`,
-    named a measurement file and the validation's evidence, what ran in the fingerprint, `measurements` under
-    `metrics`' ids and `validation`. A table at a sampling plan records nothing: each metric is every block proved's."""
+    """Writes `RECORDED`'s table into this research run's result (`kit.writer`): the table as `TABLE`, named a
+    measurement file and the validation's evidence, what ran (with the sampling plan) in the fingerprint,
+    `measurements` under `metrics`' ids and `validation`. Another system's table records nothing: each metric is
+    `RECORDED`'s."""
 
-    if doc["system"] != "flock":
+    if doc["system"].split("[", 1)[0] != RECORDED:
         return
     writer = kit.writer(settings.RESEARCH_RUN_DIR)
     table = writer.out / TABLE
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-    writer.fingerprint(benchmark="prove", system=doc["system"], workload=doc["workload"], provers=doc["provers"],
-                       cores=doc["cores"])
+    plan = next(t for i in doc["inputs"] if i["slot"] == SAMPLING for t in i["targets"])
+    writer.fingerprint(benchmark="prove", system=doc["system"], workload=doc["workload"], sampling=plan,
+                       provers=doc["provers"], cores=doc["cores"])
     writer.measurement_file(TABLE)
     for m in measurements(doc, metrics):
         writer.measurement(**m)
