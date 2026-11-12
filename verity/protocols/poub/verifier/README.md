@@ -137,7 +137,9 @@ A transcript that doesn't name its session's pace replays only with the pace its
   windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
-  (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats.
+  (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats. Every δ
+  and error it gives reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): `DELTA_FORM`, the term
+  named in the object that carries the δ (`NAMED_TERMS`).
 - `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`spot.challenger`, in
   process or through `spot.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
@@ -185,7 +187,8 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
   sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
-  δ/T beside it. The deployment's machines and window are parameters.
+  δ/T beside it. The deployment's machines and window are parameters. Its `eps` and δ leave out each session's
+  Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), which the table says (`EXCEPT`).
 - `period.py`: one session a period on one node (`run`, `session`), its core case and its answer.
 - `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the developer doesn't control,
   one line of JSON a message and each window's openings in the openings frame (`main`, `period_with`).
