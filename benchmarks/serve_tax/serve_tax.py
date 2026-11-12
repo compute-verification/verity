@@ -73,9 +73,11 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``prod``: ``published``'s server, as the stock arm the arms made from it are costed over, at the same settings
   (`STOCK`, `stock_of`);
 - ``prod-again``: ``prod`` in a second server lifetime, the noise floor of a cost over ``prod``;
-- ``prod-record``: ``prod`` with the scheduler's step trace, as ``record`` is ``compiled`` with it, and each request's
+- ``prod-record``: ``prod`` with the scheduler's step trace, as ``record`` is ``compiled`` with it, each request's
   prompt ids and served ids kept (`servetax_plugin.ServedIds`), which a replay of a pass sent by vLLM's client is
-  given and compared with (`replay.window`).
+  given and compared with (`replay.window`), and the canonical DSA top-k, as ``two-stage`` has it: a row of more than
+  2,048 keys is then a function of its inputs, which a replay that is to give the served tokens needs (it runs under
+  the same plugin and environment: `replay.served_under`).
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -270,8 +272,8 @@ ARMS = {
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
-    "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace) and each request's prompt ids and served ids",
-                       plugin=("record", "ids"), published=True),
+    "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace), each request's prompt ids and served ids, and "
+                       "the canonical DSA top-k", plugin=("record", "ids"), env=TOPK_ENV, general=TOPK, published=True),
 }
 #: the stock arms, vLLM with no change of ours: an arm's cost is over the nearest of them above it (`stock_of`)
 STOCK = ("compiled", "published", "prod")
@@ -539,7 +541,8 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
-    published = (*model.published, "--tokenizer-mode", model.published_tokenizer[front]) if arm.published else ()
+    mode = model.published_tokenizer.get(front)
+    published = (*model.published, *(("--tokenizer-mode", mode) if mode else ())) if arm.published else ()
     return [sys.executable, "-m", *serve, "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *published, *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
@@ -2470,7 +2473,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     per = [c for c in (serving_cost(ref, ours, n) for n in NUMBER if n in bench_loads(ref)) if c]
     row = prefix_row(by, reference, arm)
     if not per and not row:
-        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join(LOADS)}) sent by vLLM's client: serve "
+        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join((*NUMBER, PREFIX))}) sent by vLLM's client: serve "
                          f"both with --client {BENCH} and the same --loads")
     model = MODELS[ours["model_id"]]
     parts = target_parts(model, arm) if target is None and model.target is not None else []

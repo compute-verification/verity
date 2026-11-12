@@ -182,6 +182,33 @@ class Engine:
         return done
 
 
+def test_a_replay_runs_under_the_served_arms_other_plugins_and_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The canonical top-k decides a long row's keys, so a replay without it is not a replay of an arm that served on it."""
+    loaded = []
+    monkeypatch.setattr(R.S, "check_plugins", lambda env, arm: loaded.append((env, arm)))
+    monkeypatch.setenv("VLLM_PLUGINS", "none")
+    site, private = tmp_path / "site", tmp_path / "private"
+    for arm in ("prod-record", "two-stage", "canonical-topk"):
+        under = R.served_under(arm, site, None)
+        assert under["VERITY_DSA_TOPK"] == "canonical" and "VERITY_DSA_TOPK_LOG" not in under        # nothing kept without a place
+        assert under["PYTHONPATH"].split(R.os.pathsep)[:2] == [str(site), str(R.ROOT / "benchmarks/dsa_topk")]
+        # the top-k alone: none of the arm's recording (the replay keeps its own trace), and nothing of the job's that would drop it
+        assert R.S.PLUGIN_ENV not in under and "VLLM_PLUGINS" not in under
+        assert ((site / "verity_serve_tax-0.0.dist-info" / "entry_points.txt").read_text()
+                == "[vllm.general_plugins]\nverity_dsa_topk = dsa_topk:register\n")
+        env, ours = loaded[-1]
+        assert env is under and R.S.entry_points(ours) == ["verity_dsa_topk = dsa_topk:register"]   # loaded once before the engine
+    assert R.served_under("prod-record", site, private)["VERITY_DSA_TOPK_LOG"] == f"{private}/topk-log"
+    n = len(loaded)
+    for arm in ("prod", "prod-again", "record", "compiled", "no such arm", None):                   # stock, or the record alone
+        assert R.served_under(arm, site, None) == {}
+    assert len(loaded) == n
+    # the replay's own files leave the node, so what the plugin keeps is not put among them
+    with pytest.raises(SystemExit, match="is inside .*which leaves the node"):
+        R.main(["--arm-dir", str(tmp_path / "prod-record"), "--load", "agentic@2", "--out", str(tmp_path / "out"),
+                "--private", str(tmp_path / "out" / "private")])
+
+
 def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Serving held ``a`` back from one schedule, which ran nothing, and ``b`` arrived after it: the next step ran both.
     The replay adds ``b`` after that empty schedule; added before it, as an arrival that names none is, ``b`` runs alone
