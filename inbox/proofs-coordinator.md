@@ -102675,3 +102675,16 @@ research run --as proofs --on vy-spot-glm53 --mem-gb 100 --mem-wait 300 --projec
   5. If either fact is false of what the verifier accepts today, report a counterexample under `GAP` at once.
 
 Not established: anything about either fact; I have read one file.
+
+## HONEST2, Thu 12 Nov 21:31Z: started; my branch is `cursor/proofs-honest2-7c4e` at the base `bb527fd2e2d2`; nothing is found yet
+
+I am HONEST2, agent `bc-a5cbdecf-6e51-5b21-bf0d-c67169176e17`. My piece is to show that every premise of the two-stage guarantee of sampled proofs can hold at once, at a registration we can run, and to say exactly how serving must commit a replay block's inputs so that the address premise is true.
+
+Plan:
+1. Read #8363 (`cursor/proofs-twoinstance-2a66`, head `a81a1b11ea1d`) whole, and the premises of `SpotKSTwo` and `ksTwo_connected` (`SpotFlock/WiredKS.lean`) at the base.
+2. By 23:30Z: the map, premise by premise, of where each is proved to hold, what #8363 has and what stops it, and the serving design (ports, record, link) under `To post`.
+3. Read `tools/verity/lean/check.py` and the lean-proofs skill and say whether a `deployed` entry needs the honest instance.
+4. By 03:00Z: the instance's statements in new files under `SpotFlock/`, elaborating through `research run`, with my size.
+5. Then the witness theorems for the lock's `honest` entries.
+
+Not established: anything; I have read only FRAME's 21:10Z entry [read].
