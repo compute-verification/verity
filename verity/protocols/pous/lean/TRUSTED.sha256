@@ -7,9 +7,9 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../security/lean-toolchain
 5a2e06a3f0ac3d9566d2296f5f9c725d81ac0ad7b59bf82bd6afffad6e069d6c  ../../../../security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../security/lake-manifest.json
-a7190d19d17de06944691464fcd2000ea4792c0ff35a54057582b0bd76bedf79  ../../../../security/Proofs/lakefile.toml
-4fbac37d25f914a1b1abe8c3ff9280165c57e1ac8ca4f4980443b527b44a3b53  ../../../../security/Proofs/lake-manifest.json
-6eb8aa85e0636d2d44525e655924b19b5f2554f378d4db1f9f5966c8a94fea2e  ../../../../security/Definitions/Pous.lean
+2d2a25d5d85adab69c6bbfb3c3dfd9d627a8b464df738d6584ed0a209f4b178b  ../../../../security/Proofs/lakefile.toml
+82ef7424d2c5bc489d087a3db7bb72b3e9b8e48c75e669fad25b767e5a2f0a66  ../../../../security/Proofs/lake-manifest.json
+7da1a650e183252b7b361dcc355b023cab8a858e021b73f5cdd341c99d1b7873  ../../../../security/Definitions/Pous.lean
 004fecb2ad265eb15d7e55aef8350790d4eb66fe7e24038153637a8db8a5d066  ../../../../security/Definitions/Core/Game.lean
 1f3066f54f873a4ce22cbd07956b486c8cb25d9b9de6785466248c742265b32d  ../../../../security/Proofs/Pous/Statements.lean
 3990519592c3bc12d2be58e66bd7f2f053e673be369bd28696f82c0df4495740  ../../../../security/Proofs/Pous/Sanity.lean
@@ -22,7 +22,7 @@ d0ae7c39f3f5c10ca1d34b0f70e4ab1e0b8d3af2323491c8d7a5b5d11fd992b9  ../../../../se
 cf7774f2b0518a5cb06dc751c0ff93aeca7d45bfd8d4184e0b0f39cdc4037824  ../../../../security/Definitions/Pous/Accounting/PubMeets.lean
 de65be9c7ab79c8a1158ef4fb8468a261f2e115a74b95b14e9577a7ca69296f0  ../../../../security/Definitions/Pous/Accounting/Rebuild.lean
 b11ed120faf6ce6c926ebbcf9585147e060ea9098901caf9794ee0176f4e0bd2  ../../../../security/Definitions/Pous/Assumptions.lean
-592990b173196cdc5502257394155de1dc45bba5780e94249cd38d81e39e9e64  ../../../../security/Definitions/Pous/Assumptions/P2.lean
+205d9b6bcbb7f47d4687750859ea06217e3702fd0a3eb3e3f1c1ad2346ee75ce  ../../../../security/Definitions/Pous/Assumptions/P2.lean
 a9ada0ad1c3aa3139111312de493f9b57fdd4258ec3f46316c9415e494cda188  ../../../../security/Definitions/Pous/Claims/StreamedWipeDisk.lean
 efc099a2484e91d667c799bfdac96a13800048c215001f4dbbacd4da2b158bae  ../../../../security/Definitions/Pous/Claims/StreamedWipeServer.lean
 8fe9fa1a511b6e525fc66b0457d0b9e0247dfb40c2c16f285e43edf16c554bc2  ../../../../security/Definitions/Pous/Game/Oracle.lean
@@ -33,9 +33,9 @@ a2acedfe69b1a73344b61872752184def8ff571e521635f1e8f9ac9bd09a2868  ../../../../se
 ed98fc49994f820253ad4dc068b246bed6cb037c34c9c5d77240c2de2d255633  ../../../../security/Definitions/Pous/Guarantees/StreamedWipe.lean
 bd63ca9b0b419cd7a54d8d145643b960b6486cb2f5dcc9b7edc5d8cb61a83958  ../../../../security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean
 6a78d725575707542e39bca6736f1428f82674a912d1ccf2b9f266a6937cebe1  ../../../../security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
-ad1662b306e79da2f66b28110f82f0aa06ed139e3cc89daaf3bbce67ed872118  ../../../../security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
-8a12260a1e8bd3d3f0b3c55ce3e57dc601b009258aea85f4039e435227fe58f3  ../../../../security/Definitions/Pous/Guarantees/StreamedWipeServer.lean
-d75372937bb297b0ebec7aaf2c2a60a32233ff424b2c61244fe61816d47cf09a  ../../../../security/Definitions/Pous/Model/Audit.lean
+3067123eddd12ce1ab5060783b8c30a157326625642bdccec59be2196dd04bc8  ../../../../security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
+c58e112fb1520530f4c912f42311aac485dcb8e7b9637208b6be19980b7cba28  ../../../../security/Definitions/Pous/Guarantees/StreamedWipeServer.lean
+5d64b2bff3e6194be960b3b0044a9e5a5533cd1f3135563d3d61416cee5a60cc  ../../../../security/Definitions/Pous/Model/Audit.lean
 a97955e3da7e9be41fda2412a06bd68ed842c1b2173774671e28ec2deb5e49d0  ../../../../security/Definitions/Pous/Model/BandChain.lean
 92407f9fb201bca194a58b90300af57e491bd0fa7f283bdc5e0f3d00dbab9711  ../../../../security/Definitions/Pous/Model/BandGraph.lean
 007d44b5584f49025dc82966be8d498519791b0f21098958e9d7c96be4fe00da  ../../../../security/Definitions/Pous/Model/ColumnGame.lean
@@ -57,8 +57,8 @@ fd33d1f0e38aa97675b36fcb5925359056e42dda5758d11c57231147a4bdbf53  ../../../../se
 8daeddd594dc99e458d2bec3d46018f86cc02ae64ae40fe3be83a34b4a115cae  ../../../../security/Definitions/Pous/Model/SegLift.lean
 77168d04cd2bae90f9ad2e664978dfa36438a3807a279a2c91f7460590128552  ../../../../security/Definitions/Pous/Model/StreamedWipe.lean
 886e6ccc674f28364dec30d96c034b16d48723635e6df43174958610fe628889  ../../../../security/Definitions/Pous/Model/StreamedWipeDisk.lean
-4e01af62a153408c8a6f1726184b6bde5d75a96208e4358582b6e266b67eb8af  ../../../../security/Definitions/Pous/Model/StreamedWipeServer.lean
+7f80956556d803e71b6b3c773a187c0996e433aa4386bc9fd139af7002b01b6a  ../../../../security/Definitions/Pous/Model/StreamedWipeServer.lean
 c8a3345dc554e1fa0862dcab5549f4c332299997edd42c7dc9c3e3aed2fbe351  ../../../../security/Definitions/Pous/P2/Clip.lean
-366181e9739f5b4f8f9684d5369f6f46866e4861e2b9125c013abc9cd0799df8  ../../../../security/Definitions/Pous/P2/Cost.lean
+30cfbb5dd3fd5754b5dd660f011ff064dd1afb3047f4ca233859b339ba2f689c  ../../../../security/Definitions/Pous/P2/Cost.lean
 0de314331759e8fb4bc9b2af925fbb7e560e2f91a648a443daf27b314377ea98  ../../../../security/Definitions/Pous/P2/Mutable.lean
-db3e0f2e4e444bdb6fa50ad4589432c3a81ec6d1f85b944aed0f59e8fb17a2ef  ../../../../security/Definitions/Pous/P2/Rounds.lean
+6be5cde098db2e84fb7f10af102400d09081dc74dd5a91abf296acb644096f75  ../../../../security/Definitions/Pous/P2/Rounds.lean

@@ -10,8 +10,8 @@ The served circuit is a population (`Population.Dataflow`) with unit functions `
 and a query served with an advice `x`, and egress slots `eg (o, i)`, by charge unit `o` and position `i` in its output.
 Its served function (`popServed`) is the population's function (`Population.Dataflow.outOf`) read unit by unit. A run
 records, of each window, what `Served` records and the trace the audit extracts from the window's commitments
-(`Served.Traced`): an assignment of the population, whose incorrect proof blocks (`Population.Dataflow.wrong`) are the
-window's.
+(`Served.Traced`): an assignment of the population, whose incorrect proof blocks (`Population.Dataflow.incorrect`) are
+the window's.
 
 * `Population.Dataflow.FanOut P eg F`: each proof block's reach (`coneEgress`) holds the egress of at most `F` charge
   units (`unitsInReach`), so an incorrect proof block changes at most `F` of them;
@@ -77,7 +77,7 @@ variable {O I V Tick Adv S U R Q Θ Θ' : Type}
 population `P`'s unit functions `f`. -/
 noncomputable def counted [Fintype U] (P : Population.Dataflow U S) (f : P.Fns V) (w : Traced O (I → V) Tick Adv S V) :
     Served O (I → V) Tick Adv :=
-  { w.toServed with incorrect := (P.wrong f w.trace).card }
+  { w.toServed with incorrect := (P.incorrect f w.trace).card }
 
 /-- **The run counted at its traces**: each window's record counted at its trace. -/
 noncomputable def countRun [Fintype U] (P : Population.Dataflow U S) (f : P.Fns V)

@@ -16,10 +16,11 @@ no value for it, so form (B) does not compare it (`check.oracle_compare`, by tha
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
+
+from verity_vllm.query.manifest.format import query_id_digest
 
 FAMILY = "norm_scales"
 MEMBER = "norm_scale"
@@ -106,7 +107,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
+    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
                required_families=[*q.get("required_families", []), FAMILY])
     out["norm_scales"] = {"family": FAMILY, "member": MEMBER, "kernel_scales": dict(KERNEL_SCALES), "call_scales": dict(CALL_SCALES), **stats}
     return out

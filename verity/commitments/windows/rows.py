@@ -120,10 +120,10 @@ INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || in
 
 @dataclass(frozen=True)
 class ValueRows:
-    """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
-    (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
-    under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts concatenated, when the
-    caller has sampled them (`value_salts`), else sampled here."""
+    """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16- or
+    32-bit leaves (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by
+    row), committed under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts
+    concatenated, when the caller has sampled them (`value_salts`), else sampled here."""
     value: Any
     positions: tuple[int, ...]
     salts: bytes | None = field(default=None, repr=False, compare=False)
@@ -136,12 +136,19 @@ def value_salts(value: Any, positions: Sequence[int] | np.ndarray) -> bytes:
     return at(positions) if at is not None else b"".join(bytes(value.salts[int(i)]) for i in positions)
 
 
+def value_words(value: Any) -> int:
+    """A row of registered value ``value`` in u16 words, as a port holds it: its ``words`` leaves of ``word_bits``."""
+    return value.words * value.word_bits // 16
+
+
 def value_rows(value: Any, positions: Sequence[int] | np.ndarray) -> np.ndarray:
-    """Rows ``positions`` of registered value ``value`` as ``(len(positions), words)`` u16, gathered at once where its rows
-    are an array or gather many (``rows.at``), else row by row."""
+    """Rows ``positions`` of registered value ``value`` as ``(len(positions), value_words(value))`` u16, a 32-bit leaf its
+    two words low first (core's ``row_words``), gathered at once where its rows are an array or gather many
+    (``rows.at``), else row by row."""
     r, at = value.rows, np.asarray(positions, dtype=np.int64)
     a = r[at] if isinstance(r, np.ndarray) else r.at(at) if hasattr(r, "at") else [r[int(i)] for i in at]
-    return np.asarray(a, dtype=np.uint16).reshape(len(at), value.words)
+    leaves = np.ascontiguousarray(np.asarray(a, dtype=f"<u{value.word_bits // 8}").reshape(len(at), value.words))
+    return leaves.view("<u2").reshape(len(at), value_words(value))
 
 
 # --- salts: hm96's salt stream under RFC 8439's nonce -------------------------------------------------------------------
@@ -694,8 +701,9 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
                         v, have = src.value, len(src.value.rows)
                         why = [reason for reason, bad in (
                             (f"{len(src.positions)} rows, not {want[0]}", len(src.positions) != want[0]),
-                            (f"rows of {v.words} words, not {words}", v.words != words),
-                            (f"{v.word_bits}-bit leaves, not 16", v.word_bits != 16),
+                            (f"{v.word_bits}-bit leaves, not 16 or 32", v.word_bits not in (16, 32)),
+                            (f"rows of {v.words} {v.word_bits}-bit leaves, not {words} 16-bit words",
+                             v.word_bits in (16, 32) and value_words(v) != words),
                             (f"{v.schema} rows, not {m.schema(p)}", v.schema != m.schema(p)),
                             (f"positions outside its {have} rows", not all(0 <= i < have for i in src.positions)),
                             (f"salts not one {SALT_BYTES}-byte salt a row",
@@ -1230,7 +1238,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         **({"wired_trees": False} if m.wired and not m.wired_trees else {})})
     values = {}
     for j, (name, (v, ats, yss)) in enumerate(sorted(read.items())):
-        at, step = np.unique(np.concatenate(ats)), max(1, VALUE_CHUNK // (2 * v.words))
+        at, step = np.unique(np.concatenate(ats)), max(1, VALUE_CHUNK // (2 * value_words(v)))
         held = np.empty((len(at), SALT_BYTES), dtype=np.uint8)
         for pos, ys in zip(ats, yss, strict=True):
             held[np.searchsorted(at, pos)] = ys
@@ -1241,7 +1249,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
             for lo in range(0, len(at), step):
                 f.write(np.ascontiguousarray(value_rows(v, at[lo:lo + step]), dtype="<u2").tobytes())
             f.write(held.tobytes())
-        values[name] = {"words": v.words, "positions": at.tolist(), "file": f"v{j}-private.bin"}
+        values[name] = {"words": value_words(v), "positions": at.tolist(), "file": f"v{j}-private.bin"}
     tables = []
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)

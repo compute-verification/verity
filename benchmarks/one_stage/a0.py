@@ -202,11 +202,13 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
-    and its audit of the session's record, and a session whose challenger failed is refused.
+    and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
+    caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
     `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
@@ -218,7 +220,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
     ch = None
-    if own_challenger(env, zk):
+    if tree_from is None and own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -226,7 +228,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
-                              *(ch[1] if ch else [])],
+                              *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
@@ -308,9 +310,11 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                 flags: Sequence[str] = ()) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
+    `hold_registered`) when the statement reads registered values, with the window's registered circuit record
+    (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds; `zk`, a `--zk`
+    session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more of
+    `verify`'s (a plain session's ``--coins tree --stratified K``). ``st["archived"]``, a dict a run's members share: a
+    circuit file archived once, by its file's
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
@@ -326,6 +330,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     part = [str(st["partition_file"])] if st.get("partition_file") else []
     prog = [str(st["program_file"])] if st.get("program_file") else []
     reads = [str(st["registered_file"])] if st.get("registered_file") else []
+    iface = [str(st["interface_file"])] if reads and st.get("interface_file") else []
     circuit, held = st["dir"] / "circuit.txt", st.get("archived")
     s = circuit.stat()
     ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
@@ -335,7 +340,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
         if not (archive / "sha512" / pre[0]).exists():
             os.link(pre[1], archive / "sha512" / pre[0])
     p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
-             *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
+             *prog, *reads, *iface], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     if pre is not None:
         keys["circuit.txt"] = pre[0]
@@ -344,6 +349,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
+    bound += ["--interface", keys.get(Path(iface[0]).name, "")] if iface else []
     t = time.time()
     p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],

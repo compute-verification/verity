@@ -12,7 +12,8 @@ rate of each operand class) and its memory figures (bits from device memory to t
 bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
 estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
 `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. A node's entry comes from its files too:
-`Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`) and its GPU card's.
+`Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`) and its GPU card's, and
+registers each interface the file states as a boundary link that no certifier splits.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -186,6 +187,17 @@ def _whole(entry: Any, what: str) -> int:
     if n < 0 or n.denominator != 1:
         raise Malformed(f"{what}: {n} is not a whole number")
     return int(n)
+
+
+def _line_rate(entry: Any, what: str) -> Fraction:
+    """The bits a second a node file's entry states, read from its value's decimal text."""
+    try:
+        n, unit = Fraction(str(entry["value"])), entry["unit"]
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        raise Malformed(f"{what}: {entry!r} is not an entry with a number as its value and a unit") from None
+    if unit != "bit/s" or n <= 0:
+        raise Malformed(f"{what}: {n} {unit}; state the interface's line rate, above 0, in bit/s")
+    return n
 
 
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
@@ -441,15 +453,27 @@ class Registration:
         return Entry(self.head, tuple(sheets), tuple(locs), tuple(links))
 
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
-                   tick: Fraction = TICK) -> Entry:
+                   tick: Fraction = TICK, certifier: tuple[str, str] | None = None) -> Entry:
         """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`)
         and the table of the GPU card it names (`verity.hardware.cards.load(sku)`) register as host `host` at site
         `site`. It adds the sheet `Sheet.of_file` gives the card and the site's location, each only where the log has
         none; the host; the node's `device.count` devices `host/gpuI`, each naming the sheet, with one `hbm` leaf
-        `host/gpuI/hbm` holding the sheet's device memory, whole; and for each `memory.NAME` of the file a leaf
-        `host/NAME` under the host, at the tier and bytes it states, in the file's order. The file names no host, so
-        the caller gives its id, and every id under it starts with that. The entry holds no link and none of the
-        auditor's devices.
+        `host/gpuI/hbm` holding the sheet's device memory, whole; for each `memory.NAME` of the file a leaf
+        `host/NAME` under the host, at the tier and bytes it states, in the file's order; and for each
+        `interface.NAME` a link `host/NAME` from the host to the outside, at the bits the interface's `rate` moves in a
+        tick of `tick` seconds, rounded up, and latency 0. The file names no host, so the caller gives its id, and
+        every id under it starts with that.
+
+        An interface's link is the node's own way out, a boundary link that no certifier splits: it says what is so
+        of a node whose interface none of the auditor's hardware sits on, and `onsite` refuses it by `uncertified`.
+        A file with no `interface` table gives no link, so its entry says nothing of how the node reaches the outside.
+
+        `certifier` is the id and the key of a network certifier of the auditor's that stands in front of the node
+        without splitting its interface (a process on another machine, say). It adds the certifier under the site and
+        the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`),
+        each at the interfaces' rates summed, beside the interfaces' own links, which stay. A certifier splits one
+        host's way out, so each node names its own, and the key is the one the auditor holds for the id or `owner`
+        refuses the entry. None of the auditor's other devices is added.
 
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
         a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
@@ -458,9 +482,15 @@ class Registration:
             sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
             leaves = [(name, leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
                       for name, leaf in node.get("memory", {}).items()]
+            rates = [(name, _line_rate(port["rate"], f"a node's interface.{name}.rate"))
+                     for name, port in node.get("interface", {}).items()]
         except (AttributeError, KeyError, TypeError) as e:
-            raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count and, for each memory.NAME, "
-                            "a tier and bytes") from None
+            raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count, for each memory.NAME a "
+                            "tier and bytes, and for each interface.NAME a rate") from None
+        if certifier is not None and not rates:
+            raise Malformed("the node file states no interface, so a certifier's links have no rate; read the node's "
+                            "interfaces on a node of its kind (`ip route; ip -6 route; ethtool IF` under `research "
+                            "run --on NODE`) and state each one the routes name as an interface.NAME table")
         unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in leaves)]
         if unread:
             raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
@@ -477,7 +507,17 @@ class Registration:
             locs += [Loc(gpu, "device", host, sheet=digest),
                      Loc(f"{gpu}/hbm", "memory", gpu, tier="hbm", bytes=sheet.mem)]
         locs += [Loc(f"{host}/{name}", "memory", host, tier=tier, bytes=n) for name, tier, n in leaves]
-        return self.entry(() if any(k.digest() == digest for k in before.sheets) else (sheet,), locs)
+        links = [Link(f"{host}/{name}", (host, OUTSIDE), math.ceil(rate * tick), 0) for name, rate in rates]
+        if certifier is not None:
+            try:
+                device, key = certifier
+            except (TypeError, ValueError):
+                raise Malformed(f"`certifier` is a network certifier's id and its key, not {certifier!r}") from None
+            beta = math.ceil(sum(rate for _, rate in rates) * tick)
+            locs.append(Loc(device, "certifier", site, "auditor", key=key))
+            links += [Link(f"{host}/{device}", (host, device), beta, 0),
+                      Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
+        return self.entry(() if any(k.digest() == digest for k in before.sheets) else (sheet,), locs, links)
 
     def to_json(self) -> dict[str, Any]:
         return {"composite": self.composite, "entries": [e.to_json() for e in self.entries]}
@@ -686,6 +726,13 @@ class Site:
     def to_json(self) -> dict[str, Any]:
         return {"links": [k.to_json() for k in self.links], "locs": [x.to_json() for x in self.locs],
                 "sheets": [k.to_json() for k in self.sheets]}
+
+    @classmethod
+    def of_json(cls, j: Any) -> Site:
+        j = _exactly(j, ("links", "locs", "sheets"), "a site")
+        return cls(tuple(Sheet.of_json(k) for k in _list(j["sheets"], "sheets")),
+                   tuple(Loc.of_json(x) for x in _list(j["locs"], "locs")),
+                   tuple(Link.of_json(k) for k in _list(j["links"], "links")))
 
 
 def _dups(xs: Sequence[str]) -> list[str]:

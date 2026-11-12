@@ -18,7 +18,9 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
-from verity.commitments.windows import interface as I, wiring as WI
+from verity.commitments.windows import interface as I
+from verity.commitments.windows import rows as CS
+from verity.commitments.windows import wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -113,12 +115,31 @@ def test_a_held_wired_row_flipped_at_the_row_its_reference_names_is_refused():
     assert all(v["refused"] for v in neg.values())
 
 
+def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
+    """A shared-row reader (its body each port's table, then its units' refs) whose wired port is not its first, as the weights
+    tie's stream rows (``data`` a registered read, ``cv`` wired): the flipped string is its unit 0's ``cv`` row, so the
+    verifier's wiring check on that unit refuses it, and the honest wires hold."""
+    n, rng = 3, np.random.default_rng(7)
+    writer = CS.Member("W", (("a", 64),), (("o0", 64),), n)
+    reader = CS.Member("R", (("data", 64), ("cv", 64)), (("o0", 64),), n, base=n, tables=(("data", n), ("cv", n)),
+                       wired=(("cv", "o0", tuple(range(n))),))
+    strings = rng.integers(0, 256, (n, 2, WI.BC_BYTES), dtype=np.uint8)
+    refs = np.tile(np.arange(n, dtype="<u4")[:, None], (1, 3))
+    tables = [rng.integers(0, 256, (n, WI.BC_BYTES), dtype=np.uint8), strings[:, 1], rng.integers(0, 256, (n, WI.BC_BYTES), dtype=np.uint8)]
+    publics = {"W": strings.tobytes(), "R": b"".join(t.tobytes() for t in tables) + refs.tobytes()}
+    assert WI.check_drawn((writer, reader), publics, range(2 * n)) == {}
+    assert WI.string_at(reader, publics["R"], "cv", 0) == n * WI.BC_BYTES
+    neg = a5.wiring_negatives((writer, reader), publics)
+    assert neg["wired-row-not-its-writer-s-output (§16.13)"] == {"refused": True}
+
+
 class Held:
-    """A registered value as the committer reads it: its rows, one salt a row, a root and each row's path (stand-ins)."""
+    """A registered value as the committer reads it: its rows of 16-bit leaves, one salt a row, a root and each row's path
+    (stand-ins)."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name = self.value = name
-        self.rows, self.words, self.leaves = rows, rows.shape[1], len(rows)
+        self.rows, self.words, self.word_bits, self.leaves = rows, rows.shape[1], 16, len(rows)
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(WI.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
 
