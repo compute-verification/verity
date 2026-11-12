@@ -22,10 +22,12 @@ import os
 import shutil
 import tempfile
 from collections import deque
+from collections.abc import Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from operator import xor
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -117,7 +119,7 @@ def _reads(call, present: set) -> dict:
     return left
 
 
-def lower(C, target, inputs) -> list[list]:
+def lower(C: forms.Circuit, target: Any, inputs: Sequence[list]) -> list[list]:
     """`ir_lower.lower`, each wire dropped once `lower_gates` has read it for the last time (`_reads`; a read past that is a
     KeyError, never other gates). A row's chain of residue adds otherwise keeps every partial sum's forms to the end."""
     t = resolve_target(target)
@@ -403,7 +405,7 @@ class CompactLayout(IL.LoweredUnit):
         tok[(start + 1 + seg)[cf == 1]] = self.const
         return render(tok, (start + ntok - 1)[1::2])
 
-    def pieces(self, name: str, workers: int | None = None):
+    def pieces(self, name: str, workers: int | None = None) -> Iterator[bytes | memoryview]:
         """``ir_lower.netlist(lay, name)``'s text, as bytes in pieces."""
         head = [IL.FORMAT, name, self.n_rows, self.const]
         for groups in (self.in_groups, self.out_groups):
@@ -428,7 +430,8 @@ class CompactLayout(IL.LoweredUnit):
             yield ("\n".join(" ".join(map(str, [len(a), *a, len(b), *b])) for a, b in zip(ta[k:k + ROWS], tb[k:k + ROWS]))
                    + "\n").encode()
 
-    def evaluate(self, ports, T: int, flip=None):
+    def evaluate(self, ports: Sequence[Sequence[int]], T: int,
+                 flip: tuple[int, int] | None = None) -> tuple[list[np.ndarray], int]:
         """`ir_lower.evaluate_layout`."""
         mask = (1 << T) - 1
         if flip is None and not any(np.any(np.asarray(p, dtype=np.uint64)) for p in ports):
@@ -488,7 +491,8 @@ def render(tok: np.ndarray, last: np.ndarray) -> np.ndarray:
     return out[_KEEP[d]]
 
 
-def layout(C: CompactCircuit, in_names, out_names, in_split=None, out_split=None) -> CompactLayout:
+def layout(C: CompactCircuit, in_names: Sequence[str], out_names: Sequence[str], in_split: Sequence[int] | None = None,
+           out_split: Sequence[int] | None = None) -> CompactLayout:
     """`fast_stage.ands_layout(C, ...)` of a circuit `CompactCircuit.compact` accepts."""
     W = IL.WORD
     C._flush()

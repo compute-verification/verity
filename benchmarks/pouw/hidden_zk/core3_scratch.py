@@ -5,13 +5,14 @@ row units only, and every result staged with them is labelled 'core3 scratch'. E
 checked on 40k words)."""
 from verity.definitions.ops import prims as P
 from verity.definitions.silicon import fp
+from verity.circuits.boolean import forms
 from verity.circuits.boolean.forms import NOT, const_bits, mux, sub
 from verity.definitions.silicon import cast
 
 E4M3_TABLE = [cast.e4m3_to_f32_word(b) for b in range(256)]
 
 
-def e2m1(C, x):
+def e2m1(C: forms.Circuit, x: list) -> list:
     mag = list(x[:31])
     f = [NOT(sub(C, mag, const_bits(b + (0 if up else 1), 31), 31)[1]) for b, up in cast.E2M1_UP]
     code = [f[0] ^ f[1] ^ f[2] ^ f[3] ^ f[4] ^ f[5] ^ f[6], f[1] ^ f[3] ^ f[5], f[3], x[31]]
