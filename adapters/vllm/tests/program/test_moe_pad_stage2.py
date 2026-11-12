@@ -58,7 +58,7 @@ def weights():
     """Shared weights: a ONE-HOT router (`wg[e][k] = 1.0 iff k == e`, so logit_e = x[e] exactly) makes the route a function of x[0..E-1]
     the tests set explicitly; random bf16 expert weights of moderate scale."""
     rng = np.random.default_rng(1729)
-    wg = np.zeros((E, H), dtype=np.float32)
+    wg: np.ndarray = np.zeros((E, H), dtype=np.float32)
     for e in range(E):
         wg[e, e] = 1.0
     return {"wg": bf16(wg), "w13": bf16(rng.normal(0, 0.3, (E, 2 * I, H))), "w2": bf16(rng.normal(0, 0.3, (E, H, I))),

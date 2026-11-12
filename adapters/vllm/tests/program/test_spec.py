@@ -21,8 +21,8 @@ from verity.definitions.registry.b1 import Serve
 from tests.program.crosscheck import _standalone
 
 U32 = 0xFFFFFFFF
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
+TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+              "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 TINY_NOBIAS = {**TINY, "BIAS": False, "KVH": 2, "QKV": 96}
 
 
@@ -122,7 +122,7 @@ def test_serve_spec_tiny_schedule_obligation():
     K, LP = 2, 3
     W, WD = _random_weights(TINY, rng), _random_weights(TINY_NOBIAS, rng)
     prompt = [int(x) for x in rng.integers(0, TINY["V"], LP)]
-    A = (K, K)
+    A: tuple[int, ...] = (K, K)
     for _ in range(3):
         prog = Program(bind(spec.ServeSpec, C=TINY, CD=TINY_NOBIAS, LP=LP, K=K, A=A))
         out = _eval_program(prog, [prompt, W, WD])
