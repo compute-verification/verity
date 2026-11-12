@@ -58,9 +58,12 @@ SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}",
 
 
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
-           verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None) -> P.Steady:
+           verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None,
+           cores: int = P.HOST_CORES) -> P.Steady:
+    """A steady-state row, timed at the host's cores unless `cores` says otherwise."""
+
     return P.Steady(type_, definition, k_log, blocks, full, run, R.ART_RATES if art else R.RATES, gpu, verify, refused,
-                    provers, art)
+                    provers, art, cores)
 
 
 def test_a_census_counts_a_request_over_its_tokens_and_a_cut_replaces_its_kinds():
@@ -193,6 +196,136 @@ def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_onl
     assert [r["provers"] for r in P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)["rows"]] == [1, None, None]
 
 
+def test_a_type_is_priced_at_the_hosts_cores_else_from_the_fewest_cores_above():
+    """Among the rows at the stated prover count, those timed at the host's cores price a type, however full or new a
+    row at more cores is. A type they measured only at more cores takes the fewest cores above, then the fullest
+    statement, and its note says so; a row timed at fewer cores prices nothing, and is named like a row at another
+    prover count. The host's cores default to `HOST_CORES`, and a row that states none is one at `UNSTATED_CORES`."""
+
+    census = P.Census.of(CENSUS)
+    gemm, gemm32, norm = (P.definition_id(name) for name in (GEMM64, GEMM32, NORM))
+    rows = (
+        steady("gemm64", gemm, "r20260101-000000-0001", 4, 8.0),                               # the host's 10 cores, half full
+        steady("gemm64", gemm, "r20260102-000000-0002", 8, 12.0, cores=12),
+        steady("gemm64", gemm, "r20260103-000000-0003", 8, 8.0, cores=24),                     # the newest, and full
+        steady("norm", norm, "r20260101-000000-0001", 8, 24.0, k_log=22, cores=24),
+        steady("norm", norm, "r20260101-000000-0001", 4, 8.0, k_log=22, cores=12),             # the fewest above 10, half full
+        steady("norm", norm, "r20260103-000000-0003", 8, 40.0, k_log=22, cores=6),             # under the host's share
+        steady("gemm32", gemm32, "r20260103-000000-0003", 8, 4.0, k_log=19, cores=6),          # measured under it only,
+        steady("gemm32", gemm32, "r20260103-000000-0003", 8, 4.0, k_log=19, provers=2),        # and at two provers
+    )
+
+    def priced(**at: int) -> dict[str, P.Cost]:
+        return {r.block: r.cost for r in P.Flock(rows, SESSIONS, "art:card", **at).table(census).rows}
+
+    assert (P.HOST_CORES, P.UNSTATED_CORES, P.Flock().cores) == (10, 24, 10)
+    assert P.Steady("gemm64", gemm, 20, 8, 8, "r20260101-000000-0001", R.RATES, 8.0).cores == 24
+    ten = priced()
+    assert ten == priced(cores=10)
+    assert (ten[GEMM64].source, ten[GEMM64].seconds, ten[GEMM64].record, ten[GEMM64].cores) == (
+        P.STEADY, 2.0, "r20260101-000000-0001", 10)
+    assert ten[GEMM64].note == "`gemm64`, 1 prover, statements 4/8 full (out/rate/rate.json)"
+    assert (ten[NORM].source, ten[NORM].seconds, ten[NORM].cores) == (P.STEADY, 2.0, 12)
+    assert ten[NORM].note == ("`norm`, 1 prover, statements 4/8 full (out/rate/rate.json); timed at 12 cores, above the "
+                              "host's 10")
+    assert ten[GEMM32].source == P.MODELED and ten[GEMM32].cores is None
+    assert ten[GEMM32].note == ("measured at steady state at 2 provers, which price no type at 1; measured at steady state "
+                                "at 6 cores, which price no type at 10")
+    # on a host of 12 cores the rows at 12 are its own, and the row at 10 prices nothing
+    twelve = priced(cores=12)
+    assert (twelve[GEMM64].seconds, twelve[GEMM64].record, twelve[GEMM64].cores) == (1.5, "r20260102-000000-0002", 12)
+    assert (twelve[NORM].seconds, twelve[NORM].cores) == (2.0, 12)
+    assert "timed at" not in twelve[GEMM64].note + twelve[NORM].note
+    wide = priced(cores=24)
+    assert (wide[GEMM64].seconds, wide[GEMM64].record, wide[NORM].seconds) == (1.0, "r20260103-000000-0003", 3.0)
+    assert priced(cores=16)[GEMM64].note == ("`gemm64`, 1 prover, full statements (out/rate/rate.json); timed at 24 cores, "
+                                             "above the host's 16")
+    # on a host of more cores than any row was timed at, no row prices a type: each names the cores that measured it
+    over = priced(cores=32)
+    assert (over[GEMM64].source, over[NORM].source) == (P.SINGLE, P.MODELED)
+    assert over[GEMM64].note == "measured at steady state at 10, 12, 24 cores, which price no type at 32"
+    assert over[NORM].note == "measured at steady state at 6, 12, 24 cores, which price no type at 32"
+    # the prover count and the cores both hold: at two provers the K=32 GEMM's row at the host's cores prices it
+    assert (priced(provers=2)[GEMM32].source, priced(provers=2)[GEMM32].cores) == (P.STEADY, 10)
+
+    # the totals give the share of the proving time that rests on rows timed above the host's cores
+    table = P.Flock(rows, SESSIONS, "art:card").table(census)
+    total = 2.0 * 2.0 + 1.0 * ten[GEMM32].seconds + 0.5 * 2.0
+    out = P.report(table, 1.0)
+    assert table.cores == 10 and out["totals"]["gpu_seconds_per_token"] == pytest.approx(total)
+    assert out["totals"]["above_cores"] == {
+        "cores": 10, "block_types": 1, "time_share": pytest.approx(1.0 / total), "timed_at": [12],
+        "sources": [{"source": P.STEADY, "block_types": 1, "time_share": pytest.approx(1.0 / total)}]}
+    assert {r["block"]: r["cores"] for r in out["rows"]} == {GEMM64: 10, NORM: 12, GEMM32: None}
+    assert P.report(P.Flock(rows, SESSIONS, "art:card", cores=12).table(census), 1.0)["totals"]["above_cores"] == {
+        "cores": 12, "block_types": 0, "time_share": 0.0, "timed_at": [], "sources": []}
+
+
+def test_the_family_rule_takes_the_rows_that_price_each_type_at_the_hosts_cores():
+    """A type with no row of its own takes its Definition and K's rows as the host's cores choose them: a row timed
+    above them prices its kin and says so, and one timed under them prices neither its type nor its kin. The share of
+    the proving time that rests on rows timed above the host's cores counts both, by source, at a sampling plan too."""
+
+    defs = {"Head_v1{K=4,FIRST=false}": 20, "Head_v1{K=4,FIRST=true}": 20, "Head_v1{K=4,LAYER=9}": 21}
+    census = P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
+        name: {"k_log": k, "of": {"Head_v1": "row"}, "prefill": 1, "decode": 0} for name, k in defs.items()}})
+    own, first, layer = defs
+    rows = (steady("head", "Head_v1{K=4,FIRST=False}", "r20260101-000000-0001", 8, 8.0),
+            steady("head-first", "Head_v1{K=4,FIRST=True}", "r20260101-000000-0001", 8, 16.0, cores=24))
+    table = P.Flock(rows, (), None).table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert [(c.source, c.seconds, c.cores) for c in by.values()] == [(P.STEADY, 1.0, 10), (P.STEADY, 2.0, 24), (P.FAMILY, 4.0, 24)]
+    assert by[layer].note == ("its Definition and K's, `head-first` (`Head_v1{K=4,FIRST=True}`), 1 prover, full statements, "
+                              "at 2^1 its seconds; the dearest of 2 measured; timed at 24 cores, above the host's 10")
+    out = P.report(table, 1.0)
+    t = out["totals"]
+    assert t["steady_time_share"] == pytest.approx(3.0 / 7.0)
+    assert t["above_cores"] == {
+        "cores": 10, "block_types": 2, "time_share": pytest.approx(6.0 / 7.0), "timed_at": [24],
+        "sources": [{"source": P.STEADY, "block_types": 1, "time_share": pytest.approx(2.0 / 7.0)},
+                    {"source": P.FAMILY, "block_types": 1, "time_share": pytest.approx(4.0 / 7.0)}]}
+
+    def page(out: dict, cores: int = 10) -> str:
+        return R.render({"workload": "toy", "model": "Toy", "provers": 1, "cores": cores, "inputs": [], "refused": [],
+                         "macs_in_blocks": 1.0, **out,
+                         "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+                         "periods": {"gates_basis": "stated", "only": None, "rows": []}})
+
+    text = page(out)
+    assert ("- host cores (`--cores`, a stated input): 10 CPU cores a card, node A's share: the cores its provider gives a "
+            "card; a type is priced from the rows whose provers held that many, else from those that held the fewest above "
+            "it, which its row names; a row that held fewer prices nothing, and one whose record states no cores is read "
+            "as 24\n") in text
+    assert ("- steady-state rows timed above the host's 10 cores: 85.71% of its proving time rests on them: 2 block types "
+            "no row at 10 cores measures, priced from rows timed at 24 cores (1 measured at steady state, 28.57%; 1 steady "
+            "state, its family's, 57.14%)\n") in text
+
+    # at a sampling plan the share is of the proving time the plan's blocks take
+    cells = [{"block": name, "type": "", "taken": taken} for name, taken in zip(defs, (1.0, 1.0, 2.0))]
+    spot = P.Spot(P.Flock(rows, (), None), plan(cells), P.Serving(0.5, 4.0, "stated")).table(census)
+    assert spot.cores == 10
+    assert P.report(spot, 1.0)["totals"]["above_cores"]["time_share"] == pytest.approx((10 * 2.0 + 20 * 4.0) / 110.0)
+
+    # a row at the host's cores prices its type before the fuller, newer one above them does, and its kin with it
+    exact = (*rows, steady("head-first", "Head_v1{K=4,FIRST=True}", "r20260101-000000-0001", 4, 6.0))
+    table = P.Flock(exact, (), None).table(census)
+    assert [(r.cost.source, r.cost.seconds, r.cost.cores) for r in table.rows] == [
+        (P.STEADY, 1.0, 10), (P.STEADY, 1.5, 10), (P.FAMILY, 3.0, 10)]
+    out = P.report(table, 1.0)
+    assert out["totals"]["above_cores"] == {"cores": 10, "block_types": 0, "time_share": 0.0, "timed_at": [], "sources": []}
+    assert "- steady-state rows timed above the host's 10 cores: 0.00% of its proving time rests on them\n" in page(out)
+
+    # on a host of 24 cores the row timed at 10 prices neither its own type nor its kin: both take the row at 24
+    wide = P.Flock(rows, (), None, cores=24).table(census)
+    by = {r.block: r.cost for r in wide.rows}
+    assert [(c.source, c.seconds, c.cores) for c in by.values()] == [(P.FAMILY, 2.0, 24), (P.STEADY, 2.0, 24), (P.FAMILY, 4.0, 24)]
+    assert by[own].note == ("its Definition and K's, `head-first` (`Head_v1{K=4,FIRST=True}`), 1 prover, full statements, at "
+                            "2^0 its seconds; measured at steady state at 10 cores, which price no type at 24")
+    text = page(P.report(wide, 1.0), cores=24)
+    assert "- host cores (`--cores`, a stated input): 24 CPU cores a card; a type is priced" in text and "node A" not in text
+    assert "- steady-state rows timed above the host's 24 cores: 0.00% of its proving time rests on them\n" in text
+
+
 def test_a_row_an_art_holds_is_its_runs_and_names_the_art():
     """A row an art holds in place of its run's own is ordered as that run's, and the type's row names the art as its
     record and the run that measured it."""
@@ -218,7 +351,7 @@ def test_a_row_an_art_holds_is_its_runs_and_names_the_art():
 
 def test_a_steady_row_of_no_block_type_of_the_census_is_unread_not_dropped():
     """A steady-state row whose staged Definition the census doesn't hold, or holds no longer under its cut, is on no
-    block type's row: the table lists it as unread, at whatever prover count, with its figure where it is a
+    block type's row: the table lists it as unread, at whatever prover count and cores, with its figure where it is a
     steady-state measurement and why it isn't one otherwise. It enters no figure: no row, no total, and not the
     range's other end, whose median is over the census's steady-state types alone."""
 
@@ -227,9 +360,9 @@ def test_a_steady_row_of_no_block_type_of_the_census_is_unread_not_dropped():
     priced = steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0)
     strays = (
         steady("norm", norm, "r20260102-000000-0002", 8, 24.0, k_log=22),                     # a block type the cut replaces
-        steady("old-linear", "Linear_v0{K=64}", "r20260103-000000-0003", 4, 6.0, provers=2, art=art),
+        steady("old-linear", "Linear_v0{K=64}", "r20260103-000000-0003", 4, 6.0, provers=2, art=art, cores=24),
         steady("old-linear", "Linear_v0{K=64}", "r20260103-000000-0003", 8, None, refused="void: out of device memory"),
-        steady("idle", "Idle_v1{N=1}", "r20260101-000000-0001", 8, 2.0),                     # a type no step ran
+        steady("idle", "Idle_v1{N=1}", "r20260101-000000-0001", 8, 2.0, cores=6),            # a type no step ran
     )
     flock = P.Flock((priced, *strays), SESSIONS, "art:card")
     whole = flock.table(census)
@@ -239,20 +372,20 @@ def test_a_steady_row_of_no_block_type_of_the_census_is_unread_not_dropped():
     out = P.report(recut, 1.0)
     assert out["unread"] == [
         {"record": "r20260102-000000-0002", "run": "r20260102-000000-0002", "type": "norm", "definition": norm,
-         "provers": 1, "seconds": 3.0, "why": None},
+         "provers": 1, "cores": 10, "seconds": 3.0, "why": None},
         {"record": art, "run": "r20260103-000000-0003", "type": "old-linear", "definition": "Linear_v0{K=64}",
-         "provers": 2, "seconds": 1.5, "why": None},
+         "provers": 2, "cores": 24, "seconds": 1.5, "why": None},
         {"record": "r20260103-000000-0003", "run": "r20260103-000000-0003", "type": "old-linear",
-         "definition": "Linear_v0{K=64}", "provers": 1, "seconds": None, "why": "void: out of device memory"},
+         "definition": "Linear_v0{K=64}", "provers": 1, "cores": 10, "seconds": None, "why": "void: out of device memory"},
         {"record": "r20260101-000000-0001", "run": "r20260101-000000-0001", "type": "idle", "definition": "Idle_v1{N=1}",
-         "provers": 1, "seconds": 0.25, "why": None}]
+         "provers": 1, "cores": 6, "seconds": 0.25, "why": None}]
     alone = P.report(P.Flock((priced,), SESSIONS, "art:card").table(census.recut(CUT)), 1.0)
     assert alone["unread"] == [] and {k: v for k, v in out.items() if k != "unread"} == {k: v for k, v in alone.items() if k != "unread"}
     # a sampling plan takes the prover's table, its unread rows with it
     cells = [{"block": b.name, "type": "", "taken": 1.0} for b in census.blocks]
     assert P.Spot(flock, plan(cells), P.Serving(0.5, 4000.0, "stated")).table(census).unread == strays[1:]
 
-    page = {"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
             "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
@@ -349,7 +482,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
         P.Census.of(doc)), 1.0)["totals"]
     assert sampled["status"] == "partial" and [m["block_share"] for m in sampled["missing"]] == pytest.approx([1 / 3, 1 / 3])
 
-    page = {"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.8, **out,
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 0.8, **out,
             "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
@@ -438,7 +571,7 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
                               "difference_share": pytest.approx(gaps[top] / sum(gaps))}
     assert {r["block"]: r["planned_seconds"] for r in out["rows"]} == got.priced
 
-    page = {"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 0.9, **out,
             "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
             "periods": {"gates_basis": "stated", "only": None, "rows": []}}
     text = R.render(page)
@@ -480,7 +613,7 @@ def test_a_priced_plans_totals_where_the_table_has_no_price_a_higher_one_or_the_
     assert own[GEMM64] == 1.0 and own[bare] is None and 0.25 < own[GEMM32] < 0.2501 and 1.0 < own[half] < 1.001
 
     def page(out: dict) -> str:
-        return R.render({"workload": "toy", "model": "Toy", "provers": 1, "inputs": [], "refused": [], "macs_in_blocks": 0.9,
+        return R.render({"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 0.9,
                          **out, "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
                          "periods": {"gates_basis": "stated", "only": None, "rows": []}})
 
@@ -593,6 +726,26 @@ def test_a_row_names_the_census_type_it_was_staged_for_not_the_form_staged():
     cost = P.Flock((read,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
     assert cost.source == P.STEADY
     assert R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}"}}, "r1").definition == "Good_v2{N=1}"
+
+
+def test_a_rows_cores_are_its_count_or_its_mappings_count_and_24_where_it_states_none():
+    """A row's `cores` is the CPU cores its provers held for its card: a count, or a mapping whose `count` is one, as a
+    row completed after its run states them. A row that states none is read at 24, or at what its run's host states
+    where its reader has that; one that states anything else isn't a steady-state measurement, and says so."""
+
+    good = {row["type"]: row for row in REFUSALS}["good"]
+    held = {"count": 10, "list": "12-21", "numa_nodes": [0], "of_host": 96}
+    assert "cores" not in good and R.steady_row(good, "r1").cores == 24
+    assert [R.steady_row(good | {"cores": stated}, "r1").cores for stated in (10, held, 24, held | {"count": 12})] == [10, 10, 24, 12]
+    assert [R.row_cores(row) for row in (good, good | {"cores": 10}, good | {"cores": held})] == [24, 10, 10]
+    assert (R.steady_row(good, "r1", unstated=10).cores, R.steady_row(good | {"cores": 12}, "r1", unstated=10).cores) == (10, 12)
+    assert all(R.steady_row(good | {"cores": stated}, "r1").measured for stated in (10, held))
+    for stated in (0, 10.2, "10", True, None, {"list": "12-21"}, held | {"count": 0}):
+        read = R.steady_row(good | {"cores": stated}, "r1")
+        assert R.row_cores(good | {"cores": stated}) is None and not read.measured
+        assert read.refused == f"its `cores` ({stated}) isn't a count of CPU cores, or a mapping whose `count` is one"
+    # a row that isn't a steady-state measurement for another reason keeps the cores it states
+    assert R.steady_row(good | {"cores": 10, "flat": False}, "r1").cores == 10
 
 
 # ---- the store side ------------------------------------------------------------------------------------------------------------
@@ -747,6 +900,15 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert top["note"] == (f"steady state tried as `fi-linear-k2048` at 1 prover in {RUNS[1]} (out/rate/rate.json): void: "
                            "exited nonzero: prover-gpu0 rc -15")
     assert {r["provers"] for r in steady_rows} == {1} and top["provers"] is None and doc["provers"] == 1
+    # the runs state no cores, in a row or for their host: every row is read as timed at 24, above the default host's
+    # 10, so the same rows price the same types and the totals say how much of the proving time rests on them
+    assert doc["cores"] == 10 and {r["cores"] for r in steady_rows} == {24} and top["cores"] is None
+    assert all(r["note"].endswith("; timed at 24 cores, above the host's 10") for r in steady_rows)
+    assert t["above_cores"] == {
+        "cores": 10, "block_types": 8 + 59, "timed_at": [24],
+        "time_share": pytest.approx(by[P.STEADY]["time_share"] + by[P.FAMILY]["time_share"], rel=1e-12),
+        "sources": [{"source": P.STEADY, "block_types": 8, "time_share": by[P.STEADY]["time_share"]},
+                    {"source": P.FAMILY, "block_types": 59, "time_share": by[P.FAMILY]["time_share"]}]}
     assert "tried as `gq-k6144`" in rows["Fp8GroupQuantUe8m0_v1{K=6144,G=128}"]["note"]
     assert [i["targets"] for i in doc["inputs"]] == [[arts[R.CENSUS]], [arts[R.CUT]], RUNS[::-1], [arts[R.SINGLE]]]
 
@@ -778,7 +940,22 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert (f"- {R.STEADY}: {', '.join(RUNS[::-1])} (`prove-glm53-flock-steady`): 8 staged types measured at steady state "
             "at 1 prover\n") in text
     assert "- prover count (`--provers`, a stated input): 1;" in text
+    assert "- host cores (`--cores`, a stated input): 10 CPU cores a card, node A's share" in text
+    assert ("- steady-state rows timed above the host's 10 cores: 23.32% of its proving time rests on them: 67 block types "
+            "no row at 10 cores measures, priced from rows timed at 24 cores (8 measured at steady state, 23.32%; 59 "
+            "steady state, its family's, 0.00%)\n") in text
     assert "(modeled, a stated input, not a record)" in text and "| measured at steady state | 8 |" in text
+    # on a host of 24 cores the rows are its own: the same figures, none resting on a row timed above it; on one of
+    # more, no row prices a type
+    wide = R.build("flock", "glm53", cores=24, store=s.fresh("wide"), root=REPO)
+    assert wide["cores"] == 24 and wide["totals"]["above_cores"]["block_types"] == 0
+    assert wide["totals"]["gpu_seconds_per_token"] == doc["totals"]["gpu_seconds_per_token"] and wide["sources"] == doc["sources"]
+    assert not any("timed at" in r["note"] for r in wide["rows"])
+    over = R.build("flock", "glm53", cores=32, store=s.fresh("over"), root=REPO)
+    assert {x["source"]: x["block_types"] for x in over["sources"]}[P.STEADY] == 0 and over["totals"]["range_basis"] is None
+    assert sum(r["note"].endswith("measured at steady state at 24 cores, which price no type at 32") for r in over["rows"]) == 8
+    with pytest.raises(ValueError, match="--cores 0: a type is priced on a host of one core a card or more"):
+        R.build("flock", "glm53", cores=0, store=s.fresh("none"), root=REPO)
     # at two provers only the oldest run's half statements of the six light types measure anything: its two heavy
     # types' row at two provers is void, and every row at one prover prices nothing
     two = R.build("flock", "glm53", provers=2, store=s.fresh("fourth"), root=REPO)
@@ -983,7 +1160,9 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
     assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-12)
     steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
     assert len(steady_rows) == 8 and {r["record"] for r in steady_rows} == {art}
-    assert all(r["note"].endswith(f"(rate.json of {art[:16]}, measured in {newest})") for r in steady_rows)
+    # the fixture's rows state no `cores`, so each is read as timed at 24 and says so on a host of 10
+    assert all(r["note"].endswith(f"(rate.json of {art[:16]}, measured in {newest}); timed at 24 cores, above the host's 10")
+               for r in steady_rows)
     assert f"| {art[:16]} |" in R.render(doc, rows=150)
 
     # the art alone, its run in no store: the rows are the art's, and the run isn't read. A file art holds them as well
@@ -1015,6 +1194,60 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
     assert doc["inputs"][2]["targets"] == [] and {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
 
 
+def test_a_rows_cores_are_its_own_else_its_runs_host_else_24(tmp_path):
+    """Where a row's cores are read from, on a store: a run's row that states none takes the cores its run's
+    `out/host.json` states (`cpus_used`), and is read at 24 where the run holds no host file or the file states none;
+    an art's row states its own. Each host's cores then choose between a run's rows and an art's."""
+
+    newest = RUNS[-1]
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+
+    def store(name: str, host: dict | None) -> Store:
+        s = Store(tmp_path / name)
+        for slot, card in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+            s.record(s.doc(R.CARD_SCHEMA, card, fixture(card)), slot)
+        s.record(census_art(s), R.CENSUS)
+        files = tmp_path / name / "run-files"
+        shutil.copytree(FIXTURES / "steady" / newest, files / "out")
+        if host is not None:
+            (files / "out" / "host.json").write_text(json.dumps(host))
+        s.ran(newest, files)
+        s.record(newest, R.STEADY)
+        return s
+
+    def steady_rows(s: Store, name: str, **at: int) -> tuple[dict, list[dict]]:
+        doc = R.build("flock", "glm53", store=s.fresh(name), root=REPO, **at)
+        return doc, [r for r in doc["rows"] if r["source"] == P.STEADY]
+
+    # the run's host held 10 cores for its card: its rows are the default host's own, and none is timed above it
+    s = store("hosted", {"cpus_host": 96, "cpus_used": 10, "cpus_list": "12-21"})
+    doc, rows = steady_rows(s, "ten")
+    assert len(rows) == 8 and {r["cores"] for r in rows} == {10} and not any("timed at" in r["note"] for r in doc["rows"])
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-12)
+    assert doc["totals"]["above_cores"] == {"cores": 10, "block_types": 0, "time_share": 0.0, "timed_at": [], "sources": []}
+    # and on a host of 24 cores they are under its share: they price nothing, and each type's row says what measured it
+    doc, rows = steady_rows(s, "wide", cores=24)
+    assert rows == [] and sum(r["note"].endswith("measured at steady state at 10 cores, which price no type at 24")
+                              for r in doc["rows"]) == 8
+
+    # an art holding the run's rows, each stating its own cores as a mapping: at 24 they are another measurement of
+    # the same types, which prices them on a host of 24 cores and leaves the run's own to price them on one of 10
+    held = {"count": 24, "list": "24-47", "numa_nodes": [1], "of_host": 96}
+    art = s.record(s.tree("evidence/v1", R.ART_RATES, [row | {"cores": held} for row in whole], {"runs": [newest]}), R.STEADY)
+    doc, rows = steady_rows(s, "both")
+    assert {(r["record"], r["cores"]) for r in rows} == {(newest, 10)} and doc["totals"]["above_cores"]["block_types"] == 0
+    doc, rows = steady_rows(s, "both-wide", cores=24)
+    assert len(rows) == 8 and {(r["record"], r["cores"]) for r in rows} == {(art, 24)}
+    assert doc["totals"]["gpu_seconds_per_token"] == pytest.approx(88303.31936863324, rel=1e-12)
+    assert doc["totals"]["above_cores"]["block_types"] == 0 and not any("which price no type" in r["note"] for r in rows)
+
+    # a run whose host file states no cores, or isn't a mapping, is read as one that holds none: at 24
+    for name, host in (("unstated", {"hostname": "h"}), ("uncounted", {"cpus_used": "10"}), ("listed", [10])):
+        doc, rows = steady_rows(store(name, host), "reader")
+        assert len(rows) == 8 and {r["cores"] for r in rows} == {24}
+        assert doc["totals"]["above_cores"]["block_types"] == 8 + 59 and doc["totals"]["above_cores"]["timed_at"] == [24]
+
+
 def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_path):
     """The three runs as they are in the store, their proof server reports (`server-reports/RUN/`) and no `rate.json`: read from
     the reports, they give the table their `rate.json` rows give, each `server-kK` report's types at K provers. The rows
@@ -1035,6 +1268,7 @@ def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_p
     steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
     assert {r["record"] for r in steady_rows} == {RUNS[-1]} and {r["provers"] for r in steady_rows} == {1}
     assert sum("out/light-va2/server-k1" in r["note"] for r in steady_rows) == 6
+    assert {r["cores"] for r in steady_rows} == {24}                                   # a report states no cores
 
     two = R.build("flock", "glm53", provers=2, store=s.fresh("second"), root=REPO)
     at_two = [r for r in two["rows"] if r["source"] == P.STEADY]
@@ -1064,8 +1298,14 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     assert code == 0 and out.startswith("# verity bench prove: flock on glm53 (GLM-5.3)\n")
     assert "- prover count (`--provers`, a stated input): 1;" in out and "8 staged types measured at steady state at 1 prover" in out
     assert "## Every block proved" in out and "| 148 more block types |" in out
+    assert "- host cores (`--cores`, a stated input): 10 CPU cores a card, node A's share" in out
     code, out, _ = run("--system", "flock", "--workload", "glm53", "--provers", "2", "--json")
-    assert code == 0 and json.loads(out)["provers"] == 2
+    assert code == 0 and (json.loads(out)["provers"], json.loads(out)["cores"]) == (2, 10)
+    code, out, _ = run("--system", "flock", "--workload", "glm53", "--cores", "24", "--json")
+    doc = json.loads(out)
+    assert code == 0 and (doc["provers"], doc["cores"]) == (1, 24) and doc["totals"]["above_cores"]["block_types"] == 0
+    code, _, err = run("--system", "flock", "--workload", "glm53", "--cores", "0", "--local-only")
+    assert code == 2 and "--cores 0: a type is priced on a host of one core a card or more" in err
     code, out, _ = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], "--json")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952)

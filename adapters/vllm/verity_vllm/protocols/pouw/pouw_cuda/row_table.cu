@@ -109,15 +109,15 @@ __global__ void k_hist_nodes(Hist t, uint64_t* tree, uint32_t l, uint64_t lo, ui
 }
 
 __global__ void k_hist_rows(Hist t, uint64_t at, uint32_t k, const uint8_t* rows, const uint64_t* hm, const uint64_t* ms,
-                            uint64_t* tree, uint64_t* bcs, uint32_t* salts) {
+                            uint64_t* tree, uint64_t* bcs, const uint32_t* salts) {
   const uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= k) return;
   uint64_t m[16], bc[16];
   uint32_t y[48];
   for (int q = 0; q < 16; ++q) m[q] = ms[q];
+  for (int q = 0; q < 48; ++q) y[q] = salts[48 * (size_t)i + q];
   hist_row(t, at + i, rows + (size_t)i * t.L, hm, m, y, bc, tree + 8 * (at + i));
   for (int q = 0; q < 16; ++q) bcs[16 * (size_t)i + q] = bc[q];
-  for (int q = 0; q < 48; ++q) salts[48 * (size_t)i + q] = y[q];
 }
 
 __global__ void k_hist_paths(Hist t, const uint64_t* tree, const uint32_t* pos, uint32_t n, uint64_t* out) {
@@ -146,10 +146,10 @@ extern "C" int rt_hist_init(void* stream, const Hist* t, uint64_t* tree) {
   return (int)cudaGetLastError();
 }
 
-// ``k`` rows (``rows``, k x L bytes) at positions ``at`` .. ``at + k - 1``: their leaves and the nodes above them, their strings
-// into ``bcs`` (k x 16 words) and their salts into ``salts`` (k x 48 u32), all device pointers but ``t``.
+// ``k`` rows (``rows``, k x L bytes) at positions ``at`` .. ``at + k - 1`` under their salts ``salts`` (k x 48 u32): their leaves
+// and the nodes above them, and their strings into ``bcs`` (k x 16 words), all device pointers but ``t``.
 extern "C" int rt_hist_append(void* stream, const Hist* t, uint64_t at, uint32_t k, const uint8_t* rows, const uint64_t* hm,
-                              const uint64_t* ms, uint64_t* tree, uint64_t* bcs, uint32_t* salts) {
+                              const uint64_t* ms, uint64_t* tree, uint64_t* bcs, const uint32_t* salts) {
   if (!hist_ok(*t) || k == 0 || at + k > t->cap) return -1;
   cudaStream_t st = (cudaStream_t)stream;
   k_hist_rows<<<blocks(k, 64), 64, 0, st>>>(*t, at, k, rows, hm, ms, tree, bcs, salts);

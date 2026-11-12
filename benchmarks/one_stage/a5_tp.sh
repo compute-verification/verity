@@ -16,6 +16,12 @@
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
 #     sparse-mla:units is its --units, each key block served as its scores unit and its values units.
+#     The STANDIN entry topp is a5_topp.py: test_serving_rows_stages' window (GumbelTopPTokenSelectSharedGreedy rows cut into
+#     their stages, each stage on bits and each carried row wired to the unit that wrote it: at V = 64, split count 1's stats,
+#     probs and step blocks; A5_TOPP its other statics, a5_topp.py's arguments, e.g. '--v 128 --splits 1,2', or
+#     '--v 16 --select-only', the select chunks alone, the rows they read from the step blocks plain input rows), run as the
+#     entry row-tables is. topp:slots names the stages as words, their table reads in lookup slots, each to be refused by
+#     Lean's verify --zk.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
@@ -230,15 +236,16 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "$e" = sparse-mla:units ]; then
+    if [ "$e" = row-tables ] || [ "${e%%:*}" = sparse-mla ] || [ "${e%%:*}" = topp ]; then
+      case $e in row-tables|sparse-mla) FORM=();; sparse-mla:units) FORM=(--units);; topp) FORM=(${A5_TOPP:-});;
+        topp:slots) FORM=(--stages slots ${A5_TOPP:-});; *) echo "STANDIN $e: sparse-mla:units, topp or topp:slots"; exit 3;; esac
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
-      n=${e//:/-}; s=${e%%:*}; UNITS=(); [ "$e" = "$s" ] || UNITS=(--units)
-      mkdir -p $O/$n
-      $TIME $PY benchmarks/one_stage/a5_${s//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
+      N=${e/:/-}; B=${e%%:*}; mkdir -p $O/$N
+      $TIME $PY benchmarks/one_stage/a5_${B//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
         ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \
-        "${UNITS[@]}" --out $W/$n > $O/$n/a5.log 2> $O/$n/a5.err || rc=1
-      grep '^A5' $O/$n/a5.log | cut -c1-4000; tail -25 $O/$n/a5.err
-      keep $n
+        "${FORM[@]}" --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
+      grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err
+      keep $N
       continue
     fi
     if [ "${e%%:*}" = warden ]; then
