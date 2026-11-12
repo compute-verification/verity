@@ -766,8 +766,18 @@ and is recorded (a `known` event, no failure), and every other tree must be a re
 parse, an entry whose root is a registration's table's, two entries of one domain, an entry at whose domain the
 statement has no tree, and a tree of the statement that differs from the entry at its domain are each the session's
 stop. So a session that passes holds exactly the listed trees as known content, and the stack chooses neither which
-trees pass so nor a bit of them. The list is the verifier's word only where the answer to `Register` is the auditor's:
-nothing of the stack's reaches the auditor but through a release side run with the key.
+trees pass so nor a bit of them.
+
+The list is the verifier's word only where the answer to `Register` is the auditor's. That holds under two things the
+texts state of the deployment. The first is that the ZK server is the only exit: nothing of the workers', which run
+the serving stack, reaches the verifier except in the ZK server's release (the reference deployment's element of that
+name in `verity/protocols/recursion/verifier/firewall/README.md`, which says none of its elements is in place yet, and
+ARCHITECTURE.md's "The reference deployment"). The second is the salt key's limit: the release side checks a
+statement's value commitments only where it is given the key, and nothing yet requires the key of a deployment's loop
+(the first of the three limits below). With both, a stack that answered `Register` in the auditor's place would have
+no auditor to hand the session to. This is a condition on the deployment: those texts state it, no Lean statement
+proves it, and no named assumption carries it. This rule is the first text to read the only exit for a claim of its
+own: elsewhere it is the shape of the auditor's view in the zero-knowledge guarantees, as that README says.
 
 Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
 yet requires the key of a deployment's loop. The ZK server numbers one sequence of registrations for all its
