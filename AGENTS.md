@@ -41,8 +41,8 @@ what the layout's design has and the tree does not.
   - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model, or time base), `nodes/` (one per kind of node), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
     top-level `hardware/` that holds data only, and the types in one file of `verity/`.
-  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
-    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
+  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks) and `deploy` (parties,
+    channels, the configuration and the runtime that runs them). Target, not yet: four files
     directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
     and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
@@ -55,6 +55,8 @@ what the layout's design has and the tree does not.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
+  `tools/config/`: `verity_config`, its own distribution (each distribution's environment settings, a strict TOML loader
+  and the GPU names).
 - `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
