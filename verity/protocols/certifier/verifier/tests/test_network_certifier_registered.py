@@ -29,27 +29,33 @@ LINKS = "the network certifiers' links there are [up0, up2]"
 
 
 def loc(i: str, kind: str, parent: str | None = "site0", **more) -> dict:
-    return {"bytes": 0, "id": i, "key": "", "kind": kind, "owner": "prover", "parent": parent, "sheet": "", "tier": None,
+    return {"bw": None, "bytes": 0, "chip": None, "drift": None, "id": i, "key": "", "kind": kind, "owner": "prover",
+            "parent": parent, "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None, "timebase": None,
             **more}
 
 
-def link(i: str, a: str, b: str, beta: int) -> dict:
-    return {"beta": beta, "ends": [a, b], "id": i, "latency": 1}
+def link(i: str, a: str, b: str, beta: int | None, unmediated: str | None = None) -> dict:
+    return {"beta": beta, "ends": [a, b], "id": i, "latency": 1, "unmediated": unmediated}
 
 
 def view_site() -> dict:
     """A site as a registration log's view writes it: a host behind a network certifier, which splits its uplink, and
-    a memory challenger; beside them a second host behind a second certifier, a link between the two hosts and the
-    second host's bare uplink."""
+    a memory challenger; beside them a second host behind a second certifier, a link between the two hosts, the second
+    host's bare uplink, which states no capacity and says why no certifier splits it, and an auditor's host with a
+    link to the first host. Each field a location may state is stated on one of them."""
     return {
         "sheets": [],
-        "locs": [loc("site0", "site", None), loc("node0", "host"),
-                 loc("gpu0", "device", "node0", sheet="s"), loc("hbm0", "memory", "gpu0", tier="hbm", bytes=1 << 30),
-                 loc("cert0", "certifier", owner="auditor", key=KEY0), loc("chal0", "challenger", owner="auditor", key="k1"),
-                 loc("node1", "host"), loc("cert1", "certifier", owner="auditor", key=KEY1)],
+        "locs": [loc("site0", "site", None, time_unit="1/1000"),
+                 loc("node0", "host", chip=64, shared=[{"bw": 8, "tier": "dram"}]),
+                 loc("gpu0", "device", "node0", sheet="s"),
+                 loc("hbm0", "memory", "gpu0", tier="hbm", bytes=1 << 30, bw=1000),
+                 loc("cert0", "certifier", owner="auditor", key=KEY0, scheme="lms-sha512/n64-w1-h20/v0"),
+                 loc("chal0", "challenger", owner="auditor", key="k1"),
+                 loc("node1", "host"), loc("cert1", "certifier", owner="auditor", key=KEY1),
+                 loc("aud0", "auditor-host", owner="auditor", key="k2", drift="1/1000000", timebase="tb0")],
         "links": [link("up0", "node0", "cert0", 100), link("up1", "cert0", "outside", 100), link("mc0", "chal0", "node0", 10),
                   link("up2", "cert1", "node1", 40), link("up3", "cert1", "outside", 40), link("hh0", "node0", "node1", 400),
-                  link("up4", "node1", "outside", 10)],
+                  link("up4", "node1", "outside", None, "no certifier splits it"), link("ah0", "aud0", "node0", 5)],
     }
 
 
@@ -87,11 +93,29 @@ def test_a_link_that_is_no_link_of_the_site_is_refused():
     ("up4", "host node1 and the outside"),
     ("hh0", "host node0 and host node1"),
     ("mc0", "challenger chal0 and host node0"),
+    ("ah0", "auditor-host aud0 and host node0"),
 ])
 def test_a_link_that_joins_no_certifier_and_host_is_refused(name, joins):
-    """The certifier's half to the outside, a host's bare uplink, a link between two hosts, the memory challenger's."""
+    """The certifier's half to the outside, a host's bare uplink, a link between two hosts, the memory challenger's,
+    an auditor's host's."""
     assert refusal(view_site(), name, KEY0) == (f"link {name}: it joins {joins}, not a network certifier and a host; "
                                                  f"{LINKS}")
+
+
+def no_capacity(why: str | None) -> dict:
+    """A site whose first certifier's link states no capacity, with or without a reason no certifier splits it."""
+    site = view_site()
+    site["links"][0] = link("up0", "node0", "cert0", None, why)
+    return site
+
+
+@pytest.mark.parametrize("why", [None, "no line rate"])
+def test_a_certifiers_link_that_states_no_capacity_is_refused(why):
+    """After a key that is not the certifier's, and whatever the link says of why no certifier splits it."""
+    assert refusal(no_capacity(why), "up0", KEY0) == ("link up0: it states no capacity; a network certifier's link "
+                                                      "states its line rate")
+    assert refusal(no_capacity(why), "up0", KEY1).startswith(f"link up0: the key {KEY1} is not network certifier cert0's")
+    assert read(no_capacity(why), "up2", KEY1) == R.Registered("h", "up2", "node1", "cert1", KEY1, 40)
 
 
 def test_a_link_to_an_end_nothing_registers_is_refused():
@@ -185,7 +209,39 @@ def malformed() -> list[dict]:
     change(lambda s: s["links"][0].update(ends="nc"))
     change(lambda s: s["links"][0].update(id=None))
     change(lambda s: s["links"].append([]))
+    change(lambda s: s["links"][0].pop("unmediated"))
+    change(lambda s: s["links"][0].update(unmediated=5))
+    change(lambda s: s["links"][0].update(beta=False))
+    change(lambda s: s["locs"][1].pop("scheme"))
+    change(lambda s: s["locs"][1].update(scheme=None))
+    change(lambda s: s["locs"][1].update(kind="auditor_host"))
+    change(lambda s: s["locs"][1].update(bw="1"))
+    change(lambda s: s["locs"][1].update(chip=-1))
+    change(lambda s: s["locs"][1].update(timebase=5))
+    change(lambda s: s["locs"][1].update(shared=None))
+    change(lambda s: s["locs"][1].update(shared=[{"bw": 8}]))
+    change(lambda s: s["locs"][1].update(shared=[{"bw": 8, "tier": "tape"}]))
+    change(lambda s: s["locs"][1].update(shared=[{"bw": "8", "tier": "dram"}]))
+    change(lambda s: s["locs"][1].update(shared=[["dram", 8]]))
+    # a figure: a string `n` or `n/d` in lowest terms with d at least 2, in ASCII digits with no leading zero
+    for bad in (1, "", "1/1", "1/0", "2/4", "0/2", "01", "1/02", "1/2/3", "/2", "1/", "-1/2", "1.5", "1 /2", "١/٢"):
+        change(lambda s, bad=bad: s["locs"][8].update(drift=bad))
+        change(lambda s, bad=bad: s["locs"][0].update(time_unit=bad))
     return out + [[], None, "site", 1]
+
+
+FIGURES = ("0", "1", "7/2", "1/1000000", "12345678901234567891/7")
+
+
+def with_figure(figure: str) -> dict:
+    site = view_site()
+    site["locs"][8]["drift"] = site["locs"][0]["time_unit"] = figure
+    return site
+
+
+@pytest.mark.parametrize("figure", FIGURES)
+def test_a_figure_in_the_sites_form_is_read(figure):
+    assert read(with_figure(figure), "up0", KEY0) == R.Registered("h", "up0", "node0", "cert0", KEY0, 100)
 
 
 @pytest.mark.parametrize("site", malformed())
@@ -194,7 +250,8 @@ def test_a_site_that_is_no_site_of_a_view_is_malformed(site):
         R.site_of(site)
 
 
-IDS = ("site0", "node0", "node1", "cert0", "cert1", "chal0", "gpu0", "outside", "node9", "é")
+IDS = ("site0", "node0", "node1", "cert0", "cert1", "chal0", "gpu0", "aud0", "outside", "node9", "é")
+WHYS = (None, "no certifier splits it")
 NAMES = ("up0", "up1", "up2", "mc0", "hh0", "up9", "é")
 KEYS = (KEY0, KEY1, "00", "k0", "AB", "abc", "", "0g", "١٢")
 
@@ -202,7 +259,7 @@ KEYS = (KEY0, KEY1, "00", "k0", "AB", "abc", "", "0g", "١٢")
 def seeded(rng: random.Random) -> dict:
     """A vector near the example's: its site with locations and links dropped, repeated, re-kinded, re-keyed and
     re-ended, or a site made whole at random, and a link and a key that are likely ones of it: the key of a certifier at the
-    link's end, most often."""
+    link's end, most often. One vector in five has the link it names state no capacity."""
     if rng.random() < 0.6:
         site = view_site()
         for _ in range(rng.randrange(4)):
@@ -226,11 +283,16 @@ def seeded(rng: random.Random) -> dict:
     else:
         site = {"sheets": [],
                 "locs": [loc(rng.choice(IDS), rng.choice(R.KINDS), key=rng.choice(KEYS)) for _ in range(rng.randrange(7))],
-                "links": [link(rng.choice(NAMES), rng.choice(IDS), rng.choice(IDS), rng.randrange(1 << 70))
+                "links": [link(rng.choice(NAMES), rng.choice(IDS), rng.choice(IDS),
+                               rng.choice((None, rng.randrange(1 << 70))), rng.choice(WHYS))
                           for _ in range(rng.randrange(6))]}
     which = rng.random()
     name = ("up0" if which < 0.5 else rng.choice([k["id"] for k in site["links"]] + ["up2"]) if which < 0.85
             else rng.choice(NAMES))
+    if rng.random() < 0.2:
+        for k in site["links"]:
+            if k["id"] == name:
+                k.update(beta=None, unmediated=rng.choice(WHYS))
     ends = next((k["ends"] for k in site["links"] if k["id"] == name), [])
     certifiers = [x for x in site["locs"] if x["id"] in ends and x["kind"] == "certifier"]
     if rng.random() < 0.25:
@@ -244,10 +306,13 @@ def seeded(rng: random.Random) -> dict:
 def vectors() -> list[dict]:
     """The named cases above, every malformed site, and 600 seeded vectors."""
     named = [{"head": "head0", "key": key, "link": name, "site": view_site()}
-             for name in ("up0", "up1", "up2", "up3", "up4", "hh0", "mc0", "up9", "") for key in (KEY0, KEY1, "00")]
+             for name in ("up0", "up1", "up2", "up3", "up4", "hh0", "mc0", "ah0", "up9", "") for key in (KEY0, KEY1, "00")]
     named += [{"head": "h", "key": bad, "link": "up0", "site": with_key(bad)} for bad in ("k0", "AB", "abc", "", "0g", "١٢")]
     named += [{"head": "h", "key": key, "link": name, "site": site}
               for site, name in ((outside_named(), "up5"), (repeated(), "up0")) for key in (KEY0, KEY1)]
+    named += [{"head": "h", "key": key, "link": name, "site": no_capacity(why)}
+              for why in (None, "no line rate") for name in ("up0", "up2") for key in (KEY0, KEY1)]
+    named += [{"head": "h", "key": KEY0, "link": "up0", "site": with_figure(figure)} for figure in FIGURES]
     bad = [{"head": "h", "key": KEY0, "link": "up0", "site": site} for site in malformed()]
     rng = random.Random(0)
     return named + bad + [seeded(rng) for _ in range(600)]
@@ -288,7 +353,8 @@ def test_the_vectors_reach_every_answer():
              "no link": sum("no link of the registered hardware" in r for r in refused),
              "joins": sum("not a network certifier and a host" in r for r in refused),
              "not hex": sum("which is not lower-case hex" in r for r in refused),
-             "key": sum("registered key, " in r for r in refused)}
+             "key": sum("registered key, " in r for r in refused),
+             "no capacity": sum("it states no capacity" in r for r in refused)}
     assert all(n >= 25 for n in count.values()), count
     assert sum(count.values()) == len(answers)
     assert any("which is not registered" in r for r in refused)

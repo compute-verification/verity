@@ -425,7 +425,7 @@ def Origin.inside (o : Origin) (seconds : Ratio) (tick : Figure) (ticks : Nat) (
 counting when it names one of them; and where each series of steps lies in it (`Origin`), by the series' name as an
 answer writes it: the compact JSON under its amount's `series`, or the empty text where the amount names none. A series
 with no origin covers no tick and adds no amount. The three are the auditor's: no answer states them. -/
-structure Period where
+structure Monitored where
   ticks : Nat
   heads : List String
   origin : String → Option Origin
@@ -576,8 +576,9 @@ leaves it is about. None when the site holds no such leaf.
 
 A named span counts only where it surely lies in the period, which `origin` says for its series: a series with no
 origin, one whose device has no drift under `clock`, a step before the period and a step that might end past its last
-tick count for nothing. `clock` gives a device's drift: the Site's own for a row of record. A span that names no steps
-cannot be placed, and that it is the period's is the caller's to hold; it covers its length less its clock's drift.
+tick count for nothing. `clock` gives a device's drift: the Site's own for a row that takes no premise. A span that
+names no steps cannot be placed, and that it is the period's is the caller's to hold; it covers its length less its
+clock's drift.
 
 A flow's amounts add only over spans shown disjoint. Its verified amount is the largest total over certified answers
 whose named spans lie whole in the period, are of one series and are pairwise disjoint, or the largest amount of one
@@ -699,18 +700,18 @@ protocols' `answers` read by their `accounts`: the rows of each amount at each p
 what none covers and of the device memory no leaf holds. `S` is the Site at the period's last head: the registration
 only adds, so what an answer read at an earlier head of the period is in `S` unchanged. `digest` and `A` are the
 registration's: the sheets' digest and the auditor, whose estimate compute's `bound` reading reads. No row where the
-Site states no unit of time. Where a boundary link of the Site says no certifier splits it (`Site.mediated` is false),
+Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
 
-A row of record reads a device's drift from the Site alone: the drift the auditor's host it is in states
+A row that takes no premise reads a device's drift from the Site alone: the drift the auditor's host it is in states
 (`Site.drift?`), and a device at the site, or in a host that states none, times nothing. `premised` lists drifts taken
 on a premise, for auditor's hosts whose locations state none. A flow's amount with a series timed on a device in such a
-host has, after its rows of record, the same rows with those series covered at the premised drifts; each names the
-premises it rests on (`Row.premises`). The rows of record are as they are without the list, so a premised row adds to
-none of them and replaces none. A premise for a host that is no auditor's host of the Site is refused, by the
-premise's name: a premise is taken for a clock the registration holds, and no row is printed beside one for a clock it
-does not. -/
-def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Period)
+host has, after its rows that take no premise, the same rows with those series covered at the premised drifts; each
+names the premises it rests on (`Row.premises`). The rows that take no premise are as they are without the list, so a
+premised row adds to none of them and replaces none. A premise for a host that is no auditor's host of the Site is
+refused, by the premise's name: a premise is taken for a clock the registration holds, and no row is printed beside
+one for a clock it does not. -/
+def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Monitored)
     (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : Except String (List Row) := do
   if let some q := premised.find? fun q => S.kind? q.host ≠ some .auditorHost then
     throw s!"premise {q.premise}: {q.host} is no auditor's host of the Site"
@@ -767,7 +768,7 @@ def account : Account :=
                   uncertified := .refused, unpriced := ["the toy's units are not work"] }] }
 
 /-- The rows, or none where `rows` refuses a premise. -/
-private def rowsOf (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Period)
+private def rowsOf (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Monitored)
     (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : List Row :=
   (rows S digest A period accounts answers premised).toOption.getD []
 
@@ -883,7 +884,7 @@ private def credit : Answer :=
 
 /-- A period of `ticks` ticks at head `h`, every series' step 0 at its first tick unless `origin` says. -/
 private def period (ticks : Nat := 1000) (heads : List String := ["h"])
-    (origin : String → Option Origin := fun _ => some ⟨0, 0, "cert0"⟩) : Period := { ticks, heads, origin }
+    (origin : String → Option Origin := fun _ => some ⟨0, 0, "cert0"⟩) : Monitored := { ticks, heads, origin }
 
 private def table (accounts : List Account) (answers : List Answer) (A : Site.Registration.Auditor := auditor)
     (ticks : Nat := 1000) : List Row :=
@@ -1092,9 +1093,9 @@ private def rested (audits : List Answer) : Answer :=
 #guard (nameOf (audit 300 none)).map (·.length) == some 128
 
 -- a span counts only where it lies in the period. Before it: no cover and no amount, the link charged at capacity
-private def from_ (first : Nat) (at_ : Nat := 0) : Period :=
+private def from_ (first : Nat) (at_ : Nat := 0) : Monitored :=
   period (origin := fun _ => some ⟨first, at_, "cert0"⟩)
-private def linkRow (p : Period) (accounts : List Account) (answers : List Answer) :
+private def linkRow (p : Monitored) (accounts : List Account) (answers : List Answer) :
     List (Status × Option Nat × Option Nat) :=
   ((rowsOf site digest auditor p accounts answers).take 1).map fun r => (r.status, r.capacity, r.free)
 #guard linkRow period [sent] [check 3000 400 "1/1000"] == linkRow (from_ 0) [sent] [check 3000 400 "1/1000"]
@@ -1116,7 +1117,7 @@ private def keyed : Account :=
 private def under (key : String) (k ns : Nat) : Answer :=
   accept "toy/keyed" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("key", .str key), ("span_ns", Lean.toJson ns),
     ("start_ns", Lean.toJson (0 : Nat))] [("link", .str "up0")]
-private def twoKeys (second : Nat) : Period :=
+private def twoKeys (second : Nat) : Monitored :=
   period (origin := fun s =>
     if s == "\"k1\"" then some ⟨0, 0, "cert0"⟩
     else if s == "\"k2\"" then some ⟨0, second, "cert0"⟩ else none)
@@ -1146,7 +1147,7 @@ private def twoKeys (second : Nat) : Period :=
 #guard ticksCharged 1000 ⟨1, 1000⟩ tick (some (fig 1 1)) == none
 
 -- the rows on a clock that may drift 1/1000. A span of 400 steps surely covers 399 ticks of 1000: 601 are charged
-private def drifted (p : Period) (accounts : List Account) (answers : List Answer) (n : Nat := 1) (d : Nat := 1000) :
+private def drifted (p : Monitored) (accounts : List Account) (answers : List Answer) (n : Nat := 1) (d : Nat := 1000) :
     List (Option Nat) :=
   ((rowsOf ⟨[sheet], drifting n d, links⟩ digest auditor p accounts answers).take 1).map fun r => r.free
 #guard drifted period [sent] [check 3000 400 "1/1000"] == [some (3000 + 601 * 100)]
@@ -1194,7 +1195,7 @@ private def unrated : Site :=
   (egress site).2.map (fun r => (r.place, r.status, r.free))
 #guard (egress standin).2.map (fun r => (r.place, r.status, r.free)) ==
   (egress site).2.map (fun r => (r.place, r.status, r.free))
--- a drift taken on a premise. The example's certifier's host states no drift, so its row of record covers nothing:
+-- a drift taken on a premise. The example's certifier's host states no drift, so its row on no premise covers nothing:
 -- the link is charged at capacity over the week. With 1/2000 premised for the host, the same row follows, covered,
 -- and names the premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is
 -- left covers its length less a 2000th; the 604.6488 seconds not covered are charged at capacity
@@ -1220,7 +1221,7 @@ private def weekRows (S : Site) (premised : List Premised) : List Row :=
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":59419535120000000}"]
 #guard stepsWithin week ⟨1, 1000⟩ tick (some (fig 1 2000)) == 604800000 - 302400
 #guard ticksCredited (604800000 - 302400) ⟨1, 1000⟩ tick (some (fig 1 2000)) == week - 604648800000
--- the rows of record are the same rows with the list or without it, and every other row is as it was
+-- the rows that take no premise are the same rows with the list or without it, and every other row is as it was
 #guard (rowsOf bare digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"] onPremise).filter
     (fun r => r.premises.isEmpty) ==
   rowsOf bare digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"]
@@ -1233,7 +1234,7 @@ private def other : List Premised := [{ host := "vm1", drift := fig 1 2000, prem
 #guard weekRows twoHosts other == weekRows bare [] ∧ weekRows twoHosts (other ++ onPremise) == weekRows bare onPremise
 -- a premise for a host that is no auditor's host of the Site is refused by name, and no row is printed: one the Site
 -- does not hold, the auditor's device, the prover's host; a certifier at the site is in no host, so no premise times
--- it and its row of record covers nothing
+-- it and its row covers nothing
 private def refused (S : Site) (host : String) : Option String :=
   match rows S digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"]
       [{ host, drift := fig 1 2000, premise := "ClockRateWithin(vm0, 5e-4)" }] with

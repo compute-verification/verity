@@ -150,8 +150,8 @@ def DeviceFigures.bounding (est : DeviceEstimate) (d : DeviceFigures) : DeviceFi
   peakRate c := Figure.max (d.peakRate c) (est.figures.peakRate c)
 
 /-- A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`), and its memory figures
-in the device model's terms: bits read from or written to device memory a second (`bw`), bits of on-chip state (`chip`) and
-bytes of device memory (`mem`). -/
+in the device model's terms: bits read from or written to device memory a second (`bw`), bits of on-chip state
+(`chip`) and bytes of device memory (`mem`). -/
 structure Sheet where
   figures : DeviceFigures
   bw : Nat
@@ -217,9 +217,10 @@ keys that sign. -/
 def SCHEMES : List String := ["lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"]
 
 /-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
-time. `unmediated` is, on a boundary link no certifier splits, the reason none does; none on every other link. A link
-states no capacity (`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and
-no amount is read from it. -/
+time. `unmediated` is the reason no certifier splits the link, where the link states one. A link states no capacity
+(`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and no amount is read
+from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a certifier's own among
+them, at a capacity or at none; a reader that needs a certifier's link's capacity refuses one that states none. -/
 structure Link where
   id : String
   ends : String × String
@@ -435,8 +436,8 @@ def Rates : Prop :=
       ∃ f ∈ A.memory.lookup x.id, x.parent = some f.host ∧ x.bw = some f.bw ∧ 0 < f.bw ∧ x.bytes = f.bytes
     else x.bw = none
 
-/-- `figures`, a host's own: each new host states the auditor's figures for it, its on-chip state in bits and each
-tier's shared rate, none of them 0; every other new location states neither. -/
+/-- `figures`, a host's own: each new host states the auditor's figures for it: its on-chip state in bits, and each
+tier's shared rate, no shared rate 0; every other new location states neither. -/
 def Chips : Prop :=
   ∀ x ∈ e.locs,
     if x.kind = .host then
