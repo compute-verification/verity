@@ -191,7 +191,7 @@ def tasks(plan: dict, lean_suites: str = "tree") -> list[dict]:
             inputs = ["."]
         elif kind == "lean-audit" and name in lean_inputs:
             inputs = lean_inputs[name]
-        elif kind in ("lean-build", "lean-changed", "lean-unit-cut", "lean-agreement"):
+        elif kind in ("lean-build", "lean-unit-cut", "lean-agreement"):
             inputs = sorted({*lean_inputs.get("verity/protocols/flock/verifier", []), "verity/protocols/flock/agreement/"})
         elif kind in ("flock-circuit-build", "flock-rust-tests"):
             inputs = ["verity/protocols/flock/prover/"]

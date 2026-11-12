@@ -9,7 +9,5 @@ Merkle root), `audit` (the challenge key, responders and the unsigned timed roun
 replayed against the real labels).  `protocol` is the generic protocol over any scheme (abstract `Scheme`,
 `CapacityBound`, `TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
 The memory challenger, which signs its rounds, is the device's: `verity.protocols.pous.device.memory_challenger`.
-Code outside this package imports a module by its path and, from it, the names its `__all__` lists. `adversary` and
-`oracle` have none: they are the package's own, and nothing outside imports them.
 `PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
 """

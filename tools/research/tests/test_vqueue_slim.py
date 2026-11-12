@@ -436,9 +436,9 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
 @pytest.mark.parametrize("drops", [False, True])
 def test_a_candidate_is_sent_only_the_steps_its_own_ci_toml_declares_as_jobs(world, monkeypatch, tmp_path, shards, drops):
     """check.py refuses a `--deferred` naming a job the candidate's own ci.toml doesn't declare (`declared_steps`): a candidate
-    whose ci.toml drops a step's job (lean-changed, or ratchet-gate beside its check) is sent every other step, beside its
+    whose ci.toml drops a step's job (lean-suites, or ratchet-gate beside its check) is sent every other step, beside its
     check, whole, as each shard or to its auto plan, with one line naming the step; one declaring every step is sent them all."""
-    dropped = "lean-changed" if shards else "ratchet-gate"
+    dropped = "lean-suites" if shards else "ratchet-gate"
     jobs = CI_TOML.replace(f'[[job]]\nname = "{dropped}"\nowner = "ci"\ngroup = 1\n', "")
     assert jobs != CI_TOML
     h, base, sha, _ = _harness(world, monkeypatch, agreement=True,
@@ -647,11 +647,11 @@ def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_sh
     abandon({"ids": ["r-1"], "tip": sha})
 
 
-@pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
+@pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS),
                                         ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
 def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
     """Every step `main` waits for at the base gates, the preflights among them: not one policy.toml takes off the gate there
-    (circuit-check), drive.toml's warn step (ratchet-gate) or one a run may skip by name (lean-changed).  The candidate's
+    (circuit-check) or drive.toml's warn step (ratchet-gate).  The candidate's
     own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
         "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})
@@ -660,7 +660,7 @@ def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(
     _slim(h, tmp_path, **{red.replace("-", "_"): "error: it failed\n"})
     got = judge(h.d, rec)
     assert got.state == state and [f.task for f in got.failed] == [f"step {red}"] * (state == FAIL)
-    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-changed", "lean-agreement", "circuit-check", "ratchet-gate")]
+    gates = [s for s in (*PREFLIGHTS, *AFTER_LANDING) if s not in ("lean-agreement", "circuit-check", "ratchet-gate")]
     if red not in PREFLIGHTS:
         assert sorted(rec["verdict"]["passed"]) == sorted(s for s in gates if s != red or state == PASS)
 
