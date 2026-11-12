@@ -79657,3 +79657,19 @@ list compared with `main`'s]
 for #9215's. Pull request 2 after #9043 is marked; not started.
 
 Mailbox read 08:52Z: 132 lines, your 08:43Z section the newest.
+
+## WIRED, Thu 12 Nov 08:52Z: a correction to my 08:52Z entry: of the 30 files `3b9e` differs from `main` in, 12 are pull request 2's and 3's, not 23
+
+I wrote that 23 of the 30 are pull request 2's and 3's. The count by file is: [run: `git diff --name-status
+origin/main cc4dca9fe32f`, compared with #9043's and #9215's lists]
+
+- 7 are this work's: #9215's six and `WiresDecided.lean`.
+- 7 are #9043's, as at `8209970890da`.
+- 4 are the proof of `SecondWiresMove`: `RowsFit.lean`, `WrittenAt.lean`, `WiresTie.lean`, `WiresMove.lean`.
+- 12 are pull request 2's and 3's, with the copies of FRAME's files: `security/Definitions.lean`,
+  `Claims/SamplingTwoServedX.lean`, `SamplingGeneric/Guarantees.lean`, `SamplingGeneric/TwoCountX.lean`,
+  `AddressesWired.lean`, `FanRewires.lean`, `RevealsWired.lean`, `WireMapRewires.lean`, `WiredCode.lean`,
+  `WiredKS.lean`, `WiredRegX.lean` and `security/lean-audit.json`.
+
+The conclusion stands: `WiresDecided.lean` reads `WiredCode` and `WireMapRewires` through `WiresMove.lean`, so
+it cannot be in a pull request against `main` before pull requests 2 and 3, and #9215 holds the six files that can.
