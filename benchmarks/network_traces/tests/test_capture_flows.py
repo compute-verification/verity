@@ -7,9 +7,10 @@ and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreeme
 every capture format read to the same sums, and each thing the reader doesn't read refused by its name. Then a run of
 the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
-on it in no sum; a run of two execution phases is counted across both phases' records; a request's place in the
-release order is its `END` cell's in the ingress record, where a bucket's are not in their ordinals' order; the answer
-on a watermark connection in no pair makes its direction a bound; and a connection that failed is a bound."""
+on it in no sum; a run of two execution phases is counted across both phases' records; a run in the id egress form,
+at the id front's cell, agrees as one in the bytes form does; a request's place in the release order is its `END`
+cell's in the ingress record, where a bucket's are not in their ordinals' order; the answer on a watermark
+connection in no pair makes its direction a bound; and a connection that failed is a bound."""
 from __future__ import annotations
 
 import argparse
@@ -25,8 +26,9 @@ import pytest
 from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.active import VirtualClock
+from verity.protocols.certifier.verifier.io_tie import TRAILER
 from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.certifier.verifier.warden import Warden, WardenParams, cells, read_cell
+from verity.protocols.certifier.verifier.warden import Warden, WardenParams, audit, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -708,6 +710,57 @@ def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp
     assert len(certificates) == 6
     (out / "certified.jsonl").write_text("".join(line + "\n" for line in certificates[:-1]))
     assert cf.record_counts(out) == record | {"phase_records": {"certified": 5, "of": 6}}
+
+
+def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direction(tmp_path):
+    """The id egress form at the id front's cell of 4,096 bytes (`ids.sh`'s): three id requests
+    (`active.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
+    bytes a token and then the trailer, and the watermark stream. The device's own read accepts the run, so every
+    egress cell is one the id form reads. The schedule the reader rebuilds from the deployment is the id form's,
+    whose digest each record's head holds and the bytes form's is not, so all three records are counted as
+    certified. A connection's count to the server is its request with its release headers, and from it P bytes a
+    token and the trailer. A capture of exactly the bytes the server's side saw agrees in each direction and pairs
+    every connection, the server's answer on the watermark's in no sum."""
+    out, key = tmp_path / "run", tmp_path / "key"
+    out.mkdir()
+    params = dataclasses.replace(PARAMS, cell_bytes=4096, slots=1, egress="id")
+    P, tokens, prompts = params.payload, (1, 8, 3), ([7], list(range(1, 801)), [3, 4, 5])
+    requests = [ws.id_request(model="m", user=f"user-{k}", prompt=prompt, max_tokens=n, frame_bytes=params.cell_bytes,
+                              offset=0) for k, (prompt, n) in enumerate(zip(prompts, tokens))]
+    responses = [ws.id_response(list(range(n)), P) for n in tokens]
+    assert 2 * P < len(requests[1]) <= 3 * P and [len(r) for r in responses] == [n * P + len(TRAILER) for n in tokens]
+    relay, servers, mark = _served(out, key, requests, responses, params=params)
+    deployment = json.loads((out / "deployment.json").read_text())
+    assert deployment["params"]["egress"] == "id"
+    assert deployment["digest"] == params.digest.hex() != dataclasses.replace(params, egress="bytes").digest.hex()
+    records = ws.read_records(out, params)
+    device = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+    assert device["accepted"], device["windows"]
+    assert [c["egress_cells"] for c in device["connections"]] == [n + 1 for n in tokens]
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
+    assert [_sent(s) for s in servers] == [with_release(r, release[k + 1][0], relay.run_id, release[k + 1][1])
+                                           for k, r in enumerate(requests)]
+    record = cf.record_counts(out)
+    assert record["phase_records"] == {"certified": 3, "of": 3}
+    assert record["connections"] == [
+        *({"connection": k + 1, "release": release[k + 1][0], "exact": True, "why": None, "to_server": len(_sent(s)),
+           "from_server": n * P + len(TRAILER)} for k, (s, n) in enumerate(zip(servers, tokens))),
+        {"connection": "watermark", "release": None, "exact": True, "why": None, "to_server": len(_sent(mark)),
+         "from_server": None}]
+    seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), ANSWER)])
+    result = cf.read([seen], *_given(), run=out)
+    got = result["compared"]
+    to_server, from_server = sum(len(_sent(s)) for s in servers) + len(_sent(mark)), sum(map(len, responses))
+    assert (got["to_server"]["capture"]["stream_bytes"], got["to_server"]["record_bytes"],
+            got["to_server"]["difference"], got["to_server"]["says"]) == (to_server, to_server, [0, 0], "agrees")
+    assert (got["from_server"]["capture"]["stream_bytes"], got["from_server"]["record_bytes"],
+            got["from_server"]["difference"], got["from_server"]["says"]) == \
+        (from_server + len(ANSWER), from_server, [0, 0], "agrees")
+    assert got["pairing"] == {"connections": 4, "flows": 4, "pairs": 4, "pairs_inside_bounds": 0,
+                              "unpaired_connections": 0, "unpaired_flows": 0, "partial_flows": 0, "says": "agrees"}
+    assert got["watermark_answer_bytes"] == len(ANSWER) and got["bounded"] == got["unpaired"] == []
+    assert cf.table(result).splitlines()[1] == \
+        "record: 4 connection(s) to the server; 3 of its execution phases' 3 records certified"
 
 
 def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ingress_record(tmp_path):
