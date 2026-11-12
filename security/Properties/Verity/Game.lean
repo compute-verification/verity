@@ -176,7 +176,7 @@ subprotocol whose id `k` lists. -/
 def componentsOf (k : Verity.Registration.Composite) : List BlobProtocol :=
   (Subprotocol.all.filter (·.id ∈ k)).map (·.protocol)
 
-/-- The subprotocols of composite `k` that must commit to one record: the inference-only policy and sampled proofs,
+/-- The subprotocols of composite `k` that must commit to one record: the inference-only policy and SPOT,
 each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
   [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
