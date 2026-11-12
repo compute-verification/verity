@@ -2,8 +2,8 @@
 imports, and, with a real toolchain, that a module redeclaring a name another built module of its package declares fails
 the try naming both, as the package's root fails a records run an hour in. Its stub loads no build that is not of its
 source as it is, by the hash Lake's trace states, in the package or in one it requires by path, and none without a
-source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules
-(INF-667), and still fails a clash that is in the sources. And the package's Lean options every try takes from it: with
+source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules,
+and still fails a clash that is in the sources. And the package's Lean options every try takes from it: with
 a real toolchain, an auto-bound name fails a try where the package sets `autoImplicit = false`."""
 from __future__ import annotations
 
@@ -128,6 +128,104 @@ def test_the_stub_leaves_out_the_other_executables_roots(tmp_path):
     assert S.plan(pkg, "P/Tool.lean") == S.Plan("P.Tool", True, ["P.A"], ["P.D"])
 
 
+#: a script run with `lean --run`: a module of the library that no module imports, and that declares `main` in public
+SCRIPT = "module\n\n@[expose] public section\n\ndef main (_ : List String) : IO UInt32 := pure 0\n"
+
+
+def test_the_stub_leaves_out_the_modules_under_an_exempt_prefix_of_the_lock(tmp_path):
+    """The lock's `exempt` lists the module prefixes nothing imports: `P.Run`, which holds two scripts, and the script
+    `P.Probe` by its own name. No root loads one beside the library, so none is a sibling of a library module, nor
+    counted as unchecked where it isn't built (`P.Run.Later`). A prefix is matched as the audit matches it, the name or
+    below it: `P.Runner` and `P.Probes` are under neither. FILE's own module stays in: a script as FILE has the
+    library's modules for siblings, and not the other scripts."""
+    pkg = tmp_path / "p"
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"),
+                "lean-audit.json": json.dumps({"exempt": {"P.Run": "scripts the audit runs", "P.Probe": "run by hand"}}),
+                "P/A.lean": "module\n", "P/D.lean": "module\n", "P/Runner.lean": "module\n", "P/Probes.lean": "module\n",
+                "P/Run/Bulk.lean": SCRIPT, "P/Run/Later.lean": SCRIPT, "P/Probe.lean": SCRIPT})
+    built(pkg, "P.A", "P.Runner", "P.Run.Bulk", "P.Probe")
+    assert S.exempt(pkg) == ["P.Run", "P.Probe"]
+    p = S.plan(pkg, "P/D.lean")
+    assert p == S.Plan("P.D", True, ["P.A", "P.Runner"], ["P.Probes"])
+    (work := tmp_path / "work").mkdir()
+    S.stub(p, work)
+    assert (work / f"{S.STUB}.lean").read_text() == "module\n\npublic import P.D\npublic import P.A\npublic import P.Runner\n"
+    assert S.plan(pkg, "P/Run/Bulk.lean") == S.Plan("P.Run.Bulk", True, ["P.A", "P.Runner"], ["P.D", "P.Probes"])
+    assert S.plan(pkg, "P/Probe.lean") == S.Plan("P.Probe", True, ["P.A", "P.Runner"], ["P.D", "P.Probes"])
+
+
+def test_a_plan_never_fails_on_the_lock(tmp_path, capsys):
+    """The audit judges the lock; the sibling check only reads the names under its `exempt`. With no lock (or a
+    directory in its place), one whose `exempt` holds no names, or one that can't be read (no JSON, bytes that aren't
+    text), a package plans as one whose lock exempts nothing: both scripts are siblings. A lock that can't be read is
+    said on stderr, once a plan, and nothing else is. Nor does the plan ask for the reason the audit asks of an entry."""
+    pkg = tmp_path / "p"
+    write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/A.lean": "module\n", "P/D.lean": "module\n",
+                "P/Run/Bulk.lean": SCRIPT, "P/Probe.lean": SCRIPT})
+    built(pkg, "P.A", "P.Run.Bulk", "P.Probe")
+    lock, without = pkg / "lean-audit.json", S.Plan("P.D", True, ["P.A", "P.Probe", "P.Run.Bulk"], [])
+    assert S.exempt(pkg) == [] and S.plan(pkg, "P/D.lean") == without, "no lock"
+    lock.mkdir()
+    assert S.plan(pkg, "P/D.lean") == without, "a directory in its place"
+    lock.rmdir()
+    for text in ("[]", "null", '"P.Run"', '{"roots": ["P"]}', '{"exempt": null}', '{"exempt": "P.Run"}', '{"exempt": 7}',
+                 '{"exempt": [["P.Run"], 7, null]}', '{"exempt": {}}'):
+        lock.write_text(text)
+        assert S.exempt(pkg) == [] and S.plan(pkg, "P/D.lean") == without, text
+    assert capsys.readouterr().err == "", "none of these is a lock that can't be read"
+    for data in (b"", b"{", b'{"exempt": {"P.Run": "why", "P.Probe": "why"}', b'{"exempt": {"P.Run\xff": "why"}}'):
+        lock.write_bytes(data)
+        assert S.plan(pkg, "P/D.lean") == without, data
+        err = capsys.readouterr().err
+        assert err.startswith(f"siblings: {lock} can't be read (") and err.count("\n") == 1, err
+        assert err.endswith("): no module is left out for its `exempt`\n"), err
+    for text in ('{"exempt": {"P.Run": "", "P.Probe": null}}', '{"exempt": ["P.Run", "P.Probe", 7]}'):
+        lock.write_text(text)
+        assert S.plan(pkg, "P/D.lean") == S.Plan("P.D", True, ["P.A"], []), text
+    assert capsys.readouterr().err == ""
+
+
+def scripts(tmp_path: Path, exempt: dict[str, str]) -> Path:
+    """FILE, `P/D.lean`, in a package Lake built: the library's root `P` and its `P.A`, and two scripts that each
+    declare `main`, `P.Run.Bulk` and `P.Probe`, which the lock lists under ``exempt`` or doesn't."""
+    pkg = tmp_path / "p"
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", tmp_path)
+    write(pkg, {"lakefile.toml": 'name = "p"\ndefaultTargets = ["P"]\n' + LIB.format("P"),
+                "lean-toolchain": (tmp_path / "lean-toolchain").read_text(),
+                "lean-audit.json": json.dumps({"roots": ["P"], "exempt": exempt}),
+                "P.lean": "module\n\npublic import P.A\n",
+                "P/A.lean": "module\n\n@[expose] public section\n\ndef P.foo : Nat := 1\n",
+                "P/Run/Bulk.lean": SCRIPT, "P/Probe.lean": SCRIPT})
+    subprocess.run(["lake", "build", "P", "+P.Run.Bulk", "+P.Probe"], cwd=pkg, check=True, capture_output=True)
+    write(pkg, {"P/D.lean": "module\n\npublic import P.A\n@[expose] public section\n\ndef P.bar : Nat := P.foo\n"})
+    assert S.plan(pkg, "P/D.lean").unchecked == [], "Lake built both scripts"
+    return pkg / "P" / "D.lean"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_try_with_siblings_passes_beside_two_scripts_that_declare_main_under_exempt_prefixes(tmp_path, capsys):
+    """`P.Run.Bulk` and `P.Probe` are built and each declares `main`. The lock lists `P.Run` and `P.Probe` under
+    `exempt`, so the stub imports neither, only the library's two modules, and the try of a library module passes."""
+    file = scripts(tmp_path, {"P.Run": "scripts the audit runs", "P.Probe": "run by hand"})
+    assert S.plan(file.parents[1], "P/D.lean").siblings == ["P", "P.A"]
+    assert _cli().main(["lean", "try", str(file), "--siblings"]) == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "siblings: no built module of its package that doesn't import P.D declares a name it does (2 imported" in out, out
+    assert "unchecked" not in out and "'main'" not in out, out
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_try_with_siblings_refuses_two_scripts_that_declare_main_under_no_exempt_prefix(tmp_path, capsys):
+    """The control: the same package, its lock with no `exempt` entry. The stub imports both scripts beside the library,
+    Lean refuses the second for the `main` the first declares, and the line names both."""
+    file = scripts(tmp_path, {})
+    assert S.plan(file.parents[1], "P/D.lean").siblings == ["P", "P.A", "P.Probe", "P.Run.Bulk"]
+    assert _cli().main(["lean", "try", str(file), "--siblings"]) == 1
+    out = capsys.readouterr().out
+    assert "import P.Run.Bulk failed, environment already contains 'main' from P.Probe" in out, out
+    assert "siblings: P.Run.Bulk and P.Probe both declare 'main', neither of them P.D: a clash already in the sources" in out, out
+
+
 def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_path):
     """security/Proofs' layout: `srcDir = ".."`, so its library `Proofs` is the package's own directory, beside the outer
     package's `Defs`. A sibling that isn't a `module` can't be imported by one, so the stub is a plain file."""
@@ -147,7 +245,7 @@ def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_
 
 
 def moved(ws: Path) -> tuple[Path, Path, Path]:
-    """INF-667's tree, (`ident`, `commit`, `proofs`): everything was built, and then a sync brought a move of
+    """A tree built before names moved, (`ident`, `commit`, `proofs`): everything was built, and then a sync brought a move of
     `Identity.Domains`' names into the new `Identity.Domains.Pouw`. It rewrote `Identity/Domains.lean` and what imports
     the new module from then on, `PouwCommit/Bindings.lean` and `Proofs/New.lean`, and wrote `Identity/Domains/Pouw.lean`
     and FILE. Since then Lake built only what a target imported, `Identity.Domains.Pouw` and `Proofs.New`: the products
@@ -176,7 +274,7 @@ def moved(ws: Path) -> tuple[Path, Path, Path]:
 
 
 def test_a_sibling_that_loads_a_build_from_before_a_source_in_another_package_changed_is_unchecked(tmp_path):
-    """INF-667 (`moved`). `Proofs.Old`'s source never changed, and its build loads `PouwCommit.Bindings` and through it
+    """On `moved`'s tree, `Proofs.Old`'s source never changed, and its build loads `PouwCommit.Bindings` and through it
     `Identity.Domains` as they were built before the move, the second declaring what `Identity.Domains.Pouw` declares
     now: a stub that imports it beside FILE fails on a clash that is in no source. `PouwCommit.Bindings`' build is not
     of its source as it is, in a package `proofs` requires through another, so `Proofs.Old` is unchecked, and so is
@@ -341,7 +439,7 @@ def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_m
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fails_a_clash_in_the_sources(tmp_path, capsys):
-    """INF-667, built with Lake. `proofs` requires `commit`, which requires `ident`, and all three are built. Then
+    """Built with Lake: `proofs` requires `commit`, which requires `ident`, and all three are built. Then
     `Identity.tag` moves from `Identity.Domains` into the new `Identity.Domains.Pouw`, which `PouwCommit.Bindings` imports
     from then on, and of all that Lake builds only what FILE imports, as a try does on a slot tree synced across the move.
     The products of `Identity.Domains` (which still declares `Identity.tag`), of `PouwCommit.Bindings` and of `Proofs.Old`,
