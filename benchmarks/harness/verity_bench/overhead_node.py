@@ -36,7 +36,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from verity_bench import nsys
+from verity_bench import kit, nsys
 from verity_bench import overhead as O
 
 HARNESS = Path("benchmarks/pouw/harness")
@@ -53,7 +53,6 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
-RESULT_SCHEMA = "research/result/v0.1"
 
 Runner = Callable[[list[str], Path], int]
 
@@ -94,7 +93,7 @@ def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, d
                  measurements: Sequence[dict] = ()) -> None:
     rel = os.path.relpath(out / record, run_dir)
     _write(run_dir / "result.json", {
-        "schema": RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
+        "schema": kit.RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
         "validation": {"status": "passed" if ok else "failed", "checker": "verity bench overhead", "detail": detail,
                        "evidence": [rel]},
         "measurements": list(measurements), "measurement_files": [rel], "artifacts": []})
