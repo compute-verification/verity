@@ -26,6 +26,7 @@ from verity.protocols.spot.verifier import service as S
 from verity.protocols.spot.verifier.one_stage import partition as P
 
 from verity_vllm.engine import sampler_capture as SC
+from verity_vllm.pipeline import boundary_logits as BL
 from verity_vllm.pipeline import boundary_rows as BR
 from verity_vllm.pipeline import interior_rows as IR
 
@@ -33,14 +34,17 @@ V, OUT, N = 64, 4, 3                # the vocabulary, a class's outputs and its 
 K = 4                             # the greedy select's units a token
 SERVED = {"r0": 4, "r1": 4, "r2": 3}
 SAMPLE = [2, 0]                   # the replay sample: r2, served one token short of its class, then r0
+SAMPLING = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": OUT, "min_tokens": 0,
+            "ignore_eos": False, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 BOUNDARY = "aa" * 64
 ROW = "interior-inputs-test"
 NAME = "logits"
 
 
-def _layout(units: int = 0) -> BR.Layout:
+def _layout(units: int = 0, logits: bool = False) -> BR.Layout:
     t = f"GreedySelect_v1{{V={V},N={V // units}}}" if units else f"TokenSelect_v4{{V={V}}}"
-    return BR.Layout(BR.check_template(t), 0, 1, BR.cap(3), OUT, N, BR.run_root("interior-inputs", 0), bool(units), ids=True)
+    return BR.Layout(BR.check_template(t), 0, 1, BR.cap(3), OUT, N, BR.run_root("interior-inputs", 0), bool(units), ids=True,
+                     logits=logits)
 
 
 def _design(L: BR.Layout) -> tuple[str, tuple[CS.Member, ...], tuple[int, ...]]:
@@ -60,15 +64,19 @@ def _logits() -> dict[str, np.ndarray]:
     return {r: rng.integers(0, 1 << 16, (n, V), dtype=np.uint16) for r, n in SERVED.items()}
 
 
+def _tokens(L: BR.Layout) -> dict[str, list[int]]:
+    """Each request's served ids: the class's check's on each row of its logits."""
+    def token(row: np.ndarray) -> int:
+        out = evaluate(L.check, row.tolist())
+        return int(out[0]) if len(out) == 1 else int(out[0]) | int(out[1]) << 16
+    return {r: [token(x) for x in a] for r, a in _logits().items()}
+
+
 def _captured(tmp_path, L: BR.Layout) -> dict[str, IR.Span]:
     """Each request's captured span of the class's check, of its served tokens, each token its Definition's on its row."""
-    t, fn, rows = P.template_id(L.check), L.check, _logits()
-
-    def token(row: np.ndarray) -> int:
-        out = evaluate(fn, row.tolist())
-        return int(out[0]) if len(out) == 1 else int(out[0]) | int(out[1]) << 16
-    SC.write(tmp_path, t, {r: {"logits": a, "tokens": [token(x) for x in a], "steps": list(range(len(a))),
-                               "program": "p" * 64} for r, a in rows.items()})
+    rows, toks = _logits(), _tokens(L)
+    SC.write(tmp_path, P.template_id(L.check), {r: {"logits": a, "tokens": toks[r], "steps": list(range(len(a))),
+                                                    "program": "p" * 64} for r, a in rows.items()})
     return {r: IR.captured(tmp_path, r) for r in SERVED}
 
 
@@ -240,3 +248,51 @@ def test_a_greedy_selects_units_each_read_their_lanes_of_round_1s_logits(tmp_pat
     with pytest.raises(ValueError, match="is none of its rows .* or is wired"):
         IR.interior(per, cells, BOUNDARY, SAMPLE, row=ROW, wires=wires, rows=rws,
                     inputs=[(replace(ins[-1], port=wires[0].port, words=dict(members[-1].rows)[wires[0].port]), port)])
+
+
+def test_the_interior_opens_the_select_inputs_rank_0_kept_at_round_1s_root(tmp_path):
+    """The port's two sides joined. A class of the greedy select in units commits its select's inputs as rank 0's
+    builder lays them out and keeps them (`boundary_logits`), and its record lists ``logits`` after the return. The
+    interior of two sampled spans, one served short of its class, opens the kept value by the class's name
+    (`boundary_logits.load`): every unit's row is round 1's leaf at its place, each member's header's rows and paths are
+    of the tree whose root the class's ``commit.json`` holds, and the interior registers nothing. A kept row another
+    than the one the replay took is refused before anything is committed."""
+    L = _layout(K, logits=True)
+    key, members, cells = _design(L)
+    rec = _record(L)
+    assert [r["port"] for r in rec["roots"]][-2:] == ["o0", NAME] and IR.links(L.program, key, rec, members, cells) == ()
+    ins, (back,) = IR.inputs(L.program, key, rec, members, cells), IR.returns(L.program, key, rec, members, cells)
+    wires, rws = SS.replay_wires(L.program, key), SS.replay_rows(L.program, key)
+
+    took, toks, held = _logits(), _tokens(L), BL.Logits()
+    for r, a in took.items():
+        for row in a:
+            held.add(r, row)
+    served = [BR.Span(r, (1, 2, 3), SAMPLING, tuple(toks[r]), "length" if len(toks[r]) == OUT else "stop") for r in SERVED]
+    answer = BL.Builder(held, BL.Kept(tmp_path / "private" / "logits")).build(BL.assignment(0, L, served))
+    c = BR.commit(served, L, 0, logits=BL.root(answer, L))
+    port, ids = BL.load(tmp_path / "private", 0, L.run, L.prompt, L.outputs, None), c.port("o0")
+    entry = c.public()["values"][NAME]
+    assert (port.root.hex(), port.leaves, port.words) == (entry["root"], N * K * OUT, V // K)
+    assert port.domain.domain_id == L.domain(NAME).domain_id
+
+    spans = {r: IR.pieces(s) for r, s in _captured(tmp_path / "capture", L).items()}
+    per = [spans[r] for r in ("r2", "r0")]
+    it = IR.interior(per, cells, BOUNDARY, SAMPLE, row=ROW, wires=wires, rows=rws, inputs=[(x, port) for x in ins],
+                     returns=[(back, ids)])
+    assert not it.record.get("registered")
+    w, n = it.committed.window, CS.BC_BYTES
+    IR.write(it, tmp_path / "interior")
+    win = json.loads((tmp_path / "interior" / "window.json").read_text())
+    for k, x in enumerate(ins):
+        at = x.rows(SAMPLE)
+        assert it.committed.bc[w.members[k].port(x.port)] == b"".join(port.bcs[a * n:(a + 1) * n] for a in at)
+        assert CS.registered_header(win, k)[x.port] == port.header(at)
+    assert CS.registered_header(win, K - 1)["o0"] == ids.header(back.rows(SAMPLE))
+
+    other = port.rows.copy()
+    other[2 * K * OUT + 3 * K + 1, 0] ^= 1
+    with pytest.raises(ValueError, match=rf"unit 3 \(sampled span 0\) takes at its 'logits' a row that is not row "
+                                         rf"{2 * K * OUT + 3 * K + 1} of logits, the port round 1 committed"):
+        IR.interior(per, cells, BOUNDARY, SAMPLE, row=ROW, wires=wires, rows=rws,
+                    inputs=[(x, replace(port, rows=other)) for x in ins], returns=[(back, ids)])
