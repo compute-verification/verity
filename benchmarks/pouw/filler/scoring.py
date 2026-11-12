@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import arms as A  # where an arm places its filler at a point (`placed`)
 import share  # the capacity model's constants: MACs a token, non-GEMM times, FA2, the int8 peak
 
 log = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ __all__ = [
     "filler_entry_v5", "fold_facts", "fold_reading", "fold_words", "gates", "honesty", "isfinite", "kernel_facts",
     "margins", "mix_context", "mix_entry", "ncu_metric", "other_ms", "parse_nvdisasm", "parse_smi", "paths_gate",
     "point_stats", "points", "prefill_entry", "program_facts", "replay_gate", "score", "score_v5", "secondary",
-    "served_model", "smix", "tp_entry", "tp_gates", "tp_rows", "tp_score", "whole_of_peak",
+    "served_model", "share", "smix", "tp_entry", "tp_gates", "tp_rows", "tp_score", "whole_of_peak",
 ]
 
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"
@@ -1845,8 +1846,6 @@ def honesty(arm: Any, stats: dict, phases_points: Iterable[tuple[str, int, int]]
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
     so the check can see a dishonest arm at the run's own spread. filler-scorer/v4 passes `whole`, each point's
     `whole_of_peak` (the kernel's serving and filler MACs together over its SMs' peak), and refuses any above 1."""
-    import arms as A
-
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
     fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f} > {v['too_good_limit']:.3f}" for k, v in stats.items()
             if _too_good(v)]

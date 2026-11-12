@@ -39,16 +39,17 @@ import subprocess
 import sys
 import time
 from array import array
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.silicon import models as S
+from verity.definitions.silicon import cast, models as S
 from verity.definitions.silicon.errors import InvalidArtifact
 from verity.definitions.circuits.targets.target import FIRST
 
 from .. import settings
+from ..reference import hawkeye_close
 from . import instances_gen as G
 
 __all__ = [
@@ -56,15 +57,18 @@ __all__ = [
     "COMMITTED_FILES",
     "DATASET",
     "DEFAULT_ROOT",
+    "K",
     "N_TU",
     "N_VU",
+    "REPO",
+    "STEP",
     "STEPS",
     "TIERS",
-    "K",
     "TuTier",
     "VuTier",
     "build",
     "load",
+    "main",
     "manifest_sha256",
     "read_u16",
     "read_u32",
@@ -346,33 +350,39 @@ def _interleave_vu(n_real: int, n_corner: int) -> list[tuple[str, int]]:
 
 
 def _git_head() -> str | None:
-    try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    """The commit of the checkout this file is in; None where there is no git, or the file is in no checkout."""
+    if shutil.which("git") is None:
         return None
+    r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=False, timeout=10)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _in_domain(x: Sequence[int], w: Sequence[int]) -> bool:
+    """Whether silicon computes the chain on these operands; False where it rejects them as outside its domain."""
+    try:
+        G.chain_accs(x, w)
+    except InvalidArtifact:
+        return False
+    return True
 
 
 def _source_digests() -> dict[str, str]:
-    import verity.definitions.silicon.cast as cast_mod
-
-    import verity_numerical.reference.hawkeye_close as hk_mod
-
     files = {
         "verity_numerical/bench/instances.py": Path(__file__),
         "verity_numerical/bench/instances_gen.py": Path(G.__file__),
         "verity/definitions/silicon/models.py": Path(S.__file__),
-        "verity/definitions/silicon/cast.py": Path(cast_mod.__file__),
-        "verity_numerical/reference/hawkeye_close.py": Path(hk_mod.__file__),
+        "verity/definitions/silicon/cast.py": Path(cast.__file__),
+        "verity_numerical/reference/hawkeye_close.py": Path(hawkeye_close.__file__),
     }
     return {k: sha256_file(p) for k, p in files.items()}
 
 
 def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str | None = None, cache: Path | str | None = None,
-          log=print) -> dict:
+          log: Callable[[str], None] = print) -> dict:
     """Regenerate every array of the dataset under ``out`` (built and committed alike) and write ``manifest.json``.
     Needs network access to Hugging Face for the real weight rows (cached under ``cache``, default ``<out>/.cache/hf``).
-    Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement -- those
-    are discrepancy-log entries for the coordinator, not things to fix here."""
+    Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement: each is an
+    entry for the discrepancy log, not a thing to fix here."""
 
     t_start = time.time()
     out = Path(out)
@@ -706,11 +716,7 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
         xi, wi = list(x[i * K : (i + 1) * K]), list(w[i * K : (i + 1) * K])
         k = G.Rng("neg-nonfinite", n).below(K)
         (xi if where == "x" else wi)[k] = word
-        try:
-            G.chain_accs(xi, wi)
-        except InvalidArtifact:
-            pass
-        else:
+        if _in_domain(xi, wi):
             raise RuntimeError("a non-finite operand was not rejected by silicon")
         kind = "inf" if word & 0x7F == 0 else "nan"
         push("nonfinite-operand", i, xi, wi, claimed, None, "reject", f"{where}[{k}] = {word:#06x} ({'-' if word >> 15 else '+'}{kind}); claimed the IEEE word")
@@ -721,11 +727,7 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
         a, b = (K - STEP), (K - 2 * STEP)
         xi[a : a + STEP], xi[b : b + STEP] = xi[b : b + STEP], xi[a : a + STEP]
         wi[a : a + STEP], wi[b : b + STEP] = wi[b : b + STEP], wi[a : a + STEP]
-        try:
-            G.chain_accs(xi, wi)
-        except InvalidArtifact:
-            pass
-        else:
+        if _in_domain(xi, wi):
             raise RuntimeError("an intermediate saturation was not rejected by silicon")
         push("sat-intermediate", i, xi, wi, results[i]["y"], None, "reject", "steps 94 and 95 of a sat-final corner swapped: acc_94 is +-inf, step 95 is out of the domain; claimed the sticky infinity")
     return {"x": neg_x, "w": neg_w, "y": neg_y, "rows": rows, "composition": composition}
@@ -734,7 +736,8 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
 # --- verify ----------------------------------------------------------------------------------------------------------------------
 
 
-def verify(root: Path | str = DEFAULT_ROOT, full: bool = False, sample: int = 64, seeds_dir: Path | str | None = None, log=print) -> dict:
+def verify(root: Path | str = DEFAULT_ROOT, full: bool = False, sample: int = 64, seeds_dir: Path | str | None = None,
+           log: Callable[[str], None] = print) -> dict:
     """Digests of every array against ``manifest.json`` (built arrays: reported missing rather than failed), the seed
     checks, a ``silicon`` recheck of ``sample`` VU and TU instances (every instance with ``full``), and the negatives'
     claims.  Returns a report with ``ok``."""

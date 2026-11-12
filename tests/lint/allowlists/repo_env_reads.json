@@ -19,7 +19,6 @@
     {"file": "benchmarks/hash/dither/live_audit.py", "count": 2},
     {"file": "benchmarks/hash/exactlin/kbench.py", "count": 1},
     {"file": "benchmarks/hash/exactlin/share.py", "count": 1},
-    {"file": "benchmarks/judge.py", "count": 1},
     {"file": "benchmarks/kv_filler/serve.py", "count": 1},
     {"file": "verity/composite/device/live_challenger/auditor.py", "count": 3},
     {"file": "verity/composite/device/live_challenger/tests/stub_serve.py", "count": 3},

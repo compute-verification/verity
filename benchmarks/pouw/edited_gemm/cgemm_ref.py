@@ -31,17 +31,23 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from derive import NCT, tile_receipts
-from ref import key_mul
-
 __all__ = ["C_TAG", "DITHER_TAG", "NCT", "T", "block", "check", "cs", "patch_bits", "tile_receipts", "u_rows",
            "z_rows"]
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("checked_strip", HERE.parent / "theory" / "checked_strip.py")
-cs = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(cs)
+
+
+def _load(name: str, path: Path):
+    """The script at path, from its file under a name no other directory's script has: nothing goes on `sys.path`."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_derive = _load("floored_gemm_derive", HERE.parent / "floored_gemm" / "derive.py")
+NCT, key_mul, tile_receipts = _derive.NCT, _derive.key_mul, _derive.tile_receipts
+cs = _load("checked_strip", HERE.parent / "theory" / "checked_strip.py")
 
 T = 128
 DITHER_TAG, C_TAG, Z_TAG, BETA_TAG, HBETA_TAG = 7, 8, 9, 10, 11

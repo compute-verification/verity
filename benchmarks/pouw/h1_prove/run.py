@@ -126,6 +126,7 @@ import os
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -193,7 +194,7 @@ def tamper_flag(flag: str, units: list[int], call: tuple[int, int]) -> list[str]
 
 # -- the verifier's view of an execution phase ----------------------------------------------------------------------------------------
 
-def program_of(k: int, calls, slot: int) -> SimpleNamespace:
+def program_of(k: int, calls: Sequence[tuple[str, int]], slot: int) -> SimpleNamespace:
     """The public Program of an execution phase shape (`h1unit.Shape.window`: its calls' names and B rows, its slot), its
     template-instance query and partition (``tp`` as core evaluates it, ``obj`` the `verity/partition/v1` object)."""
     program, query = U.Shape(k, R, C).window(calls, slot)
@@ -289,20 +290,21 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
     return {**{p: bytes.fromhex(op["rows"][p]["bc"]) for p in [*shape.in_rows, "o0"]}, "pub": pub, "o1": ok}
 
 
-def ok_registration(win: SimpleNamespace, com: dict) -> "U.G.Registered":
+def ok_registration(win: SimpleNamespace, com: dict) -> G.Registered:
     """The verifier's own registration of an execution phase's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
     salt), under its own Program's digest and the execution phase's open root (`h1unit.window_open_root`, the verifier's own), from
     the execution phase's name, its b/<K> root and the Program's population alone."""
     return U.register_ok(win.obj["program"], com["window"], win.tp.population, U.window_open_root(com))
 
 
-def roots_of(com: dict, okr) -> dict[str, tuple[int, str]]:
+def roots_of(com: dict, okr: G.Registered) -> dict[str, tuple[int, str]]:
     """Every registered value a statement of the execution phase reads, each its rows and root: the commitment's (the prover's), and
     the verifier's own ``ok`` (``okr``, `ok_registration`)."""
     return U.registered_of(com) | {U.OK_VALUE: (okr.leaves, okr.root.hex())}
 
 
-def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int, okr) -> dict[str, tuple[str, int, str]]:
+def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int,
+                    okr: G.Registered) -> dict[str, tuple[str, int, str]]:
     """Unit ``u``'s registered reads as the verifier's public file states them (`h1unit.verifier_pub`'s ``reads``): each
     registered port's value, the position the verifier's Program reads (`h1unit.unit_reads`) and the opened path, and the
     ok port's at the verifier's own ``ok`` (``okr``, `ok_registration`) and its path there."""
@@ -313,7 +315,8 @@ def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int, okr) -> dict
     return {**out, "o1": (value, index, okr.path(index).hex())}
 
 
-def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int], okr) -> tuple[dict, dict]:
+def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int],
+                    okr: G.Registered) -> tuple[dict, dict]:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (`h1unit.registered_reads`, under
     its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 execution phase's own reads
     (`h1unit.unit_reads`) at the sampled ``units``. Returns what it wrote and the file."""
@@ -448,7 +451,7 @@ def wait_for(path: Path, what: str, pid: int | None) -> None:
 
 # -- prepare ----------------------------------------------------------------------------------------------------------------
 
-def epoch(work: Path, name: str, layer: str, number: int, a, record: dict,
+def epoch(work: Path, name: str, layer: str, number: int, a: argparse.Namespace, record: dict,
           program: str = "") -> tuple[dict, dict, bytes, Challenger]:
     """One execution phase's execution phase to its registration: commit (``program``: the execution phase Program's digest, when known), the salt
     coin, serve. Returns its commitment, served root, the unit salt and the challenger (its sampling coin still closed)."""
@@ -502,7 +505,7 @@ def sample_units(lean: str, coin: bytes, window: str, registration: str, populat
     return sorted(lean_sample(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
 
 
-def cmd_prepare(a) -> int:
+def cmd_prepare(a: argparse.Namespace) -> int:
     work, sw = Path(a.work), Path(a.stage)
     work.mkdir(parents=True, exist_ok=True)
     (sw / "requests").mkdir(parents=True, exist_ok=True)
@@ -891,7 +894,7 @@ def lean_credit(work: Path, out: Path, record: dict) -> dict:
     return {"ran": True, "units": sorted(found), "result": got}
 
 
-def cmd_summarize(a) -> int:
+def cmd_summarize(a: argparse.Namespace) -> int:
     work, out = Path(a.work), Path(a.out)
     plan = json.loads((work / "plan.json").read_text())
     record = json.loads((work / "record.json").read_text())
@@ -985,7 +988,7 @@ def cmd_summarize(a) -> int:
     return 0 if ok else 1
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
@@ -1011,6 +1014,10 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)
 
+
+__all__ = ["check_opening", "check_registration", "credit_descriptor", "credit_registration", "findings_of", "forge",
+           "ok_known_root", "ok_registration", "program_of", "registered_file", "registered_opens", "unrooted",
+           "unrooted_ok", "z_only"]
 
 if __name__ == "__main__":
     raise SystemExit(main())

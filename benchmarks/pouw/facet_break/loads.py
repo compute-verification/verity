@@ -33,6 +33,7 @@ import argparse
 import json
 import re
 import sys
+import tomllib
 from fnmatch import fnmatchcase
 from fractions import Fraction
 from itertools import combinations
@@ -42,7 +43,7 @@ HERE = Path(__file__).resolve().parent
 MM = Path(__file__).resolve().parents[2] / "machine_model"
 sys.path.insert(0, str(MM))
 
-from verity_machine_model.model import census, model  # noqa: E402
+from verity_machine_model.model import census, entries, holds, model, vector, vectors  # noqa: E402
 
 __all__ = ["BULK_BYTES", "bulk_counts", "census", "class_of", "CLASS_RULES", "facet_loads", "gate_loops",
            "l2_bytes_per_s", "L2_ROW", "load_rows", "main", "MMA_FORMS", "model", "program", "rates_by_class",
@@ -231,7 +232,6 @@ def l2_default() -> float | None:
     t = MM / "data" / "table.toml"
     if not t.exists():
         return None
-    import tomllib
     return float(tomllib.loads(t.read_text())["l2"])
 
 
@@ -390,7 +390,6 @@ def load_rows(paths: list[Path], full: bool = False) -> list[dict]:
 
 def in_vector(epoch: str) -> set[str]:
     """The rows the named vector's price LP (and CALC's ε LP) reads, so a violation of one is flagged as ε-reading."""
-    from verity_machine_model.model import vector, vectors
     for n in vectors():
         v = vector(n)
         if v.epoch == epoch:
@@ -558,7 +557,6 @@ def polygon(lines: list[tuple[float, float]], s: float, label: str) -> list[tupl
 
 def _close(m, epoch: str, rows: list[str]) -> list[str]:
     """Each live census line on the given rows, to close at `epoch` (its `until`), by the file it is in."""
-    from verity_machine_model.model import entries, holds
     return [f"close: census/{e.since or m.epochs[0]}.csv {e.kind},{e.row} until {epoch}"
             for e in entries(m) if e.row in rows and holds(m, e.since, e.until, epoch)]
 

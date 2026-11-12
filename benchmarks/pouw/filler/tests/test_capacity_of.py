@@ -3,14 +3,9 @@ dcap's lfill lines."""
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
+import capacity_of as CO
 import pytest
-
-HERE = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(HERE))
-import capacity_of as CO  # noqa: E402
 
 PI = CO.E.machine("VF3r-16")  # the vector of record the readings below are taken on
 GHZ = 2.092e9

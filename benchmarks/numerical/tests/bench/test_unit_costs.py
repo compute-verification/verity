@@ -45,26 +45,26 @@ def test_affine_refuses_a_bent_metric():
         U.affine(pts[:2], ("ands",))
 
 
-def test_argmax_scan_law_predicts_a_later_band():
+def test_argmax_scan_counts_predict_a_later_band():
     builds = {v: _counts("token-select-greedy", {"V": v}) for v in range(2, 20)}
-    law = U.argmax_scan_law(builds)
-    assert law.constants == {"alpha": 103, "beta": 163, "inputs_per_V": 16}
-    assert law(70) == _counts("token-select-greedy", {"V": 70})
+    scan = U.argmax_scan_counts(builds)
+    assert scan.constants == {"alpha": 103, "beta": 163, "inputs_per_V": 16}
+    assert scan(70) == _counts("token-select-greedy", {"V": 70})
     bent = {**builds, 15: {**builds[15], "ands": builds[15]["ands"] + 1, "committed": builds[15]["committed"] + 1}}
     with pytest.raises(ValueError, match="breaks at V = 15"):
-        U.argmax_scan_law(bent)
+        U.argmax_scan_counts(bent)
 
 
-def test_block_law_affine_or_curved():
+def test_block_excess_affine_or_curved():
     fit = {m: (Fraction(3), Fraction(7)) for m in U.METRICS}
     head = lambda T, extra: {m: 3 * T + 7 + extra for m in U.METRICS}  # noqa: E731
     r = {"params": {"BN": 64}, "_fit": fit, "method": "model",
          "block_checks": {80: {"built": head(80, 11)}, 144: {"built": head(144, 22)}}}
-    U.block_law(r)
+    U.block_excess(r)
     assert r["method"] == "affine" and r["per_extra_block"]["ands"] == 11 and "block_curvature" not in r
     r = {"params": {"BN": 64}, "_fit": fit, "method": "model",
          "block_checks": {80: {"built": head(80, 11)}, 144: {"built": {**head(144, 22), "nnz_AB": 3 * 144 + 7 + 25}}}}
-    U.block_law(r)
+    U.block_excess(r)
     assert r["method"] == "model" and r["block_curvature"] == {"nnz_AB": 3}
 
 
@@ -77,13 +77,13 @@ def test_sample_size_is_the_record_k():
     assert U.sample_size() == 27_713
 
 
-def test_draw_count_against_the_exact_hypergeometric():
+def test_sample_count_against_the_exact_hypergeometric():
     N, n, K, tail = 30, 7, 12, 1e-3
     pmf = [comb(n, k) * comb(N - n, K - k) / comb(N, K) for k in range(n + 1)]
     want = next(k for k in range(n + 1) if sum(pmf[k + 1:]) <= tail)
-    mean, q = U.draw_count(N, n, K, tail)
+    mean, q = U.sample_count(N, n, K, tail)
     assert (mean, q) == (K * n / N, want)
-    assert U.draw_count(10, 3, 4, 0.05) == (1.2, 2)
+    assert U.sample_count(10, 3, 4, 0.05) == (1.2, 2)
 
 
 def test_work_model():

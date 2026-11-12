@@ -7,15 +7,15 @@ against it, not against itself); y is the dequantization primitives' evaluators 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from verity.circuits.defs import REGISTRY
 
 from ..schemes.ncp import assemble, checked_route_u
 from . import ncp2
-from .ncp2 import D, Shape
 from . import words as W
+from .ncp2 import D, Shape
 from .words import M32, i32_to_f32_rn, sx
 
 M64 = (1 << 64) - 1
@@ -164,5 +164,5 @@ def signed(v: int) -> int:
     return sx(v, 32)
 
 
-__all__ = ["Call", "Result", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest", "strip_digest",
-           "weight_outputs"]
+__all__ = ["Call", "Result", "dequant", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest",
+           "strip_digest", "weight_outputs"]

@@ -54,6 +54,8 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 from verity.commitments import hm96
 from verity.commitments import merkle as MK
@@ -71,7 +73,7 @@ HASH_T = ("hash_msg", "hash_leaf", "tree_leaves_t", "tree_t")
 CALL_PHASES = ("commit", "forming", "cleanup", "hashing")
 
 
-def load(name: str, path: Path):
+def load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     mod = sys.modules[name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -93,7 +95,7 @@ def node_head(dom: MK.CommitmentDomain, level: int, index: int) -> bytes:
     return MK._message(MK._NODE, dom.domain_id, MK._uint(level), MK._uint(index)) + (64).to_bytes(8, "big")
 
 
-def constants(h) -> dict:
+def constants(h: Any) -> dict:
     """hm96_rows.cu's constants on the device: M_key's byte tables and the midstates of hm96's salt and leaf prefixes."""
     tables = b"".join(v.to_bytes(64, "little") for row in INST.byte_tables(KEY) for v in row)
     pre = h.put(INST.salt_prefix + INST.leaf_prefix(KEY))
@@ -450,6 +452,8 @@ def main() -> int:
     print("per forward (ms, 32 layers):", res["per_forward_ms"], flush=True)
     return 0
 
+
+__all__ = ["Commit", "INST", "KEY", "SEG", "SLOT", "V2", "node_head", "slots"]
 
 if __name__ == "__main__":
     sys.exit(main())

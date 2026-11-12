@@ -24,11 +24,18 @@ import json
 import multiprocessing as mp
 import sys
 from concurrent.futures import ProcessPoolExecutor
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.pouw.prover.circuit import h1zy as ZY
+
+if TYPE_CHECKING:
+    import ctypes
+    from pathlib import Path
+
+    from partials import Calls, Kernel, Leaf
 
 R = 32
 PARTLY = (1, 3, 7)     # j of m = 32 r + j: 28, 20 and 4 of a leaf's 32 lanes hold no admitted row
@@ -42,7 +49,8 @@ def _job(a: list, b: list, admit: list, salt: bytes, position: int, roots: tuple
     return tile, lanes
 
 
-def records(win, leaves, kernel=None, receipts: dict | None = None, group: str = "") -> list[dict]:
+def records(win: Calls, leaves: list[Leaf], kernel: Kernel | None = None, receipts: dict | None = None,
+            group: str = "") -> list[dict]:
     """Each leaf's record: its step, call and unit, K, live bit and admit bits (slots < m), the step's salt, its position
     and (A, B) roots, its A and B row blocks (u8), its partials on the cpu and (with `kernel`) the gpu, and its
     committed receipt from `receipts` {leaf: (W,)}."""
@@ -61,7 +69,7 @@ def records(win, leaves, kernel=None, receipts: dict | None = None, group: str =
     return out
 
 
-def save(path, recs: list[dict]) -> None:
+def save(path: str | Path, recs: list[dict]) -> None:
     """The records as one npz: their arrays by index, the rest as JSON."""
     arrays, meta = {}, []
     for i, r in enumerate(recs):
@@ -73,7 +81,7 @@ def save(path, recs: list[dict]) -> None:
     np.savez_compressed(path, meta=np.array(json.dumps(meta)), **arrays)
 
 
-def load(path) -> list[dict]:
+def load(path: str | Path) -> list[dict]:
     z = np.load(path)
     out = []
     for i, r in enumerate(json.loads(str(z["meta"]))):
@@ -128,7 +136,8 @@ def check(recs: list[dict], workers: int = 1) -> dict:
             "ok": all(gd["ok"] for gd in groups.values())}
 
 
-def compare(win, leaves, kernel=None, workers: int = 1, receipts: dict | None = None) -> dict:
+def compare(win: Calls, leaves: list[Leaf], kernel: Kernel | None = None, workers: int = 1,
+            receipts: dict | None = None) -> dict:
     """`check` of the leaves' records, as one group."""
     doc = check(records(win, leaves, kernel, receipts), workers)
     return {**doc.pop("groups")[""], **doc}
@@ -141,7 +150,8 @@ def verdict(doc: dict) -> bool:
                                                     for g in gs if g.startswith("partly")))
 
 
-def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, workers: int = 1) -> dict:
+def served(win: Any, g: dict, salt: bytes, lib: str | Path | ctypes.CDLL | None = None, per_call: int = 1,
+           path: str | Path | None = None, workers: int = 1) -> dict:
     """On a served step's capture `g` (dither_one's DitherState `win`, the step's salt; `lib` the served h1u build for the
     gpu): every call's `per_call` live leaves and one dead leaf (when the step has a dead row block), group "real", with
     their committed receipts; then, on the step's own operands at m = 32 r + j (j in `PARTLY`,
@@ -189,7 +199,7 @@ def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, wo
     return {**here, **doc, "ok": here["here_ok"] and verdict(doc)}
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="SERVE-REG's gated lane on a saved capture (`served` with a path)")
     ap.add_argument("capture")
     ap.add_argument("--workers", type=int, default=32)
@@ -207,7 +217,7 @@ def main(argv=None) -> int:
     return 0 if doc["ok"] else 1
 
 
-__all__ = ["PARTLY", "check", "compare", "load", "records", "save", "served", "verdict"]
+__all__ = ["PARTLY", "check", "compare", "load", "main", "records", "save", "served", "verdict"]
 
 if __name__ == "__main__":
     sys.exit(main())

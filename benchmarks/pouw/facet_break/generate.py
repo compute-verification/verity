@@ -14,6 +14,8 @@ with the exact SASS counts the gate pins. A program the gate refuses is dropped 
 """
 from __future__ import annotations
 
+import argparse
+import json
 import random
 import sys
 from pathlib import Path
@@ -986,8 +988,6 @@ def emit_cu(gs: list[dict]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    import argparse
-    import json
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")

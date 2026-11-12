@@ -175,7 +175,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
         data = DATA if f.device == "sm_120" else device(f.device)
         pi = E.machine(f.vector, data)
         base = E.design(f.design_name, data)
-        flat0 = cmd._eps_record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]
+        flat0 = cmd.record(base, pi, 1.22, data, "free", "floor", None, None, "full")["baseline"]["cycles_per_mma"]
         d0 = base
         for x, mix in f.pre_fill:
             d0 = d0.with_fill(x, dict(mix))
@@ -183,8 +183,7 @@ def sweep(out: Path = FILL_DATA) -> dict:
         for name, mix in FILL_MIXES.items():
             pts = []
             for y in FILL_GRID:
-                r = cmd._eps_record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None,
-                                    "full")
+                r = cmd.record(d0.with_fill(y, mix) if y else d0, pi, 1.22, data, "free", "floor", None, None, "full")
                 flat = r["baseline"]["cycles_per_mma"]
                 # the point's "gamma" is the machine model's ratio, 1 + γ
                 pts.append([y, round(r["gamma"], 5), round(r["terms"]["skip"] * flat0 / flat, 7),

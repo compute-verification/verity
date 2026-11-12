@@ -3,16 +3,8 @@ pump on a split's other SMs also through the non-GEMM time, and the pick keeps o
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
-
-_spec = importlib.util.spec_from_file_location("share", Path(__file__).resolve().parents[1] / "share.py")
-S = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = S
-_spec.loader.exec_module(S)
+import share as S
 
 
 class _M:

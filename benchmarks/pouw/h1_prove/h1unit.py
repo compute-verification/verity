@@ -61,9 +61,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -79,6 +81,13 @@ from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
+
+if TYPE_CHECKING:
+    from verity.circuits.partition_object import TemplatePartition
+    from verity.circuits.program import Program
+    from verity.protocols.pouw.prover.circuit.h1tile import Layout
+    from verity_flock.circuit import Port
+    from verity_flock.class_statement import UnitStager
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
@@ -136,19 +145,20 @@ def layout() -> str | None:
     return m
 
 
-def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
+def stager(definition: Any, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
+           out_rows: Sequence[tuple[str, Sequence[int]]], layout: str | None, **kw: Any) -> UnitStager:
     """``definition``'s `UnitStager` (``kw`` its ``circuit``, ``bind`` and ``public_inputs``): with ``layout`` the
     templated statement of its structural lowering (`struct_lower`, ``structural``), the flat unit never built; with
     None, or where struct_lower refuses the Definition (its NotImplementedError: an assertion, or a specialization of
     2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
     (K ≤ 4096 served; past K ≈ 5,041 the lane fits no 2^27 block in either form, and compose refuses it)."""
-    import sys
+    import warnings
     from verity_flock import class_statement as CS
     if layout is not None:
         try:
             return CS.UnitStager(definition, name, in_rows, out_rows, layout=layout, structural=True, **kw)
         except NotImplementedError as e:
-            print(f"{name}: the flat statement: struct_lower refuses {definition.id} ({e})", file=sys.stderr, flush=True)
+            warnings.warn(f"{name}: the flat statement: struct_lower refuses {definition.id} ({e})", stacklevel=2)
     return CS.UnitStager(definition, name, in_rows, out_rows, **kw)
 
 
@@ -203,13 +213,13 @@ def tables(com: dict) -> dict[str, int]:
     return out
 
 
-def steps(program) -> int:
+def steps(program: Program) -> int:
     """The execution phase's steps as `h1window.table` counts them: h1_prove serves no rounds, so each call is a step of its own
     and its step's A table ``a/<K>@<c>`` holds its slot alone."""
     return len(HW.call_units(program))
 
 
-def program_tables(program, k: int) -> dict[str, int]:
+def program_tables(program: Program, k: int) -> dict[str, int]:
     """`tables` as the verifier's own execution phase Program gives them: its B rows, and each call's A table (`h1window.table`
     at `steps`, its slot of M rows) and z table (its tiles)."""
     S, sig = program.fn.S(), dict(program.fn.signature()[0])
@@ -252,7 +262,7 @@ def window_roots(com: dict) -> tuple[bytes, bytes]:
 OUT_PORTS = {"receipt": "o0", "ok": "o1"}
 
 
-def ports(template) -> dict[str, str]:
+def ports(template: Any) -> dict[str, str]:
     """The statement's port of each row a unit of ``template`` (the execution phase's at its K, `h1window.template`) reads, by
     `h1window.unit_reads`' and `registered.reads`' keys (its parameters' ``a_k<K>[i]``, ``b_k<K>[j]`` and ``zy``,
     `h1window.row_key`): A row i's ``a<i>``, B row j's ``b<j>``, the record's ``zy``."""
@@ -261,7 +271,7 @@ def ports(template) -> dict[str, str]:
             zy: "zy"}
 
 
-def window_ports(program) -> dict[str, str]:
+def window_ports(program: Program) -> dict[str, str]:
     """`ports` of the execution phase ``program``'s template: the statement is one K's circuit, so an execution phase of two K's is refused."""
     tiles = program.fn.bindings["TILES"]
     if len(tiles) != 1:
@@ -269,7 +279,7 @@ def window_ports(program) -> dict[str, str]:
     return ports(tiles[0][1])
 
 
-def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
+def unit_reads(program: Program, tp: TemplatePartition, u: int) -> dict[str, tuple[str, int]]:
     """`h1window.table_reads` by the statement's ports (`window_ports`, `OUT_PORTS`; ``salt``, ``position`` and ``roots``
     the public row's): each registered port's value (its call c's ``a/<K>@<c>`` or ``zy@<c>``, the weights' ``b/<K>``)
     and its row there, and the execution phase's parameter or output each other port reads."""
@@ -294,7 +304,7 @@ def bound_root(name: str, window_root: str) -> str | None:
     return None if CR.is_held(name) else window_root
 
 
-def register(program: str, name: str, words: np.ndarray, salts, window_root: str) -> G.Registered:
+def register(program: str, name: str, words: np.ndarray, salts: Sequence[bytes], window_root: str) -> G.Registered:
     """An execution phase's rows of the registered value ``name`` (its bit rows' u16 words, `row_words` or `record_words`), committed
     under the execution phase Program's digest ``program`` in the tile's ports' format (``row/v2``, 16-bit leaves) with one of
     ``salts`` a row, its domain binding the execution phase's open root ``window_root`` unless ``name`` is b/<K> (`bound_root`)."""
@@ -346,7 +356,7 @@ def registered_domain(program: str, name: str, leaves: int, window_root: str) ->
     return G.domain(program, name, value_words(name), int(leaves), window=bound_root(name, window_root))
 
 
-def registered_levels(program: str, name: str, bcs: list[bytes], window_root: str):
+def registered_levels(program: str, name: str, bcs: list[bytes], window_root: str) -> tuple[tuple[bytes, ...], ...]:
     """The registered tree of ``name``'s rows ``b || c`` (`register`'s, from its ``bcs`` alone)."""
     dom = registered_domain(program, name, len(bcs), window_root)
     return tree_levels(dom, [G.leaf(dom, i, bc, V2) for i, bc in enumerate(bcs)])
@@ -360,8 +370,8 @@ def verify_registered(program: str, name: str, leaves: int, root: bytes, index: 
                          bytes.fromhex("".join(sibs)), V2)
 
 
-def registered_reads(program, tp, call: int, roots: dict[str, str], window: str, window_root: str,
-                     prog: str | None = None) -> dict:
+def registered_reads(program: Program, tp: TemplatePartition, call: int, roots: dict[str, str], window: str,
+                     window_root: str, prog: str | None = None) -> dict:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (flock-verify ``verify --zk
     --registered``, `h1window.table_reads_file`): for each registered port (`window_ports`), the value it reads (the
     call's A table or z table, or the weights' b/<K>), its root (``roots`` ``{value: root}``, the execution phase's registration),
@@ -389,7 +399,7 @@ def registered_reads(program, tp, call: int, roots: dict[str, str], window: str,
     return doc
 
 
-def table(positions) -> tuple[list[int], list[int], list[int]]:
+def table(positions: Iterable[int]) -> tuple[list[int], list[int], list[int]]:
     """A registered port's shared-row table over its instances' positions (`registered.table`): the table's positions,
     each instance's ref into it, and the first instance that reads each table row."""
     tpos, refs = G.table([int(p) for p in positions])
@@ -399,7 +409,7 @@ def table(positions) -> tuple[list[int], list[int], list[int]]:
     return tpos, refs, [first[t] for t in range(len(tpos))]
 
 
-def one_value(port: str, values) -> str:
+def one_value(port: str, values: Iterable[object]) -> str:
     """The one registered value a statement's port reads at all its instances: a port reads one value, so a statement
     holds one call's units."""
     got = sorted({str(v) for v in values})
@@ -453,7 +463,7 @@ class Shape:
     j10r: bool = False
 
     @cached_property
-    def layout(self):
+    def layout(self) -> Layout:
         from verity.protocols.pouw.prover.circuit import h1tile as H
         return H.Layout(self.r, self.c, self.k)
 
@@ -491,26 +501,27 @@ class Shape:
                    FC._port("pub", self.pub_bits // 16, self.pub_bits)]
                 + [FC._port("o0", self.receipt_words, 16 * self.receipt_words), FC._port("o1", len(OK), 16 * len(OK))])
 
-    def unit(self):
+    def unit(self) -> Any:
         """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
         from verity.protocols.pouw.prover.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
 
-    def definition(self):
+    def definition(self) -> Any:
         """The statement's Definition: the execution phase's template at K (`h1window.template`, one call of `unit`), the one its
         partition lists."""
         return HW.template(self.k, self.unit())
 
-    def window(self, calls, m: int):
+    def window(self, calls: Sequence[tuple[str, int]], m: int) -> tuple[Program, dict[str, Any]]:
         """The execution phase's public Program (`h1window.program` over this unit: its ``calls`` ``(name, B rows)``, each its own
         linear at K, all reading the one A block of slot ``m``) and its `Q_template_instances` query."""
         program = HW.program([(name, self.k, n) for name, n in calls], [(name, 0) for name, _n in calls], m,
                              (self.r, self.c), unit=lambda _k: self.unit())
         return program, HW.query(program)
 
-    def stager(self, name: str, circuit=None, bind: dict | None = None, flat: bool = False):
+    def stager(self, name: str, circuit: Path | None = None, bind: dict | None = None,
+               flat: bool = False) -> UnitStager:
         """The unit's `UnitStager` on K's statement rows (`h1window.statement_rows`, under this harness's ports): its circuit,
         built once and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``: the execution phase's partition and
         Program, `Shape.window`), templated from struct_lower or flat as `layout` says (`stager`), or with ``flat`` the
@@ -523,7 +534,7 @@ class Shape:
 
 # -- words ------------------------------------------------------------------------------------------------------------------
 
-def row_words(codes: np.ndarray, scales) -> np.ndarray:
+def row_words(codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
     """int8 code rows ``(n, K)`` and their f32 scales ``(n,)`` as their bit rows' u16 words ``(n, K / 2 + 2)``: code t's
     bits are leaves 8 t .. 8 t + 7, then the scale's 32 bits, little-endian (`h1zy.ROW`, the A table leaf)."""
     b = np.ascontiguousarray(np.asarray(codes).astype(np.int8).view(np.uint8))
@@ -532,13 +543,13 @@ def row_words(codes: np.ndarray, scales) -> np.ndarray:
     return np.ascontiguousarray(np.concatenate([b, s], axis=1)).view("<u2").astype(np.uint16)
 
 
-def split_row(words) -> tuple[list[int], int]:
+def split_row(words: np.ndarray | Sequence[int]) -> tuple[list[int], int]:
     """`row_words`' one row back: its codes (u8 encodings) and its scale (the f32 encoding)."""
     b = np.asarray(words, np.uint16).astype("<u2").tobytes()
     return list(b[:-4]), int.from_bytes(b[-4:], "little")
 
 
-def dequant(z, sa, sw) -> np.ndarray:
+def dequant(z: np.ndarray, sa: np.ndarray | float, sw: np.ndarray | float) -> np.ndarray:
     """`h1zy.dequant` on arrays (z s32, s_a and s_w f32, broadcast): RN_bf16(RN32(RN32(RN32(z) · s_a) · s_w)), the served
     epilogue, as bf16 encodings, every NaN 0x7FFF."""
     with np.errstate(over="ignore", invalid="ignore"):
@@ -547,21 +558,21 @@ def dequant(z, sa, sw) -> np.ndarray:
     return np.where(np.isnan(f), 0x7FFF, ((u + 0x7FFF + ((u >> 16) & 1)) >> 16) & 0xFFFF).astype(np.uint16)
 
 
-def records(a: np.ndarray, b: np.ndarray, sa, sw) -> tuple[np.ndarray, np.ndarray]:
+def records(a: np.ndarray, b: np.ndarray, sa: np.ndarray, sw: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """``scaled_mm_zy``'s record of A's rows and B's rows (int8 codes) at their scales (f32): z = A Bᵀ exact, as s32, and
     y = `dequant`(z) at each cell's row s_a and column s_w, each ``(rows of A, rows of B)`` (`h1zy.records` on arrays)."""
     z = (np.asarray(a, np.int64) @ np.asarray(b, np.int64).T).astype(np.int32)
     return z, dequant(z, np.asarray(sa, np.float32)[:, None], np.asarray(sw, np.float32)[None, :])
 
 
-def record_words(z, y) -> np.ndarray:
+def record_words(z: np.ndarray, y: np.ndarray) -> np.ndarray:
     """A unit's record, its cells' z (s32) and y (bf16 encodings), row-major, as its bit row's 3 R C u16 words: z's 32-bit
     words little-endian, then y's (`h1zy.RECORD`, the z table leaf)."""
     zw = np.ascontiguousarray((np.asarray(z, np.int64).reshape(-1) & M32).astype("<u4")).view("<u2")
     return np.concatenate([zw, np.asarray(y, np.uint16).reshape(-1)]).astype(np.uint16)
 
 
-def split_record(words, cells: int) -> tuple[list[int], list[int]]:
+def split_record(words: np.ndarray | Sequence[int], cells: int) -> tuple[list[int], list[int]]:
     """`record_words`' one row back: its cells' z (s32 words, two's complement in 32 bits) and y (bf16 encodings)."""
     w = np.asarray(words, np.uint16)
     return [int(v) for v in np.ascontiguousarray(w[:2 * cells].astype("<u2")).view("<u4")], [int(v) for v in w[2 * cells:]]
@@ -579,7 +590,7 @@ def receipt_words(rc: list[int]) -> np.ndarray:
     return np.array([int(v) & M32 for v in rc], dtype="<u4").view("<u2").astype(np.uint16)
 
 
-def commit_strings(port, rows: np.ndarray, salts: list[bytes]) -> list[bytes]:
+def commit_strings(port: Port, rows: np.ndarray, salts: list[bytes]) -> list[bytes]:
     """Each row's ``b || c`` under its salt, by Flock's own function (`circuit._commit_strings`) on `port`."""
     from verity_flock import circuit as FC
     return FC._commit_strings([port], {port.name: np.asarray(rows, np.uint16).reshape(len(salts), -1)}, {port.name: salts})[port.name]
@@ -596,11 +607,11 @@ def leaves(dom: CommitmentDomain, bcs: list[bytes]) -> list[bytes]:
     return [row_leaf(dom, i, HM96.tree_leaf(HM96.default_key, bc), V2) for i, bc in enumerate(bcs)]
 
 
-def levels(dom: CommitmentDomain, bcs: list[bytes]):
+def levels(dom: CommitmentDomain, bcs: list[bytes]) -> tuple[tuple[bytes, ...], ...]:
     return tree_levels(dom, leaves(dom, bcs))
 
 
-def path(lv, index: int) -> list[str]:
+def path(lv: Sequence[Sequence[bytes]], index: int) -> list[str]:
     out = []
     for level in lv[:-1]:
         out.append(level[index ^ 1].hex())
@@ -728,3 +739,13 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
             "rows": False, "registered": registered, "shared_rows": {p.name: len(tabs[p.name]) for p in ports}}
     return FC.public_file(head, b"".join(bc for p in ports for bc in tabs[p.name])
                           + np.ascontiguousarray(np.stack([refs[p.name] for p in ports], axis=1).astype("<u4")).tobytes())
+
+
+__all__ = ["A_TABLES_TAG", "HW", "LAYOUT", "M32", "OK", "OK_VALUE", "OUT_PORTS", "PROVER", "PUBLIC", "PUB_BITS",
+           "SALT_BYTES", "STREAM", "Shape", "TILE", "V2", "bound_root", "check_known", "commit_strings", "dequant",
+           "domain", "forge_statement", "known_ok", "layout", "levels", "ok_salt", "open_root", "path", "ports",
+           "program_tables", "pub_salt", "pub_words", "receipt_words", "record_words", "records", "register",
+           "register_ok", "registered_domain", "registered_levels", "registered_of", "registered_reads", "row_words",
+           "slot", "split_record", "split_row", "stager", "stand_in_reveal", "statement_tables", "tables", "tile",
+           "unit_reads", "unit_salt", "value_words", "verifier_pub", "verify", "verify_registered", "window_open_root",
+           "window_ports", "window_roots", "window_shape"]

@@ -27,9 +27,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterable
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+from typing import TYPE_CHECKING
 
 import methodology
 import models
@@ -39,6 +39,12 @@ import spec
 import tables
 import windows
 
+if TYPE_CHECKING:
+    import numpy as np
+
+__all__ = ["BASELINE", "LOCAL_DATA", "NODE", "README", "arms_for", "load_plugins", "main", "merge", "parse_seeds",
+           "submit_command", "visible_gpus"]
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 DATA = Path(settings.get("PPL_DATA"))
@@ -47,7 +53,7 @@ HF_HOME = Path(settings.get("HF_HOME"))
 NODE = "vy-nebius-2"
 
 
-def load_plugins(paths) -> None:
+def load_plugins(paths: Iterable[str] | None) -> None:
     for p in paths or []:
         s = importlib.util.spec_from_file_location(Path(p).stem, p)
         mod = importlib.util.module_from_spec(s)
@@ -77,7 +83,7 @@ def parse_seeds(text: str) -> tuple:
     return seeds
 
 
-def tokenizer(path: Path):
+def tokenizer(path: Path) -> tuple[Callable[[str], list[int]], int | None]:
     import transformers
     return windows.encoder(transformers.AutoTokenizer.from_pretrained(str(path)))
 
@@ -98,7 +104,7 @@ def check_ctx(model: str, ctx: int) -> None:
         raise SystemExit(f"{model} runs at contexts up to {top} (models.py)")
 
 
-def build_windows(model: str, set_name: str, ctx: int, data: Path, calibration: bool):
+def build_windows(model: str, set_name: str, ctx: int, data: Path, calibration: bool) -> tuple[np.ndarray, np.ndarray | None, dict]:
     encode, bos = tokenizer(snapshot(model))
     fam = models.get(model)["tokenizer"]
     texts: dict = {}
@@ -120,7 +126,7 @@ def visible_gpus() -> list[str]:
     return [str(i) for i in range(torch.cuda.device_count())]
 
 
-def cmd_eval(a) -> int:
+def cmd_eval(a: argparse.Namespace) -> int:
     import numpy as np
     load_plugins(a.plugin)
     seeds = parse_seeds(a.seeds)
@@ -175,7 +181,7 @@ def cmd_eval(a) -> int:
     return 0 if res["passed"] else 1
 
 
-def merge(a, arms, seeds, wrec, shard_out, nll, seconds, n_gpus) -> dict:
+def merge(a: argparse.Namespace, arms: list[spec.Arm], seeds: tuple[int, ...], wrec: dict, shard_out: list[dict], nll: dict[str, np.ndarray], seconds: float, n_gpus: int) -> dict:
     import numpy as np
     import torch
     from gates import Gates
@@ -228,7 +234,7 @@ def cmd_shard(task_path: str) -> int:
     return 0
 
 
-def submit_command(a, data: Path) -> list[str]:
+def submit_command(a: argparse.Namespace, data: Path) -> list[str]:
     """The `research run` that runs this eval on vy-nebius-2 under a gpu-lease of the model's GPUs, from the
     checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
     the commit (paths relative to the repository's root)."""
@@ -246,7 +252,7 @@ def submit_command(a, data: Path) -> list[str]:
             "--", "bash", "benchmarks/ppl/job.sh"]
 
 
-def cmd_submit(a) -> int:
+def cmd_submit(a: argparse.Namespace) -> int:
     load_plugins(a.plugin)
     arms_for(a.spec)
     check_ctx(a.model, a.ctx)
@@ -258,7 +264,7 @@ def cmd_submit(a) -> int:
     return subprocess.run(cmd).returncode
 
 
-def cmd_windows(a) -> int:
+def cmd_windows(a: argparse.Namespace) -> int:
     fam = models.get(a.model)["tokenizer"]
     encode, bos = tokenizer(Path(a.tokenizer) if a.tokenizer else snapshot(a.model))
     lock = windows.lock()
@@ -280,7 +286,7 @@ def cmd_windows(a) -> int:
     return 0
 
 
-def cmd_setup(a) -> int:
+def cmd_setup(a: argparse.Namespace) -> int:
     return stage(Path(a.data))
 
 
@@ -304,7 +310,7 @@ def stage(data: Path) -> int:
     return 0
 
 
-def cmd_report(a) -> int:
+def cmd_report(a: argparse.Namespace) -> int:
     for r in report.load(a.results):
         print(report.table(r))
         print()
@@ -315,7 +321,7 @@ BASELINE = tables.BASELINE
 README = HERE / "README.md"
 
 
-def cmd_baseline(a) -> int:
+def cmd_baseline(a: argparse.Namespace) -> int:
     lk = json.loads(BASELINE.read_text())
     if a.lock:
         lk = report.lock(lk, report.load(a.results))
@@ -330,7 +336,7 @@ def cmd_baseline(a) -> int:
     return 0 if ok else 1
 
 
-def cmd_steps(_a) -> int:
+def cmd_steps(_a: argparse.Namespace) -> int:
     for k, v in spec.catalogue().items():
         params = ", ".join(f"{p}={d!r}" if d is not None else p for p, d in v["params"].items())
         print(f"{k}({params})  [{v['phase']}{', on ' + '/'.join(v['on']) if k.startswith('attention') else ''}]")
@@ -338,19 +344,19 @@ def cmd_steps(_a) -> int:
     return 0
 
 
-def cmd_specs(_a) -> int:
+def cmd_specs(_a: argparse.Namespace) -> int:
     for p in sorted(spec.SPECS.glob("*.toml")):
         arm = spec.load(str(p))
         print(f"{arm.name:24} {arm.scope:9} {'seeded' if arm.seeded else 'deterministic':13} {arm.description}")
     return 0
 
 
-def cmd_tables(a) -> int:
+def cmd_tables(a: argparse.Namespace) -> int:
     print(tables.render(a.sections), end="")
     return 0
 
 
-def cmd_selftest(_a) -> int:
+def cmd_selftest(_a: argparse.Namespace) -> int:
     import pytest
     return pytest.main(["-q", str(HERE / "tests")])
 

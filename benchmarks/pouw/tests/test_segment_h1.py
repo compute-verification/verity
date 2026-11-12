@@ -1,11 +1,10 @@
-"""`PouwCallCheck_v1`'s word view (`segment.call_check`) is cgemm.cu's served H1 receipt: on a random 128 x 128 tile it
-accepts the receipts `cgemm_ref` derives (`checked_strip.co32c_words`, then `derive.tile_receipts` over T_1 .. T_last, O',
-D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread from the thread's leaves, coin and sample, and
-refuses each with one bit changed."""
+"""`PouwCallCheck_v1`'s word view (`segment.call_check`) is `edited_gemm/cgemm.cu`'s served H1 receipt: on a random
+128 x 128 tile it accepts the receipts `cgemm_ref` derives (`checked_strip.co32c_words`, then `floored_gemm/derive.py`'s
+`tile_receipts` over T_1 .. T_last, O', D_1 .. D_(m-1); for fx1, over those words times `fx1_key`), thread by thread
+from the thread's leaves, coin and sample, and refuses each with one bit changed."""
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -23,28 +22,19 @@ def _load(path: Path, name: str):
     return mod
 
 
-def _derive():
-    """floored_gemm's derive.py, with the `ref` it imports by name bound to the one beside it (another suite module may
-    have imported a different `ref`)."""
-    saved = sys.modules.get("ref")
-    try:
-        sys.modules["ref"] = _load(POUW / "floored_gemm" / "ref.py", "floored_gemm_ref")
-        return _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
-    finally:
-        if saved is None:
-            sys.modules.pop("ref", None)
-        else:
-            sys.modules["ref"] = saved
-
-
 def _thread_args(V, W, b, c, U, z, ks, ctid):
     """Thread ``ctid``'s `PouwCallCheck_v1` operand and coin ports (receipt rows are V's, columns W's)."""
     warp, lane = divmod(ctid, 32)
     wm, wn, g, q = warp // 4, warp % 4, lane >> 2, lane & 3
-    enc = lambda a: (np.asarray(a) & 0xFF).tolist()  # noqa: E731
     rows = [32 * wm + g + 8 * r for r in range(4)]
     cols = [32 * wn + 2 * q + 8 * (k >> 1) + (k & 1) for k in range(8)]
-    seg = lambda M, i, s: M[i, 32 * s:32 * s + 32].tolist()  # noqa: E731
+
+    def enc(a) -> list:
+        return (np.asarray(a) & 0xFF).tolist()
+
+    def seg(M, i: int, s: int) -> list:
+        return M[i, 32 * s:32 * s + 32].tolist()
+
     return ([enc(V[64 * (wm // 2):64 * (wm // 2) + 64, 32 * s:32 * s + 32]) for s in range(ks)],
             [int(i == 8 * (wm % 2) + g) for i in range(16)],
             [[seg(b, i, s) for i in rows] for s in range(ks)],
@@ -58,7 +48,7 @@ def _thread_args(V, W, b, c, U, z, ks, ctid):
 @pytest.mark.parametrize("ks,fold", [(2, "duo"), (4, "duo"), (4, "fx1"), pytest.param(130, "duo", marks=pytest.mark.slow)])
 def test_call_check_accepts_cgemm_refs_receipts(ks, fold):
     cs = _load(POUW / "theory" / "checked_strip.py", "checked_strip")
-    derive = _derive()
+    derive = _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
     rng = np.random.default_rng(ks)
     k, T = 32 * ks, 128
     V, W = rng.integers(-127, 127, (T, k)), rng.integers(-60, 61, (T, k))

@@ -50,14 +50,14 @@ from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 
-from verity.commitments import Commitment, MerkleTree, Opening
+from verity_config.settings import of
 
-from verity.protocols.pouw.verifier import audit as au
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, tagged
+from verity.commitments import Commitment, MerkleTree, Opening
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_c_work as W
-from verity_config.settings import of
+from verity.protocols.pouw.verifier import audit as au
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, tagged
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
@@ -71,13 +71,13 @@ REPORT = "verity/pouw/pearl-c4-replay/v0"
 DRAW_BEACON_TAG = "verity/pouw/pearl-c4-replay/draw-beacon/v0"
 COMMITTED_ROUND = 0
 SHORTCUTS = (
-    "the draws' beacon is Fiat-Shamir over the transcript root and the records root (draw_beacon), not a public beacon "
-    "round after the commitment",
+    ("the draws' beacon is Fiat-Shamir over the transcript root and the records root (draw_beacon), not a public beacon "
+     "round after the commitment"),
     "the epoch beacon is a label of the benchmark's operand set, not a public beacon round after the weights",
-    "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
-    "timing",
-    "verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-    "(development shortcut; the protocol's check is a ZK proof, PouwCheck)",
+    ("the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
+     "timing"),
+    ("verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
+     "(development shortcut; the protocol's check is a ZK proof, PouwCheck)"),
 )
 
 

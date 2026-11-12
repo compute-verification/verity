@@ -1,21 +1,14 @@
 """period_cost: the windows and node-days come back, the served window's units are 32×32, n_min is the least
-n under 1%, the period only shortens with load, draws and nodes, and every lever names what it changes."""
+n under 1%, the period only shortens with load, the sample and nodes, and every lever names what it changes."""
 
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import json
-import sys
 from dataclasses import replace
-from pathlib import Path
 
+import period_cost as PC
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_period_cost", Path(__file__).parents[1] / "period_cost.py")
-PC = importlib.util.module_from_spec(spec)
-sys.modules["pouw_period_cost"] = PC
-spec.loader.exec_module(PC)
 
 LINE = PC.configurations()[0]
 #: the ε_♭ INT-PERIOD's figures (and ComposeMonitoringPeriod's, which quote them) are stated at
@@ -64,7 +57,7 @@ def test_the_served_window_is_32x32_units():
     assert PC.lanes_per_unit(PC.LANE_OUTPUTS, 1.0) == 1.0
 
 
-def test_the_period_shortens_with_load_draws_and_nodes():
+def test_the_period_shortens_with_load_the_sample_and_nodes():
     assert PC.U_TODAY < 0.5 < PC.U_FULL < 1.0
     us = [PC.windows(replace(PC.TODAY, u=u)) for u in (0.05, PC.U_TODAY, 0.5, PC.U_FULL, 1.0)]
     assert us == sorted(us, reverse=True)

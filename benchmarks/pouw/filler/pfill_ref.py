@@ -19,14 +19,14 @@ from pathlib import Path
 
 import numpy as np
 
-for _name, _path in (("dfill_ref", Path(__file__).with_name("dfill_ref.py")),
-                     ("receipt_folds", Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "receipts" / "receipt_folds.py")):
-    if _name not in sys.modules:
-        _spec = importlib.util.spec_from_file_location(_name, _path)
-        sys.modules[_name] = importlib.util.module_from_spec(_spec)
-        _spec.loader.exec_module(sys.modules[_name])
+# the receipts reference: the folds' steps, key rules and pfill's lane starts
+from verity.protocols.pouw.receipts import receipt_folds as RF
+
+if "dfill_ref" not in sys.modules:  # another suite's test loads this file by path, its directory not on the path
+    _spec = importlib.util.spec_from_file_location("dfill_ref", Path(__file__).with_name("dfill_ref.py"))
+    sys.modules["dfill_ref"] = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(sys.modules["dfill_ref"])
 smix, dseed = sys.modules["dfill_ref"].smix, sys.modules["dfill_ref"].dseed
-RF = sys.modules["receipt_folds"]  # the receipts reference: the folds' steps, key rules and pfill's lane starts
 
 #: what the tests and the receipts reference's conformance check read
 __all__ = [
@@ -207,7 +207,10 @@ def ho_ok(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int = W) -
     kind, tn = int(kind), 128 * w
     a = a_rows(c0, c1, tile, steps, kind, w).reshape(w, steps, 16)
     full = np.uint64((1 << (64 if kind == E2M1 else 32)) - 1)
-    same = lambda x, y: ((x == y) | (x == (y ^ full))).any()  # noqa: E731
+
+    def same(x: np.ndarray, y: np.ndarray) -> np.bool_:
+        return ((x == y) | (x == (y ^ full))).any()
+
     if same(a[:, :, :8], a[:, :, 8:]) or same(a[:, :-4, 8:], a[:, 4:, :8]):
         return False
     n = np.arange(tn // 8)[:, None] * 8 + 2 * np.arange(4)[None, :]  # [j, t]: column 8 j + 2 t

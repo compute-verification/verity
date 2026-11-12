@@ -1,4 +1,4 @@
-"""Shared pieces for the bench-contract tests: a conforming result and the paths of the workload scripts."""
+"""Shared pieces for the bench-contract tests: a conforming result, and a run's directory holding it."""
 
 from __future__ import annotations
 
@@ -10,9 +10,6 @@ from typing import Any
 import pytest
 
 from verity_numerical.bench import contract
-
-REPO = Path(__file__).resolve().parents[4]
-JUDGE = REPO / "benchmarks" / "judge.py"
 
 CONFORMING_FINGERPRINT: dict[str, Any] = {
     "profile": contract.PROFILE,

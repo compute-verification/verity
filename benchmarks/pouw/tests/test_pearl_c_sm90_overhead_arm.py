@@ -234,6 +234,7 @@ def test_the_door_names_the_arm_and_its_epsilon_here(monkeypatch):
     monkeypatch.delitem(sys.modules, "overhead_arm", raising=False)
     try:
         (mod, cls), (emod, fn) = door.arm.split(":"), door.epsilon.split(":")
+        assert sorted(OA.__all__) == sorted([cls, fn])
         assert isinstance(getattr(importlib.import_module(mod), cls)(), A.BenchArm)
         eps = getattr(importlib.import_module(emod), fn)
         for n, k in LINEARS.values():

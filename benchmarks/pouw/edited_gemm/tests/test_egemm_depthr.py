@@ -4,19 +4,12 @@ change the R-fold does not see. The fast tests reuse the check's functions on a 
 exact_kit check (every odd key exhaustively, n=10/12 key_ok_r11, 32-bit (13,19), and both mutations)."""
 from __future__ import annotations
 
-import importlib.util
 import subprocess
 import sys
-from pathlib import Path
 
+import egemm_depthr_check as M
 import numpy as np
 import pytest
-
-HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("egemm_depthr_check", HERE.parent / "egemm_depthr_check.py")
-M = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = M
-_spec.loader.exec_module(M)
 
 W8 = (0x9E, 0x37, 0x79, 0xB9)  # a committed word's four s32 limbs, at the reduced width n = 8
 
@@ -65,7 +58,7 @@ def test_full_depthr_check_passes():
     """The whole exact_kit check: n = 8 exhaustive over every odd key pair, n = 10/12 over key_ok_r11 keys, the 32-bit
     (13, 19) sample, and both mutations -- 10/10 checks, 2/2 mutations caught. Catches what the sampled fast tests cannot:
     an all-state collapse of the family on any odd key or any key_ok_r11 key across the full width."""
-    p = subprocess.run([sys.executable, str(HERE.parent / "egemm_depthr_check.py"), "--mutations"],
+    p = subprocess.run([sys.executable, M.__file__, "--mutations"],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert "checks OK" in p.stdout and "mutations caught" in p.stdout

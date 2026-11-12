@@ -136,5 +136,7 @@ def main() -> None:
     print("END", flush=True)
 
 
+__all__ = ["check_against_reference"]
+
 if __name__ == "__main__":
     main()

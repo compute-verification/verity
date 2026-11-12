@@ -8,17 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
-
-import pytest
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
 import arm as A
 import ledger as L
 import price_twins as P
+import pytest
 import verify as V
 
 RUN, COMMIT = "r20260930-170000-abcd", "0123456789abcdef0123456789abcdef01234567"
@@ -145,16 +141,15 @@ def test_a_variant_is_named_by_its_sources_digest_in_any_order_and_a_changed_sou
         L.source_sha256([], d)
 
 
-def test_the_variant_and_the_groups_are_verity_pouw_serving_s_when_it_is_importable(tmp_path):
-    S = L.serving()
-    if S is None:
-        pytest.skip("verity.protocols.pouw.verifier.serving (#567) isn't on this tree yet")
+def test_the_variant_the_groups_and_the_gate_record_are_verity_pouw_serving_s(tmp_path):
+    S = L.serving
     v = variant(tmp_path)
     kv = S.KernelVariant(family="pearl-c", device="sm120", schemes=frozenset(v["schemes"]), schedules=frozenset(v["schedules"]),
                          shapes=S.ShapeRule(), source_sha256=v["source_sha256"], binary_sha256=v["binary_sha256"],
                          loader=v["loader"], prices=v["prices"])
     assert kv.id == v["id"]
-    assert tuple(S.GROUPS) == L.GROUPS
+    with pytest.raises(L.LedgerError, match=r"phase_groups names \['warp'\]: .*groups \('row_seeds', "):
+        L._steps({}, None, {"phase_groups": {"before": ["a_tree", "warp"]}})
     gate = records_of(tmp_path)[PREFILL]["meta"]["gate"]
     assert set(gate) == set(S.GateRecord.__dataclass_fields__)
 
@@ -649,6 +644,38 @@ def test_measured_refusal_follows_panel_append():
     assert "naming the run" in L.measured_refusal(meta | {"verify": meta["verify"] | {"negative_control": "REJECT other"}})
     assert "doesn't name the run" in L.measured_refusal(meta | {"verify": meta["verify"] | {"transcript": "elsewhere"}})
     assert "SM clocks" in L.measured_refusal(meta | {"metrics": {"sm_clock": {"arm": [2090.0], "base": []}}})
+
+
+def test_a_clock_list_that_isn_t_numbers_and_a_price_twin_table_that_doesn_t_load_are_errors(tmp_path, monkeypatch):
+    """A row whose per-rep SM clocks aren't MHz joined by commas is refused by name, and a price-twin table that doesn't
+    load raises its own error, rather than the row going on with no clocks or no gap."""
+    res = json.loads(result(tmp_path / RUN, None).read_text())
+    assert L.records(res, run_id=RUN, commit=COMMIT)[0]["meta"]["metrics"]["sm_clock"]["arm"] == [2090.0, 2092.0]
+    panel = res["shapes"][0]["arms"]["pc"]["panel"]
+    with pytest.raises(L.LedgerError, match=r"sm_clock_arm is '2090,n/a', not MHz joined by commas"):
+        L.records(res | {"shapes": [res["shapes"][0] | {"arms": {"pc": res["shapes"][0]["arms"]["pc"] | {
+            "panel": panel | {"sm_clock_arm": "2090,n/a"}}}}]}, run_id=RUN, commit=COMMIT)
+    table = tmp_path / "price_twins.json"
+    table.write_text(json.dumps({"schema": "price-twins/v0", "twins": []}))
+    load = P.load
+    monkeypatch.setattr(L.P, "load", lambda: load(table))
+    with pytest.raises(P.TwinError, match=f"{table} is 'price-twins/v0'"):
+        L.records(res, run_id=RUN, commit=COMMIT)
+    table.write_text(json.dumps({"schema": P.SCHEMA}))
+    with pytest.raises(P.TwinError, match=f"{table} has no twins list"):
+        L.records(res, run_id=RUN, commit=COMMIT)
+
+
+def test_a_price_twin_table_with_no_twins_list_leaves_the_verification_standing(tmp_path, monkeypatch):
+    """The ledger step never raises: a table of the right schema with no twins list is its error, and the verification's
+    own result and exit code are written as before."""
+    table = tmp_path / "price_twins.json"
+    table.write_text(json.dumps({"schema": P.SCHEMA}))
+    load = P.load
+    monkeypatch.setattr(L.P, "load", lambda: load(table))
+    code, res = verify(result(tmp_path / RUN, variant(tmp_path)), "--tier", "2b")
+    assert code == V.EXIT_OK and res["verification"]["ok"]
+    assert res["ledger"]["records"] == [] and res["ledger"]["error"] == f"TwinError: {table} has no twins list"
 
 
 def test_the_ledger_s_words_are_the_store_s():

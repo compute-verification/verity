@@ -13,9 +13,10 @@ Its docstring has every mode and switch.
 
 ## The runner, `run.sh`
 
-`run.sh JOB [ARGS...]` starts one of the directory's jobs with its arguments and environment unchanged. Each job is the
-command of a `research run` on a node with the card; the job's script has the full command, its variables and its
-exit codes in its header, and may be started by its own path as before.
+`run.sh JOB [ARGS...]` starts one of the directory's jobs, the script of its name (`window` is `window.sh`), with its
+arguments and environment unchanged. Each job is the command of a `research run` on a node with the card; the job's
+script has the full command, its variables and its exit codes in its header, and may be started by its own path as
+before.
 
 | Job | Runs on | What it does | What it writes |
 | --- | --- | --- | --- |

@@ -82,12 +82,15 @@ python3 benchmarks/pouw/filler/comm/report.py OUT [--json]                      
 rules and lane starts from the receipts reference (`verity/protocols/pouw/receipts/`). One test outside the directory,
 `../tests/test_receipts_adopters.py`, loads `pfill_ref.py`, `pfill.cuh` and `scoring.py`'s `FOLDS` and `RECEIPT_TAGS`
 and holds them to that reference; nothing else outside the directory loads its Python or includes its kernels.
-`arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py` and `comm/report.py`
-list in `__all__` the names other files read; the other files in an arm's `sources` list none, since a byte changed in
-one is a new variant of every arm that lists it.
+`arms.py`, `score.py`, `scoring.py`, `share.py`, `pfill_ref.py`, `dfill_ref.py`, `capacity_of.py`, `pfill_proved.py` and
+`comm/report.py` list in `__all__` the names other files read; the other files in an arm's `sources` list none, since a
+byte changed in one is a new variant of every arm that lists it.
 `scoring.py`, `share.py`, the two references and the readers above start no process and touch no GPU, and import
 nothing beyond the standard library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the
 three arm runners build with `nvcc` and take a lease.
 
 The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
+A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
+directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
+`comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
 `../tests/test_budget.py`, `test_eps_budget.py` and `test_lean_headline_dc.py` test `benchmarks/pouw`'s own modules.

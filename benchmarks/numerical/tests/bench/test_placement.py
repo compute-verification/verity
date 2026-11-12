@@ -100,7 +100,7 @@ def test_the_real_cells_still_pass_on_documents():
     assert C.check(_cell(), _doc("6d1295ed")) == []
 
 
-# --- a datacenter's shared NAT IP (red-team-flock-3's conditions S1-S5) ---------------------------------------------------------
+# --- a datacenter's shared NAT IP: what the NAT exception needs ---------------------------------------------------------------
 
 IP = "91.199.227.82"
 #: An L40S prover and an H100 verifier in EU-NL-1 as the RunPod API shows them: two machine ids behind one egress NAT, the
@@ -197,9 +197,9 @@ def test_a_shared_nat_ip_registers_on_the_runs_own_records(tmp_path, probes):
 @pytest.mark.parametrize("prover,verifier,why", [
     ({}, {"boot_id": "boot-p"}, "share boot_id boot-p"),                                   # two containers of one kernel
     ({}, {"product_uuid": "uuid-p"}, "share product_uuid uuid-p"),
-    ({}, {"hypervisor": True}, "the verifier pod is a virtual machine"),                    # S1
+    ({}, {"hypervisor": True}, "the verifier pod is a virtual machine"),
     ({"sys_vendor": "QEMU"}, {}, "the prover pod is a virtual machine"),
-    ({}, {"sys_vendor": None}, "the verifier run did not record sys_vendor"),              # S2: the plan's probe does not stand in
+    ({}, {"sys_vendor": None}, "the verifier run did not record sys_vendor"),              # the plan's probe does not stand in
     ({"hypervisor": None}, {}, "the prover run did not record hypervisor"),
     ({}, {"boot_id": None}, "the verifier run's boot_id"),                                  # job.json's boot id, not the plan's
     ({"pod_id": None}, {}, "the prover run did not record pod_id"),
@@ -207,7 +207,7 @@ def test_a_shared_nat_ip_registers_on_the_runs_own_records(tmp_path, probes):
     ({}, {"boot_id": "boot-v2"}, "boot_id boot-v2 is not the boot-v the plan probed on pod pod-v (a reboot"),   # rebooted since
     ({"link": {**PROBES["vy-flock-h100"]["link"], "rtt": {**RTT, "median_ms": 0.03}}}, {}, "no TCP-connect RTT of at least 0.1 ms"),
     ({"link": {"peer": "pod-v.runpod.internal:7400", "peer_ip": "172.24.0.3", "rtt": {**RTT, "target_ip": "172.24.0.3"}}}, {},
-     "host bridge"),                                                                        # S3
+     "host bridge"),
 ])
 def test_a_shared_nat_ip_without_the_proof_is_refused_at_registration(tmp_path, probes, prover, verifier, why):
     p, v = _nat_runs(tmp_path, prover, verifier)
@@ -223,7 +223,7 @@ def test_a_shared_nat_ip_without_the_proof_is_refused_at_registration(tmp_path, 
     ({"prover__hypervisor": None}, "the prover pod's hypervisor flag and DMI sys_vendor are not recorded"),
     ({"verifier__sys_vendor": None}, "the verifier pod's hypervisor flag and DMI sys_vendor are not recorded"),
 ])
-def test_s1_a_shared_ip_needs_both_pods_bare_metal(over, why):
+def test_a_shared_ip_needs_both_pods_bare_metal(over, why):
     a = PL.assess(*_pair(**over))
     assert a["shared_public_ip"] and any(why in x for x in a["problems"]), a["problems"]
     assert PL.assess(*_pair())["problems"] == []
@@ -231,14 +231,14 @@ def test_s1_a_shared_ip_needs_both_pods_bare_metal(over, why):
     assert not PL.is_hypervisor_vendor(None) and not PL.is_hypervisor_vendor("")
 
 
-def test_s1_a_plan_whose_probe_shows_a_vm_is_refused(monkeypatch):
+def test_a_plan_whose_probe_shows_a_vm_is_refused(monkeypatch):
     vm = {**PROBES["vy-flock-verifier"], "hypervisor": True, "sys_vendor": "QEMU"}
     monkeypatch.setattr(PL, "remote_probe", lambda m, peer=None: copy.deepcopy(vm if m == "vy-flock-verifier" else PROBES[m]))
     with pytest.raises(C.NotSupported, match="the verifier pod is a virtual machine"):
         _nat_cell()
 
 
-def test_s1_the_probe_reads_the_hypervisor_flag(monkeypatch):
+def test_the_probe_reads_the_hypervisor_flag(monkeypatch):
     cpuinfo = {"guest": "flags\t\t: fpu vme hypervisor lahf_lm\n", "metal": "flags\t\t: fpu vme lahf_lm\n", "none": "processor : 0\n"}
     for kind, want in (("guest", True), ("metal", False), ("none", None)):
         monkeypatch.setattr(PL, "_read", lambda path, text=cpuinfo[kind]: text if path == "/proc/cpuinfo" else None)
@@ -249,11 +249,12 @@ def test_s1_the_probe_reads_the_hypervisor_flag(monkeypatch):
     ({"link__peer": "pod-w.runpod.internal:7400"}, "the link must be RunPod's global network"),      # another pod's name
     ({"link__peer": "10.65.0.12:7400"}, "the link must be RunPod's global network"),                 # an address, not the name
     ({"link__peer_ip": "100.64.0.3", "rtt__target_ip": "100.64.0.3"}, "resolving into 10.0.0.0/8"),
+    ({"link__peer_ip": "pod-v", "rtt__target_ip": "pod-v"}, "resolving into 10.0.0.0/8"),             # no address at all
     ({"link__peer_ip": "172.24.0.3", "rtt__target_ip": "172.24.0.3"}, "host bridge"),
     ({"link__peer_ip": "127.0.0.1", "rtt__target_ip": "127.0.0.1"}, "host bridge"),
     ({"link__peer": f"{IP}:7400", "link__peer_ip": IP, "rtt__target_ip": IP}, f"its own public IP {IP}"),   # dialling the shared IP
 ])
-def test_s3_a_shared_ip_links_only_by_the_verifiers_global_name(over, why):
+def test_a_shared_ip_links_only_by_the_verifiers_global_name(over, why):
     a = PL.assess(*_pair(**over))
     assert any(why in x for x in a["problems"]), a["problems"]
 
@@ -265,12 +266,12 @@ def test_s3_a_shared_ip_links_only_by_the_verifiers_global_name(over, why):
     {"rtt__method": "hello-ping: the session's Hello/Ping round trip"},
     {"rtt__target_ip": IP, "rtt__median_ms": 4.2},             # timed via the public IP, not the link's route
 ])
-def test_s4_a_shared_ip_needs_a_tcp_connect_rtt_on_the_links_route(over):
+def test_a_shared_ip_needs_a_tcp_connect_rtt_on_the_links_route(over):
     a = PL.assess(*_pair(**over))
     assert any("no TCP-connect RTT of at least 0.1 ms measured on the link's own route" in x for x in a["problems"]), a["problems"]
 
 
-def test_s4_the_sessions_rtt_does_not_stand_in_for_the_tcp_connects(tmp_path, probes):
+def test_the_sessions_rtt_does_not_stand_in_for_the_tcp_connects(tmp_path, probes):
     def slow_session(d):
         for m in d["measurements"]:
             if m["name"] == "net.rtt_ms":
@@ -310,7 +311,7 @@ def _stub_connects(monkeypatch, refused=()) -> list:
     return calls
 
 
-def test_s4_tcp_rtt_times_kernel_connects_to_the_target(monkeypatch):
+def test_tcp_rtt_times_kernel_connects_to_the_target(monkeypatch):
     calls = _stub_connects(monkeypatch, refused=(3, 7))
     r = PL.tcp_rtt("127.0.0.1:7400", n=10)
     assert calls == [("127.0.0.1", 7400)] * 10
@@ -320,7 +321,7 @@ def test_s4_tcp_rtt_times_kernel_connects_to_the_target(monkeypatch):
 
 
 
-def test_s4_the_rtt_target_is_the_verifier_pods_sshd_on_its_global_name(monkeypatch):
+def test_the_rtt_target_is_the_verifier_pods_sshd_on_its_global_name(monkeypatch):
     """Not the session port (the verifiers count every connection on it as a session): sshd on the same name, so the same route."""
     assert PL.rtt_target("pod-v.runpod.internal:7400") == "pod-v.runpod.internal:22"
     assert PL.rtt_target("10.0.0.2:7400") is None and PL.rtt_target(None) is None
@@ -390,13 +391,13 @@ def test_uuid_registration_rechecks_pod_and_boot_id_not_the_uuid(tmp_path, probe
 
 
 @pytest.mark.parametrize("n,failed", [(1, 29), (29, 1), (0, 30), (20, 0)])
-def test_r1_the_nat_rtt_needs_every_connect_to_succeed(n, failed):
+def test_the_nat_rtt_needs_every_connect_to_succeed(n, failed):
     a = PL.assess(*_pair(rtt__n=n, rtt__failed=failed))
     assert any("needs all 30 TCP connects to succeed" in x for x in a["problems"]), a["problems"]
     assert PL.assess(*_pair(rtt__n=30, rtt__failed=0))["problems"] == []
 
 
-def test_r1_a_real_run_of_connects_that_partly_fail_is_refused(monkeypatch):
+def test_a_real_run_of_connects_that_partly_fail_is_refused(monkeypatch):
     _stub_connects(monkeypatch, refused=(7,))                  # one connect in 30 refused
     r = PL.tcp_rtt("127.0.0.1:7400")
     assert (r["n"], r["failed"]) == (29, 1) and r["median_ms"] is not None
@@ -431,6 +432,7 @@ def test_the_co_resident_pair_is_still_refused():
     a = PL.assess({**CORESIDENT["prover"], **metal, "machine_id": "m-a"}, {**CORESIDENT["verifier"], **metal, "machine_id": "m-b"}, bridge)
     assert any("share boot_id k" in x for x in a["problems"]) and any("host bridge" in x for x in a["problems"])
     assert PL.is_host_bridge("172.24.0.3") and PL.is_host_bridge("127.0.0.1") and not PL.is_host_bridge("10.65.0.12")
+    assert PL.is_global_net("10.65.0.12") and not any(PL.is_global_net(x) for x in ("172.24.0.3", "fd00::1", "pod-v", "", None))
 
 
 def test_pod_env_falls_back_to_the_container_init_environment(monkeypatch, tmp_path):

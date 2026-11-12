@@ -1,15 +1,17 @@
-"""The first certified PoUW accounting period: windows, draws, wall-clock and node-days, and what each lever buys.
+"""The first certified PoUW accounting period: windows, sampled proof blocks, wall-clock and node-days, and what each lever
+buys.
 
     uv run benchmarks/pouw/period_cost.py [--json OUT] [--md OUT]
 
 **The bound.** An accepted period of n windows (`ComposeMonitoringPeriod`) has ε(n) = ε_♭ + Λ·ln(1/δ_s)/(u·n), with Λ the
-sharp split rate (`SplitRateExp`) at K_d draws a window, M rounds and credit ratio r:
+sharp split rate (`SplitRateExp`) at K_d sampled proof blocks a window, M rounds and credit ratio r:
 
     x = K_d/(r·M),  Λ = max(a/(M·(−ln(p + (1 − p)e^{−x}))), b/(M·(−ln(p0 + (1 − p0)e^{−x})))),
 
 at the lucks a = 0.218, b = 0.998, p = 7/8, p0 = ½, δ_s = 2^-40 and ε_♭ = 0.571% (sm_120 sheet, H1 + fx1). u is the
 period's admitted rows over its declared rows, so the first period at ε < 1% is n = ⌈Λ·ln(1/δ_s)/(u·(1% − ε_♭))⌉ windows.
-At small x, Λ ≈ b·r/((1 − p0)·K_d): what counts is the period's total draws n·K_d, and M past 18 buys nothing.
+At small x, Λ ≈ b·r/((1 − p0)·K_d): what counts is the period's sampled proof blocks in all, n·K_d, and M past 18 buys
+nothing.
 A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at the realized prefix j, so a prefix
 earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every sampled tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
@@ -22,7 +24,7 @@ empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. 
 and 32 times that at 4×8 units unless the receipts are fused into the kernel.
 
 **A window's certification** is its K_d sampled proof blocks, proved by Flock (`--zk`, live coins) and checked by the Lean
-verifier (`flock-verify`). A sampled proof block costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
+verifier. A sampled proof block costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
 outputs at K = 4,096: 46.7 M ANDs, `k_log` 27, the most `Stmt.InRange` admits): 32 at K = 4,096, 39.6 at the served mean
 K. down's units need a narrower lane to fit a block (a 4×8 tile at K = 14,336 is 164 M ANDs). A statement holds at most
 256 instances (`m = k_log + nbl ≤ 35`), each a lane, and no more than its prover's memory allows on one node. Its cost is
@@ -161,7 +163,7 @@ def today_rates() -> Rates:
 
 RATES = {
     "int-period": Rates(
-        "int-period", "INT-PERIOD's per-draw rates (RT-INT-3): W2's statement over its 8 draws, one tile a draw",
+        "int-period", "INT-PERIOD's rates a sampled proof block (RT-INT-3): W2's statement over its 8 of them, one tile each",
         prove_load_s=0.0, prove_session_s=0.0, prove_lane_s=66.0, prove_gb=W2_PROVE_GB, prove_lane_gb=0.0,
         lean_process_s=0.0, lean_session_s=0.0, lean_lane_s=446.0, lean_gb=W2_LEAN_GB, lean_lane_gb=0.0),
     "today": today_rates(),
@@ -191,17 +193,17 @@ class Config:
     delta_s_log2: float = DELTA_S_LOG2
 
 
-def lam(draws: int, r: float, rounds: int) -> float:
+def lam(k_d: int, r: float, rounds: int) -> float:
     """Λ, the sharp split rate (`SplitRateExp`) at equal rounds (w_max = 1/M) and ρ = 1/r."""
-    w, x = 1.0 / rounds, draws / (r * rounds)
+    w, x = 1.0 / rounds, k_d / (r * rounds)
     fixed = -math.log1p((1 - P) * math.expm1(-x))
     folded = -math.log1p((1 - P0) * math.expm1(-x))
     return max(A * w / fixed, B * w / folded)
 
 
-def lam_limit(draws: int, r: float) -> float:
+def lam_limit(k_d: int, r: float) -> float:
     """Λ's many-rounds limit, which it falls to from above: r·max(a/(1 − p), b/(1 − p0))/K_d."""
-    return r * max(A / (1 - P), B / (1 - P0)) / draws
+    return r * max(A / (1 - P), B / (1 - P0)) / k_d
 
 
 def eps(n: int, c: Config) -> float:
@@ -311,14 +313,14 @@ LEVERS = [
           "a verifier on main), instead of 439.1 s of launch-bound torch receipts, at any unit size",
           dict(t_window_s=T_WINDOW_DITHER, receipts_per_unit=False)),
     Lever("draws per window", "compute-accounting", 1,
-          "the service challenger's K_d (H1_DRAW), the best of 4 to 256: more draws mean fewer windows and so fewer "
-          "statements' fixed costs, but more draws a period once x = K_d/(r·M) is not small",
+          "the service challenger's K_d (H1_DRAW), the best of 4 to 256: a larger sample means fewer windows and so fewer "
+          "statements' fixed costs, but more sampled proof blocks a period once x = K_d/(r·M) is not small",
           dict(draws=DRAWS)),
     Lever("Lean: one process checks many windows", "proofs", 2,
-          "flock-verify takes many windows' public inputs and sessions in one process, so a circuit is parsed once in "
+          "the Lean verifier takes many windows' public inputs and sessions in one process, so a circuit is parsed once in "
           "64 windows instead of once a statement",
           dict(lean_windows_per_process=64)),
-    Lever("prover: one process proves many windows", "C-Flock", 2,
+    Lever("prover: one process proves many windows", "Flock", 2,
           "flock-circuit-prove keeps the unrolled circuit loaded across windows' statements",
           dict(prove_windows_per_process=64)),
     Lever("r → 1: units of equal work", "kernels + circuits", 3,
@@ -326,9 +328,9 @@ LEVERS = [
           "unit at the K = 4,096 unit's work",
           dict(r=1.0, k=1.0)),
     Lever("served unit 32×32 → 4×8", "circuits + kernels", 3,
-          "the receipt's unit is the measured tile, so a draw is one lane, not 32·K/4,096: the period's draws are set "
-          "by the lucks, not the unit's size; 32× the receipts and leaves a window, so 32× the torch receipts' time "
-          "without the fused kernel (custody here stays the 32×32 window's)",
+          "the receipt's unit is the measured tile, so a sampled proof block is one lane, not 32·K/4,096: how many the "
+          "period samples is set by the lucks, not the unit's size; 32× the receipts and leaves a window, so 32× the "
+          "torch receipts' time without the fused kernel (custody here stays the 32×32 window's)",
           dict(unit_outputs=LANE_OUTPUTS)),
     Lever("Lean session at O(description)", "proofs", 4,
           "the Lean session check at the Rust in-session verifier's cost (11.2 s in W2, not 1,175.7 s), the "
@@ -341,7 +343,7 @@ LEVERS = [
     Lever(SPEND, "Daniel (spend)", 1, "eight CPU nodes certify windows in parallel instead of two", dict(nodes=8)),
 ]
 
-TODAY = Config("today: SERVE-H1's window, served-unit draws, per-statement rates")
+TODAY = Config("today: SERVE-H1's window, served units sampled, per-statement rates")
 
 
 def lever(name: str) -> Lever:
@@ -396,7 +398,7 @@ def near_term(base: Config = TODAY) -> list[Config]:
 
 def configurations(base: Config = TODAY) -> list[Config]:
     """The period's line, `base`, and `route`'s steps, each on the last."""
-    line = Config("INT-PERIOD's line: per-draw rates, W2's tile a draw", rates="int-period", unit_outputs=LANE_OUTPUTS,
+    line = Config("INT-PERIOD's line: rates a sampled proof block, each W2's tile", rates="int-period", unit_outputs=LANE_OUTPUTS,
                   k=1.0, receipts_per_unit=False)
     return [line, base, *route(base)]
 
@@ -500,7 +502,7 @@ def report() -> dict:
 
 
 def markdown(rep: dict) -> str:
-    out = [f"A drawn served unit is {rep['lanes_per_unit']:.1f} lanes of the measured tile; a statement holds at most "
+    out = [f"A sampled served unit is {rep['lanes_per_unit']:.1f} lanes of the measured tile; a statement holds at most "
            f"{rep['statement_lanes'][TODAY.rates]} lanes at `{TODAY.rates}`'s rates; a node has {NODE_GB} GB.", ""]
     out += [f"- rates `{k}`: {rt['source']}" for k, rt in rep["rates"].items()]
     out += ["", table(rep["configurations"]), "",
@@ -511,7 +513,7 @@ def markdown(rep: dict) -> str:
     for key, field in (("draws_scan", "draws"), ("rounds_scan", "rounds")):
         out.append(f"At the route's end, by {field} a window: " + "; ".join(
             f"{r['value']}: {r['windows']:,} windows, {r['days']:,.2f} d, {r['node_days']:,.1f} node-d" for r in rep[key]))
-    out += ["", "One window long enough on its own (no period), with the custody it holds until its draw:", ""]
+    out += ["", "One window long enough on its own (no period), with the custody it holds until its sample:", ""]
     out += [f"- {p['name']}: {p['days_to_period']:,.2f} days ({p['serving_days']:,.2f} serving), "
             f"{p['node_days']:,.1f} node-days, {p['statements_per_window']:,} statements, "
             f"{p['window_custody_gb']:,.0f} GB custody" for p in rep["long_windows"]]

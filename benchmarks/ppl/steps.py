@@ -16,18 +16,29 @@ from __future__ import annotations
 
 import math
 import zlib
+from collections.abc import Callable, Sequence
 
 import torch
 
 import gates as G
-from matmul import Softmaxed
+from matmul import MM, Next, Product, Softmaxed, exact_mm
 from spec import attention_step, linear_step
+
+__all__ = ["E2M1", "FIRST", "GRIDS", "GROUP", "LEVELS", "NATIVE", "ROUTES", "Rotation", "SCALES", "WORD_K", "act_quant",
+           "bracket", "coin_positions", "dither3", "dither_shift", "exact_rows", "fake_quant", "floor_quant",
+           "grid_attention", "holds", "int8_attention", "key_quant", "lut_norm_size", "lut_softmax", "lut_table",
+           "lut_up", "native_gptq", "native_parts", "on_blocks", "on_grid", "peel_linear", "quant", "route_planes",
+           "to_format", "to_grid", "with_blocks"]
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
          "mlp.gate_proj": "gu", "mlp.up_proj": "gu", "mlp.down_proj": "down"}
 #: the linear whose input stands for its group's (calibration reads its input)
 FIRST = {"qkv": "self_attn.q_proj", "o": "self_attn.o_proj", "gu": "mlp.gate_proj", "down": "mlp.down_proj"}
 PEEL_L = 32
+#: the dimensions a scale is taken over, as `torch.amax` reads them
+Dims = int | tuple[int, ...]
+#: GPTQ's quantizer of one column: (the column, its index) -> (its levels, their dequantized values)
+Column = Callable[[torch.Tensor, int], tuple[torch.Tensor, torch.Tensor]]
 
 
 # ================================================================ linears
@@ -67,7 +78,7 @@ class Rotation:
     odd x odd orthogonal, both sampled from the generator seeded k, R first), kind `h` the flat one (R = H_28 / sqrt(28)
     when 7 divides k; the same signs). Applied through the Kronecker factors in FP32."""
 
-    def __init__(self, k: int, kind: str, device):
+    def __init__(self, k: int, kind: str, device: torch.device | str | None):
         self.kind, self.k = kind, k
         g = torch.Generator().manual_seed(k)
         odd = k
@@ -148,7 +159,7 @@ def gptq_round(w: torch.Tensor, h: torch.Tensor, top: int, block: int = 128, dam
     return gptq(w, h, column, block, damp), s
 
 
-def gptq(w: torch.Tensor, h: torch.Tensor, column, block: int = 128, damp: float = 0.01) -> torch.Tensor:
+def gptq(w: torch.Tensor, h: torch.Tensor, column: Column, block: int = 128, damp: float = 0.01) -> torch.Tensor:
     """GPTQ's column loop with the quantizer `column(col, i)` -> (column i's levels, their dequantized values), the
     scales fixed beforehand: the levels, n x k."""
     w = w.clone()
@@ -183,7 +194,7 @@ def gptq(w: torch.Tensor, h: torch.Tensor, column, block: int = 128, damp: float
     return q
 
 
-def smooth_factors(mm, alpha: float, kv_shared: bool) -> torch.Tensor:
+def smooth_factors(mm: MM, alpha: float, kv_shared: bool) -> torch.Tensor:
     """m = amax_x^alpha / amax_W^(1 - alpha) per input channel of the linear's group (amax_x over the calibration
     windows' inputs to the group, amax_W over its linears' raw weights); `kv_shared` (o_proj) one m per (KV head,
     channel), shared by the group's query heads, so 1 / m folds into v_proj's rows."""
@@ -203,7 +214,7 @@ def _check_smooth(p):
 
 
 @linear_step("smooth", phase="real", calib=True, check=_check_smooth, source="D4-70B")
-def smooth(mm, nxt, *, alpha: float, kv_shared: bool = False):
+def smooth(mm: MM, nxt: Next, *, alpha: float, kv_shared: bool = False) -> Product:
     """SmoothQuant before the rotation: x / m and W m per input channel, m from the calibration windows' channel maxima
     (1 / m folds into the RMSNorm weights before q/k/v and gate/up, and into up_proj's rows before down_proj).
     `kv_shared` shares o_proj's m across each KV group's query heads, so it folds into v_proj's rows: the foldable
@@ -213,7 +224,7 @@ def smooth(mm, nxt, *, alpha: float, kv_shared: bool = False):
 
 
 @linear_step("rotate", phase="real", source="D4-PPL")
-def rotate_linear(mm, nxt, *, kind: str = "q"):
+def rotate_linear(mm: MM, nxt: Next, *, kind: str = "q") -> Product:
     """x Q and W Q for one orthogonal Q per k: `q` signs (H_{k/odd} x R_odd), R a random odd x odd orthogonal, seeded
     by k (exact_grid's); `h` the flat Q = signs (H_{k/28} x H_28) / sqrt(k) (Paley's H_28)."""
     k = mm.x.shape[1]
@@ -256,8 +267,8 @@ def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
 
 @linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
              check=_check_int8_linear, source="D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE")
-def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
-                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1, exact: bool = False):
+def int8_linear(mm: MM, nxt: Next, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
+                group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1, exact: bool = False) -> Product:
     """The int8 grid: activations one scale per token (`round` to [-act_top, act_top], or `dither`: floor(x / s) + b,
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
@@ -321,7 +332,7 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
 
 # ================================================================ attention
 
-def hadamard_rotation(d: int, seed: int, device) -> torch.Tensor:
+def hadamard_rotation(d: int, seed: int, device: torch.device | str | None) -> torch.Tensor:
     h = torch.ones(1, 1, dtype=torch.float64)
     while h.shape[0] < d:
         h = torch.cat([torch.cat([h, h], 1), torch.cat([h, -h], 1)], 0)
@@ -330,13 +341,13 @@ def hadamard_rotation(d: int, seed: int, device) -> torch.Tensor:
     return (signs[:, None] * h / math.sqrt(d)).float().to(device)
 
 
-def quant(x: torch.Tensor, top: int, dims) -> tuple[torch.Tensor, torch.Tensor]:
+def quant(x: torch.Tensor, top: int, dims: Dims) -> tuple[torch.Tensor, torch.Tensor]:
     """Integers |q| <= top and scales s (absmax over `dims` / top) with x ~ q s."""
     s = x.abs().amax(dim=dims, keepdim=True).clamp(min=1e-30) / top
     return torch.round(x / s).clamp(-top, top), s
 
 
-def floor_quant(x: torch.Tensor, dims, top: int = 127, dither_bits: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
+def floor_quant(x: torch.Tensor, dims: Dims, top: int = 127, dither_bits: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
     """floor(x / s) - m in [-top - 1, top - 2m - 1] and s, the smallest scale (to 2^-20) that keeps x / s in
     [-top - 1 + m, top - m), m = `dither_shift(dither_bits)`: with fresh coins R on {0, ..., 2^b - 1} added, the served
     X stays within [-top - 1, top] (int8 at top = 127). b = 1: floor(x / s) in [-top - 1, top - 1], plus a bit."""
@@ -376,7 +387,7 @@ def p_edges(s: int, block: int, sink: bool) -> list[int]:
 
 
 @attention_step("rotate", phase="real", seeded=True, source="D4-ATTN")
-def rotate_attention(mm, nxt):
+def rotate_attention(mm: MM, nxt: Next) -> Product:
     """Q R, K R and V R for one random Hadamard R of the head dimension (signs times Sylvester's H, seeded by the arm's
     seed and the layer), and the output times R^T: S and O unchanged before any edit."""
     d = mm.extra["d"]
@@ -388,7 +399,7 @@ def rotate_attention(mm, nxt):
 
 
 @attention_step("center_keys", phase="real", on=("qk",), source="D4-ATTN")
-def center_keys(mm, nxt):
+def center_keys(mm: MM, nxt: Next) -> Product:
     """K - mu, mu its per-channel mean over the window: q mu is the same for every key of q's row, so softmax(S) is
     unchanged, and a part of K constant over tokens (Qwen2.5's k bias) no longer sets K's scale."""
     return nxt(mm.replace(w=lambda k: k - k.mean(dim=0, keepdim=True)))
@@ -401,7 +412,7 @@ LUT_TOP = 127
 LUT_SINK_OCTAVES = 23
 
 
-def lut_table(res: int, size: int, device=None, top: int = LUT_TOP) -> torch.Tensor:
+def lut_table(res: int, size: int, device: torch.device | str | None = None, top: int = LUT_TOP) -> torch.Tensor:
     """LUT[t] = rint(top 2^(-t / res)) for t in 0..size-1 (fattn.cu's at top 127, res 16, size 256), as int64."""
     return torch.round(top * torch.exp2(-torch.arange(size, dtype=torch.float64) / res)).long().to(device)
 
@@ -411,7 +422,7 @@ def lut_norm_size(res: int, bits: int) -> int:
     return math.ceil(res * math.log2(2 * (LUT_TOP << bits))) + 1
 
 
-def lut_up(res: int, device=None) -> torch.Tensor:
+def lut_up(res: int, device: torch.device | str | None = None) -> torch.Tensor:
     """H[r] = rint(127 2^(r / res)) for r in 0..res-1: the sink's weight above the max is H[u mod res] 2^(u div res)."""
     return torch.round(LUT_TOP * torch.exp2(torch.arange(res, dtype=torch.float64) / res)).long().to(device)
 
@@ -442,7 +453,7 @@ def key_quant(kg: torch.Tensor, mode: str, top: int, bits: int, scale: str, sink
     return q, sk
 
 
-def calibrated_keys(mm, sink: bool) -> tuple:
+def calibrated_keys(mm: MM, sink: bool) -> tuple:
     """(max K, max -K) for this KV head over the calibration windows' keys (the bf16 stream's, after RoPE), each window
     through this chain's maps of K (the rotation, centred keys), key 0 left out under `sink`."""
     def go():
@@ -460,8 +471,8 @@ def calibrated_keys(mm, sink: bool) -> tuple:
     return mm.shared(key, go)
 
 
-def lut_softmax(mm, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res: int, size: int, sink: bool,
-                rnd: bool = False, norm: int = 0):
+def lut_softmax(mm: MM, S: torch.Tensor, sq: torch.Tensor, sk: torch.Tensor, *, res: int, size: int, sink: bool,
+                rnd: bool = False, norm: int = 0) -> Softmaxed:
     """fattn.cu's integer softmax (fattn_ref.py) on the exact S = Q K^T (rep x rows x s): per query row the fixed-point
     A = rint(s_q s_k log2(e) res / sqrt(d) 2^32) (key 0's own A_0 from its own s_k when K's key 0 has one), the logits
     lam = S A (key 0: S A_0), m their max over keys 0..pos (1..pos under `sink`), t = floor((m - lam) / 2^32) (`rnd`:
@@ -554,11 +565,11 @@ def _check_int8_attention(p):
 @attention_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
                 calib=lambda p: p["k_scale"] == "calib", check=_check_int8_attention,
                 source="D4-ATTN, EPS-BUDGET, PPL-DITHER-SIZE, PPL-LUT")
-def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
+def int8_attention(mm: MM, nxt: Next, *, q: str = "round", q_top: int = 127, k: str = "round", k_top: int = 127,
                    k_scale: str = "token", k_sink: bool = False, p: str = "round", p_top: int = 127, p_block: int = 0,
                    p_sink: bool = False, v: str = "round", v_top: int = 127, v_scale: str = "channel", qk_bits: int = 1,
                    softmax: str = "float", lut_res: int = 16, lut_size: int = 256, lut_sink: bool = False,
-                   lut_round: bool = False, lut_norm: int = 0):
+                   lut_round: bool = False, lut_norm: int = 0) -> Product:
     """Both attention matmuls on one int8 limb. Q, K: one scale per (head, token), Q rounded to [-q_top, q_top] or
     dithered, K rounded or dithered (`dither`: floor(x / s) + b, s the smallest scale with x / s in [-top - 1, top), b
     a fresh bit (for K, one for every query head), so the served operand is within [-top - 1, top]). `k_scale`: K's
@@ -636,7 +647,7 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
     return (num * sv.double()).float()
 
 
-def random_nonzero(width: int, shape, gen: torch.Generator, device) -> torch.Tensor:
+def random_nonzero(width: int, shape: Sequence[int], gen: torch.Generator, device: torch.device | str | None) -> torch.Tensor:
     """Uniform on {+-1, ..., +-width}."""
     table = torch.tensor([v for v in range(-width, width + 1) if v], dtype=torch.float32, device=device)
     return table[torch.randint(0, len(table), shape, generator=gen, device=device)]
@@ -652,7 +663,7 @@ def _check_peel(p):
 
 
 @attention_step("peel", phase="integer", check=_check_peel, source="D4-ATTN")
-def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
+def peel(mm: MM, nxt: Next, *, operand: str, width: int, offset: int = 0) -> Product:
     """Low-rank noise the server adds and peels exactly: E_ik = U_{i, k mod 32}, U (tokens x 32) uniform on
     {+-1..+-width}, one sample per layer shared by its heads; on P only where key <= query, P served as P - offset + E
     (within int8), the offset added back as offset sum_{k <= i} V_k. The served products, peeled ((Q + E) K^T - U (W^T
@@ -767,7 +778,7 @@ def dither3(v: torch.Tensor, grid: str, b: torch.Tensor, b2: torch.Tensor) -> to
     return n + d * (b + b2 - 1 + inward)
 
 
-def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims,
+def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, dims: Dims,
             coined: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """Integers on the grid and scales s (one per slice over `dims`, kept) with x ~ q s: `round` the nearest level,
     s = absmax / top; `dither` the level below v = x / s or the one above it by the fair bit b, s = absmax / top
@@ -797,7 +808,7 @@ def on_blocks(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, 
     return (to_grid(v / sigma, grid, mode, b, c) * sigma).view(m, k), s
 
 
-def coin_positions(mm, k: int, density: float) -> torch.Tensor:
+def coin_positions(mm: MM, k: int, density: float) -> torch.Tensor:
     """The coined k-positions: round(density * WORD_K) of every word of WORD_K, uniformly, sampled per (seed, layer,
     linear) like the weight's coins (after commitment: nothing the server commits depends on them)."""
     g = torch.Generator(device=mm.device)
@@ -812,7 +823,7 @@ def coin_positions(mm, k: int, density: float) -> torch.Tensor:
     return mask.view(-1)[:k]
 
 
-def weight_bits(mm, shape, mode: str = "dither") -> torch.Tensor:
+def weight_bits(mm: MM, shape: Sequence[int], mode: str = "dither") -> torch.Tensor:
     """The weight's coins: one sample per (seed, layer, linear), so every window (and shard) serves one weight; fair bits
     (`dither`) or uniforms in [0, 1) (`sr`)."""
     g = torch.Generator(device=mm.device)
@@ -822,7 +833,7 @@ def weight_bits(mm, shape, mode: str = "dither") -> torch.Tensor:
     return torch.randint(0, 2, tuple(shape), generator=g, device=mm.device).float()
 
 
-def act_coins(mm, mode: str):
+def act_coins(mm: MM, mode: str) -> torch.Tensor | None:
     """The activations' coins: the linear's fair bits (`dither`), or uniforms (`sr`) from its own stream per (seed,
     layer, linear, window)."""
     if mode == "dither":
@@ -855,8 +866,8 @@ def _check_grid_linear(p):
 
 @linear_step("grid", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_grid_linear,
              source="D4-LOWBIT, LOWBIT-DESIGN")
-def grid_linear(mm, nxt, *, grid: str, act: str = "dither", weight: str = "dither", block: int = 0,
-                scales: str = "odd", density: float = 1.0):
+def grid_linear(mm: MM, nxt: Next, *, grid: str, act: str = "dither", weight: str = "dither", block: int = 0,
+                scales: str = "odd", density: float = 1.0) -> Product:
     """Both operands on a low-bit grid (`GRIDS`: fp4c, fp4, int5): activations one scale per token, weights one per
     output row, both applied after the exact integer product; each `round`ed, `dither`ed or `sr` (`on_grid`), the
     weight's coins flipped once per seed and layer (`weight_bits`). `block = 16`: NVFP4's block scales over k on both
@@ -891,7 +902,7 @@ def _check_linear_peel(p):
 
 
 @linear_step("peel", phase="integer", check=_check_linear_peel, source="LOWBIT-DESIGN")
-def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 127):
+def peel_linear(mm: MM, nxt: Next, *, alphabet: str = "bit", width: int = 1, top: int = 127) -> Product:
     """The weight-side coin of the int8 design: a low-rank U (output rows x PEEL_L, period PEEL_L in k) served as
     W + U and peeled exactly, X (W + U)^T - fold(X) U^T with fold(X)_l = sum over k = l mod PEEL_L of X_k (L / k of the
     GEMM). `alphabet`: `bit`, U in {0, 1} (one plane at weight 1), or `pm`, U uniform on +-1..+-`width` (the adopted
@@ -919,8 +930,8 @@ def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 12
 
 @attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
                 check=lambda p: _check_grid(p, ("q", "k", "p", "v")), source="D4-LOWBIT")
-def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", p: str = "dither", v: str = "dither",
-                   p_sink: bool = False):
+def grid_attention(mm: MM, nxt: Next, *, grid: str, q: str = "dither", k: str = "dither", p: str = "dither", v: str = "dither",
+                   p_sink: bool = False) -> Product:
     """Both attention matmuls on a low-bit grid (`GRIDS`), each operand `round`ed or `dither`ed (`on_grid`): Q and K one
     scale per (head, token), P one per query row (`p_sink`: key 0 in a block of its own, read and scaled on its own),
     V one per (KV head, channel). K's and V's bits are fresh for every query head; P's are sampled only where key <= query
@@ -967,7 +978,7 @@ G128, G128_EPS = 128, 1e-10
 ROW_CHUNK = 8192
 
 
-def by_rows(fn, w: torch.Tensor) -> list:
+def by_rows(fn: Callable[[torch.Tensor], torch.Tensor], w: torch.Tensor) -> list:
     return [fn(w[i:i + ROW_CHUNK]) for i in range(0, w.shape[0], ROW_CHUNK)]
 
 
@@ -1018,7 +1029,7 @@ def _check_fp(p):
 
 
 @linear_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
-def fp_linear(mm, nxt, *, fmt: str, scale: str, keep_weight: bool = False):
+def fp_linear(mm: MM, nxt: Next, *, fmt: str, scale: str, keep_weight: bool = False) -> Product:
     """A format's own plain quantization, no PoUW: activations and weights rounded to the nearest value of `fmt`
     (e4m3, e2m1) under `scale` along k (`fake_quant`: tensor; channel, per token and per output row; mx; nv; g128), the
     product of the dequantized operands in FP32 (the format's MMA with its FP32 accumulator). `keep_weight`: the
@@ -1039,7 +1050,7 @@ def fp_linear(mm, nxt, *, fmt: str, scale: str, keep_weight: bool = False):
 
 
 @attention_step("fp", phase="quantize", check=_check_fp, source="PPL-COMPILE")
-def fp_attention(mm, nxt, *, fmt: str, scale: str):
+def fp_attention(mm: MM, nxt: Next, *, fmt: str, scale: str) -> Product:
     """Both attention matmuls in a format, plain: Q and K scaled along the head dimension (`channel`: per head and
     token), P and V along the keys (`channel`: per query row, per KV head and channel), rounded; products in FP32."""
     if mm.kind == "qk":
@@ -1066,7 +1077,7 @@ CLIP_STEP = 0.05
 
 
 def native_parts(x: torch.Tensor, grid: str, scale: str, coined: bool, amax: torch.Tensor | None = None,
-                 clip: int = 0):
+                 clip: int = 0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """v = x / (s m) within the grid's range, s one scale per tensor or row and m one per block of k: `tensor` and
     `channel` s = amax / top (m = 1); `nv` s = row amax / (top 15) and m the smallest odd UE4M3 integer that holds the
     block (`on_blocks`'), `nvi` the same with any integer to 15, `nv9` with the odd ones to 9 (s = row amax / (top 9)),
@@ -1132,7 +1143,7 @@ def with_blocks(q: torch.Tensor, m: torch.Tensor | None) -> torch.Tensor:
 
 
 def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: torch.Tensor | None = None,
-                clip: int = 0):
+                clip: int = 0) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """GPTQ on a native grid: w's scale and block multipliers fixed by `native_parts` (uncoined, `clip` its search),
     then GPTQ's column loop rounding each column to the grid's nearest level in its unit s m. Returns the levels, s and
     m."""
@@ -1183,8 +1194,8 @@ def _check_native(p):
 
 @linear_step("native", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, check=_check_native,
              calib=lambda p: p["gptq"], source="PPL-COMPILE, FPX-DESIGN")
-def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
-                  act_grid: str = "", gptq: bool = False, clip: int = 0):
+def native_linear(mm: MM, nxt: Next, *, grid: str, scale: str = "channel", act: str = "dither", weight: str = "dither",
+                  act_grid: str = "", gptq: bool = False, clip: int = 0) -> Product:
     """Dither's coins on a format's exact integer grid (`NATIVE`: e4m3i, e4m3i352, e4m3i120, e4m3i104, e4m3i60, int5
     on E4M3; e2m1i, e2m1x2 on E2M1), both operands scaled by `scale` along k (`native_parts`) and `round`ed or
     `dither`ed (the level below or above by a fresh bit), the activations' coins first, then the weights', fresh every
@@ -1273,7 +1284,7 @@ def digits8(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     return (y - b) / 8, b, c
 
 
-def route_planes(route: str, x: torch.Tensor, w: torch.Tensor):
+def route_planes(route: str, x: torch.Tensor, w: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor], list[tuple[int, int, float]]]:
     """Each operand's planes and the plane pairs (i, j, weight) whose weighted products sum to x w: `e4m3-k4` [16 h, l]
     on both sides, all four pairs; `e4m3-k3` (Karatsuba) [4 h, m, -l] and [4 h', m', l'] with m = h + l, 15 (P00 + P22)
     + 16 P11; `fp4-k9` the three base-8 digits on both sides, P_ij at 8^((2 - i) + (2 - j))."""
@@ -1292,12 +1303,11 @@ def holds(fmt: str, p: torch.Tensor) -> bool:
     return bool(torch.isin(p, torch.tensor((-6., -4., -3., -2., -1., 0., 1., 2., 3., 4., 6.), device=p.device)).all())
 
 
-def emulate(mm, nxt, route: str):
+def emulate(mm: MM, nxt: Next, route: str) -> torch.Tensor:
     """The int8 product the chain returns, recomputed from `route`'s limb planes: every plane exact in the format,
     each plane pair's product exact (FP32 chunks, `matmul.exact_mm`), recombined in float64. Gated (`emulation`) on
     every call: the planes held and the recombined product equal to the int8 one. Returns the emulated product, so
     the arm's perplexity is the emulation's."""
-    from matmul import exact_mm
     acc = nxt(mm)
     x, w = mm.x.float(), mm.weight()
     fmt = "e2m1" if route.startswith("fp4") else "e4m3"
@@ -1329,13 +1339,13 @@ def _check_emulate(p):
 
 
 @linear_step("emulate", phase="integer", check=_check_emulate, source="PPL-COMPILE, EMU8")
-def emulate_linear(mm, nxt, *, route: str):
+def emulate_linear(mm: MM, nxt: Next, *, route: str) -> Product:
     """int8 run on FP8 or FP4 hardware by limb splitting (`route_planes`): the quantizer's int8 product recomputed
     exactly from limb planes the format holds, gated equal on every call (`emulate`), and returned."""
     return emulate(mm, nxt, route)
 
 
 @attention_step("emulate", phase="integer", check=_check_emulate, source="PPL-COMPILE, EMU8")
-def emulate_attention(mm, nxt, *, route: str):
+def emulate_attention(mm: MM, nxt: Next, *, route: str) -> Product:
     """Both attention matmuls' int8 products by limb splitting, as `linear.emulate`."""
     return emulate(mm, nxt, route)

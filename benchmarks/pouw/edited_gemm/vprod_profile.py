@@ -80,7 +80,10 @@ def main() -> int:
             if arm not in sh["bench"] and arm not in sh["ncu"]:
                 continue
             n = sh["ncu"].get(arm, {})
-            g = lambda k, d=3: f"{n[k]:.{d}f}" if k in n else "-"  # noqa: E731
+
+            def g(k: str, d: int = 3, n: dict = n) -> str:
+                return f"{n[k]:.{d}f}" if k in n else "-"
+
             lines.append(f"| {key} | {arm} | {sh['bench'].get(arm, float('nan')):.4f} | {g('ms', 4)} | "
                          f"{g('warp_inst_per_entry', 4)} | {g('thread_inst_per_entry', 2)} | {g('issue_pct', 1)} | "
                          f"{g('dram_pct', 1)} | {g('l2_pct', 1)} |")

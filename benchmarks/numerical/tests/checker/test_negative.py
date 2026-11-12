@@ -1,6 +1,6 @@
 """Soundness by mutation: for every gadget, a witness the checker must reject, and the predicate that rejects it.
 Each mutation keeps the public (x, y) and changes only hints -- the excessive exponent, the false selector, the
-wrong remainder, the wrong leading bit, the sign flip and the wrapped reconstruction the handoff names, per gadget."""
+wrong remainder, the wrong leading bit, the sign flip and the wrapped reconstruction, per gadget."""
 from __future__ import annotations
 
 import copy

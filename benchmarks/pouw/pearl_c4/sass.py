@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 
 OPS = {"OMMA_NV": r"OMMA\.SF\.16864\.F32\.E2M1\.E2M1\.UE4M3\.4X", "OMMA_MX": r"OMMA\.SF\.16864\.F32\.E2M1\.E2M1\.E8\b",
        "HMMA": r"HMMA\.16816\.F32\.BF16", "E2M1": r"F2FP\.SATFINITE\.E2M1", "LDL": r"\bLDL\b", "STL": r"\bSTL\b",
@@ -62,7 +63,7 @@ def problems(ptxas: str, funcs: dict[str, dict]) -> list[str]:
         if r.get("stack") or r.get("spill_stores") or r.get("spill_loads") or r.get("LDL") or r.get("STL"):
             out.append(f"{name}: local memory {r}")
         if r.get("FTZ"):
-            out.append(f"{name}: {r['FTZ']} FP32 FADD, FFMA or FMUL with .FTZ (server.md 09:34Z: none in a shipped kernel)")
+            out.append(f"{name}: {r['FTZ']} FP32 FADD, FFMA or FMUL with .FTZ (a shipped kernel has none)")
         for op, (mult, least) in (want(name) or {}).items():
             n = r.get(op, 0)
             if (mult == 0 and n) or (mult and (n < least or n % mult)):
@@ -75,7 +76,7 @@ def problems(ptxas: str, funcs: dict[str, dict]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    ptxas, sass = open(argv[0]).read(), open(argv[1]).read()
+    ptxas, sass = Path(argv[0]).read_text(), Path(argv[1]).read_text()
     funcs = census(ptxas, sass)
     bad = problems(ptxas, funcs)
     with open(argv[2], "w") as f:

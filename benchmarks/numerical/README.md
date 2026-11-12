@@ -1,17 +1,57 @@
 # benchmarks/numerical
 
-Frozen: kept, not developed. The exception is the bench spine `verity_numerical.bench` (the result contract, workloads,
-lowerings, the cell checks and `bench.interaction`, a result's interaction time), which Flock and `circuit-check` read,
-and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampled proof blocks, work weight) over the census
-workloads.
+`verity_numerical` (`python/verity_numerical/`) is the Python that the proof system's benchmarks share: what a measured
+result must say about itself, the input sets results are measured on, and what each unit type of the census workloads costs
+as a Boolean circuit. It has three parts:
+
+- `bench`: the result contract (`contract`) and the comparison of two results under it (`judge`), a result's interaction
+  time (`interaction`, `latency`), the census as Python (`census`, which reads `benchmarks/census/`), input sets (`generate`,
+  `fixture_sets`, `instances`), one measured cell on its prover and verifier pods (`cell`, `placement`, `drivers`), the
+  subcircuit catalog and the per-unit-type cost inventory (`unit_costs` and its padding, prover and menu tables).
+- `reference`: the pinned GPU simulator's tensor-core step as integer operations (`hawkeye_close`), an independent reference
+  for `verity.definitions.circuits.targets.target.FIRST`.
+- `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
+
+**What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one. The
+modules without a list (`bench.unit_costs_menu`, `bench.unit_costs_prover`) have no reader outside it, and `settings` also
+answers each setting it declares as an attribute. Its readers outside this directory are Flock's prover and pod scripts
+(`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
+(`bench.contract`, `bench.instances`, `reference.hawkeye_close`) and `proof_throughput/` (`bench.contract`). Several
+benchmarks' scripts start `bench.generate` as a command, so what it prints is read too.
+
+**What it never does.** It states no relation of its own: every expected word comes from `verity.definitions.silicon`, and the
+reference and the checker are held to it by tests. It reads the census and the committed input sets and never writes them
+outside a job that says so. It is no verifier, and no guarantee reads a number it computes.
+
+## Commands
+
+`verity bench numerical JOB [ARGS]` (`run.py`) starts one of the package's command-line modules with ARGS, as
+`python -m verity_numerical.<module>` does; with no JOB it prints this list. Each module's docstring is its manual. None needs
+a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a cell's pods through `research`.
+
+| JOB | Module | What it does | What it writes |
+| --- | --- | --- | --- |
+| `generate` | `bench.generate` | synthetic input sets, one or a named suite | each set under `--out`; `--summary FILE`; an `input-set/v1` artifact with `--register` |
+| `fixture_sets` | `bench.fixture_sets` | rewrites, adds to or checks the synthetic sets Flock's tests read | the sets under Flock's test fixtures; nothing with `--check` |
+| `instances` | `bench.instances` | builds, verifies or summarizes `bench-instances/v1` | `build`: the set under `--out`; `verify` and `stats`: a report on stdout |
+| `subcircuit_catalog` | `bench.subcircuit_catalog` | every census subcircuit's Boolean export, as one catalog | `tree/`, `meta.json` and `catalog.json` under `--out` |
+| `unit_costs` | `bench.unit_costs` | what one unit of each workload's unit types costs: gates, nonzeros, sampled proof blocks, work weight | `unit-costs.json` and `unit-costs.md` under `--out` |
+| `unit_costs_padding` | `bench.unit_costs_padding` | what proving the sampled proof blocks in fixed-shape sessions costs over their own nonzeros | `padding.json` and `padding.md` under `--out` |
+| `unit_costs_prover` | `bench.unit_costs_prover` | the inner prover's time and memory per session, fitted from recorded prover runs | `prover.json` and `prover.md` under `--out` |
+| `unit_costs_menu` | `bench.unit_costs_menu` | each model's menu of session shapes | `menu.json` and `menu.md` under `--out`, or `Pinned.lean` |
+| `latency` | `bench.latency` | a result's rounds priced as network round trips, per batch | `<out>.md` and `<out>.json` with `--out` |
+| `cell` | `bench.cell` | plans, launches, checks and registers one measured cell | `plan`: `cell.json`; `register`: a `bench-result/v1` document |
+| `placement` | `bench.placement` | a machine's identity, and whether a run's parties are placed as their roles require | the probe or the gate record on stdout, and in `--out` |
+| `sweep` | `checker.sweep` | the reference checker over `bench-instances/v1` | a report in `--out` or the run directory, with `result.json` under `research run` |
+| `search` | `checker.search` | the search for an accepted wrong output, per gadget and for a group step | the table on stdout; `--json FILE` |
+| `search_v2` | `checker.v2.search` | the same search over the v2 gadgets | the table on stdout; `--json FILE` |
+
+The tests are the suite `tests/` (`uv run tools/verity/check/suites.py`).
 
 The canonical tables, their drill-downs and views are evidence, not code: the evidence store keeps their final render
 (`tables`, `drilldown` and `views`, each as `.md` and `.json`, with the docs site's last entities JSON and the last
-parity report), over the cells of a `dataset-snapshot/v1`. The renderers are in Git history.
-
-Campaign-side numerical work for `verity.definitions.circuits.targets.target.FIRST`. `verity_numerical.reference`
-is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. The archived systems' exporter,
-drivers, explorations and red-team forgeries were deleted with the archive in `2091252fe3`.
+parity report), over the cells of a `dataset-snapshot/v1`. The renderers are in Git history, and so are the archived systems'
+exporter, drivers, explorations and red-team forgeries, deleted with the archive in `2091252fe3`.
 
 ## The subcircuit catalog
 
@@ -29,7 +69,7 @@ A `research run` workload holds no store credentials. There, `--put` goes into a
 `RESEARCH_STORE_CONFIG` under its scratch), and `DIR/catalog.json` records the ids. Afterwards, `research data put` of the
 run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref circuit_check=ART --preserve` gives the same ids.
 
-## WP1: independence audit of the existing columns
+## The reference: how independent the existing columns are
 
 The target names three executable columns of the finite-domain step: Python `verity.definitions.silicon.models`, Rust
 `tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
@@ -64,7 +104,7 @@ Two facts about the simulator noted on the way, neither used by the mma path: `u
 BF16 subnormal with exponent `-127` and no forced `exp = 1` (unlike `multiply_bfloat16_to_gfloat`), and `Gfloat`'s default
 constructor carries Hopper's `-133`.
 
-## WP1: what is here
+## The reference: its files and commands
 
 ~~~text
 python/verity_numerical/reference/hawkeye_close.py   the source-close evaluator: the pinned routines as defined integer operations
@@ -103,7 +143,7 @@ same 10 families -- 25,698,304 elements, 12,065,535 with a nonzero accumulator, 
 `zero_acc_tiny_cancellation`: 163,533 elements would differ under a zero at -126 and 87,058 under -127, the hardware matched
 neither alternative on either device).
 
-## WP1: the adapter and the wrapper's finalisation (D7)
+## The reference: the adapter and the wrapper's finalisation (D7)
 
 The pinned wrapper (`Ampere_simulator::matrix_multiply_template`) starts every coordinate from `Gfloat(false, -132, 0)`,
 appends products, collapses each full vector of 9 by `group_sum`, and after the last product applies `group_sum` once more to
@@ -120,7 +160,7 @@ carry `-132`: the C++ maximum ranges over every term, and a zero at `-126`/`-127
 below `2^-145` (`tc_probe` family `zero_acc_tiny_cancellation` measures which the hardware does; no earlier capture
 distinguishes them).
 
-## WP1: where the simulator is not a reference
+## The reference: where the simulator is not one
 
 On finite inputs whose group result leaves the FP32 range (`exponent > 127`) the simulator masks the exponent field
 (`(e + 127) & 0xFF`: an exponent of 128 gives an infinity or NaN word by the mantissa, 129 and above wrap into a small finite
@@ -129,7 +169,7 @@ sign and keeps it through the remaining group, and every measured case agrees wi
 cases and 114 golden records saturate; 18 of them cancel to zero in group 2 under the simulator's arithmetic and one golden
 record returns to a finite value). Log entry D8.
 
-## WP2 checker: the FP8 generalisation (silicon Phase 0)
+## The checker: FP8
 
 `verity_numerical.checker` was BF16-only by construction: `Params` asserted an adder at least as wide as the accumulator's
 significand (`width >= acc_sig`, 25 >= 24), and one exponent width served operands and accumulator alike. Hopper/Ada E4M3
@@ -143,7 +183,7 @@ What changed (`python/verity_numerical/checker/`):
   (`acc_sig`, `acc_exp`, defaulting to `exp`) and admits `width < acc_sig` -- the *lossy* case, with `acc_drop = acc_sig - width`.
   `Params.from_model(model)` derives them from a `GroupSum`; at `AMPERE_BF16_M16N8K16` it is `REAL`. `TOY_LOSSY` is the small
   lossy instance. Contracts, hint layout and outputs at `REAL` / `TOY` / `TINY` are byte-identical to before (every BF16 test
-  passes unchanged); the census over the WP2 contracts is unaffected at `REAL`.
+  passes unchanged); the census over the checker's contracts is unaffected at `REAL`.
 - `gadgets.py`: one new gadget, `RescaleState` (`M = 2^drop * P + r`, `r < 2^drop`, `P < 2^W`): the truncation of the incoming
   significand to the adder width, placed before `AlignState` on lossy paths only. `Normalise` produces a `width`-bit magnitude
   and scales it back up exactly (`norm_up`) where the truncation no longer folds into one floor division. `Bf16Decode` (alias

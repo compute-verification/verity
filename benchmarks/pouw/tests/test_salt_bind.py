@@ -175,7 +175,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every sampled proof block is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
     `core_check.opening` under that salt and under none. Only this test takes the certified served path to the opening at
-    every sampled unit; the next one holds the opening alone."""
+    every sampled proof block; the next one holds the opening alone."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
     key, sign = _prover(b"the prover")
     prover, sid = PS.prover_id(key.public), _sid()

@@ -204,9 +204,9 @@ def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: 
     live_ok = (np.abs(X) >= 8 * sig[:, None]).sum(1) * 64 <= k
     C = (alpha[:, None] * X).astype(np.float32).astype(np.float64)
     out, sub = [], []
-    for _draw in range(2):
+    for trial in range(2):
         Ec = enc(unit_lines(rows, rng) * (sig * alpha / line_norm)[:, None])
-        if lines_out is not None and _draw == 0:
+        if lines_out is not None and trial == 0:
             lines_out.append(Ec)
         sub.append(float(((Ec & 0x7F) < 8).mean()))
         codes = np.empty((rows, k), dtype=np.uint8)
@@ -296,12 +296,12 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
     if name.startswith("xcancel-"):
         h, spec = k // 2, name.removeprefix("xcancel-")
         pm1 = "pm1" in spec
-        draw = (lambda shape: rng.choice([-1.0, 1.0], shape)) if pm1 else rng.standard_normal
+        entries = (lambda shape: rng.choice([-1.0, 1.0], shape)) if pm1 else rng.standard_normal
         if spec.startswith("tail-f"):
-            A, B = draw((rows, k)), draw((cols, k))
+            A, B = entries((rows, k)), entries((cols, k))
             A[:, h:] *= 2.0 ** -float(spec.removeprefix("tail-f"))
             return A, B
-        a, b = draw((rows, h)), draw((cols, h))
+        a, b = entries((rows, h)), entries((cols, h))
         if spec.startswith("spikes-"):
             R = float(spec.rsplit("-r", 1)[1])
             pos = np.concatenate([np.arange(0, h, 128) + 1, np.arange(0, h, 128) + 9])
@@ -739,7 +739,8 @@ def main() -> None:
     ap.add_argument("--cross-words", type=int, default=0,
                     help="with --debit: run P1's greedy cross-group search on this many words per cell")
     ap.add_argument("--transfer-words", type=int, default=0,
-                    help="with --debit and --forming s5: the reviewer's transfer test (simulated-draw greedy sets skipped on the real draw)")
+                    help="with --debit and --forming s5: the reviewer's transfer test (greedy sets found on a simulated noise sample, "
+                         "skipped on the real one)")
     ap.add_argument("--atom", choices=tuple(ATOMS), default="hopper",
                     help="the accumulator step: HOPPER_E4M3_K32, or the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32")
     ap.add_argument("--out", default="pearlc_census.json")

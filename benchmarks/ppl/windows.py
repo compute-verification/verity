@@ -8,12 +8,16 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 
 import methodology
+
+__all__ = ["DATASETS", "LOCK_PATH", "build", "check", "cut", "dataset_path", "digest", "encoder", "file_sha256", "key",
+           "lock", "read_texts", "stream"]
 
 HERE = Path(__file__).resolve().parent
 DATASETS = json.loads((HERE / "datasets.json").read_text())
@@ -35,7 +39,7 @@ def stream(texts: list[str], encode: Callable[[str], list[int]]) -> np.ndarray:
     return np.asarray(encode("\n\n".join(texts)), dtype=np.int64)
 
 
-def cut(ids: np.ndarray, ctx: int, bos: int | None, which) -> np.ndarray:
+def cut(ids: np.ndarray, ctx: int, bos: int | None, which: Iterable[int]) -> np.ndarray:
     lead = [] if bos is None else [bos]
     body = ctx - len(lead)
     which = list(which)
@@ -73,7 +77,7 @@ def dataset_path(name: str, data_dir: Path) -> Path:
     return path
 
 
-def encoder(tokenizer) -> tuple[Callable[[str], list[int]], int | None]:
+def encoder(tokenizer: Any) -> tuple[Callable[[str], list[int]], int | None]:
     """An HF tokenizer's encoding without special tokens, and its BOS (or None)."""
     return (lambda s: tokenizer(s, add_special_tokens=False)["input_ids"]), tokenizer.bos_token_id
 

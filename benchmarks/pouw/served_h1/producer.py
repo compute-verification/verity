@@ -257,4 +257,4 @@ def check(kept: dict[str, Any], units: list[int]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["Units", "check", "j10r_fields", "public_fields"]
+__all__ = ["Units", "WS", "check", "j10r_fields", "public_fields"]

@@ -12,8 +12,10 @@ enforces although they are not columns; a field embedding must range-check them 
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from .ctx import Ctx, Value
 from .params import Params, Reject
 from .tables import align_table, lead_table, norm_table, pow_table
 
@@ -91,7 +93,7 @@ class Bf16Decode:
         return {"s": w >> (p.word_bits - 1), "t": t, "f": w & (2**p.frac - 1), "nz": int(t != 0)}
 
     @staticmethod
-    def check(ctx, p: Params, w, h: dict, tag: str = "bf16"):
+    def check(ctx: Ctx, p: Params, w: Value, h: dict, tag: str = "bf16") -> tuple[Value, Value, Value]:
         s, t, f, nz = h["s"], h["t"], h["f"], h["nz"]
         ctx.boolean(f"{tag}.s", s)
         ctx.rng(f"{tag}.t", t, 0, p.t_max_finite + 1)
@@ -133,7 +135,7 @@ class Fp32Decode:
         return {"s": c >> (p.acc_word_bits - 1), "t": t, "f": f, "nz": int(t != 0), "z": int(t == 0 and f == 0)}
 
     @staticmethod
-    def check(ctx, p: Params, c, h: dict, tag: str = "acc"):
+    def check(ctx: Ctx, p: Params, c: Value, h: dict, tag: str = "acc") -> tuple[Value, Value, Value]:
         s, t, f, nz, z = h["s"], h["t"], h["f"], h["nz"], h["z"]
         ctx.boolean(f"{tag}.s", s)
         ctx.rng(f"{tag}.t", t, 0, p.acc_t_finite)
@@ -179,7 +181,8 @@ class Product:
         return {"z": int(m_a * m_b == 0)}
 
     @staticmethod
-    def check(ctx, p: Params, a, b, h: dict, tag: str = "prod"):
+    def check(ctx: Ctx, p: Params, a: Sequence[Value], b: Sequence[Value], h: dict,
+              tag: str = "prod") -> tuple[Value, Value, Value]:
         (s_a, m_a, e_a), (s_b, m_b, e_b) = a, b
         z = h["z"]
         ctx.boolean(f"{tag}.z", z)
@@ -223,7 +226,7 @@ class GroupMax:
         return {"E": E, "sel": [int(i == first) for i in range(len(options))]}
 
     @staticmethod
-    def check(ctx, p: Params, cands: list, h: dict, tag: str = "max"):
+    def check(ctx: Ctx, p: Params, cands: list, h: dict, tag: str = "max") -> tuple[Value, list[Value]]:
         E, sel = h["E"], h["sel"]
         if len(sel) != len(cands) + 1:
             raise Reject(f"{tag}.sel: {len(sel)} selectors for {len(cands)} candidates")
@@ -269,7 +272,7 @@ class RescaleState:
         return {"P": P, "r": M - (P << p.acc_drop)}
 
     @staticmethod
-    def check(ctx, p: Params, M, h: dict, tag: str = "rescale_state"):
+    def check(ctx: Ctx, p: Params, M: Value, h: dict, tag: str = "rescale_state") -> Value:
         if not p.lossy:
             raise Reject(f"{tag}: no rescale when the adder is at least as wide as the accumulator")
         P, r = h["P"], h["r"]
@@ -306,7 +309,7 @@ class AlignState:
         return {"q": q, "r": P - (q << dd)}
 
     @staticmethod
-    def check(ctx, p: Params, M, d, h: dict, tag: str = "align_state"):
+    def check(ctx: Ctx, p: Params, M: Value, d: Value, h: dict, tag: str = "align_state") -> Value:
         q, r = h["q"], h["r"]
         W = p.acc_bits
         ctx.rng(f"{tag}.q", q, 0, 2**W)
@@ -348,7 +351,7 @@ class AlignProduct:
         return {"q": 0, "r": u}
 
     @staticmethod
-    def check(ctx, p: Params, u, d, h: dict, tag: str = "align_prod"):
+    def check(ctx: Ctx, p: Params, u: Value, d: Value, h: dict, tag: str = "align_prod") -> Value:
         q, r = h["q"], h["r"]
         U = 2 * p.sig
         ctx.rng(f"{tag}.q", q, 0, 2**U)
@@ -403,7 +406,7 @@ class SignedSum:
         return {"sgn": int(S < 0), "z": int(S == 0)}
 
     @staticmethod
-    def check(ctx, p: Params, terms: list, h: dict, tag: str = "sum"):
+    def check(ctx: Ctx, p: Params, terms: list, h: dict, tag: str = "sum") -> tuple[Value, Value]:
         SignedSum.premise(p, len(terms) - 1)
         sgn, z = h["sgn"], h["z"]
         ctx.boolean(f"{tag}.sgn", sgn)
@@ -443,7 +446,7 @@ class LeadingBit:
         return {"l": v.bit_length()}
 
     @staticmethod
-    def check(ctx, p: Params, v, h: dict, tag: str = "lead"):
+    def check(ctx: Ctx, p: Params, v: Value, h: dict, tag: str = "lead") -> Value:
         l = h["l"]
         lo, ispan = ctx.lookup(f"{tag}.lead", lead_table(p), l)
         ctx.lt_pow(f"{tag}.window", v - lo, ispan, p.s_bits)   # 0 <= v - 2^(l-1) < 2^(l-1)
@@ -482,7 +485,7 @@ class Normalise:
         return {"clamp": int(e_raw < p.acc_e_min), "M": M, "r": v - (M << -k)}
 
     @staticmethod
-    def check(ctx, p: Params, E, l, v, h: dict, tag: str = "norm"):
+    def check(ctx: Ctx, p: Params, E: Value, l: Value, v: Value, h: dict, tag: str = "norm") -> tuple[Value, Value]:
         clamp, M, r = h["clamp"], h["M"], h["r"]
         ctx.boolean(f"{tag}.clamp", clamp)
         ctx.rng(f"{tag}.M", M, 0, 2**p.norm_bits)
@@ -519,7 +522,8 @@ class StateOut:
         return {"z": int(M == 0), "ovf": int(e1 > p.acc_e_max)}
 
     @staticmethod
-    def check(ctx, p: Params, sgn, e1, M, h: dict, tag: str = "out"):
+    def check(ctx: Ctx, p: Params, sgn: Value, e1: Value, M: Value, h: dict,
+              tag: str = "out") -> tuple[Value, Value, Value, Value, Value]:
         z, ovf = h["z"], h["ovf"]
         ctx.boolean(f"{tag}.z", z)
         ctx.boolean(f"{tag}.ovf", ovf)
@@ -541,7 +545,7 @@ class Pack:
     when any group saturated; otherwise sign, field e' + bias - 1 + hidden and the low acc_frac bits of M
     (hidden = 0 only at e' = e_min, where the field is 0: a subnormal).
 
-    ``e1`` is ``StateOut``'s ``e_hat``, which sits at the floor ``exp_lo`` when ``z = 1`` (red team wave 2, U4): the
+    ``e1`` is ``StateOut``'s ``e_hat``, which sits at the floor ``exp_lo`` when ``z = 1``: the
     finite word ``fin`` is then out of range and is discarded by the ``(1 - z)`` mask, never by a range check.  An
     implementation must keep that mask and must **not** range-check ``e1`` to ``[e_min, exp_hi)`` (it would reject
     every honest zero); the declared input range below is the range actually fed."""
@@ -566,7 +570,7 @@ class Pack:
         return {"hidden": M >> p.acc_frac, "low": M & (2**p.acc_frac - 1)}
 
     @staticmethod
-    def check(ctx, p: Params, state, ovfs: list, h: dict, tag: str = "pack"):
+    def check(ctx: Ctx, p: Params, state: Sequence[Value], ovfs: list, h: dict, tag: str = "pack") -> Value:
         s, e1, M, z = state
         hidden, low = h["hidden"], h["low"]
         ctx.boolean(f"{tag}.hidden", hidden)
@@ -612,7 +616,7 @@ class Epilogue:
         return {"hi": hi, "lo": lo, "hi2": hi >> 1, "lsb": lsb, "carry": t >> L, "rem": t & (2**L - 1)}
 
     @staticmethod
-    def check(ctx, p: Params, y32, h: dict, tag: str = "cast"):
+    def check(ctx: Ctx, p: Params, y32: Value, h: dict, tag: str = "cast") -> Value:
         L = p.acc_frac - p.frac
         hi, lo, hi2, lsb, carry, rem = (h[k] for k in ("hi", "lo", "hi2", "lsb", "carry", "rem"))
         ctx.rng(f"{tag}.hi", hi, 0, 2**p.word_bits)

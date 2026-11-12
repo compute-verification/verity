@@ -9,15 +9,19 @@ One JSON line a gate directory, with each arm's verdict; exit 1 on any differenc
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "floored_gemm"))
-from derive import BN, NCT, TM, tile_receipts  # noqa: E402
+# floored_gemm's derive.py from its file, under a name no other directory's script has: nothing goes on `sys.path`
+_spec = importlib.util.spec_from_file_location(
+    "floored_gemm_derive", Path(__file__).resolve().parent.parent / "floored_gemm" / "derive.py")
+_derive = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_derive)
+BN, NCT, TM, tile_receipts = _derive.BN, _derive.NCT, _derive.TM, _derive.tile_receipts
 
 SPACING = {"e16": 16, "e32": 32, "e64": 64}
 

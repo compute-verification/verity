@@ -477,7 +477,7 @@ class _Host:
 
     def open_draw(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
         """The window's sample session, reserved and opened (withheld unless `withhold` is False) on the sample root `root`
-        in this host's ledger, as `coins.gate_draw` asks the gate for it: its client's session (no commitment)."""
+        in this host's ledger, as `coins.gate_sample` asks the gate for it: its client's session (no commitment)."""
         self.sample = _Host(self.tmp_path, self.epoch, None, self.host, root, bytes([6]) * 32, SAMPLE_SID, withhold, self)
         return CO.Endpoint(SAMPLE_SID, self.sample.address, self.sample.secret)
 
@@ -856,8 +856,8 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
 
 
 def test_a_sample_session_is_reserved_withheld_and_an_open_that_answers_its_root_is_refused():
-    """`coins.gate_draw` reserves the sample session ``--withhold`` and opens it on the sample root with no flag of its own
-    (the gate withholds what its reserve marked): the session holds no commitment, and its secret is the session's
+    """`coins.gate_sample` reserves the sample session ``--withhold`` and opens it on the sample root with no flag of its
+    own (the gate withholds what its reserve marked): the session holds no commitment, and its secret is the session's
     alone. A reserve the gate answers plain is refused before any open, and so is an open answer that hands out the
     session's coin commitment root before its end, that isn't marked withheld, or whose challenger signed no record."""
     root, secret, sid = hashlib.sha512(b"the draw root").digest(), bytes(range(32)), "s20261020T130100Z-0a1c"
@@ -868,20 +868,20 @@ def test_a_sample_session_is_reserved_withheld_and_an_open_that_answers_its_root
               "reserve": 6, "root": root.hex(), "by": LANE, "opened_by": LANE, "secret": secret.hex(),
               "commitment": None, "withheld": True, "signed": True}
     sent: list = []
-    at = CO.gate_draw("research@gate", "vy-nebius-2", EPOCH, run=_gate(sent, reserved, opened))(root)
+    at = CO.gate_sample("research@gate", "vy-nebius-2", EPOCH, run=_gate(sent, reserved, opened))(root)
     assert sent[0][1] == ["reserve", "--peer", "vy-nebius-2", "--scheme", lay["scheme"], "--families",
                           json.dumps(lay["families"], separators=(",", ":")), "--epoch", str(EPOCH), "--withhold"]
     assert sent[1][1] == ["open", "--session", sid, "--root", root.hex()]
     assert at == CO.Endpoint(sid, "127.0.0.1:7812", secret) and at.commitment is None
     with pytest.raises(CO.Ch.CoinError, match=f"reserved {sid} plain: a draw session is withheld"):
-        CO.gate_draw("research@gate", "vy-nebius-2", EPOCH,
+        CO.gate_sample("research@gate", "vy-nebius-2", EPOCH,
                      run=_gate(sent := [], {k: v for k, v in reserved.items() if k != "withheld"}, opened))(root)
     assert [w[1][0] for w in sent] == ["reserve"], "no open after a plain reserve"
     for bad, why in (({"commitment": "cd" * 64}, "handed out the session's coin commitment root before its end"),
                      ({"withheld": None, "signed": None, "commitment": "cd" * 64}, "opened the session plain"),
                      ({"signed": False}, "signed no record")):
         with pytest.raises(CO.Ch.CoinError, match=why) as refusal:
-            CO.gate_draw("research@gate", "vy-nebius-2", EPOCH,
+            CO.gate_sample("research@gate", "vy-nebius-2", EPOCH,
                          run=_gate([], reserved, {k: v for k, v in {**opened, **bad}.items() if v is not None}))(root)
         assert secret.hex() not in str(refusal.value)
 

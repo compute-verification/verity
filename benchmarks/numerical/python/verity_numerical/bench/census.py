@@ -7,12 +7,36 @@ Each file is loaded as ``{id: entry}`` with entries as attribute namespaces (``H
 
 from __future__ import annotations
 
+import ast
 import json
+import operator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from .. import settings
+
+__all__ = [
+    "DATATYPES",
+    "GEMM_COORDINATE",
+    "HARDWARE",
+    "INPUT_SETS",
+    "NETWORKS",
+    "REFERENCE_NETWORK",
+    "ROOT",
+    "SENSITIVITY_NETWORKS",
+    "SUBCIRCUITS",
+    "SUBCIRCUIT_TEMPLATES",
+    "WORKLOADS",
+    "evaluate",
+    "line",
+    "load",
+    "native_seconds_per_instance",
+    "raw",
+    "source",
+    "stood_for_by",
+    "subcircuit_of",
+]
 
 ROOT = Path(settings.VERITY_CENSUS or Path(__file__).resolve().parents[4] / "census")
 
@@ -44,14 +68,6 @@ def subcircuit_of(target: str) -> Any:
     return next(s for s in SUBCIRCUITS.values() if getattr(s, "legacy_target", None) == target)
 
 
-def subcircuit_with(template: str, **parameters: Any) -> Any:
-    """The bound subcircuit of ``template`` with exactly these parameters (e.g. ``K``, ``semantics``), or ``None``."""
-    for s in SUBCIRCUITS.values():
-        if s.template == template and all(getattr(s.parameters, k, None) == v for k, v in parameters.items()):
-            return s
-    return None
-
-
 def stood_for_by(subcircuit_id: str) -> str | None:
     """The subcircuit whose results and input set stand for ``subcircuit_id`` (its ``stood_for_by`` equivalence), or ``None``."""
     e = getattr(SUBCIRCUITS[subcircuit_id], "stood_for_by", None)
@@ -60,9 +76,6 @@ def stood_for_by(subcircuit_id: str) -> str | None:
 
 def evaluate(expr: str, env: dict[str, Any]) -> int:
     """A work-model expression (``+ - * //`` and parentheses over integers and parameter names) evaluated without ``eval``."""
-    import ast
-    import operator
-
     ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
 
     def ev(n: ast.AST) -> int:

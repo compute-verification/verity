@@ -295,6 +295,8 @@ def load(path: Path = TABLE) -> list[dict]:
     doc = json.loads(path.read_text())
     if doc.get("schema") != SCHEMA:
         raise TwinError(f"{path} is {doc.get('schema')!r}, not {SCHEMA}")
+    if not isinstance(doc.get("twins"), list):
+        raise TwinError(f"{path} has no twins list")
     return doc["twins"]
 
 

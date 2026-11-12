@@ -4,17 +4,9 @@ is a bijection, and the receipt depends on the step count."""
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
+import dfill_ref as R
 import numpy as np
 import pytest
-
-_spec = importlib.util.spec_from_file_location("dfill_ref", Path(__file__).resolve().parents[1] / "dfill_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
 

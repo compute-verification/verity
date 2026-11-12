@@ -24,6 +24,7 @@ import hashlib
 import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
@@ -33,7 +34,7 @@ ROOTS = 1 << 12
 POISON = 0xA5
 
 
-def rows_bench():
+def rows_bench() -> ModuleType:
     name = "served_zk_rows_bench"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, HERE / "rows_bench.py")
@@ -202,3 +203,6 @@ class Statement:
         ok = (all(res["honest"]["roots_equal"]) and res["honest"]["staged_rows_equal"] and res["control"]["staged_rows_equal"]
               and not any(res["control"]["roots_equal"]))
         return {"check": "statement", "cubin_sha256": self.cubin_sha256, "calls": len(calls), "rows": rows, **res, "ok": ok}
+
+
+__all__ = ["Statement", "slots_of"]

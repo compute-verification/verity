@@ -40,6 +40,12 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from . import census
+from verity.circuits.codec import descriptor_id
+from verity_flock import boolean_export as BX
+from verity_flock import circuit as FC
+from verity_flock import subcircuit_templates as TM
+
+__all__ = ["KIND", "LOWERING_FIELDS", "RECORDS_KIND", "build", "census_ids", "export", "main", "put", "put_report"]
 
 KIND = "verity/subcircuit-catalog/v1"
 RECORDS_KIND = "circuit-check-report/v1"
@@ -55,9 +61,7 @@ def canonical(obj: Any) -> bytes:
 
 
 def statics_key(statics: dict) -> str:
-    from verity_flock.boolean_export import statics_key as key
-
-    return key(statics)
+    return BX.statics_key(statics)
 
 
 def census_ids() -> list[str]:
@@ -108,8 +112,6 @@ def _counts_missing(rec: dict | None) -> str | None:
 
 def export(sub: Any, statics: list[dict]) -> bytes:
     """The Boolean export of ``sub`` at every statics, as canonical JSON."""
-    from verity_flock import boolean_export as BX
-
     return canonical(BX.subcircuit(sub, statics))
 
 
@@ -117,11 +119,6 @@ def build(out: Path, report: dict, report_art: str, ids: Iterable[str] | None = 
           export: Callable[[Any, list[dict]], bytes] = export, log: Callable[[str], None] | None = None) -> dict:
     """Write the payload tree under ``out`` and return the meta, citing ``report`` (a circuit-check report, stored as
     ``report_art``) for the counts."""
-    from verity.circuits.codec import descriptor_id
-    from verity_flock import circuit as FC
-
-    from verity_flock import subcircuit_templates as TM
-
     ids = census_ids() if ids is None else list(ids)
     if unknown := [i for i in ids if i not in census.SUBCIRCUITS]:
         raise KeyError(f"not census subcircuits (developer circuits never enter the catalog): {unknown}")

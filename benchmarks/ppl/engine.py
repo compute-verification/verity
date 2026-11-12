@@ -7,6 +7,7 @@ import json
 import math
 import time
 import types
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import numpy as np
@@ -16,16 +17,18 @@ import methodology
 from gates import Gates
 from matmul import MM, Run, run_chain
 from model import Config, Weights, check_reference, head, make_layer, rotary
-from spec import HEAD
+from spec import HEAD, Arm
 from steps import FIRST, GROUP
 
+__all__ = ["evaluate", "shards"]
 
-def stream_key(arm, seed: int) -> str:
+
+def stream_key(arm: Arm, seed: int) -> str:
     return f"{arm.name}/s{seed}"
 
 
-def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list, seeds, calib_ids: np.ndarray | None,
-             device="cuda", log=print, hf_check: bool = True) -> dict:
+def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list[Arm], seeds: Iterable[int], calib_ids: np.ndarray | None,
+             device: torch.device | str = "cuda", log: Callable[[str], None] = print, hf_check: bool = True) -> dict:
     """NLL of every scored token of the windows `ids` (n x T, global ids `window_ids`) under the bf16 reference and
     each (arm, seed); the gates' log; per-layer divergence from the reference."""
     torch.backends.cuda.matmul.allow_tf32 = False

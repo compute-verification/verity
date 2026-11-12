@@ -3,6 +3,8 @@
 # (`uv run tools/verity/check/suites.py benchmarks/pouw/filler`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the directory's modules and the harness's ledger, which the tests import by name; no name is in both
+pythonpath = [".", "../harness"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
