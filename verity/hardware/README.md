@@ -5,8 +5,8 @@ card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and
 so the same GPU in another host needs no second card) or a server's (`kind = "server"`: what a server model's own
 documents state of it apart from those, its network ports). Each number is an entry `{ value, unit, mark, source }`:
 
-- `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
-  (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
+- `mark` is `ceiling` (no program on that SKU exceeds it, whatever firmware it runs: what the model's premises need),
+  `measurement` (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
 - `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
   `outputs.run_record`), and a node by its kind, never its host name.
 
@@ -44,6 +44,13 @@ the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it cou
 from verity.hardware.cards import load, skus
 skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
+**The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
+today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
+B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with them what a card computes from one
+(`clock.tensor` on those two cards, `memory.bandwidth` on all three). Each bounds a card only while it is the declared
+board and vBIOS, which the named assumptions `accounting-declared-device` and `accounting-sheet-clock` state
+(`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are likewise its guest's CPUID.
+
 ~~~
 
 **The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions

@@ -156,10 +156,10 @@ def test_derived_server_numbers(sku: str) -> None:
 
 
 def test_the_quoted_numbers() -> None:
-    """The firmware ceilings, host peaks, bandwidths and measured reads already quoted outside this package, pinned so
-    that a change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host
-    card states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO
-    6000's card states."""
+    """The clocks, host peaks, bandwidths and measured reads already quoted outside this package, pinned so that a
+    change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card
+    states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO 6000's
+    card states."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
     clocks = ("clock.sm", "clock.tensor", "clock.memory")
     assert [value(server, k) for k in clocks] == [2430, 2430, 12481]

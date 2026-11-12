@@ -1,8 +1,8 @@
 # The NVIDIA H200 SXM 141 GB: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
-# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to this file. The
-# host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
+# runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to
+# this file. The host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
 
 kind = "gpu"
 sku = "h200-sxm-141gb"
