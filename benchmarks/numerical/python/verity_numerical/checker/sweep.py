@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
@@ -107,7 +108,8 @@ def _neg(i: int) -> dict[str, Any]:
 _WORKER = {"vu-k1536": _vu, "tu-k16": _tu, "vu-k1536-neg": _neg}
 
 
-def sweep_tier(tier_name: str, root: Path, limit: int | None = None, procs: int = 1, log=print) -> dict[str, Any]:
+def sweep_tier(tier_name: str, root: Path, limit: int | None = None, procs: int = 1,
+               log: Callable[[str], None] = print) -> dict[str, Any]:
     tier = I.load(tier_name, root)
     n = tier.n if limit is None else min(limit, tier.n)
     fn = _WORKER[tier_name]
@@ -132,7 +134,7 @@ def sweep_tier(tier_name: str, root: Path, limit: int | None = None, procs: int 
     return rep
 
 
-def sweep(root: Path, tiers: list[str], limit: int | None, procs: int, log=print) -> dict[str, Any]:
+def sweep(root: Path, tiers: list[str], limit: int | None, procs: int, log: Callable[[str], None] = print) -> dict[str, Any]:
     doc = {"schema": "checker-sweep/v1", "dataset": I.DATASET,
            "manifest_sha256": hashlib.sha256((root / "manifest.json").read_bytes()).hexdigest(), "params": "REAL",
            "tiers": [sweep_tier(t, root, limit, procs, log) for t in tiers]}
