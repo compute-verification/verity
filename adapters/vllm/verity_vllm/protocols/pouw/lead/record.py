@@ -79,13 +79,14 @@ class PassRecord:
         if self.published is not None:
             raise RecordError(f"pass {self.pass_index}: {what} after the pass's record was published")
 
-    def salted(self, salt: bytes) -> None:
+    def salted(self, salt: bytes) -> bytes:
         """The window's salt salt_w, which the certifier sampled once it held the weights' root, the key leaf and the
-        call count: once, before any A root."""
+        call count: once, before any A root. Returns the salt as recorded."""
         self._open("the window's salt")
         if self.salt is not None:
             raise RecordError(f"pass {self.pass_index}: the window's salt comes once")
-        self.salt = self._digest("salt", salt)
+        self.salt = recorded = self._digest("salt", salt)
+        return recorded
 
     def a_root(self, call: Call, root: bytes) -> None:
         """The call's root(A_j): the next call's, after the window's salt and before the words root, at a position below

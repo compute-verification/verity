@@ -14,10 +14,8 @@ duplicate under a NON-required identity = extra, reported) stay `ok`.
 """
 from __future__ import annotations
 
-import pytest
-
-from verity_vllm.commit.binding import coverage_check, identity, identity_dict
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.commit.binding import coverage_check, identity, identity_dict
 
 PD = "ab" * 32
 

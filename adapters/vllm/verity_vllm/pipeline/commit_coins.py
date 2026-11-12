@@ -34,6 +34,7 @@ import secrets
 import shlex
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
+from types import SimpleNamespace
 from typing import Any
 
 from verity.protocols.spot.device import challenger as Ch
@@ -222,8 +223,6 @@ def replay_challenge(rc: Any, given: str | None) -> tuple[str, dict[str, Any]]:
 
 def tp_draw(session: ChallengePhase | None, root: bytes) -> dict[str, Any]:
     """A TP Commit's coins for one pair after its TP run root `root` (v2: SHA-512 over the ranks' rows-sha512 roots)."""
-    from types import SimpleNamespace
-
     rc = SimpleNamespace(run_root=bytes(root), extra={})
     return draw(session, rc)
 

@@ -171,6 +171,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     import torch
 
     from verity_vllm.engine import arrivals as AR, vllm_adapter as va
+    from verity_vllm.engine.handle import scheduler_or_none
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -214,7 +215,7 @@ def run_hooks_variant(workload: str, out_dir: str, checkpoints: str, *, max_toke
     arrivals = sorted(wl["requests"], key=lambda r: int(r.get("arrive_step") or 0))
     steps: list[dict] = []
     tokens: dict[str, list[int]] = {}
-    k, forwards = 0, AR.ForwardCounter(engine, AR.scheduler_of(eng.llm))
+    k, forwards = 0, AR.ForwardCounter(engine, scheduler_or_none(eng.llm))
     t_run0 = time.perf_counter()
 
     def _admit(r: dict) -> None:

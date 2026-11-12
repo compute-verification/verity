@@ -8,17 +8,20 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import copy
 import json
+import os
+import sys
+import types
 from typing import Any
 
 import numpy as np
 import pytest
-
-from tests.properties import glm53_fa3_split_capture_gpu as X
-from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
+
+from tests.properties import glm53_fa3_split_capture_gpu as X
+from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 U32 = np.uint32
@@ -165,7 +168,8 @@ def _doc(quick: bool = False) -> dict:
     names = X.QUICK_LAUNCHES if quick else tuple(X.LAUNCHES)
     launches = [{"phase": "mufu", "case": c, "checks": {"ok": True}} for c in ("lg2", "ex2", "rcp")]
     launches += [{"phase": "attn", "case": n, "checks": {"deterministic": True, "shape": True}} for n in names]
-    comps: list[dict[str, Any]] = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
+    comps: list[dict[str, Any]]
+    comps = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
               "first_mismatch": None, "differing": []} for x in launches]
     doc = {"schema": X.SCHEMA, "quick": quick, "gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "bind": {"ok": True},
            "launches": launches, "comparisons": comps}
@@ -216,9 +220,6 @@ def test_each_launch_has_its_own_verdict() -> None:
 
 
 def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
-    import sys
-    import types
-
     envs = types.ModuleType("vllm.envs")
     vars(envs).update(VLLM_BATCH_INVARIANT=batch_invariant)
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
@@ -236,8 +237,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main --quick` with the GPU's phases stood in for (the jobs of the tests above, the attention words the twin's with one
     flipped), every served-default switch inherited set: the switches cleared before vLLM reads them and read back, the jobs
     through the spawned worker pool, the per-launch verdicts, the sealed record and the exit status."""
-    import os
-
     for k in SERVED_DEFAULTS:
         monkeypatch.setenv(k, "0")
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR"):

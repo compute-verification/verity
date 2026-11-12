@@ -12,9 +12,10 @@ workload of record.  Fixtures: a `_Store` of committed words by identity (the st
 from __future__ import annotations
 
 import numpy as np
-
-from verity_vllm.check.replay import index as IX, linkage as LK
 from verity.definitions.numerics import rows as RK
+
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import linkage as LK
 
 EMB = "model.embed_tokens"
 
@@ -302,6 +303,7 @@ def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_populatio
     # the commit_delta wiring: the replay/linkage (and serving rows') _arr goes through this one rule, fed the binding record's schedule
     from pathlib import Path
     from types import SimpleNamespace
+
     from verity_vllm.pipeline import c2_replay as C2
     reqs = [{"request_id": "a", "index": 0, "arrive_step": 0}, {"request_id": "b", "index": 1, "arrive_step": 7}]
     site = SimpleNamespace(reqs=reqs, row={"commit": {"binding": {"coverage": {"schedule": obs_sched}}}})

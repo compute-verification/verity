@@ -10,21 +10,25 @@ substituted).  Nothing here names a model, a vLLM class or a module path of the 
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.commit import binding as B  # noqa: E402
-from verity_vllm.commit.committer.native_host import (  # noqa: E402
+from verity_vllm.commit import binding as B
+from verity_vllm.commit.committer.native_host import (
     NativeHostCommitter,
     TensorMeta,
     _dtype_name,
     _StepJob,
 )
-from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.query.manifest.bind import Binder  # noqa: E402
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.bind import Binder
 
 V, H, TOKENS = 8, 16, 3
 PD = hashlib.sha256(b"program").hexdigest()

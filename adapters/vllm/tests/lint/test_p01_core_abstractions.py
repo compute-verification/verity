@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from functools import lru_cache
+from typing import TypeGuard
 
 import pytest
 
@@ -33,16 +34,19 @@ MUTATORS = frozenset({"append", "extend", "insert", "update", "setdefault", "pop
 DEFINITION_CALLS = frozenset({"primitive", "composite", "PrimitiveDefinition", "CompositeDefinition"})
 
 
-def _core(name: str | None) -> bool:
+def _core(name: str | None) -> TypeGuard[str]:
     """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
     (the catalog, the kernels, Flock, the integration's Definitions, verity_experimental's multiproofs, private circuits and ports), with core's own
     protocols and claims, which are under `verity.core` now."""
+    if not name:
+        return False
+
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
                 "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
                 "verity.definitions")
-    return bool(name) and under("verity") and (not any(map(under, moved_in))
+    return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
 

@@ -39,8 +39,15 @@ import struct
 from contextlib import nullcontext
 from typing import Any
 
-from verity.protocols.pouw.verifier.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
+from verity.protocols.pouw.verifier.serving import (
+    SCHEDULES,
+    Schedule,
+    StepIO,
+    hash_format,
+    schedule_refusals,
+)
 
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
 from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream
 
@@ -143,7 +150,7 @@ def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
     return frozenset(ok)
 
 
-class LaneCalls:
+class LaneCalls(_RunState):
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
     ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``,
     ``_side_turn`` and ``_side_cache``, and its
@@ -266,7 +273,8 @@ class LaneCalls:
         cuda = self.device.type == "cuda"
         main = self.main if self.schedule.main_priority == "greatest" else None
         lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
-        j, rot, to, tl = 0, (), None, None
+        j, to, tl = 0, None, None
+        rot: tuple[str, ...] = ()
         if side:
             j, rot = sh.turn % len(sh.sets), rotated(self.schedule)
             sh.turn += 1
@@ -316,7 +324,7 @@ class LaneCalls:
                     for f in side[:side_cut]:
                         f()
                 if g is None:
-                    size, nb, p = pipe.size["tree_a"], self.nb, index - self.cur.base
+                    size, nb, p = pipe.size["tree_a"], self.nb, index - self.cur.first
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
                         self.roots_buf[nb * p:nb * (p + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
@@ -357,6 +365,7 @@ class LaneCalls:
         after the main graph's own event past the per-row keying; side lane `to` replays the side graph after the main
         graph, then waits for the tree where `tl` is another; the caller waits for the main lane."""
         D = self.driver
+        assert D is not None
         lane = main.raw if main is not None else raw
         done = sh.done[j]
         if done is not None:
