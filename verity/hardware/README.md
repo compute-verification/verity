@@ -2,11 +2,14 @@
 
 One TOML file per SKU in `cards/`, beside their loader (`cards/__init__.py`), the one source of that card's numbers. A
 card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
-so the same GPU in another host needs no second card) or a server's (`kind = "server"`: what a server model's own
-documents state of it apart from those, its network ports). Each number is an entry `{ value, unit, mark, source }`:
+so the same GPU in another host needs no second card), a server's (`kind = "server"`: what a server model's own
+documents state of it apart from those, its network ports) or a time base's (`kind = "timebase"`: the clock an
+auditor's device reads, apart from the host it runs in). Each number is an entry `{ value, unit, mark, source }`:
 
 - `mark` is `ceiling` (no program on that SKU exceeds it, whatever firmware it runs: what the model's premises need),
-  `measurement` (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
+  `measurement` (a measured value, so only a lower bound on the ceiling), `premise` (no page and no run bounds the
+  number; it is assumed under the premise its source states, of whom it names. A row that uses it prints the premise
+  for its device's host, and no figure of record uses it) or `placeholder` (none of these: open);
 - `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
   `outputs.run_record`), and a node by its kind, never its host name.
 
@@ -18,6 +21,7 @@ documents state of it apart from those, its network ports). Each number is an en
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 | NVIDIA DGX H200, a server none of our nodes is | server | `cards/dgx-h200.toml` | none |
+| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `cards/nebius-vm-monotonic-raw.toml` | none |
 
 Every card of a kind has the same sections, a host card's `disk` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
@@ -42,7 +46,15 @@ has it and the H200 nodes' has no entry rather than an invented one). A server c
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
 machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
-the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts.
+the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts. A time base's card's is `drift`:
+`max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
+record, a `measurement`, which `max` is never below.
+
+**A device's drift.** The auditor's figure for its device's drift is `drift.max` of the card of the clock that device
+reads (`number(load(sku)["drift"]["max"])`), and a row is of record only where that entry's mark is `ceiling`. Where
+it is `premise`, as on the one time base with a card (the raw clock of a provider's virtual machine, which no page
+bounds), the row prints the premise for the device's host, which the registration names and the card does not, and
+`tests/test_cards.py` lists every entry so marked, in a card or a node file.
 
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
@@ -52,9 +64,11 @@ board and vBIOS, which the named assumptions `accounting-declared-device` and `a
 (`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are likewise its guest's CPUID.
 
 ~~~python
-from verity.hardware.cards import load, skus
+from verity.hardware.cards import load, number, skus
 skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
+drift = load("nebius-vm-monotonic-raw")["drift"]["max"]   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+number(drift)                                   # Fraction(1, 2000)
 ~~~
 
 **The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions
