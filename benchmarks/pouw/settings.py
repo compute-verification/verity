@@ -76,7 +76,7 @@ REGISTRY = Registry(
     S("PEARLC4_CUBIN", str, None, VALUE, "the cubin the Pearl-C4 arm loads; unset, pearl_c4.cubin beside it"),
     S("PEARLC4_VERIFY_WORKERS", int, 16, WHERE, "the verifier's worker processes: how fast it runs, not what it checks"),
     S("PEARLC4_GATE_TILES", int, 2, VALUE, "the tiles the arm's gate checks a call"),
-    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a drawn tile through the fast path, else exact "
+    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a seeded tile through the fast path, else exact "
                                        "(real.py --f1 sets it for the processes it starts)"),
     S("VERITY_COMMIT", str, None, WHERE, "the commit a Pearl-C4 replay names for its provenance; unset, unknown"),
     # ---------------------------------------------------------------- the vLLM arm (pearl_c_vllm)
