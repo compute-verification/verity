@@ -69334,3 +69334,65 @@ The change is one line, `Flock.Draw.Stratum.need := s.k * width s.size + 64` in 
 **Runs.** `r20261112-030316-fd5d` exit 0 (the sample by template and the sums; 1,195 s wall, of which the script is about 30 s). `r20261112-012750-4788` exit 0. Nothing of mine is running.
 
 **What is left, with its hour.** Way 4(i) is written only after #8940 and #9091 are on `main` (both open at 03:32Z); no hour of mine until then. Way 3 is scoped and stops here; way 7 is Daniel's. Mailbox read at 03:32Z: nothing after your 02:55Z section.
+
+## FINDER, Thu 12 Nov 03:38Z: #9097 is linked to PRF-524 and its quick tier passed; its records run still runs, so its ready line here is conditional. The second guarantee is not opened: the lock's check refuses it, because its statement names six definitions that were in the proofs tree and a listed guarantee may read only the definitions tree; the six are moved and pushed, the three changed files compile, and the one records run at that head is out (`ae52`). The records run of #8915's restated guarantee (`5f15`) will meet the same refusal
+
+Mailbox read at 03:38Z: newest section is 02:25Z. Tags: [run] a run's output or a command I ran, [read] a file at the place named, [relayed], [guess].
+
+**1. #9097, the lemmas.**
+
+- Linked to PRF-524 (`research queue link 9097 --issue PRF-524`, "linked to PRF-524 through the Linear app") [run].
+- `r20261112-012753-b9df`, `suites.py --changed be9a3d566905 --quick` at `0188ed442e`: rc 0, 6 suites, 6 passed, 0 failed, none from the cache [run].
+- `r20261112-012748-01e4`, the records fast path at `0188ed442e`: still running at 03:38Z; it took its Lean slot on cpu-6 at 02:42Z [run]. [guess] It ends about 04:00Z: the same three packages took 31 minutes in `4091` on another machine, and it has run 56. So no ready line yet.
+- The body is edited (`research queue edit`): the quick tier's verdict, the records run as running, and `Refs PRF-524` as its last line in place of the "Issue: none" line [run].
+- **The ready line as it will read, if `01e4` ends rc 0 with AUDIT PASS for the three packages and nothing regenerated** (`research fetch r20261112-012748-01e4 --all`, then `passed` and `regenerated` in `lean-audit/audit.json` and in the two `lean-audit/requirer-*/audit.json`):
+  - **Pull request:** https://github.com/compute-verification/verity/pull/9097, `cursor/proofs-finder-b3a4` at `0188ed442e8dd68033c04099acf6acfb387d60cc`, `main` `be9a3d566905` merged in; `main` has not moved since and GitHub shows it mergeable [run, 03:04Z]. Two Lean modules, their two imports and one limit file: 4 files, +397 −2.
+  - **To mark:** `research queue ready 9097 --mark --sha 0188ed442e8dd68033c04099acf6acfb387d60cc --by proofs`. You mark; I have not.
+  - **Runs at that head:** `b9df` passed (above); `01e4` as it ends.
+  - **Records that move:** none expected, `{}` [guess until `01e4` ends; the fast path before the merge, `r20261111-221121-1d38`, regenerated nothing].
+  - **Before and after:** before, the three masses that the two-stage committed form's event splits into were bounded at SPOT[Flock]'s code only as hypotheses a guarantee had to take, which #8915 lists as three open premises; after, each is a theorem from the linear expected-time bound on SHA-512 at one finder, so a guarantee stated on them takes one named assumption that is already in the trust base. No guarantee and no verifier changes.
+
+**2. The second guarantee is not opened: its records run failed on one rule, and the fix is pushed.** Branch `cursor/proofs-finder-7c1e`.
+
+- `r20261112-020858-4091` (records, `--update`, at `ffddd6db28`), rc 1 [run]. `security/Proofs`: AUDIT PASS, so `SpotFlock/OneWaitTwo.lean`, the witness and the whole branch build on the tree merged with `main`. `security/Properties`: PASS. `security`: FAIL, and so nothing was regenerated. Its failures are the two "has no record" lines for my two entries, twelve lines naming modules the two now read (both are what `--update` writes), and two of the trees rule:
+  - `trees: Flock.SecurityProofs.SpotOneWaitTwo read Verity.FirstHit.outOfAt in Proofs.Core.SamplingGeneric.FirstHit, a module of the proofs tree (Proofs, Proofs.Properties): a guarantee's or property's statement reads only the definitions tree (Definitions), the code it is about and pinned dependencies. Move the definitions into the definitions tree (Definitions/<Area>/) …`
+  - the same for `Verity.FirstHit.classFinderAt, Verity.FirstHit.clsOf in Proofs.Core.SamplingGeneric.FirstHitClass`.
+- Why: the guarantee takes `Claims.ExpectedCR` at the two by-class first-hit finders, as you ruled, so its statement names the finders, and their definitions were in `Proofs/Core/SamplingGeneric/`, which is not one of the lock's 27 exceptions to that rule (`Proofs.Flock.SamplingGeneric` and `Proofs.Flock.SpotFlock` are) [read: `security/lean-audit.json`, `tools/verity/lean/check.py` `tree_failures`].
+- `r20261112-020906-907f` (quick tier at `ffddd6db28`), rc 1: 11 suites, 9 passed, 2 failed, `verity-pouw-benchmarks` (6 tests) and `verity/protocols/pouw/verifier` (1 test), every one `KeyError: 'signature'` [run]. Cause: those two suites read `signature` of every entry under the lock's `guarantees`, and my two entries have no record until a records run writes one [read: `benchmarks/pouw/harness/price_twins.py:114`, `verity/protocols/pouw/verifier/tests/test_lean_package.py:33`]. It goes when the records are committed; a pull request that lists a guarantee can't pass the quick tier before its records run.
+- **The fix, pushed** (`0334240a90`, then two comment-only commits; head `046049333c`): the six definitions the statement reaches move, unchanged in name and text, into a new `security/Definitions/Core/FirstHit.lean`, which imports only `Definitions/Core/Interaction.lean`: `Verity.FirstHit.firstIdx`, `loopCostAt`, `sampleFinderAt`, `outOfAt`, `classFinderAt`, `clsOf`. Their lemmas stay in `Proofs/Core/SamplingGeneric/`. Four files: the new one, `Definitions.lean` (one import), and the two proof files (an import and the six definitions out). I did not add to the lock's exceptions: `tests/test_lean_packages.py` holds that list to shrinking and names this move as the fix [read].
+- Not done by me, yours to weigh: it puts six definitions into the definitions tree, text a reader of a guarantee checks. They are 48 lines and say what a first-hit finder's seed, output and cost are. No guarantee on `main` reads them, so no record on `main` should move [guess until the records run].
+- `046049333c` also changes one clause of my own `shape.frozen` reason: `SpotFlock.Addresses` is "an open premise", where it said "open until the frame's slots prove it", `main`'s words for `SpotKSTwo` and `SpotExfilTwo`. FRAME's finding makes those words stale in `main`'s two entries too; I did not touch them.
+- Compiles, one file at a time, each of the tree at the head [run]:
+  - `r20261112-024519-2324`, `Definitions/Core/FirstHit.lean`: rc 0, "lean exit 0 in 215 s", no built module of its package declares a name it does.
+  - `r20261112-025905-6edb`, `Proofs/Core/SamplingGeneric/FirstHit.lean`: rc 0, "lean exit 0 in 80 s", "none of its 64 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  - `r20261112-030823-c5a4`, `Proofs/Core/SamplingGeneric/FirstHitClass.lean`: rc 0, "lean exit 0 in 57 s", none of its 15 theorems beyond the three.
+- **The one records run at the head `046049333c`** (`lean_changed.py --records security/Proofs --update`): `r20261112-033523-ae52`, launched 03:35Z, placed on cpu-1 with 11 runs ahead of it for a slot [run]. [guess] It ends about 05:00Z: a slot in about 15 minutes by the launcher's estimate, then the wait for the Lean slot, then the three packages (31 minutes in `4091`) and the regeneration. `main` is still `be9a3d566905` and is in that head [run, 03:36Z].
+- After it: the commit of the lock it keeps, the quick tier at that head, the body's three placeholders, and the pull request, unmarked. [guess] About 06:30Z if each step is launched as the one before ends.
+- [read: WIRED's 03:18Z entry] `SpotKSTwo` and `SpotExfilTwo` are being restated without `Addresses`. `SpotOneWaitTwo` takes `SpotFlock.Addresses` as `main` has it; it follows that restatement by a merge once it is on `main`, and I have not changed it for it.
+
+**3. For LAND2 and #8915: `r20261112-023105-5f15` will fail on the same rule.** [read: LAND2's 02:40Z entry, section 2] The restated `SpotFirstHitTwo` at `bfe0225d021d` names `Verity.FirstHit.clsOf` and takes `ExpectedCR` at `finderXCls` and `finderICls`, which unfold to `classFinderAt` and `outOfAt`, so `security` fails there as it did for me [guess: I have not seen that run's output]. Commit `0334240a90` on `cursor/proofs-finder-7c1e` is the fix and touches only the four files above, so it cherry-picks onto that branch; the same commit in both pull requests merges without a conflict whichever lands first. I would not put it in #9097: that head has its runs, and six definitions no listed guarantee reads would need the `Definitions/Core` limit raised there.
+
+**4. The body of the second guarantee's pull request** (draft, `/opt/cursor/artifacts/pr-guarantee-body-draft.md`) now says, as ruled:
+
+- where it lists `SpotFlock.Addresses` as open: "not met, and false at the served design: the served driver's second round reads every parameter of a replay block at a value the interior commits, where this premise has it read under the statement's roots (read from the code on `main`; not proved in Lean)";
+- "One bit more is available and not built: the error's `4·firstHitCost` can become `2·firstHitCost + 2·runCost` …". Nothing of item 2 is built.
+
+**5. Runs.**
+
+| run | what | verdict or ETA |
+|---|---|---|
+| `r20261112-012753-b9df` | quick tier, lemmas' head `0188ed442e` | rc 0, 6 of 6 passed |
+| `r20261112-012748-01e4` | records fast path, lemmas' head | running since 02:42Z; [guess] about 04:00Z |
+| `r20261112-020858-4091` | records, second guarantee at `ffddd6db28` | rc 1: `security` fails the trees rule; `security/Proofs` and `security/Properties` pass |
+| `r20261112-020906-907f` | quick tier at `ffddd6db28` | rc 1: 2 of 11 suites, `KeyError: 'signature'` |
+| `r20261112-024519-2324` | try, `Definitions/Core/FirstHit.lean` | rc 0 |
+| `r20261112-025905-6edb` | try, `Proofs/Core/SamplingGeneric/FirstHit.lean` | rc 0 |
+| `r20261112-030823-c5a4` | try, `Proofs/Core/SamplingGeneric/FirstHitClass.lean` | rc 0 |
+| `r20261112-033523-ae52` | records with `--update`, second guarantee at `046049333c` | waiting for a slot; [guess] about 05:00Z |
+
+**6. What I do when resumed, or a fresh worker does.**
+
+- Read `01e4`. On its pass: edit #9097's last "Checked" line (`/opt/cursor/artifacts/pr-lemmas-body-v2.md` is the body as it stands) and confirm the ready line of section 1 in one entry. If it regenerated a record or failed, say which and stop.
+- Read `ae52` (`research fetch r20261112-033523-ae52 --all`; the lock it kept is under `lean-audit/`). On AUDIT PASS for the three packages: commit the lock it keeps on `cursor/proofs-finder-7c1e` and compare the record with what I expect: `domain` `SpotFlock.Built`; `open` `Claims.ExpectedCR`, `CompiledTwo.Scope`, `SpotFlock.Addresses`; type hash `8acc03ad…d372`, which I computed by hand. Then the quick tier at that head (`suites.py --changed be9a3d566905 --quick`), where the two suites of section 2 must pass; fill `__RECORD__`, `__MOVED__` and `__CHECKED__` in `/opt/cursor/artifacts/pr-guarantee-body-draft.md`; `research queue open --head cursor/proofs-finder-7c1e` unmarked; tell you. No second records run for the commit that only commits the records.
+- If `ae52` fails for another reason than a record difference: its failure lines to you before anything else is launched.
+- The checkpoint note `lanes/proofs/20261111T1834Z-report-finder.md` holds this.
