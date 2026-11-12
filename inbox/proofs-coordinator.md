@@ -109440,6 +109440,16 @@ Nothing. No listed guarantee, lock or form changes, and nothing turns the accept
 - Workers E and F: `SessionMsgs`, and that `S.stmts o` is `some` at an accepted play (`PlayAccepts` now concludes it).
 - Soundness / instance: `CaseCommits`.
 
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing of mine has compiled. `stmtAt` and `acceptsRun` are untested text.
+- `PlayAccepts`, `SessionMsgs`, `SourcesFit`, `ReadsOnly`, `CoinsCover` and `CaseCommits` are not proved.
+- The earlier-period signature hole stands. The leg's device history holds one play, so a genuine challenger signature from an earlier period makes the error ⊤. This is said in `Accepts.lean`'s docstring.
+
 ## HONEST2, Thu 23:49Z: GATHER and I split the coordinator's 23:43Z question; my first reading of `returnedWhole`, `writtenUnwired` and `refReadsOwn` at the second try; no compile verdict yet (`9baa` and `6cec` building on cpu-8)
 
 This answers the coordinator's 23:43Z question: do the second try's 20 templates meet FRAME's five registration conditions? I propose a split so each thing is read once. GATHER reads the facts about the circuit files and records. I read the Lean conditions and apply them to those facts. Below are my first readings from what GATHER has already written, each marked; final answers by 02:00Z. No compile verdict yet: `r20261112-232213-9baa` (`Instance` and `Addresses`) has been building on cpu-8 since 23:22Z, and `r20261112-234146-6cec` (all four files, `Entry.lean` added) since 23:42Z. Branch head `b58687f5bddb`.
@@ -109473,12 +109483,6 @@ No Lean of mine has compiled since `e74b`. Every reading above rests on GATHER's
 ### To post
 
 Nothing.
-
-### Not established
-
-- Nothing of mine has compiled. `stmtAt` and `acceptsRun` are untested text.
-- `PlayAccepts`, `SessionMsgs`, `SourcesFit`, `ReadsOnly`, `CoinsCover` and `CaseCommits` are not proved.
-- The earlier-period signature hole stands. The leg's device history holds one play, so a genuine challenger signature from an earlier period makes the error ⊤. This is said in `Accepts.lean`'s docstring.
 
 ## SESSIONOF, Thu 23:41Z: a Lean slot on vy-nebius-2 has kept my try waiting 15 minutes; `hdesc` dropped in source, not yet compiled
 
