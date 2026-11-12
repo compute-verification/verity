@@ -8,10 +8,10 @@ import json
 import numpy as np
 import pytest
 
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.check.checkpoint_index import renamed, renames
 from tests.check.test_weights_of_record import live_digests, write_safetensors
 from tests.check.test_weights_of_record_routed_experts import _program
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.checkpoint_index import renamed, renames
 
 H, I, E, WORLD, RANK = 64, 64, 3, 2, 1          # hidden, expert width, experts; TP world and the rank composed
 CONTAINER = "model.layers.0.ffn.experts"

@@ -16,11 +16,14 @@ snapshots every step.  L40S / A100 rows (Gemm_v1, Attention_v3) are byte-identic
 from __future__ import annotations
 
 import pytest
+from verity.definitions.numerics.rows import EVALUATORS
 
-from verity_vllm.check.c2_rules import _complete_replay_population_gap, _no_evaluator_gaps
+from verity_vllm.check.c2_rules import (
+    _complete_replay_population_gap,
+    _no_evaluator_gaps,
+)
 from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity.definitions.numerics.rows import EVALUATORS
 from verity_vllm.program.frontend import targets as T
 
 

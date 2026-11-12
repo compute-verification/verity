@@ -26,8 +26,23 @@ import json
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit.capture_map import (DISPOSITIONS, LAYER_VAR, STATUSES, TP_KINDS, MapError, at_layer, config_value, counts,
-                                            dim, evaluate, layer_set, load, route_sites, symbols, tap_layers)
+from verity_vllm.commit.capture_map import (
+    DISPOSITIONS,
+    LAYER_VAR,
+    STATUSES,
+    TP_KINDS,
+    MapError,
+    at_layer,
+    config_value,
+    counts,
+    dim,
+    evaluate,
+    layer_set,
+    load,
+    route_sites,
+    symbols,
+    tap_layers,
+)
 from verity_vllm.commit.identity import NAMED_LAYERS
 from verity_vllm.properties.record import REGISTRY as PROPERTIES
 

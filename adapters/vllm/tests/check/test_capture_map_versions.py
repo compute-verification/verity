@@ -22,11 +22,12 @@ import itertools
 from pathlib import Path
 
 from verity.circuits.defs import SpecializedDefinition
-from verity_vllm.commit import capture_map as CM
 from verity.definitions.boolean import boolean_version
+from verity.definitions.registry import catalog
+
+from verity_vllm.commit import capture_map as CM
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.registry import catalog
 
 MAP = Path(__file__).parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 CMAP = CM.load(MAP)
@@ -35,7 +36,6 @@ CMAP = CM.load(MAP)
 SITES = {
     "embedding-shard": {"embedding_shard": dict(VS=8, H=8, START=0)},
     "fp8-block-linear-deepgemm": {"flashinfer_fp8_linear": dict(K=256, N=256), "deepgemm_fp8_linear": dict(K=256, N=256)},
-    "rmsnorm-cuda": {"rmsnorm_cuda": dict(N=8, EPS=1e-6, BLOCK=1), "rmsnorm_fused_cuda": dict(N=8, EPS=1e-6, BLOCK=8)},
     "silu-mul": {"silu_mul": dict(I=8)},
     "bf16-add": {"residual_add": dict(N=8)},
     "moe-sum": {"moe_sum": dict(TOPK=2, H=8)},

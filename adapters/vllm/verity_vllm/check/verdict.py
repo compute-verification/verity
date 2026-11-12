@@ -50,17 +50,33 @@ from typing import Any, Mapping, Sequence
 
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
-from verity_vllm.check.commit_rules import _d, _int
-from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, OUTCOMES, PASS, CheckResult, worst
+
+# Imported from here by modules open PRs edit (pipeline/commit.py, cpu_replay.py, replay_bundle.py, tp/commit.py and three tests); they
+# move to commit_pass after those land.
+from verity_vllm.check.commit_pass import (  # noqa: F401
+    _after_release_verdict,
+    _c1_verdict,
+    commit_verdict,
+)
+from verity_vllm.check.commit_rules import (
+    REQUIRED_CLASSES_DEFAULT,  # noqa: F401
+    _d,
+    _int,
+)
+from verity_vllm.check.result import (
+    FAIL,
+    INSUFFICIENT,
+    NOT_RUN,
+    OUTCOMES,
+    PASS,
+    CheckResult,
+    worst,
+)
 from verity_vllm.check.verdict_names import GROUPS
 from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
-# Imported from here by modules open PRs edit (pipeline/commit.py, cpu_replay.py, replay_bundle.py, tp/commit.py and three tests); they
-# move to commit_pass after those land.
-from verity_vllm.check.commit_pass import _after_release_verdict, _c1_verdict, commit_verdict  # noqa: F401
-from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT  # noqa: F401
 
 SCHEMA = "vllm-verdict/v1"
 
@@ -344,7 +360,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         treatment = [r for r in runs if r.arm != "control" and r.commit is not None]
     if min_openings is None:
         es = _d(execution.get("engine_settings"))
-        min_openings = min(64, _int(es.get("openings"), 64)) if es.get("openings") is not None else 64
+        min_openings = min(64, int(es["openings"])) if es.get("openings") is not None else 64
     ctx = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
            "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
     required_classes = vd.get("required_classes")

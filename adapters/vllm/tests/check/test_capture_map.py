@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 import torch
+from verity.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from verity_vllm.acquire.sources import moe_source
-from verity_vllm.commit import identity as ID
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.commit import identity as ID
 from verity_vllm.engine import meta_inventory as MI
-from verity.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "glm_moe_dsa"

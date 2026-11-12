@@ -17,9 +17,10 @@ import os
 import numpy as np
 import pytest
 
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.check import checkpoint_index as CI
 from tests.check.test_weights_of_record import write_safetensors
+from verity_vllm import config
+from verity_vllm.check import checkpoint_index as CI
+from verity_vllm.check import weights_of_record as WR
 
 H, I, HQ, HKV, D, V, E, G = 128, 128, 4, 2, 16, 16, 2, 64
 WORLDS = ((1, 0), (2, 0), (2, 1), (4, 0), (4, 1), (4, 2), (4, 3))
@@ -232,15 +233,26 @@ def test_parallel_shard_hashing_is_the_serial_pin(ckpt):
     assert list(serial["shards"]) == sorted(serial["shards"])
 
 
-def test_built_record_reads_the_program_header_and_is_the_full_load_record(ckpt, tmp_path):
+def test_built_record_reads_the_program_header_and_is_the_full_load_record(ckpt, tmp_path, caplog):
     d, man = ckpt
     for w, r in WORLDS:
         assert canonical(WR.build_record(write_program_dir(tmp_path, w, r), d, checkpoints_manifest=man)) == GOLDEN_BUILT[(w, r)]
     assert WR.record_shard_pin(d, checkpoints_manifest=man) == WR.CheckpointIndex(d, checkpoints_manifest=man).pin
-    # a driver that can't read the checkpoint hands the ranks no pin: each takes it itself, and its own failure is the named one
+    assert "no shard pin" not in caplog.text
+    # a driver that can't read the checkpoint hands the ranks no pin and says why: each takes it itself, and its own failure is the named one
     assert WR.record_shard_pin(str(tmp_path / "absent"), checkpoints_manifest=man) is None
+    assert f"no shard pin of {tmp_path / 'absent'} was taken" in caplog.text and "FileNotFoundError" in caplog.text
     with pytest.raises(FileNotFoundError):
         WR.build_record(write_program_dir(tmp_path, 1, 0), str(tmp_path / "absent"), checkpoints_manifest=man, shard_pin=None)
+
+
+def test_the_default_manifest_is_the_trees_pins_whatever_the_working_directory(tmp_path, monkeypatch):
+    (tmp_path / "manifests").mkdir()
+    (tmp_path / "manifests" / "checkpoints.json").write_text("{}")
+    monkeypatch.chdir(tmp_path)
+    assert WR._default_manifest() == str(config.CHECKPOINTS) and config.CHECKPOINTS.is_file()
+    monkeypatch.setattr(config, "CHECKPOINTS", tmp_path / "pins" / "checkpoints.json")
+    assert WR._default_manifest() is None
 
 
 def test_program_head_is_the_loaded_program_with_its_rows_as_stored(tmp_path):

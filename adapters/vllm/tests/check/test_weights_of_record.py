@@ -815,6 +815,7 @@ def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp
     reason code is null, rather than a null that reads like a tree with neither EXPORT.json nor .git."""
     import subprocess
     import types
+
     import verity_vllm.pipeline.experiment as EX
 
     def broken(_root):

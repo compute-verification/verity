@@ -1099,11 +1099,10 @@ def fold_integrity(fold_summary: Any, fold_summary_2: Any = None, resolution: An
             try:
                 total = sum(int(v) for v in classes.values())
             except (TypeError, ValueError):
-                total = None
-            if total is None:
                 unverified.append(f"{what}.error_classes has non-integer counts")
-            elif total != n_err:
-                unverified.append(f"{what}.error_classes sums to {total}, errors = {n_err}")
+            else:
+                if total != n_err:
+                    unverified.append(f"{what}.error_classes sums to {total}, errors = {n_err}")
         per_step = fs.get("per_step")
         if isinstance(per_step, list) and per_step and n_err is not None:
             vals = [s.get("errors") for s in per_step if isinstance(s, dict)]
