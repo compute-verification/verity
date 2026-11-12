@@ -322,3 +322,6 @@ class DifftestCase:
             self.result = {"path": str(self.path), "error": f"{type(e).__name__}: {e}"}
             while not closed:
                 closed = self.items.get()[0] == "close"
+
+
+__all__ = ["Lean", "LeanError", "build", "registration_json"]

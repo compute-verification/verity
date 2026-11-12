@@ -33,5 +33,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return verifier.main(argv, verify=lms_verify, serve=(sys.executable, str(SERVE)))
 
 
+__all__ = ["lms_verify", "main"]
+
 if __name__ == "__main__":
     sys.exit(main())

@@ -522,3 +522,7 @@ class Binding:
         return {"name": self.role, "checkpoint_sha512": self.pin["checkpoint_sha512"], "pin": str(self.pin_path),
                 "checkpoint": str(self.directory), "files": len(self.pin["checkpoint"]), "workers": self.workers,
                 "salt": SALT_VERSION, **self.state}
+
+
+__all__ = ["Arena", "BLOCK", "Binding", "KEY_BYTES", "PAYLOAD_LABEL", "Refused", "SALT_DOMAIN", "Store", "arena",
+           "arena_of", "checkpoint_sha512", "file_sha512", "pool", "read_pin", "store_salt"]
