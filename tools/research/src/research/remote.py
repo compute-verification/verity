@@ -965,6 +965,12 @@ SHIP_ENV = "RESEARCH_SHIP"                     # `stream` forces the archive str
 POD_GIT_REPO = "git/verity.git"                # <root>/git/verity.git: the machine's bare repository, fed by `git push`
 _RC_NO_GIT = 69                                # the machine has no git: the archive stream ships instead
 _RC_TREE = 76                                  # the pushed commit's tree on the machine is not the launcher's
+
+
+def _stream_forced() -> bool:
+    """Whether SHIP_ENV asks for the archive stream alone: no git ship, and no .git added to a tree."""
+    return os.environ.get(SHIP_ENV, "").strip().lower() == "stream"
+
 #: the programs of a shipped tree that refuse a tree without .git (suites are keyed from git's view of the tree, check runs them,
 #: lean_changed.py reads its commits): a command naming one is refused at launch from a tree git can't reach (`needs_git`), not
 #: after it has waited for a slot.  A list of the known ones, not a test of what a command does
@@ -1193,7 +1199,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=git_dir, capture_output=True, text=True).stdout.strip() or None
     dest = f"{root}/src/{sha}"
     state, doc = _probe_source(ssh, dest)
-    push = os.environ.get(SHIP_ENV, "").strip().lower() != "stream"
+    push = not _stream_forced()
     if state == "ready" and not doc.get("checkout") and doc.get("identity") == sha and push:
         state, doc = _give_git(ssh, root, git_dir, sha, tree, dest, doc)
     if state == "ready":
@@ -2104,7 +2110,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if source is not None:
             tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
             if not ready.get("checkout") and (prog := needs_git(command)):
-                why = f"{SHIP_ENV}=stream" if os.environ.get(SHIP_ENV, "").strip().lower() == "stream" else "the line above says why"
+                why = f"{SHIP_ENV}=stream" if _stream_forced() else "the line above says why"
                 raise Refused(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
                               f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
                               f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
