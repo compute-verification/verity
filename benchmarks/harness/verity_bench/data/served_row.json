@@ -1,0 +1,71 @@
+{
+ "verdicts": {
+  "lean-verify": {
+   "what": "each session's proof",
+   "verifier": "flock-verify verify",
+   "decided_by": "lean",
+   "proved_by": "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
+  },
+  "lean-draw": {
+   "what": "each session's sample, checked against its statement",
+   "verifier": "flock-verify draw-test",
+   "decided_by": "lean",
+   "proved_by": null
+  },
+  "m0-verifier": {
+   "what": "each session's own verdict, its roots held to its statement's and its sample checked",
+   "verifier": "flock-circuit serve, compared in benchmarks/one_stage/a5.py",
+   "decided_by": "rust and python",
+   "proved_by": null
+  }
+ },
+ "checks": {
+  "checks_before_draw": {
+   "what": "the checks before the sample",
+   "verifier": "benchmarks/one_stage/a5.py",
+   "decided_by": "python"
+  },
+  "pins": {
+   "what": "each session's circuit file is the one its template's params name",
+   "verifier": "benchmarks/one_stage/two_stage.py",
+   "decided_by": "python"
+  },
+  "negatives": {
+   "what": "the audit's negative controls, each a changed input the audit must refuse",
+   "verifier": "benchmarks/one_stage/a5.py",
+   "decided_by": "python"
+  },
+  "registered_reads": {
+   "what": "each session's Lean verdict reports the registered values and roots the verifier's own file names",
+   "verifier": "verity/commitments/windows/tables.py",
+   "decided_by": "python"
+  },
+  "complete": {
+   "what": "no verdict of the audit's record is left unrun",
+   "verifier": "verity/protocols/spot/verifier/one_stage/audit.py",
+   "decided_by": "python"
+  },
+  "round_two": {
+   "what": "round 2's statement check with the two-stage form allowed",
+   "verifier": "verity/protocols/spot/verifier/second_stage.py",
+   "decided_by": "python"
+  }
+ },
+ "outcome": {
+  "what": "the stream's outcome of the second stage's sample",
+  "verifier": "sampled-proofs-verifier",
+  "decided_by": "lean"
+ },
+ "withheld": {
+  "two-stage-form": {
+   "why": "the two-round form's soundness is not proved"
+  }
+ },
+ "cards": [
+  {
+   "machine": "vy-spot-glm53",
+   "card": "1",
+   "note": "this card's clock is held down under load, so a proving time taken on it is not a figure of the card's model"
+  }
+ ]
+}

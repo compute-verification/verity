@@ -1411,8 +1411,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
     doc["spot_holes"] = spot_status.status(doc["runs"])
+    shown = None
+    if served is not None:
+        from verity_bench import served_row  # it reads this module's names
+
+        shown = served_row.account(served)
+    if shown is not None:
+        doc["served_run"] = shown
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else
-          render(doc) + "\n\n" + spot_status.render(doc["spot_holes"]))
+          render(doc) + ("" if shown is None else "\n\n" + served_row.render(shown))
+          + "\n\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
