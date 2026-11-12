@@ -18,9 +18,11 @@ registered openings fix before the phase's sample.
   (`Compiled.regValX`) at every other gate. `FregR` is its incorrect set, and `BopsX` the collision finder against the
   registered openings, whose probability is the registered openings' binding term.
 * A monitoring period is `m` execution phases. Its coins are `Fin m → Tp × (Fin kV → Coin)`: phase `i`'s are a tape of
-  its prover and the verifier's `kV` coins (`PhaseRounds`). The secret `z` and the coins `ω` fix phase `i`'s statement
-  `x z ω i`, its prover's strategy `Pv z ω i` and its registered openings `ops z ω i`, each reading only the phases
-  before `i` (`PhasesAdaptive`). `phaseAcc` is the phase's verdict and `WregR` its incorrect set.
+  its prover and `kV` coins, of which its verifier reads the first it needs (`PhaseRounds`). The verifier is a function
+  of the statement, `D y` the compiled verifier that judges `y`; one verifier that judges every statement is the
+  constant one. The secret `z` and the coins `ω` fix phase `i`'s statement `x z ω i`, its prover's strategy `Pv z ω i`
+  and its registered openings `ops z ω i`, each reading only the phases before `i` (`PhasesAdaptive`). `phaseAcc` is the
+  phase's verdict and `WregR` its incorrect set.
 * The premises a guarantee over these takes by name: the design's rate (`RateAt`), the bound on each phase's error
   (`PhaseErrors`), what an accepted phase's statement is registered as (`PhasesRegistered`) and what its record holds
   (`RecordsComplete`).
@@ -89,26 +91,30 @@ section Phases
 
 variable {m kV : ℕ} {Tp Sec : Type}
 
-/-- **Every execution phase's statement has `kV` rounds**, at every secret and every history of the period's coins: the
-verifier's coins at a phase are `kV` coins, so the period's coins are one type. -/
-def PhaseRounds (D : Compiled Coin A) (kV : ℕ) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg) : Prop :=
-  ∀ z ω i, D.V.k (x z ω i) = kV
+/-- **Every execution phase's verifier has at most `kV` rounds at its statement**, at every secret and every history
+of the period's coins, so the period's coins are one type: a phase's verifier reads the first of its `kV` coins and
+ignores the rest. The verifier is a function of the statement, `D y` the compiled verifier that judges `y`. -/
+def PhaseRounds (D : Msg → Compiled Coin A) (kV : ℕ) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg) :
+    Prop :=
+  ∀ z ω i, (D (x z ω i)).V.k (x z ω i) ≤ kV
 
-/-- **Execution phase `i`'s verdict at its own coins**, the prover's tape and the verifier's `kV` coins, at the secret
-`z` and the period's coins `ω`: the run of phase `i`'s prover on phase `i`'s statement accepts. -/
-def phaseAcc (H : Msg → Msg) (D : Compiled Coin A) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
+/-- **Execution phase `i`'s verdict at its own coins**, the prover's tape and `kV` coins, at the secret `z` and the
+period's coins `ω`: the run of phase `i`'s prover on phase `i`'s statement, against the statement's verifier at the
+first of those coins, accepts. -/
+def phaseAcc (H : Msg → Msg) (D : Msg → Compiled Coin A) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x) :
     Sec → Fin m → (Fin m → Tp × (Fin kV → Coin)) → Tp × (Fin kV → Coin) → Prop :=
-  fun z i ω c => (run H (Pv z ω i) D.V (x z ω i) c.1 (fun j => c.2 (Fin.cast (hk z ω i) j))).out = .acc
+  fun z i ω c =>
+    (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) c.1 (fun j => c.2 (Fin.castLE (hk z ω i) j))).out = .acc
 
 /-- **Execution phase `i`'s incorrect set at the trace with the registered openings**, the openings those registered
 at phase `i` (`ops z ω i`), which may read the secret and the earlier phases' coins. -/
-noncomputable def WregR [Fintype Tp] (H : Msg → Msg) (D : Compiled Coin A)
+noncomputable def WregR [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A)
     (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) :
     Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Finset ℕ :=
-  fun z ω i => FregR H D (Pv z ω i) (x z ω i) (ops z ω i)
+  fun z ω i => FregR H (D (x z ω i)) (Pv z ω i) (x z ω i) (ops z ω i)
 
 /-- **Each execution phase reads only the earlier phases' coins**: phase `i`'s statement, its prover's strategy and
 its registered openings are one at any two histories of the period's coins that agree before `i`. -/
@@ -121,34 +127,36 @@ def PhasesAdaptive (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m �
 
 /-- **`e i` bounds execution phase `i`'s error**: at every secret of `Zs` and every history, the committed form's
 error at the trace read at the statement (`Compiled.εregX`) plus the registered openings' binding term (`BopsX`'s
-probability) is at most `e i`. -/
-def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Compiled Coin A) (Zs : Set Sec)
+probability), both at the statement's verifier, is at most `e i`. -/
+def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A) (Zs : Set Sec)
     (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) (e : Fin m → ℝ) :
     Prop :=
-  ∀ z ∈ Zs, ∀ ω i, D.εregX H (x z ω i) (Pv z ω i) + (BopsX H D (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i
+  ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) +
+    (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i
 
 /-- **Every accepted execution phase is registered as the period's**: where phase `i`'s run accepts, its statement is
 registered as `sw i` (`SameRegistration`) with the partition `Pw i`, and the phase's registered openings hold `ρ i` at
 every registered input. -/
-def PhasesRegistered {Lk S : ℕ} (H : Msg → Msg) (D : Compiled Coin A) (lay : AuditStatement → BoundaryGates Lk S)
-    (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
-    (ρ : Fin m → ℕ → Bool) (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
+def PhasesRegistered {Lk S : ℕ} (H : Msg → Msg) (D : Msg → Compiled Coin A)
+    (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ)
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (Zs : Set Sec)
+    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) : Prop :=
-  ∀ z ∈ Zs, ∀ ω i s, D.parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
-    SameRegistration D lay k reg (sw i) s ∧ D.partition s = some (Pw i) ∧
+  ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
+    SameRegistration (D (x z ω i)) lay k reg (sw i) s ∧ (D (x z ω i)).partition s = some (Pw i) ∧
       ∀ g ∈ reg s, certifierVal (ops z ω i s) g = ρ i g
 
 /-- **Every accepted execution phase's record is complete**: where phase `i`'s run accepts, the phase's observations
 in the network certifier's record have every status complete over the statement's steps (`Covered`), one observation
 a step, and jitter below `Dj`. -/
-def RecordsComplete {Lk K S : ℕ} (H : Msg → Msg) (D : Compiled Coin A) (k : AuditStatement → ℕ) (Dj : ℕ)
+def RecordsComplete {Lk K S : ℕ} (H : Msg → Msg) (D : Msg → Compiled Coin A) (k : AuditStatement → ℕ) (Dj : ℕ)
     (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
     (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S)) : Prop :=
-  ∀ z ∈ Zs, ∀ ω i s, D.parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
+  ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
     Covered (k s) (obs z ω i) ∧ (obs z ω i).length = k s ∧ ∀ y ∈ obs z ω i, y.jitter < Dj
 
 end Phases

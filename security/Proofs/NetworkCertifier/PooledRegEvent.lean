@@ -29,7 +29,8 @@ At one execution phase, the event the sample's term is paid against: the run acc
   fourth case beside its three; one split of that event at a trace with a list of registered openings would serve
   both.
 * `pr_offOps_le`: the fourth mass is at most `Pr[B_ops,X]`, by the commitment's binding.
-* `ksRegR_of_sessionKS`: the event is at most `ε_reg,X + Pr[B_ops,X]`, its binding terms in the square-root form.
+* `ksRegR_of_sessionKS`: the event is at most `ε_reg,X + Pr[B_ops,X]`, its binding terms in the square-root form;
+  `εregX_nonneg`: `ε_reg,X` is not negative.
 * `ksRegR_of_costs`: the event with its binding terms from costs, with no square root of a collision term.
 -/
 
@@ -191,6 +192,13 @@ theorem ksRegR_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
     (ex_offRegX_le hbind hs P) (fun s' hs' => pr_offOps_le hbind ops hs' (hops s' hs') P)
   unfold Compiled.εregX
   linarith
+
+/-- The committed form's error at the trace read at the statement is not negative. -/
+theorem εregX_nonneg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) : 0 ≤ L.εregX H x P := by
+  unfold Compiled.εregX
+  exact add_nonneg (add_nonneg (add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
+    (mul_nonneg (Nat.cast_nonneg _) (Real.sqrt_nonneg _))) (Pr_nonneg _)
 
 /-! ## The binding terms from costs -/
 

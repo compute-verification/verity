@@ -22,13 +22,16 @@ openings fix before the phase's sample.
 So every phase is accepted outside the period's good event (`PooledGood` at `WregR`) with probability at most
 `(1 - q)^Fmax + Σ_i e_i`.
 
-What it takes. The sampled proof system's premises (`Arg.KS`, `CommitmentScheme.Binds`, `Compiled.Sessions`). A rate
-`q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in this statement derives it from
-what the verifier accepts. That each phase reads only the phases before it (`PhasesAdaptive`), a property of the
-period the statement is read at, which it proves of no check. That the registered openings pass under each statement's
-roots and open every registered input (`RegOpens`), and that at each accepted phase the network certifier registers
-its record among them (`CertifierRegisters`), the record is complete (`RecordsComplete`) and the statement is
-registered as the period's (`PhasesRegistered`).
+What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
+at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
+`y`, so the statement reads at one verifier a statement as at one verifier of every statement, the constant function;
+the phases' verifiers have at most `kV` rounds at their statements (`PhaseRounds`), and a phase's verifier reads the
+first of its `kV` coins. A rate `q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in
+this statement derives it from what the verifier accepts. That each phase reads only the phases before it
+(`PhasesAdaptive`), a property of the period the statement is read at, which it proves of no check. That the registered
+openings pass under each statement's roots and open every registered input (`RegOpens`), and that at each accepted
+phase the network certifier registers its record among them (`CertifierRegisters`), the record is complete
+(`RecordsComplete`) and the statement is registered as the period's (`PhasesRegistered`).
 
 What it does not say. It counts no secrets: `PooledLeakAccepted`'s second conclusion does, at any incorrect sets. It
 fixes no sample's form and states no error's size.
@@ -46,12 +49,13 @@ set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits, at the trace with
 the registered openings.** Over `m` execution phases on independent live coins, phase `i`'s a tape of its prover and
-the verifier's `kV` coins (`hk`), audited by the compiled verifier `D` over the proof system `A`: for each secret
-`z ∈ Zs` and coins `ω`, phase `i`'s statement `x z ω i`, its prover's strategy `Pv z ω i` and its registered openings
-`ops z ω i` read only the phases before `i` (`had`), and `obs z ω i` are the phase's observations in the network
-certifier's record. Given
+`kV` coins, of which its verifier reads the first it needs (`hk`), each statement `y` judged by the compiled verifier
+`D y` over the proof system `A`: for each secret `z ∈ Zs` and coins `ω`, phase `i`'s statement `x z ω i`, its prover's
+strategy `Pv z ω i` and its registered openings `ops z ω i` read only the phases before `i` (`had`), and `obs z ω i`
+are the phase's observations in the network certifier's record. Given
 
-* `A`'s knowledge soundness, the commitment's binding and the sessions' contract (`hA`, `hb`, `hS`);
+* `A`'s knowledge soundness, and the commitment's binding and the sessions' contract at every statement's verifier
+  (`hA`, `hb`, `hS`);
 * registered openings that pass under each statement's roots and open every registered input (`hops`);
 * `q`, the rate every execution phase's sample met (`hrate`), a hypothesis here, with `0 ≤ q ≤ 1`;
 * `e i` at least phase `i`'s error at the trace read at the statement plus the registered openings' binding term
@@ -65,21 +69,24 @@ for every secret, every phase is accepted while the period's good event fails (`
 with probability at most `(1 - q)^Fmax + Σ_i e i`. -/
 def PooledLeakRegistered : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} (H : Claims.Msg → Claims.Msg)
-    (D : Compiled Coin A) (hA : A.KS H) (hb : D.commit.Binds H) (hS : D.Sessions H) {Lk K S : ℕ}
-    (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
-    {m kV : ℕ} {Tp Sec : Type} [Fintype Tp] [Nonempty Tp] (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
-    (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool)
-    (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Msg)
+    (D : Claims.Msg → Compiled Coin A) (hA : A.KS H) (hb : ∀ y, (D y).commit.Binds H) (hS : ∀ y, (D y).Sessions H)
+    {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ)
+    (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m kV : ℕ} {Tp Sec : Type} [Fintype Tp] [Nonempty Tp]
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+    (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool) (Zs : Set Sec)
+    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Claims.Prover Tp) (hk : PhaseRounds D kV x)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
     (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S)) (had : PhasesAdaptive x Pv ops)
-    (hops : ∀ z ∈ Zs, ∀ ω i s, D.parse (x z ω i) = some s → RegOpens H D.commit s (reg s) (ops z ω i s))
+    (hops : ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s →
+      RegOpens H (D (x z ω i)).commit s (reg s) (ops z ω i s))
     (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hrate : ∀ z ∈ Zs, ∀ ω i s Pt, D.parse (x z ω i) = some s → D.partition s = some Pt → RateAt s Pt q)
-    (e : Fin m → ℝ) (he0 : ∀ i, 0 ≤ e i) (he : PhaseErrors H D Zs x Pv ops e)
-    (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
-    (hcert : ∀ z ∈ Zs, ∀ ω i s, D.parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
-      CertifierRegisters H D.commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s) (obs z ω i))
+    (hrate : ∀ z ∈ Zs, ∀ ω i s Pt, (D (x z ω i)).parse (x z ω i) = some s →
+      (D (x z ω i)).partition s = some Pt → RateAt s Pt q)
+    (e : Fin m → ℝ) (he : PhaseErrors H D Zs x Pv ops e) (hfit : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)))
+    (hcert : ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
+      CertifierRegisters H (D (x z ω i)).commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s)
+        (obs z ω i))
     (hreg : PhasesRegistered H D lay k reg sw Pw ρ Zs x Pv hk ops) (hrec : RecordsComplete H D k Dj Zs x Pv hk obs)
     (Fmax : ℕ),
     ∀ z ∈ Zs, Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i)) ∧

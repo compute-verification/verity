@@ -143,17 +143,19 @@ which the network certifier registers its record among the phase's registered op
 registered input at the registered value `ρ i`, a phase is accepted while its record fails the leak relation at its
 incorrect set with probability at most `0`. Its conclusion is the form `NetTiming.pr_pooled_le` takes each phase's
 leak relation in. -/
-theorem phaseLeaks_regR [Fintype Tp] {H : Msg → Msg} {D : Compiled Coin A} (hS : D.Sessions H) {Lk K S : ℕ}
-    (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
-    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
-    (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool) (Zs : Set Sec)
-    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
+theorem phaseLeaks_regR [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A} (hS : ∀ y, (D y).Sessions H)
+    {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ)
+    (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
+    (ρ : Fin m → ℕ → Bool) (op : Fin m → List (List (Obs Lk K S)) → ℕ → List (Obs Lk K S) → List Bool)
+    (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
     (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S))
-    (hyp : ∀ z ∈ Zs, ∀ ω i s, D.parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
-      SameRegistration D lay k reg (sw i) s ∧ D.partition s = some (Pw i) ∧ (lay s).Fits s.prog (k s) ∧
-        CertifierRegisters H D.commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s) (obs z ω i) ∧
+    (hyp : ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
+      SameRegistration (D (x z ω i)) lay k reg (sw i) s ∧ (D (x z ω i)).partition s = some (Pw i) ∧
+        (lay s).Fits s.prog (k s) ∧
+        CertifierRegisters H (D (x z ω i)).commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s)
+          (obs z ω i) ∧
         Covered (k s) (obs z ω i) ∧ (obs z ω i).length = k s ∧ (∀ y ∈ obs z ω i, y.jitter < Dj) ∧
         ∀ g ∈ reg s, (∃ o ∈ ops z ω i s, o.pos = g) ∧ certifierVal (ops z ω i s) g = ρ i g) :
     ∀ z ∈ Zs, ∀ i, Pr (fun ω => phaseAcc H D x Pv hk z i ω (ω i) ∧
@@ -162,9 +164,9 @@ theorem phaseLeaks_regR [Fintype Tp] {H : Msg → Msg} {D : Compiled Coin A} (hS
   intro z hz i
   refine (Claims.Pr_mono (q := fun _ => False) fun ω hω => ?_).trans_eq Claims.Pr_false
   obtain ⟨hacc, hnot⟩ := hω
-  have hacc' : (run H (Pv z ω i) D.V (x z ω i) (ω i).1
-      (fun j => (ω i).2 (Fin.cast (hk z ω i) j))).out = .acc := hacc
-  obtain ⟨s, Pt, hs, hPt, hin⟩ := hS.refuses _ _ _ _ _ hacc'
+  have hacc' : (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) (ω i).1
+      (fun j => (ω i).2 (Fin.castLE (hk z ω i) j))).out = .acc := hacc
+  obtain ⟨s, Pt, hs, hPt, hin⟩ := (hS (x z ω i)).refuses _ _ _ _ _ hacc'
   obtain ⟨hsame, hPw, hfit, hcert, hcov, hlen, hj, hreg⟩ := hyp z hz ω i s hs hacc
   have hPtw : Pt = Pw i := Option.some.inj (hPt.symm.trans hPw)
   subst hPtw
