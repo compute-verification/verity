@@ -116,8 +116,8 @@ and each row says where it stands:
   block, a proof block that checks where a response's ids stop, sampled on a served audit: it holds that output count
   to the response's ids. Whether it does is read from a served run's verdict records, as the row `design`'s is (The
   stop class's verdicts, below): with no record read, or one verdict lacking, each connection is charged its
-  schedule under these two rows too. The jitter's 0 under `timing` and `all three` rests on the set-time card, which
-  is simulated.
+  schedule under these two rows too, as is each connection of an execution phase no registration was read for. The
+  jitter's 0 under `timing` and `all three` rests on the set-time card, which is simulated.
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
@@ -127,7 +127,8 @@ and each row says where it stands:
   nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
   holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
   count. With no record read, or one verdict lacking, each connection is charged its schedule and the row is the
-  one before it. The entries are the compute audit's either way.
+  one before it; so is each connection of an execution phase no registration was read for. The entries are the
+  compute audit's either way.
 
 ### The stop class's verdicts
 
@@ -152,20 +153,29 @@ The records are in the evidence store, in the run files of the runs that carry
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read.
 
-The rows are below their schedules only where some class holds a row and every class that holds one, in every head
-read, has its four verdicts. The calculator takes that answer as an argument (`document`'s and `table`'s `stop`). The
-command has no option for it and no input holds it, and it reads no store itself: run alone it reads no record,
-charges the rows their whole schedules and says so. A caller that reaches the store names the runs and passes the
-answer.
+An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
+its four verdicts. The answer is how many execution phases of a link are held (the document's `stop`'s
+`held_phases`), and a row is charged by it:
+
+- a row's execution phases are its scope's over its monitoring period, never the ones a run kept a registration for;
+- the held ones' share of the row's connections is charged below its schedule, at most all of them;
+- every other execution phase is charged each connection's whole schedule, one no registration was read for among
+  them. So a run's files with an execution phase left out charge what they would with that execution phase refused.
+
+The calculator takes the answer as an argument (`document`'s and `table`'s `stop`). The command has no option for it
+and no input holds it, and it reads no store itself: run alone it reads no record, charges the rows their whole
+schedules and says so. A caller that reaches the store names the runs and passes the answer.
 
 The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
 record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
-signature is not checked here.
+signature is not checked here. Nothing but verdicts that name a head's digest holds an execution phase, so a
+registration nobody signed holds none.
 
-Where the rows are charged their whole schedules, the document holds apart what each would be below them: its
-`stop`'s `with_verdicts`, in a row's own fields, and one line over the world's year. No record read supports those
-figures, and no row, sum or measurement holds them.
+Where some execution phase is charged its whole schedule, the document holds apart what each row would be with every
+one held: its `stop`'s `with_verdicts`, in a row's own fields, and one line over the world's year. No record read
+supports those figures, and no row, sum or measurement holds them. The `stop`'s `below` is whether every execution
+phase of every scope and monitoring period is held, where nothing is held apart.
 
 Nothing a check counts by capacity is scaled by requests: twice the requests are twice the scan's schedules and fail
 cells, and nothing else. The count is by capacity too: with the lanes given it does not move with the requests, and
@@ -175,8 +185,8 @@ with none given it moves only as the least lanes that serve them do.
 
 - **schedules**: for the scan, ⌈log2(cells + 1)⌉ bits a connection, where cells is the most cells a response takes,
   one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three` and
-  `design`, where the verdict records charge the stop class below its schedule), and the scan's where they are held
-  without one (`design, no stop block`, and those three rows otherwise). For N2, ⌈log2 #Σ_sync^m⌉ over a link's m execution
+  `design`, on the execution phases whose verdict records charge the stop class below its schedule), and the scan's
+  where they are held without one (`design, no stop block`, and those three rows on every other execution phase). For N2, ⌈log2 #Σ_sync^m⌉ over a link's m execution
   phases (`--syncs`).
 - **cells**: the fail cells, the same bits again a connection. Where the lengths are held, with a stop block or
   without, it is the failed connections' charge instead, pooled over the period: which connections failed and where

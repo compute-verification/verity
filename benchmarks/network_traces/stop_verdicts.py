@@ -22,13 +22,18 @@ held to the digest its certificate names. No signature is checked here: the cert
 certifier's key and session, which a calculator doesn't hold, so a head read here is as good as the run that kept it.
 A verdict's own verifier checks the certificate before it accepts.
 
-**The answer** (`stop`) is below the schedule only where some class of some head read holds a count above 0, and
-every class with a count above 0, in every head read, is charged below its schedule by the rule. One class at its
-whole schedule keeps every connection at its whole schedule, and each line says which verdict it lacks. A verdict
-is held to a head by the digest it names, so one decided under another head, another serve's among them, counts
-for nothing. Each verdict that is on a head read is handed on under the mark `leak_bounds.RUN_NOT_PROVED`,
-whatever its ``proved_by`` says: a run is no proof, and what a record's ``proved_by`` is worth is its reader's to
-check."""
+**The answer** (`stop`) counts the execution phases that are held: those whose head was read, in which some class
+holds a count above 0 and every class with a count above 0 is charged below its schedule by the rule. One class at
+its whole schedule keeps its execution phase at its whole schedule, and each line says which verdict it lacks.
+Every other execution phase is charged its whole schedule, one whose registration no run kept among them: the
+calculator counts a row's execution phases from its monitoring period (`leak_bounds.Stop.share`), never from the
+registrations read here. So a run's files with an execution phase left out charge what they would with that
+execution phase refused, and since nothing but verdicts on a head's digest holds an execution phase, a
+registration nobody signed holds none. A verdict is held to a head by the digest it names, so one decided under
+another head, another serve's among them, counts for nothing. Registrations or records that don't read, and two
+heads given for one execution phase of a link, hold no execution phase at all. Each verdict that is on a head read
+is handed on under the mark `leak_bounds.RUN_NOT_PROVED`, whatever its ``proved_by`` says: a run is no proof, and
+what a record's ``proved_by`` is worth is its reader's to check."""
 from __future__ import annotations
 
 import json
@@ -75,7 +80,7 @@ def classes(head: C.Head) -> list[int]:
 
 
 def _whole(why: str, *more: str) -> LB.Stop:
-    return LB.Stop(False, (f"each connection is charged its whole schedule: {why}", *more))
+    return LB.Stop(0, (f"each connection is charged its whole schedule: {why}", *more))
 
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -91,7 +96,7 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     as `read` returns them; ``left`` are lines on what was not read, which the answer carries."""
     registrations, records = list(registrations), list(records)
     if not registrations and not records:
-        return LB.Stop(False, (*LB.NO_RECORDS.why, *left))
+        return LB.Stop(0, (*LB.NO_RECORDS.why, *left))
     if not registrations:
         return _whole(f"{len(records)} verdict record(s) were read and no registration (`{REGISTRATIONS_FILE}`), so "
                       "no class's count is known", *left)
@@ -116,26 +121,29 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
         else:
             by_verdict.setdefault(kind, []).append(record)
     try:
-        charges = [(head, CC.charge(head, cls, by_verdict))
-                   for _, head in sorted(heads.items()) for cls in classes(head)]
+        phases = [(head, [CC.charge(head, cls, by_verdict) for cls in classes(head)])
+                  for _, head in sorted(heads.items())]
     except ValueError as e:
         return _whole(str(e), *left)
+    charges = [(head, c) for head, its in phases for c in its]
     lines = [f"the link {head.link}, execution phase {head.window}, {c.why()}" for head, c in charges]
-    held = [c for _, c in charges if c.count]
-    below = bool(held) and all(c.below for c in held)
+    # an execution phase is held where a class of it holds a row and each class that holds one is charged below
+    held = sum(1 for _, its in phases if any(c.count for c in its) and all(c.below for c in its if c.count))
+    with_rows = [c for _, c in charges if c.count]
     counted = [_handed(kind, record) for _, c in charges for kind, record in c.read]
-    rows, of = sum(c.count for c in held), f"{len(heads)} execution phase(s) read"
-    if not held:
+    of = f"{len(heads)} execution phase(s) read"
+    if not with_rows:
         first = f"each connection is charged its whole schedule: no class holds a row in the {of}"
-    elif below:
-        first = (f"each connection is charged below its schedule: the {rows} row(s) of {len(held)} class(es) in the "
-                 f"{of} each have their {len(CC.VERDICTS)} verdicts, accepted and complete")
+    elif not held:
+        lacking = sum(1 for c in with_rows if not c.below)
+        first = (f"each connection is charged its whole schedule: {lacking} of the {len(with_rows)} class(es) that "
+                 f"hold a row in the {of} lack a verdict, one in each execution phase that holds a row")
     else:
-        lacking = sum(1 for c in held if not c.below)
-        first = (f"each connection is charged its whole schedule: {lacking} of the {len(held)} class(es) that hold "
-                 f"a row in the {of} lack a verdict")
+        first = (f"{held} of the {of} are charged below their schedule: each class that holds a row in one of them "
+                 f"has its {len(CC.VERDICTS)} verdicts, accepted and complete. Every other execution phase of a "
+                 "monitoring period is charged its whole schedule, one no registration was read for among them")
     other = len(records) - unlisted - len(counted)
-    return LB.Stop(below, (
+    return LB.Stop(held, (
         first, *lines,
         *([f"{other} verdict record(s) read are on no head read, or on no class of one that holds a row, and count "
            "for nothing"] if other else []),
@@ -175,7 +183,7 @@ def of_runs(store: Any, runs: Iterable[str]) -> LB.Stop:
     its whole schedule, and the line says no run carries the record."""
     runs = list(runs)
     if not runs:
-        return LB.Stop(False, (*LB.NO_RECORDS.why, f"no run in the store carries `run_of_record={RECORD}`"))
+        return LB.Stop(0, (*LB.NO_RECORDS.why, f"no run in the store carries `run_of_record={RECORD}`"))
     try:
         return stop(*read(store, runs))
     except (OSError, ValueError) as e:
