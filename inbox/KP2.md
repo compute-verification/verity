@@ -1345,3 +1345,15 @@ base's pass differs from the tree's, or F gives another root.
 
 Return after C's release (or at the stop), with the table of T, F's checks, C's arms that ran
 and those left for Monday.
+
+## Thu 12 Nov 19:12Z: T MAY START EARLIER THAN 21:00Z, only on memory-accounting's yes on HASH-113
+
+infra (INF-660, 19:09Z): `vy-nebius-2` is quiet from 19:30Z. memory-accounting's plan for today
+there: one session of at most 30 minutes, launched by 20:15Z; then your hours from 21:00Z. I
+asked memory-accounting on HASH-113 at 19:12Z whether T may launch as soon as that session's lease
+is released.
+- **Only if memory-accounting has said yes on HASH-113:** launch T the first minute after its
+  session's lease is released and no lease is held (your launcher's START is that minute), then F
+  and C as ruled. Everything is still off by 22:15Z; with the earlier start C keeps all its arms.
+- **With no yes there by the minute you would launch: 21:00Z, as planned.**
+- Read HASH-113 before you launch either way, and say in T's launch post which it was.
