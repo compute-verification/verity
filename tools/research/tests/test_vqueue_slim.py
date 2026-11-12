@@ -27,7 +27,7 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
 from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
                                   _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
                                   judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
-                                  shard_count, start, step_test, suite_kind, traced_reads, unnamed)
+                                  joined, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -1233,6 +1233,18 @@ def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_
                "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
     assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
     assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
+
+
+def test_a_step_failed_by_its_change_beside_suites_its_machine_failed_is_named_by_the_change_s_suites_alone():
+    """lean-suites failed one suite on its own test and another whose tests a full disk errored: the step's failure is its own
+    work, every test of both kept, so the base's word on it reads all of them; but only the suite that failed on its own
+    names the culprit, so a member whose files a test the disk broke names isn't ejected for it."""
+    own = Read(frozenset({"pouw::tests/test_a.py::t"}), frozenset({"benchmarks/pouw/tests/test_a.py"}), frozenset(), "own")
+    disk = Read(frozenset({"vllm::tests/test_b.py::t"}), frozenset({"integrations/vllm/tests/test_b.py"}), frozenset(), "infra")
+    got = joined([disk, own], "rest")
+    assert got.kind == "own" and got.tests == own.tests | disk.tests
+    assert got.named == own.named
+    assert joined([disk, disk._replace(named=frozenset({"x.py"}))], "rest").named == {"integrations/vllm/tests/test_b.py", "x.py"}
 
 
 def test_a_lean_build_s_failure_is_read_as_its_failed_modules_alike_in_every_run_and_its_reads_their_imports():

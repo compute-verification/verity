@@ -816,13 +816,15 @@ def read_step(step: str, st: dict, log: str, rest: str, root: str | None = None,
 def joined(parts: Iterable[Read], rest: str) -> Read:
     """One failure of ``parts`` (a step's, of several suites or shards): their tests, names and reads together (unbounded when
     one's are), and the first class of `KINDS` one has, its own work before the rest; of none, ``rest`` (`unnamed`) alone,
-    its reads unbounded."""
+    its reads unbounded.  Of its own work, it is named only by the parts of its own work: a part its machine failed blames
+    no member."""
     if not (parts := list(parts)):
         return Read(frozenset({rest}), frozenset(), None, None)
     kinds = {p.kind for p in parts}
-    return Read(frozenset().union(*(p.tests for p in parts)), frozenset().union(*(p.named for p in parts)),
-                None if any(p.reads is None for p in parts) else frozenset().union(*(p.reads for p in parts)),
-                next((k for k in KINDS if k in kinds), None))
+    kind = next((k for k in KINDS if k in kinds), None)
+    return Read(frozenset().union(*(p.tests for p in parts)),
+                frozenset().union(*(p.named for p in parts if kind != "own" or p.kind == "own")),
+                None if any(p.reads is None for p in parts) else frozenset().union(*(p.reads for p in parts)), kind)
 
 
 def suite_kind(row: dict, log: str) -> str:
