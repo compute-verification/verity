@@ -843,15 +843,17 @@ def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tupl
     it is its pattern, its script and its files. The quoted strings up to it are read as commands in turn, which is how a
     wrapper script's argument, `bash -c`'s and an interpreter's code are seen. `git`'s arguments and those of a `research`
     command that runs nothing (no `--`) are prose and are not read. `where` is the directory the commands run in when they
-    run on this machine, None on another or once a `cd` can't be followed: there a command that reads a file itself (behind
-    nothing but `sudo`, `timeout` and the like without options, or in such a `bash -c`) reads one git has committed freely
-    (`tracked`). `sunk` says the output of `text` as a whole goes to a command that only unpacks it. Inside `text` a
-    command's does when a `|` hands it to one (`unpacks`) that shares the pipe with no other command (no subshell or group),
+    run on this machine, None on another or when they may move (`worktree_guard.moves`: any `cd` among them, run or not):
+    there a command that reads a file itself (behind nothing but `sudo`, `timeout` and the like without options, or in such
+    a `bash -c`) reads one git has committed freely (`tracked`). `sunk` says the output of `text` as a whole goes to a
+    command that only unpacks it. Inside `text` a command's does when a `|` hands it to one (`unpacks`) that shares the pipe with no other command (no subshell or group),
     or `text`'s own does and the command is piped nowhere, and it is redirected nowhere but to `/dev/null`; so then does the
     output of the command it has another machine run (`far_words`). Only a `tar` that is the command itself, here or there,
     is let through on it."""
     try:
         commands = words_of(text)
+        if where is not None and guard().moves([unwrap(w) for w in flattened(text)]):
+            where = None
     except ValueError:                                   # unbalanced quotes: the words between the shell's operators, unquoted
         commands = [(re.findall(r"[<>]+|[^\s'\"<>]+", part), "") for part in re.split(r"[|;&()`\n]", text)]
         where, sunk = None, False
@@ -864,7 +866,7 @@ def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tupl
         whole = all(to == "/dev/null" for w, to in zip(words, words[1:] + [""]) if ">" in w and set(w) <= set("&<>|"))
         taker = commands[n + 1][0] if op in ("|", "|&") and n + 1 < len(commands) else None
         into = whole and (plain and taker[0] != "{" and unpacks(taker) if taker else sunk and op not in ("|", "|&"))
-        words, upstream, opened, after = strip_redirections(words), piped, before.endswith("(<"), before
+        words, upstream, opened = strip_redirections(words), piped, before.endswith("(<")
         run, before = unwrap(words), op
         prog, first, far = os.path.basename(run[0]) if run else "", len(words) - len(run), far_words(run)
         direct = {first, len(words) - len(unwrap(far))} if far else {first}   # where the command stands, here or on the far side
@@ -872,10 +874,6 @@ def secret_read(text: str, where: str | None = None, sunk: bool = False) -> tupl
         piped = upstream + piped_names(run) if op in ("|", "|&") and not prose else []
         if prose:
             continue
-        if where is not None and prog in ("cd", "pushd", "popd"):   # followed only where the next command runs in the new directory
-            followed = (plain and words[0] == "cd" and len(words) == 2 and re.fullmatch(r"[\w./@+][\w./@+-]*", words[1])
-                        and op in ("&&", ";") and after in ("", "&&", ";"))
-            where = os.path.join(where, words[1]) if followed else None
         ats = [i for i, w in enumerate(words) if WRAPS.sub("", os.path.basename(w)) in PRINTERS
                or INTERPRETER.fullmatch(os.path.basename(w)) and any(CODE_OPTION.fullmatch(a) for a in words[i + 1:-1])]
         last = next((i for i in ats if i in direct and os.path.basename(words[i]) in SCRIPTED), len(words))
@@ -933,7 +931,8 @@ def secret_file_reason(command: str, cwd: str = "") -> str | None:
             "prints nothing of a file that isn't one; look at a key with `stat`, `sha256sum` or `openssl pkey -in FILE -pubout`. "
             "A command that needs the contents reads the file inside the program that needs it (give it the path, `. FILE`, "
             "`CMD < FILE`, `cp`): a value captured in a shell variable (`KEY=$(cat FILE)`) is one `echo` from the transcript. "
-            f"A file git tracks in the checkout, unchanged, reads freely there. {LOCAL_OK} does not lift this.")
+            f"A file git tracks in the checkout, unchanged, reads freely there, named from the directory the command starts in "
+            f"and with no `cd` in the command. {LOCAL_OK} does not lift this.")
 
 
 ALWAYS, PRESSURE = 2, 1
