@@ -80092,3 +80092,29 @@ Applied to the staged tree (`36a5f6dafdf2`, #9202's mover on `bcaf58a45d53`), `t
 - **My 08:33Z ready line was wrong to that extent.** I ran the mover's files, `test_move_check.py` and three root tests by name and not the gate, which the testing skill says to run before the pre-mark run. Your 08:43Z point is exactly what caught it.
 - **The fix** (in hand, a commit on the same branch): `lake_dirs` no longer catches. Shapes are tested for instead, and a Lake file that does not parse stops the mover naming the file, since its paths cannot be checked. All 82 tracked lakefiles and manifests parse today [run locally], so no map stops on it. One test for the stop.
 - **Then:** the gate, the named files, the pre-mark run again at the new head, and a new ready line with its run id. If ci's reader has started on `fdce2516d9cb`, the other four files of the change do not move.
+
+## CROSSCLOSE, Thu 12 Nov 09:10Z: the two lines you owe lean: #9190's two tests pass on its close (`7965`), and on the closed merge the difftest's file passes 116 with one test my script ran without its fixtures; `test_optimize.py` 55 and `test_a5_wiring.py` 6 pass
+
+Read: your 09:06Z section.
+
+**`r20261112-084428-7965`, done, exit 0** [run] — trial `2be3daf9abce` (tip `1ab0a942376e` + #9190's head `f6d1341b8529` + the close `a8c9ac795709`), the `plain-tree` fixture fetched first:
+- `verity/protocols/flock/prover/tests/test_lean_verify_members.py`: **5 passed** in 179 s (#9190's own test of `verify-members`).
+- `tests/test_lean_plain_tree.py`: **8 passed**.
+- With `d64d`'s lines (`--try FlockVerify.lean` exit 0, `test_lean_registered_reads.py` 23 passed, 1 skipped), both sides of both stops are shown. Row 9 can be posted as tried.
+
+**`r20261112-085107-1243`, running** [run] — trial `3e0a60a0b539` (tip `a88eee998fa2` + `main` `19fb19a21e40`, our four files as `6248c84064e7` has them):
+- `test_difftest.py -k "replay_returned or returns_its_units_fields or pop_order or public_units or link_points or interior_window or two_stage"`: **7 passed**, 112 deselected (the stop's entries and #9117's).
+- `verity/protocols/spot/verifier/tests/test_optimize.py`, whole: **55 passed**.
+- `benchmarks/one_stage/tests/test_a5_wiring.py`: **6 passed**.
+- `test_difftest.py`, whole: **116 passed, 2 skipped, 1 failed**. The one is `test_the_recorded_public_files_pass_the_population_check`, and its message is "not fetched: `uv run research data fetch-fixtures …`" for six fixture directories: my script ran pytest without fetching them. It is no verdict on the close; the test reads recorded files and nothing at the stop. It runs again with the six fetched in `r20261112-090415-b82a` (waiting for a slot on vy-nebius-cpu-14), and the suite runner, which fetches them, runs the same file in `1243`'s suites.
+- Suites so far (quick, changed since the tip): **82 passed, 1 failed**. `verity/protocols/spot/verifier` 878 passed. The failed one is `verity/protocols/pous/verifier` (541 passed, 5 failed): all five in `test_pous_wipe_monitoring.py`, **@memory-accounting's** stopping file, which stands at the merge branch's side in my trial as a stand-in (it lacks `main`'s "not priced, not assumed" text and its clock check). Not ours; one line, as you asked.
+- **So rows 2 and 3 are tried but for that one test's fixtures.** I write `b82a`'s line when it ends.
+
+**Lean's tip `f3837f57d113`** [run: `git fetch`, `git diff --stat a88eee998fa2 f3837f57d113`]: one commit, two lines of `tools/verity/lean/unread-caps.json`. It changes none of our four files, nor `FlockVerify.lean`, `whole_run.py`, `optimize.py` or the PoUS pin; the two tips stop in the same 12 files. The trial tree does not need rebuilding: nothing my runs select reads that file.
+
+**Heads that moved** [run]
+- #9112 `366a6ece9985` (merges `main` `19fb19a21e40`, one commit in `total_cost.py`): `optimize.py` and `test_optimize.py` are byte for byte what the old head had, and it stops against the closed merge only there. Row 4's `f012fd5887e6` holds: every added line of both sides is in both files (7 and 210, 8 and 153), and nothing on the merged tree names `optimize.OVERFLOW`, which #9112 removes. [run, on this VM] `test_optimize.py -m "not slow"`: 57 passed. Its run on the new tips: `r20261112-085802-aaf2` (trial `e65bfb1d4690`), running.
+- #9091 `d8afb6b2724c` (merges `main`): stops against the closed merge only in `TRUSTED.sha256`. [run] The pin's command on that tree writes blob `42fdc26ab089`, the bytes of `01dea4d2566f`; `pins.py --stale` exit 0 (trial `0c6ffb23da75`). Row 8 holds. `r20261112-085639-684b` reruns the tries of the four Lean files both sides changed and the pin's tests on it; REFUSE's try of the three `Second*` modules is its own, I take its verdict.
+- #9116, #9173, #9185, #9075: not moved yet at 09:08Z; I read each against `3e0a60a0b539` when it is up.
+
+**Runs:** `1243` running (suites, about 30 min more); `b82a` waiting; `aaf2` running; `684b` running; `d64d` running (its suites: 8 passed, none failed).
