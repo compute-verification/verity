@@ -25,6 +25,8 @@ TASK_FIELDS = ("id", "kind", "about", "env", "argv", "vars", "inputs", "reads", 
 CORE_FIELDS = ("priority", "key")
 FAMILY_FIELDS = {"files": list, "kinds": list, "env": str, "about": str, "resources": dict, "timeout_s": int}
 RESOURCES = ("cores", "mem_gb", "disk_gb")
+#: what `[slot]` bounds: the largest slot an executor leases a task, which no task's resources may pass
+SLOT = ("cores", "mem_gb")
 #: what `verity graph run` writes in a task's work directory beside its outputs and reads
 LOG = "task.log"
 #: a field name no table, task or result may have: who is paged is drive's policy, from paths
@@ -77,14 +79,19 @@ def _forbid(where: str, doc: object) -> None:
 
 
 def spec(root: Path) -> dict:
-    """`tasks.toml`, checked: {"env": {name: {"spec": [glob]}}, "family": {name: table}}."""
+    """`tasks.toml`, checked: {"slot": {cores, mem_gb}, "env": {name: {"spec": [glob]}}, "family": {name: table}}."""
     try:
         doc = tomllib.loads((root / SPEC).read_text())
     except (OSError, tomllib.TOMLDecodeError) as e:
         raise GraphError(f"{SPEC}: {e}") from e
     _forbid(SPEC, doc)
-    if extra := set(doc) - {"env", "family"}:
-        raise GraphError(f"{SPEC}: tables {', '.join(sorted(extra))}: it holds [env.*] and [family.*] only")
+    if extra := set(doc) - {"slot", "env", "family"}:
+        raise GraphError(f"{SPEC}: tables {', '.join(sorted(extra))}: it holds [slot], [env.*] and [family.*] only")
+    slot = doc.get("slot")
+    if not isinstance(slot, dict) or set(slot) != set(SLOT) or not all(
+            isinstance(v, int | float) and not isinstance(v, bool) and v > 0 for v in slot.values()):
+        raise GraphError(f"{SPEC}: [slot] holds {' and '.join(SLOT)}, each a positive number: the largest slot an executor "
+                         "leases a task")
     envs, fams = doc.get("env", {}), doc.get("family", {})
     for name, e in envs.items():
         if set(e) != {"spec"} or not isinstance(e["spec"], list) or not all(isinstance(p, str) for p in e["spec"]):
@@ -97,13 +104,17 @@ def spec(root: Path) -> dict:
             raise GraphError(f"{SPEC}: [family.{name}] fields {', '.join(sorted(extra))}: it has {', '.join(FAMILY_FIELDS)}")
         if not t["kinds"] or t["env"] not in envs:
             raise GraphError(f"{SPEC}: [family.{name}] needs a kind and an env of [env.*]")
-        _resources(f"[family.{name}]", t["resources"])
-    return {"env": envs, "family": fams}
+        _resources(f"[family.{name}]", t["resources"], slot)
+    return {"slot": slot, "env": envs, "family": fams}
 
 
-def _resources(where: str, r: dict) -> None:
+def _resources(where: str, r: dict, slot: dict) -> None:
     if set(r) != set(RESOURCES) or not all(isinstance(v, int | float) and not isinstance(v, bool) and v > 0 for v in r.values()):
         raise GraphError(f"{where}: resources are {', '.join(RESOURCES)}, each a positive number")
+    if over := [f"{k} {r[k]} (its largest {slot[k]})" for k in SLOT if r[k] > slot[k]]:
+        raise GraphError(f"{where}: asks {', '.join(over)}, more than {SPEC}'s [slot], the largest slot an executor leases a "
+                         "task: no slot would take it, so it and every task reading it would wait queued. Ask about what "
+                         "its passing runs reach, or raise [slot] once the executor's slots are that large")
 
 
 def covered(root: Path, family: str, files: list[str]) -> list[str]:
@@ -123,8 +134,9 @@ def _path(where: str, p: object) -> str:
     return p
 
 
-def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -> dict:
-    """``t``, a task family ``family``'s lister gave, with what it left out taken from its table, checked."""
+def complete(t: object, family: str, table: dict, envs: dict, files: set[str], slot: dict) -> dict:
+    """``t``, a task family ``family``'s lister gave, with what it left out taken from its table, checked, its resources within
+    ``slot`` (`[slot]`)."""
     if not isinstance(t, dict):
         raise GraphError(f"family {family} listed {t!r}, not a task")
     _forbid(f"family {family}'s task {t.get('id')!r}", {k: v for k, v in t.items() if k not in SHAPED})
@@ -168,7 +180,7 @@ def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -
     for o in outputs:
         _path(f"{tid}'s output {o['name']}", o["path"])
     resources = {**table["resources"], **t.get("resources", {})}
-    _resources(tid, resources)
+    _resources(tid, resources, slot)
     timeout = t.get("timeout_s", table["timeout_s"])
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise GraphError(f"{tid}: timeout_s is a positive integer")
@@ -299,7 +311,7 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
         listed.add(name)
         if name not in listers:
             continue
-        new = [complete(t, name, fams[name], s["env"], have) for t in listers[name](root, files)]
+        new = [complete(t, name, fams[name], s["env"], have, s["slot"]) for t in listers[name](root, files)]
         for c in new:
             if c["id"] in tasks:
                 raise GraphError(f"{c['id']} is listed twice")
@@ -332,7 +344,7 @@ def task_graph(root: Path, task_id: str, listers: dict | None = None) -> dict:
             listed[name] = {t.get("id"): t for t in (listers[name](root, files) if name in listers else []) if isinstance(t, dict)}
         if tid not in listed[name]:
             raise GraphError(f"no task {tid} on this tree: `verity graph` lists them")
-        tasks[tid] = complete(listed[name][tid], name, fams[name], s["env"], have)
+        tasks[tid] = complete(listed[name][tid], name, fams[name], s["env"], have, s["slot"])
         todo += [r["task"] for r in tasks[tid]["reads"]]
     return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), None)
 

@@ -361,6 +361,33 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
                 dataclasses.replace(ledger.Node.stated(), **{name: bad})
 
 
+def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> None:
+    """`Node.stated`'s tiers are what its R and S_chip are sums of: every GPU's HBM and the host's DRAM, each device's
+    read rate at spec and measured and its on-chip bytes, `timing`'s.  A reported read raises the node's R and no
+    tier's; a node built by hand states none, and a tier is a `Tier` of whole devices, positive rates and whole
+    bytes."""
+    n = ledger.Node.stated()
+    assert n.tiers == {
+        "hbm": ledger.Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
+                           timing.GPU_CHIP_BYTES),
+        "dram": ledger.Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
+    assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.5952e12
+    assert sum(t.devices * t.read_bytes_per_s for t in n.tiers.values()) == n.read_bytes_per_s == 12.9188e12
+    assert sum(t.devices * t.chip_bytes for t in n.tiers.values()) == n.chip_bytes == 3_105_652_736
+    fast = ledger.Node.stated(reported_read_bytes_per_s=2e13)
+    assert fast.tiers == n.tiers and fast.spec_bytes_per_s == fast.read_bytes_per_s == 2e13
+    assert node().tiers == {} and "tiers" not in n.to_json()
+    with pytest.raises(TypeError):
+        n.tiers["disk"] = n.tiers["dram"]
+    with pytest.raises(ValueError, match="tiers"):
+        dataclasses.replace(n, tiers={"hbm": (8, 1.597e12, 1.539e12, 263_163_904)})
+    for bad, what in (({"devices": 0}, "devices"), ({"devices": 1.0}, "devices"), ({"spec_bytes_per_s": 0.0}, "spec"),
+                      ({"read_bytes_per_s": math.inf}, "read"), ({"chip_bytes": -1}, "chip_bytes"),
+                      ({"chip_bytes": 1.0}, "chip_bytes")):
+        with pytest.raises(ValueError, match=what):
+            dataclasses.replace(n.tiers["hbm"], **bad)
+
+
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     """With 7 of 20 receipts sampled a window, the pooled wrong receipts W are spread over the groups at
     v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
