@@ -10,11 +10,13 @@ computed whatever the others say:
   (`Challenger.coinsReason`), and that log shows a coin released after the earlier registration, the last of those before
   the first released after the later one (`receiptReason`): the record whose ports the later blocks read was received
   first, and no coin that sampled one of them was released before the challenger received what fixes its rows;
-* `audit`: the earlier stream's audit record (`Record.record`'s) is the earlier registration's and accepted
-  (`auditReason`); no verdict when none is handed.
+* `audit`: the earlier stream's audit record (`Record.record`'s) is the earlier registration's and accepted, with
+  `complete`, whether that record says every one of its entries ran (`auditVerdict`); no verdict when none is handed.
 
-`case` names the outcome: 1 when all three hold; 2 when the earlier stream's log holds no such record or the order is
-not the log's; 3 when those hold and the earlier stream's audit record is missing or did not accept.
+`case` names the outcome: 1 when all three hold and the earlier stream's audit record is complete; 2 when the earlier
+stream's log holds no such record or the order is not the log's; 3 when those hold and the earlier stream's audit record
+is missing or did not accept; 4 when those hold and that audit record accepted and is not complete: it accepted with
+entries that did not run, and is no audit of those entries, so a later record does not rest on it as on one that is.
 
 The order is read from one coin family of one session, the later sample's own: both registrations' receipts are roots
 of that family.
@@ -22,7 +24,8 @@ of that family.
 `acrossAll` takes a list of such reads beside the digest of one record, a class's boundary record, and runs `across` on
 each. A read reaches that record when its `previous` is it, or is the later registration of a read of the list that
 reaches it (`reached`). Its `case` is the list's: 1 when every read reaches the boundary record and is case 1; 2 when one
-does not reach it or is case 2; 3 when neither and a read's earlier stream's audit record is missing or did not accept.
+does not reach it or is case 2; 3 when none is and a read is case 3, its earlier stream's audit record missing or not an
+accept; 4 when none is either and a read is case 4, that audit record an accept that is not complete.
 It holds nothing about a record the list leaves out: that the list is every record that reads the class is the
 caller's.
 -/
@@ -102,15 +105,53 @@ def orderReason (window : String) (earlier later : ByteArray) (coins : Json) (re
       | .error why => some why
       | .ok received => receiptReason received earlier later
 
-/-- Why `audit` is not an accepted audit record of the registration `previous` (its digest, hex): it is no audit record,
-it is another registration's, or it did not accept. -/
-def auditReason (audit : Json) (previous : String) : Option String :=
+/-- The verdict on the earlier stream's audit record: whether it is the earlier registration's and accepted, and
+whether it is complete, every one of its entries having run; `why` when it did not accept, or accepted and is not
+complete. -/
+structure AuditVerdict where
+  accepted : Option Bool
+  complete : Option Bool
+  why : Option String := none
+
+/-- `{"accepted": true | false | null, "complete": true | false | null}`, with `why` when there is one. -/
+def AuditVerdict.toJson (v : AuditVerdict) : Json :=
+  let tri : Option Bool → Json
+    | some b => Json.bool b
+    | none => Json.null
+  Json.mkObj ([("accepted", tri v.accepted), ("complete", tri v.complete)] ++
+    (v.why.map fun w => ("why", Json.str w)).toList)
+
+/-- Why `audit` is no audit record of the registration `previous` (its digest, hex): it is no audit record, or it is
+another registration's. -/
+def auditOther (audit : Json) (previous : String) : Option String :=
   if !jsonStrIs (getD audit "format") FORMAT then some s!"not a {FORMAT} record"
   else if !jsonStrIs (getD audit "registration_digest") previous then
     some "the audit record is another registration's than the one the later registration names"
-  else match getD audit "accepted" with
-    | .bool true => none
-    | _ => some "the earlier stream's audit record did not accept"
+  else none
+
+def NOT_ACCEPTED : String := "the earlier stream's audit record did not accept"
+
+def NOT_COMPLETE : String :=
+  "the earlier stream's audit record accepted with entries that did not run: it is not complete, and is no audit of those entries"
+
+private def saysTrue : Json → Bool
+  | .bool true => true
+  | _ => false
+
+/-- The verdict on `audit`, the audit record handed for the registration `previous` (its digest, hex): none when none
+is handed (null); refused, with no word on `complete`, when it is no audit record of that registration (`auditOther`);
+else `accepted` and `complete` as the record's own fields say, each true only where the field is `true`. -/
+def auditVerdict (audit : Json) (previous : String) : AuditVerdict :=
+  match audit with
+  | .null => { accepted := none, complete := none }
+  | a =>
+    match auditOther a previous with
+    | some why => { accepted := some false, complete := none, why := some why }
+    | none =>
+      let accepted := saysTrue (getD a "accepted")
+      let complete := saysTrue (getD a "complete")
+      { accepted := some accepted, complete := some complete,
+        why := if !accepted then some NOT_ACCEPTED else if !complete then some NOT_COMPLETE else none }
 
 /-- What `across` reads: the window's open root the verifier holds, the earlier stream's log, its audit record (null:
 none), the later stream's registration, and the later stream's sample's coin evidence and the bytes it read. -/
@@ -122,10 +163,12 @@ structure Across where
   coins : Json
   read : ByteArray
 
-/-- 1 when all three verdicts accept, 2 when `logged` or `order` does not, 3 when they do and `audit` does not. -/
-def acrossCase (logged order audit : AcrossVerdict) : Nat :=
+/-- 2 when `logged` or `order` does not accept; else 3 when `audit` does not; else 4 when it does and is not complete;
+else 1: all three accept and the audit record is complete. -/
+def acrossCase (logged order : AcrossVerdict) (audit : AuditVerdict) : Nat :=
   if logged.accepted != some true || order.accepted != some true then 2
   else if audit.accepted != some true then 3
+  else if audit.complete != some true then 4
   else 1
 
 /-- What `across` finds on one read: its three verdicts, the earlier record's index in the earlier stream's log (none
@@ -134,7 +177,7 @@ structure AcrossFound where
   logged : AcrossVerdict
   received : Option Nat
   order : AcrossVerdict
-  audit : AcrossVerdict
+  audit : AuditVerdict
   earlier : String
   later : String
 
@@ -154,10 +197,7 @@ def acrossFound (i : Across) : V AcrossFound := do
   let received := loggedAt i.log previous
   return { logged := .ofReason (if received.isSome then none else some UNLOGGED), received,
            order := .ofReason (orderReason i.window earlier later i.coins i.read),
-           audit := (match i.audit with
-             | .null => { accepted := none }
-             | a => .ofReason (auditReason a previous)),
-           earlier := previous, later := Flock.hexOf later }
+           audit := auditVerdict i.audit previous, earlier := previous, later := Flock.hexOf later }
 
 /-- The verdicts on one read across streams (`acrossFound`): `{"logged", "received", "order", "audit", "case",
 "earlier", "later"}`, `received` the earlier record's index in the log (null when it holds none), `earlier` and
@@ -179,10 +219,11 @@ def reached (boundary : String) (links : Array (String × String)) : Std.HashMap
   reachedFrom links (links.size + 1) ((∅ : Std.HashMap String Unit).insert boundary ())
 
 /-- A list's case from each read's own case and whether it reaches the boundary record: 2 when a read does not reach it
-or is case 2, else 3 when a read is case 3, else 1. -/
+or is case 2, else 3 when a read is case 3, else 4 when a read is case 4, else 1. -/
 def acrossAllCase (links : Array (Nat × Bool)) : Nat :=
-  if links.any fun (c, reaches) => !reaches || (c != 1 && c != 3) then 2
-  else if links.any fun (c, _) => c != 1 then 3
+  if links.any fun (c, reaches) => !reaches || !(c == 1 || c == 3 || c == 4) then 2
+  else if links.any fun (c, _) => c == 3 then 3
+  else if links.any fun (c, _) => c == 4 then 4
   else 1
 
 /-- What `acrossAll` reads: the digest (hex) of a class's boundary record, and the reads across streams that rest on
@@ -229,15 +270,33 @@ private def root (n : Nat) : ByteArray := ByteArray.mk #[n.toUInt8]
 -- a sample with no coin evidence holds no order
 #guard orderReason "" (root 1) (root 2) .null (root 0) == some NO_LOG
 
-private def audited (digest : String) (accepted : Json) : Json :=
-  Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str digest), ("accepted", accepted)]
+private def audited (digest : String) (accepted : Json) (complete : Json := .bool true) : Json :=
+  Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str digest), ("accepted", accepted),
+    ("complete", complete)]
 
-#guard auditReason (audited "ab" (.bool true)) "ab" == none
-#guard (auditReason (audited "ab" (.bool false)) "ab").isSome
-#guard (auditReason (audited "ab" .null) "ab").isSome
-#guard (auditReason (audited "ab" (.str "true")) "ab").isSome
-#guard (auditReason (audited "cd" (.bool true)) "ab").isSome
-#guard (auditReason (Json.mkObj [("registration_digest", Json.str "ab"), ("accepted", .bool true)]) "ab").isSome
+private def verdictOn (audit : Json) : Option Bool × Option Bool :=
+  let v := auditVerdict audit "ab"
+  (v.accepted, v.complete)
+
+#guard verdictOn (audited "ab" (.bool true)) == (some true, some true)
+#guard (auditVerdict (audited "ab" (.bool true)) "ab").why == none
+-- an accept that is not complete: a `complete` that is `false`, is not `true`, or is not there
+#guard verdictOn (audited "ab" (.bool true) (.bool false)) == (some true, some false)
+#guard (auditVerdict (audited "ab" (.bool true) (.bool false)) "ab").why == some NOT_COMPLETE
+#guard verdictOn (audited "ab" (.bool true) .null) == (some true, some false)
+#guard verdictOn (audited "ab" (.bool true) (.str "true")) == (some true, some false)
+#guard verdictOn (Json.mkObj [("format", Json.str FORMAT), ("registration_digest", Json.str "ab"),
+  ("accepted", .bool true)]) == (some true, some false)
+-- a record that did not accept, complete or not
+#guard verdictOn (audited "ab" (.bool false)) == (some false, some true)
+#guard (auditVerdict (audited "ab" (.bool false) (.bool false)) "ab").why == some NOT_ACCEPTED
+#guard verdictOn (audited "ab" .null) == (some false, some true)
+#guard verdictOn (audited "ab" (.str "true")) == (some false, some true)
+-- no audit record of this registration
+#guard verdictOn (audited "cd" (.bool true)) == (some false, none)
+#guard verdictOn (Json.mkObj [("registration_digest", Json.str "ab"), ("accepted", .bool true),
+  ("complete", .bool true)]) == (some false, none)
+#guard verdictOn .null == (none, none)
 
 private def reg (n : Nat) : Json :=
   Json.mkObj [("format", Json.str "verity/registration/v2"), ("population", Lean.toJson n)]
@@ -248,11 +307,15 @@ private def digestOf (r : Json) : String := (Flock.WindowRecord.digestHex r).toO
 #guard loggedAt #[reg 1, reg 2] (digestOf (reg 3)) == none
 #guard loggedAt #[] (digestOf (reg 1)) == none
 
-#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some true, none⟩ == 1
-#guard acrossCase ⟨some false, none⟩ ⟨some true, none⟩ ⟨some true, none⟩ == 2
-#guard acrossCase ⟨some true, none⟩ ⟨some false, none⟩ ⟨none, none⟩ == 2
-#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨none, none⟩ == 3
-#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some false, none⟩ == 3
+#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some true, some true, none⟩ == 1
+#guard acrossCase ⟨some false, none⟩ ⟨some true, none⟩ ⟨some true, some true, none⟩ == 2
+#guard acrossCase ⟨some true, none⟩ ⟨some false, none⟩ ⟨none, none, none⟩ == 2
+#guard acrossCase ⟨some false, none⟩ ⟨some true, none⟩ ⟨some true, some false, none⟩ == 2
+#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨none, none, none⟩ == 3
+#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some false, some true, none⟩ == 3
+#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some false, some false, none⟩ == 3
+#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some true, some false, none⟩ == 4
+#guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some true, none, none⟩ == 4
 
 private def reaches (boundary : String) (links : Array (String × String)) : Array Bool :=
   links.map fun l => (reached boundary links).contains l.1
@@ -273,9 +336,13 @@ private def reaches (boundary : String) (links : Array (String × String)) : Arr
 
 #guard acrossAllCase #[(1, true), (1, true)] == 1
 #guard acrossAllCase #[(1, true), (3, true)] == 3
+#guard acrossAllCase #[(1, true), (4, true)] == 4
+#guard acrossAllCase #[(4, true), (3, true)] == 3
+#guard acrossAllCase #[(4, true), (2, true)] == 2
 #guard acrossAllCase #[(3, true), (2, true)] == 2
 #guard acrossAllCase #[(1, true), (1, false)] == 2
 #guard acrossAllCase #[(3, false)] == 2
+#guard acrossAllCase #[(4, false)] == 2
 #guard acrossAllCase #[(1, true), (0, true)] == 2
 
 end Spot.Record
