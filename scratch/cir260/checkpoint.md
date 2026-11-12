@@ -9,3 +9,4 @@
 - 2026-11-12T20:52Z FP8WRITE: final. PR #9316 head f912fe226f, body updated; capture GO (0 rows differ of 12,512); suites 57 of 57 passed across three runs, repository whole in r20261112-203126-e313's suites.json; no lease, no timer held; returning.
 - 2026-11-12T21:58Z FP8WRITE: the ratchet's three noqa fixed at ffaacd91c9dd (gate failures []); repository at that head 352 passed (r20261112-210538-041f); verity-vllm running as r20261112-213631-ff0e; capture's second try set for the 03:00Z row.
 - 2026-11-12T22:56Z FP8WRITE: verity-vllm at ffaacd91c9dd 84% in r20261112-213631-ff0e; nothing else open before the 03:00Z row.
+- 2026-11-12T23:17Z FP8WRITE: verity-vllm at ffaacd91c9dd passed (r20261112-213631-ff0e); launcher, job script, PR body, gate output and the 03:00Z steps (second-try.md) pushed here.

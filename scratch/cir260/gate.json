@@ -1,0 +1,59 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "5f0c008aa0403ac275f5626828c534f93d987048",
+ "top": "ffaacd91c9dd0d6baf4494143fe5ec4ad2e40c44",
+ "changes": [
+  {
+   "name": "3498d4ad6546..ffaacd91c9dd",
+   "commit": "ffaacd91c9dd0d6baf4494143fe5ec4ad2e40c44",
+   "base": "3498d4ad6546bed9289878c1b4cf19f218d7478e",
+   "pr": null,
+   "verdict": "passed",
+   "why": "no direct environment read is new in the 5 Python file(s) it changes; no silent except handler is new in the 5 Python file(s) it changes; no lane-text site is new in the 7 file(s) it changes; no retired-term site is new in the 7 file(s) it changes",
+   "before": null,
+   "after": null,
+   "touched": [],
+   "lints": [],
+   "fix": [],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [],
+   "counted": {
+    "repo_env_reads": [
+     "verity/definitions/registry/boolean_dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/boolean_dsa_ds_mla.py",
+     "verity/definitions/registry/dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/dsa_ds_mla.py",
+     "verity/definitions/tests/test_dsa_ds_mla.py"
+    ],
+    "repo_silent_excepts": [
+     "verity/definitions/registry/boolean_dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/boolean_dsa_ds_mla.py",
+     "verity/definitions/registry/dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/dsa_ds_mla.py",
+     "verity/definitions/tests/test_dsa_ds_mla.py"
+    ],
+    "repo_lane_text": [
+     "adapters/vllm/tests/properties/glm53_ds_mla_write_capture_gpu.py",
+     "adapters/vllm/tests/properties/test_glm53_ds_mla_write_capture.py",
+     "verity/definitions/registry/boolean_dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/boolean_dsa_ds_mla.py",
+     "verity/definitions/registry/dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/dsa_ds_mla.py",
+     "verity/definitions/tests/test_dsa_ds_mla.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/properties/glm53_ds_mla_write_capture_gpu.py",
+     "adapters/vllm/tests/properties/test_glm53_ds_mla_write_capture.py",
+     "verity/definitions/registry/boolean_dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/boolean_dsa_ds_mla.py",
+     "verity/definitions/registry/dsa_ds_mla.circuit-check.py",
+     "verity/definitions/registry/dsa_ds_mla.py",
+     "verity/definitions/tests/test_dsa_ds_mla.py"
+    ]
+   }
+  }
+ ],
+ "failures": []
+}
