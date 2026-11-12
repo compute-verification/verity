@@ -44,12 +44,18 @@ from verity_vllm.pipeline.launch_context import rows_at
 __all__ = ["Options", "main"]
 
 
-def _first_step(tok: dict, request_id: str) -> int:
-    """The forward that ran a request's prefill, as the capture's `tokens.json` has it (`timing.requests[rid].first_step`); 0 for a
-    capture written without the block, a request the block does not list, and a step the engine did not report (null)."""
+def _first_steps(tok: dict) -> dict:
+    """What a capture's `tokens.json` says of each request's timing, by request id (`timing.requests`); empty for a capture written
+    without the block."""
     timing = tok.get("timing")
     listed = timing.get("requests") if timing else None
-    entry = listed.get(request_id) if listed else None
+    return listed if listed else {}
+
+
+def _first_step(listed: dict, request: dict) -> int:
+    """The forward that ran a request's prefill (`first_step` of its entry in `_first_steps`, by its `request_id`); 0 for a request
+    the block does not list, and for a step the engine did not report (null)."""
+    entry = listed.get(str(request["request_id"]))
     first = entry.get("first_step") if entry else None
     return int(first) if first else 0
 
@@ -58,7 +64,8 @@ def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
     """{engine step: (tokens, sampled rows)} of the schedule a capture's `tokens.json` realized: each request from the forward that ran
     its prefill (`_first_step`) for one forward per generated token, as `launch_context.rows_at` schedules a declared request (a
     chunked prefill is not modelled: its steps' rows differ and fail)."""
-    reqs = [{"arrive_step": _first_step(tok, str(q["request_id"])), "prompt_len": len(q["prompt_token_ids"]),
+    timing = _first_steps(tok)
+    reqs = [{"arrive_step": _first_step(timing, q), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
     last = max((q["arrive_step"] + max(1, q["max_tokens"]) for q in reqs), default=0)
     return {e: (sum(rows_at(q, e) for q in reqs), sum(1 for q in reqs if rows_at(q, e))) for e in range(last)}
