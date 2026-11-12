@@ -3,7 +3,6 @@
   "entries": [
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "thread_word_offset", "detail": "cls"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "rng", "symbol": "bootstrap_ci", "detail": "random.Random"},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "rng", "symbol": "compare", "detail": "random.Random"},
     {"file": "verity/definitions/numerics/twins.py", "kind": "rng", "symbol": "admit", "detail": "numpy.random.default_rng"}
   ]
 }

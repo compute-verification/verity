@@ -12,8 +12,6 @@ import contextlib
 import copy
 import json
 import os
-import sys
-import types
 from typing import Any
 
 import numpy as np
@@ -22,6 +20,7 @@ import torch
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import mla_check as MK
 
+from tests import fake_vllm
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
@@ -511,10 +510,7 @@ def test_the_absorb_weights_are_the_served_views() -> None:
 
 
 def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
-    envs = types.ModuleType("vllm.envs")
-    vars(envs).update(VLLM_BATCH_INVARIANT=batch_invariant)
-    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    fake_vllm.install(monkeypatch)["vllm.envs"].VLLM_BATCH_INVARIANT = batch_invariant
 
 
 def _inherit(monkeypatch) -> dict[str, str]:
@@ -572,11 +568,9 @@ def test_the_configuration_read_back_is_the_served_default_or_the_variant(monkey
 
 def test_the_process_groups_are_vllms_own_at_world_size_one(tmp_path, monkeypatch) -> None:
     seen = []
-    vd = types.ModuleType("vllm.distributed")
-    vars(vd).update(init_distributed_environment=lambda **kw: seen.append(kw),
-                    ensure_model_parallel_initialized=lambda tp, pp: seen.append((tp, pp)))
-    monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.distributed", vd)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.distributed:init_distributed_environment", lambda **kw: seen.append(kw))
+    fake.set("vllm.distributed:ensure_model_parallel_initialized", lambda tp, pp: seen.append((tp, pp)))
     X.distributed(tmp_path)
     assert seen == [{"world_size": 1, "rank": 0, "distributed_init_method": f"file://{tmp_path / 'dist_store'}", "local_rank": 0,
                      "backend": "gloo"}, (1, 1)]
@@ -720,11 +714,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     and vLLM's config module stubbed: the comparison jobs through the spawned worker pool, the decided fma, the per-case and
     per-model verdicts, `--models`, the sealed record and the exit status, so a slip in the orchestration shows here and not in the
     H200's hour."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     inherited = _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
@@ -791,11 +784,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
     """The scan's boundary Ms join the expected cases, each extended launch gets the scan's fitted split for its regime (None
     past the reduce regime), and the scan record is sealed into the document."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     _inherit(monkeypatch)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})

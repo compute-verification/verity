@@ -21,8 +21,8 @@ not observation) x the workload (requests, engine steps, TP ranks).  The Program
 same key and replaces `expected_population` when delivered (`coverage_check(pop, bmap)` takes any iterable of identities).
 
 Two separate verdicts: `coverage_check` = required-value coverage (every required Value has >= 1 binding; duplicates/aliases/extra
-bytes cannot hide a missing one) and `value_correspondence` (the opened bytes under an identity are the producer's bytes -- the late-read / relabel negatives;
-openings that verify against the root do NOT imply correspondence).
+bytes cannot hide a missing one), and value correspondence (the opened bytes under an identity are the producer's bytes), which is not
+graded here: a late read or a relabel passes coverage, and openings that verify against the root do NOT imply correspondence.
 """
 from __future__ import annotations
 
@@ -32,12 +32,18 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Iterator
 from typing import Any
 
-from verity_vllm.commit import challenge as CH, executed_prefix as _EPX, json_chunks as JC
+from verity_vllm.commit import challenge as CH
+from verity_vllm.commit import executed_prefix as _EPX
+from verity_vllm.commit import json_chunks as JC
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
-from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
-from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition
+from verity_vllm.query.manifest.format import (
+    PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE,  # noqa: F401  -- re-exported
+)
+from verity_vllm.query.manifest.format import (
+    promoted_observation as promoted_input_acquisition,
+)
 
 __all__ = ["HIDDEN_FAMILIES", "RULES_VERSION", "build_binding_map", "challenge_identities", "composition_check", "coverage_check",
            "expected_population", "identity_dict", "load_required_manifest", "logical_request", "map_context_check",
@@ -305,8 +311,10 @@ def expected_population(structure: dict[str, Any], workload: dict[str, Any]) -> 
     if structure.get("weights_registered"):
         for rank in ranks:
             yield identity(pd, "*", -1, 0, "weights", "registered", 0, 0, rank)      # the registered-input binding of the weights
+    request_steps = workload.get("request_steps")   # a workload that states none places every request at every step
+    moe_layers, moe_planes = structure.get("moe_layers"), structure.get("moe_planes")   # a structure without MoE layers names neither
     for rid in workload["requests"]:
-        rsteps = (workload.get("request_steps") or {}).get(rid, steps)
+        rsteps = request_steps.get(rid, steps) if request_steps else steps
         for step in rsteps:
             for rank in ranks:
                 for d in structure["modules"]:
@@ -316,8 +324,8 @@ def expected_population(structure: dict[str, Any], workload: dict[str, Any]) -> 
                 if structure.get("hidden"):
                     for L in structure["attention_layers"]:
                         yield identity(pd, rid, step, 0, f"{structure['hidden']}/L{L}", "*", 0, -1, rank)
-                for L in structure.get("moe_layers") or []:
-                    for plane in structure.get("moe_planes") or []:
+                for L in moe_layers if moe_layers else ():
+                    for plane in moe_planes if moe_planes else ():
                         yield identity(pd, rid, step, 0, f"moe/L{L}", plane, 0, -1, rank)
 
 
@@ -332,9 +340,12 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     (counted in header `programmed_not_executed_n`).  The manifest itself stays the Program's (cap shape); only the requirement is placed."""
     with open(path) as f:
         doc = json.loads(f.read())
-    rows = doc.get("entries") or doc.get("rows") or doc.get("identities") or []
+    rows = doc.get("entries") or doc.get("rows") or doc.get("identities")   # the rows, under the first of their spellings that holds any
+    if not rows:
+        rows = []                                                           # a manifest that carries no row is digested and loaded as empty
+    unmodelled = doc.get("unmodelled")
     hdr = {"path": path, "manifest_digest": doc.get("manifest_digest") or doc.get("digest"), "program_digest": doc.get("program_digest"),
-           "complete": doc.get("complete", True), "unmodelled": doc.get("unmodelled") or {},   # incomplete manifest -> fail closed (commit_delta)
+           "complete": doc.get("complete", True), "unmodelled": unmodelled if unmodelled else {},   # incomplete manifest -> fail closed (commit_delta)
            "rows_n": len(rows), "version": doc.get("version") or doc.get("schema"), "query": doc.get("query") or doc.get("vu_query")}
     # the manifest is an INPUT the consumer must not trust blindly: its `manifest_digest` is recomputed
     # over the rows it carries (a manifest edited after digesting is refused); a zero-width identity is refused, never
@@ -355,7 +366,8 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
         if er is None or len(er) != 2 or er[0] is None or (er[1] is not None and er[1] != -1 and int(er[1]) <= int(er[0])):
             raise ValueError(f"required manifest {path}: zero-width / malformed identity element_range {er} at step {ident.get('step')} "
                              f"{ident.get('op_path')}/{ident.get('output_member')} req {ident.get('request_id')}: refused")
-    df = ((doc.get("program") or {}).get("dataflow") or {}) if isinstance(doc.get("program"), dict) else {}
+    program = doc.get("program")
+    df = program.get("dataflow") if isinstance(program, dict) else None   # only a manifest that carries its Program's block can state one
     if df:                                                                    # P_compiled: the dataflow is in the digest
         hdr["dataflow_in_digest"] = True
         hdr["dataflow"] = {k: df.get(k) for k in ("n_edges", "n_launch_edges", "n_undefined", "wiring_declared", "split_graph")}
@@ -363,7 +375,8 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     all_steps = list(range(int(steps))) if steps is not None else []
     all_ranks = list(ranks or [0])
     # global (B>1) manifests name requests by the workload's own ids; `requests_declared[i].index` (else declaration order) -> r<i>
-    declared = {str(d.get("request_id")): f"r{int(d.get('index', i))}" for i, d in enumerate(doc.get("requests_declared") or []) if d.get("request_id") is not None}
+    requests_declared = doc.get("requests_declared")
+    declared = {str(d.get("request_id")): f"r{int(d.get('index', i))}" for i, d in enumerate(requests_declared if requests_declared else ()) if d.get("request_id") is not None}
     hdr["requests_declared_n"] = len(declared)
     hdr["global"] = bool(doc.get("global", False))
     # the declared per-engine-step composition (which requests, how many rows each) and the members the map's partition is
@@ -371,7 +384,8 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     # A B=1 `build` manifest writes engine_steps as the request's engine-step NUMBERS (ints: arrival + s, rc3 schema); only `build-global`
     # declares the dict composition.  The numbers are kept as `engine_step_numbers`, the composition is
     # declared only from dict entries (composition_check then skips, named) -- never subscript an int.
-    raw_es = list(doc.get("engine_steps") or [])
+    engine_steps = doc.get("engine_steps")
+    raw_es = list(engine_steps) if engine_steps else []
     if raw_es and all(isinstance(es, dict) for es in raw_es):
         hdr["engine_steps"] = [{"engine_step": int(es["engine_step"]), "rows": es.get("rows"), "n_seq": es.get("n_seq"),
                                 "members": [dict(m, request_id=declared.get(str(m["request_id"]), str(m["request_id"]))) for m in es["members"]]} for es in raw_es]
@@ -385,7 +399,8 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
         hdr["engine_steps"] = []
         hdr["engine_step_numbers"] = []
     rows_at = {es["engine_step"]: {str(m["request_id"]): int(m["rows"]) for m in es["members"]} for es in hdr["engine_steps"]}
-    hdr["composition_reference"] = doc.get("composition_reference") or {}
+    reference = doc.get("composition_reference")   # the members the map's partition is read from, which a global manifest names
+    hdr["composition_reference"] = reference if reference else {}
     hdr["addressing"] = doc.get("addressing", "global" if hdr["global"] else "request-local")
     hdr["program_digest_kind"] = doc.get("program_digest_kind")
 
@@ -487,7 +502,8 @@ def _launch_shortfalls(population: list[tuple], idx: dict[tuple, list[dict[str, 
             if tensors:
                 bound[ident] = tensors
         union = {t: v for tensors in bound.values() for t, v in tensors.items()}
-        rows = idents[0].launch.get("rows") or {}
+        declared = idents[0].launch.get("rows")   # {request: token rows} of the step's composition; a launch built without it declares none
+        rows = declared if declared else {}
         undeclared = sorted(ident[1] for ident in bound if ident[1] not in rows)
         why = (f"requests {undeclared[:3]} have no declared rows at engine step {st}" if undeclared else
                batch_launch_shortfall(idents[0].launch.get("geometry"), [int(rows[ident[1]]) for ident in bound], union.values()))
@@ -612,7 +628,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     {(request, rows)} over executed + padding must equal the declared cap composition; a request with BOTH an executed block and a
     padding entry at one step FAILS (double binding); a padding entry for a request the executed prefix of record places AT that step
     FAILS (padding inside the prefix); sampled-ids slots are checked over the executed member, the padding counted beside."""
-    steps = man_hdr.get("engine_steps") or []
+    steps = man_hdr.get("engine_steps")
     if not steps or not isinstance(steps[0], dict):
         # a B=1 (`build`) manifest's engine_steps are the request's engine-step NUMBERS (rc3 schema, ints); only `build-global` declares
         # the dict composition {engine_step, members, rows, n_seq}: the int list skips, never es["engine_step"]
@@ -622,8 +638,8 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     restricted = None
     if request_steps is not None and not padded:
         steps, restricted = _EPX.restrict_engine_steps(steps, request_steps)
-    ref = man_hdr.get("composition_reference") or {}
-    tok, samp = ref.get("input_token_ids"), ref.get("sampled_token_ids")
+    ref = man_hdr.get("composition_reference")   # a header whose manifest named no reference member has none to read the partition from
+    tok, samp = (ref.get("input_token_ids"), ref.get("sampled_token_ids")) if ref else (None, None)
     if not tok:
         return {"ok": False, "checked_steps": 0, "error": "global manifest names no input_token_ids reference member: composition unverifiable"}
     by_key: dict[tuple, list[dict[str, Any]]] = {}
@@ -688,7 +704,8 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
                 if past:
                     pad_problems.append(f"executed block past the stop for {past[:3]}")
         overlaps, cursor, gaps = [], 0, []
-        total = int((ents[0].get("encoding") or {}).get("shape", [0])[0] or 0) if ents else 0
+        encoding = ents[0].get("encoding") if ents else None   # the packed member's shape; an entry that states none gives no row count to tile
+        total = int(encoding.get("shape", [0])[0] or 0) if encoding else 0
         for lo, hi, rid, _w in blocks:
             if lo < cursor:
                 overlaps.append(f"{rid} rows [{lo},{hi}) overlaps the previous block ending at {cursor}")
@@ -773,27 +790,3 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         leaf = e["leaf_lo"] + pick(2000 + j, max(e["leaf_hi"] - e["leaf_lo"], 1))
         out.append((ident, e, leaf))
     return out
-
-
-# ---------------------------------------------------------------------- value correspondence (separate from coverage)
-
-def value_correspondence(openings: list, entries: list[dict[str, Any] | None], reference, *, chunk: int) -> dict[str, Any]:
-    """For each (opening, map entry): the opened chunk bytes must equal the PRODUCER's bytes for that identity.  `reference(entry)` returns
-    the bytes the producer wrote for that (step, name, invocation) -- the test's producer, or a replay -- or None (not checkable).
-    Openings can verify against the root and still fail here (late read after overwrite; relabelled occurrence)."""
-    bad = []
-    checked = 0
-    for o, e in zip(openings, entries, strict=True):
-        if e is None:
-            bad.append({"step": o.step, "index": o.index, "why": "no binding"})
-            continue
-        ref = reference(e)
-        if ref is None:
-            continue
-        checked += 1
-        start = o.index * chunk - e["stream_offset"]
-        want = ref[max(start, 0):max(start, 0) + len(o.value)] if start >= 0 else ref[:len(o.value) + start]
-        got = o.value[:len(want)] if start >= 0 else o.value[-start:]
-        if got[:len(want)] != want:
-            bad.append({"step": o.step, "index": o.index, "name": e["name"], "why": "opened bytes != producer bytes"})
-    return {"ok": not bad, "checked": checked, "bad_n": len(bad), "bad": bad[:8]}

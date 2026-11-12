@@ -7,26 +7,28 @@ what it holds.
 ## Interface
 
 - **Provides:** to code outside the integration, the modules `tests/test_vllm_public_api.py` lists as public:
-  engine specs (`spec`), a built engine's vLLM objects (`handle`), a stock engine and vLLM's own kernels at
-  the pin (`stock`, `stock_kernels`), a served request's seed (`served_seed`), the seams around a forward pass, a
-  step's end, the engine core and the all-reduce (`forward_pass`, `step_end`, `core_gate`,
-  `collectives.all_reduce`), a pinned op (`pin_op`), the step trace (`step_trace`), the sampler's capture
-  (`sampler_capture`), the carried pool's row (`pool_row`), the MoE alignment (`moe_align`) and the vLLM plugins
-  (`plugins`). To the integration's other packages also: the engine's profile and run facts (`engine_profile`,
-  `run_facts`), its served switches (`served`), a request's own id through the engine (`engine_driver`), the one
-  owner of runtime patches (`hooks`), the int8 kernels and the exact-int8 parts of every process that builds the
-  model (`int8_exact`, `int8_ops`, `int8_attention`, `int8_experts`, `int8_ranks`), sparse MLA at one split and the
-  top-p split at its registered count (`sparse_mla`, `topp_pin`), a served engine class's admission
-  (`class_admission`), the collectives' sites and the fused norm as one collective (`collectives.collective_sites`,
-  `collectives.fused_norm`), the static serving schedule (`static_schedule`), the two checkpoint makers' commands
-  (`fp8_checkpoint`, `int8_checkpoint`), and the facts of models, cards and transports (`profiles.cases`,
-  `profiles.coverage_roles`, `profiles.dense_generic`, `profiles.devices`, `profiles.engine_classes`,
-  `profiles.family_facts`, `profiles.transport`). Each of these lists in `__all__` the names that other packages
-  and the benchmarks import from it. Ten more modules that other packages, the benchmarks or the command line read
-  state no `__all__` yet: `arrivals`, `build`, `env`, `vllm_adapter`, `kernel_identity`, `meta_inventory`,
-  `int8_fused`, `int8_vllm`, `profiles.admission_calibration` and `profiles.layer_classes`; `served_seed`'s does
-  not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, and `step_trace`'s does not yet list `SERVED`,
-  `scheduler_config` and `scheduler_of`, which other packages read.
+  engine specs (`spec`), a built engine's vLLM objects (`handle`), a stock engine at the pin (`stock`), a served
+  request's seed (`served_seed`), the engine core's seam between steps (`core_gate`), the step trace
+  (`step_trace`), the sampler's capture (`sampler_capture`), the carried pool's row (`pool_row`) and the MoE
+  alignment (`moe_align`). To the integration's other packages also: the engine's profile and run facts
+  (`engine_profile`, `run_facts`), its served switches (`served`), a request's own id through the engine
+  (`engine_driver`), the one owner of runtime patches (`hooks`), the int8 kernels and the exact-int8 parts of every
+  process that builds the model (`int8_exact`, `int8_ops`, `int8_attention`, `int8_experts`, `int8_ranks`), sparse
+  MLA at one split and the top-p split at its registered count (`sparse_mla`, `topp_pin`), a served engine class's
+  admission (`class_admission`), the collectives' sites and the fused norm as one collective
+  (`collectives.collective_sites`, `collectives.fused_norm`), the static serving schedule (`static_schedule`), the
+  two checkpoint makers' commands (`fp8_checkpoint`, `int8_checkpoint`), a workload's load and its requests' run
+  through a built engine, at once or at declared steps (`vllm_adapter`, `arrivals`), the generated kernels'
+  identity (`kernel_identity`), a checkpoint's modules on the meta device and a serving rank's (`meta_inventory`),
+  and the facts of models, cards and transports (`profiles.cases`, `profiles.coverage_roles`,
+  `profiles.dense_generic`, `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`,
+  `profiles.transport`, `profiles.admission_calibration`). Each of these lists in `__all__` the names that other
+  packages, the benchmarks and the command line read from it. Six more modules that other packages or the
+  benchmarks read state no `__all__` yet: `build`, `env`, `runner_step` (the one wrap of the model runner's step,
+  and the parts that run around it), `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `served_seed`'s does
+  not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, nor `step_trace`'s `SERVED` and `scheduler_config`,
+  which other packages read; and `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
+  `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
   (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`

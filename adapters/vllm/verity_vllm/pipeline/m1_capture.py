@@ -32,6 +32,10 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from verity_vllm.protocols import Composition
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports)
 
@@ -49,6 +53,8 @@ prof.apply_env()
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
+__all__ = ["Options", "dump_cos_sin", "main"]
+
 
 def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
@@ -57,7 +63,8 @@ def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     import numpy as np
     import torch
 
-    from verity_vllm.acquire.plan import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
+    # the one by-name recognition of the two analytic-table buffers
+    from verity_vllm.acquire.plan import analytic_table_of_buffer
 
     buf = None
     for name, b in engine.model.named_buffers():
@@ -161,7 +168,7 @@ def adapter_revision(args: Options) -> str:
         return "unknown"
 
 
-def capture_protocols(wl: dict, args: Options, model: object) -> tuple[object | None, list[str]]:
+def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Composition | None, list[str]]:
     """The target's executors (PoUW) and their entries. Installed after the warm-up as in the Commit, they serve both arms, so the
     observed run executes what the Commit serves and records each executed call as its executor's own op (`protocol_options.at_capture`)."""
     from verity_vllm import protocols as PO
@@ -254,22 +261,22 @@ def main(args: Options) -> None:
         cap.install()
         print(f"[m1] observer installed: {len(cap.roots)} roots, profile_id={header.profile_id}, "
               f"reenter impls={header.notes.get('reenter_impls')}", flush=True)
-        acq_inst, acq_sink = None, None
-        if acq_docs.plan is not None:
+        plan = acq_docs.plan
+        if plan is not None:
             from verity_vllm.acquire.install import OccurrenceSink, install_from_plan
 
             acq_sink = OccurrenceSink()
-            acq_inst = install_from_plan(acq_docs.plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
+            acq_inst = install_from_plan(plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
             print(f"[m1] acquisition plan hooks installed beside the observer: {len(acq_inst.installed)} sites "
                   f"({len(acq_inst.deferred)} deferred to their sources: taps / registered inputs / prescribed)", flush=True)
         t0 = time.perf_counter()
         tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
         run_s = time.perf_counter() - t0
-        if acq_inst is not None:
+        if plan is not None:
             acq_inst.remove()                                  # before cap.close() restores the runner's sample(): the wraps unwind in order
             obs = acq_sink.to_json()
-            obs["plan_digest"] = acq_docs.plan.digest
-            obs["installed"] = [list(k) for k in acq_inst.keys()]
+            obs["plan_digest"] = plan.digest
+            obs["installed"] = list(map(list, acq_inst.keys()))
             (out / "acquisition_observed.json").write_text(json.dumps(obs, indent=1) + "\n")
             print(f"[m1] acquisition observed: {sum(s['occurrences'] for s in obs['sites'])} occurrences over {len(obs['sites'])} sites -> {out / 'acquisition_observed.json'}", flush=True)
         stats = cap.close()
@@ -296,7 +303,7 @@ def main(args: Options) -> None:
            "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
            "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_equal = True
-    per_req = (timing.get("requests") or {})
+    per_req = timing.get("requests")       # the run's timing by request, where the timing has any
     # the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
     # attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
     # unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
@@ -315,11 +322,12 @@ def main(args: Options) -> None:
         gen = tokens.get(rid, [])
         eq = (acc is not None and gen == acc[: len(gen)] and len(gen) == len(acc)) if acc is not None else None
         all_equal = all_equal and bool(eq)
-        steps_r = per_req.get(rid) or {}
+        timed = per_req.get(rid) if per_req else None
+        steps_r: dict = timed if timed else {}                # a request the timing has no record of has no realized step
         _served = len(gen)
         _cap = int(r["max_tokens"])
         _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap
-        _executed = (None if (_eos_stop and _lag is None) else (_served + _lag if _eos_stop else _served))
+        _executed = _served if not _eos_stop else (None if _lag is None else _served + _lag)
         doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
                                 "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
                                 # realized lengths and schedule (D87): every run artifact records them
