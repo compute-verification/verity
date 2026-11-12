@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import gc
 import gzip
 import hashlib
 import json
@@ -34,6 +35,7 @@ from tests.check.test_sampled_replay import _program
 from tests.pipeline import tp_toy
 from tests.pipeline.test_build_ir_record import _write
 from tests.pipeline.test_vu_export import _world
+from verity_vllm import gc_tuning
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.correspondence.runtime import NAMESPACE as CORRESPONDENCE
 from verity_vllm.pipeline import build as B
@@ -48,6 +50,18 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NO_SWEEP = dict.fromkeys(PC.DERIVE_INPUTS)
 SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sampling_seeds": [7, 8]}
+
+
+@pytest.fixture(autouse=True)
+def _the_collector_as_pytest_has_it(monkeypatch):
+    """`build`, `manifest` and `global-program` tune the collector of the process their `main` runs in, which here is pytest's:
+    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it."""
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    before = gc.get_threshold()
+    yield
+    after = gc.get_threshold()
+    gc.set_threshold(*before)
+    assert after == before, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
 @pytest.mark.parametrize("doc, want", [
@@ -481,7 +495,6 @@ def test_the_construction_manifest_of_a_result_that_states_no_tp_and_no_declarat
 @pytest.mark.parametrize("unstated", [{}, {"target": None, "artifact": None}, {"target": {}, "artifact": {}}])
 def test_the_build_command_s_summary_states_null_for_a_result_with_no_target_and_no_artifact(unstated, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(B, "run", lambda *args, **kw: {"ok": False, **unstated})
-    monkeypatch.setattr("verity_vllm.pipeline.gc_tuning.tune", lambda: None)
     assert B.main(B.Options(out=str(tmp_path / "out"))) == 1
     summary = json.loads(capsys.readouterr().out)
     assert summary["target"] == {"declared": None, "applied": None} and summary["artifact_identity"] is None
