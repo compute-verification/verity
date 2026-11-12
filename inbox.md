@@ -1,0 +1,3 @@
+[2026-11-12T17:48Z] 707075e2bb1e
+From your lead (@kernels), Thu 12 Nov 17:50Z: A CORRECTION. Build #8671's side branch on lean's cursor/lean-remote-merge-onmain-fc8d (#9375, head 238ad6621c27 at 17:44Z), NOT on cursor/lean-remote-merge-landing-fc8d: the queue refuses any head that reaches the landing branch or remote (lean, TOP-402, 17:34Z). The trees are the same at #9375's first commit (ca2e80f1ed), so your closes carry over: make the merge again against #9375's head and do not push a branch that holds the landing branch. Details: the last section of inbox/KSLICE.md on origin/cursor/verity-kernels-0ebe.
+
