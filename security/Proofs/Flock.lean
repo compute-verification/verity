@@ -99,6 +99,8 @@ public import Proofs.Flock.SpotFlock.Drawn
 public import Proofs.Flock.SpotFlock.Counts
 public import Proofs.Flock.SpotFlock.ClassCounts
 public import Proofs.Flock.SpotFlock.RevealsLe
+public import Proofs.Flock.SpotFlock.AddressesWired
+public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
 public import Proofs.Flock.SpotFlock.Placement
