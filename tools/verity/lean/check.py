@@ -295,10 +295,8 @@ def pinned(manifest: bytes | str | None) -> frozenset[str]:
 
 def pins(pkg: Path) -> frozenset[str]:
     """The `HEAVY_DEPS` ``pkg`` pins, by its manifest alone."""
-    try:
-        return pinned((pkg / "lake-manifest.json").read_bytes())
-    except OSError:
-        return frozenset()
+    m = pkg / "lake-manifest.json"
+    return pinned(m.read_bytes()) if m.is_file() else frozenset()
 
 
 def pins_heavy(pkg: Path) -> bool:
@@ -365,17 +363,18 @@ def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.envi
                    run: str | None = None) -> str | None:
     """Why a run taking ``steps`` (of `STEPS`) of ``pkgs``, every package it audits (those proving another's guarantees
     included), must not start with what it reserved (``have``, `reserved`'s), or None: it reserved less than the largest
-    floor among them (`reserve.floor`; `VERITY_LEAN_MEM_FLOOR_GIB` sets another, 0 none), or, inside a research run,
-    nothing. The reason names the command to run instead (``run``, with ``{gb}`` for the ask; by default this file's
-    audit of ``pkgs``) and, under it, the ask in GiB (`ask_lines`). `check.py` and the fast path (`lean_changed.py`)
-    refuse by it alike."""
+    floor among them (`reserve.floor`; `VERITY_LEAN_MEM_FLOOR_GIB` sets another, 0 none, and one that is no number
+    refuses), or, inside a research run, nothing. The reason names the command to run instead (``run``, with ``{gb}`` for
+    the ask; by default this file's audit of ``pkgs``) and, under it, the ask in GiB (`ask_lines`). `check.py` and the fast
+    path (`lean_changed.py`) refuse by it alike."""
     r = reserve()
     pins_of = {rel(p): pins(p) for p in pkgs}
     floor, step, pkg = r.largest(r.floor, pins_of, steps)
     try:
         floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", floor))
     except ValueError:
-        pass
+        return (f"VERITY_LEAN_MEM_FLOOR_GIB={env['VERITY_LEAN_MEM_FLOOR_GIB']!r} is no number of GiB: set it to one (0 for "
+                "none), or unset it for the floor of what this run audits")
     got, said = have
     if floor <= 0 or (got is not None and got >= floor):
         return None
@@ -457,7 +456,7 @@ def tree_bytes(pid: int, proc: Path = Path("/proc")) -> int:
                     total += int(v.split()[0]) * 1024
             for t in (proc / str(q) / "task").iterdir():
                 todo += [int(c) for c in (t / "children").read_text().split()]
-        except (OSError, ValueError):
+        except OSError:                                 # it ended since its parent's `children` named it: it holds nothing
             continue
     return total
 

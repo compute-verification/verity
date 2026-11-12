@@ -2677,6 +2677,7 @@ def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_
         "a build runs fewer jobs, down to one"
     assert A.memory_refusal([light], have(4), env={}) is None
     assert A.memory_refusal([heavy], have(16), env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
+    assert "is no number of GiB" in A.memory_refusal([light], have(500), env={"VERITY_LEAN_MEM_FLOOR_GIB": "lots"})
     why = A.memory_refusal([mathlib], (None, "research run r1 sets none of them"), env={}, steps=("build",))
     assert "this run reserved nothing (research run r1 sets none of them)" in why
     assert A.memory_refusal([light], (None, "research run r1 sets none of them"), env={}) is None

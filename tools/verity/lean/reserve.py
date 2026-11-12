@@ -83,13 +83,14 @@ def ask(pins_of: Mapping[str, Iterable[str]], steps: Iterable[str] = STEPS) -> t
 
 def reserved(env: Mapping[str, str], machine_gib: float) -> tuple[float | None, str]:
     """(the GiB a run reserved, what says so): the least of the `RESERVATIONS` set in ``env``, each converted to GiB, and
-    the machine's memory (``machine_gib``); None inside a research run (`IN_RUN`) that sets none of them."""
+    the machine's memory (``machine_gib``); None inside a research run (`IN_RUN`) that sets none of them, and wherever
+    one of them is no number."""
     got = []
     for name, unit in RESERVATIONS:
         try:
             v = float(env.get(name) or 0)
         except ValueError:
-            continue
+            return None, f"{name}={env[name]!r} is no number of {unit}"
         if v > 0:
             got.append((v if unit == "GiB" else gib(v), f"{name}={env[name]}, in {unit}"))
     if not got and env.get(IN_RUN):

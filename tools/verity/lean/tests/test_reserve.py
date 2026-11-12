@@ -81,13 +81,15 @@ def test_the_asks_floors_and_plan(tmp_path):
 
 def test_what_a_run_reserved_is_the_least_said_in_gib():
     """A check slot says its GiB and a `research run --mem-gb` run its GB; what a run reserved is the least of those and the
-    machine, and inside a research run that says none of them, nothing."""
+    machine, and inside a research run that says none of them, or anywhere one of them is no number, nothing."""
     assert R.reserved({}, 500.0) == (500.0, "this machine's memory and swap, within its cgroup")
     assert R.reserved({"CHECK_SLOT_MEM_GB": "64"}, 500.0)[0] == 64
     assert R.reserved({"RESEARCH_RUN_MEM_GB": "93"}, 500.0) == (R.gib(93), "RESEARCH_RUN_MEM_GB=93, in GB")
     assert R.reserved({"CHECK_RUN_MEM_GB": "258", "CHECK_SLOT_MEM_GB": "64", "RESEARCH_RUN_ID": "r"}, 500.0)[0] == 64
     assert R.reserved({"RESEARCH_RUN_MEM_GB": "93"}, 40.0)[0] == 40.0, "the machine's, where it holds less"
     assert R.reserved({"RESEARCH_RUN_ID": "r1", "CHECK_SLOT_MEM_GB": "x"}, 500.0)[0] is None
+    assert R.reserved({"CHECK_RUN_MEM_GB": "93GB", "CHECK_SLOT_MEM_GB": "64"}, 500.0) == \
+        (None, "CHECK_RUN_MEM_GB='93GB' is no number of GB"), "a reservation it can't read is none, never the machine"
     assert R.reserved({"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_MEM_GB": "258"}, 500.0)[0] == R.gib(258)
 
 
