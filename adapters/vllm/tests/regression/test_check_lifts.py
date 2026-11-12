@@ -7,6 +7,8 @@ the synthetic worlds of `tests.check.test_sampled_replay` it must lift to exactl
 from __future__ import annotations
 
 import copy
+import gzip
+import json
 
 import pytest
 
@@ -69,3 +71,23 @@ def test_a_changed_program_row_moves_a_count_by_name(world):
     d = resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, progs)))
     assert any(x.startswith("$.population.vus") for x in d), d
 
+
+def test_the_self_check_recomputes_the_partition_from_the_rows_own_programs(world, tmp_path, monkeypatch):
+    """`actual` with no candidate: the record's `programs` name each request's Build dir, read by its basename under the row's Programs."""
+    rep, _man = _record(world, per_stratum=2, seed=3)
+    row_dir = tmp_path / "rows" / "stand-in-row"
+    (row_dir / "commit").mkdir(parents=True)
+    (row_dir / "build_request").mkdir()
+    record = row_dir / "commit" / "sampled_replay_p0.json"
+    record.write_text(json.dumps(dict(rep, programs={rid: {"dir": "/pod/row/build_request"} for rid in world.prompts})))
+    with gzip.open(row_dir / "build_request" / "instances.json.gz", "wt") as f:
+        json.dump(world.inst, f)
+    (row_dir / "build_request" / "result.json").write_text("{}")
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
+    row = resolver.Row("stand-in-row", {"row": 900}, fixtures={})
+    exp, act = RP.expected(row), RP.actual(row)
+    assert act["source"].startswith("recomputed") and act["population"]["vus"] > 0 and resolver.diff(exp, act) == []
+    record.write_text(json.dumps(dict(rep, programs={rid: {"dir": "/pod/row/build_request_LP9_T9"} for rid in world.prompts})))
+    with pytest.raises(resolver.NotResolvable, match="build_request_LP9_T9/instances.json.gz not under"):
+        RP.actual(row)

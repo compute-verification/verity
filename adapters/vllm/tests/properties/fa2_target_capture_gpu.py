@@ -47,7 +47,8 @@ from typing import Any
 import numpy as np
 
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
+from verity_vllm.properties.fa_tap_exactness import PAGE
+from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-target-capture/v1"
@@ -77,7 +78,7 @@ def cpu_workers() -> int:
     """CPUs this container may use: the cgroup v2 quota when one is set (RunPod pods see the host's CPUs), else the affinity mask."""
     n = len(os.sched_getaffinity(0))
     try:
-        quota, period = open("/sys/fs/cgroup/cpu.max").read().split()
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         if quota != "max":
             n = min(n, max(1, int(quota) // int(period)))
     except (OSError, ValueError):

@@ -50,7 +50,7 @@ import os
 import re
 import subprocess
 import sys
-from collections import defaultdict, deque
+from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -273,15 +273,17 @@ class Graph:
 
     def why(self, roots: set[str], target: str) -> list[str] | None:
         """Shortest import path root -> ... -> target (BFS), or None."""
+        from collections import deque
         prev: dict[str, str | None] = {r: None for r in roots if self.exists(r)}
         q = deque(prev)
         while q:
             m = q.popleft()
             if m == target:
                 path = []
-                while m is not None:
-                    path.append(m)
-                    m = prev[m]
+                at: str | None = m
+                while at is not None:
+                    path.append(at)
+                    at = prev[at]
                 return path[::-1]
             for n in self.edges.get(m, ()):
                 if n not in prev:
@@ -482,10 +484,13 @@ NAMED_RE = re.compile(rf"^((?:{_TOPS}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Z
 def cli_commands(g: Graph) -> dict[str, str]:
     """`verity-vllm` command -> its module, from `cli.COMMANDS` as written (`{name: (module, help)}`), without importing it."""
     for node in ast.parse(path_of(g.file_of[CLI_MODULE]).read_text()).body:
-        target = node.target if isinstance(node, ast.AnnAssign) else node.targets[0] if isinstance(node, ast.Assign) else None
+        if not isinstance(node, (ast.AnnAssign, ast.Assign)):
+            continue
+        target = node.target if isinstance(node, ast.AnnAssign) else node.targets[0]
         if isinstance(target, ast.Name) and target.id == "COMMANDS" and isinstance(node.value, ast.Dict):
             return {k.value: v.elts[0].value for k, v in zip(node.value.keys, node.value.values)
-                    if isinstance(k, ast.Constant) and isinstance(v, ast.Tuple) and isinstance(v.elts[0], ast.Constant)}
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str) and isinstance(v, ast.Tuple)
+                    and isinstance(v.elts[0], ast.Constant) and isinstance(v.elts[0].value, str)}
     raise SystemExit(f"{g.file_of[CLI_MODULE]}: no `COMMANDS = {{name: (module, help)}}` literal to read the commands from")
 
 
@@ -692,7 +697,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     plan_totals: dict[str, dict] = defaultdict(lambda: {"files": 0, "loc": 0})
     for e in modules.values():
         if e.get("plan") == "delete":
-            for k in (e["package"], "all"):
+            for k in (str(e["package"]), "all"):
                 plan_totals[k]["files"] += 1
                 plan_totals[k]["loc"] += e["loc"]
     for rel in deleted_tests:

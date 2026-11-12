@@ -13,7 +13,9 @@ from pathlib import Path
 import pytest
 
 REGISTRY = "verity.definitions.registry"
-REGISTRY_DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
+_SPEC = importlib.util.find_spec(REGISTRY)
+assert _SPEC is not None and _SPEC.origin is not None
+REGISTRY_DIR = Path(_SPEC.origin).parent
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, `sampling.bit_at` (`UnpackF32_v1`),
@@ -30,7 +32,7 @@ MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properti
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
     """(line, module, names) of every import in the file, at any depth, relative ones resolved against the registry."""
-    out = []
+    out: list[tuple[int, str, tuple[str, ...]]] = []
     for n in ast.walk(ast.parse(path.read_text())):
         if isinstance(n, ast.Import):
             out += [(n.lineno, a.name, ()) for a in n.names]

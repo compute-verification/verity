@@ -27,6 +27,7 @@ GPU lease ends only when it exits.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import pickle
 import socket
@@ -37,6 +38,7 @@ from typing import Any
 
 from verity.protocols.spot.device import remote
 from verity.protocols.spot.device.challenger import LiveCommitment, LiveRecord
+from verity.protocols.spot.verifier.one_stage import partition as P
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -178,7 +180,6 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
 def _declare(served: SV.Served, run: PH.H1Run) -> None:
     """The resumed window's Program, declared again from the run's public shapes and the period's prefix: the saved state
     holds its digest, not the Program (whose Definitions don't pickle)."""
-    from verity.protocols.spot.verifier.one_stage import partition as P
     served.program = None
     if served.program_digest is not None:
         served.program = SV.declared(run.shapes_, run.modules, run.rows, run.steps, served.tile, served.blocks,
@@ -201,7 +202,9 @@ class Holder:
     (`take`), this process's to pass on and close."""
 
     def __init__(self, path: str | Path) -> None:
-        self.path, self.fd, self.error = Path(path), None, None
+        self.path = Path(path)
+        self.fd: int | None = None
+        self.error: str | None = None
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.bind(str(self.path))
         self._sock.listen(1)
@@ -226,10 +229,8 @@ class Holder:
 
     def take(self) -> int | None:
         """The stream's descriptor, once the sender has exited (or None, with ``error``, when none was handed over)."""
-        try:
+        with contextlib.suppress(OSError):
             self._sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
         self._sock.close()
         self._thread.join()
         return self.fd

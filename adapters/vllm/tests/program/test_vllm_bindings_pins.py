@@ -7,7 +7,13 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, _pins_ok, gemm_pins_for, lookup_key  # noqa: E402
+from verity_vllm.program.frontend.rules.vllm_bindings import (  # noqa: E402
+    GEMM_PINS,
+    RMS_PINS,
+    _pins_ok,
+    gemm_pins_for,
+    lookup_key,
+)
 
 
 def _gemm_meta(**over):
@@ -99,7 +105,10 @@ def test_x01_num_sms_is_the_one_target_profile_fact():
     `Gemm_v1{K,N}` Definition for the BI persistent matmul whatever that count is.  No second copy of the number: `GEMM_PINS["NUM_SMS"]`
     is `DEFAULT_TARGET.num_sms`."""
     from verity_vllm.program.frontend.rules.vllm_bindings import observe_target_profile
-    from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
+    from verity_vllm.program.frontend.target_profile import (
+        DEFAULT_TARGET,
+        TargetProfile,
+    )
     assert GEMM_PINS["NUM_SMS"] == DEFAULT_TARGET.num_sms
     try:
         for sms in (142, 108, 132, 188):

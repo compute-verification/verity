@@ -10,12 +10,16 @@ tp2_fold_match, cb_a) works unchanged in a fresh process.  The two protected bas
 as the κ pin record and the golden corpus's profiles; `derived_B0` is the base module's profile derived from config.json, behind the
 target's tuned GEMM (`tests/engine/test_profiles_generic.py` pins the agreement)."""
 
+import importlib
+import importlib.util
+import json
+import sys
+
 
 class _DerivedProfileFinder:
     """`sys.meta_path` hook: `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` / `dense_<ROLE>` -> `generic.make_module`."""
 
     def find_spec(self, fullname, path=None, target=None):
-        import importlib.util
         if not fullname.startswith(__name__ + "."):
             return None
         from verity_vllm.observe.fold.profiles import generic
@@ -32,7 +36,6 @@ class _DerivedProfileFinder:
 
 
 def _install_finder() -> None:
-    import sys
     if not any(isinstance(f, _DerivedProfileFinder) for f in sys.meta_path):
         sys.meta_path.append(_DerivedProfileFinder())
 
@@ -43,8 +46,6 @@ _install_finder()
 def profile_module_for_case(case: str, world: int = 1) -> str:
     """The profile MODULE name of a checkpoint role: `derived_<ROLE>[_tp<W>]` when the role's HF config.json is available and its
     `model_type` is in the family facts table; KeyError (with the reason) otherwise -- never a name looked up in a table."""
-    import json
-
     from verity_vllm.engine.profiles import dense_generic
     from verity_vllm.observe.fold.profiles import generic
     hit = dense_generic.find_hf_config(case)
@@ -59,6 +60,4 @@ def profile_module_for_case(case: str, world: int = 1) -> str:
 
 def profile_for_case(case: str, world: int = 1):
     """The `Profile` of a checkpoint role (torch-free import)."""
-    import importlib
-
     return importlib.import_module(f"verity_vllm.observe.fold.profiles.{profile_module_for_case(case, world)}").PROFILE

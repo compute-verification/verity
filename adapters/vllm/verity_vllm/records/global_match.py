@@ -28,9 +28,7 @@ INFO = frozenset({"comparator", "rules_version", "utc", "oracle_dir", "log", "gl
                   "alternate_verdict", "phases", "impl", "fold_form"})
 
 
-def _strs(v: Sequence[Any] | None, where: str, name: str) -> tuple[str, ...] | None:
-    if v is None:
-        return None
+def _strs(v: Sequence[Any], where: str, name: str) -> tuple[str, ...]:
     if not all(isinstance(x, str) for x in v):
         raise RecordError(where, name, "holds a value that is not a string")
     return tuple(v)
@@ -113,7 +111,8 @@ class GlobalMatch:
                    reasons=_strs(required(doc, "reasons", where, (list, tuple)), where, "reasons"),
                    checks=tuple(MatchCheck.of(c, where, f"checks[{i}]") for i, c in enumerate(objects(doc, "checks", where))),
                    requests=tuple(MatchRequest.of(r, where, f"requests[{i}]") for i, r in enumerate(objects(doc, "requests", where))),
-                   failed_checks=_strs(optional(doc, "failed_checks", where, (list, tuple)), where, "failed_checks"),
+                   failed_checks=(None if doc.get("failed_checks") is None else
+                                  _strs(required(doc, "failed_checks", where, (list, tuple)), where, "failed_checks")),
                    lag=optional(doc, "lag", where, Mapping),
                    info={k: doc[k] for k in INFO if k in doc})
 

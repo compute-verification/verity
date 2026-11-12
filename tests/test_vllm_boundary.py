@@ -43,8 +43,7 @@ ALLOWED = {
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
                     "compute-accounting: Pearl-C served through verity_vllm.LLM, with vLLM's SamplingParams and a stock "
                     "vllm.LLM beside it"),
-    **dict.fromkeys(("benchmarks/kv_filler/serve.py", "benchmarks/kv_filler/step_profile.py"),
-                    "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up, and its decode step profiled"),
+    "benchmarks/kv_filler/serve.py": "memory-accounting: a stock vllm.LLM serving under the KV filler's top-up",
     "benchmarks/pous/p2_v1/scale.py": "memory-accounting: P2's store held beside a stock vllm.LLM serving",
     **dict.fromkeys(("benchmarks/remote_session/engine.py", "benchmarks/remote_session/serve.py"),
                     "memory-accounting: an in-process LLMEngine under the remote bandwidth audit's binder"),
@@ -60,8 +59,6 @@ ALLOWED = {
                      "benchmarks/pouw/pearl_c_sm90/grouped_check.py"),
                     "compute-accounting: the FP8 GEMMs vLLM serves with (cutlass_scaled_mm, DeepGEMM, fp8_utils) as "
                     "Pearl-C's baselines"),
-    "benchmarks/pouw/gemm_rate/attn_rate.py": "compute-accounting: vLLM's flash-attention build, the served prefill attention "
-                                              "whose MAC rate is measured",
     # served arms that replace a layer's kernels inside a stock engine
     **dict.fromkeys(("benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py",
