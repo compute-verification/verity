@@ -1,6 +1,6 @@
 # The served (prefill) edited GEMM: egemm.cu and its profile/probe scripts run on a GPU node through research run; the
-# depth-R fold check (egemm_depthr_check.py) runs here as a suite (`uv run tools/verity/check/suites.py
-# benchmarks/pouw/edited_gemm`). Not a package.
+# depth-R fold check (egemm_depthr_check.py) and the tests of the CPU judges and summaries run here as a suite (`uv run
+# tools/verity/check/suites.py benchmarks/pouw/edited_gemm`). Not a package.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
@@ -9,5 +9,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # egemm_depthr_check.py uses exact_kit's check registry and rotl/wrap helpers; numpy is in the workspace environment. The
 # check inlines the XOR-in(13,19) fold (receipt_folds_r9.xorin_step). d2sgemm_ref.py's tests read floored_gemm's
-# derive.py (tile_receipts) and the ref.py it imports.
-inputs = ["benchmarks/pouw/exact_kit", "benchmarks/pouw/floored_gemm/derive.py", "benchmarks/pouw/floored_gemm/ref.py"]
+# derive.py (tile_receipts) and the ref.py it imports. test_egemm_ref.py holds egemm_ref.py to the receipt folds'
+# reference: `verity.protocols.pouw.receipts.receipt_conform`'s check, with the receipt_folds.py and vectors.json it
+# reads and the packages above it, which import nothing.
+inputs = ["benchmarks/pouw/exact_kit", "benchmarks/pouw/floored_gemm/derive.py", "benchmarks/pouw/floored_gemm/ref.py",
+          "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py",
+          "verity/protocols/pouw/receipts/__init__.py", "verity/protocols/pouw/receipts/receipt_conform.py",
+          "verity/protocols/pouw/receipts/receipt_folds.py", "verity/protocols/pouw/receipts/vectors.json"]
