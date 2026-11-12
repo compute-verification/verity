@@ -132,6 +132,15 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str) -> t
     return p.returncode, summary, out, f"{p.stdout[-6000:]}\n{p.stderr[-6000:]}"
 
 
+def _kept_verifier(out: Path) -> list[tuple[int, bool]]:
+    """The members the audit's kept verifier (`a0.VerifyMembers`) answered, in its order: each ``MEMBER`` line of its
+    log, as the member's place and whether `verify` exited 0 on it. A member verified by a process of its own has no
+    line there."""
+    log = (out / "window" / "lean-verify" / "verify-members.log").read_text()
+    ends = [json.loads(x[7:]) for x in log.splitlines() if x.startswith("MEMBER ")]
+    return [(e["index"], e["exit"] == 0) for e in ends]
+
+
 def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
@@ -156,6 +165,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     for k in range(len(TEMPLATES)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         assert json.loads(session.read_text())["verdict"]["accepted"] is True
+    assert _kept_verifier(out) == [(0, True), (1, True)]
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
     # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
@@ -181,3 +191,5 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         record = json.loads(session.read_text())
         assert (record["verdict"]["accepted"], bool(record["proof_sha512"])) == (proofs, proofs), session
+    # the one kept verifier answered both members, and went on to refuse the changed one after accepting the other
+    assert _kept_verifier(out) == [(0, True), (1, False)]
