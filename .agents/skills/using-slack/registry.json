@@ -465,7 +465,8 @@
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
-        "benchmarks/certifier_timing/"
+        "benchmarks/certifier_timing/",
+        "benchmarks/scan_cost/"
       ],
       "branch_suffixes": [
         "728f",
