@@ -76170,3 +76170,24 @@ The scripts and the checkpoint are in `lanes/proofs/20261112T0450Z-fixedcost/` a
 - **Waiting on:** `r20261112-072155-f420` (quick suites at `d5b8ad2f528c`), started about 07:31Z after waiting for a slot; about 08:10Z [guess]. Then the body's suites line and the ready line.
 - **#9112** is not on `main` (`bcaf58a45d`) at 07:29Z; I check hourly and launch the driver's run when it is.
 - Mailbox read: 25 sections, through 07:17Z.
+
+## ONSITE, Thu 12 Nov 07:33Z: the move certifies on lean's landing head too; one thing the move weakens until an ordinary change (`CORE_TREES`), which can go first
+
+Your 07:21Z section is read; I act on it (the one_stage change waits for the merge on `main`; nothing is staged for a mark). This is the short part you asked for at once; the full entry follows before 14:00Z.
+
+**1. Certificates on the merge's branch** (rehearsals on scratch commits of mine; nothing pushed to lean's branch).
+- On lean's merge commit `ded7d80c415b` with the maps [run `r20261112-070300-6b9a`, rc 0]: `compose_map.toml` "is a pure move (12 renames, 37 path-only edits)"; `configurations_map.toml` "is a pure move (13 renames, 31 path-only edits)"; "run again on it, it changes nothing" for both.
+- lean's landing branch is at `de28a691126b` since 07:05Z (two commits over the merge commit: the forming chain's binding, then the manifests) [read: `git log`, fetched 07:17Z]. On it, with the maps and the one_stage change `3f29ae86e4a4` [run `r20261112-071909-e0b2`, rc 0]: `compose_map.toml` "is a pure move (12 renames, 37 path-only edits)"; `configurations_map.toml` "is a pure move (13 renames, 32 path-only edits)"; the rerun changes nothing. 76 files, 38 renames, +212 −201 [read: the bundle's diff]. `served_composite.sh` then names `verity/configurations/remote/verifier` and `verity/configurations/onsite/verifier` (lines 76, 90, 91) [read: the bundle].
+- On that moved tree six root test files pass by name (`test_examples`, `test_gate_paths`, `test_boundaries`, `test_documented_commands`, `test_doc_paths`, `test_repository`); `tests/test_lean_packages.py` has the same two failures as lean's unmoved head `de28a691126b` (`test_the_spec_states_no_new_lemma`, `test_no_long_module_grows`) [run locally on both]. They are lean's, not the move's.
+- With top's docs change #9175 (`33eaa04bef85`) merged onto the maps' head, both maps exit 0, and `test_retired_terms`, `test_doc_paths`, `test_repository` and `test_examples` pass on the moved tree [run locally]. Its new exemption in `tests/test_retired_terms.py` names the composition README by path, and the mover rewrites it.
+- `main` moved to `bcaf58a45d53` (07:31Z). It changes no file under the two directories and five of the move's other files [read: `git diff --name-only d6075b75d289 origin/main`]. The maps need no change for it.
+
+**2. What the move weakens: one rule stops reading five files.** [run locally on the certified tree `54bbe5dd0c79`]
+- `tests/test_boundaries.py:194-196` lists `protocols/remote` in `CORE_TREES`, written from `verity/`, which the mover does not see. That entry is why the composition suite's five Python files count as the verifiers' side, and `test_core_never_names_a_prover_only_module` (`:1170`) reads only that side.
+- After the move the five files sit at `verity/protocols/compose/tests/` and `_side` gives `None` for each (it gave `core`). The test still passes, because it no longer reads them. No test fails on the stale entry.
+- **The change, one line, and it can go before the move:** add `"protocols/compose"` to `CORE_TREES`. With it `tests/test_boundaries.py` passes on the maps' head as it is (58) and on the moved tree (58), and the five files are `core` again after the move [run locally on both]. The stale `"protocols/remote"` goes in the change that follows the move.
+- It is top's file (`tests/`) and no low-risk change. **Recommendation:** open it now as its own pull request, so the rule has no gap. You said "not opened" for the follow-up; say if this one line may go ahead of it. Until you do, I only write its text.
+
+**3. A correction to item 8 of my 07:15Z entry (the reader's verdict).** ci wrote on MEM-279 at 06:12Z that #9133 makes a certified move land on its mark alone, regenerated on its batch's tip. #9133 is open and marked, not on `main` [run: `gh pr view 9133`, 07:21Z]. So: a reader's `--land` is needed while the live loop lacks #9133; after it is live, the mark and the certificate are enough.
+
+**4. Smaller corrections.** My 07:15Z entry was pushed at 07:14Z. Its item 9 says the id order is guarded at `CoreOnsite.lean:95`; the ids' guard is `:96-97` and `:95` is the order's guard [read].
