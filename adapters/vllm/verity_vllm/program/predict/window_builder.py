@@ -145,7 +145,7 @@ class _Builder:
     reads: list[IF.Read] = field(default_factory=list)
     tables: dict[tuple[int, int, int], IF.Table] = field(default_factory=dict)
     roots: list[IF.TableRead] = field(default_factory=list)
-    openings: list[IF.Opening] = field(default_factory=list)
+    openings: list[IF.TableOpening] = field(default_factory=list)
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
@@ -212,14 +212,15 @@ class _Builder:
             param, base = self.weight(base, base + words + sum((r - 1) * s for r, s in zip(radix, step)), words)
         self.reads.append(IF.Read(tid, port, param, at=at, radix=tuple(radix), base=base, step=tuple(step)))
 
-    def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int) -> None:
-        """Unit ``at`` of ``tid`` reads ``port`` as row ``row`` of the registered parameter ``param``, ``rows`` rows of the
-        port's width (a per-window value, not the weights record); an output row ``port`` is held to that row (`IF.Read`)."""
+    def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int, count: int = 1) -> None:
+        """Units ``at`` to ``at + count - 1`` of ``tid`` read ``port`` as rows ``row`` to ``row + count - 1`` of the registered
+        parameter ``param``, ``rows`` rows of the port's width (a per-window value, not the weights record); an output row
+        ``port`` is held to its row (`IF.Read`)."""
         lay = IF.layout(self.fns[tid])
         words = dict(lay.rows + lay.outs)[port]
         if self.params.setdefault(param, rows * words) != rows * words:
             raise Unexpressible(f"{param}: read as {rows} rows of {words} words and as {self.params[param]} leaves")
-        self.reads.append(IF.Read(tid, port, param, at=at, radix=(1,), base=row * words, step=(0,)))
+        self.reads.append(IF.Read(tid, port, param, at=at, radix=(count,), base=row * words, step=(words if count > 1 else 0,)))
 
     def table(self, lo: int, words: int, rows: int) -> IF.Table:
         """The registered table of ``rows`` rows of ``words`` from word ``lo`` of the weights record (an embedding's), one a
@@ -279,12 +280,12 @@ class _Builder:
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 
-    def merged(self) -> tuple[list[IF.TableRead], list[IF.Opening]]:
+    def merged(self) -> tuple[list[IF.TableRead], list[IF.TableOpening]]:
         """The table reads and the openings, each run of like ones at consecutive units one."""
         return (_merge(self.roots, lambda x: (x.reader, x.port, x.table, x.of),
                        lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n)),
                 _merge(self.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict),
-                       lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
+                       lambda x, n: IF.TableOpening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n)))
 
 
 def _rows(fn: Any, cuts: dict[str, int] | None) -> int:

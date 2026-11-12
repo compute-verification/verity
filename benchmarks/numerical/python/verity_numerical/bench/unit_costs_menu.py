@@ -276,7 +276,7 @@ def inner_algebra(entries: Sequence[dict[str, Any]], blocks: Mapping[int, tuple[
             continue
         products, why = algebra(e["inner_m"], e["k_log"], e["claims"])
         rows = REPS * products * ROWS_PER_PRODUCT
-        k = max(22, math.ceil(math.log2(rows + 1)) + 2)
+        k = max(U.PACK_LOG, math.ceil(math.log2(rows + 1)) + 2)
         if k not in blocks:
             raise ValueError(f"the outer input has no one-block statement at k_log {k} to price {rows:.3g} rows by")
         s, gib = blocks[k]

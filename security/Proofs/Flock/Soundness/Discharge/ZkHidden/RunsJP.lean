@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
 
 @[expose] public section
 

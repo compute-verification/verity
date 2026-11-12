@@ -119,7 +119,8 @@ untraced = [
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
 inputs_only = true
-inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_config", "fixtures/artifacts.json", "demos/vllm/workloads/SHA256SUMS", ".gitignore",
+inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_config", "fixtures/artifacts.json",
+          "demos/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",

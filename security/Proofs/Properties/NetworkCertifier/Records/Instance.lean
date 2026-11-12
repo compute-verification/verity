@@ -67,7 +67,7 @@ they are taken as given.
 @[expose] public section
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Link Evidence)
+open NetworkCheck.Check (Params LinkOpening Evidence)
 open NetworkCertifier (ClockSync)
 open Properties.NetworkCertifier (ParamsDigests Declares programGrid)
 open Properties.NetworkCertifier.CheckProofs (declares_unique declares_declared)
@@ -88,7 +88,7 @@ def p₀ : Params where
   key := .empty
   session := ⟨Array.replicate 32 0⟩
 
-def link₀ : Link := ⟨[], #[sync₀]⟩
+def link₀ : LinkOpening := ⟨[], #[sync₀]⟩
 
 def ev₀ : Evidence := ⟨#[link₀]⟩
 

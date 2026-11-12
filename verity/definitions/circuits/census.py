@@ -112,7 +112,7 @@ from typing import Any, Callable, Iterable, Iterator
 from verity.circuits import boolean as BL
 from verity.circuits import ports
 from verity.circuits.codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from verity.circuits.defs import CompositeDefinition, Node, PrimitiveDefinition, bind
+from verity.circuits.defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind
 from verity.circuits.intervals import Intervals, contains, full, norm, ref_intervals, total
 from verity.circuits.layout import resolve
 from verity.circuits.liveness import _MEMBER_LIMIT
@@ -474,7 +474,7 @@ class _Aliases:
         return runs
 
     def resolved(self, k: int) -> tuple[list[int], list[tuple[int, int, Refs, bool]]]:
-        """Node `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
+        """BodyNode `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
         resolve to and whether that is the body's parameters (`resolve`'s pieces at their leaves), by `lo`, and their `lo`s."""
         todo = [k]
         while todo:  # a node's sources are earlier nodes: resolve them first, without recursing down a chain
@@ -610,7 +610,7 @@ class _Analysis:
         self._reads[id(fn)] = (fn, r)
         return r
 
-    def node(self, node: Node, m: _Marks) -> None:
+    def node(self, node: BodyNode, m: _Marks) -> None:
         r = self.reads(node.fn)
         n = node.n if node.form in ("batch", "scan") else 1
         m.select_gates += n * r.select_gates
@@ -697,7 +697,7 @@ class NoBooleanWork(ValueError):
 Work = dict[str, tuple[int, int]]
 
 
-class _Work:
+class BooleanWork:
     """Each Definition's Boolean work per instance, by `id(fn)`: its two-input gates and ANDs by facet, or the id of the first
     primitive it reaches that is not a Boolean gate, a constant bit or an input."""
 
@@ -775,7 +775,7 @@ def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
     """Each of ``fns``' two-input Boolean gates per instance, over every facet, as `census` with ``boolean`` counts a class's
     work, in order; for one that isn't counted, the id of the first primitive it reaches that is no Boolean gate, constant
     bit or input. A Definition shared by several is counted once."""
-    w = _Work()
+    w = BooleanWork()
     out: list[int | str] = []
     for fn in fns:
         got = w.of(fn)
@@ -786,7 +786,7 @@ def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
 def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
     """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
     refused (`NoBooleanWork`) for every root Call it cannot count."""
-    W = _Work()
+    W = BooleanWork()
     per: dict[str, Work] = {}
     for fn in post:
         if id(fn) in ids and not isinstance(got := W.of(fn), str):
@@ -1192,5 +1192,5 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "BooleanWork",
+           "NoBooleanWork", "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]

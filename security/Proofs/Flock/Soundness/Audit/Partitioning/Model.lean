@@ -14,6 +14,8 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
   number of units it samples;
 * `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of
   work;
+* `servedCost F C f o δ w β h s`, the leading cost of cutting work `F` into units of work `s` when serving commits every
+  unit: proving's `c(s) · (F/C) · Λ` plus the commitment's `w · (F/s) · β · h`;
 * the targets, `MeetsTarget` (free compute) and `CertifiesLeak` (exfiltration) with its location term `locBits`, in
   `Definitions.Flock.Audit.Partitioning`;
 * `detectionRisk N k p m = −ln(1 − p + p · C(N − m, k) / C(N, k))`, the detection risk of a replay unit holding `m` wrong
@@ -41,6 +43,12 @@ noncomputable def meanDraws (L : Law n) : ℝ := ∑ u, (L.incl u).toReal
 
 /-- The simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of work `s`. -/
 def unitCost (f o s : ℝ) : ℝ := f + o * s
+
+/-- The leading served cost of cutting work `F` into units of work `s`: proving, `c(s) · (F/C) · Λ` with `Λ = ln(1/δ)`,
+plus serving's commitment of every one of the `F/s` units, sampled or not, `β` bytes each at `h` a byte, weighted `w`
+against proving. -/
+noncomputable def servedCost (F C f o δ w β h s : ℝ) : ℝ :=
+  unitCost f o s * (F / C * Real.log δ⁻¹) + w * (F / s * β * h)
 
 /-- **The detection risk** of a replay unit holding `m` wrong proof blocks out of `N`: the verifier samples the replay unit
 with probability `p`, then `k` of its proof blocks uniformly, and the replay unit escapes with probability

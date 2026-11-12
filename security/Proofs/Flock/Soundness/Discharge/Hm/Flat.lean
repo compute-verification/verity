@@ -9,7 +9,6 @@ read the pin and the unit range's forced-zero row (`Aliased.zeroPos_block`).
 -/
 module
 
-public import Proofs.Flock.Soundness.Discharge.Aliased
 public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
 public import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Mathlib.Tactic.ENatToNat
@@ -30,6 +29,8 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.SparseRows
+public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+public import Proofs.Flock.Soundness.Discharge.Aliased
 
 @[expose] public section
 

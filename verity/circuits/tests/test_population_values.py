@@ -11,7 +11,7 @@ import pytest
 from verity.circuits import partition_object as PO
 from verity.circuits import ports as P
 from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.population import leaf_type, mixed_population_program
 from verity.circuits.refs import runs as ref_runs
 from verity.circuits.types import Array, Value
@@ -88,7 +88,7 @@ def test_a_value_of_a_leaf_type_is_an_array_of_it_and_decodes_to_itself():
     assert program_digest(mixed_population_program(MEMBERS, values=(("hist", 2, [8, 64, 1]), *VALUES))) == \
         program_digest(prog)
     assert leaf_type(16) == Value(16) and leaf_type((4, 16)) == Array(4, Value(16))
-    registry = Registry()
+    registry = DefinitionTable()
     for prim in (TAdd, TKeyFold):
         registry.add(prim)
     decoded = decode_program(json.loads(json.dumps(encode_program(prog))), registry)
@@ -116,7 +116,7 @@ def test_a_value_that_is_no_new_name_of_a_leaf_and_a_bit_or_of_a_v0_population_i
 
 def test_a_population_with_values_decodes_to_itself():
     prog = mixed_population_program(MEMBERS, values=VALUES)
-    registry = Registry()
+    registry = DefinitionTable()
     for prim in (TAdd, TKeyFold):
         registry.add(prim)
     decoded = decode_program(json.loads(json.dumps(encode_program(prog))), registry)
