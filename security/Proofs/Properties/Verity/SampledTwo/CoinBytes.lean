@@ -135,9 +135,9 @@ theorem stagesOfBytes : StagesOfBytes := by
 /-- **The first stage's coins are the device's**, with no premise on the coins' bytes. -/
 theorem coinsAgree_first_of (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop)
-    (hShow : FirstShown C Good) (hDev : DevFirst C dev) (hRead : SourceRead C) :
+    (hShow : FirstShown C Good) (hDev : DevFirst C dev) :
     CoinsAgree A (formReading A C S dev) (FormAccepts C) Good .first :=
-  coinsAgree_first A C S dev Good hShow hDev hRead coinsOfBytes
+  coinsAgree_first A C S dev Good hShow hDev coinsOfBytes
 
 /-- **The second stage's coins are the device's**, with no premise on the coins' bytes. -/
 theorem coinsAgree_second_of (A : Live₂) (C : CaseOf) (S : SessionReading)

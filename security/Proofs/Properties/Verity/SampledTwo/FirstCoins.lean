@@ -19,19 +19,19 @@ coin) agrees, on the bytes the first stage read, with every coin the device's re
 (`Rd.coin o i = Rd.dev o.log i`). At round 0 it can't: the first stage reads a prefix of the challenger's coin (ten
 bytes, say), the reading pads that prefix with zeros, and the device released the whole coin, whose bytes past the
 prefix are not zeros. What the projection uses is weaker (its `AcceptsRun` premise): the reading's coin agrees with
-the chosen coin wherever the device's release does. `CoinsAgree` says that; `CoinsRead` implies it
+the chosen coin wherever the device's release does. The projection's `CoinsAgree` says that; `CoinsRead` implies it
 (`coinsAgree_of_coinsRead`), and with the coin map's second law it gives `AcceptsRun`'s coin premise.
 
 **What it rests on**, each a named `Prop` taken as a hypothesis:
 * `FirstShown`: the play's log shows, after the first stage's digest in the first draw's family, the bytes the first
   stage read. It is the meeting of the run's coin check (`Run.coinsHold`) with the cut's `LogIsDevice`.
 * `DevFirst`: the coin map's reading of round 0 starts with those bytes (the coin map's to prove).
-* `SourceRead`: the first stage's bytes are no longer than what it read. The run checks only the bytes it read
-  (`i.source.extract 0 read`); the form refuses nothing past them today.
 * `CoinsOfBytes`: every byte string of at most one coin's bytes is a coin's bytes followed by zeros.
 
-What the run itself establishes, at either value of the form's switch, is proved here (`run_firstRead`): an accepted
-run's first stage read `read` of its bytes under `Select.select` and its coins hold on them.
+What the run and the form establish, at either value of the form's switch, is proved here: an accepted run's first
+stage read `read` of its bytes under `Select.select`, its coins hold on them, and it answers that `read`
+(`run_read`); the form refuses where the evidence's first-stage bytes run past it, so on an accepted play the first
+stage's bytes are all read (`sourceRead_holds`).
 
 **Not established here.** The run's coin check takes the coin family from the evidence's segment (`firstDraw`), not
 from the parameters, and checks a signature over the coins without binding it to the current monitoring period: a
@@ -46,14 +46,7 @@ namespace Verity.SampledTwo
 open Claims
 open Lean (Json)
 
-/-! ## The statement -/
-
-/-- **The coins the check reads at group `g` agree with the device's releases**: on a play the check accepts whose log
-is the device's, wherever the reading reads a coin `c` of group `g`, `c` agrees with every coin `c'` the device's release
-for that round agrees with. -/
-def CoinsAgree (A : Live₂) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (g : Group) : Prop :=
-  ∀ o : Verity.Exchange, Acc o → Good o → ∀ i, Rd.reads i → groupOf A i = g → ∀ c, Rd.coin o i = some c →
-    ∀ c', (∀ d, Rd.dev o.log i = some d → Rd.agree o i d c') → Rd.agree o i c c'
+/-! ## The statement (`CoinsAgree`, the projection's) -/
 
 /-- **Equal coins agree**: `CoinsRead` gives `CoinsAgree`. -/
 theorem coinsAgree_of_coinsRead {A : Live₂} {Rd : Reading A} {Acc Good : Verity.Exchange → Prop} {g : Group}
@@ -148,10 +141,11 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
         .ok (draw, rest, read) ∧
       ¬(!Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read)) = true ∧
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
-        (staged : List (String × Json)) (rest' : List (String × Json)),
+        (staged : List (String × Json)) (receipt symbol shown audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
         Spot.Run.interiorAudit form i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
-        j = Json.mkObj (rest' ++ staged) := by
+        j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read), ("symbol", symbol),
+          ("public", shown), ("audit", audit)] ++ staged) := by
   unfold Spot.Run.run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
@@ -161,24 +155,72 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
     | exact Or.inr ⟨_, _, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
-        _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm⟩
+        _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm⟩
+
+/-- **The interior audit stages at most its `interior` entry.** -/
+private theorem interiorAudit_staged {form : Bool} {i : Spot.Run.Input} {s : Array ℕ}
+    {inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)} {acc : Bool} {staged : List (String × Json)}
+    (h : Spot.Run.interiorAudit form i s inner = .ok (acc, staged)) :
+    staged = [] ∨ ∃ x, staged = [("interior", x)] := by
+  unfold Spot.Run.interiorAudit at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' (first | split at h | focus (cases h; done))
+  all_goals first
+    | (cases h; exact Or.inl rfl)
+    | (cases h; exact Or.inr ⟨_, rfl⟩)
+
+private theorem nat?_toJson (n : ℕ) : Spot.nat? (Lean.toJson n) = some n := by
+  simp [Spot.nat?, Spot.int?, Lean.toJson, Lean.JsonNumber.fromNat]
+
+/-- **The run's answer at `read`**, where its staged entries are at most the interior's. -/
+private theorem getD_answer_read {receipt draw symbol shown audit : Json} {read : ℕ} {staged : List (String × Json)}
+    (h : staged = [] ∨ ∃ x, staged = [("interior", x)]) :
+    Spot.nat? (Spot.getD (Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
+      ("symbol", symbol), ("public", shown), ("audit", audit)] ++ staged)) "read") = some read := by
+  rw [Json.mkObj, Properties.Challenger.CanonRead.getD_obj, Std.TreeMap.Raw.get?_eq_getElem?,
+    Std.TreeMap.Raw.getElem?_ofList_of_mem (k := "read") (v := Lean.toJson read) Std.ReflCmp.compare_self ?_ ?_]
+  · exact nat?_toJson read
+  · rcases h with rfl | ⟨x, rfl⟩ <;> simp [List.pairwise_cons]
+  · simp
+
+/-- **An accepted run's first stage read its bytes with coins that hold, and it answers what it read**, at either
+value of the form's switch. -/
+theorem run_read {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j)
+    (hs : Spot.jeq (Spot.getD j "symbol") (Json.str "accept") = true) :
+    ∃ read, FirstRead i read ∧ Spot.nat? (Spot.getD j "read") = some read := by
+  rcases run_path h with ⟨step, codes, rfl⟩ |
+      ⟨wt, res, draw, rest, read, h1, -, h2, h3, h4, _, _, _, _, _, _, _, -, hia, rfl⟩
+  · rw [symbol_refused] at hs
+    cases SpotFlock.str_of_jeq (SpotFlock.jeq_symm hs)
+  · exact ⟨read, ⟨wt, res, draw, rest, h1, h2, h3, by simpa using h4⟩,
+      getD_answer_read (interiorAudit_staged hia)⟩
 
 /-- **An accepted run's first stage read its bytes with coins that hold**, at either value of the form's switch. -/
 theorem run_firstRead {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j)
-    (hs : Spot.jeq (Spot.getD j "symbol") (Json.str "accept") = true) : ∃ read, FirstRead i read := by
-  rcases run_path h with ⟨step, codes, rfl⟩ | ⟨wt, res, draw, rest, read, h1, -, h2, h3, h4, -⟩
-  · rw [symbol_refused] at hs
-    cases SpotFlock.str_of_jeq (SpotFlock.jeq_symm hs)
-  · exact ⟨read, wt, res, draw, rest, h1, h2, h3, by simpa using h4⟩
+    (hs : Spot.jeq (Spot.getD j "symbol") (Json.str "accept") = true) : ∃ read, FirstRead i read :=
+  (run_read h hs).imp fun _ h => h.1
+
+/-- **The first stage reads one length**: `Select.select` is a function of the run's input. -/
+theorem firstRead_unique {i : Spot.Run.Input} {r₁ r₂ : ℕ} (h₁ : FirstRead i r₁) (h₂ : FirstRead i r₂) : r₁ = r₂ := by
+  obtain ⟨w, s, d, x, h1, h2, h3, -⟩ := h₁
+  obtain ⟨w', s', d', x', h1', h2', h3', -⟩ := h₂
+  rw [h1] at h1'
+  cases h1'
+  rw [h2] at h2'
+  cases h2'
+  rw [h3] at h3'
+  cases h3'
+  rfl
 
 /-- **The run of record's input on an accepted case** is the one the check ran and accepted. -/
 theorem inputOn_accepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (ha : FormAccepts C o)
     (hi : inputOn C o = some i) :
     ∃ k p c e c₂ ξ₂ r run, C o = some k ∧ Decoded k p c e ∧
       VStar.Recursive.SampledTwo.inputAt p c e.source e k.blobs = .ok (c₂, ξ₂, r, i) ∧
-      Spot.Run.run i true = .ok run ∧ Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true := by
+      Spot.Run.run i true = .ok run ∧ VStar.Recursive.SampledTwo.sourceRead e.source run = .ok () ∧
+      Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true := by
   obtain ⟨k, hk, p, c, e, pub, prof, hd, hc⟩ := ha
-  obtain ⟨-, c₂, ξ₂, r, i', run, hin, hrun, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨-, c₂, ξ₂, r, i', run, hin, hrun, hsr, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
   have hik : inputOfCase k = some i' := by
     obtain ⟨h1, h2, h3⟩ := hd
     unfold inputOfCase
@@ -188,13 +230,31 @@ theorem inputOn_accepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} 
     rw [inputOn, hk, Option.bind_some, hik] at hi
     exact (Option.some.inj hi).symm
   subst this
-  exact ⟨k, p, c, e, c₂, ξ₂, r, run, hk, hd, hin, hrun, hsym⟩
+  exact ⟨k, p, c, e, c₂, ξ₂, r, run, hk, hd, hin, hrun, hsr, hsym⟩
 
 /-- **An accepted play's run read its first stage's bytes with coins that hold.** -/
 theorem firstRead_of_accepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (ha : FormAccepts C o)
     (hi : inputOn C o = some i) : ∃ read, FirstRead i read := by
-  obtain ⟨-, -, -, -, -, -, -, run, -, -, -, hrun, hsym⟩ := inputOn_accepts ha hi
+  obtain ⟨_, _, _, _, _, _, _, run, _, _, _, hrun, -, hsym⟩ := inputOn_accepts ha hi
   exact run_firstRead hrun hsym
+
+/-- The run of record's first-stage bytes are the evidence's. -/
+theorem inputOf_source (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ ξ₂ : ByteArray)
+    (e : VStar.Recursive.SampledTwo.Evidence) (received₂ : String) (vs : Array (String × Json)) :
+    (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).source = ξ := by
+  unfold VStar.Recursive.SampledTwo.inputOf
+  first | rfl | (split; rfl)
+
+/-- **The first stage read all its bytes**: on a play the form accepts, the run's first stage read every byte of its
+input's, since the form refuses where the evidence's bytes run past what the run answers it read (`sourceRead`). -/
+theorem sourceRead_holds (C : CaseOf) : SourceRead C := by
+  intro o ha i read hi hread
+  obtain ⟨_, _, _, e, _, _, _, run, _, _, hin, hrun, hsr, hsym⟩ := inputOn_accepts ha hi
+  obtain ⟨read', hread', hr⟩ := run_read hrun hsym
+  obtain rfl := firstRead_unique hread hread'
+  obtain ⟨-, -, -, -, vs, received₂, -, rfl⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  rw [inputOf_source]
+  exact VStar.Recursive.SampledTwo.sourceRead_le hsr hr
 
 /-! ## The first stage's coin -/
 
@@ -230,7 +290,7 @@ theorem groupOf_first {A : Live₂} {n : ℕ} (h : groupOf A n = .first) : n = 0
 round-0 coin agrees, on the first stage's bytes, with every coin the device's release for round 0 agrees with. -/
 theorem coinsAgree_first (A : Live₂) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop)
-    (hShow : FirstShown C Good) (hDev : DevFirst C dev) (hRead : SourceRead C) (hB : CoinsOfBytes) :
+    (hShow : FirstShown C Good) (hDev : DevFirst C dev) (hB : CoinsOfBytes) :
     CoinsAgree A (formReading A C S dev) (FormAccepts C) Good .first := by
   intro o ha hg n _ hgn c hc c' hd
   obtain rfl := groupOf_first hgn
@@ -239,7 +299,7 @@ theorem coinsAgree_first (A : Live₂) (C : CaseOf) (S : SessionReading)
   refine ⟨i, hi, ?_⟩
   obtain ⟨hL, hcs⟩ := coinOf_src hB hci
   obtain ⟨read, hread⟩ := firstRead_of_accepts ha hi
-  have hsz := hRead o ha i read hi hread
+  have hsz := sourceRead_holds C o ha i read hi hread
   unfold prefixAgree
   by_cases h0 : i.source.size = 0
   · rw [h0]
