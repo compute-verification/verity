@@ -1,9 +1,10 @@
 """`research data evict`'s passes over what nothing else removes (`store/leftovers.py`): a uv cache's idle editable shards and
-build directories, and the store's lock files.
+build directories, the store's lock files, and request directories whose run dir is gone.
 Each group shows the removal and everything that must stay: in use by a live process, too young, a lock held, a run that has not
 ended, a name or layout the pass does not know.  Every path is under `tmp_path`, /proc is a directory there, and time is the
 `now` and `clock` each pass is given."""
 import fcntl
+import json
 import os
 import threading
 from pathlib import Path
@@ -11,11 +12,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from research import remote
+from research.store import evict as EV
 from research.store import fetchset
 from research.store import leftovers as L
 
 NOW = 2_000_000_000.0
 H = 3600.0
+RIDS = [f"r20330518-0333{n:02d}-0a1b" for n in range(20)]
 
 
 def age(path: Path, hours: float) -> None:
@@ -394,3 +398,133 @@ def test_a_fetch_takes_a_lock_the_pass_removed_as_one_it_never_had(tmp_path):
     with fetchset.lock(store, key(1)):
         assert not is_free(path)
     assert is_free(path) and fetchset.LOCK_NAME.fullmatch(key(1)) and fetchset.LOCK_NAME.fullmatch("entry-" + "ab" * 32)
+
+
+# ---- request directories whose run directory is gone -----------------------------------------------------------------------------------
+
+@pytest.fixture
+def root(tmp_path):
+    r = tmp_path / "research"
+    (r / "runs").mkdir(parents=True)
+    return r
+
+
+def request(root: Path, rid: str, hours: float = 2, *, runs_root: Path | None = None, mem_wait_s: float | None = None,
+            launched: bool = True) -> Path:
+    """A staged request: request.json, an input, its custody key and, once a launch has delivered it, its lock.  6 inodes."""
+    d = root / "requests" / rid
+    (d / "inputs").mkdir(parents=True)
+    (d / "request.json").write_text(json.dumps({"run_id": rid, "runs_root": str(runs_root or root / "runs"),
+                                                **({} if mem_wait_s is None else {"mem_wait_s": mem_wait_s})}))
+    (d / "inputs" / "job.sh").write_text("true\n")
+    (d / "custody.key").write_text("k")
+    if launched:
+        (d / remote.LAUNCH_LOCK).write_text("")
+    age(d, hours)
+    return d
+
+
+def requests(root: Path, proc: Path, **kw):
+    return L.evict_requests(root / "requests", proc=proc, now=kw.pop("now", NOW), clock=kw.pop("clock", lambda: 0.0), **kw)
+
+
+def test_a_request_whose_run_dir_is_gone_goes_and_one_whose_run_dir_is_anywhere_stays(root, proc, tmp_path):
+    gone, here, aside, own, lost = (request(root, RIDS[0]), request(root, RIDS[1]), request(root, RIDS[2]),
+                                    request(root, RIDS[3], runs_root=tmp_path / "other-runs"),
+                                    request(root, RIDS[4], runs_root=tmp_path / "unmounted"))
+    (root / "runs" / RIDS[1]).mkdir()
+    (root / "runs-aside" / RIDS[2]).mkdir(parents=True)
+    (tmp_path / "other-runs" / RIDS[3]).mkdir(parents=True)
+    (root / "requests" / "notes").mkdir()
+    rep = requests(root, proc)
+    assert rep["error"] is None and rep["found"] == 6 and rep["deleted_first"] == [str(gone)] and not gone.exists()
+    assert rep["deleted_inodes"] == 6 and rep["kept_by"] == {"run": 3, "unknown": 2}
+    assert all((d / "request.json").exists() and (d / "inputs" / "job.sh").exists() for d in (here, aside, own, lost))
+    assert {k["path"]: k["why"] for k in rep["kept_first"]} == {
+        str(lost): f"unknown: {tmp_path / 'unmounted'}, where its run dir would be, is not a directory",
+        str(root / "requests" / "notes"): "unknown: it is not named like a run id"}
+
+
+def test_a_request_stays_for_as_long_as_its_launch_may_still_deliver_it(root, proc):
+    """A launch delivers a staged request three times, each for two minutes, the preflight's limit and the memory wait it was
+    given, and claims the run dir as its first act: a request younger than that, or than an hour, may be on its way."""
+    assert remote.launch_limit(None) == 3 * (120 + remote.PREFLIGHT_TIMEOUT_S) + 18 == 918
+    assert remote.launch_limit(7200) == 3 * (120 + remote.PREFLIGHT_TIMEOUT_S + 7200) + 18 == 22518
+    young, old = request(root, RIDS[0], 0.9), request(root, RIDS[1], 1.1)
+    waits, waited = request(root, RIDS[2], 6, mem_wait_s=7200), request(root, RIDS[3], 6.5, mem_wait_s=7200)
+    touched = request(root, RIDS[4], 5)
+    os.utime(touched / remote.LAUNCH_LOCK, (NOW - 600, NOW - 600))      # a delivery took its lock ten minutes ago
+    rep = requests(root, proc)
+    assert sorted(rep["deleted_first"]) == sorted([str(old), str(waited)]) and rep["kept_by"] == {"recent": 3}
+    assert young.is_dir() and waits.is_dir() and touched.is_dir() and not old.exists() and not waited.exists()
+
+
+def test_a_request_a_delivery_holds_or_a_live_process_names_stays_and_is_named(root, proc):
+    locked, named, cmd = request(root, RIDS[0]), request(root, RIDS[1]), request(root, RIDS[2])
+    process(proc, 9, environ=f"HOME=/x\0RESEARCH_RUN_ID={RIDS[1]}\0")
+    process(proc, 10, cmdline=f"python3 -m research launch-request {cmd}/request.json")
+    before = snapshot(root)
+    fd = held(locked / remote.LAUNCH_LOCK)
+    try:
+        rep = requests(root, proc)
+    finally:
+        os.close(fd)
+    assert rep["deleted"] == 0 and rep["kept_by"] == {"2": 3} and snapshot(root) == before
+    assert rep["kept_first"] == [{"path": str(locked), "why": "2: its lock is held (.launch.lock)"},
+                                 {"path": str(named), "why": "2: process 9 (p9) names its run"},
+                                 {"path": str(cmd), "why": "2: process 10 (p10) names its run"}]
+
+
+def test_a_request_goes_under_its_launch_lock_request_json_first(root, proc, monkeypatch):
+    """A delivery that arrives while the pass removes a request waits on the lock and then finds no request to claim a run dir
+    for; one that never had a lock file gets one for the removal."""
+    d, never = request(root, RIDS[0]), request(root, RIDS[1], launched=False)
+    seen = []
+    real = EV._remove_tree
+
+    def remove(path):
+        seen.append(((path / "request.json").exists(), not is_free(path / remote.LAUNCH_LOCK)))
+        return real(path)
+
+    monkeypatch.setattr(EV, "_remove_tree", remove)
+    rep = requests(root, proc)
+    assert seen == [(False, True), (False, True)] and rep["deleted"] == 2 and not d.exists() and not never.exists()
+
+
+def test_a_run_dir_claimed_while_the_pass_took_the_lock_keeps_its_request(root, proc, monkeypatch):
+    d = request(root, RIDS[0])
+    real = L._take
+
+    def take(path, create=False):
+        (root / "runs" / RIDS[0]).mkdir()           # a delivery claimed the run dir and let go of the lock just before
+        return real(path, create)
+
+    monkeypatch.setattr(L, "_take", take)
+    rep = requests(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_by"] == {"run": 1} and (d / "request.json").exists() and (d / "inputs" / "job.sh").exists()
+
+
+def test_a_request_dry_run_removes_and_creates_nothing(root, proc):
+    d, never = request(root, RIDS[0]), request(root, RIDS[1], launched=False)
+    before, lines = snapshot(root), []
+    rep = requests(root, proc, dry_run=True, log=lines.append)
+    assert snapshot(root) == before and rep["deleted"] == 2 and rep["deleted_inodes"] == 6 + 5
+    assert f"requests: would delete {d} (6 inodes, 0.0 MB)" in lines and f"requests: would delete {never} (5 inodes, 0.0 MB)" in lines
+
+
+def test_a_request_pass_fails_closed(root, proc, tmp_path):
+    """No runs directory, a request that names none, a /proc that cannot be read, the time limit: nothing goes."""
+    d = request(root, RIDS[0])
+    (d / "request.json").write_text("not json")
+    age(d, 2)
+    (root / "runs").rmdir()
+    rep = requests(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_first"] == [
+        {"path": str(d), "why": f"unknown: {root / 'runs'}, where its run dir would be, is not a directory"}]
+    (root / "runs").mkdir()
+    rep = requests(root, tmp_path / "no-proc")
+    assert rep["error"].startswith("2: cannot list") and rep["deleted"] == 0 and rep["kept_by"] == {"unestablished": 1} and d.is_dir()
+    more = request(root, RIDS[1])
+    t = [0.0]
+    rep = requests(root, proc, clock=lambda: t[0], budget_s=240, log=after_first("requests: deleted ", t, 241.0))
+    assert rep["deleted_first"] == [str(d)] and rep["kept_by"] == {"budget": 1} and more.is_dir()

@@ -30,9 +30,18 @@ root, exe, open files, maps, command line, environment: `evict.live_texts`) is r
   (`fetchset.lock`).  One goes while this pass holds its flock, taken without waiting, once it is `LOCK_KEEP_S` old; the
   taker checks that the path still names the file it locked and takes the lock again if not, so no fetch runs beside
   another on an unlinked file.
+* **request directories whose run directory is gone** (`evict_requests`): `<root>/requests/<run id>` holds the request, its
+  inputs and its custody key, and nothing reads it once its run dir is deleted; without a run dir it also keeps the source
+  tree it names (`evict.record_uses`).  A launch claims the run dir as its first act under `.launch.lock`, so a request goes
+  under that lock, request.json first (a delivery that arrives later finds no request and claims nothing), once nothing in it
+  was written for `REQUEST_KEEP_S`, or for as long as its launch may still deliver it (`remote.launch_limit`) when that is
+  longer, with no run dir under the runs roots or the `runs_root` it names, and no live process naming its run.
+
+A request is a directory named like a run id (`ids.is_run_id`); any other entry stays, and is said.
 """
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import os
 import re
@@ -42,10 +51,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import evict as EV
+from . import ids
 from .evict import Unestablished
 
 UV_KEEP_S = 48 * 3600        # a shard or build directory written this recently may belong to a build under way or a tree in use
 LOCK_KEEP_S = 3600           # a lock file made this recently belongs to fetches of one tree that are still taking it in turn
+REQUEST_KEEP_S = 3600        # a request written this recently may be on its way to its launch
 BUDGET_S = 4 * 60            # no removal of a pass starts after this long: with evict_src's, they stay inside the unit's `timeout 3000`
 SCAN_S = 60                  # what live processes name is read again before a removal once the last reading is this old
 LISTED = 20                  # how many paths a report names of those deleted, and of those kept with a reason to act on
@@ -63,6 +74,8 @@ _BUILD = re.compile(r"\.tmp[A-Za-z0-9]{6}")
 _UV_NAMED = re.compile(rf"(?:^|[/\0\s:=])(sdists-v[0-9]+/+editable/+[0-9a-f]{{16}}(?![0-9a-f])"
                        rf"|{UV_BUILDS}/+\.tmp[A-Za-z0-9]{{6}}(?![A-Za-z0-9]))")
 """A shard or build directory however a process spells its cache: one of that name in any cache keeps the one here."""
+_RUN_NAMED = re.compile(rf"(?<![0-9A-Za-z])({ids.RUN_RE.pattern.strip('^$')})(?![0-9a-f])")
+"""A run id anywhere in what a process names (its RESEARCH_RUN_ID, a path under its run dir, request or clone)."""
 
 
 class _Held(Exception):
@@ -329,3 +342,78 @@ def evict_locks(store_root: Path, *, dry_run: bool = False, keep_s: float = LOCK
             os.close(lock)
 
     return p.end(p.each(paths, one))
+
+
+# ---- request directories whose run directory is gone -----------------------------------------------------------------------------------
+
+def _run_entries(d: Path) -> tuple[list[Path], list[Path]]:
+    """The directories under `d` named like a run id, and the other directories there, which stay."""
+    dirs = [d / n for n in EV._entries(d) if _mtime(d / n) is not None]
+    return [x for x in dirs if ids.is_run_id(x.name)], [x for x in dirs if not ids.is_run_id(x.name)]
+
+
+def _run_dir(homes: list[Path], name: str) -> Path | None:
+    """The run dir `name` under one of `homes`, None when none has it; Unestablished when one cannot be read."""
+    for home in homes:
+        try:
+            there = EV._quiet(lambda home=home: os.lstat(home / name))
+        except OSError as e:
+            raise Unestablished(f"2: cannot read {home / name}: {e}") from None
+        if there is not None:
+            return home / name
+    return None
+
+
+def evict_requests(requests_dir: Path, *, runs_dirs: list[Path] | None = None, dry_run: bool = False,
+                   keep_s: float = REQUEST_KEEP_S, budget_s: float = BUDGET_S, now: float | None = None,
+                   clock: Callable[[], float] = time.monotonic, proc: Path = Path("/proc"),
+                   log: Callable[[str], None] | None = None, nginx_conf: Path = EV.NGINX_CONF) -> dict[str, Any]:
+    """Remove each `<requests_dir>/<run id>` whose run dir is gone (module docstring).  `runs_dirs`: where run dirs are, by default
+    `runs/` and `runs-aside/` beside `requests_dir`.  The directory a request's run dir would be in (the `runs_root` it names,
+    else the first of `runs_dirs`) must be there: a run dir missing from a directory that is itself missing is not gone."""
+    from .. import remote as RM
+
+    requests_dir = Path(requests_dir)
+    root = requests_dir.parent
+    runs_dirs = [root / "runs", root / "runs-aside"] if runs_dirs is None else [Path(d) for d in runs_dirs]
+    p = _Pass("requests", requests_dir, dry_run, budget_s, now, clock, log)
+    named = _Named(_RUN_NAMED, "its run", requests_dir, proc, nginx_conf, clock)
+    try:
+        paths, others = _run_entries(requests_dir)
+    except Unestablished as e:
+        return p.end(str(e))
+
+    def one(path: Path) -> None:
+        req = EV._doc(EV._text(path / "request.json")) or {}
+        own = Path(req["runs_root"]) if isinstance(req.get("runs_root"), str) and os.path.isabs(req["runs_root"]) else None
+        if _mtime(own or runs_dirs[0]) is None:
+            return p.stay(path, f"unknown: {own or runs_dirs[0]}, where its run dir would be, is not a directory")
+        homes = [*runs_dirs, *([own] if own else [])]
+        if run := _run_dir(homes, path.name):
+            return p.stay(path, f"run: its run dir {run} exists")
+        wait = req.get("mem_wait_s")
+        keep = max(keep_s, RM.launch_limit(wait if isinstance(wait, (int, float)) and not isinstance(wait, bool) else None))
+        if (age := p.now() - _walk(path)[0]) < keep:
+            return p.stay(path, f"recent: written {_age(age)} ago (a launch may deliver it for {_age(keep)})")
+        if why := named(path.name):
+            return p.stay(path, why)
+        made = not dry_run or os.path.lexists(path / RM.LAUNCH_LOCK)      # a dry run makes no lock file
+        lock = _take(path / RM.LAUNCH_LOCK, create=not dry_run) if made else None
+        try:
+            if run := _run_dir(homes, path.name):
+                return p.stay(path, f"run: its run dir {run} exists")
+            size = _walk(path)[1:]
+            if not dry_run:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(path / "request.json")
+                EV._remove_tree(path)
+            p.gone(path, *size)
+        finally:
+            if lock is not None:
+                os.close(lock)
+
+    error = p.each(paths, one)
+    p.rep["found"] += len(others)
+    for o in others:
+        p.stay(o, "unknown: it is not named like a run id")
+    return p.end(error)
