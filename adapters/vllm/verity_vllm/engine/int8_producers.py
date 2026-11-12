@@ -100,6 +100,9 @@ def install(model: Any) -> dict | None:
         return None
     h = hooks.Hooks(TAG)
     sites: list[tuple[Any, type, Any]] = []
+    attn: Any
+    mlp: Any
+    producer: Any
     for _, layer in model.named_modules():
         attn, mlp = getattr(layer, "self_attn", None), getattr(layer, "mlp", None)
         if (type(layer).forward is not LlamaDecoderLayer.forward or type(attn).forward is not LlamaAttention.forward
