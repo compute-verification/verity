@@ -175,7 +175,7 @@ def test_a_pair_every_rank_finalized_passes_under_the_root_of_the_ranks_roots(pa
     assert (summary["pass"], summary["commit_pass"], summary["pairs_run"]) == (True, [True], 1)
 
 
-def test_every_rank_opens_the_positions_and_the_identities_the_pairs_coins_draw(pair):
+def test_every_rank_opens_the_positions_and_the_identities_the_pairs_coins_sample(pair):
     assert pair.run() == 0
     c, roots = pair.rows()[1]["commit"], pair.roots()
     root, claimed = bytes.fromhex(c["tp_run_root"]), {str(r): roots[r].hex() for r in (0, 1)}
@@ -189,11 +189,11 @@ def test_every_rank_opens_the_positions_and_the_identities_the_pairs_coins_draw(
     assert [kw for method, kw in pair.sent if method == "tp2_commit_open_population"] == [
         {"k": 4, "salt": "0/population", "combined_root_hex": root.hex(), "source_hex": identities_from.hex(), "claimed_root_hex": claimed[r]} for r in "01"]
     for r in "01":
-        drawn = c["per_rank"][r]["openings_population"]
-        assert (drawn["rank"], drawn["claimed_root"], drawn["claimed_root_is_own"], drawn["context"]) == (int(r), claimed[r], True, {"ok": True, "why": "PASS"})
-        assert drawn["n"] == drawn["opened"] == drawn["verified"] >= 4 and (drawn["unbound_n"], drawn["unbound"]) == (0, [])
-        assert (drawn["late_step_in_sample"], drawn["families"], drawn["tp_partial_identities_drawn"]) == (True, ["logits", "proj"], drawn["n"])
-        assert drawn["map_digest"] == c["per_rank"][r]["binding"]["map_digest"] and drawn["open_verify_s"] >= 0
+        sampled = c["per_rank"][r]["openings_population"]
+        assert (sampled["rank"], sampled["claimed_root"], sampled["claimed_root_is_own"], sampled["context"]) == (int(r), claimed[r], True, {"ok": True, "why": "PASS"})
+        assert sampled["n"] == sampled["opened"] == sampled["verified"] >= 4 and (sampled["unbound_n"], sampled["unbound"]) == (0, [])
+        assert (sampled["late_step_in_sample"], sampled["families"]) == (True, ["logits", "proj"])
+        assert sampled["map_digest"] == c["per_rank"][r]["binding"]["map_digest"] and sampled["open_verify_s"] >= 0
     # the warm-up, then the pair's instrumented run: each installed, finalized and reset; only the pair's is opened and dumped
     assert [method for method, _ in pair.sent] == [
         "tp2_commit_install", "tp2_commit_finalize", "tp2_commit_reset",
@@ -218,9 +218,9 @@ def test_the_pairs_coverage_record_is_the_ranks_bindings_and_population_openings
     assert cov["binding_map_digest"] == "+".join(bindings[r]["map_digest"][:16] for r in "01")
     assert cov["program_digests_per_rank"] == {str(r): _program(r).hex() for r in (0, 1)}
     assert cov["coverage_per_rank"] == {r: {"ok": True, "expected_n": 6, "bound_n": 6, "missing_n": 0, "extra_n": 0, "physical_copies_n": 0} for r in "01"}
-    drawn = {r: per_rank[r]["openings_population"] for r in "01"}
-    assert cov["openings_per_rank"] == drawn and cov["openings_population"] == "expected population"
-    assert cov["openings_checked"] == cov["openings_ok"] == sum(d["opened"] for d in drawn.values()) and cov["openings_unbound"] == 0
+    sampled = {r: per_rank[r]["openings_population"] for r in "01"}
+    assert cov["openings_per_rank"] == sampled and cov["openings_population"] == "expected population"
+    assert cov["openings_checked"] == cov["openings_ok"] == sum(d["opened"] for d in sampled.values()) and cov["openings_unbound"] == 0
     assert (cov["late_step_in_sample"], cov["attribution_per_rank"], cov["attribution_reference"], cov["retention"]) == (True, {"0": None, "1": None}, None, "host")
     assert cov["negatives"] == pair.read("versions.json")["negatives"] and cov["negatives"]["wrong_root_rank"] is None
     # each rank's binding map is beside the record, under the name the record gives it
@@ -242,10 +242,10 @@ def test_a_wrong_root_for_one_rank_in_the_vector_fails_that_ranks_openings(pair)
     honest, cheated = c["per_rank"]["0"], c["per_rank"]["1"]
     assert (honest["commit_pass"], honest["openings"]["verified"], honest["openings_population"]["claimed_root_is_own"]) == (True, 4, True)
     assert (cheated["openings"]["n"], cheated["openings"]["verified"], c["openings"]) == (4, 0, {"n": 8, "verified": 4})
-    drawn = cheated["openings_population"]
-    assert (drawn["claimed_root"], drawn["claimed_root_is_own"], drawn["verified"], drawn["context"]["ok"]) == (wrong.hex(), False, 0, False)
+    sampled = cheated["openings_population"]
+    assert (sampled["claimed_root"], sampled["claimed_root_is_own"], sampled["verified"], sampled["context"]["ok"]) == (wrong.hex(), False, 0, False)
     assert cheated["commit_pass"] is False
-    assert cheated["commit_fail_reason"] == f"population openings: 0/{drawn['opened']} verified, 0 unbound (None)"
+    assert cheated["commit_fail_reason"] == f"population openings: 0/{sampled['opened']} verified, 0 unbound (None)"
     assert (c["commit_pass"], c["commit_fail_reason"]) == (False, f"rank 1: openings verified 0 != checked 4; rank 1: {cheated['commit_fail_reason']}")
     cov = pair.read("coverage.json")
     assert (cov["verdict"], cov["identity_coverage"], cov["reason"]) == ("FAIL", False, c["commit_fail_reason"])
@@ -335,9 +335,9 @@ def test_one_rank_without_a_map_keeps_every_rank_from_the_population_openings(pa
 def test_a_ranks_population_openings_gate_its_verdict(pair, answer, why):
     opened: list[int] = []
 
-    def change(drawn: dict[str, Any]) -> None:
-        opened.append(drawn["opened"])
-        drawn.update(answer)
+    def change(sampled: dict[str, Any]) -> None:
+        opened.append(sampled["opened"])
+        sampled.update(answer)
 
     pair.alter("tp2_commit_open_population", 1, change)
     assert pair.run() == 1
@@ -370,7 +370,7 @@ def test_a_second_pair_has_its_own_root_and_coins_and_a_coverage_record_only_whe
     assert pair.read("coverage.json")["verdict"] == "PASS"
     cov = pair.read("coverage_pair1.json")
     assert (cov["verdict"], cov["reason"]) == ("FAIL", "rank 1: openings verified 3 != checked 4")
-    # the positions and the identities of the second pair are drawn under its own salt; the declarations and the maps are the first pair's
+    # the positions and the identities of the second pair are sampled under its own salt; the declarations and the maps are the first pair's
     positions_from, identities_from = CC.tp_keys(second["coins"])
     opened = [kw for method, kw in pair.sent if method == "tp2_commit_open"]
     assert opened[1]["positions_by_rank"]["1"] == [list(p) for p in challenge_positions(bytes.fromhex(second["tp_run_root"]), [1] * STEPS, 4,
@@ -416,7 +416,7 @@ def test_a_rank_opens_its_positions_against_the_root_the_driver_claims():
     assert w.tp2_commit_open(positions_by_rank=positions) == {"rank": 1, "n": 0, "verified": 0, "error": "no run commitment on this rank"}
 
 
-def test_a_rank_opens_identities_of_its_population_drawn_under_the_combined_root():
+def test_a_rank_opens_identities_of_its_population_sampled_under_the_combined_root():
     w, rc = _finalized()
     st = w._tp2_commit
     opened: list[list[tuple[int, int]]] = []
@@ -426,28 +426,28 @@ def test_a_rank_opens_identities_of_its_population_drawn_under_the_combined_root
         return st["com"].com.open(positions)
 
     st["com"].open = open_
-    draw: dict[str, Any] = {"k": 16, "salt": "0/population", "combined_root_hex": "ab" * 64, "source_hex": "cd" * 64}
-    own = w.tp2_commit_open_population(**draw)
-    drawn = BD.challenge_identities(st["pop"], st["bmap"], bytes.fromhex("ab" * 64), 16, salt=b"0/population", source=bytes.fromhex("cd" * 64))
-    assert opened == [[(identity[2], leaf) for identity, _, leaf in drawn]] and own["n"] == len(drawn) == 16 + 1 + 2
+    asked: dict[str, Any] = {"k": 16, "salt": "0/population", "combined_root_hex": "ab" * 64, "source_hex": "cd" * 64}
+    own = w.tp2_commit_open_population(**asked)
+    sampled = BD.challenge_identities(st["pop"], st["bmap"], bytes.fromhex("ab" * 64), 16, salt=b"0/population", source=bytes.fromhex("cd" * 64))
+    assert opened == [[(identity[2], leaf) for identity, _, leaf in sampled]] and own["n"] == len(sampled) == 16 + 1 + 2
     assert (own["rank"], own["claimed_root"], own["claimed_root_is_own"], own["context"]) == (1, rc.run_root.hex(), True, {"ok": True, "why": "PASS"})
     assert own["n"] == own["opened"] == own["verified"] and (own["unbound_n"], own["unbound"]) == (0, [])
-    assert (own["late_step_in_sample"], own["families"], own["tp_partial_identities_drawn"], own["map_digest"]) == (True, ["logits", "proj"], own["n"], st["bmap"]["digest"])
-    again = w.tp2_commit_open_population(**draw)
+    assert (own["late_step_in_sample"], own["families"], own["map_digest"]) == (True, ["logits", "proj"], st["bmap"]["digest"])
+    again = w.tp2_commit_open_population(**asked)
     assert {k: v for k, v in again.items() if k != "open_verify_s"} == {k: v for k, v in own.items() if k != "open_verify_s"}
-    other = w.tp2_commit_open_population(**draw, claimed_root_hex="00" * 64)
+    other = w.tp2_commit_open_population(**asked, claimed_root_hex="00" * 64)
     assert (other["opened"], other["verified"], other["claimed_root"], other["claimed_root_is_own"]) == (own["opened"], 0, "00" * 64, False)
     assert other["context"]["ok"] is False and other["context"]["why"]
     # an identity of the population with no entry in the map is counted, not opened
     held = dict(st["bmap"])
     st["bmap"] = dict(held, entries=[])
-    unbound = w.tp2_commit_open_population(**draw)
+    unbound = w.tp2_commit_open_population(**asked)
     assert (unbound["n"], unbound["unbound_n"], unbound["opened"], unbound["verified"], len(unbound["unbound"])) == (own["n"], own["n"], 0, 0, 5)
     assert {u["output_member"] for u in unbound["unbound"]} <= {"part_rank1", "shard_rank1"} and {u["rank"] for u in unbound["unbound"]} == {1}
     for lacks in ("pop", "bmap", "rc"):
         st.update(bmap=held, pop=st["pop"], rc=rc)
         kept, st[lacks] = st[lacks], None
-        assert w.tp2_commit_open_population(**draw) == {"rank": 1, "n": 0, "verified": 0, "error": "no population / binding map on this rank"}
+        assert w.tp2_commit_open_population(**asked) == {"rank": 1, "n": 0, "verified": 0, "error": "no population / binding map on this rank"}
         st[lacks] = kept
 
 
