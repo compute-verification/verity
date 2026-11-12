@@ -7,13 +7,14 @@ import copy
 import json
 
 import pytest
-from verity_vllm.query.manifest.bind import Binder
-from verity_vllm.query.units import ValueRef
+
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
+from verity_vllm.query.units import ValueRef
 
 W = "model.model"
 H = 8
@@ -164,7 +165,10 @@ def test_the_family_is_in_every_vocabulary():
 
 def test_the_plan_takes_the_scale_at_the_norm_module():
     from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_from_paths
+    from verity_vllm.correspondence.reader_for_acquire import (
+        AnnotationCorrespondence,
+        runtime_tree_from_paths,
+    )
 
     man = _manifest(kernel_program(), norm_scales=True).manifest
     rt = runtime_tree_from_paths({"": ["M"], "model.layers.0.input_layernorm": ["N"], "model.norm": ["N"]}, buffers=[],
@@ -202,7 +206,7 @@ def test_manifest_verify_rebuilds_under_the_callers_policy(tmp_path, monkeypatch
     on = _manifest(P, norm_scales=True).manifest
     off = _manifest(P).manifest
     assert V.verify(on, on)["ok"] and not V.verify(on, off)["ok"] and not V.verify(off, on)["ok"]
-    seen = {}
+    seen: dict[str, dict] = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and on)
     MV.rebuild(program="p", norm_scales=True)
     assert seen["kw"]["norm_scales"] is True

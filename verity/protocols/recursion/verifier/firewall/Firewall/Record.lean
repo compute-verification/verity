@@ -8,13 +8,16 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
 1. A recursive session's V* statements and their order are fixed when it opens (`parts`), and it ends at its first stop.
    `admit` serves only the next statement not yet released, once: a request for any other is a stop at that next
    statement, never opened. After a stop, and after the last statement's release, every outer session of it is refused.
-2. One outer slot (`slot`): a holder that ended before its session's outcome is recorded as that session's stop by the
-   next one to take the slot.
+   A stop is recorded only of a recursive session opened, so every stop follows its session's open.
+2. One outer slot (`slot`): a holder that ended before its session's outcome is recorded as that session's stop, if it
+   was opened, by the next one to take the slot.
 3. A recursive session opened with a release schedule (`start_ms`, one window a statement) releases statement `j` at
    `start_ms + windows_ms[0] + ... + windows_ms[j]` (`releaseMs`); a missed time is a stop (`Firewall.Release`).
-4. A stream opened with a failure `budget` b stops at its b-th failure (`failures`): a recursive session's stop, a
-   registration it skipped (rule 5), or a refusal of a recursive session that had neither stopped nor released its last
-   statement, on a stream not yet stopped.
+4. A stream opened with a failure `budget` b (a public parameter of the deployment, at least `BUDGET_MIN`) stops at its
+   b-th failure (`failures`): a recursive session's stop, a registration it skipped (rule 5), or a refusal of a
+   recursive session that had neither stopped nor released its last statement, on a stream not yet stopped. It opens no
+   recursive session while its unended ones (`unended`: opened on it, neither stopped nor released whole) and its
+   failures together reach b, so at most b of its recursive sessions ever have a statement not released.
 5. The value service's registrations are numbered on the record (`register`: 0, 1, 2, … with no gap, `core-firewall
    values`), and each is admitted once, oldest first: an outer session's statement admits, once it is itself admitted,
    every registration its value commitments read that is not yet admitted (`admitReads`, `admit`), and skips every older
@@ -160,6 +163,15 @@ def budgetOk : Option Nat → V Unit
   | some 0 => throw "a failure budget is a positive integer, not 0"
   | _ => pure ()
 
+/-- The least failure budget a stream is opened with (rule 4). -/
+def BUDGET_MIN : Nat := 1
+
+/-- A failure budget as an open is given it: at least `BUDGET_MIN`. -/
+def budgetArg : Option Nat → V Unit
+  | some b =>
+    if b < BUDGET_MIN then throw s!"a failure budget is an integer of at least {BUDGET_MIN}, not {b}" else pure ()
+  | none => pure ()
+
 /-! ## Reading the record -/
 
 private def eventOf (j : Json) : V (Event × Nat) := do
@@ -301,6 +313,21 @@ def Tally.step (stream : String) (b : Option Nat) (t : Tally) : Event → Tally
 def failures (evs : Events) (stream : String) : Nat :=
   (evs.foldl (Tally.step stream (budgetOf evs stream)) {}).n
 
+/-- The recursive sessions opened, each once. -/
+def openedSessions (evs : Events) : List String :=
+  (evs.toList.filterMap fun | .opened o => some o.session | _ => none).eraseDups
+
+/-- Whether the recursive session `s` is one of `stream`'s not ended: its open is on `stream`, it has not stopped, and a
+statement of it is not released. -/
+def unendedOn (evs : Events) (stream s : String) : Bool :=
+  match openOf evs s with
+  | some o => o.stream == stream && (stopOf evs s).isNone && (nextOf evs o).isSome
+  | none => false
+
+/-- How many of `stream`'s recursive sessions are not ended (rule 4). -/
+def unended (evs : Events) (stream : String) : Nat :=
+  ((openedSessions evs).filter (unendedOn evs stream)).length
+
 /-- The last `slot` event (its position, session and part), if no outcome of its session at its part (`release`, `stop`
 or `refused`) follows it. -/
 def orphan (evs : Events) : Option (Nat × String × String) :=
@@ -324,7 +351,8 @@ private def showBudget : Option Nat → String
   | none => "None"
 
 /-- `rec_live` opens a recursive session: why it may not (its statements, budget or schedule), its id, or why the
-ZK server refuses it (the stream stopped at its budget). The first check needs no record: `openArgs`. -/
+ZK server refuses it (the stream stopped at its budget, or its unended recursive sessions and failures reach it). The
+first check needs no record: `openArgs`. -/
 inductive Opened where
   | ok (session : String)
   | refused (why : String)
@@ -333,7 +361,7 @@ inductive Opened where
 /-- What an open is given, checked before the record is read. -/
 def openArgs (parts : Array String) (budget : Option Nat) (release : Option Json) : V (Option Schedule) := do
   partsOk parts
-  budgetOk budget
+  budgetArg budget
   match release with
   | some r => some <$> scheduleOf r parts.size
   | none => pure none
@@ -355,7 +383,13 @@ where
     let n := failures evs stream
     match budget with
     | some b =>
-      if n ≥ b then (.refused s!"stream {stream} stopped at its failure budget ({n} of {b})", evs) else made
+      if n ≥ b then (.refused s!"stream {stream} stopped at its failure budget ({n} of {b})", evs)
+      else
+        let u := unended evs stream
+        if n + u ≥ b then
+          (.refused (s!"stream {stream}'s unended recursive sessions and failures reach its failure budget " ++
+            s!"({u} and {n} of {b})"), evs)
+        else made
     | none => made
   made : Opened × Events :=
     let s := sid (evs.filter (fun | .opened _ => true | _ => false)).size
@@ -363,19 +397,21 @@ where
 
 def finish (evs : Events) (s : String) : Events := evs.push (.finish s)
 
-/-- The recursive session stops at `part`: its one failure, recorded once (false if it had already stopped). -/
+/-- The recursive session stops at `part`: its one failure, recorded once, and only of a recursive session opened (false
+if it was never opened or had already stopped). -/
 def stop (evs : Events) (s part why : String) : Bool × Events :=
-  if (stopOf evs s).isSome then (false, evs) else (true, evs.push (.stop s part why))
+  if (openOf evs s).isNone || (stopOf evs s).isSome then (false, evs) else (true, evs.push (.stop s part why))
 
 /-- An outer proof of the recursive session was released (the challenger's verdict accepted it). -/
 def release (evs : Events) (s part : String) : Events := evs.push (.release s part)
 
 /-- The ZK server's one outer slot, taken by a session that found it free: a `slot` whose session has no outcome after it
-is that session's stop, then `slot`. -/
+is that session's stop, if it was opened and has not stopped, then `slot`. -/
 def slot (evs : Events) (s part : String) : Events :=
   let evs := match orphan evs with
     | some (seq, s', p') =>
-      if (stopOf evs s').isNone then evs.push (.stop s' p' s!"the slot's holder ended before its outcome (slot {seq})")
+      if (openOf evs s').isSome && (stopOf evs s').isNone then
+        evs.push (.stop s' p' s!"the slot's holder ended before its outcome (slot {seq})")
       else evs
     | none => evs
   evs.push (.slot s part)

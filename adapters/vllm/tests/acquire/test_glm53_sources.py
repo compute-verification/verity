@@ -31,6 +31,8 @@ class T:
     storage's identity, `to` and `repeat_interleave` make new ones."""
 
     device = types.SimpleNamespace(type="cuda")
+    #: the tensor a view was taken of
+    base: T
 
     def __init__(self, *shape: int, dtype: torch.dtype = torch.bfloat16) -> None:
         self.shape, self.dtype = tuple(shape), dtype
@@ -76,6 +78,8 @@ class Committer:
     """The committer's side of a source: the current step job, `_acquire`, the gather collector's flush, `errors`."""
 
     gather = True
+    #: the X-03 rows the MoE source counts on its committer
+    x03_expected: int
 
     def __init__(self) -> None:
         self._cur = types.SimpleNamespace(step=0)
@@ -176,7 +180,8 @@ class MoERunner(torch.nn.Module):
             scoring_func="sigmoid", routed_scaling_factor=2.5, e_score_correction_bias=self.bias)
         N = 2 * MIL
         cache1, cache3, out = T(M, TOPK, N), T(M, TOPK, H), T(M, H)
-        sorted_ids, expert_ids, npp, config = T(M * TOPK, dtype=torch.int32), T(M, dtype=torch.int32), T(1, dtype=torch.int32), {}
+        sorted_ids, expert_ids, npp = T(M * TOPK, dtype=torch.int32), T(M, dtype=torch.int32), T(1, dtype=torch.int32)
+        config: dict[str, Any] = {}
         fp8 = dict(compute_type=None, use_fp8_w8a8=fp8_on, use_int8_w8a8=False, use_int8_w8a16=False, use_int4_w4a16=False,
                    per_channel_quant=False, block_shape=[128, 128] if fp8_on else None, B_bias=None)
         a1, a1q_scale = group_quant(hidden_states) if fp8_on else (hidden_states, None)
@@ -327,7 +332,11 @@ def test_the_moe_output_is_bound_only_on_a_tp_rank_of_a_module_that_does_not_red
 
 
 def test_identity_check_holds_a_served_step_to_ten_planes_per_layer_and_its_out(monkeypatch):
-    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+    from verity_vllm.commit.committer.native_host import (
+        GPU_CHUNK_BYTES,
+        NativeHostCommitter,
+        TensorMeta,
+    )
 
     _c, src, names = run_source(monkeypatch, [3, 4])
     com = NativeHostCommitter(None, run_id="glm53-moe", gpu_tree=True)
@@ -421,9 +430,9 @@ def fake_far(monkeypatch, world: int = TP) -> types.SimpleNamespace:
     for name in ("vllm", "vllm.models", "vllm.models.common", "vllm.models.common.ops", "vllm.models.deepseek_v32",
                  "vllm.models.deepseek_v32.nvidia"):
         monkeypatch.setitem(sys.modules, name, sys.modules.get(name) or types.ModuleType(name))
-    home = types.ModuleType("vllm.models.common.ops.fused_allreduce_rms_norm")
+    home: Any = types.ModuleType("vllm.models.common.ops.fused_allreduce_rms_norm")
     home.fused_allreduce_rms_norm = fused_allreduce_rms_norm
-    user = types.ModuleType(MODEL_MODULE)
+    user: Any = types.ModuleType(MODEL_MODULE)
     user.fused_allreduce_rms_norm = fused_allreduce_rms_norm
     monkeypatch.setitem(sys.modules, home.__name__, home)
     monkeypatch.setitem(sys.modules, MODEL_MODULE, user)
@@ -546,7 +555,11 @@ class FarRun:
 
     def identity_check(self) -> dict[str, Any]:
         """The committer's X-03 identity check over the steps run, with this source attached and the norms as its modules."""
-        from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+        from verity_vllm.commit.committer.native_host import (
+            GPU_CHUNK_BYTES,
+            NativeHostCommitter,
+            TensorMeta,
+        )
 
         com = NativeHostCommitter(None, run_id="glm53-far", gpu_tree=True)
         com._modules = [(n, m) for n, m in self.root.named_modules() if isinstance(m, Norm)]
@@ -635,9 +648,9 @@ def test_the_meta_export_shim_emits_the_fused_leaf_only_on_flashinfers_served_ra
             seen.append((tuple(hidden_states.shape), tuple(residual.shape), tuple(weight.shape), eps))
             return T(*hidden_states.shape), T(*residual.shape)
 
-    parallel = types.ModuleType("vllm.distributed.parallel_state")
+    parallel: Any = types.ModuleType("vllm.distributed.parallel_state")
     parallel.get_tp_group = lambda: types.SimpleNamespace(world_size=TP, bus=Bus())
-    distributed = types.ModuleType("vllm.distributed")
+    distributed: Any = types.ModuleType("vllm.distributed")
     distributed.parallel_state = parallel
     monkeypatch.setitem(sys.modules, distributed.__name__, distributed)
     monkeypatch.setitem(sys.modules, parallel.__name__, parallel)

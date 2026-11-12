@@ -217,6 +217,51 @@ def test_runs_whose_sender_no_handle_owns_are_one_post_that_rings_infra(relay):
     assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]] * 2
 
 
+def test_a_worker_the_watch_cant_place_rings_infra_once_and_what_follows_rings_no_one(relay):
+    """A worker whose launcher the watch couldn't find came as infra's own ("of lane infra ...; resume it with Task"), each
+    time it stopped, and each run of a sender no handle owned rang infra again. The watch's one `unplaced` record rings infra
+    and says why; the worker's alerts and its later runs, which the watch marks quiet, are posted with no handle and ring no
+    one, and none names a lane."""
+    infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
+    kid, other, p = ("bc-22222222-2222-2222-2222-222222222222", "bc-33333333-3333-3333-3333-333333333333",
+                     "bc-99999999-9999-9999-9999-999999999999")
+    link = f"<https://cursor.com/agents/{kid}|{kid}>"
+    run = {"run": "r20261019-052718-24a9", "node": "vy-nebius-2", "sender": f"https://cursor.com/agents/{kid}",
+           "what": "python -m bench", "rc": 0, "state": "done", "after": "6 s", "at": "2026-10-19T05:28:12Z"}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "unplaced", "agent": kid, "name": "review-9", "run": "", "role": "worker", "lane": "", "status": "ACTIVE",
+         "parent": p},
+        {"kind": "worker_idle", "agent": kid, "name": "review-9", "run": "", "lane": "", "quiet": True,
+         "at": "2026-10-19T19:22:00Z", "since": "2026-10-19T19:22:00Z"},
+        {"kind": "worker_long", "agent": kid, "name": "review-9", "run": "", "lane": "", "quiet": True,
+         "since": "2026-10-19T13:22:00Z", "hours": 6},
+        {"kind": "workers_failed", "agent": p, "name": "", "run": "", "role": "workers", "lane": "", "quiet": True, "minutes": 4,
+         "members": [{"kind": "worker_idle", "agent": kid, "name": "review-9", "at": "2026-10-19T19:22:00Z", "quiet": True},
+                     {"kind": "worker_idle", "agent": other, "name": "review-10", "at": "2026-10-19T19:25:00Z", "quiet": True}]},
+        {"kind": "run_ended", "agent": "", "name": "", "run": run["run"], "handle": None, "role": "unknown", "count": 1,
+         "runs": [run], "quiet": True}]) + "\n"
+    relay.once()
+    assert relay.posts[0] == (
+        f"{infra} *Agent watch:* worker review-9 ({link}) is under no lane: the watch saw no Task call for it by an agent a "
+        "handle owns, and no workers.d entry or note names its launcher or a lane. The Task call it saw came from "
+        f"<https://cursor.com/agents/{p}|bc-99999999>, which no handle owns. @infra is rung this once, to find its launcher: "
+        "until a Task call the watch sees, a workers.d entry or a note places it (or, at the end of a run it sent, its "
+        "name), its alerts are posted and ring no one.")
+    assert relay.posts[1] == (
+        f"*Agent watch:* worker review-9 ({link}) went idle at 2026-10-19T19:22:00Z; if it didn't report back, resume it with "
+        "Task. The watch knows no lane for it and rang @infra once to say so: nobody is rung.")
+    assert relay.posts[2].startswith(f"*Agent watch:* worker review-9 ({link}) has been ACTIVE since 2026-10-19T13:22:00Z (6 h)")
+    assert relay.posts[3].startswith("*Agent watch:* 2 workers of the coordinator") and relay.posts[3].endswith(
+        "The watch knows no lane for them and rang @infra once to say so: nobody is rung.")
+    assert relay.posts[4] == (
+        "*Agent watch:* 1 research run ended whose sender no handle owns (not a coordinator, a worker the watch knows, its "
+        "parent, or a lane): r20261019-052718-24a9 on vy-nebius-2 (python -m bench, done rc=0) sent by "
+        "<https://cursor.com/agents/bc-22222222-2222-2222-2222-222222222222|bc-22222222>. @infra was rung for each of these "
+        "senders at an earlier run of its, so nobody is rung.")
+    assert not [post for post in relay.posts if "of lane" in post], "no lane is made up for it"
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]], "the one ring"
+
+
 def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
     """Cursor answers 409 for an agent waiting on background work, every hour the watch tries; the post would say nothing new."""
     relay.log_text["text"] = "\n".join([

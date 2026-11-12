@@ -15,7 +15,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
-too, with its rank policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
+too, with its rank policy).  Dependency-free (json/hashlib, and `SCHEMA` from `verity_vllm.records`) but for `load_program`, which reads through `program.instances_file`.
 """
 from __future__ import annotations
 
@@ -23,9 +23,12 @@ import hashlib
 import json
 import os
 import re
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any
 
-SCHEMA = "verity-sweep/required-manifest/v1"
+from verity_vllm.records import required_manifest
+
+SCHEMA = required_manifest.SCHEMA
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
@@ -181,14 +184,15 @@ def promoted_observation(manifest: dict[str, Any]) -> dict[str, Any]:
     consumers: dict[str, int] = {}
     producers: dict[str, dict[str, Any]] = {}
     problems: list[str] = []
-    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    rows = manifest_rows(manifest)
     own_inputs = {str(r.get("op_path")) for r in rows if str(r.get("output_member")) == "in" and not r.get("promoted")}
     for r in rows:
         if not r.get("promoted"):
             continue
         op = str(r.get("op_path"))
         member = str(r.get("output_member", PROMOTED_MEMBER))
-        cons = [str(c) for c in (r.get("consumers") or [])]
+        named = r.get("consumers")
+        cons = [] if named is None else [str(c) for c in named]
         if not cons:
             problems.append(f"promoted row {op}/{member} (spec {r.get('spec')}) names no consumer: no observation point")
             continue
@@ -314,15 +318,15 @@ def moe_plane_modules(rows: Iterable[tuple[str, str]]) -> frozenset[str]:
 def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
     """(plane, elements, dtype) of the block-stream tensors for one MoE layer in one step: `MOE_PLANES`, or under block-FP8 experts the
     `MOE_FP8_PLANES` the module's rows produce (a quant or SiluMul the Program has no rows for is no plane)."""
-    M, K, H, I, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
+    M, K, H, inter, N = g["M"], g["TOPK"], g["H"], g["I"], g["N_up"]
     route = [("router_w", M * K, "f32"), ("router_ids", M * K, "i32")]
     tail = [("down", M * K * H, "bf16"), ("sum", M * H, "bf16")]
     if not g.get("fp8"):
-        return route + [("up", M * K * N, "bf16"), ("act", M * K * I, "bf16")] + tail
+        return route + [("up", M * K * N, "bf16"), ("act", M * K * inter, "bf16")] + tail
     G = int(g.get("G") or 1)
     return (route + ([("in_q", M * H, "w8"), ("in_scale", M * H // G, "f32")] if g.get("in_quant_rows") else [])
-            + [("up", M * K * N, "bf16")] + ([("act", M * K * I, "bf16")] if g.get("act_rows") else [])
-            + ([("act_q", M * K * I, "w8"), ("act_scale", M * K * I // G, "f32")] if g.get("act_quant_rows") else []) + tail)
+            + [("up", M * K * N, "bf16")] + ([("act", M * K * inter, "bf16")] if g.get("act_rows") else [])
+            + ([("act_q", M * K * inter, "w8"), ("act_scale", M * K * inter // G, "f32")] if g.get("act_quant_rows") else []) + tail)
 
 
 def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, windowed: bool = False) -> tuple[int, int, int, int, str]:
@@ -452,11 +456,13 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     (`instances_file.read_instances`): read them, never modify them in place."""
     from verity_vllm.program.instances_file import read_instances
     inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
-    res = json.load(open(os.path.join(program_dir, "result.json")))
+    with open(os.path.join(program_dir, "result.json")) as f:
+        res = json.load(f)
     art = None
     p = os.path.join(program_dir, "artifact.json")
     if os.path.exists(p):
-        art = json.load(open(p))
+        with open(p) as f:
+            art = json.load(f)
     return {"instances": inst, "result": res, "artifact": art, "dir": program_dir}
 
 #: the sampling event that ends an engine step: greedy `TokenSelect_v1`, and the stochastic / explicit-argmax selectors of `registry.sampling`
@@ -525,13 +531,13 @@ def alias_family(member: str) -> str:
 REQ_RE = re.compile(r"^r(\d+)$")
 
 
-def request_label(rid: Any, workload: dict[str, Any] | None = None, *, position: int | None = None) -> str:
+def request_label(rid: Any, workload: Mapping[str, Any] | None = None, *, position: int | None = None) -> str:
     """The identity key's `request_id` is `r<k>`, k = the request's position (`index`) in the workload manifest --
     the convention the binding's map and the run header use.  A UUID is a WORKLOAD id (`requests[i].request_id`), never a request id:
     a manifest keyed by it matches only the request-less weights.
     Accepts `r<k>`, an int / digit string k, or a workload id resolvable through `workload["requests"]`; anything else is an error
     (fail closed -- a manifest keyed by an id no map can carry is a manifest that covers nothing)."""
-    reqs = (workload or {}).get("requests") or []
+    reqs = sweep_and_requests(workload)[1]
     if rid is None:
         if position is not None:
             return f"r{int(position)}"
@@ -641,6 +647,29 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
             "n_unbound": len(unbound), "unbound": sorted(unbound)[:16], "rule": TP_PEER_BINDING_RULE}
 
 
+def identity_rows(manifest: Mapping[str, Any] | None) -> Sequence[Mapping[str, Any]]:
+    """The identity rows a manifest holds under `identities`; none where there is no manifest, or it has no such field."""
+    rows = None if manifest is None else manifest.get("identities")
+    return () if rows is None else rows
+
+
+def manifest_rows(manifest: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
+    """A manifest document's rows: under the first of `identities`, `entries` and `rows` that holds any; none where none does."""
+    for key in ("identities", "entries", "rows"):
+        rows = manifest.get(key)
+        if rows:
+            return rows
+    return ()
+
+
+def sweep_and_requests(workload: Mapping[str, Any] | None) -> tuple[Mapping[str, Any], Sequence[Any]]:
+    """A workload manifest's `sweep` block and its `requests`: an empty block and no requests where there is no workload, or it
+    holds neither."""
+    sweep = workload.get("sweep") if workload else None
+    requests = workload.get("requests") if workload else None
+    return ({} if sweep is None else sweep), (() if requests is None else requests)
+
+
 def manifest_digest(identities: list[dict[str, Any]]) -> str:
     """sha256 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
     h = hashlib.sha256()
@@ -668,6 +697,7 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     request's Program for a warm one (`prefix_plan.request_shape`).  The traversal engine streams these (rows never all in
     memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
     import glob
+
     from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
@@ -679,8 +709,9 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                 rj = os.path.join(cand, "result.json")
                 if os.path.isdir(cand) and os.path.exists(rj):
                     try:
-                        res = json.load(open(rj))
-                    except Exception:  # noqa: BLE001
+                        with open(rj) as f:
+                            res = json.load(f)
+                    except (OSError, ValueError):      # unreadable, or not JSON: not this request's Program
                         continue
                     if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]

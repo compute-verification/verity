@@ -23,8 +23,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -34,10 +35,14 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
-
-from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, derive_report
-from verity.definitions.numerics.serve3_reference import materialize
 from verity.circuits.types import Array, RecordType, Value
+from verity.definitions.numerics.serve3_reference import materialize
+
+from verity_vllm.program.frontend.derive import (
+    DERIVE_VERSION,
+    DeriveReport,
+    derive_report,
+)
 
 transformers = pytest.importorskip("transformers")
 

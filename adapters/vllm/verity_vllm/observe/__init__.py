@@ -12,6 +12,8 @@ Vocabulary (the Verity IR design): Definition -> Specialization -> Instance -> s
 runtime artifact is the *raw observation log* (never "trace"); "trace" is reserved for the IR's gate values.
 """
 
+from verity_vllm.records.schema_ids import CAPTURE_LOG_SCHEMA
+
 __all__ = ["SCHEMA"]
 
-SCHEMA = "verity-capture/log/v1"
+SCHEMA = CAPTURE_LOG_SCHEMA
