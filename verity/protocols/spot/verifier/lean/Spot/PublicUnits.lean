@@ -12,6 +12,14 @@ public import Spot.Json
 meta import Flock.JsonParse
 meta import Spot.Json
 
+/-!
+# A public file's units
+
+`headerLine` and `unitIndices`, a public file's `units.indices` off its header line; `exactly`, whether they are the
+units of given `[lo, hi)` ranges in ascending order; `piece`, `exactly` on JSON. `Pieces.table`'s `public_units` serves
+`piece` to the difftest, which `tests/test_difftest.py` holds to `one_stage.proofs.units_exactly`.
+-/
+
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false

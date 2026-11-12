@@ -10,6 +10,15 @@ module
 
 public import Spot.Slots
 
+/-!
+# The run's `population-order` check, decided from the ranges
+
+`chain` and `segsOf`, the population's segments in slot order; `popOkRanges`, `Slots.popOk` read off the query's ranges
+and unit gates with no proof block built; the lemmas up to `popOk_of` that tie the two; and `popOk_eq_popOkRanges`,
+the `@[csimp]` equality under which `popOk` runs as `popOkRanges`. `Spot.Run` imports it, so its `population-order`
+checks run `popOkRanges`.
+-/
+
 @[expose] public section
 
 namespace Spot.Slots
