@@ -60,7 +60,8 @@ load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 
 ~~~
 
 **The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions
-`load`, `skus`, `rate` and `number` (an entry's value as an exact `Fraction`), and the constants `KINDS` (a card's
+`load`, `skus`, `rate`, `number` (an entry's value as an exact `Fraction`) and `check` (the rule `load` holds a card
+to, for another file that states numbers as entries), and the constants `KINDS` (a card's
 kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
 directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
 `verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
@@ -95,3 +96,43 @@ each committed table to `render` byte for byte; it also evaluates each `card` ar
 of the generator, and fails on any number that differs from the card file's, and on a store, resource or format of
 `security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file, whose `lean` names its
 table.
+
+## The node files (`verity.hardware.nodes`)
+
+One TOML file per kind of node in `nodes/`, beside their loader (`nodes/__init__.py`): what a node's registration
+states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, and each
+number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
+kind's, read on one node of it, and its sources cite what read it by `art:` id.
+
+| Node | file | GPU card | host card | the host's own leaves |
+|---|---|---|---|---|
+| An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
+| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
+
+A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
+and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`) and its
+`bytes`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves out what the
+kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read on record has
+no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole. A node file holds no rate, clock or
+peak, which are the cards', and no link, network certifier or memory challenger: each is a table of its own once it
+has a figure for the node.
+
+`nodes.load(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
+card of its kind. `nodes.kinds()` lists the files. `Registration.node_entry(node, card, host)`, in the Site
+(`site/__init__.py`), gives the entry a node file's table and its GPU card's table register, under the host id its
+caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the sheet's device
+memory, and the host's leaves `host/NAME`. The sheet is built from the card file when the entry is, so no digest is
+kept in the tree. It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check
+and state a host with less memory than the node has. Its message gives the commands that read both on the node.
+
+~~~python
+from verity.hardware import cards, nodes
+from verity.hardware.site import Auditor, Registration, check
+node = nodes.load("rtx-pro-6000-server-x8")
+gpu = cards.load(node["device"]["sku"])
+log = Registration("remote")
+site = check(log.append(log.node_entry(node, gpu, host="node0")), Auditor.of_files([gpu]))
+~~~
+
+`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses each by
+`challenger-reach` until a memory challenger is registered with a link to the host (`tests/test_nodes.py`).

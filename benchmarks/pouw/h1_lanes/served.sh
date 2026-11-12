@@ -231,7 +231,7 @@ lean_check() {   # lean_check TAG CAP: the plan's Lean check of TAG, in the fore
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return 0; }
   env -u FC_FIREWALL -u FC_HOST_WITNESS -u FC_FIREWALL_STATEMENT -u FC_FIREWALL_HELLO_ARGS \
-    $TIME "$OUT/lean/$tag.time" bash -c "$(lean_vlimit "$2") exec $LEAN verify --zk --circuit $D/circuit.txt \
+    $TIME "$OUT/lean/$tag.time" bash -c "$(lean_vlimit "$2") exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err"
 }
@@ -304,7 +304,7 @@ while IFS=$'\t' read -r kind tag D pub reg prog part _expect; do
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
-  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt \
+  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement verity/flock-circuit --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 done < "$WK/plan.tsv"

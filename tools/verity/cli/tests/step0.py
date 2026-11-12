@@ -59,9 +59,9 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
 
 def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
     """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
-    by default (``max_tokens_cap``, ``lengths``) stays out of the table while unset (`WARDEN_DEFAULTS`), as it stays
-    out of `WardenParams.digest`, so a configuration that sets neither has the form and hash it had before either was
-    a parameter."""
+    by default (``max_tokens_cap``, ``lengths``, ``content``) stays out of the table while unset (`WARDEN_DEFAULTS`),
+    as it stays out of `WardenParams.digest`, so a configuration that sets none has the form and hash it had before
+    any was a parameter."""
     names = [f.name for f in fields(WardenParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
         raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
@@ -77,7 +77,7 @@ def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 #: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response cap, the lengths
-#: rows' form), and ``tie``.
+#: rows' form, the content rows' classes), and ``tie``.
 WARDEN_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
 
 
