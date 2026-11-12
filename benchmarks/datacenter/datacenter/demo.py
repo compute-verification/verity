@@ -12,8 +12,8 @@ its own reason.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Tuple
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Tuple
 
 from . import (SALT_CUSTODY, Challenge, Deviation, Interval, Plan, Port, ReadWindow, StoreEntry, Wipe, account, audit,
                occupancy, place, register, run)

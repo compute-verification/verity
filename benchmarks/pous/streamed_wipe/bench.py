@@ -1,6 +1,6 @@
 """The streamed-label wipe's timing on one node: the labels a GPU generates, what reaches host memory and the network
 stack, and the challenge round trips, so the fill time and the challenger's GPU budget are measured
-(`verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe").
+(`verity/protocols/pous/verifier/PROTOCOL.md`, "The streamed-label wipe").
 
 `bench.py all --bin WIPELABELS --scratch DIR --out DIR` runs every step and writes `timing.json`:
 
@@ -38,11 +38,11 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "verity/core/protocols/pous/tests")]
+sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/pous/verifier/tests")]
 
-from verity.core.protocols.pous import streamed_wipe as sw  # noqa: E402
+from verity.protocols.pous.verifier import streamed_wipe as sw  # noqa: E402
 
-WIPE_VERDICT = ROOT / "verity/core/devices/memory_challenger/lean/wipe_verdict.py"
+WIPE_VERDICT = ROOT / "verity/protocols/pous/device/lean/wipe_verdict.py"
 SECRET, SERVER = b"streamed-wipe bench secret", b"bench-node/bench"
 SESSION = hashlib.sha512(b"streamed-wipe bench session").digest()[:32]
 TABLE_LABELS = 1 << 28

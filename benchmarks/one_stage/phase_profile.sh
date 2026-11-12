@@ -42,7 +42,7 @@ if has setup; then
     curl -fsSL -o $K https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${VERSION_ID/./}/x86_64/cuda-keyring_1.1-1_all.deb \
       && dpkg -i $K > /dev/null && apt-get update -qq > /dev/null 2>&1
   fi
-  set +u; FLOCK_WORK=$W . verity/ml/flock/pod/cuda-13.3.sh; set -u
+  set +u; FLOCK_WORK=$W . verity/protocols/flock/pod/cuda-13.3.sh; set -u
   echo "$CUDA_TK" > $W/cuda.env
   NR=$W/nsys-root
   if [ ! -x $NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys ]; then
@@ -57,9 +57,9 @@ fi
 CUDA_TK=$(cat $W/cuda.env 2>/dev/null); export CUDA_TK LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-} PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH
 NSYS=$W/nsys-root/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
 PY=$W/py/bin/python3
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 for i in 1 2 3 4 5 6; do
-  miss=$($PY -c 'import circuit_check.targets, verity.ml.circuits.defs, verity.core.protocols.spot.one_stage.draw' 2>&1 \
+  miss=$($PY -c 'import circuit_check.targets, verity.circuits.defs, verity.protocols.spot.verifier.one_stage.draw' 2>&1 \
     | sed -n "s/.*No module named '\([^'.]*\).*/\1/p" | tail -1)
   [ -z "$miss" ] && break
   log "python: no module $miss; the venv holds only numpy and blake3 (setup)"; exit 1
@@ -71,7 +71,7 @@ if has stage && [ ! -s $Z/plan.json ]; then
     > $O/stage.txt 2>&1; echo $? > $S/stage.rc) & STAGE_PID=$!
 fi
 if has build; then
-  FLOCK_WORK=$W/fw OUT=$O/build-$AS bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=90 > $O/build-$AS.txt 2>&1
+  FLOCK_WORK=$W/fw OUT=$O/build-$AS bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=90 > $O/build-$AS.txt 2>&1
   log "build $AS rc=$?"
   B=$(sed -n 's/^BINARY=//p' $O/build-$AS.txt | tail -1); SB=$(sed -n 's/^SELFTEST_BINARY=//p' $O/build-$AS.txt | tail -1)
   [ -x "$B" ] && [ -x "$SB" ] || { log "build $AS: no binaries"; tail -30 $O/build-$AS.txt | tee -a $O/job.log; exit 1; }
@@ -79,10 +79,10 @@ if has build; then
 fi
 if has test; then
   $PY -c 'import pytest' 2> /dev/null || $HOME/.local/bin/uv pip install -q --python $PY pytest
-  T=${TESTS:-verity/ml/flock/tests/test_hm96_leaves.py verity/ml/flock/tests/test_arena_layout.py verity/ml/flock/tests/test_ligerito_folds.py}
+  T=${TESTS:-verity/protocols/flock/prover/tests/test_hm96_leaves.py verity/protocols/flock/prover/tests/test_arena_layout.py verity/protocols/flock/prover/tests/test_ligerito_folds.py}
   G=$W/ghash-b684b12
   [ -d $G/cuda-ghash ] || for F in $W/fw/*/flock; do mkdir -p $G && git -C $F archive b684b12 cuda-ghash | tar -x -C $G && break; done
-  (cd verity/ml/flock/tests && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \
+  (cd verity/protocols/flock/prover/tests && PYTHONPATH=$PWD:$PYTHONPATH VERITY_ML_FLOCK_CUDA_GHASH=$G/cuda-ghash \
     $PY -m pytest -q -rs -p no:cacheprovider $(for t in $T; do echo $REPO/$t; done)) > $O/test-$AS.txt 2>&1
   rc=$?; tail -3 $O/test-$AS.txt | sed "s/^/test-$AS /" | tee -a $O/job.log; log "test-$AS rc=$rc"
   [ $rc = 0 ] && ! grep -q skipped $O/test-$AS.txt || fail=1

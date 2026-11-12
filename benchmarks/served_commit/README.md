@@ -35,4 +35,4 @@ labeled run, `served.py` the served arm's runs).
 
 The engines are vLLM's serving defaults (`serving_defaults`: torch.compile, full and piecewise CUDA graphs, no batch
 invariance), and each arm is gated token for token against `stock` before anything is timed. The acquisition under CUDA
-graphs is `integrations/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.
+graphs is `adapters/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.

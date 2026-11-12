@@ -12,7 +12,7 @@ from typing import Any
 
 def population(vu: str, n: int) -> Any:
     from circuit_check import targets as TG
-    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.protocols.spot.verifier.one_stage import partition as P
 
     TG.load_registries()
     return P.population_program(TG.definition(vu), n, version=0)

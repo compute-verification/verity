@@ -6,7 +6,7 @@
 
 Schemes (``--scheme``, repeatable, or ``all``):
 
-    frame-v3            ``verity.ml.commitments.frame_v3``, word leaves: leaf = ``domain.leaf(rank, position, schema, value)``,
+    frame-v3            ``verity.commitments.frame_v3``, word leaves: leaf = ``domain.leaf(rank, position, schema, value)``,
                         tree = domain-, level- and index-bound nodes, padded to a power of two
     frame-v3-sha256-row the same tree over ``sha256/row/v1`` row leaves (the value is one row of 16-bit words)
     frame-v3-blake3-row the same tree over ``blake3-keyed/row/v2`` row leaves (plain-Python BLAKE3: slow by design)
@@ -36,11 +36,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import ROLE_X
-from verity.ml.commitments.scheme import CommitmentScheme
+from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.rowleaf import ROLE_X
+from verity.commitments.scheme import CommitmentScheme
 
 SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "frame-v3-sha512", "frame-v3-sha512-row")
 DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row")

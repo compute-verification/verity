@@ -21,7 +21,7 @@ sys.exit(vllm.__version__ != '0.28.1rc1.dev472+gd9105ea80' or torch.__version__ 
     || { echo "LINK_VENV $LINK_VENV is not pod_bootstrap.sh's vLLM d9105ea80 and torch 2.13.0+cu129" >&2; exit 3; }
   [ -e "$WORK/venv312" ] || ln -s "$LINK_VENV" "$WORK/venv312"
 else
-  (cd "$ROOT/integrations/vllm" && VENV=$WORK/venv312 bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$WORK/bootstrap")
+  (cd "$ROOT/adapters/vllm" && VENV=$WORK/venv312 bash verity_vllm/ops/pod_bootstrap.sh --cpu --cases "" --out "$WORK/bootstrap")
 fi
 "$WORK/venv312/bin/python" - "$REPO" "$REV" "$WORK/models/llama-3.1-8b-instruct" <<'EOF'
 import json, os, sys

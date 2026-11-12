@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The pinned checkpoint of ROLE (default QWEN25_32B_BF16) on this node, for a bound run (cwd = the source tree): the
-# files core's pin names (`verity/core/protocols/pouw/lean/check/models.json`) at its repo and revision in the HF cache
+# files core's pin names (`verity/protocols/pouw/verifier/lean/check/models.json`) at its repo and revision in the HF cache
 # (HF_HOME, default /workspace/hf), any missing fetched from the Hub; then $HF_HOME/pinned/ROLE-REV8, a directory of hard
 # links to the cache's blobs (regular files, which `remote_bandwidth.store.check` takes and a snapshot's symlinks aren't:
 # `verifier.py --checkpoint`), every file of it held to the pin's SHA-512 (`store.check`, WORKERS processes); the
@@ -11,7 +11,7 @@
 set -uo pipefail
 : "${OUT:?}"
 ROLE=${ROLE:-QWEN25_32B_BF16}
-PIN=verity/core/protocols/pouw/lean/check/models.json
+PIN=verity/protocols/pouw/verifier/lean/check/models.json
 export HF_HOME=${HF_HOME:-/workspace/hf}
 PY=${PY:-python3}
 read -r REPO REV < <("$PY" -c 'import json, sys; e = json.load(open(sys.argv[1]))[sys.argv[2]]; print(e["repo"], e["revision"])' \
@@ -48,7 +48,7 @@ trap 'rm -rf "$T"' EXIT
 cat > "$T/check.py" <<'EOF'
 import json, sys
 from pathlib import Path
-from verity.core.protocols.remote_bandwidth import store
+from verity.protocols.poub.verifier import store
 
 
 def main() -> int:

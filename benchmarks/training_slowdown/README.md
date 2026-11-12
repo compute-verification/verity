@@ -24,7 +24,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, seed replay and their composition |
 | `starts.py` | a start's entry in the starts registry the run command reads |
 
-The reference shapes are the lf model's (`integrations/vllm/tests/program/train_step_lf.py`), which the suite checks.
+The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
 ## Running a program
 

@@ -55,7 +55,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import auditor_line as al  # noqa: E402
-from verity.core.protocols.spot import remote  # noqa: E402
+from verity.protocols.spot.device import remote  # noqa: E402
 
 RTT_MS = (0.3, 1.15, 10.0, 25.0, 50.0)
 """The round trips a row is replayed at by default, ms: in-region and a few farther."""

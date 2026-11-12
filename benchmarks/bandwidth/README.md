@@ -1,6 +1,6 @@
 # Device ceilings for PoUB
 
-The measurements PoUB's timing cites (`verity/core/protocols/remote_bandwidth/timing.py`): how fast a node's writers can
+The measurements PoUB's timing cites (`verity/protocols/poub/verifier/timing.py`): how fast a node's writers can
 fill a tier with labels, and how much a card holds on chip. Each probe is one Attempt on a GPU node.
 
 ## Write ceilings

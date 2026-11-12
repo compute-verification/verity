@@ -11,19 +11,19 @@ from test_repository import ROOT, _tracked
 
 #: Specs that stay: {PROTOCOL.md: why}.
 KEPT = {
-    "verity/core/protocols/pouw/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
-    "verity/ml/circuits/PROTOCOL.md": "a format: the circuit file",
-    "verity/ml/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
-    "verity/ml/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
-    "verity/ml/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",
-    "verity/ml/flock/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
+    "verity/protocols/pouw/verifier/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
+    "verity/circuits/PROTOCOL.md": "a format: the circuit file",
+    "verity/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
+    "verity/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
+    "adapters/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",
+    "verity/protocols/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
 }
 #: Specs of protocols whose verifier is already Lean, each to be deleted: {PROTOCOL.md: the Lean that covers it}. An entry
 #: only goes, in the PR that deletes its file.
 RETIRING = {
-    "verity/core/protocols/certifier/PROTOCOL.md": "verity/core/protocols/certifier/lean",
-    "verity/core/protocols/pous/PROTOCOL.md": "verity/core/protocols/pous/lean",
-    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "verity/core/protocols/remote_bandwidth/lean",
+    "verity/protocols/certifier/verifier/PROTOCOL.md": "verity/protocols/certifier/device/program/lean",
+    "verity/protocols/pous/verifier/PROTOCOL.md": "verity/protocols/pous/lean",
+    "verity/protocols/poub/verifier/PROTOCOL.md": "verity/protocols/poub/verifier/lean",
 }
 
 

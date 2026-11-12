@@ -44,7 +44,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/python"))
 
 from verity_flock.proof_server import ProofServer, Statement
 

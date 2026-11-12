@@ -35,9 +35,9 @@ mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW"
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || exit 7
-  (cd verity/core/service/spot && lake build sampled-proofs-verifier) || exit 7
-  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh || exit 6
+  (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) || exit 7
+  (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) || exit 7
+  RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &
 PB=$!
 
@@ -48,7 +48,7 @@ fi
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-sha512}
 export VERITY_WEIGHTS_HASH=${VERITY_WEIGHTS_HASH:-device-checked}
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED SERVING_ROWS
@@ -61,7 +61,7 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority normal \
 row() {  # NAME ARGS...: one `verity-vllm row run` of the row dir, its output in $OUT/NAME.out
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
-  (cd "$TREE/integrations/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
+  (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
      --hidden-so-fa3 "$FA3" --hidden-so-fa3-guarded "$FA3G" --norm-tap-so "$NT" "$@") > "$OUT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"

@@ -29,11 +29,11 @@ from typing import Any
 
 import pytest
 
-from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
-from verity.core.protocols.certifier.active import id_request
-from verity.core.protocols.certifier.certificate import Issuer, LmsSigner
-from verity.ml.crypto import lms
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.certifier.verifier import warden as W
+from verity.protocols.certifier.verifier.active import id_request
+from verity.protocols.certifier.verifier.certificate import Issuer, LmsSigner
+from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 HERE = Path(__file__).resolve().parent
@@ -46,7 +46,7 @@ with PP.network_traces():
     import warden_chain as WCH
     import warden_serve as WS
 
-_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/core/protocols/certifier/tests/scan_traffic.py")
+_spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/certifier/verifier/tests/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 

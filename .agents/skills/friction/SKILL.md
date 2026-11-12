@@ -139,11 +139,11 @@ Landing:
 
 - The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `integrations/vllm`, no
+  cleanup lanes pay the exceptions down; a feature PR owes none (`adapters/vllm/tools/ratchet_gate.py`).
+- A `# noqa` is an exception too: in `adapters/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
-- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
+- Outside `adapters/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
   after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
   list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at

@@ -1,5 +1,5 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
-(`verity.ml.windows.interface`) under core's registration:
+(`verity.commitments.windows.interface`) under core's registration:
 
 * the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
   the registration binds; a window with row tables is refused until its records carry their segment roots;
@@ -40,12 +40,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
-from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
-from verity.ml.circuits.ops import gemm as G
-from verity.ml.windows import interface as IF, rows as CS
+from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch, evaluate_words
+from verity.definitions.ops import gemm as G
+from verity.commitments.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -126,7 +126,7 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
 def test_a_registry_template_resolves_in_a_fresh_audit_process():
     """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
     fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
+    from verity.definitions.registry import boolean_io_shell as BX
 
     occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
     tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
@@ -134,7 +134,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
 import sys
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.ml.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
     p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
@@ -361,7 +361,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.core.protocols.pouw import operands as OP
+    from verity.protocols.pouw.verifier import operands as OP
 
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
@@ -669,7 +669,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
 def _history(d: Path, n: int = 4) -> SimpleNamespace:
     """``n`` units of ``Gemm_v2{K=16, N=8}``, two a member, their outputs history table ``latent``'s rows (capacity 16),
     the window written to ``d`` with the members' public bodies."""
-    from verity.ml.commitments import history as HT
+    from verity.commitments import history as HT
     g8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
     gid, rng = descriptor_id(g8), np.random.default_rng(3)
 
@@ -698,7 +698,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     and sample nothing, so the audit doesn't pass."""
     import a5 as A5
     import a5_coins as AC
-    from verity.ml.commitments import history as HT
+    from verity.commitments import history as HT
 
     got, seen = _history(tmp_path / "w"), {}
 
@@ -804,7 +804,7 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
     """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
     of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
     gives it."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
+    from verity.definitions.registry import boolean_io_shell as BX
 
     fn = bind(BX.ScanSlotsV2, **SLOTS)
     state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
@@ -1112,7 +1112,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)

@@ -20,7 +20,7 @@ set -uo pipefail
 PIECES=${1:?usage: served_case.sh PIECES}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PY=${PY:-/workspace/cp/venv312/bin/python}
-export PYTHONPATH=$ROOT:$ROOT/integrations/vllm:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
 CASE=$ROOT/benchmarks/pous/served_case.py
 rc=0
 if [ -f "$PIECES/pous/answer.json" ]; then

@@ -11,7 +11,7 @@
 #   bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 #   (a job run from a clone of the tree)
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from
-# (verity/ml/flock and verity/core/service/flock), and stops. PB_BINARIES=DIR (on the node, e.g. that run's out/bin) uses them
+# (verity/protocols/flock/prover and verity/protocols/flock/verifier), and stops. PB_BINARIES=DIR (on the node, e.g. that run's out/bin) uses them
 # when DIR's stamp is this source's, and otherwise builds here: M3 builds before its window, not in it.
 # Kept in $OUT: the summary, the logs and the session records; never a window's private file or the bundle's payload.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -26,7 +26,7 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
 
-STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock 2>/dev/null | tr '\n' ' ')
+STAMP=$(git rev-parse HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/verifier 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
 BUNDLE_WINDOW=benchmarks/one_stage/tests/fixtures/bundle-window
 FX=$REPO/$BUNDLE_WINDOW
@@ -41,14 +41,14 @@ if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$
   log "binaries: prebuilt in $PB_BINARIES, stamp $STAMP"
 else
   [ -n "${PB_BINARIES:-}" ] && log "binaries: $PB_BINARIES's stamp is not this source's ($STAMP), so they're built here"
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
+  (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
   LP=$!
   mkdir -p "$O/m0-build"
-  RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+  RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
     || { tail -40 "$O/m0-build/build.log"; exit 6; }
   BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
   wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-  LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify
+  LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
   FWL=${LEAN%/*}/flock-firewall
 fi
 sha256sum "$BIN" "$LEAN" "$FWL" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
@@ -58,7 +58,7 @@ if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   log "build only: $O/bin, stamp $STAMP"
   exit 0
 fi
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/examples/h200/interfaces:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/benchmarks/one_stage/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
 # (prove_path/run.sh)
