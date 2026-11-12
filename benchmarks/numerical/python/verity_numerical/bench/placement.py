@@ -48,9 +48,39 @@ import ipaddress
 import json
 import os
 import socket
+import statistics
+import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Mapping
+
+__all__ = [
+    "GATE_RULES",
+    "GATE_SCHEMA",
+    "PEER_ROLES",
+    "PROBE",
+    "RTT_METHOD",
+    "assess",
+    "cpu_list",
+    "cpu_text",
+    "dedicated_cores",
+    "from_job",
+    "from_runpod",
+    "gate",
+    "is_host_bridge",
+    "is_host_private",
+    "is_hypervisor_vendor",
+    "link_to",
+    "main",
+    "merge",
+    "probe",
+    "read_tasks",
+    "remote_probe",
+    "rtt_target",
+    "separation",
+    "tcp_rtt",
+]
 
 #: What a pair sharing a public IP (a datacenter's egress NAT) must record, on both pods and all different.
 NAT_IDS = ("machine_id", "product_uuid", "boot_id")
@@ -126,9 +156,6 @@ def _hypervisor_flag() -> bool | None:
 def tcp_rtt(target: str, n: int = RTT_CONNECTS, timeout: float = 5.0) -> dict[str, Any]:
     """Round trips of ``n`` kernel-level TCP connects to ``target`` (HOST:PORT): ``connect()`` to the SYN-ACK, no payload, each socket
     closed at once.  Median and minimum in ms, the address connected to, and how many failed."""
-    import statistics
-    import time
-
     host, _, port = target.rpartition(":")
     out: dict[str, Any] = {"target": target, "target_ip": None, "n": 0, "failed": 0, "median_ms": None, "min_ms": None,
                            "method": RTT_METHOD}
@@ -220,8 +247,6 @@ def rtt_target(peer: str | None) -> str | None:
 
 def remote_probe(machine: str, peer: str | None = None) -> dict[str, Any]:
     """:func:`probe` run on a pod over ``research pods ssh`` (this file on stdin), so a plan can see its DMI identity and RTT."""
-    import subprocess
-
     args = ["probe", *(["--peer", peer] if peer else []), *(["--rtt", rtt_target(peer)] if rtt_target(peer) else [])]
     r = subprocess.run(["research", "pods", "ssh", machine, "--", "python3", "-", *args], input=Path(__file__).read_text(),
                        capture_output=True, text=True, timeout=300)

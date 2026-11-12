@@ -1,4 +1,4 @@
-"""Front F6's per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
+"""The per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
 (``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit samples, and the unit's public
 work weight.
 
@@ -65,8 +65,10 @@ import ast
 import json
 import math
 import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from fractions import Fraction
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import census
@@ -148,8 +150,6 @@ def _key(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | 
 def run_builds(jobs: Iterable[tuple], n_jobs: int, fn: Callable[[tuple], tuple] = _build_job) -> dict[tuple, dict[str, Any]]:
     """Each build in its own spawned process (a build's forms are only freed with its process, and two registered lowerings
     register kernels that collide); a worker that dies (the OOM killer) raises BrokenProcessPool rather than hanging."""
-    from concurrent.futures import ProcessPoolExecutor
-
     jobs = list(dict.fromkeys(jobs))
     if n_jobs <= 1:
         return dict(fn(j) for j in jobs)
@@ -973,8 +973,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--reuse", help="an earlier run's unit-costs.json: take its subcircuit results instead of building")
     ap.add_argument("--retree", help="an earlier run's unit-costs.json: only re-price its samplers at the argmax tree (retree)")
     a = ap.parse_args(argv)
-    from pathlib import Path
-
     if a.retree:
         inv = json.loads(Path(a.retree).read_text())
         inv["retreed"] = a.retree
