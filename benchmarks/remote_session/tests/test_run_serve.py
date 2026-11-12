@@ -143,6 +143,9 @@ shift
 exec "$@"
 """
 
+LEASE_CORES = LEASE + "# gpu-lease N [--wait] [--on LIST] [--cores CPUS] [--max-min M] -- CMD...\n"
+"""A lease program whose text names ``--cores``; `LEASE` names none, as a lease program older than the option."""
+
 NVCC = r"""#!/bin/bash
 echo "nvcc $*" >> "$STUB_DIR/calls"
 while [ $# -gt 0 ]; do
@@ -400,6 +403,7 @@ def test_one_line_of_tiny_ends_0_with_its_verifier_started_and_its_session_accep
     lease, = [c for c in node.calls() if c.startswith("lease")]
     assert node.calls() == ["verifier", lease, "tiny"]
     assert lease.startswith(f"lease {node.lease} 1 --wait --max-min 30 -- taskset -c ")
+    assert f"the lease program {node.lease} names no --cores: cores " in p.stdout      # and is told none
     assert gone(v["pid"]) and v["pid"] == v["pgid"] and node.scratch() == []
 
 
@@ -475,6 +479,28 @@ def test_no_lease_ends_75_and_a_lease_is_asked_as_the_line_says(node):
     lease, = [c for c in node.calls() if c.startswith("lease")]
     assert lease.startswith(f"lease {node.lease} 1 --on 0 --max-min 20 -- ")
     assert node.provers() == [] and gone(node.verifier()["pid"])
+
+
+def test_a_served_line_declares_its_cores_to_a_lease_program_that_takes_them(node):
+    """The cores at work while the lease is held: the prover's and, under ROLE=both, its verifier's, which holds no
+    lease of its own; under ROLE=prover the verifier is another line's, and every core of this one is the prover's."""
+    verifier, prover = (",".join(map(str, c)) for c in cores())
+    both = prover if verifier == prover else f"{prover},{verifier}"
+    every = sorted(os.sched_getaffinity(0))
+    program(node.lease, LEASE_CORES)
+    p = node.both("tiny", NOWAIT="1", GPU="0")
+    assert p.returncode == 0, said(p)
+    assert "names no --cores" not in p.stdout
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        port = str(server.getsockname()[1])
+        (node.stub / "busy").write_text(port + "\n")
+        p = node.run(ROLE="prover", SERVE="row", ROW=ROW, ROW_FILE=str(node.row), PORT=port)
+        assert p.returncode == 0, said(p)
+    first, second = (c for c in node.calls() if c.startswith("lease"))
+    assert first.startswith(f"lease {node.lease} 1 --on 0 --max-min 30 --cores {both} -- taskset -c {prover} ")
+    alone = ",".join(map(str, every))
+    assert second.startswith(f"lease {node.lease} 1 --wait --max-min 30 --cores {alone} -- taskset -c {alone} ")
+    assert [x["cpus"] for x in node.provers() if x["what"] != "row build"] == [cores()[1], every]
 
 
 def test_nowait_ends_75_for_a_card_with_a_process_on_it_before_a_build_and_before_the_lease(node):
@@ -632,9 +658,11 @@ def test_the_lease_program_is_the_one_named_then_the_paths_then_the_nodes(node):
     installed.unlink()
     program(node.bin / "bash", LEASE_BASH)                         # a `bash` that runs what a lease script is handed
     assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the tree's script
-    leases = [c.split()[1:3] for c in node.calls() if c.startswith("lease")]
+    asked = [c for c in node.calls() if c.startswith("lease")]
+    leases = [c.split()[1:3] for c in asked]
     assert [x[0] for x in leases[:3]] == [str(node.lease), str(on_path), str(installed)]
     assert leases[3] == ["bash", str(ROOT / TREE_LEASE)] and (ROOT / TREE_LEASE).is_file()
+    assert [" --cores " in c for c in asked] == [False, False, False, True]     # the tree's script takes them
 
 
 # ------------------------------------------------------------------------------------ run.sh: a row around its lease

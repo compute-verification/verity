@@ -125,7 +125,10 @@
 # NODE_WORKSPACE/pouw/infra/bin/gpu-lease, else this tree's (tools/research/src/research/pods/sh/gpu_lease.sh). GPU
 # names the cards it may take (--on), and NOWAIT=1 takes them only if they are free now (exit 75 otherwise) instead
 # of queueing; a served line with both also ends 75 where a compute process is on those cards, one that took them
-# without the lease, asked before anything is built and again before the lease. A served line's CUDA_HOME defaults
+# without the lease, asked before anything is built and again before the lease. A served line declares the cores at
+# work while its lease is held to a lease program whose text names --cores: PROVER_CPUS and, under ROLE=both,
+# VERIFIER_CPUS, which the lease counts with every other lease's against the node's CPU quota (75 where they pass
+# it under NOWAIT=1); to a program that names none it declares none, and says so. A served line's CUDA_HOME defaults
 # to CUDA_ROOT/cuda-V (CUDA_ROOT default /usr/local) for the CUDA version V the prover's torch is built for, else
 # cuda-13.0, else cuda; any other line's to /usr/local/cuda-13.0. ROLE=prover takes PORT; ROLE=both and
 # ROLE=verifier pick one nothing listens on when it is not stated. Scratch is under TMPDIR (default /tmp), removed
@@ -328,18 +331,31 @@ elif [ "$ROLE" = prover ]; then
   ss -Hltn "sport = :$PORT" | grep -q . || { echo "no verifier tunnel on 127.0.0.1:$PORT"; exit 3; }
 fi
 if [ -n "${GPU_LEASE:-}" ]; then
-  command -v "$GPU_LEASE" > /dev/null || refuse "GPU_LEASE=$GPU_LEASE is not a program"
+  LF=$(command -v "$GPU_LEASE") || refuse "GPU_LEASE=$GPU_LEASE is not a program"
   LP=("$GPU_LEASE")
-elif command -v gpu-lease > /dev/null; then LP=(gpu-lease)
-elif [ -x "$WS/pouw/infra/bin/gpu-lease" ]; then LP=("$WS/pouw/infra/bin/gpu-lease")
-else LP=(bash "$PWD/tools/research/src/research/pods/sh/gpu_lease.sh"); fi
+elif LF=$(command -v gpu-lease); then LP=(gpu-lease)
+elif [ -x "$WS/pouw/infra/bin/gpu-lease" ]; then
+  LF=$WS/pouw/infra/bin/gpu-lease
+  LP=("$LF")
+else
+  LF=$PWD/tools/research/src/research/pods/sh/gpu_lease.sh
+  LP=(bash "$LF")
+fi
 # A served line's lease holds the card: where GPU_LEASE names the tool, a row's Commit would ask for one of its own
 # (`verity_vllm.pipeline.gpu_lease`).
 [ -n "$SERVED" ] && unset GPU_LEASE
 WAIT=(--wait)
 [ -n "${NOWAIT:-}" ] && WAIT=()
-LEASE=("${LP[@]}" "${GPUS:-1}" "${WAIT[@]}" ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}" --)
+LEASE=("${LP[@]}" "${GPUS:-1}" "${WAIT[@]}" ${GPU:+--on "$GPU"} ${TIMED:+--timed} --max-min "${MAXMIN:-30}")
 [ -n "${GPU_LEASE_UUID:-}" ] || [ -n "${CPU:-}" ] && LEASE=()
+if [ -n "$SERVED" ] && [ ${#LEASE[@]} -gt 0 ]; then
+  # the cores at work while the lease is held: the prover's and, under ROLE=both, its verifier's, which holds no lease
+  LEASE_CPUS=$PROVER_CPUS
+  [ "$ROLE" = both ] && [ "$VERIFIER_CPUS" != "$PROVER_CPUS" ] && LEASE_CPUS+=,$VERIFIER_CPUS
+  if grep -q -e '--cores' "$LF" 2> /dev/null; then LEASE+=(--cores "$LEASE_CPUS")
+  else echo "run.sh: the lease program $LF names no --cores: cores $LEASE_CPUS are pinned under it, not declared to it"; fi
+fi
+[ ${#LEASE[@]} -gt 0 ] && LEASE+=(--)
 export CPU=${CPU:-} CODEC=${CODEC:-p512/k2}
 card_free() { # NOWAIT=1 with GPU: 75 where a compute process is on those cards, one that took them without the lease
   [ -n "${NOWAIT:-}" ] && [ -n "${GPU:-}" ] && [ ${#LEASE[@]} -gt 0 ] || return 0
