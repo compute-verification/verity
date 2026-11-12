@@ -127,6 +127,37 @@ def test_a_window_put_before_its_sessions_is_one_process_and_every_member_links_
         assert all((out / "archive" / "sha512" / k).samefile(tmp_path / "lean-verify" / "archive" / "sha512" / k) for k in mine)
 
 
+def test_the_windows_registered_circuit_record_is_put_once_and_named_only_beside_registered_reads(tmp_path):
+    """The window's one record (``st["interface_file"]``) is among a member's files, and `verify`'s ``--interface``,
+    exactly where the member has registered reads: the window's put archives it once, each reading member links it and
+    names it by its key, and the member with no registered reads is verified without it."""
+    lean, puts, members, archived = window(tmp_path)
+    record = tmp_path / "circuit.json"
+    record.write_bytes(b"the window's registered circuit record")
+    for st, _ in members:
+        st["interface_file"] = record
+    assert [a0.bound_files(st) for st, _ in members] == [["program"], *[["program", "registered", "interface"]] * 2]
+    files = [f for st, _ in members for f in a0.archive_files(st, 8)]
+    assert [record in a0.archive_files(st, 8) for st, _ in members] == [False, True, True]
+    keys = a0.archive_put(str(lean), tmp_path / "lean-verify" / "archive", files, tmp_path / "archive-put.log", archived)
+    (put,) = [json.loads(x) for x in puts.read_text().splitlines()]
+    assert put.count("circuit.json") == 1 and keys[record] == hashlib.sha512(record.read_bytes()).hexdigest()
+    assert [a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"] for st, out in members] == [True, True, True]
+    assert len(puts.read_text().splitlines()) == 1
+    for k, (st, out) in enumerate(members):
+        said = (out / "lean-verify.log").read_text().splitlines()[0].split()
+        assert ("--interface" in said) == bool(k), said
+        if k:
+            assert said[said.index("--interface") + 1] == keys[record]
+            assert said.index("--registered") < said.index("--interface") < said.index("--session")
+            assert (out / "archive" / "sha512" / keys[record]).samefile(tmp_path / "lean-verify" / "archive" / "sha512" / keys[record])
+    # a negative that drops the reads drops the record with them, and one that drops the record keeps the reads
+    st, out = members[1]
+    none = {x: y for x, y in st.items() if x != "registered_file"}
+    assert a0.bound_files(none) == ["program"] and record not in a0.archive_files(none, 8)
+    assert a0.bound_files({x: y for x, y in st.items() if x != "interface_file"}) == ["program", "registered"]
+
+
 def test_a_file_changed_or_new_since_the_window_put_is_put_by_the_verify_that_reads_it(tmp_path):
     """A negative's altered copy is a new file, and a file rewritten in place is no longer the one archived: each is put
     by its own verify, under its own log, and a file that is gone is left for Lean to refuse."""
