@@ -11,8 +11,8 @@ import pytest
 
 import ncp_lean as NL
 import pouw_vectors as MV
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.protocols.pouw.prover.schemes import get, ncp
+from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "ncp.json").read_text())
 
