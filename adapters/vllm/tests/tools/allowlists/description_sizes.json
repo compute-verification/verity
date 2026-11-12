@@ -24,12 +24,6 @@
      "removed_by": "no one yet (cut by #8426 under CIR-202, after the census; CIR-215)"},
     {"template": "GreedyCombine_v1{V=154880,N=16384}",
      "why": "Calls, written out lane by lane over the last chunk's lanes",
-     "removed_by": "no one yet (cut by #8426 under CIR-202, after the census; CIR-215)"},
-    {"template": "SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-     "why": "traced: its own body is every gate of it",
-     "removed_by": "serving naming SparseMlaHeadBlock_v3 (#8765, on main) or the scores and values units (CIR-241)"},
-    {"template": "SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
-     "why": "traced: its own body is every gate of it",
-     "removed_by": "serving naming SparseMlaHeadBlock_v3 (#8765, on main) or the scores and values units (CIR-241)"}
+     "removed_by": "no one yet (cut by #8426 under CIR-202, after the census; CIR-215)"}
   ]
 }

@@ -11,6 +11,8 @@ import collections
 import json
 import re
 
+__all__ = ["CC_ARCH", "count", "parse"]
+
 IMAD = re.compile(r"^(IMAD|IMUL)$")
 ALU = re.compile(r"^(IADD3|IADD|LOP3|LOP|SHF|PRMT|LEA)$")
 MODES = {0: "cpw_none", 1: "cpw_redux", 2: "cpw_red64", 3: "cpw_atoms64", 4: "cpw_shfl", 5: "cpw_egress",
@@ -32,7 +34,9 @@ def cls(op: str) -> str:
 
 def parse(path: str) -> dict[tuple[str, str], tuple[list[str], dict[str, int], list[tuple[int, str]]]]:
     arch, kernel, out = "?", None, {}
-    for line in open(path, encoding="utf-8"):
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+    for line in lines:
         m = re.match(r"\s*arch = (sm_\w+)", line)
         if m:
             arch, kernel = m.group(1), None
@@ -85,7 +89,9 @@ def count(path: str) -> dict[str, dict[str, dict]]:
 
 def device(path: str) -> tuple[str | None, dict[str, list[dict[str, float]]]]:
     arch, rows = None, collections.defaultdict(list)
-    for line in open(path, encoding="utf-8"):
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+    for line in lines:
         m = re.match(r"device cc=(\S+)", line)
         if m:
             arch = CC_ARCH.get(m.group(1))

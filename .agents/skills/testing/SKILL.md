@@ -18,7 +18,8 @@ each suite in its own process from its own directory, and `check` runs the same 
 ## Run tests
 
 Suites run remotely through `research run --on auto` (AGENTS.md "Tests"). Its launch says where the job went and when
-it should start, and warns when that is over 10 minutes away (`research/auto.py`). Give
+it should start, and warns when that is over 10 minutes away (`research/auto.py`). A machine that can start no run takes
+no job: the launch passes over it for the next, saying which and why. Give
 it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and `uv sync` that tree first:
 `suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
 
@@ -77,7 +78,7 @@ reused only while everything its tests read is unchanged. When it fails:
 - **Only the tests need it** (a cross-check against another package, a shared fixture, the census): list it under
   `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why, as narrowly as a directory or
   file allows. A listed workspace package is its directory alone, not its dependencies, and every listed path adds the
-  suite to the quick tier of each change under it.
+  suite to the quick tier of each change under it and keys each of its test files in the graph, Python with its imports.
 - **One test file reads what its source doesn't name** (a tree it walks, a module it loads by a computed name, what a
   program it starts reads): the graph's test-file family keys each file on its own inputs, so add a
   `[[tool.verity.tests.reads]]` entry with `tests` (the files, from the suite's directory) and `paths` (what they read,
