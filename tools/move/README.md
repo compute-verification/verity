@@ -71,15 +71,18 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
         --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
-If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. Where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells, `move_check.py`
+A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
+it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it
+once `move_check.py` certifies that run (the team skill's "Landing"). It needs a land verdict while drive.toml's
+`lowrisk_lane` is off, and under `signed_verdicts` when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
+crosses it with `restack.py`.
+
+Where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells, `move_check.py`
 certifies the move and only a build would find the file. Neither `stage.py` nor `check` looks for it on a move: whoever
 stages a move, or stages it again, runs `main`'s `python3 tools/move/resolve_check.py PARENT COMMIT` on each commit of a
 word map once `stage.py` has made it, before the move's Lean build, and reads each issue. The script compares the two
 commits' text and elaborates nothing, so it names some files that are fine and misses others: an issue is where to look,
-and the Lean build stays the authority on whether the move builds. A move's PR, whose body says
-`Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land verdict (the team skill's "Landing"); once
-it lands, each open branch crosses it with `restack.py`.
+and the Lean build stays the authority on whether the move builds.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a map with `[[words_in]]` and no `[words]`
@@ -94,6 +97,13 @@ with each path's first offending hunk, every change its docstring doesn't list a
 - a lock's records (`pins`, `guarantees`, `reads`) changed, or a pin rewritten to other than its file's digest at the
   head;
 - a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package.
+
+A certificate says that nothing but paths, modules and words changed. It does not say that every path which had to
+change did: a path no pass of the rewrite reads stays as written, and its commit is still a pure move. For Lean the mover
+checks it itself: `layout.py` stops (exit 1) a move after which a Lake package's path to another package (a requirement's
+`path` in a `lakefile.toml`, a path package's `dir` in a `lake-manifest.json`) names no package where it named one
+before, and names the file and the path. A path of any other kind that a move leaves behind is found by the check on
+its candidate.
 
 Once the moves have landed, each open branch crosses all of them with one command:
 

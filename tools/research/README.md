@@ -302,7 +302,8 @@ what is in use (page cache excluded), minus the not-yet-used part of every live
 reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
 `ramlock = DIR` overrides it), is at least N. They count against the machine's
 outermost limited cgroup (a node's user slice), not the run's. A reservation is live unless its
-pid is gone or its run is terminal. The run then writes
+pid is gone, its run is terminal, or it names no pid and a run directory that
+is gone. The run then writes
 `research-<run id>.json` there, and the runner removes it at exit. Otherwise the
 run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
 `--mem-wait S` polls for up to S seconds instead. job.json records the
