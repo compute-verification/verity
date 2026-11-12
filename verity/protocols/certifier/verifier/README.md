@@ -162,7 +162,8 @@ A spec-level reference for network accounting's timing channel:
   (`Shape`'s offsets), which the scan's ingress step writes;
 - the lengths row's proof block (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
   execution phase and slot stride (`PROTOCOL.md`, "The lengths row's proof block");
-- the response tie's two proof blocks (`response_tie`, beside it), in no Spec;
+- the response tie's two proof blocks (`response_tie`, beside it) and its verifier (`response_tie_service`): a
+  class's tie's record held to the signed head, its verdict accepted and complete apart;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one

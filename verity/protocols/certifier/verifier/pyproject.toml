@@ -9,6 +9,7 @@ untraced = [
     "tests/test_network_certifier_link_window_lean.py",
     "tests/test_network_certifier_period.py",
     "tests/test_network_certifier_registered.py",
+    "tests/test_network_certifier_response_tie_service.py",
     "tests/test_network_certifier_served.py",
     "tests/test_network_certifier_service.py",
     "tests/test_network_certifier_tie_service.py",
@@ -26,6 +27,7 @@ paths = ["verity/circuits", "verity/definitions/kernels"]
 tests = [
     "tests/test_network_certifier_issuer_lean_difftest.py",
     "tests/test_network_certifier_lean_difftest.py",
+    "tests/test_network_certifier_response_tie_service.py",
     "tests/test_network_certifier_tie_service.py",
     "tests/test_network_check_lean_difftest.py",
 ]
