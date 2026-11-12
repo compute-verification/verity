@@ -248,7 +248,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
     prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
-    rows = next((held for name in ("identities", "entries", "rows") if (held := manifest.get(name))), [])
+    rows: list[Mapping[str, Any]] = next((held for name in ("identities", "entries", "rows") if (held := manifest.get(name))), [])
     padded = {_identity_key(p) for p in padding_identities}
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
