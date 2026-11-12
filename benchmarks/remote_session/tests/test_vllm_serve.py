@@ -28,10 +28,11 @@ def remote_or_skip():
         pytest.skip("no StoreBackend in verity_vllm.protocols.remote_bandwidth.remote")
 
 
-def serve(out: Path, plan: str) -> dict:
+def serve(out: Path, plan: str, code: int) -> dict:
+    """`serve.py --local` under ``plan``, which must exit ``code``: 0 only for an accepted session."""
     r = subprocess.run([sys.executable, str(SERVE), "--local", "--plan", plan, "--out", str(out)],
                        capture_output=True, text=True)
-    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-4000:]
+    assert r.returncode == code, r.stdout[-4000:] + r.stderr[-4000:]
     return json.loads((out / "serve.json").read_text())
 
 
@@ -42,7 +43,7 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     serving is accepted, with the memory line's weights the layout's and its KV read the record's post-seed reads; a
     prover that withholds the first block appended is rejected at a receipt on it (every receipt is sampled)."""
     remote_or_skip()
-    d = serve(tmp_path / "serve", "serve")
+    d = serve(tmp_path / "serve", "serve", 0)
     v, p = d["verifier"], d["prover"]
     assert v["accepted"] and p["accepted"] and v["failure"] is None
     assert d["trace"]["steps"] >= 12 and sum(r["finished"] is not None for r in d["trace"]["requests"]) >= 2
@@ -55,7 +56,7 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     assert mem["labels"] and not mem["kv_credited"] and mem["read"]["kv"] == sum(pub["post_seed"]) * B
     assert all(w["held"]["weights"] == weights for w in mem["windows"])
 
-    d = serve(tmp_path / "drop", "servedrop:1")
+    d = serve(tmp_path / "drop", "servedrop:1", 6)
     v, p = d["verifier"], d["prover"]
     assert not v["accepted"] and not p["accepted"]
     assert v["failure"]["failure"] == "receipt" and p["failure_on_dropped"] is True

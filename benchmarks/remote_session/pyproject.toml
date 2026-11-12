@@ -3,7 +3,8 @@
 # (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
 # (`uv run tools/verity/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
-# `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are. `sampling_inputs.py`
+# `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are; `run.sh`'s served
+# lines (SERVE=tiny, SERVE=row) run on a node of stubs, with no GPU, in `tests/test_run_serve.py`. `sampling_inputs.py`
 # reads a run's `verifier.json` for the audit's side of a sampling plan: ε, the line and the serving cost. `auditor_line.py`
 # reads a gate run's memory line on the auditor's clock, computed by the Lean verifier (its `line` request) and held
 # exactly to `line.py`'s: each group's coin and last root from the challenger's signed
@@ -28,6 +29,7 @@ untraced = [
     "tests/test_gate_run.py",
     "tests/test_gate_whatif.py",
     "tests/test_lease.py",
+    "tests/test_run_serve.py",
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
@@ -58,7 +60,10 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
+          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py",
+          # test_run_serve.py: the kv.cu that run.sh's SERVE=row hands nvcc, and the lease script run.sh falls back to,
+          # are files of the tree
+          "benchmarks/word_codec/kv.cu", "tools/research/src/research/pods/sh/gpu_lease.sh"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
