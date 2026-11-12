@@ -231,6 +231,18 @@ def test_an_arrival_after_an_empty_schedule_says_how_many():
         ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, 1)]
 
 
+def test_a_request_added_again_under_an_id_the_scheduler_holds_is_one_arrival():
+    sched = FakeScheduler()
+    trace = ST.StepTrace().install(sched)
+    sched.add_request(_req("a", 3, [5, 2], 4))
+    sched.add_request(_req("a", 3, [5, 2], 4))                  # held: no second record
+    sched.add_request(_req("b", 2, [2], 1))
+    del sched.requests["a"]
+    sched.add_request(_req("a", 3, [5, 2], 4))                  # no longer held: it arrives again
+    assert [r["request"] for r in trace.records if r["kind"] == "arrive"] == ["a", "b", "a"]
+    trace.uninstall()
+
+
 def test_the_header_says_where_the_launch_left_the_context_limit_to_vllm():
     """vLLM keeps the launch's -1 beside the limit it fitted to the KV pool (its model config's ``original_max_model_len``).
     A replay's engine is then launched at -1 on the header's block count, so its model is built at the length the served one
