@@ -127,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
@@ -243,7 +242,7 @@
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
         "verity/protocols/pouw/clear/",
-        "benchmarks/pouw/machine_model/",
+        "benchmarks/machine_model/",
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
@@ -293,10 +292,7 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
-        "archive/examples/dither_full_util/",
-        "archive/benchmarks/pouw/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -469,7 +465,8 @@
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
-        "benchmarks/certifier_timing/"
+        "benchmarks/certifier_timing/",
+        "benchmarks/scan_cost/"
       ],
       "branch_suffixes": [
         "728f",
@@ -495,6 +492,9 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
+      ],
+      "owns": [
+        "benchmarks/metrics.toml"
       ]
     },
     {
@@ -618,8 +618,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {
@@ -633,6 +632,7 @@
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/prod_repro/",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -664,7 +664,7 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/exfiltration/",
-        "benchmarks/specs/",
+        "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
         "benchmarks/README.md"

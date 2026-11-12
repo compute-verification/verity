@@ -71,7 +71,7 @@ for L in "${WINDOWS[@]}"; do
     s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
     [ -n "$s" ] || { echo "no session under $D" > "$O/lean/$tag.err"; continue; }
     while [ "$(jobs -rp | wc -l)" -ge "$PAR" ]; do wait -n; done
-    $TIME "$O/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $WK/circuit.txt \
+    $TIME "$O/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $WK/circuit.txt \
       --statement verity/flock-circuit --public $pub $BOUND --registered $reg --session $s" > "$O/lean/$tag.out" 2> "$O/lean/$tag.err" &
   done < "$WK/plan.tsv"
   wait

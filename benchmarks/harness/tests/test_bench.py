@@ -18,11 +18,13 @@ import pytest
 
 from verity_config import Admission
 
-from verity_bench import jobs
+from verity_bench import jobs, steady_spec
 from verity_bench.cli import _parser, main
 from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.presets import (
+    FORMER_SPECS,
     GPUS,
+    SOURCE_ROOT,
     SPEC_ROOT,
     Sweep,
     SweepPoint,
@@ -146,6 +148,9 @@ def test_every_toml_spec_strictly_loads():
     loaded = []
     for path in sorted(SPEC_ROOT.glob("*.toml")):
         if path.name == "pyproject.toml":   # the specs' own suite
+            continue
+        if steady_spec.is_steady(path):
+            assert steady_spec.load_spec(path).id == path.stem
             continue
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
@@ -508,7 +513,27 @@ def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
     for argv in (workload, wrapped):
         params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
         assert key == {"identity": item.identity}
-        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml"
+
+
+def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
+    """A command written while the specs had a directory of their own names a file there. It loads as the spec of that
+    name, a steady-state spec's path resolves the same way, and its points record the path the spec has now."""
+
+    from verity_bench import served_table, steady_spec
+    from verity_bench.vllm import presets
+
+    name = "llama31-8b-fp8-1gpu"
+    former = SOURCE_ROOT / FORMER_SPECS / f"{name}.toml"
+    assert presets.former_name(former) == presets.former_name(f"{FORMER_SPECS}/{name}.toml") == name
+    assert presets.former_name(name) is None and presets.former_name(tmp_path / f"{name}.toml") is None
+    assert presets.former_name(f"not-{FORMER_SPECS}/{name}.toml") is None
+    assert load_spec(former) == load_spec(name) and resolve_spec(former) == resolve_spec(name)
+    assert steady_spec.spec_path(former).samefile(SPEC_ROOT / f"{name}.toml")
+    assert jobs._relative_spec(former, SOURCE_ROOT) == served_table.spec_path(name)
+    assert (SOURCE_ROOT / served_table.spec_path(name)).samefile(SPEC_ROOT / f"{name}.toml")
+    with pytest.raises(Exception, match="no benchmark spec"):
+        load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
 
 
 def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():

@@ -62,8 +62,8 @@ from verity_vllm.pipeline.spans import Spans
 
 GPU_CHUNK_BYTES = 256
 
-# the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
-# CompiledGraphSource.wrap_model); TP rank committers (pipeline/tp/rank_worker.py) have no plan yet and keep it
+# the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer); TP rank committers
+# (pipeline/tp/rank_worker.py) have no plan yet and keep it
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",

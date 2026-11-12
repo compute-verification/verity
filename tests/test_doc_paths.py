@@ -87,10 +87,6 @@ WAITING = {
     ("security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
-    ("security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/fp8atom_vectors.py"):
-        "both demo branches edit the file",
-    ("security/Definitions/Pouw.lean", "verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py"):
-        "both demo branches edit the file",
     ("security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/RowCircuit.lean", "tests/test_circuit_row_lean.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",

@@ -12,7 +12,7 @@ from conftest import bf16, f32
 from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, tc_dot
 from verity_numerical.checker import REAL, Reject, check_step, check_vu, gen_step, gen_vu
 from verity_numerical.checker.gadgets import Epilogue
-from verity_numerical.checker.tables import align_table, norm_table, pow_table
+from verity_numerical.checker.tables import align_table, norm_table
 
 P = REAL
 ONE = bf16(0, 127, 0)

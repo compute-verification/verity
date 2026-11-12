@@ -263,7 +263,7 @@ class CommitWindows:
     is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
     with ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live
     ``BlockPool``) and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`).
-    ``coins`` (`engine.served_seed.SeedCoins`, which the engine loop draws from as it admits) names the seed coin each
+    ``coins`` (`engine.served_seed.SeedCoins`, which the engine loop reads as it admits) names the seed coin each
     window opens under in its line (``seed_coin``)."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,

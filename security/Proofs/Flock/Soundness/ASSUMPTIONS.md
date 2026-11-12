@@ -361,12 +361,12 @@ malicious-verifier claim rests on beyond the theorems.
   byte's zero fill bits and SHA-512's padding, in a block with row bytes or in a block of its own); and a unit's leaf bit
   past `ℓ`, read from its slot's forced-zero row. That these constants are SHA-512's padding of `P(ℓ)` and the row's
   bytes is part of what it assumes. `HmRows.v2` takes `enc_inj` from `FlockLevel3.RowV2.enc_inj`.
-- **What it gives, and `δ_tree`:** `assumption-notes/hm-row-computes.md`.
+- **What it gives, and `δ_tree`:** `README.md` §1.3 (The value binding); What is restated over the two forms, above.
 - **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing.
 - **Proved so far** for `sha512/row/v1` rows: `row_bc_setupH` (untyped, given `hv1` and `ho`), `keyedRowsOuts_computes`
-  (the keyed layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
+  (the keyed layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis).
 - **Upstream:** watch entry `hm-row-computes`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
@@ -437,8 +437,10 @@ before the session's first coin, not bounds state by state.
 - **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
   before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
   tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
-- **`seed` coins** (`coin-commit/sha256/v1`; the circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
-  add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
+- **`seed` coins** (the circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`; earlier,
+  `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and the derivation's hash in counter
+  mode is a PRF: SHA-512 (`prf/sha-512`; `live/src/coin_seed.rs`), SHA-256 in the earlier recorded sessions
+  (`coinDerivation`, `Flock/Tags.lean`). No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins), and the Lean verifier refuses it once every
   check has passed (`ProvedScope.SEED_COINS`).
 - **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain

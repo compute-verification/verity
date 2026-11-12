@@ -35,7 +35,7 @@ from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
-from verity.protocols.poub.verifier import p2_case, p2_lean
+from verity.protocols.poub.verifier import ledger, p2_case, p2_lean
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -222,7 +222,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
     leg = BR.leg("pous", row, server=NODE, runs=[])
-    assert leg["quantity"] == {"symbol": "S_cert", "value": 0, "unit": "bits", "certified": False}
+    assert leg["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
 
     prof = answer["profile"]
     w_bytes = sum(n * k for n, k in SHAPES.values()) * LAYERS
@@ -587,6 +587,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     row = SV.piece_row("bandwidth", s.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}
+    assert row["answer"]["profile"]["named_terms"] == bw["profile"]["named_terms"] == ledger.NAMED_TERMS
     assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))

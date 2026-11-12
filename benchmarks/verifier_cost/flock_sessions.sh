@@ -74,8 +74,9 @@ verify() {   # verify TAG PUB SESSION...: one `verify` of the sessions on CORE, 
   local tag=$1 pub=$2 pk
   shift 2
   pk=$(taskset -c "$CORE" "$LEAN" archive-put "$A" "$pub" | awk 'NR == 1 {print $1}')
-  # every argument after --session is a session's directory
-  /usr/bin/time -v -o "$OUT/$tag.time" taskset -c "$CORE" "$LEAN" verify --statement verity/flock-circuit --archive "$A" \
+  # every argument after --session is a session's directory; verifier_env is job.sh's, the pool's allocator setting
+  # shellcheck disable=SC2046
+  /usr/bin/time -v -o "$OUT/$tag.time" taskset -c "$CORE" $(verifier_env) "$LEAN" verify --statement verity/flock-circuit --archive "$A" \
     --circuit "$CK" --public "$pk" --zk --session "$@" > "$OUT/$tag.out" 2> "$OUT/$tag.err"
   log "$tag exit $?: $(grep -E ' ms$' "$OUT/$tag.err" | sed 's|^/.*/||' | tr '\n' ';') $(spent "$OUT/$tag.time")"
 }
@@ -121,7 +122,8 @@ fi
 [ ${#SAVED[@]} -eq 0 ] || FIRST="$D/pub.bin ${SAVED[0]}"
 if [ -n "$FIRST" ] && command -v perf > /dev/null; then
   pk=$(taskset -c "$CORE" "$LEAN" archive-put "$A" "${FIRST% *}" | awk 'NR == 1 {print $1}')
-  taskset -c "$CORE" perf record -F 99 -o "$W/perf.data" -- "$LEAN" verify --statement verity/flock-circuit --archive "$A" \
+  # shellcheck disable=SC2046
+  taskset -c "$CORE" perf record -F 99 -o "$W/perf.data" -- $(verifier_env) "$LEAN" verify --statement verity/flock-circuit --archive "$A" \
     --circuit "$CK" --public "$pk" --zk --session "${FIRST#* }" > "$OUT/perf-verify.out" 2> "$OUT/perf-verify.err"
   perf report -i "$W/perf.data" --stdio --no-children --sort symbol --percent-limit 0.3 2> /dev/null | grep -v '^#' | grep -v '^$' \
     > "$OUT/perf-symbols.txt"

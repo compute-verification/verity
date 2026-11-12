@@ -285,8 +285,8 @@ def check_slack() -> Check:
     return Check("slack", OK, f"auth.test is ok ({api.via})")
 
 
-#: (what ssh says, what it means), the first that matches. No host-key failure: `research`'s ssh sets StrictHostKeyChecking=no
-#: (runpod.ssh_command), so ssh warns of a changed key and still connects with the research key.
+#: (what ssh says, what it means), the first that matches. No host-key failure: `research`'s ssh to an ssh machine checks no
+#: host key (runpod.ssh_command), so ssh warns of a changed key and still connects with the research key.
 SSH_FAILURES = (
     (re.compile(r"Permission denied|Too many authentication failures", re.I), "refused the key"),
     (re.compile(r"Could not resolve|timed out|Connection refused|No route to host|Network is unreachable|closed by remote|reset by peer",

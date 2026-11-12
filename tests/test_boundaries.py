@@ -192,7 +192,7 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
 CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
-              "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
+              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
@@ -303,13 +303,12 @@ INFRA_IMPORTERS = {
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
     # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
-                                                       "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
-                                                       "`config.P2_POUS` and `config.P2_STAGE`",
+    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
+                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
-                                                                          "`config.REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`)",
+                                                                          "its `REMOTE_SESSION`) and `paged.py` "
+                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
@@ -987,11 +986,11 @@ def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], lo
 
 
 def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str, list[str]]:
-    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` (and ``archive/``, which has rules of its
-    own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
+    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` that imports a module of
+    ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``config.REMOTE_SESSION``), and through any function, wherever it
+    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
     is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))
@@ -999,7 +998,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith(("benchmarks/", "archive/"))}
+    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     constants: set[str] = set()
 

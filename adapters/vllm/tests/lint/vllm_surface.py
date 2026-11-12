@@ -1,5 +1,5 @@
 """The closed list of vLLM's modules and names that the integration's library code imports, at the pin
-(`verity_vllm.config.VLLM`).
+(`verity_vllm.config.VLLM`); `test_vllm_surface.py` resolves it at whichever build of `engine.stock.BUILDS` is installed.
 
 `SURFACE` maps each to why the integration needs it: ``"vllm.mod"`` for a module imported whole (``import vllm.mod``) and
 ``"vllm.mod:name"`` for a name imported from one (``from vllm.mod import name``). `test_vllm_surface.py` refuses an
@@ -11,6 +11,8 @@ from __future__ import annotations
 SURFACE = {
     # the engine and its requests
     "vllm": "the package, for its version, which records and facts carry beside config.VLLM",
+    "vllm._version:__commit_id__": "the installed build's commit, which engine.stock names it by and config.vllm_revision "
+                                   "puts after a tagged build's version, which carries none",
     "vllm:LLM": "the engine engine.build builds, as the tensor-parallel capture, commit and match drivers do",
     "vllm:EngineArgs": "the arguments engine.stock builds a stock in-process LLMEngine from",
     "vllm:SamplingParams": "a request's sampling parameters, which the adapter, the servers and served_match pass",
@@ -23,7 +25,7 @@ SURFACE = {
     "vllm.v1.core.sched.scheduler:Scheduler": "the V1 scheduler, which engine.handle returns and the tick's gate and PoUB's "
                                               "binder hook",
     "vllm.v1.core.block_pool:BlockPool": "the KV block pool, whose allocations PoUB's binder records",
-    "vllm.v1.worker.gpu_model_runner:GPUModelRunner": "the model runner, which engine.handle returns",
+    "vllm.v1.worker.gpu.model_runner:GPUModelRunner": "Model Runner V2, which engine.env.ENGINE selects and engine.handle returns",
     "vllm.v1.executor.multiproc_executor:WorkerProc": "the tensor-parallel worker process, which the TP lease hooks",
     # configuration and the platform
     "vllm.envs": "vLLM's environment switches, which engine.build, the inventory and the served facts read back",
@@ -32,13 +34,10 @@ SURFACE = {
     "vllm.config:set_current_vllm_config": "the config the meta-device frontend builds its model under",
     "vllm.platforms:current_platform": "the platform, whose device capability the frontend's profile pins and facts record",
     "vllm.platforms.interface:DeviceCapability": "a compute capability, to ask vLLM's tuned GEMM arch family for a device",
-    "vllm.utils:deep_gemm": "vLLM's DeepGEMM: its verdict, which the build inventory records, and the FP8 GEMMs "
-                            "engine.stock_kernels calls",
+    "vllm.utils:deep_gemm": "vLLM's DeepGEMM: its verdict, which the build inventory records",
     "vllm.utils:flashinfer": "vLLM's FlashInfer verdict, which the build inventory records",
     "vllm.utils.flashinfer:has_flashinfer": "vLLM's FlashInfer verdict for this process, which engine.build records",
     "vllm.utils.platform_utils:num_compute_units": "the SM count that fixes the top-p split's launch geometry",
-    "vllm.utils.torch_utils:is_quantized_kv_cache": "whether the KV cache is quantized, which the int8 attention backend "
-                                                    "refuses",
     "vllm.utils.torch_utils:set_default_torch_dtype": "the dtype a meta-device model is built under",
     "vllm.ir": "vLLM's IR ops, which the frontend makes torch-wrapped so that its export sees through them",
     # distributed
@@ -51,13 +50,10 @@ SURFACE = {
     "vllm.distributed:tensor_model_parallel_all_reduce": "the all-reduce the export's TP ops stand in for",
     "vllm.distributed.parallel_state:get_pp_group": "a PoUW H1 rank's pipeline-parallel rank",
     "vllm.distributed.parallel_state:get_tp_group": "the TP group: its device communicator, and a PoUW H1 rank's TP rank",
-    "vllm.distributed.device_communicators.cuda_communicator:CudaCommunicator": "a group's CUDA communicator, whose "
-                                                                                "all-reduce engine.collectives.all_reduce wraps",
     "vllm.forward_context:set_forward_context": "a forward context with no attention metadata, for the frontend's export",
     # compilation and CUDA graphs
-    "vllm.compilation.backends": "VllmBackend, whose compiled graphs the compiled source renumbers",
-    "vllm.compilation:cuda_graph": "CUDAGraphWrapper, whose replays the compiled sources hook",
-    "vllm.compilation:piecewise_backend": "PiecewiseBackend, whose pieces the compiled sources hook",
+    "vllm.compilation:cuda_graph": "CUDAGraphWrapper, whose replays the served compiled source hooks",
+    "vllm.compilation:piecewise_backend": "PiecewiseBackend, whose pieces the served compiled source hooks",
     "vllm.v1.worker:workspace": "the engine's persistent MoE workspace, which export_compat resets",
     "vllm.v1.worker.gpu:cudagraph_utils": "CudaGraphManager, whose captures the served compiled source hooks",
     "vllm.v1.worker.gpu:model_runner": "the V2 model runner, whose CUDA graph dispatch the served compiled source hooks",
@@ -100,10 +96,6 @@ SURFACE = {
     "vllm.model_executor.layers.quantization:register_quantization_config": "registers the int8 quantization config",
     "vllm.model_executor.layers.quantization.base_config:QuantizationConfig": "the base of the int8 quantization config",
     "vllm.model_executor.layers.quantization.utils.quant_utils:is_layer_skipped": "the layers the int8 recipe leaves bf16",
-    "vllm.model_executor.layers.quantization.utils.fp8_utils:per_token_group_quant_fp8": "the per-token-group FP8 quant "
-                                                                                         "engine.stock_kernels calls",
-    "vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm:triton_scaled_mm":
-        "the Triton scaled GEMM engine.stock_kernels calls",
     "vllm.model_executor.layers.vocab_parallel_embedding": "the embedding's module, whose all-reduce the rank worker hooks",
     "vllm.model_executor.layers.vocab_parallel_embedding:ParallelLMHead": "the LM head, which the int8 recipe keeps bf16",
     "vllm.model_executor.layers.vocab_parallel_embedding:VocabParallelEmbedding": "the embedding the export's TP ops bind",
@@ -125,11 +117,11 @@ SURFACE = {
                                                                 "frontend's profile knob",
     "vllm.v1.attention.backends.registry:register_backend": "registers the int8 attention backend as CUSTOM",
     "vllm.v1.attention.ops.triton_decode_attention:decode_attention_fwd": "the Triton MLA decode the MLA capture calls",
+    "vllm.v1.kv_cache_interface:is_quantized_kv_cache": "whether the KV cache is quantized in any of vLLM's modes, which "
+                                                        "the int8 attention backend refuses",
     "vllm.v1.kv_cache_layout:KVCacheLayout": "the KV layout the int8 attention backend declares",
     "vllm._custom_ops": "vLLM's custom ops: the MoE router and sum the MoE sources hook, and the silu-mul difftest",
-    "vllm:_custom_ops": "vLLM's custom ops: the rotary embedding the RoPE difftests call, and the int8 quant and CUTLASS "
-                        "GEMM engine.stock_kernels calls",
-    "vllm.vllm_flash_attn:flash_attn_varlen_func": "the paged FlashAttention prefill engine.stock_kernels calls",
+    "vllm:_custom_ops": "vLLM's custom ops: the rotary embedding the RoPE difftests call",
     # sampling
     "vllm.v1.sample.ops:topk_topp_triton": "the Triton top-p kernels, whose split statistics the top-p probe reads",
     "vllm.v1.sample.ops.topk_topp_triton": "the Triton top-p module, which topp_pin pins and its check installs",

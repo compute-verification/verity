@@ -638,7 +638,11 @@ def main(opts: Options) -> int:
                                  f"{(len(tok) - 1).bit_length()} bits")
             pool_block = trace.sched.block_size
             PR.install_keys(ctw, pool_block)
-            pool = lambda: trace.sched.kv_cache_manager.block_pool   # noqa: E731
+
+            def live_pool() -> Any:
+                return trace.sched.kv_cache_manager.block_pool
+
+            pool = live_pool
             PR.genesis_reset(pool())                         # the learn pass cached its blocks under vLLM's own keys
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],

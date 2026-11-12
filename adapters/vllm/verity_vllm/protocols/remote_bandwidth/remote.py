@@ -38,7 +38,7 @@ Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
 `benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
-(`config.REMOTE_SESSION`), and `prove` takes the wire from it. The verifier's side, the wire among it, is
+(`REMOTE_SESSION`, below), and `prove` takes the wire from it. The verifier's side, the wire among it, is
 `verity.protocols.poub.verifier.session`.
 """
 from __future__ import annotations
@@ -65,6 +65,11 @@ from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
+#: The PoUB session's processes (not a package), whose prover runs in the Commit's.
+REMOTE_SESSION = config.ROOT.parent.parent / "benchmarks" / "remote_session"
+#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
+VLLM_ENCODED = config.ROOT.parent.parent / "benchmarks" / "vllm_encoded"
+
 
 def address(value: str) -> tuple[str, int]:
     """``HOST:PORT``, the verifier's listening address."""
@@ -74,7 +79,7 @@ def address(value: str) -> tuple[str, int]:
     return host, int(port)
 
 
-def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
+def session_module(name: str, directory: str | Path = REMOTE_SESSION) -> ModuleType:
     """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``), loaded once from its file, as its own
     scripts import it."""
     if name in sys.modules:
@@ -393,7 +398,7 @@ class KvDevice:
     """The store's encode on the GPU by kv.cu (``benchmarks/word_codec/kv.cu``, a build at the codec's field and mask
     loaded as `kv_bench.Lib`): blocks under the seed's key by ``kv_encode``; an append's under their bound keys and its
     coin by ``kv_encode_bound``, each block's offset b_j(c_a) = `codec.binding`(d_j, j, key, c_a) handed to the device
-    by ``paged.offsets`` (`config.VLLM_ENCODED`), so the host computes only d_j and b_j."""
+    by ``paged.offsets`` (`VLLM_ENCODED`), so the host computes only d_j and b_j."""
 
     CHUNK = 1 << 14
 
@@ -401,7 +406,7 @@ class KvDevice:
         import torch
 
         self.torch, self.codec = torch, codec
-        self.paged = session_module("paged", config.VLLM_ENCODED)
+        self.paged = session_module("paged", VLLM_ENCODED)
         self.lib, self.field = self.paged.KB.Lib(codec.field.name, str(path)), self.paged.K.field(codec.field.name)
         if self.lib.mask != codec.masked or self.lib.kmax < codec.rounds:
             raise ValueError(f"{path} is kv.cu at {self.field.name}, masked={self.lib.mask}, at most {self.lib.kmax} "

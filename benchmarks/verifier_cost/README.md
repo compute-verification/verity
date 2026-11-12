@@ -119,10 +119,13 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 ~~~
 
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
-`whole_run.py` writes, per N, an accepted `run` input (`run`: a stratified v1 audit on challenger coins with N/8 more
-ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
-three templates, or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition
-walks every gate, so `l5` takes `desc`). `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
+`whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
+program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
+or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
+so `l5` takes `desc`). The audit's law is the stratified rate of two in the population, `stratified-rate:2/P` over its
+P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
+of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
+`whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
 `Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
 a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
 with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
@@ -175,6 +178,24 @@ digest and sections), with the template's size against the unrolled unit's (rows
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
 
+`flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
+members in turn (`verify-members`, which reads the run's program once) against a process a member (`verify`). Per spec,
+`one_stage/m1_unit.py` stages, proves and verifies one statement bound to its program, and `flock_members.py` hands that
+member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
+are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
+first member, which pays the one read, and as a later member, with the memory the kept process holds between members
+(`rss_kb`: its resident memory at each `MEMBER` line). Every process runs under the verifier's allocator setting, as its
+Python callers start it (`proofs.verifier_env`), unless the job's environment sets a value of its own, and
+`members.json` records the value (`env`). Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s
+alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and none of its figures
+counts. The target is a later member's wait with nothing of the program's in it: what is left reads the member's own
+circuit and public file.
+
+~~~sh
+research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
+  env FM_MEM_GB=64 bash benchmarks/verifier_cost/flock_members.sh
+~~~
+
 `flock_sessions.sh census:NAME [N...]` measures the Lean verifier's seconds on a served block type's sessions, on one
 core, against the statement's blocks. `flock_sessions.py stage` stages the type's flat statement at `full` as
 `served_units/stage.py` stages a census type, and from the same lowering its first N blocks for each N. Per N, the CPU
@@ -222,3 +243,8 @@ has none.
 
 Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.
+
+The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
+verifier it times: each must still elaborate in the checkout's package, and `whole_run.py toy 146 --check` must still
+accept the run it writes. It builds no executable and runs no benchmark; a main in a new directory is held without being
+listed.

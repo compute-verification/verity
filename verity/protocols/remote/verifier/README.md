@@ -542,9 +542,8 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 ## The demo
 
-**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite; h200
-runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
-development run:
+**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, and
+the vLLM demo runs both halves on one served run, PoUW's as a development run:
 
 - `verity demo lifecycle` (`demos/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
@@ -552,11 +551,6 @@ development run:
   its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
-- `verity demo h200` (`archive/examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
-  are sampled by one live coin, each is proved by Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
-  refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
-  none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
-  `uv run python archive/examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity demo vllm` (`demos/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
@@ -564,9 +558,8 @@ development run:
   `verity/pouw/period/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-`archive/examples/dither_full_util/README.md` is archived, with no runner and no run of record. What of PoUW's own check runs
-is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
-`verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
+What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
+suite `verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`verity/protocols/remote/verifier/composition/tests`).
 
 ## Read next

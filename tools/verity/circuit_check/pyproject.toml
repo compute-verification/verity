@@ -58,10 +58,12 @@ worker_gb = 8
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
 # the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/frontend/seed_rule.py's sidecar builds the
 # served seed rule, whose domain tag and derivation are served_seed's.
+# pouw/window.py: circuit/window_statement.py imports it (the statement on words and the entry row's layout), so building
+# its unit reads it, and the catalog's records digest it as an import site of the PoUW modules they hold
+# (`units._unchanged`).
 # Read only to check the catalog's records (conftest.py):
-# pouw/window.py and spot/service.py, which the records digest as import sites of the PoUW modules they hold
-# (`units._unchanged`), and which a whole build never imports, with spot/second_stage.py, which service.py imports, and
-# spot/schedule.py, which second_stage.py imports.
+# spot/service.py, which the records digest as such an import site too and which a whole build never imports, with
+# spot/second_stage.py, which service.py imports, and spot/schedule.py, which second_stage.py imports.
 # pouw/weights.py and spot/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. spot/challenger.py and
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
@@ -142,12 +144,18 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/spec.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/served_seed.py",
           "adapters/vllm/verity_vllm/llm.py", "adapters/vllm/verity_vllm/pipeline/program_graph.py",
-          # boundary_rows defines TemplateInlined_v1, which its sidecar binds; it imports boundary_tables, and its
-          # template lookup imports serving_templates when a named target builds
+          # boundary_rows defines TemplateInlined_v1 and boundary_stop EgressStop_v1, which their sidecars bind;
+          # boundary_rows imports boundary_tables, and its template lookup imports serving_templates when a named
+          # target builds
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
+          "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
+          "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
+          # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins
+          "adapters/vllm/verity_vllm/pipeline/long_row.py", "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.py",
+          "adapters/vllm/verity_vllm/pipeline/long_row.circuit-check.json",
           "adapters/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/protocols/spot/verifier/__init__.py",
           "verity/protocols/certifier/verifier/cache_step.py", "verity/protocols/certifier/verifier/cache_step.circuit-check.py",
@@ -176,6 +184,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/protocols/certifier/prover/compile_slice_v7.circuit-check.json",
           "verity/protocols/certifier/prover/lengths_row.py", "verity/protocols/certifier/prover/lengths_row.circuit-check.py",
           "verity/protocols/certifier/prover/lengths_row.circuit-check.json",
+          "verity/protocols/certifier/prover/response_tie.py", "verity/protocols/certifier/prover/response_tie.circuit-check.py",
+          "verity/protocols/certifier/prover/response_tie.circuit-check.json",
+          "verity/protocols/certifier/verifier/content_rows.py",
           "verity/protocols/certifier/verifier/connection_rows.py", "verity/protocols/certifier/verifier/warden_rows.py",
           "verity/protocols/certifier/verifier/served_rows.py", "verity/protocols/certifier/verifier/warden.py",
           "verity/protocols/certifier/verifier/release.py",
@@ -236,6 +247,8 @@ paths = [
     "adapters/vllm/verity_vllm/engine/served_seed.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
     "adapters/vllm/verity_vllm/program/frontend/seed_rule.circuit-check.py",
     "adapters/vllm/verity_vllm/program/frontend/seed_rule.py",
     "adapters/vllm/verity_vllm/records/boundary_commit.py",

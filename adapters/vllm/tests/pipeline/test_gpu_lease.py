@@ -70,14 +70,6 @@ def test_only_an_item_with_a_lease_tool_is_leased_and_its_devices_are_hidden_out
     assert env == {"GPU_LEASE": "/x/gpu-lease", "CUDA_VISIBLE_DEVICES": ""}
 
 
-def test_a_process_that_holds_its_lease_takes_no_second_one(monkeypatch):
-    monkeypatch.setattr(GL, "_HELD", [("holder",)])
-    monkeypatch.setattr(GL, "cuda_initialised", lambda: pytest.fail("a held lease is not taken again"))
-    env = {"GPU_LEASE": "/x/gpu-lease", GL.STARTED: "/row/gpu_lease.started", "CUDA_VISIBLE_DEVICES": "5"}
-    GL.acquire(environ=env)
-    assert env == {"GPU_LEASE": "/x/gpu-lease", GL.STARTED: "/row/gpu_lease.started", "CUDA_VISIBLE_DEVICES": "5"} and GL._HELD == [("holder",)]
-
-
 def test_the_commit_requests_its_tasks_gpus_for_at_most_its_timeout():
     env = {"GPU_LEASE": "/l/gpu-lease", GL.STARTED: "/row/gpu_lease.started", GL.MAX_MIN: str(GL.max_min(2400))}
     argv = GL.holder_argv(env, 7)

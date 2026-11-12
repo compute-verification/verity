@@ -43,13 +43,15 @@ the lock's sections, each naming the docstring with the detail. This is the work
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
-- **The fast path is for the lock and the mark**, once `verity lean try` passes: `lean_changed.py --records PKG
-  --update` through `research run` (the README's commands have the line) regenerates PKG's records and its requirers',
+- **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
+  can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
+  (the README's commands have the line) regenerates PKG's records and its requirers',
   with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
   `lean-audit/record/`. No merge check accepts its result. It repairs a slot tree another run left mid-way: never
-  delete or copy one.
+  delete or copy one. `--allow CODE:ENTRY` takes a finding ruled open, cured before the mark, as known: it stays red
+  (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
 - **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
   at `lean-audit/audit-TAG/lean-audit.json`.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
@@ -61,6 +63,10 @@ the lock's sections, each naming the docstring with the detail. This is the work
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`.
+- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not one tactic. A common cause:
+  an argument states at a definition (`saltOf o`) what the lemma asks at a structure's field (`c.salt o`), and the
+  unifier unfolds the definition and walks everything `o` holds. Prove the field is the function once
+  (`(code …).salt = saltOf := rfl`), rewrite with it, and hand the lemma each premise in the form it states.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -117,14 +123,17 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 ## Before the PR
 
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
+- A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
+  check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
+  entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
   says.
-- Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. Your PR's candidate's records run regenerates
-  records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
-  move's map).
+- Mark with no records run of your own: the candidate's records run commits every stale record. Record first, by the
+  fast path, only what it can't write: a hand-written entry a merge warning says took theirs; `shape`; a hand edit to
+  the lock (an `exempt` entry deleted while its module is not in `roots` fails the run, and the PR leaves its batch);
+  a guarantee that only moved (`--update --moved MOVES.json`, which the run lacks).
 
 ## Standing rulings
 
@@ -133,9 +142,10 @@ Their history is in the decisions log.
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
-  `assumptions_module`; any other premise is `domain` or `open` (the README's lock sections). A named `Prop` counted only as an
-  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
-  restricts there, and no witness is asked to conclude it.
+  `assumptions_module`; any other premise is `domain` or `open`, and a `Prop` a statement only reads is `open` by its
+  entry's `why` (the README's lock sections). A named `Prop` counted only as an antecedent inside a premise an honest
+  witness concludes is that premise's scope: `domain`, its `why` saying what it restricts there, and no witness is
+  asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is

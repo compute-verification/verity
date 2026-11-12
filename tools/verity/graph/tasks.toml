@@ -4,6 +4,13 @@
 # its tasks' kinds, the first the default; `env`; `about`, a template over the task's id, kind, name (the id after
 # `<kind>:`) and vars; `resources`; and `timeout_s`. Each family's table is edited only with its lister.
 
+# The largest slot an executor leases a task (its slots file's largest CORES and MEM_GB). An executor leases a task only to
+# a slot its resources fit, so the listing refuses a table or a task that asks more: no slot would ever take it, and it and
+# every task reading it would wait queued
+[slot]
+cores = 32
+mem_gb = 110
+
 # An env's `spec` is the files (paths and globs) that pin it: its digest is over theirs.
 [env.py]
 spec = ["uv.lock", "pyproject.toml"]
@@ -50,7 +57,9 @@ kinds = ["lean-lock"]
 env = "lean"
 about = "check the guarantees {name} locks against their records"
 resources = { cores = 1, mem_gb = 8, disk_gb = 2 }
-timeout_s = 1800
+# an executor's lease of a task (1.5 timeout_s + 600 s) counts its staging of the task's reads: Security's locks read about
+# 26,000 module outputs, which a worker whose cache holds none of them stages for over an hour
+timeout_s = 3600
 
 [family.circuit-binding]
 # one task per circuit-check catalog binding, each from its slice of the records one circuit-catalog task builds, and one

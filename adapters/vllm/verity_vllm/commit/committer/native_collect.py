@@ -46,7 +46,8 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
 import torch
@@ -68,6 +69,7 @@ from verity_vllm.commit.committer.native_host import (
     memtrace,
 )
 from verity_vllm.commit.committer.plan_cache import PlanCache, PlanMetas
+from verity_vllm.engine import runner_step
 
 def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
@@ -156,6 +158,8 @@ class NativeCollectCommitter(NativeHostCommitter):
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
     ends_source_steps = True
+    #: set by the first sampling step that binds a seed (`install`'s `sample`)
+    seed_bound_steps: int
 
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
@@ -316,8 +320,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         for src in self.sources:
             src.install()
         if getattr(self, "external_acquisition", False):
-            # compiled execution: the module boundaries are acquired by record ops inside the compiled graphs (compiled_source.CompiledGraphSource,
-            # installed before vLLM compiled the model); wrapping the forwards here would never be traced and never run under graph replay
+            # compiled execution: the attached source acquires the values itself (`ServedCompiledSource`); forwards wrapped here would
+            # never be traced and never run under graph replay
             pass
         elif self.wrap:
             for name, m in self._modules:
@@ -339,45 +343,9 @@ class NativeCollectCommitter(NativeHostCommitter):
                     self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
             for name, m in self._input_only_modules():
                 self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
+        self._step_off = runner_step.add(self.runner, _StepPart(self))
         runner = self.runner
-        for nm in ("execute_model", "sample"):
-            if hasattr(runner, nm):
-                self._orig[nm] = getattr(runner, nm)
-        orig_exec = self._orig["execute_model"]
         me = self
-
-        def execute_model(scheduler_output, *a, **kw):
-            dummy = bool(kw.get("dummy_run", False)) or (len(a) >= 2 and bool(a[1]))
-            ntok = getattr(scheduler_output, "total_num_scheduled_tokens", 0)
-            if dummy or ntok == 0:
-                return orig_exec(scheduler_output, *a, **kw)
-            me._end_step()
-            nreq = len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ())
-            # step-shape class -> plan key.  (ntok, nreq) alone is NOT the layout: the FA3 hidden M1 export plane is
-            # sized by every request's KV length, so two decode steps with the same (ntok, nreq) differ in bytes (B8 mixed 1024/128 steps
-            # 35 and 80: 78,892,288 vs 87,297,280; see `plan_key_of`).  The key binds the per-request
-            # geometry (num_computed_tokens, num_scheduled_tokens) as a multiset; on the unbounded windowed path a miss still self-heals.
-            # It binds too the names the step-keyed sources commit at the step about to begin (`step_targets`), which follow the window step.
-            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq), me.step_targets(me._step_index))
-            me._plan_shape = (int(ntok), int(nreq))
-            if me.bounded and me._plan_key_mode != "geometry":
-                # fail closed at the FIRST step, not mid-run: without the per-request geometry a hit-plan step can meet another layout
-                raise RuntimeError("bounded staging needs the geometry plan key (per-request num_computed_tokens / num_scheduled_tokens); "
-                                   f"this scheduler output ({type(scheduler_output).__name__}) does not expose them")
-            me._cur_sched = scheduler_output                         # the step's scheduled tokens per request (row map, read at sample)
-            me._step_min_bytes = me.step_min_bytes(int(ntok), int(nreq))   # pick a block big enough for THIS step (prefill vs decode)
-            me._begin_step()
-            if me.hi_prio:
-                cur = torch.cuda.current_stream()
-                hi = me._hi
-                hi.wait_stream(cur)
-                with torch.cuda.stream(hi):
-                    res = orig_exec(scheduler_output, *a, **kw)
-                cur.wait_stream(hi)
-                return res
-            return orig_exec(scheduler_output, *a, **kw)
-
-        self._hooks.patch(runner, "execute_model", execute_model)
         if hasattr(runner, "gather_batch_req_state"):                          # new `vllm.v1.worker.gpu` runner: capture the step's sorted batch rows
             orig_gather = self._orig["gather_batch_req_state"] = runner.gather_batch_req_state
 
@@ -389,46 +357,14 @@ class NativeCollectCommitter(NativeHostCommitter):
                 return res
 
             self._hooks.patch(runner, "gather_batch_req_state", gather_batch_req_state)
-        if "sample" in self._orig:
-            orig_sample = self._orig["sample"]
-
-            def sample(*a, **kw):
-                res = orig_sample(*a, **kw)
-                job = me._cur
-                if job is not None:
-                    try:
-                        so = res[0] if isinstance(res, tuple) else res
-                        st = getattr(so, "sampled_token_ids", None)
-                        ib = a[1] if len(a) > 1 else kw.get("input_batch")
-                        draw_srcs = [s for s in me.sources if hasattr(s, "on_sample")]      # a source of the sample's inputs (served_record)
-                        owned = {n for s in draw_srcs for n in getattr(s, "own_names", ())}
-                        if isinstance(st, torch.Tensor) and st.device.type == "cuda":
-                            me._acquire("runner.sampler/sampled_token_ids", st, job)
-                            for s in draw_srcs:
-                                s.on_sample(ib, int(st.shape[0]), job)
-                        # the per-sequence SEED the sampler consumed this step (manifest family `sampler_seed`, identity
-                        # `runner.sampler/seed`, one i64 per sequence): `sampling_states.seeds.gpu[input_batch.idx_mapping]` -- the very buffer
-                        # `_gumbel_sample_kernel` reads (`seeds_ptr + req_state_idx`), gathered in the step's row order.  Bound only when the
-                        # batch carries explicit seeds (a stochastic Program's registered runtime input); a greedy / unseeded step binds nothing.
-                        ss = getattr(getattr(runner, "sampler", None), "sampling_states", None)
-                        if "runner.sampler/seed" not in owned and ib is not None and ss is not None and hasattr(ss, "seeds") and hasattr(ib, "idx_mapping"):
-                            idx_np = getattr(ib, "idx_mapping_np", None)
-                            explicit = bool(ss.any_explicit_seed(idx_np)) if (idx_np is not None and hasattr(ss, "any_explicit_seed")) else False
-                            if explicit:
-                                seeds = ss.seeds.gpu[ib.idx_mapping.to(torch.long)]
-                                me._acquire("runner.sampler/seed", seeds, job)
-                                me.seed_bound_steps = getattr(me, "seed_bound_steps", 0) + 1
-                    except Exception as e:  # noqa: BLE001
-                        me.errors.append(f"sampler acquire: {e!r}"[:200])
-                    me._end_step()
-                return res
-
-            self._hooks.patch(runner, "sample", sample)
         self.installed = True
 
     def uninstall(self) -> None:
         if not self.installed:
             return
+        # the step's part first: its removal is refused, with nothing changed, while a patch of the runner's `execute_model` or
+        # `sample` that another component installed later is still on, and the committer stays whole
+        self._step_off()
         super().uninstall()
         self._wrapped = []
 
@@ -1579,3 +1515,78 @@ class NativeCollectCommitter(NativeHostCommitter):
             fn = getattr(src, "begin_run", None)
             if fn is not None:
                 fn()                    # per-run source counters (slots/hooks persist across the process's runs)
+
+
+@contextmanager
+def _on_stream(hi: Any) -> Iterator[None]:
+    """The block on the CUDA stream ``hi``, fenced both ways: ``hi`` waits for the caller's stream before it, and the caller's
+    stream waits for ``hi`` after it."""
+    cur = torch.cuda.current_stream()
+    hi.wait_stream(cur)
+    with torch.cuda.stream(hi):
+        yield
+    cur.wait_stream(hi)
+
+
+class _StepPart(runner_step.Part):
+    """The committer at an engine step (`runner_step`): before vLLM's ``execute_model`` it ends a step whose ``sample`` never
+    came, reads the step's plan key and begins the step; vLLM's ``execute_model`` runs on its high-priority stream; after
+    vLLM's ``sample`` it hashes the sampled token ids and the seeds of a batch that sends them, calls each source's
+    ``on_sample`` between the two, and ends the step."""
+
+    rank = runner_step.Rank.COMMIT
+
+    def __init__(self, committer: NativeCollectCommitter) -> None:
+        self.me = committer
+
+    def before_forward(self, step: runner_step.Step) -> None:
+        me, scheduler_output = self.me, step.scheduler_output
+        ntok = getattr(scheduler_output, "total_num_scheduled_tokens", 0)
+        me._end_step()
+        nreq = len(getattr(scheduler_output, "num_scheduled_tokens", ()) or ())
+        # step-shape class -> plan key.  (ntok, nreq) alone is NOT the layout: the FA3 hidden M1 export plane is
+        # sized by every request's KV length, so two decode steps with the same (ntok, nreq) differ in bytes (B8 mixed 1024/128 steps
+        # 35 and 80: 78,892,288 vs 87,297,280; see `plan_key_of`).  The key binds the per-request
+        # geometry (num_computed_tokens, num_scheduled_tokens) as a multiset; on the unbounded windowed path a miss still self-heals.
+        # It binds too the names the step-keyed sources commit at the step about to begin (`step_targets`), which follow the window step.
+        me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq), me.step_targets(me._step_index))
+        me._plan_shape = (int(ntok), int(nreq))
+        if me.bounded and me._plan_key_mode != "geometry":
+            # fail closed at the FIRST step, not mid-run: without the per-request geometry a hit-plan step can meet another layout
+            raise RuntimeError("bounded staging needs the geometry plan key (per-request num_computed_tokens / num_scheduled_tokens); "
+                               f"this scheduler output ({type(scheduler_output).__name__}) does not expose them")
+        me._cur_sched = scheduler_output                         # the step's scheduled tokens per request (row map, read at sample)
+        me._step_min_bytes = me.step_min_bytes(int(ntok), int(nreq))   # pick a block big enough for THIS step (prefill vs decode)
+        me._begin_step()
+
+    def around_forward(self, step: runner_step.Step) -> AbstractContextManager[None] | None:
+        return _on_stream(self.me._hi) if self.me.hi_prio else None
+
+    def after_sample(self, step: runner_step.Step) -> None:
+        me, runner, res, ib = self.me, self.me.runner, step.sampled, step.input_batch
+        job = me._cur
+        if job is not None:
+            try:
+                so = res[0] if isinstance(res, tuple) else res
+                st = getattr(so, "sampled_token_ids", None)
+                draw_srcs = [s for s in me.sources if hasattr(s, "on_sample")]      # a source of the sample's inputs (served_record)
+                owned = {n for s in draw_srcs for n in getattr(s, "own_names", ())}
+                if isinstance(st, torch.Tensor) and st.device.type == "cuda":
+                    me._acquire("runner.sampler/sampled_token_ids", st, job)
+                    for s in draw_srcs:
+                        s.on_sample(ib, int(st.shape[0]), job)
+                # the per-sequence SEED the sampler consumed this step (manifest family `sampler_seed`, identity
+                # `runner.sampler/seed`, one i64 per sequence): `sampling_states.seeds.gpu[input_batch.idx_mapping]` -- the very buffer
+                # `_gumbel_sample_kernel` reads (`seeds_ptr + req_state_idx`), gathered in the step's row order.  Bound only when the
+                # batch carries explicit seeds (a stochastic Program's registered runtime input); a greedy / unseeded step binds nothing.
+                ss = getattr(getattr(runner, "sampler", None), "sampling_states", None)
+                if "runner.sampler/seed" not in owned and ib is not None and ss is not None and hasattr(ss, "seeds") and hasattr(ib, "idx_mapping"):
+                    idx_np = getattr(ib, "idx_mapping_np", None)
+                    explicit = bool(ss.any_explicit_seed(idx_np)) if (idx_np is not None and hasattr(ss, "any_explicit_seed")) else False
+                    if explicit:
+                        seeds = ss.seeds.gpu[ib.idx_mapping.to(torch.long)]
+                        me._acquire("runner.sampler/seed", seeds, job)
+                        me.seed_bound_steps = getattr(me, "seed_bound_steps", 0) + 1
+            except Exception as e:  # noqa: BLE001
+                me.errors.append(f"sampler acquire: {e!r}"[:200])
+            me._end_step()

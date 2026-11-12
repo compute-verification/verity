@@ -14,9 +14,10 @@ T = machines·⌊period/window_s⌋ sessions in a period, each on its own live c
 - **Per window** (`per_window`): the session's openings bound at δ/T instead of δ₀ (`pooled.bound` of its windows),
   so that every one of the T sessions certifies that much at once, except with δ + T·S/2^64.
 
-Both leave out each session's coin PRF advantage, a named assumption, not a number; a session's sample has no hiding
-term, since its prover is sent the coin commitment only at the session's end. What the session proves is its verdict
-and outputs, by the Lean verifier; what is scaled is the
+Both leave out (`EXCEPT`) each session's Σ_t adv_t, its windows' PRF advantages (SHA-512 stream as PRF: not priced,
+not assumed), so every δ and `eps` of this module reads δ + Σ_t adv_t over the period's sessions; a session's sample
+has no hiding term, since its prover is sent the coin commitment only at the session's end. What the session proves is
+its verdict and outputs, by the Lean verifier; what is scaled is the
 number of sessions and that each is audited as this one was."""
 
 from __future__ import annotations
@@ -38,7 +39,9 @@ from . import codec, pooled
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
-EXCEPT = "each session's coin PRF advantage (a named assumption) over the period's sessions"
+EXCEPT = ("Σ_t adv_t, the PRF advantage of each window of each of the period's sessions (SHA-512 stream as PRF: not "
+          "priced, not assumed): every δ and eps here reads δ + Σ_t adv_t")
+"""What every δ and `eps` of a table leaves out, which the table carries beside them (`except_also`)."""
 
 
 def _share(x: int, of: int) -> str:

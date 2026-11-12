@@ -7,11 +7,15 @@ verifier's mean seconds over the window, and whether the provers' statement cach
 quarters' hit rates and the rule), which a prover still building statements in its last quarter fails without voiding the
 row; and the CPUs its processes could run on (``cores``: this process's affinity as a count, a list and the NUMA nodes
 that hold them, on a made-up node directory). A templated staging is proved with its unit placed, and verified under its
-own statement."""
+own statement. The Lean verdict is on the row's Program when one is given, and the row keeps what the verdict says of it.
+A row whose sessions ran another statement version than it asked for (a prover that ignores ``--wide-leaf``, or one that
+runs the wide leaf unasked) or name none is void."""
 from __future__ import annotations
 
+import io
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,10 +30,10 @@ FILED0 = 1_800_000_000  # the first session's filing time, UTC seconds
 
 
 class Session:
-    def __init__(self, label: str, prover: str, d: Path, accepted: bool, cache: dict, verify_s: float) -> None:
+    def __init__(self, label: str, prover: str, d: Path, accepted: bool, cache: dict, verify_s: float, profile: str) -> None:
         self.label, self.prover, self.dir, self.accepted = label, prover, d, accepted
         self.live = ({"accepted": True, "e2e_s": 2.0, "prove_total_s": 1.5, "stmt_cache": cache} if accepted
-                     else {"accepted": False, "why": "R7: no proof"})
+                     else {"accepted": False, "why": "R7: no proof"}) | {"identity": {"profile": profile} if profile else {}}
         self.served = {"accepted": accepted, "verify_s": verify_s}
 
     def result(self) -> None:
@@ -39,10 +43,13 @@ class Session:
 class Server:
     """K provers that file session i at FILED0 + i, refuse the sessions in ``refuse``, write ``log`` to the first prover's
     log and close with ``exits``. A prover builds a statement at its sessions in ``built`` and finds it in its cache at
-    the others; session i's verifier takes i / 8 seconds."""
+    the others; session i's verifier takes i / 8 seconds. Every session's identity names ``profile``: by default the
+    version the server was made with (``wide_leaf``), as a prover that knows ``--wide-leaf`` does; "" names none."""
 
-    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "", built=(0,)) -> None:
+    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "", built=(0,), wide_leaf: bool = False,
+                 profile: str | None = None) -> None:
         self.out, self.k, self.refuse, self.built = out, provers, set(refuse), set(built)
+        self.profile = SR.PROFILES[wide_leaf] if profile is None else profile
         self.exits = exits or {**{f"prover-gpu0-{j}": 0 for j in range(provers)}, "verifier-t": 0}
         (out / "prover-gpu0-0.log").write_text("LIVE\t{}\n" + log)
 
@@ -57,7 +64,10 @@ class Server:
         os.utime(d, (FILED0 + i, FILED0 + i))
         mine = range(i % self.k, i + 1, self.k)
         cache = {"lookups": len(mine), "held": sum(1 for j in mine if j in self.built)}
-        return Session(label, f"prover-gpu0-{i % self.k}", d, i not in self.refuse, cache, i / 8)
+        s = Session(label, f"prover-gpu0-{i % self.k}", d, i not in self.refuse, cache, i / 8, self.profile)
+        if verdict is not None:
+            s.verdict = lambda: verdict(s)
+        return s
 
     def close(self) -> dict[str, int]:
         return dict(self.exits)
@@ -80,13 +90,20 @@ class Device:
         return None
 
 
-def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, **server) -> None:
+def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, made: list[dict] | None = None, **server) -> None:
+    """``made`` gets the keyword arguments each `ProofServer` was made with."""
     d = tmp_path / "staged"
     d.mkdir()
     (d / "stage.json").write_text(json.dumps({"n": 1, "k_log": 34}))
     monkeypatch.setattr(SR, "staged", lambda z, t, tu: (SimpleNamespace(pin="pin", tmpl_unit=tmpl_unit), 1, d))
     monkeypatch.setattr(SR, "Device", Device)
-    monkeypatch.setattr(SR, "ProofServer", lambda binary, out, *, provers, **kw: Server(Path(out), provers, **server))
+
+    def proof_server(binary, out, *, provers, **kw) -> Server:
+        if made is not None:
+            made.append(kw)
+        return Server(Path(out), provers, wide_leaf=kw.get("wide_leaf", False), **server)
+
+    monkeypatch.setattr(SR, "ProofServer", proof_server)
 
 
 def run(monkeypatch, tmp_path: Path, *args: str, **server) -> tuple[int, dict]:
@@ -247,11 +264,66 @@ def test_a_flat_statement_has_no_unit(tmp_path):
     assert st.tmpl_unit is None and not (d / "unit.placed").exists()
 
 
+@pytest.mark.parametrize("wide", [True, False])
+def test_a_row_runs_one_statement_version_and_says_which(monkeypatch, tmp_path, wide):
+    """``--wide-leaf`` reaches the proof server, whose provers and verifiers all carry it, and the row keeps it; without
+    it neither does."""
+    made: list[dict] = []
+    rc, row = run(monkeypatch, tmp_path, *(["--wide-leaf"] if wide else []), made=made)
+    assert (rc, row["wide_leaf"], [kw["wide_leaf"] for kw in made]) == (0, wide, [wide])
+    asked = "fast100-wide-leaf" if wide else "fast100"
+    assert (row["profile"], "void" in row) == ({"asked": asked, "ran": {asked: 9}}, False)
+
+
+@pytest.mark.parametrize("wide", [True, False])
+def test_a_row_whose_sessions_ran_the_other_statement_version_is_void(monkeypatch, tmp_path, capsys, wide):
+    """A prover that ignores ``--wide-leaf`` proves fast100's statement and is accepted, and one that runs the wide
+    leaf unasked is accepted too: either way every session's identity names the other version's profile, and the row
+    has no rate."""
+    asked, ran = ("fast100-wide-leaf", "fast100") if wide else ("fast100", "fast100-wide-leaf")
+    rc, row = run(monkeypatch, tmp_path, *(["--wide-leaf"] if wide else []), profile=ran)
+    assert (rc, row["statements_per_s"], row["accepted"], row["profile"]) == (1, None, 9, {"asked": asked, "ran": {ran: 9}})
+    [why] = row["void"]
+    assert why.startswith(f"9 of 9 finished sessions ran another statement version than the row's {asked!r}: 9 at {ran!r}")
+    assert ("does not know --wide-leaf" in why) is wide
+    assert f"VOID t K=1: {why}" in capsys.readouterr().out
+
+
+def test_a_row_whose_sessions_name_no_profile_is_void(monkeypatch, tmp_path):
+    rc, row = run(monkeypatch, tmp_path, profile="")
+    assert (rc, row["statements_per_s"], row["profile"]["ran"]) == (1, None, {"none": 9})
+    assert row["void"] == ["9 of 9 finished sessions ran another statement version than the row's 'fast100': 9 at 'none'"]
+
+
+def test_version_reasons_count_each_other_profile():
+    assert SR.version_reasons("fast100", {"fast100": 7}) == []
+    assert SR.version_reasons("fast100", {}) == []
+    [why] = SR.version_reasons("fast100-wide-leaf", {"fast100-wide-leaf": 4, "fast100": 2, "none": 1})
+    assert why.startswith("3 of 7 finished sessions ran another statement version than the row's 'fast100-wide-leaf': "
+                          "2 at 'fast100', 1 at 'none'; a flock-circuit that does not know --wide-leaf ignores it")
+
+
+@pytest.mark.parametrize("tmpl", [False, True])
+def test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement(monkeypatch, tmp_path, tmpl):
+    got = []
+
+    class Lean:
+        def __init__(self, lean, d, out, statement, program):
+            got.append(statement)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(SR, "Lean", Lean)
+    run(monkeypatch, tmp_path, "--lean", "flock-verify", "--wide-leaf", tmpl_unit=tmp_path / "unit.placed" if tmpl else None)
+    assert got == [(SR.FC.TMPL_STATEMENT if tmpl else SR.STATEMENT_ID) + "+wide-leaf"]
+
+
 def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch, tmp_path):
     got = []
 
     class Lean:
-        def __init__(self, lean, d, out, statement):
+        def __init__(self, lean, d, out, statement, program):
             got.append(statement)
 
         def close(self):
@@ -260,3 +332,71 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
     monkeypatch.setattr(SR, "Lean", Lean)
     run(monkeypatch, tmp_path, "--lean", "flock-verify", tmpl_unit=tmp_path / "unit.placed")
     assert got == [SR.FC.TMPL_STATEMENT]
+
+
+def test_lean_is_handed_the_rows_program_and_the_row_keeps_what_its_verdict_says_of_it(monkeypatch, tmp_path):
+    """`--lean-program`'s descriptor is archived with the circuit and the public file and handed to `verify` by its key
+    (`--program`), and the row's Lean verdict keeps what it says of the Program: here, as on a statement under the
+    provisional unit cover, its digest as handed and the note that it was not held to the circuit, and no
+    `program_sha512`. Without `--lean-program`, `verify` is handed no program and the row keeps its refusal. `verify` and
+    `archive-put` are stand-ins: `archive-put` names each file `key-<its name>`."""
+    note = "the Program was handed and not held to the circuit: the provisional unit cover binds no Program descriptor"
+    refusal = "refused: a session without the verifier's program (--program)"
+    cmds = []
+
+    class Child:
+        pid = 0
+
+        def __init__(self, cmd, **kw) -> None:
+            cmds.append(cmd)
+            v = ({"accepted": True, "why": "", "program_handed_sha512": "ab", "program_note": note} if "--program" in cmd
+                 else {"accepted": False, "why": refusal})
+            self.stdout = io.StringIO(f"VERDICT {json.dumps(v)}\n")
+
+    def put(cmd, **kw):
+        cmds.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "".join(f"key-{Path(f).name} {f}\n" for f in cmd[3:]), "")
+
+    monkeypatch.setattr(SR.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(SR.subprocess, "run", put)
+    monkeypatch.setattr(SR.subprocess, "Popen", Child)
+    monkeypatch.setattr(SR.os, "wait4", lambda pid, options: (pid, 0, SimpleNamespace(ru_utime=0.0, ru_stime=0.0, ru_maxrss=0)))
+    for d in ("handed", "none"):
+        (tmp_path / d).mkdir()
+    program = tmp_path / "program.json"
+    lean = ("--lean", "verifier", "--lean-sessions", "1")
+    _, row = run(monkeypatch, tmp_path / "handed", *lean, "--lean-program", str(program))
+    [v] = row["lean"]
+    assert v["accepted"] and (v["program_handed_sha512"], v["program_note"]) == ("ab", note) and "program_sha512" not in v
+    archived, verify = cmds
+    assert archived[-1] == str(program) and verify[verify.index("--program") + 1] == "key-program.json"
+    del cmds[:]
+    _, row = run(monkeypatch, tmp_path / "none", *lean)
+    [v] = row["lean"]
+    assert (v["accepted"], v["why"]) == (False, refusal) and not set(SR.PROGRAM_FIELDS) & set(v)
+    archived, verify = cmds
+    assert str(program) not in archived and "--program" not in verify
+
+
+@pytest.mark.parametrize("statement", [SR.STATEMENT_ID + SR.WIDE_LEAF, SR.STATEMENT_ID])
+@pytest.mark.parametrize("refuses", [True, False])
+def test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that(tmp_path, statement, refuses):
+    """A `flock-verify` that refuses the statement's name (exit 2, "unknown statement" on stderr, no VERDICT line) is
+    recorded as a refusal of the name, and for a wide-leaf name as a `flock-verify` that does not list it; any other
+    exit with no verdict keeps the plain reason."""
+    lean = tmp_path / "flock-verify"
+    end = "echo 'unknown statement; known: [verity/flock-circuit]' >&2; exit 2" if refuses else "exit 3"
+    lean.write_text(f'#!/bin/sh\n[ "$1" = verify ] || exit 0\n{end}\n')
+    lean.chmod(0o755)
+    d, out = tmp_path / "stage", tmp_path / "out"
+    for x in (d, out, tmp_path / "s"):
+        x.mkdir()
+    v = SR.Lean(str(lean), d, out, statement)
+    got = v(SimpleNamespace(label="t/k1/0", dir=tmp_path / "s"))
+    v.close()
+    assert got["accepted"] is False
+    if not refuses:
+        assert got["why"] == "no verdict (rc 3)"
+        return
+    assert got["why"].startswith(f"no verdict (rc 2): this flock-verify does not know the statement {statement!r}")
+    assert ("Flock/Tags.lean" in got["why"]) is statement.endswith(SR.WIDE_LEAF)

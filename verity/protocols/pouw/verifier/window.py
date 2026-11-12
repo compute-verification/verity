@@ -1,7 +1,7 @@
 """PoUW's audit execution phase as the proof system sees it: what the execution phase makes public, the grid its tile count is padded to,
 the size of the uniform sample, and the execution phase's advice (its per-call entries and the map from a sampled index to a tile).
 
-**Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
+**Public items** (`PUBLIC`), the draft's list and the workloads' fixed length.  The service refuses a registration
 that makes anything else public; the execution phase's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
@@ -9,7 +9,7 @@ that makes anything else public; the execution phase's own root and W's root are
     work       output       execution phase     the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the sampling design subset:K′ they fix with the work level (`k_prime`)
-    length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
+    length     structure    parameter  the workloads of record's fixed length: each slot's public max_tokens (`length_item`)
     flipped      coins        outcome    the verifier's own sample, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
@@ -25,9 +25,9 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a sample of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
-**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A workload of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
-`length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
+`length_problem` refuses an EOS-keyed workload (`window-form: eos-keyed-row`) and a slot that served another length
 (`window-form: length-mismatch`).  A window commitment record made before the rule carries `LEGACY_REGISTERED`, without
 the item, and is not of record.
 
@@ -42,7 +42,9 @@ sides and the range [N_real, N).  `tile_at` maps a sampled index to its entry an
 statement (L4) in Python over the entry rows: the rows are entry rows, the ranges tile [0, N) in order, each call's range
 is its tiles, the filler covers the rest, every call's -h3 root is the pass's, the calls' pass tiles are ordered and
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
-holds those to the entries.  It is not proved yet: no Program states it.
+holds those to the entries.  Its part on the entry rows is a public Program's one unit
+(`verity.protocols.pouw.prover.circuit.window_statement`, `PouwWindowStatement`, the level and the pass's -h3 root public);
+the records' and indices' part no Program states.  It is not proved yet: no verifier requires that Program's proof.
 
 **The layout for gates** is the Lean's (`PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Inputs`): the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the execution phase's side domains (`side_domain`, `side_levels`,
@@ -72,6 +74,7 @@ import hashlib
 import json
 import math
 import struct
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
@@ -240,8 +243,8 @@ def k_prime(eps: Fraction, delta: Fraction, credited: int, n: int, w_max: int) -
     eps, delta = Fraction(eps), Fraction(delta)
     if not (0 < eps <= 1 and 0 < delta < 1 and _positive(n) and _positive(w_max) and _int(credited)
             and 0 < credited <= n * w_max):
-        raise ValueError(f"k_prime needs 0 < ε <= 1, 0 < δ < 1 and 0 < credited <= n·w_max, not {eps}, {delta}, "
-                         f"{credited}, {n}, {w_max}")
+        raise ValueError(f"k_prime needs 0 < ε <= 1, 0 < δ < 1 and 0 < credited <= n·w_max, not {ratio_str(eps)}, "
+                         f"{ratio_str(delta)}, {credited}, {n}, {w_max}")
     p = eps * credited / (n * w_max)
     if p == 1:
         return 1
@@ -272,7 +275,7 @@ def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fracti
         return k_prime(Fraction(j, one), delta, credited, n, w_max) <= k
 
     if not ok(one):
-        raise ValueError(f"K = {k} establishes no ε <= 1 at δ = {Fraction(delta)}")
+        raise ValueError(f"K = {k} establishes no ε <= 1 at δ = {ratio_str(delta)}")
     lo, hi = 0, one
     while lo + 1 < hi:
         mid = (lo + hi) // 2
@@ -283,15 +286,33 @@ def eps_at(k: int, delta: Fraction, credited: int, n: int, w_max: int) -> Fracti
     return Fraction(hi, one)
 
 
+def _decimal(n: int) -> str:
+    """A natural number's decimal digits, however many: `str` refuses more digits than the process's limit
+    (`sys.get_int_max_str_digits`), so `n` is written in pieces no longer than the least limit a process can set."""
+    if n < 10 ** sys.int_info.str_digits_check_threshold:
+        return str(n)
+    k = n.bit_length() * 3 // 20  # about half of n's digits, a bit being log10(2) = 0.301 of one
+    high, low = divmod(n, 10**k)
+    return _decimal(high) + _decimal(low).zfill(k)
+
+
+def ratio_str(q: Fraction) -> str:
+    """`str` of a Fraction at any length: `Core.Ratio.toString`'s ``n`` or ``n/d``, which `core_check.ratio` reads
+    back."""
+    q = Fraction(q)
+    n = ("-" if q < 0 else "") + _decimal(abs(q.numerator))
+    return n if q.denominator == 1 else f"{n}/{_decimal(q.denominator)}"
+
+
 def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: int = GRID_BITS) -> dict[str, Any]:
     """The `sampling` item: ε, δ, the grid and the sampling design they fix with the level (every tile does `tile_work`)."""
     k = k_prime(eps, delta, work.credited * tile_work, work.n, tile_work)
-    return {"eps": str(Fraction(eps)), "delta": str(Fraction(delta)), "grid_bits": bits, "law": {"law": "subset", "k": k}}
+    return {"eps": ratio_str(eps), "delta": ratio_str(delta), "grid_bits": bits, "law": {"law": "subset", "k": k}}
 
 
 # ---- the fixed length -----------------------------------------------------------------------------------------------------
 
-#: a row of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
+#: a workload of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
 STOP_FIXED = "fixed"
 LENGTH_KEYS = ("max_tokens", "served", "stop")
 
@@ -845,7 +866,7 @@ __all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_SCHEMA", "EPS_BITS
            "STOP_FIXED", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason", "entry_bc", "entry_digest",
            "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem", "length_item",
            "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode",
-           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
-           "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain",
-           "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles",
-           "window_problem"]
+           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "ratio_str", "record_digest",
+           "record_problem", "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions",
+           "side_domain", "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read",
+           "tiles", "window_problem"]

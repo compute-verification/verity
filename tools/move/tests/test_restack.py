@@ -191,8 +191,10 @@ def test_a_clone_without_the_merge_drivers_gets_them_registered_or_nothing_runs_
     """A checkout whose `.gitattributes` names merge drivers its clone defines none of has them registered before any branch
     (`DRIVERS`), since without them a lock merges as text and the restack stops where its owner's merge wouldn't. When the
     interpreter can't register them, no branch is restacked, the exit is 2, and the refusal names each driver and the command
-    that registers them."""
-    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"})
+    that registers them. Git's own drivers (`union`, which the tree gives every `.gitignore`) are none of them: no clone
+    defines one, so a check that asked for it would refuse every branch."""
+    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"
+                                                  ".gitignore merge=union\n*.bin merge=binary\n*.txt merge=text\n"})
     monkeypatch.chdir(repo)
     assert RS.missing_drivers() == ["lean-audit", "lean-imports"]
     monkeypatch.setattr(RS, "DRIVERS", "raise SystemExit('no research here')")

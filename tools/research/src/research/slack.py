@@ -97,6 +97,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -135,6 +136,8 @@ REGISTRY_REFS = ("origin/main",)                                  # where a chec
 FRONT_DOOR = "agent-coordination"
 ASKS_ON_LINEAR = True                                             # an ask is also an issue in its owner's team (`linear.py`)
 LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0-9]*-\d+)>")
+#: a Linear issue named anywhere in a post: an announcement to several names that asks for comments on it is answered there
+LINEAR_ISSUE_URL_RE = re.compile(r"https://linear\.app/[^/\s|>]+/issue/([A-Z][A-Z0-9]*-\d+)")
 LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
@@ -142,15 +145,15 @@ BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also
 CHAT_METHODS = ("bookmarks.add", "conversations.archive", "conversations.create", "conversations.info", "conversations.invite",
                 "conversations.inviteShared", "conversations.list", "conversations.unarchive", "pins.add", "users.list",
                 "users.lookupByEmail")
-#: the calls the broker allows only by who asks: `retract`'s edit to a post a name the caller holds or posts as sent,
-#: `groups sync --apply`'s user-group writes (@comms' and @top's holders), and `chat`'s channel calls (@top's and @console's)
+#: the calls the broker allows only by who asks (`retract`'s edit, `groups sync --apply`'s user-group writes and `chat`'s
+#: channel calls); who may make each is `GUARDED_WHO`
 BROKER_GUARDED = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
                   *CHAT_METHODS)
-#: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
 #: who the broker lets make each guarded call, for its refusal
 GUARDED_WHO = {"chat.update": "only an edit to a post made as a name this agent holds or posts as (its route's holder or posters)",
                **{m: "only @comms' and @top's holders sync the user groups" for m in BROKER_GUARDED if m.startswith("usergroups.")},
                **{m: "only @top's and @console's holders open and close people's chats" for m in CHAT_METHODS}}
+#: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
 BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
                   "reactions.add", "usergroups.list", *BROKER_GUARDED)
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
@@ -1829,10 +1832,9 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
-        print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
-        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
-              "it for each (every handle writes as one app)")
+        print(f"# no Linear subscription on {key}: its events are nearly all @{h['handle']}'s own writes (every handle writes as "
+              "one app), and another handle's ask rings the inbox; a person's new issue rings it through the sweep's audit "
+              "(`unheard`)")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
           f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
     print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
@@ -2001,19 +2003,17 @@ def render_audit(found: list[dict], counts: dict[str, dict[str, int]]) -> str:
 def render_asks(rows: list[dict], now: float) -> str:
     """People's asks (`Linear.asks`) by lane: each one not delivered, with its state, due date, slips and restatements, then
     the counts.  Delivered means Done; an ask canceled with its asker's yes (`asker-ok`) or as a duplicate is closed."""
-    from .linear import ASK_SLIPS, ASKER_OK, OPEN_TYPES
+    from .linear import ASK_SLIPS, ASKER_OK, ask_open
 
-    def live(a: dict) -> bool:
-        return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]
     lines = []
     for lane in sorted({a["lane"] for a in rows}):
         mine = [a for a in rows if a["lane"] == lane]
-        todo = [a for a in mine if live(a)]
+        todo = [a for a in mine if ask_open(a)]
         lines.append(f"@{lane}: {len(todo)} not delivered, {sum(a['type'] == 'completed' for a in mine)} delivered")
         lines += [f"  {a['issue']:<9} {a['state']:<12} due {a['due'] or '-':<10} {a['slips']} slip(s), asked again {a['again']}, "
                   f"{(now - a['created']) / 3600:.0f} h old: {a['title']}" for a in todo]
     askers = ", ".join(sorted({a["asker"] for a in rows})) or "anyone"
-    todo = [a for a in rows if live(a)]
+    todo = [a for a in rows if ask_open(a)]
     lines.append(f"{len(rows)} ask(s) of {askers} open or closed recently: {sum(a['type'] == 'completed' for a in rows)} delivered, "
                  f"{len(todo)} not ({sum(a['type'] in ('backlog', 'canceled') and not a['ok'] for a in todo)} parked without `{ASKER_OK}`, "
                  f"{sum(a['type'] in ('triage', 'unstarted') for a in todo)} with no worker, "
@@ -2720,9 +2720,76 @@ def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> 
              **({"succeeds": old.get("holder")} if old and old.get("holder") != holder else {})}
         if not ns.dry_run:
             print(publish_route(routes.root, r, f"routes.d: open @{name} for {holder}"))
+        if r.get("succeeds"):
+            registry_handover(ns, name, r)
         old = r
     print(f'subscribe_slack_thread(channelId="{ch}", threadTs="{old["inbox_ts"]}", expiresInSeconds={EXPIRES_S})   # @{name}\'s inbox; renew on every wake')
     return 0
+
+
+def registry_with_route(text: str, name: str, route: dict) -> str | None:
+    """The registry's text with `name`'s holder and branch suffixes as its route has them, or None where they already agree
+    or the registry has no such handle."""
+    reg = json.loads(text)
+    h = next((h for h in reg.get("handles", []) if h.get("handle") == name), None)
+    if h is None or not route.get("holder"):
+        return None
+    sfx = list(dict.fromkeys([*h.get("branch_suffixes", []), *route.get("branch_suffixes", [])]))
+    if h.get("holder") == route["holder"] and sfx == h.get("branch_suffixes", []):
+        return None
+    h["holder"] = route["holder"]
+    if sfx:
+        h["branch_suffixes"] = sfx
+    return json.dumps(reg, indent=2, ensure_ascii=False) + "\n"
+
+
+def registry_handover(ns: argparse.Namespace, name: str, route: dict) -> str | None:
+    """A succession's second record: the registry change that gives `name` its route's holder and branch suffixes, pushed from
+    main and opened as a PR, whose URL it returns.  The queue reads a PR's owner and a mark's signer from main's registry, so
+    until this lands a successor's work resolves to its predecessor.  Where it can't (no checkout of the registry's repository,
+    no push), it says what to open by hand and the route stands."""
+    from . import queue
+
+    by_hand = (f"open the registry change by hand: @{name}'s `holder` {route['holder']} and its `branch_suffixes` in "
+               f"{REGISTRY_REL}, then `research queue ready N --mark --by {name}`")
+    path = registry_path(getattr(ns, "registry", None))
+    git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], capture_output=True, text=True, timeout=120,  # noqa: E731
+                                         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, check=True).stdout.strip()
+    try:
+        top = Path(git(path.resolve().parent, "rev-parse", "--show-toplevel"))
+        git(top, "fetch", "-q", "origin", "main")
+        new = registry_with_route(git(top, "show", f"origin/main:{REGISTRY_REL}") + "\n", name, route)
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        print(f"registry: main's registry can't be read here ({str(e)[:120]}): {by_hand}", file=sys.stderr)
+        return None
+    if new is None:
+        print(f"registry: main's registry already names @{name}'s holder and branch suffixes")
+        return None
+    branch = f"cursor/registry-{name}-{route['holder'][-4:]}"
+    if ns.dry_run:
+        print(f"registry: would push {branch} from origin/main with @{name}'s holder {route['holder']} and open its PR")
+        return None
+    work = Path(tempfile.mkdtemp(prefix="registry-handover-"))
+    try:
+        git(top, "worktree", "add", "-q", "--detach", str(work), "origin/main")
+        (work / REGISTRY_REL).write_text(new)
+        git(work, "commit", "-qam", f"Registry: @{name}'s holder is {route['holder']}, as its inbox route has it")
+        sha = git(work, "rev-parse", "HEAD")
+        git(work, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+        body = (f"Lane {name}\n\n@{name}'s inbox passed to {route['holder']} (`research msg names open --succeeds`). This gives "
+                f"the registry the route's holder and branch suffixes, so the queue reads the successor's PRs and marks as "
+                f"@{name}'s.")
+        url = queue.open_pr(top, queue.REPO, branch, f"Registry: @{name}'s holder after its handover",
+                            queue.with_issue(body, "none:the registry follows a handover"), sha=sha)
+    except (OSError, subprocess.SubprocessError, queue.QueueError) as e:
+        print(f"registry: {str(e)[:200]}: {by_hand}", file=sys.stderr)
+        return None
+    finally:
+        subprocess.run(["git", "-C", str(top), "worktree", "remove", "--force", str(work)], capture_output=True)
+    n = url.rstrip("/").rsplit("/", 1)[-1]
+    print(f"registry: {url}: mark it with `research queue ready {n} --mark --by {name}`; a holder change waits for a "
+          "reviewer's verdict")
+    return url
 
 
 def seen_path(name: str) -> Path:
@@ -2818,6 +2885,19 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
                 cache[ident] = (False, "in Backlog, no comment but the asker's")
         except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
             cache[ident] = (False, f"{RECORD_UNREADABLE} ({e})")
+    return cache[ident]
+
+
+def issue_commenters(ident: str, cache: dict[str, set[str] | str]) -> set[str] | str:
+    """Who commented on the Linear issue `ident` (`comment_by`), or why Linear can't say."""
+    if ident not in cache:
+        from . import linear
+        q = "query($id: String!) { issue(id: $id) { comments { nodes { botActor { userDisplayName } user { name } body } } } }"
+        try:
+            nodes = linear.Linear().gql(q, {"id": ident})["issue"]["comments"]["nodes"]
+            cache[ident] = {w for c in nodes if (w := comment_by(c))}
+        except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
+            cache[ident] = f"{RECORD_UNREADABLE} ({e})"
     return cache[ident]
 
 
@@ -3187,6 +3267,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
+    said: dict[str, set[str] | str] = {}                             # Linear issue -> who commented on it, or why unreadable
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
@@ -3210,6 +3291,14 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             answered, state = issue_state(link[1], x["by"], taken)
             answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
+        elif len(x["to"]) > 1 and (named := LINEAR_ISSUE_URL_RE.search(m.get("text") or "")):
+            replied = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
+            who, names = issue_commenters(named[1], said), len(x["to"])
+            if not isinstance(who, str):
+                x["to"] = [n for n in x["to"] if n not in who]
+            answered = True if replied else None if isinstance(who, str) else not x["to"]
+            x.update(record="linear", ref=named[1],
+                     state=who if isinstance(who, str) else f"{names - len(x['to'])} of its {names} names commented there")
         else:
             answered = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
             x.update(record="slack", ref=None, state=("replied" if m.get("reply_count") else "reacted") if answered else "no reply or reaction")
@@ -3952,7 +4041,16 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
                            "Deadline": {"date": {"start": body["deadline"]}},
                            "Lane checked": {"checkbox": True},
                            "Asked by": {"url": body["agent_url"]}},
-            "markdown": with_reply(markdown), "markdown_version": "v2"}
+            "markdown": with_reply(display_math(markdown)), "markdown_version": "v2"}
+
+
+#: a display equation on one line: Notion shows `$$ x $$` as its literal text, and renders it only with each `$$` on a line of its own
+ONE_LINE_DISPLAY = re.compile(r"(?m)^([ \t]*)\$\$[ \t]*(\S(?:.*\S)?)[ \t]*\$\$[ \t]*$")
+
+
+def display_math(markdown: str) -> str:
+    """Each one-line `$$ x $$` as the three lines `$$`, `x`, `$$`; inline `$x$` and display blocks already split stay."""
+    return ONE_LINE_DISPLAY.sub(lambda m: f"{m[1]}$$\n{m[1]}{m[2]}\n{m[1]}$$", markdown)
 
 
 def with_reply(markdown: str) -> str:

@@ -48,7 +48,6 @@ RANGES = {
     "hbm_gb": (640.0, 2304.0, "8 x 80 GB (H100) to 8 x 288 GB (B300); 8 x 96 GB today"),
     "host_gb": (512.0, 4000.0, "guess, around vy-nebius-2's 1.9 TB"),
     "tau": (10.0, 1e4, "about 860 from the network appendix's program format; the ends a guess"),
-    "export": (2.5e6, 4.4e10, "under the export rule 2.5e6; today 4.4e9; high a guess (10x)"),
     "nic": (8e11, 6.4e12, "2 x 400 Gb/s to 8 x 800 Gb/s; 8 x 400 Gb/s today"),
     "share": (1e-3, 0.1, "guess, around the 1% budget"),
     "overhead": (1.6e8, 1e13, "batched throughput 1.6e8; sparse draws today 4.8e12; high a guess"),
@@ -69,16 +68,12 @@ RANGES = {
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
     "d": (1.0, 17.0, "a run that trains its embedding; ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 under the "
                      "open conjecture ReferenceLayered; a Dot16 step's 17 legs, no lookup read"),
-    "e": (12288.0, 1.65e5, "low a guess (the chain's fan-out); Kimi K2 4e4; dense-405b"),
+    "e": (12288.0, 1.65e5, "low a guess; Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
     "thread_bits": (6.96e6, 2.94e9, "ThreadedOfLayered at 2.5-bit embedding columns for any reference circuit C1 "
                                     "allows; the whole embedding table at 2.5 bits, under a refined layered theorem"),
     "block_mults": (0.3, 1.0, "kappa / 2 if each block's counted share were the recipe's; 1, every gate countable"),
-    "kappa_chain": (0.0, 0.3, "0 while the partial-sum law's support premises are falsified (NCI-FALSIFY); Kimi K2's dense path 7%; 0.3 a guess"),
-    "d_chain": (512.0, 7168.0, "guess; Kimi K2 1536; d_model 7168"),
-    "e_chain": (4096.0, 49152.0, "guess"),
-    "b_p": (8.25, 64.0, "b_a.activation/tp-partial-sums-training central; 32; high a guess"),
     "nodes": (1e4, 1e6, "guess, around 100,000 servers"),
     "node_flops": (4e15, 3.6e16, "low a guess; 8 RTX PRO 6000s; 8 B200s, FP8 dense"),
     "years": (0.25, 3.0, "guess"),
@@ -133,7 +128,6 @@ CHECKS = [
      "(1, 0) above thread_bits: one block is full at S_1"),
     ("batched proving", DESIGN | BATCHED, "T5", "chi", "overhead 1.6e8"),
     ("1,000 servers, batched", DESIGN | BATCHED | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
-    ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,

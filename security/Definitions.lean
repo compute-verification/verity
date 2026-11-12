@@ -12,11 +12,11 @@ public import Definitions.Core.Period
 public import Definitions.Core.Structure
 public import Definitions.Core.Rec
 public import Definitions.Core.CoinBytes
+public import Definitions.Core.FirstHit
 public import Definitions.Core.Game.Tape
 public import Definitions.Core.Game.TwoRun
 public import Definitions.Core.Game.InterleaveBridge
 public import Definitions.Nci
-public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Covering
@@ -55,6 +55,7 @@ public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingTwoReg
 public import Definitions.Claims.SamplingTwoRegX
 public import Definitions.Claims.SamplingServed
+public import Definitions.Claims.SamplingTable
 public import Definitions.Claims.Guarantees.SamplingTwo
 public import Definitions.Claims.SamplingTwoRankin
 public import Definitions.Claims.ZKOut
@@ -70,12 +71,9 @@ public import Definitions.Nci.Guarantees.FitRate
 public import Definitions.Nci.Guarantees.Dampener
 public import Definitions.Nci.Guarantees.Remote
 public import Definitions.Nci.Guarantees.RemotePeriod
-public import Definitions.Nci.Guarantees.Info
 public import Definitions.Nci.Assumptions.Capability
 public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
-public import Definitions.Nci.Guarantees.Fmt2
-public import Definitions.Nci.Guarantees.Training
 public import Definitions.Nci.Guarantees.Covering
 public import Definitions.Nci.Guarantees.CoveringTwoCosts
 public import Definitions.Nci.Guarantees.Cut
