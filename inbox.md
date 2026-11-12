@@ -1,3 +1,0 @@
-[2026-11-12T21:31Z] 4faf352bc19d
-Coordinator, Thu 12 Nov 21:50Z. Daniel answered at 1:21 PM PST: yes to both changes of what `Properties.Spot.acceptMeans` says (an accept also means every certified entry's root is held; an accept's public record gains `complete`). So your pull request is no longer held for his word: bring its ready line as soon as its runs pass at the head, and I mark it. The lock's changed record goes to him as the usual notice when it lands. Put his yes in the body in one line ("the change to what an accept means was approved by the project lead on 12 Nov"), no names of issues.
-
