@@ -87,6 +87,7 @@ from textwrap import fill
 import cards as spot_cards
 import figure1 as f1
 from verity.protocols.spot import plancheck
+from verity.protocols.spot.device import challenger
 from verity.protocols.spot.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
                                             two_stage_price, two_stage_statements)
 
@@ -593,19 +594,24 @@ ONE_SESSION = {"template": "one session a block type, whatever it holds",
                "table": "one session of one table a block type"}
 #: the tables a session holds at most in the designs with several sessions a template printed beside them
 TABLES = (1, 16, 64, SESSION_TABLES)
+#: the coins of one stream of a session's coin tree: 2^9 rounds of 512 coins (`verity_flock.rec_live.INNER_COIN_SPEC`'s
+#: rounds and block, `flock-circuit`'s)
+STREAM_COINS = 2 ** 9 * 512
+#: the tables of one session whose coin tree the challenger samples at most: a tree holds `challenger.MAX_TREE_COINS`
+#: coins, in one stream a session and two a table
+TREE_TABLES = (challenger.MAX_TREE_COINS // STREAM_COINS - 1) // 2
 #: the tables of one session the code that runs a second stage takes at most, least first, each by what takes it: the
 #: GPU prover (one table a session), the CPU prover and the Lean verifier (their `MAX_TABLES`), the challenger's coin
-#: commitment (`challenger.MAX_TREE_COINS`, at 2^18 coins a stream, one stream a session and two a table) and the scope
-#: the sessions' knowledge error is proved in (`SESSION_TABLES`)
+#: commitment (`TREE_TABLES`) and the scope the sessions' knowledge error is proved in (`SESSION_TABLES`)
 TABLE_LIMITS = ((1, "the GPU prover's"), (64, "the CPU prover's and the Lean verifier's"),
-                (127, "the challenger's coin commitment's"), (SESSION_TABLES, "the proved scope's"))
+                (TREE_TABLES, "the challenger's coin commitment's"), (SESSION_TABLES, "the proved scope's"))
 #: the lines of session coins one challenger session's release log holds (`challenger.MAX_TREE_LINES`), and the least
 #: a session writes for each of its tables beside the 2 of its commitment: two repetitions of at least 86 rounds, a
 #: line a round (`verity_flock.rec_live.rep_rounds` at the smallest table)
-LOG_LINES, TABLE_LINES = 2 ** 20, 2 * 86
+LOG_LINES, TABLE_LINES = challenger.MAX_TREE_LINES, 2 * 86
 #: the bytes of live coins one layout of the challenger's holds (`challenger.MAX_COINS` coins of `COIN_BYTES`), which
 #: the second stage's draw reads its streams from
-DRAW_BYTES = 2 ** 20 * 64
+DRAW_BYTES = challenger.MAX_COINS * challenger.COIN_BYTES
 
 
 def draw_width(n: int) -> int:

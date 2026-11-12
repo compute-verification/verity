@@ -9,6 +9,7 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
+from verity.protocols.spot.device import challenger
 from verity.protocols.spot.optimize import Cell
 
 
@@ -392,6 +393,22 @@ def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monke
     assert past == ("its largest session in tables is 201 of its type, past the GPU prover's 1, the CPU prover's and "
                     "the Lean verifier's 64, the challenger's coin commitment's 127 and the proved scope's 200")
     assert [n for n, _ in t.TABLE_LIMITS] == [1, 64, 127, t.SESSION_TABLES]
+
+
+def test_the_challengers_limits_are_the_challenger_modules():
+    """The three limits `limits` holds a design to on the challenger's side are the challenger's own constants, read
+    from its module and never restated: a release log's coin-tree lines, one commitment's coins in bytes, and the
+    most tables of a session whose coin tree, one stream a session and two a table at the inner session's rounds and
+    block, the challenger still samples (`LiveChallenger.sample_tree`'s inequality)."""
+    assert t.LOG_LINES == challenger.MAX_TREE_LINES
+    assert t.DRAW_BYTES == challenger.MAX_COINS * challenger.COIN_BYTES
+
+    def sampled(tables: int) -> bool:
+        return (1 + 2 * tables) * t.STREAM_COINS <= challenger.MAX_TREE_COINS
+
+    (tree,) = [n for n, what in t.TABLE_LIMITS if "challenger" in what]
+    assert tree == t.TREE_TABLES and sampled(tree) and not sampled(tree + 1)
+    assert t.STREAM_COINS <= (1 << challenger.MAX_ROUNDS_LOG) * challenger.MAX_BLOCK
 
 
 def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
