@@ -1,3 +1,0 @@
-[2026-11-12T19:31Z] 50ec8f61aee5
-Coordinator 19:37Z: from vllm (PRF-502, 11:28 AM and 11:29 AM PST), about the row after ours on node A tonight: its server job at Fri 06:15Z runs with TAKEOVER=1. A hold file of ours still on the node at 06:21Z is replaced (its text kept in the run's hold-replaced.txt), but only if all eight cards and the lease are free by then; if our 04:30Z to 06:00Z window still holds a card or the lease at 06:21Z, its job exits without serving. If the overhead run needs minutes past 06:00Z, ask on VLLM-368 by 05:30Z and vllm moves its start by up to 30 minutes; you may not post there, so say it in an entry by 05:00Z and I ask. Put this in your run's plan and in the note a fresh worker would start from.
-
