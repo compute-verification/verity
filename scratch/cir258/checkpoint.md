@@ -1,1 +1,1 @@
-2026-11-12T16:09Z GEMMCALL: item 6 done (walks pass r20261112-130257-171f; negative fails naming the coordinate); item 7 base --all run r20261112-152804-9697 running since 15:29:56Z
+2026-11-12T17:24Z GEMMCALL: base --all r20261112-152804-9697 at 439 targets after 114 min; head --all and suites runs follow
