@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import itertools
 import sys
+from collections.abc import Callable, Iterator, Sequence
 
 from exact_kit.checks import Checks
 
@@ -112,7 +113,7 @@ def duo_zp(y: int, z: int, d: int, k: int, a: int, r: int) -> int:
 SHIFTS = tuple(range(32))
 
 
-def arith_templates():
+def arith_templates() -> list[tuple[str, int, Callable[..., int]]]:
     """(name, arity, fn) for the non-LOP3 integer ops. fn takes the operand values (and, for shift ops, a shift)."""
     out = []
     # IADD3 with per-operand negation (IADD3 can negate its sources): s0*±1 + s1*±1 + s2*±1.
@@ -137,7 +138,7 @@ def arith_templates():
 ARITH = arith_templates()
 
 
-def is_lop3(target_bits, pool_bits):
+def is_lop3(target_bits: list[int], pool_bits: dict[str, list[int]]) -> tuple[str, str, str] | None:
     """True iff `target` is some 3-input bitwise LUT of three pool operands: group the test-vector bit positions by the
     operand-bit triple and check the target bit is constant in each group. Returns the triple (names) or None.
 
@@ -164,7 +165,7 @@ def is_lop3(target_bits, pool_bits):
 
 # ---- the single-instruction superoptimiser -------------------------------------------------------------------------------
 
-def make_pool(k: int, a: int, r: int, vectors):
+def make_pool(k: int, a: int, r: int, vectors: Sequence[tuple[int, int, int]]) -> dict[str, list[int]]:
     """The operand pool: name -> list of values over the test vectors. Inputs y, z, d; the public constants k, a, r;
     a rich immediate set (0, 1, -1, a, k, a^{-1}, GOLDEN, sign bit, small ints)."""
     consts = {
@@ -180,7 +181,7 @@ def make_pool(k: int, a: int, r: int, vectors):
     return pool
 
 
-def single_instruction(target, pool):
+def single_instruction(target: list[int], pool: dict[str, list[int]]) -> str | None:
     """Return the name of a single modelled instruction computing `target` (a list over the test vectors) from the pool,
     or None. Searches LOP3 (all LUTs) and every arithmetic template over all ordered operand tuples."""
     # LOP3: any 3-input bitwise function of three pool operands.
@@ -198,11 +199,11 @@ def single_instruction(target, pool):
     return None
 
 
-def two_instruction_yp(yp, pool):
+def two_instruction_yp(yp: list[int], pool: dict[str, list[int]]) -> tuple[str, str] | None:
     """Confirm y' is a length-2 program: v1 = u = y ^ d ^ k (one LOP3), then y' = IMAD(a, v1, z) (one instruction over the
     pool extended with v1). The first value u is itself a single instruction (checked separately), so y' at length 2 is
     the honest prefix, below the duo word's three."""
-    y, d, k, z, a = pool["y"], pool["d"], pool["k"], pool["z"], pool["a"]
+    y, d, k = pool["y"], pool["d"], pool["k"]
     nv = len(yp)
     v1 = [u32(y[i] ^ d[i] ^ k[i]) for i in range(nv)]
     ext = dict(pool)
@@ -213,7 +214,7 @@ def two_instruction_yp(yp, pool):
 
 # ---- small-width exhaustive single-instruction cross-check (all 256 LUTs) -------------------------------------------------
 
-def width_single_instruction(width: int, target, inputs):
+def width_single_instruction(width: int, target: list[int], inputs: dict[str, list[int]]) -> str | None:
     """Over `width`-bit words, is `target` a single instruction of the `inputs` (name -> value over a small test set)?
     Exhaustive over the FULL modelled ISA at this width -- every one of the 256 3-input LOP3 LUTs, IADD3 sign variants,
     IMAD / IMAD.HI, every funnel shift, LEA and LEA.HI -- a complement to the 32-bit search (which collapses the 256 LUTs
@@ -376,7 +377,7 @@ def main() -> int:
 
 # ---- small helpers -------------------------------------------------------------------------------------------------------
 
-def lcg(seed: int):
+def lcg(seed: int) -> Iterator[int]:
     s = seed & M32
     while True:
         s = (1664525 * s + 1013904223) & M32
@@ -404,7 +405,7 @@ def pick_key_ok_r9() -> int:
             return a
 
 
-def is_f2_affine(f) -> bool:
+def is_f2_affine(f: Callable[[int, int, int], int]) -> bool:
     """True iff f(x) is affine over F2 in its bit-inputs: the effect of flipping an input bit is point-independent."""
     base = f(0, 0, 0)
     # linear part from single-bit deltas at 0

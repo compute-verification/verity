@@ -47,7 +47,7 @@ def n_of(shape: str) -> int:
     return int(shape.split("n")[1].split("k")[0])
 
 
-def form(name, shape, types, ctype, con, extra, rs, sp=False) -> str:
+def form(name: str, shape: str, types: str, ctype: str, con: str, extra: str, rs: bool, sp: bool = False) -> str:
     nacc = 64 * n_of(shape) // 128 // (2 if ctype == "f16" else 1)
     ctype = "uint32_t" if ctype == "f16" else ctype
     regs = ", ".join(f"%{i}" for i in range(nacc))
