@@ -15,7 +15,6 @@
     {"file": "verity_vllm/acquire/served.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/served-required-manifest/v1"},
     {"file": "verity_vllm/acquire/served.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/acquire/sources/narrowed_source.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
-    {"file": "verity_vllm/check/c2_rules.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 22},
     {"file": "verity_vllm/check/commit_tokens.py", "kind": "schema-literal", "symbol": "CommitTokens", "detail": "verity-vllm/commit-tokens/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/fold-summary/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/gates/v1"},

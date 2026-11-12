@@ -255,7 +255,6 @@
     {"file": "verity_vllm/check/c2_rules.py", "kind": "misc", "symbol": "_complete_replay_population_gap", "detail": ""},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "misc", "symbol": "execution_extent_rules", "detail": ""},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "type-var", "symbol": "_complete_replay_population_gap", "detail": ""},
-    {"file": "verity_vllm/check/c2_rules.py", "kind": "union-attr", "symbol": "_batch_attribution_note", "detail": "", "count": 3},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "union-attr", "symbol": "_complete_replay_population_gap", "detail": ""},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "union-attr", "symbol": "_partial_replay_named_gap", "detail": "", "count": 2},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "union-attr", "symbol": "_query_population_scope", "detail": "", "count": 2},
