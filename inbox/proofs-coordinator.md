@@ -73962,3 +73962,71 @@ Tags: [derived] unless a line says otherwise: the hash term at one table a sessi
 - **Not established**: the class mix of COUNT's new designs (assumed as above; a rerun of `wires_sessions2.py` on the kit of its run `8921` would settle it and I have not made it); everything my 05:48Z entry lists.
 
 No repository file changed; nothing posted; no Lean.
+
+## MEMBERS, Thu 12 Nov 06:13Z: NET-352's fact: no theorem today holds an accepted session's output row to the registration's root of its member's port. The guarantee's claim has that shape with the root read off the member's public file; the tie from that file to the registration's record is code with no statement at v2 or per member; binding does not read the salt's rule; their way puts the root on a member's own port, so the form takes it. One thing they did not ask: an accepting per-member run holds an undrawn member's root to nothing
+
+Clock: `date -u` read 06:13Z before writing. Read only: `git show`, `grep`; nothing built, nothing written to Linear or Slack. `origin/main` is `d6075b75d289`; soundness's branch is `cursor/soundness-multileg-8fb2` at `c7e54ba54c`, old paths (`Security/…`) [run: `git ls-remote`]. Paths below without `origin/main` are that branch's.
+
+Tags: [run] a command of this hour; [read]; [relayed]; [derived]; [guess].
+
+### The four answers, each in a line
+
+1. **No.** At one member a theorem says it with the root read off the member's public file (soundness's branch and #8569, not `main`). At a window none does. Nowhere does a theorem at v2 say the public file's root is the registration record's.
+2. **One lemma is missing**, about a tenth of S7's size, and it belongs in S7, not on the longest chain.
+3. **The salt's rule does not enter.** Binding reads the salt's length only. One condition of the one-member theorem does bite a scan: every port has at least 2 leaves, and three kinds of scan member are one unit.
+4. **Yes**: the root's port is `<member>/o0`, one member's, so `rootStep` gives it to that member and `headerHeld` holds its header to it.
+
+### 1. Is there a theorem today
+
+**What the guarantee's claim says, so that the question can be held against it.**
+- [read] The claim is `Accounting.IntegrityHolds P opens X ε`: the units that are `unbound` are at most an `ε` share. A unit `u` is unbound when it is incorrect or some gate `g ∈ P.io u` (a committed gate it holds or reads, its outputs among them) has `¬ opens g (X g)` (`Security/Definitions/Accounting/JointLive.lean:92,98`).
+- [read] `opens` is `Vocab.Opens θ F c g v` (`Security/Properties/Verity/Game.lean:786`): `place θ F c g = some p`, and some `Hash.RowLeaf` opening is accepted under SHA-512 at `p`'s domain, key, row format, root and rank, its row holding `v` at `p.offset`.
+- [derived] So the claim is about every unit of the population in the extracted trace, all but an `ε` share, and not about a sampled unit's transcript. "The registration's root of its member's port" is whatever `place` returns.
+
+**At one member: yes, with the root read off the public file.**
+- [read] `Verity.Sampled.remote_soundness_deployedReady` (`Security/Proofs/Properties/Verity/Sampled/OpensAt.lean:270`), through `Live.opens_rowLeaf` (:136) and `Instance.opensAt_of_sessions` (:261). On soundness's branch and in #8569; not on `main`.
+- [read] Its `place` is fixed by the field `Instance.place` (`Sampled/Instance.lean:170`) to `placeOfRead (base.read θ F) g` (`Sampled/Place.lean:46`): the port's root recomputed from the public file's rows under the domain the file publishes, which is `Flock.PortRoots.pubRoot` (`Flock.Bridge.rootsOf_getD_pub`, `Security/Proofs/Flock/Bridge/Refused.lean:73`), at the unit's row as rank. It does not read the commitment `c`.
+- [read] What it assumes: `OpensReady` (`OpensAt.lean:115`, section 3 below); SHA-512's collision resistance at each finder; the binding inside the session's term `ε_ks + ε_bind` of `SampledKSLiveV5`, under the ids `cr/sha-512` (`TableCRZAt`) and `ecr/sha-512` (`LinkCRZCAt`); and the file finders (`ecr/sha-512`), which fix the public file by its digest in the parameters.
+- [derived] So at one member the row is held to the root in the parameters' public file. That this root is the record's is `publicHeld`'s check, which no theorem states (below).
+
+**At a window: no.**
+- [read] `remote_soundness_window` (`Window/Instance.lean:468`) takes `ClaimTransfers` (:328) as a hypothesis, and `ClaimTransfers` reads `I.base.Opens`. `WindowInstance` (:65) has no field that fixes `base.read`, `base.place` or `base.extract`, where the one-member `Instance` has three. So at a window the place is not fixed by any text. (i-a)'s statement fixes it; that is my next task.
+- [read] `SliceHeld` (`Window/Members.lean:589`) carries `Record.matchesPublic` whole at a member's slice, and `Accepts` (:656) asks it of each member with a statement. Only its population clause is drawn out (`SliceHeld.population`, :630).
+
+**On `main`: the two ends, not the middle.**
+- [read] Header to tree: `SpotFlock.header_roots` (`origin/main:security/Proofs/Flock/SpotFlock/HeaderRoots.lean:286`): at a statement in Flock's scope with hidden outputs and one table, the public file's header entry `frame_v3.roots` for port `q` is `pubRoot` over the loaded population, and its `domain_ids` entry is `idOf`. `pubPort_opens` and `setupHidden_unit` (`Rooted.lean:80, 107`): a unit's `b‖c` opens its leaf under that root.
+- [read] Record to header, proved only for two-stage: `rootsOk_entry` and `interior_entry` (`SpotFlock/EntriesAt.lean:424, 572`), about `Spot.SecondStage.rootsOk`.
+- [run] Record to header at v2 (`publicHeld`, `Record.matchesPublic`, `origin/main:…/Spot/Record.lean:70`): four theorems, all of the population and indices clauses (`indicesHeld_of_publicHeld`, `Spot/OneStageZk.lean:356`; `population_of_matchesPublic`, `Properties/Spot/Credited.lean:367`; `matchesPublic_population` and `publicHeld_population`, `Properties/Verity/Sampled/Held.lean:394, 408`). None of the roots or domains clause. For the per-member `headerHeld` (`Spot/OneStageZk.lean:1002`): none [run: `git grep` for `headerHeld`, `matchesPublic` under `security/`].
+
+### 2. The missing statement
+
+- [read] **The definitions that carry it**, all on `main`: `rootStep`, `rootsOf`, `Member.slice`, `headerHeld` (`Spot/OneStageZk.lean:963, 983, 995, 1002`); `Record.matchesPublic` with `byPort` and `sameDict` (`Spot/Record.lean:57-81`); `FilePart.header`; `Flock.PortRoots.pubRoot` (`Flock/PortRoots.lean:78`). On soundness's branch: `placeOfRead`.
+- **In one line:** at a run `membersRun` accepts, for each member `m` with a statement and each port `q` of its circuit, the record's root named `<m.name>/<port q>` is the hex of `pubRoot c_m pub_m q` and its domain is `idOf c_m pub_m q`; so the place of a gate of `m`'s unit `u` is that domain, the record's root, and `u`'s row.
+- [guess] **Its size: one file, 200 to 350 lines, 8 to 12 theorems.** Three parts: `matchesPublic`'s roots and domains clauses read pointwise (`sameDict`), as `rootsOk_entry` does for two-stage; `rootsOf`'s fold, that a member's slice holds exactly the record's roots named `<name>/…`, bare; the join with `header_roots`.
+- [derived] **Beside the chain:** it is part of S7 (`WindowReads` of the form's acceptance; my guess for S7 was 700 to 1,200 lines) and not of S3 to S5. (i-a) cannot need it: `ClaimTransfers` quantifies the commitment `c` after the window `W`, so a place the claim reads cannot depend on what the record says, and must be the public file's, as #8569's is.
+
+### 3. A public salt rule
+
+- [read] `Hash.RowLeaf.accepts` (`Security/Definitions/Hash/RowLeaf.lean:118`) asks of the salt only `o.salt.length = Hm96.SALT_BYTES`. The opening in `Opens` is existential. Nothing in the binding reads how the salt was chosen, so the statement needs no form of the salt. What a public salt gives up is hiding of that port, and a row that is the constant `[1]` has nothing to hide.
+- [read] `main` already holds such a value: `Flock.Registered.checkKnown` (`origin/main:verity/protocols/flock/verifier/Flock/RegKnown.lean`) computes a registered root from known rows and their salts, and its docstring names PoUW's `ok` rows under `ok_salt(window, u)`.
+- [read] **One condition of the one-member theorem bites a scan, and it is not the salt: `OpensReady.leaves` (`OpensAt.lean:115`), every port of the statement has at least 2 leaves.** It is a hypothesis (`SessionsReady`, :223), "an accepted path then has a level, which the salt precedes". A scan's members `first` and `last` and the unread round's member are one unit each (`origin/main:benchmarks/network_traces/scan_zk.py:330-355`, `members_of`), so a port of theirs is a tree of one leaf. [derived] At the per-member form those members' units are outside what the one-member theorem's `Opens` covers, whatever the salt. Soundness's to say whether the condition can go or a one-unit member is padded.
+- [read] `OpensReady.roots`, the ports of one statement have pairwise different roots, does not bite: `PortRoots.checkOf` already refuses two ports of one published domain (`dupId`) and one root under two domains (`collidesPub`) (`origin/main:verity/protocols/flock/verifier/Flock/PortRoots.lean:88-140`), so two ports of rows `[1]` under one salt rule differ by their domains.
+- [derived] The row formats in scope are `sha512/row/v2` and `sha512/row-seg/v1`, rows under 2^64 bits (`OpensReady.rows`, `.width`). `checkKnown` takes `row/v2` rows of 16-bit leaves under a 192-byte salt, which is inside that.
+
+### 4. Does their way put the root on a member's own port
+
+- [read] Yes. `rootStep` (`Spot/OneStageZk.lean:963`) gives a root to the one member whose name, then `/`, its port begins with. A root the registration names `<member>/o0` is that member's; `Member.slice` hands it to the member bare as `o0`; `headerHeld` holds the member's header to it. The refusal of my 05:46Z section 5 is of `scan/state`, `scan/prog` and `rows/<direction>/<w>`, which this way does not touch. [relayed] network-accounting decides those by Thu noon PST and asked that our statement be written for members' roots only (NET-352, 06:01Z).
+- [read] The registered-reads entry goes through `classHeld` (:1055): every port of one registered value, over all members, names one root, one count of leaves, one row width, one domain and one schema. [derived] So the `ok` value is one tree read by every scan member, or it is named per member. Two members that name one value with two roots are refused (`classTwo`).
+
+### 5. Not asked, and it bears on their period check: an undrawn member
+
+- [read] `membersRun` (`Spot/OneStageZk.lean:1232`) runs `headerHeld` inside `Member.statement`, which runs only for a member with a statement. `runMembers`' docstring: "a member no statement names is never read" (:1160-1161). `popHeld`, `laidHeld`, `classHeld` and `rootsOf` run on every member and read the parameters and the record, no public file.
+- [derived] **So an accepting per-member run holds the record's root of `<member>/o0` to the member's public file only for the members the sample drew.** The one statement's form does not have this: `publicHeld` always runs on the one public file.
+- [derived] What the guarantee can then say: all but an `ε` share of the units open their rows at the root in their member's public file, which the parameters fix by digest before the draw. For an undrawn member it says nothing of the record's root. A period check that compares the record's root with the root of n rows `[1]` is then covered for the drawn members only.
+- [derived] Two ways to close it, neither written. (a) The check that reads the record's roots also holds every member's header to its slice, drawn or not: one header a member, a function of the parameters and the record, in the verifier or in the period check. (b) The claim's place reads the record, and a member whose header differs counts as wrong; the bound then needs a sampling step that `JointShareV5` does not have, since such a member is caught by `headerHeld` and not by `wrongSet`, and `ClaimTransfers` as written cannot say it (section 2).
+- [guess] (a) is the small one: a fold beside `classHeld`. It reads the undrawn members' public files, which the verifier does not load today.
+
+### 6. What I did not establish
+
+- Whether soundness's `WindowInstance.SetsUp`, abstract at `c7e54ba54c`, was meant to carry every member's header held to the record. Nothing on the branch says.
+- The salt rule's text and the port's domain in their way: I read no branch of network-accounting's.
