@@ -6,6 +6,9 @@ from __future__ import annotations
 
 import re
 
+#: what `bench.py`, `characterize.py`, `native.py` and the tests read
+__all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
+
 UUID_RE = re.compile(r"GPU-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 

@@ -57,6 +57,9 @@ import arm as A
 import ledger as L
 from verity_config.settings import of
 
+#: what the tests read
+__all__ = ["EXIT_OK", "EXIT_REJECTED", "EXIT_USAGE", "VERSION", "main"]
+
 settings = of(__file__)
 VERSION = "verify/v1"
 EXIT_OK, EXIT_REJECTED, EXIT_USAGE = 0, 1, 2

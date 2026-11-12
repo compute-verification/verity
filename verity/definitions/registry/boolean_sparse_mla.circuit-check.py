@@ -7,18 +7,23 @@ from typing import Any, Callable
 
 def _glm53_served_roots() -> list[Any]:
     """`SparseMlaHeadBlock_v3` at GLM-5.3's served statics: a row's later 64-key block, its first, and a 16-key first block
-    (a short row's); and the units it is cut into at P, `SparseMlaHeadScores_v2` and `SparseMlaHeadValues_v2`.  Each is over
-    `targets.MAX_GATES`, so it holds a ``digests`` pin, which keeps it in ``--all``; its description is rows of Calls, and its
-    Flock block is read off them (`verity_flock.circuit.unit_block`)."""
+    (a short row's); the units it is cut into at P, `SparseMlaHeadScores_v2` and `SparseMlaHeadValues_v2`; and a head's end on
+    one column block of 64.  Each is over `targets.MAX_GATES`, so it holds a ``digests`` pin, which keeps it in ``--all``;
+    its description is rows of Calls, and its Flock block is read off them (`verity_flock.circuit.unit_block`)."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import boolean_sparse_mla
 
     S = {k: boolean_sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")}
     # the block cut at P: a later 64-key block's scores and the first block's; a later block's O on 128, 64 and 32 of its
-    # columns (a quarter, an eighth, a sixteenth of them) and the first block's on 128
-    cut = [bind(boolean_sparse_mla.SparseMlaHeadScoresV2, NVIS=64, FIRST=first, **S) for first in (False, True)]
-    cut += [bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=64, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=g)
-            for first, g in ((False, 128), (False, 64), (False, 32), (True, 128))]
+    # columns (a quarter, an eighth, a sixteenth of them) and the first block's on 128; and what a chain of 64-column values
+    # units (`sparse_mla.head_chain` at ``cols`` = 64) holds beside them: a first block's O on 64, a 16-key first block's
+    # scores and O on 64, and the head's end on a column block
+    cut = [bind(boolean_sparse_mla.SparseMlaHeadScoresV2, NVIS=nvis, FIRST=first, **S)
+           for nvis, first in ((64, False), (64, True), (16, True))]
+    cut += [bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=nvis, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=g)
+            for nvis, first, g in ((64, False, 128), (64, False, 64), (64, False, 32), (64, True, 128), (64, True, 64),
+                                   (16, True, 64))]
+    cut.append(bind(boolean_sparse_mla.SparseMlaHeadEndV2, DV=64, INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"]))
     return [bind(boolean_sparse_mla.SparseMlaHeadBlockV3, NVIS=nvis, FIRST=first, **S)
             for nvis, first in ((64, False), (64, True), (16, True))] + cut
 

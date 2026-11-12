@@ -133,7 +133,11 @@ def _from_records(cache: Path, handed: bool = False) -> Catalog | None:
     calls it, which under xdist is every worker of the session at once, each holding what the heaviest binding's build holds.
     So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_apart`) makes
     them all.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses: holding
-    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches."""
+    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records'
+    cache, unless handed, is marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session
+    removes nothing, which the runs that write the cache do (`cache.expire`)."""
+    if not handed:
+        CC.mark(cache)
     with pytest.MonkeyPatch.context() as mp:
         # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
         mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
