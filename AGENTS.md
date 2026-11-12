@@ -305,6 +305,10 @@ Landing.
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Every `Task` launch names its `model`, never `inherit`.** `claude-opus-5-5-high` is a worker's default (moving files,
+  reading code, a specified change with its tests, a merge, a review); `claude-fable-5-2-xhigh` only to plan, design or
+  decide where no check catches an error, as leads do. This is Daniel's standing explicit request, the one the Task tool
+  wants before a `model`; `tools/agent-guard/task_hook.py` refuses a launch without one (the team skill).
 - **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
