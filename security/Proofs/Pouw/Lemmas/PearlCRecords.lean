@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Pouw.Advantage
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
