@@ -18,6 +18,7 @@ it prints from the store's records of record."""
 
 from __future__ import annotations
 
+import ast
 import json
 import math
 import runpy
@@ -161,6 +162,31 @@ def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_meas
     whole = P.Flock(rows, (), None).table(P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
         name: {"k_log": defs[name], "of": {"Head_v1": "row"}, "prefill": 1, "decode": 0} for name in list(defs)[:3]}}))
     assert P.report(whole, 1.0)["totals"]["status"] == "modeled"
+
+
+def test_the_steady_rows_are_the_types_measured_at_steady_state_as_the_planner_reads_them():
+    """`--steady-rows`' file holds a row for each block type its own steady-state row measures, by its census name, with
+    the statement's GPU-seconds and blocks that row timed, and none for a type priced from its family's row, a single
+    session or the k_log model; every row has the fields the break-even planner's reader requires."""
+
+    defs = {'Head_v1{K=4,DOT={"fn":"Dot_v1"},FIRST=false}': 20, 'Head_v1{K=4,DOT={"fn":"Dot_v1"},FIRST=true}': 20,
+            "Head_v1{K=4,LAYER=9}": 21, "Head_v1{K=8,FIRST=false}": 20}
+    census = P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
+        name: {"k_log": k, "of": {"Head_v1": "row"}, "prefill": 1, "decode": 0} for name, k in defs.items()}})
+    rows = (steady("head", "Head_v1{K=4,DOT=Dot_v1,FIRST=False}", "r20260101-000000-0001", 8, 12.0),
+            steady("head-first", "Head_v1{K=4,DOT=Dot_v1,FIRST=True}", "r20260101-000000-0002", 4, 16.0, provers=1, cores=24,
+                   art="art:" + "ab" * 32))
+    doc = P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)
+    assert [r["source"] for r in sorted(doc["rows"], key=lambda r: list(defs).index(r["block"]))] == [
+        P.STEADY, P.STEADY, P.FAMILY, P.MODELED]
+    first, later = list(defs)[1], list(defs)[0]
+    assert P.steady_rows(doc) == {"rows": [
+        {"block": first, "statement_seconds": 16.0, "blocks": 4, "provers": 1, "cores": 24, "record": "art:" + "ab" * 32},
+        {"block": later, "statement_seconds": 12.0, "blocks": 8, "provers": 1, "cores": 10, "record": "r20260101-000000-0001"}]}
+    reader = ast.parse((REPO / "benchmarks" / "spot_figures" / "breakeven" / "reprice.py").read_text())
+    fields = next(ast.literal_eval(n.value) for n in reader.body
+                  if isinstance(n, ast.Assign) and ast.unparse(n.targets[0]) == "STEADY_FIELDS")
+    assert fields and all(set(fields) <= set(r) for r in P.steady_rows(doc)["rows"])
 
 
 def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_only():
@@ -1400,6 +1426,12 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     assert "- host cores (`--cores`, a stated input): 10 CPU cores a card, node A's share" in out
     code, out, _ = run("--system", "flock", "--workload", "glm53", "--provers", "2", "--json")
     assert code == 0 and (json.loads(out)["provers"], json.loads(out)["cores"]) == (2, 10)
+    code, out, _ = run("--system", "flock", "--workload", "glm53", "--json", "--steady-rows", str(tmp_path / "steady.json"))
+    wrote = json.loads((tmp_path / "steady.json").read_text())["rows"]
+    measured = {r["block"]: r for r in json.loads(out)["rows"] if r["source"] == P.STEADY}
+    assert code == 0 and len(wrote) == 8 and {r["block"] for r in wrote} == set(measured)
+    assert all(r["statement_seconds"] / r["blocks"] == pytest.approx(measured[r["block"]]["seconds"], rel=1e-12) and r["provers"] == 1
+               for r in wrote)
     code, out, _ = run("--system", "flock", "--workload", "glm53", "--cores", "24", "--json")
     doc = json.loads(out)
     assert code == 0 and (doc["provers"], doc["cores"]) == (1, 24) and doc["totals"]["above_cores"]["block_types"] == 0

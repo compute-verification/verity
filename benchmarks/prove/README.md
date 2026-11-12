@@ -12,6 +12,7 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
     [--cores N]                                                     the host's CPU cores a card each type is priced at (default 10)
     [--rows N]                                                      the N costliest block types, the rest in one row
     [--json]                                                        the table as JSON, every row whole
+    [--steady-rows FILE]                                            also write the steady-state rows the planner reads
     [--local-only]                                                  this machine's catalog alone, not the store's remote
 ```
 
@@ -59,6 +60,11 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   staged, and its own ms per block where it is a steady-state measurement, else why it isn't one. It is on no row and
   in no figure, the range's other end included: a census that no longer holds a type leaves its measurements listed,
   not dropped.
+- **The steady-state rows as the break-even planner reads them,** in `--steady-rows FILE`: a row for each block type
+  its own steady-state row measures at the stated provers and cores, by its census name, with the statement's
+  GPU-seconds and blocks that row timed, its provers, their cores and the run or art that holds it (`prove.steady_rows`;
+  `benchmarks/spot_figures/breakeven`'s `--steady FILE`). A type priced from its family's row, a single session or the
+  k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
 

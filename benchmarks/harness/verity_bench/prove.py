@@ -146,7 +146,8 @@ class Cost:
     `missing`), the run or art that holds it, the staged type that measured it as its record names it (a sampling plan
     names its cells' the same way), the same block at the steady-state types' median seconds a witness bit (the range's
     other end; None for a type measured at steady state), the verifier's seconds and the proof's bytes where a record
-    holds them, and the prover count and the host CPU cores a card a steady-state figure was measured at."""
+    holds them, and the prover count, the host CPU cores a card and the blocks a statement held that a steady-state
+    figure was measured at."""
 
     source: str
     seconds: float | None = None
@@ -158,6 +159,7 @@ class Cost:
     proof_bytes: float | None = None
     provers: int | None = None
     cores: int | None = None
+    blocks: int | None = None
 
 
 @dataclass(frozen=True)
@@ -397,7 +399,7 @@ class Flock:
                 cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record,
                             f"`{s.type}`, {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
-                            provers=s.provers, cores=s.cores)
+                            provers=s.provers, cores=s.cores, blocks=s.blocks)
             else:
                 kin = families.get(_family(spelled), [])
                 cost = _kin(b, kin, self.cores) if kin else single(b)
@@ -556,7 +558,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
 
     rows = [{"block": r.block, "k_log": r.k_log, "per_token": r.per_token, "seconds": r.cost.seconds,
              "planned_seconds": r.planned, "source": r.cost.source, "record": r.cost.record, "provers": r.cost.provers,
-             "cores": r.cost.cores, "note": r.cost.note,
+             "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
             for r in table.rows]
@@ -597,6 +599,18 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
             "planned": _planned(table, serving_seconds),
         },
     }
+
+
+def steady_rows(doc: Mapping[str, Any]) -> dict[str, Any]:
+    """A report's block types measured at steady state, a row each as the break-even planner reads a steady-state row
+    (`benchmarks/spot_figures/breakeven/reprice.py`'s `steady`): the block type by its census name, a statement's
+    GPU-seconds, the blocks it held, its provers, their cores and the run or art that holds the measurement. A type
+    priced any other way (its family's row, a single session, the k_log model) is no measurement of it and gets no
+    row."""
+
+    return {"rows": [{"block": r["block"], "statement_seconds": r["seconds"] * r["statement_blocks"],
+                      "blocks": r["statement_blocks"], "provers": r["provers"], "cores": r["cores"], "record": r["record"]}
+                     for r in doc["rows"] if r["source"] == STEADY]}
 
 
 def _above_cores(table: Table) -> dict[str, Any] | None:
