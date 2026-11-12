@@ -2035,8 +2035,7 @@ def test_a_rerun_sets_its_key_s_results_aside_for_the_candidate_above_too_as_gra
     env.result(z, "pytest:z", "pass")
     assert loop.tick() == []                                        # graph2 still counts it pending
     Path(f"{script}.verdict").write_text(json.dumps({"state": PASS, "pending": 0}))
-    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == one["sha"]
-    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == two["sha"] and env.posts == []  # no red on z
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] * 2 and env.main() == two["sha"] and env.posts == []  # no red on z
 
 
 @pytest.mark.parametrize("shadow", [False, True])
@@ -2505,6 +2504,43 @@ def test_an_advance_is_logged_once_pushed_and_drive_s_steps_after_it_are_a_step_
     assert (again["action"], again["done"], drop["action"], drop["why"]) == ("on_main", True, "drop", "on main")
     assert calls == [(sha, built["base"], [1], []), (sha, built["base"], [1], ["stacked:9<1"])]   # who was told, kept
     assert loop.tick() == [] and len(calls) == 2
+
+
+def test_a_tick_advancing_through_stacked_passed_candidates_pushes_each_with_its_lease_and_runs_its_steps_once(env):
+    """Each candidate passed on the one below lands in the tick its base does, in order: a push of `main` leased on its base,
+    then drive's steps on its members from that base, then its drop.  A push refused part-way (here a stale lease) stops the
+    tick with the candidates below it landed whole and nothing of it: the next tick lands it, its steps run once."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    env.graph2_script(loop, {"state": PASS, "pending": 0})
+    (one,) = loop.tick()
+    env.put(2, {"b.txt": "2\n"})
+    (two,) = loop.tick()
+    env.put(3, {"c.txt": "3\n"})
+    (three,) = loop.tick()
+    assert (two["base"], three["base"]) == (one["sha"], two["sha"])
+    for c, task, path in ((one, "pytest:a", "a.txt"), (two, "pytest:b", "b.txt"), (three, "pytest:c", "c.txt")):
+        env.result(env.listed(c["sha"], {task: [path]})[task], task, "pass")
+    calls, pushes, advance = [], [], loop.world.advance
+
+    def on_main(sha: str, base: str, members, told: list[str]) -> None:
+        calls.append((sha, base, [m.pr for m in members]))
+
+    def stale(sha: str, base: str) -> None:
+        pushes.append(sha)
+        advance(sha, "f" * 40 if pushes.count(three["sha"]) == 1 else base)  # three's first push leases a stale `main`
+
+    loop.world.on_main, loop.world.advance = on_main, stale
+    recs = loop.tick()
+    assert _acts(recs) == ["advance", "on_main", "drop", "advance", "on_main", "drop", "advance"], recs
+    assert "stale info" in recs[-1]["error"] and env.main() == two["sha"] and env.queued() == {branch(three["sha"]): three["sha"]}
+    assert [(r["sha"], r["base"], r.get("done")) for r in recs if r["action"] == "advance"] == [
+        (one["sha"], main, True), (two["sha"], one["sha"], True), (three["sha"], None, None)]
+    assert calls == [(one["sha"], main, [1]), (two["sha"], one["sha"], [2])]
+    assert _acts(loop.tick()) == ["advance", "on_main", "drop"] and env.main() == three["sha"]
+    assert calls[2:] == [(three["sha"], two["sha"], [3])] and pushes == [one["sha"], two["sha"], three["sha"], three["sha"]]
+    assert loop.tick() == [] and len(calls) == 3 and env.queued() == {}
 
 
 def test_an_outcome_s_inherited_failures_keep_their_tests_and_their_base_s_through_the_log():
@@ -4251,8 +4287,9 @@ def test_under_gate_check_a_candidate_that_took_lean_audit_through_its_base_foll
         env, monkeypatch, says):
     """Three candidates stacked, one PR each: the lowest one's member changes a Lean file, the other two's none, so the top
     one takes lean-audit from the lowest one's check, as its base did.  While that check runs, the top one is pending,
-    though every step its own check ran passed, and so is its base.  Where that check passes lean-audit, the three land in
-    turn, the top one's record keeping lean-audit as passed.  Where it fails it, the lowest one is ejected, and the two
+    though every step its own check ran passed, and so is its base.  Where that check passes lean-audit, the lowest lands,
+    and the two above, pending while it was in flight, land together in the next tick, the top one's record keeping
+    lean-audit as passed.  Where it fails it, the lowest one is ejected, and the two
     above, still pending, nothing taken into their records, drop as their base failed, with no outcome, so nobody of theirs
     is blamed or capped."""
     main = env.main()
@@ -4272,8 +4309,8 @@ def test_under_gate_check_a_candidate_that_took_lean_audit_through_its_base_foll
     assert {c.sha: c.verdict.state for c in seen[-1].candidates} == {lean: PENDING, a: PENDING, b: PENDING}
     if says == "passed":
         runs.end(lean)
-        for landed in (lean, a, b):
-            assert "advance" in _acts(loop.tick()) and env.main() == landed
+        assert _acts(loop.tick()).count("advance") == 1 and env.main() == lean
+        assert _acts(loop.tick()).count("advance") == 2 and env.main() == b
         rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == b][-1]["record"]
         assert rec["lean_audit_from"] == lean and "lean-audit" in rec["verdict"]["passed"]
         return
@@ -4294,7 +4331,7 @@ def test_under_gate_check_a_candidate_takes_lean_audit_from_a_landed_one_by_the_
     either, takes lean-audit from the landed one too, whose verdict on it the run beside `main` keeps.  Once the log keeps
     no record of that run, as a loop that lost it, the run beside `main` starts again, and a candidate built then audits:
     nothing beside `main` keeps a verdict on lean-audit to take.  The two that took it are pending while that run runs,
-    though their own checks passed, and land on its verdict, the one that audited after them."""
+    though their own checks passed, and land on its verdict in one tick, with the one that audited after them."""
     from research.landing import AFTER_LANDING
 
     main = env.main()
@@ -4320,8 +4357,7 @@ def test_under_gate_check_a_candidate_takes_lean_audit_from_a_landed_one_by_the_
     runs.end(c)
     assert "advance" not in _acts(loop.tick()) and env.main() == lean
     runs.end(lean)
-    for landed in (a, b, c):
-        assert "advance" in _acts(loop.tick()) and env.main() == landed
+    assert _acts(loop.tick()).count("advance") == 3 and env.main() == c
 
 
 def test_under_gate_check_a_candidate_that_took_lean_audit_is_pending_while_the_check_that_ran_it_is_rerun(env, monkeypatch):
@@ -4364,8 +4400,8 @@ def test_under_gate_check_on_main_red_on_lean_audit_a_candidate_that_took_it_kee
     inherited: it lands.  The one on it, changing no Lean input, took lean-audit from it: pending while the lowest is in
     flight, nothing taken into its record, then failed on the run beside `main`'s failure of it once the lowest has landed,
     inherited too, so it lands, its record keeping that failure.  The candidate on it, whose member changes a Lean file,
-    fails lean-audit the same way: read against that record, the run beside `main` now, its failure is inherited, not its
-    own, and it lands with no rerun or ejection."""
+    fails lean-audit the same way: read against that record, the run beside `main` once it lands, its failure is inherited,
+    not its own, and it lands in the same tick with no rerun or ejection."""
     main = env.main()
     env.put(1, {"Security/Proofs/A.lean": "-- a\n"})
     env.put(2, {"b.txt": "1\n"})
@@ -4383,10 +4419,9 @@ def test_under_gate_check_on_main_red_on_lean_audit_a_candidate_that_took_it_kee
     assert not any(vqueue_slim.answers(r["record"]) for r in env.lines() if r["action"] == "slim" and r["sha"] == a)
     logged += loop.tick()
     recs = {x: [r for r in env.lines() if r["action"] == "slim" and r["sha"] == x][-1]["record"] for x in (lean, a)}
-    assert env.main() == a and recs[a]["lean_audit_from"] == lean
+    assert env.main() == c and recs[a]["lean_audit_from"] == lean
     assert recs[a]["verdict"]["failed"] == recs[lean]["verdict"]["failed"] and vqueue_slim.answers(recs[a])
-    logged += loop.tick()
-    assert env.main() == c and not {"rerun", "eject"} & set(_acts(logged)) and env.withdrawn == []
+    assert not {"rerun", "eject"} & set(_acts(logged)) and env.withdrawn == []
 
 
 def test_under_gate_check_a_red_while_the_shards_run_with_several_suspects_is_bisected(env, monkeypatch):
