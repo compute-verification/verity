@@ -2,6 +2,9 @@
 was dumped from; its full dump keeps the steps' salt keys, its slim dump only the salts of the leaves its reads opened."""
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import pytest
 
 pytest.importorskip("torch")
@@ -21,6 +24,14 @@ STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5 * K), ("model.layers.0
 
 def _reads(reader):
     return {(s, m.name): reader(s, m.name, 0, m.nbytes) for s, ms in reader.com._layouts.items() for m in ms}
+
+
+def test_the_store_imports_where_torch_is_not_installed():
+    """`verity_vllm.commit.store_dump` imports with no torch to import, and so do the CPU replay's modules that load it: only
+    `not_retained_of`, when called, reads `host_retention`, which imports torch."""
+    hidden = "import sys; sys.modules['torch'] = None; import verity_vllm.commit.store_dump"
+    child = subprocess.run([sys.executable, "-c", hidden], capture_output=True, text=True, check=False)
+    assert child.returncode == 0, child.stderr
 
 
 def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
