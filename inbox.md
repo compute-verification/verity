@@ -45,3 +45,13 @@ SORT, TRN-146: carry of #8438, item 3 only. What it is for: `read_slots`' automa
 - Quick suites `r20261112-193149-86cf`, rc 0, last line: `55 suites: 55 passed (0 cached), 0 failed; 107.7 min of test time`. RAN (fetched stdout.log).
 - No Lean changed. Question: none. The PR's tables were measured before its own merge and are not measured again here. READ (the PR body).
 
+[2026-11-12T21:33Z] 4a7f9d22fbd7
+SORT, TRN-146: carry of #8578. What it is for: the committer refuses two ways for one salt to hide two strings. A linked `x` port must take the row table's schema, and an input row committed in full under a registered value's salt must be that value's row (`rows.commit`'s `carried`). READ (the PR title and diff).
+
+- Branch `cursor/carry-8578-dc90`, head 07d87523518804b2a2f427416ae1d07870a5ada0: #8578's head with `main` 30d6fcc92ff7 merged in, across the three moves. Restack stopped at the base merge, so I merged by hand; `interface.py`'s commit call takes both sides. RAN.
+- The diff against `main` is 4 files, +106/−22: `verity/commitments/windows/{interface.py, rows.py, tests/test_interface.py}`, and `benchmarks/one_stage/tests/test_a5_wiring.py`. RAN (`git diff --stat`).
+- The first quick suites, `r20261112-192108-36b5` on 81711f2d0de4, ended rc 1: `82 suites: 81 passed (10 cached), 1 failed`. The failure was `benchmarks/one_stage`'s `test_a5_wiring.py::test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_whose_wired_port_is_not_its_first`: `AttributeError: 'Held' object has no attribute 'bcs'`. That test came to `main` after #8578's base (0174e36bdc), and its stand-in registered value carried no `b || c`, which #8578's committer now reads. RAN.
+- The fix, in 07d8752351, is test-only: the stand-in carries each row's `b || c` under its salt in a row/v2 row, as #8578's own `Bound` stand-in in `test_interface.py` does. The committer is not loosened. RAN.
+- Rerun `r20261112-210942-7030`, `--changed 81711f2d0de4 --quick`, rc 0, last line: `4 suites: 4 passed (0 cached), 0 failed` (`benchmarks/one_stage` 586 passed). RAN (fetched stdout.log).
+- No Lean changed. Question for proofs: is requiring every registered value to carry `bcs` (`_Drawn.strings`) what they want? Core's `Registered` has it, and only test stand-ins lacked it. READ.
+
