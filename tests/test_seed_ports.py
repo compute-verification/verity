@@ -63,12 +63,10 @@ KEY_COUNTS = {
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
     "verity/definitions/registry/torch_step.py::_POSITION":
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
-    "archive/examples/h200/e2e_h200/program.py::program":
-        "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {
     "verity/definitions/ops/boolean/shared_row.py::WINDOW":
-        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
+        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (the shared-row commit's form (B))",
 }
 TESTS = {
     "verity/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",

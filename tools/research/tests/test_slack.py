@@ -330,8 +330,7 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
     assert rc == 0 and (infra["holder"], infra["branch_suffixes"]) == ("bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", ["558b", "9e59"])
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
-    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
-    assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
+    assert "subscribe_linear" not in out and "no Linear subscription on INF" in out           # nearly all are its own writes
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
@@ -2185,6 +2184,17 @@ def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on
     assert (m2, p2) == ("PATCH", "/v1/pages/p-1") and patch["properties"]["Card ID"]["rich_text"][0]["text"]["content"] == "42"
     assert patch["properties"]["Slack card"] == {"url": f"https://computeverification.slack.com/archives/{ASK}/p1790800000000100"}
     assert "ntn-dummy-not-a-secret" not in out + err
+
+
+def test_page_uploads_a_one_line_display_equation_with_each_dollar_dollar_on_its_own_line(route, notion, fake, registry, tmp_path,
+                                                                                          capsys):
+    """Notion shows `$$ x $$` on one line as its literal text (INF-640); inline math and a block already split stay as written."""
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD.replace("$$\n\\gamma \\le 0.01\n$$", "Inline $`\\delta`$ stays.\n  $$ \\gamma \\le 0.01 $$"))
+    rc, out, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    made = notion.requests[0][2]
+    assert rc == 0 and "Inline $`\\delta`$ stays.\n  $$\n  \\gamma \\le 0.01\n  $$\n## The design" in made["markdown"]
+    assert slack.display_math(PAGE_MD) == PAGE_MD
 
 
 def test_the_reply_callout_sits_above_the_problem_once():

@@ -71,9 +71,8 @@ NOT_STARTED = 75
 #: the steps of a whole check: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the merge gate
 #: (policy.toml's `off_gate`) among them; what the check that gates a candidate sends (`vqueue_slim.start`)
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
-#: the steps of `AFTER_LANDING` a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
-#: and in every shard (`shards.NO_SHARD`)
-AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
+#: the steps of `AFTER_LANDING` a run may skip by name: lean-agreement when nothing it checks changed
+AFTER_LANDING_OPTIONAL = ("lean-agreement",)
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")
 #: the steps train.sh still checks beside the executor's check of a candidate: a run of them alone (`vqueue_slim.start`), whose
@@ -1072,11 +1071,11 @@ class Landing:
         """The machines the runs of ``states`` ran on: none for a twin that never started or was stopped for a sibling."""
         return sorted({s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)})
 
-    def _elsewhere(self, states: dict) -> str:
-        """`on` without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a machine's fault;
-        all of `on` when that leaves none (`auto`, or one machine)."""
-        ran = self._ran_on(states)
-        return ",".join(m for m in self.on.split(",") if m not in ran) or self.on
+    def _elsewhere(self, states: dict, on: str = "") -> str:
+        """``on`` (else `on`) without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a
+        machine's fault; all of it when that leaves none (`auto`, or one machine)."""
+        ran, on = self._ran_on(states), on or self.on
+        return ",".join(m for m in on.split(",") if m not in ran) or on
 
     def _open(self) -> dict[int, PR]:
         if self._prs is None:

@@ -1832,10 +1832,9 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
-        print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
-        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
-              "it for each (every handle writes as one app)")
+        print(f"# no Linear subscription on {key}: its events are nearly all @{h['handle']}'s own writes (every handle writes as "
+              "one app), and another handle's ask rings the inbox; a person's new issue rings it through the sweep's audit "
+              "(`unheard`)")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
           f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
     print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
@@ -4042,7 +4041,16 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
                            "Deadline": {"date": {"start": body["deadline"]}},
                            "Lane checked": {"checkbox": True},
                            "Asked by": {"url": body["agent_url"]}},
-            "markdown": with_reply(markdown), "markdown_version": "v2"}
+            "markdown": with_reply(display_math(markdown)), "markdown_version": "v2"}
+
+
+#: a display equation on one line: Notion shows `$$ x $$` as its literal text, and renders it only with each `$$` on a line of its own
+ONE_LINE_DISPLAY = re.compile(r"(?m)^([ \t]*)\$\$[ \t]*(\S(?:.*\S)?)[ \t]*\$\$[ \t]*$")
+
+
+def display_math(markdown: str) -> str:
+    """Each one-line `$$ x $$` as the three lines `$$`, `x`, `$$`; inline `$x$` and display blocks already split stay."""
+    return ONE_LINE_DISPLAY.sub(lambda m: f"{m[1]}$$\n{m[1]}{m[2]}\n{m[1]}$$", markdown)
 
 
 def with_reply(markdown: str) -> str:
