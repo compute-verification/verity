@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from verity_numerical import settings
 from verity_numerical.bench import cell, placement
 
@@ -31,7 +30,7 @@ def test_a_read_takes_the_environment_as_it_is_then(monkeypatch, tmp_path):
 
 def test_an_undeclared_name_is_refused():
     with pytest.raises(AttributeError, match="NOT_DECLARED"):
-        settings.NOT_DECLARED
+        _ = settings.NOT_DECLARED
     with pytest.raises(AttributeError, match="not a declared setting"):
         settings.get("NOT_DECLARED")
 

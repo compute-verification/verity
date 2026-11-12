@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.settings import VALUE, WHERE, Registry, Setting as S, present
+from verity.settings import VALUE, WHERE, Registry, Setting, present
 
 __all__ = ["REGISTRY", "STANDALONE", "get"]
 
@@ -21,6 +21,7 @@ RECORD_SCHEMA = "verity-numerical/settings/v1"
 #: the files that run outside the tree, relative to this one
 STANDALONE = ("bench/placement.py",)
 
+S = Setting
 REGISTRY = Registry(
     __file__, (),
     # ---- research's runner sets these for a run
