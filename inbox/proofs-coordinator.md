@@ -105589,3 +105589,131 @@ Mailbox read at `0b285b5c90` (your 22:22Z). **I can pause now.**
 ### Runs
 
 [run: `research fetch`, 22:27Z to 22:28Z] Waiting: `5326` (the head under a stop rule, cpu-12, 3 ahead), `b876` (Friday's shape, cpu-12, 4 ahead), `8cac` (cpu-12, 5 ahead), `9e10` (the toy, cpu-10, 8 ahead), `5640` (the class of whole instances at `d5f8313e35`, cpu-10, next for memory). Done: `c5d4`, `7ad8`. Cancelled: `4978`, `0aa9`. [relayed: your item 2] I send nothing to vy-nebius-2 until you say a try has passed on it, and plan nothing on cpu-12 after 07:00Z.
+
+## SESSIONOF, Thu 22:28Z: A12 compiled; the session's Prop written, its elaboration minutes out; hset derived
+
+Branch `cursor/proofs-sessionof-5c1e` at `97bd02450d`, which merges the base's move to `871ab913c3` (a clean merge; no
+Lean file this work reads changed, and `Witness.recordDraw` only moved to `Flock/WitnessZk.lean`) [run: git].
+
+**Compiled.** `Flock/Soundness/Discharge/FailClosed/ZkHiddenM1P.lean` (A12) elaborates, and its axiom probe finds
+none of its 8 theorems using anything beyond `propext`, `Classical.choice` and `Quot.sound`. The run was
+`r20261112-221059-0a7f`, at `b6f74329cc` on the old base, lean exit 0 in 818 s [run]. A12 is therefore proved, not a
+named hypothesis: `rateZ_planZHJP_le_m1 (S) (R) (j) (k) : rateZ (planZHJP dj y₀ S R) j k ≤ rateM1 k`, the twin of
+`planZHJ_M1W` for `planZHJP` [run].
+
+**The Prop, as written** (`Properties/Verity/Sampled/SessionOf.lean`): written, **not elaborated**. The same run is
+building SessionOf's imports, 10840 of 10882 at 22:28Z [run]. `ChecksAt` is the checks, `ChecksWitness` packs the values
+v2 computes with them, and the session's Prop is
+
+```lean
+def SessionChecks (θ : ByteArray) (F : Array ByteArray) : Prop :=
+  Nonempty (ChecksWitness θ (circuitAt θ F) (publicAt θ F))
+-- circuitAt θ F = namedFile (programDigestOf θ) F, publicAt θ F = namedFile (publicDigestOf θ) F
+-- inputsAt p cf pf = toExec {tags := Flock.Tags.circuit, circuitFile := cf, publicFile := pf, count := 1,
+--   tables := pinnedTables cf, partition := some p.own.partition, program := some p.own.program}
+
+structure ChecksAt (θ cf pf : ByteArray) (p : Spot.OneStageZk.Params) (D : Flock.Desc) (pub pubO : Flock.Public)
+    (n : ℕ) (desc : Claims.Msg) (S₀ : Finset (Fin n)) (d₀ : Lean.Json) : Prop where
+  params : ParamsAt θ p
+  challenger : ∃ key label, p.base.challenger = some (key, label)
+  parse : Flock.Desc.parse (zkTags (inputsAt p cf pf)) (inputsAt p cf pf).circuitFile (inputsAt p cf pf).tables = .ok D
+  noInputs : Flock.HmIn.parse D.unroll = .ok {}
+  loadIn : Flock.HmIn.loadPublic (zkTags (inputsAt p cf pf)) D.unroll {} (inputsAt p cf pf).publicFile = .ok pub
+  loadOut : Flock.HmOut.loadPublic (zkTags (inputsAt p cf pf)) D.unroll (inputsAt p cf pf).publicFile = .ok pubO
+  ports : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (zkTags (inputsAt p cf pf))
+    (inputsAt p cf pf).circuitFile (inputsAt p cf pf).tables) (zkTags (inputsAt p cf pf)) (inputsAt p cf pf).publicFile = .ok ()
+  form : ∃ draw, Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf …same…) (zkTags (inputsAt p cf pf))
+    (inputsAt p cf pf).publicFile (inputsAt p cf pf).count draw = .ok ()
+  popIn : pub.n = n
+  popOut : pubO.n = n
+  pop : Spot.Slots.popOk p.base.verifier.program p.base.verifier.query n = true
+  program : Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program
+  subset : ∃ kd, lawAt p.base.verifier n = .ok (.subset kd)      -- NOT a check v2 makes; see below
+  setup : Nonempty (DrawSetupZHJP (inputsJ (inputsAt p cf pf) 0) none
+    (mPtsOf D.unroll.g (Flock.Bridge.lawK (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+      p.base.verifier.workTable n) / nTab (inputsAt p cf pf))) S₀ d₀)
+
+structure ChecksWitness (θ cf pf : ByteArray) where
+  p D pub pubO n desc (S₀ : Finset (Fin n)) d₀
+  checks : ChecksAt θ cf pf p D pub pubO n desc S₀ d₀
+```
+
+**The constructor, as written** (not elaborated). `SessionBound` holds the bound's own parameters: `k Rw M`, `1 ≤`
+each, `hρ : rateM1 k < 1`, `ε v w h`.
+
+```lean
+noncomputable def sessionOf (θ : ByteArray) (F : Array ByteArray) (B : SessionBound) : Option Live :=
+  if h : SessionChecks θ F then some ((Classical.choice h).live B) else none
+theorem sessionOf_isSome (B) (h : SessionChecks θ F) : (sessionOf θ F B).isSome
+theorem sessionOf_setsUp (V : Vocab dv α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = readOf θ F)
+    (hfam : ∀ p key label, ParamsAt θ p → p.base.challenger = some (key, label) →
+      (label, Spot.Challenger.MAX_COINS) ∈ V.families θ)
+    (hε : (V.certOf θ).ε = B.ε) (h : sessionOf θ F B = some A) : SetsUp V θ F A
+theorem sessionOf_opensReady (h : sessionOf θ F B = some A) : A.OpensReady
+```
+
+**`Live`'s fields against their sources** (`ChecksWitness.live`) [read]:
+
+| Fields | Source |
+|---|---|
+| `n I own D pub pubO desc S₀ d₀` | the witness; `I := inputsAt p cf pf`, `own := none` |
+| `hD hpi hpub hpubO hn hnO` | `checks.parse noInputs loadIn loadOut popIn popOut` |
+| `ht hU hscope hTags` | `Flock.Bridge.ksScoped_files` on `checks.form` (via `circuitOf_parse`) |
+| `hdup` | `Flock.Bridge.v5Files_of_checksStmt` |
+| `qr lj tb` | `p.base.verifier.query law workTable` |
+| `hpop` | `Flock.Bridge.popMatches_of_popOk checks.program checks.pop` |
+| `hsub` | `designAt_of_lawAt checks.program` on `checks.subset` (new, in `SessionOf`) |
+| `hdiv` | `nTab I = 1` (`count = 1`) |
+| `y₀` | `Classical.choice checks.setup` |
+| `Ω Lb src hA3` | `DeployedCoins deployedLb deployedSrc uniformRandomBytes_deployed` |
+| `k Rw M hk hRw hM ε v w h` | `SessionBound` |
+| `ρ hρ` | `rateM1 B.k`, `B.hρ` |
+| `hr` | `rateZ_planZHJP_le_m1` (A12, compiled) |
+
+`SetsUp.params` reads `lawAt … = .ok A.design` from `ChecksWitness.law`, and `OpensReady` reads `checks.ports`
+[read].
+
+**`AcceptedChecks.lean`** (written, at `97bd02450d`, not elaborated). Its theorem is
+`sessionChecks_of_verdict (hc hp) (hD : DigestsAt V θ) (hreg : V.Registered θ F) (hv : V.Verdict k .sampled o)
+(hθ : o.params = θ) (hs : o.sent.blobs = F ++ B) (ht : TablesSent o.sent) (hp₀ : ParamsAt θ p₀) (hdesc) (hsub) :
+SessionChecks θ F`. It is stated over the auditor's given files `F` per the ruling: the play's blobs are `F ++ B`, with
+no existential over plays [read].
+- **A13** is done in it [derived]: `noInputs_of_accepts`, an accepted session at one table, goes through
+  `setupTables_okH`, then `setupHidden_specP`, then `checkOwn_none`, then `parse_empty`, and gives
+  `HmIn.parse c = .ok {}`.
+- **`hset` is now derived from the play**, not assumed [derived]. The record's sample file is the subset print of the
+  units v2 drew (`drawHeld`, `drawOf_filter`, `drawUnits_size`). At it, `drawHypsZHJ` sets the first table up, and
+  `setupZHJP` turns that `DrawSetupZHJ` into a `DrawSetupZHJP … none`.
+
+**Two hypotheses about the parameters remain on `sessionChecks_of_verdict`**, both facts no play checks [derived]:
+- `hdesc : Spot.Program.parse ⟨desc.toArray⟩ = .ok p₀.base.verifier.program`, a descriptor of the verifier's program.
+- `hsub : ∀ n L, lawAt p₀.base.verifier n = .ok L → ∃ kd, L = .subset kd`, the registration's law being a plain subset
+  design. `ChecksAt.subset` says the same, and its docstring says it is not a check v2 makes. A stratified or work
+  design is outside what this session covers.
+
+**Runs.**
+- `r20261112-221059-0a7f`, cpu-8, at `b6f74329cc`: ZkHiddenM1P passed; SessionOf is building imports; AcceptedChecks
+  there is the old version, with `hset` [run].
+- `r20261112-222801-34eb`, cpu-8, at `97bd02450d`: SessionOf and the new AcceptedChecks, on the merged base. It waits
+  for a slot and then rebuilds what the base's merge of `main` touched (the flock verifier changed). [guess] about 40 min
+  once it has a slot.
+
+**Soundness's branches** [run: `git ls-remote`]: neither `cursor/soundness-prf579-rest-8fb2` nor
+`cursor/soundness-live-deployment-8fb2` exists on the remote, so I have nothing of theirs to check against.
+#9375 has not landed in the base: no `macs` field in `Vocab` [run: git]. My files build no `Vocab`.
+
+**Size** [read]: 3 new files, 789 lines (SessionOf 356, AcceptedChecks 323, ZkHiddenM1P 110), and 3 root lines in
+`security/Proofs/lakefile.toml`, each on a line of its own.
+
+**NEEDS**: none beyond the three lakefile root lines, which the lean lead asked for.
+**STOP RULE**: nothing. No listed guarantee, lock entry or verifier path changes; the files are new, and no other file
+imports them.
+
+**Next.** Read SessionOf's result and fix it until it elaborates, then AcceptedChecks.
+- [guess] the Prop elaborated by 22:50Z.
+- [guess] `SessionOf` (constructor, `SetsUp`, `OpensReady`) compiled by 23:30Z.
+- [guess] `AcceptedChecks` compiled by 01:00Z.
+
+**Not established**: anything in SessionOf or AcceptedChecks compiling. Whether `hdesc` and `hsub` can be dropped,
+which needs a fact about the registration that no play reads.
