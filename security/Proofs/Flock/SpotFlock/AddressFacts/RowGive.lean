@@ -46,6 +46,24 @@ slot of one row a unit. -/
 def RowShape.FitsSized (sh : RowShape) (s : Slot) : Prop :=
   s.pos = sh.pos ∧ s.stride = sh.stride ∧ s.units = sh.units ∧ s.sized = true
 
+/-- **An unsized slot's leaf count is its entry's.** -/
+theorem leavesAt_fits {roots : List Msg} {s : Slot} {sh : RowShape} (e : Entry) (hf : sh.Fits s) :
+    leavesAt roots s e = e.leaves := by
+  unfold leavesAt; rw [hf.2.2.2]; rfl
+
+/-- **A sized slot's leaf count is its units'.** -/
+theorem leavesAt_sized {roots : List Msg} {s : Slot} {sh : RowShape} (e : Entry) (hf : sh.FitsSized s) :
+    leavesAt roots s e = unitsAt roots s := by
+  unfold leavesAt; rw [hf.2.2.2]; rfl
+
+/-- **A sized slot of some units opens its unit**: leaf `pos + place·stride`, one leaf a unit. -/
+theorem leafAt_sized {roots : List Msg} {s : Slot} {sh : RowShape} (e : Entry) (hf : sh.FitsSized s)
+    (hu : 0 < unitsAt roots s) : leafAt roots s e = s.pos + placeOf roots * s.stride := by
+  unfold leafAt
+  split
+  · omega
+  · rw [leavesAt_sized e hf, Nat.div_self hu, Nat.mul_one]
+
 variable (R : ℕ → String → ℕ → ℕ) (addr : ℕ → Address)
 
 /-- **The address map's slots have the shapes round 2 holds rows to**: at every accepted run's checked unit and every
