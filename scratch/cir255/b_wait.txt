@@ -1,0 +1,6 @@
+r20261112-103655-c9e8: controller 11:14:52..11:38:00 (1388 s), 9 workers; the waiting workers resumed after 1112 s (first) / 1112 s (median of 8); served-merge child 32..492 s, cpu 460 s, peak 31.5 GiB
+r20261112-004428-54eb: controller 00:50:02..01:08:31 (1109 s), 17 workers; the waiting workers resumed after 839 s (first) / 839 s (median of 16); served-merge child 436..845 s, cpu 410 s, peak 31.4 GiB
+r20261112-025431-e1c4: controller 02:59:21..03:21:23 (1322 s), 16 workers; the waiting workers resumed after 1005 s (first) / 1006 s (median of 15); served-merge child 565..1011 s, cpu 446 s, peak 31.6 GiB
+r20261112-070459-f6ff: controller 07:11:33..07:36:25 (1492 s), 15 workers; the waiting workers resumed after 1210 s (first) / 1211 s (median of 14); served-merge child 693..1216 s, cpu 522 s, peak 31.4 GiB
+r20261112-071722-cf2d: controller 07:22:03..07:42:35 (1232 s), 15 workers; the waiting workers resumed after 961 s (first) / 962 s (median of 14); served-merge child 559..967 s, cpu 408 s, peak 31.4 GiB
+r20261112-081343-8992: controller 08:48:28..09:16:08 (1660 s), 9 workers; the waiting workers resumed after 1337 s (first) / 1338 s (median of 8); served-merge child 908..1343 s, cpu 435 s, peak 31.5 GiB
