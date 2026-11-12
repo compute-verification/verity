@@ -294,7 +294,7 @@ def bind_names(cmap: dict[str, Any], env: dict[str, int], names, *, profile: str
         raise MapError(f"capture map {cmap.get('id')}: a step that commits row-counted names needs their leading dimensions")
     return {"ids": sorted(tap_value_id(*want[n], profile=profile, request=request, t=t, phase=phase, rank=rank) for n in got & want.keys()),
             "unknown": sorted(got - want.keys()), "missing": sorted(want.keys() - got - empty), "empty": sorted(got & empty),
-            "rows_differ": rows_differ(cmap, env, positions, counted, rows) if counted else {}}
+            "rows_differ": rows_differ(cmap, env, positions, counted, rows) if counted and rows is not None else {}}
 
 
 def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | None = None) -> dict[str, Any]:

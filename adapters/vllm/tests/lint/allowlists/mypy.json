@@ -545,7 +545,6 @@
     {"file": "verity_vllm/check/verdict.py", "kind": "union-attr", "symbol": "build", "detail": "", "count": 14},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "arg-type", "symbol": "main", "detail": ""},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "union-attr", "symbol": "weights_of_record", "detail": ""},
-    {"file": "verity_vllm/commit/capture_map.py", "kind": "arg-type", "symbol": "bind_names", "detail": ""},
     {"file": "verity_vllm/commit/challenge.py", "kind": "arg-type", "symbol": "stratum_picks", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "arg-type", "symbol": "NativeCollectCommitter._commit_step_windowed", "detail": ""},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "assignment", "symbol": "NativeCollectCommitter", "detail": ""},
