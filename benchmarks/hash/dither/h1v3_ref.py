@@ -18,6 +18,10 @@ import importlib
 import json
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 #: where a pinned TREE (H1V3_SHA, J10R_SHA) from before this tree's layout has h1tile, newest first. A pinned tree keeps its
 #: own layout, so these are data about other trees, never modules of this one: each is kept as its parts, which nothing
@@ -26,7 +30,7 @@ OLDER = (("verity", "ml", "protocols", "pouw", "circuit", "h1tile"),
          ("verity", "core", "protocols", "pouw", "circuit", "h1tile"))
 
 
-def older_h1tile(missing: ModuleNotFoundError):
+def older_h1tile(missing: ModuleNotFoundError) -> ModuleType:
     """h1tile from the first of `OLDER` the tree on PYTHONPATH holds, ``missing`` being how this tree's own name failed
     there. A layout the tree lacks is skipped; an h1tile that is there and fails on an import of its own raises that
     failure; a tree with no h1tile raises one error with every name tried."""
