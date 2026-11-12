@@ -89,6 +89,21 @@ def test_a_logs_key_is_its_rows_with_the_dtype_where_the_row_names_one():
     assert [gates.split_key(gates.op_key(r)) for r in (old, new)] == [(*old[:4], None), (*new[:4], "float32")]
 
 
+@pytest.mark.parametrize("row", [["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2],
+                                 ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, "float32", "float32"],
+                                 ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, ""],
+                                 ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, None],
+                                 ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, "bfloat16 float32"]])
+def test_a_row_of_neither_kind_is_refused_and_never_read_as_the_other(row):
+    """A row is the counter's seven fields or the six of a row written before rows named a dtype: an eighth field
+    would be dropped, and an empty dtype would give a key `split_key` reads as naming none, so either is refused
+    where the row is read, with the row."""
+    with pytest.raises(ValueError, match=rf"^an op log's row is .* this one has {len(row)} fields"):
+        gates.row_dtype(row)
+    with pytest.raises(ValueError, match="^an op log's row is "):
+        gates.op_key(row)
+
+
 def test_a_log_without_dtypes_in_gates():
     log = {"by": {"fwd/theta": 100, "other/param": 10, "bwd/grad": 50, "fwd/updated": 5},
            "ops": {"fwd theta mm [[4, 5], [5, 5]]": [1, 100], "other param _fused_adamw_ [[5]]": [1, 10],

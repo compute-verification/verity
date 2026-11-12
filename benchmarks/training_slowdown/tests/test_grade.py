@@ -620,6 +620,34 @@ def test_as_if_assumed_counts_every_record_by_the_assumed_dtypes_and_says_so_on_
     assert json.loads((tmp_path / "out" / "slowdown.json").read_text())["S"]["any"] is None
 
 
+@pytest.mark.parametrize("bad", [["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, "float32", "float32"],
+                                 ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, ""]])
+def test_every_reader_of_an_op_log_refuses_a_row_of_neither_kind(bad, ran):
+    """Every place that reads an op log's rows reads each by `gates.row_dtype`, so a row of eight fields, or one
+    whose dtype is empty, is refused wherever it is read and never read as a row of the other kind."""
+    from training_slowdown import as_math, of_record, run
+
+    good = ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200, "float32"]
+    rec = {"structures": {"s": {"log": [good, bad], "updated": []}}, "setup": {"struct": "s", "by": {"fwd/theta": 1}},
+           "steps": [], "tf32": {"cuda_matmul_allow_tf32": True, "float32_matmul_precision": "high"}}
+    step = ran["structures"][ran["steps"][-1]["struct"]]
+    part = {k: 0 for k in ("tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "cpu_s", "wall_s",
+                           "gpu_s", "exited")} | {"by": {}, "device_macs": {}, "weights": {}, "shapes": {}}
+    readers = {"dtype_rows": lambda: G.dtype_rows(rec), "without_dtypes": lambda: G.without_dtypes(rec),
+               "macs_log": lambda: G.macs_log(rec, None), "of_record": lambda: F.of_record(rec),
+               "exact_under_tf32": lambda: gates.exact_under_tf32(rec),
+               "rewrite": lambda: as_math.rewrite([good, bad], []),
+               "per_row": lambda: of_record.per_row(step | {"log": [*step["log"], bad]}, synthetic.SHAPE),
+               "outside_steps": lambda: run.outside_steps(
+                   {"a": {"log": [good], "updated": []}, "b": {"log": [bad], "updated": []}},
+                   [part | {"struct": "a"}, part | {"struct": "b"}])}
+    assert of_record.per_row(step, synthetic.SHAPE)["log"]
+    for name, read in readers.items():
+        with pytest.raises(ValueError, match=r"^an op log's row is ") as e:
+            read()
+        assert repr(bad) in str(e.value), name
+
+
 def test_a_record_with_an_op_in_a_dtype_no_definition_prices_is_refused_with_its_place():
     """A record whose op log names an op in a dtype no Definition prices has no count in gates: the grade stops, and
     says which record, which op and which dtype. Counted as if it named none, it is priced as one that names none."""

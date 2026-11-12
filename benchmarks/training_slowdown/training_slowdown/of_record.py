@@ -67,7 +67,7 @@ from pathlib import Path
 
 import torch
 
-from . import as_math, config, library, run, starts
+from . import as_math, config, gates, library, run, starts
 from .model import LM
 
 HELD = Path(__file__).with_name("of_record.toml")
@@ -182,7 +182,9 @@ def per_row(struct: dict, shape: dict) -> dict:
         return len(s) == 3 and s[0] == r * heads and ctx in s[1:] and set(s[1:]) <= a_head
 
     log: dict[tuple, list] = {}
-    for phase, kind, op, shapes, count, macs, *_ in struct["log"]:
+    for row in struct["log"]:
+        gates.row_dtype(row)
+        phase, kind, op, shapes, count, macs = row[:6]
         was = json.loads(shapes)
         now = ([[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
                [of_tokens(s) for s in was])

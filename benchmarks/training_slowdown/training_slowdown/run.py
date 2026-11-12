@@ -115,7 +115,7 @@ import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
+from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, gates, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -966,10 +966,11 @@ def outside_steps(structures: dict, parts: list[dict]) -> dict:
         out["shapes"] = out["shapes"] | p["shapes"]
         mine, its = structures[out["struct"]], structures[p["struct"]]
         log: dict[tuple, list[int]] = {}
-        for phase, role, op, shapes, count, macs, *dtype in mine["log"] + its["log"]:
-            entry = log.setdefault((phase, role, op, shapes, *dtype), [0, 0])
-            entry[0] += count
-            entry[1] += macs
+        for row in mine["log"] + its["log"]:
+            dtype = gates.row_dtype(row)
+            entry = log.setdefault((*row[:4], *([dtype] if dtype else [])), [0, 0])
+            entry[0] += row[4]
+            entry[1] += row[5]
         struct = {"updated": sorted(mine["updated"] + its["updated"], key=lambda u: (u[1], u[0])),
                   "log": sorted([*k[:4], *v, *k[4:]] for k, v in log.items())}
         out["struct"] = structure_id(struct)

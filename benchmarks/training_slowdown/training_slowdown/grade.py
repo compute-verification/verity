@@ -214,7 +214,7 @@ def macs_log(record: dict, through: int | None) -> dict:
 
 def dtype_rows(record: dict) -> tuple[int, int]:
     """How many rows of the record's op log name their op's dtype, and how many name none."""
-    named = [len(row) > 6 for s in record["structures"].values() for row in s.get("log", [])]
+    named = [gates.row_dtype(row) is not None for s in record["structures"].values() for row in s.get("log", [])]
     return sum(named), len(named) - sum(named)
 
 
@@ -246,6 +246,7 @@ def without_dtypes(record: dict) -> dict:
     def plain(log: list) -> list:
         rows: dict[tuple, list] = {}
         for row in log:
+            gates.row_dtype(row)
             n = rows.setdefault(tuple(row[:4]), [0, 0])
             n[0], n[1] = n[0] + row[4], n[1] + row[5]
         return sorted([*key, *n] for key, n in rows.items())

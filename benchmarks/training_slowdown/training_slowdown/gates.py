@@ -172,13 +172,28 @@ def exact_under_tf32(record: dict) -> list[str]:
     if not tf32_on(record):
         return []
     return sorted({f"{row[0]} {row[2]}" for s in record["structures"].values() for row in s.get("log", [])
-                   if len(row) > 6 and row[6] == "float32" and kind_of(*row[:3], row[6])[0] == "gemm/f32"})
+                   if row_dtype(row) == "float32" and kind_of(*row[:3], "float32")[0] == "gemm/f32"})
+
+
+def row_dtype(row: list) -> str | None:
+    """The dtype an op log's row names: a row is [phase, role, op, shapes, count, MACs, dtype] as
+    `flops.Counter.record` writes it, or [phase, role, op, shapes, count, MACs], one written before rows named a
+    dtype, for which it is None. Every reader of a row reads it here, so a row of another length, or one whose dtype
+    is not a dtype's name, is refused wherever it is read and is never read as a row of the other kind."""
+    if len(row) == 6:
+        return None
+    if len(row) == 7 and isinstance(row[6], str) and row[6] and " " not in row[6]:
+        return row[6]
+    named = f" and names the dtype {row[6]!r}" if len(row) == 7 else ""
+    raise ValueError(f"an op log's row is [phase, role, op, shapes, count, MACs] or that and the dtype its op "
+                     f"computed in; this one has {len(row)} fields{named}: {row!r}")
 
 
 def op_key(row: list) -> str:
-    """An op log's row [phase, role, op, shapes, count, MACs] or [..., dtype] (`flops.Counter.record`) as its
-    `macs_log` key, "phase role op shapes [dtype]" (`split_key` reads it back)."""
-    return " ".join(map(str, [*row[:4], *row[6:7]]))
+    """An op log's row (`row_dtype`) as its `macs_log` key, "phase role op shapes [dtype]" (`split_key` reads it
+    back)."""
+    dtype = row_dtype(row)
+    return " ".join(map(str, [*row[:4], *([dtype] if dtype else [])]))
 
 
 def split_key(key: str) -> tuple[str, str, str, str, str | None]:
