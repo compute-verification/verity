@@ -6,7 +6,8 @@ port's occurrences to them in Program order."""
 from __future__ import annotations
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.manifest.bind import Binder, Port as Declared
+from verity_vllm.query.manifest.bind import Binder
+from verity_vllm.query.manifest.bind import Port as Declared
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Q_WORD_ID, Population, request_manifest
 from verity_vllm.query.units import ValueRef as R

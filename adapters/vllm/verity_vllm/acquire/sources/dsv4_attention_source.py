@@ -58,7 +58,8 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import inspect
 import sys
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import torch
 
@@ -115,8 +116,13 @@ PORTS = {"attn.q": _call((INSERT_DEF,), "0"), "attn.swa_rows.nope": _call((INSER
          "attn.o_einsum": _call(("ScaledMmFp8BlockGrouped_v1",), "out")}
 
 
+def _taps(cmap: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The map's taps this source commits: those whose `commit` block names `BINDER` (a tap with no block is committed nowhere)."""
+    return [t for t in cmap["taps"] if (c := t.get("commit")) is not None and c["binder"] == BINDER]
+
+
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
+    return bool(_taps(cmap))
 
 
 def role_of(tap: Mapping[str, Any]) -> str:
@@ -133,8 +139,7 @@ def cache_of(role: str) -> str:
 def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
     """`bind.Binder`'s declared labels for the taps of `cmap` this source binds: each tap's label (its commit name's last part) -> its
     role's port (`PORTS`)."""
-    return {t["commit"]["name"].rsplit("/", 1)[1]: PORTS[role_of(t)] for t in cmap["taps"]
-            if (t.get("commit") or {}).get("binder") == BINDER and role_of(t) in PORTS}
+    return {t["commit"]["name"].rsplit("/", 1)[1]: PORTS[role_of(t)] for t in _taps(cmap) if role_of(t) in PORTS}
 
 
 def claims(r: Mapping[str, Any]) -> str | None:
@@ -197,7 +202,7 @@ class Dsv4AttentionSource:
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
         cid = self.cmap.get("id")
         free = self.cmap.get("free_symbols", {})
-        taps = [t for t in self.cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER]
+        taps = _taps(self.cmap)
         unknown = sorted({role_of(t) for t in taps} - ROLES)
         if unknown:
             raise ValueError(f"capture map {cid}: the dsv4_attention source binds no {unknown}")
@@ -210,7 +215,7 @@ class Dsv4AttentionSource:
             return m
 
         #: (role, layer) -> tap; role -> layer -> the committed name (the target_only ones on the target only)
-        self.taps: dict[tuple[str, int], Mapping[str, Any]] = {}
+        self.taps: dict[tuple[str, int], dict[str, Any]] = {}
         self.names: dict[str, dict[int, str]] = {}
         #: (cache, layer) -> the module holding the cache (its `kv_cache` read at the call, its `prefix` the metadata key)
         self.owners: dict[tuple[str, int], Any] = {}
@@ -271,8 +276,8 @@ class Dsv4AttentionSource:
             missing = [f for f in (FORWARD, PROJECTIONS, INSERT, ATTEND, *set(CALLER.values())) if not callable(getattr(m, f, None))]
             if missing or int(getattr(m, "n_local_heads", self.heads)) != self.heads:
                 raise ValueError(f"capture map {cid}: attention layer {i} has no {missing} or not {self.heads} local heads")
-            for f, roles in GLOBALS.items():
-                if not any(r in self.names for r in roles):
+            for f, bound in GLOBALS.items():
+                if not any(r in self.names for r in bound):
                     continue
                 home = sys.modules.get(inspect.unwrap(getattr(type(m), CALLER[f])).__module__)
                 if f in (INV_ROPE, EINSUM):

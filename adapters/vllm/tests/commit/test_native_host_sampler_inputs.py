@@ -25,7 +25,7 @@ def committer(seeds):
                               geo_digest=b"g" * 32)
     src = SamplerInputsSource(com)
     com.attach_source(src)
-    got = {}
+    got: dict[str, list] = {}
     com._acquire = lambda name, t, job: got.__setitem__(name, t.tolist())
     return com, src, got
 

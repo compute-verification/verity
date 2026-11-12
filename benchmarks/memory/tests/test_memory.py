@@ -27,6 +27,8 @@ RUN, FIRE, PROVER = "r20000101-000000-aaaa", "r20000101-000001-bbbb", "r20000101
 POUS, WIPE = "r20000101-000003-dddd", "r20000101-000004-eeee"
 COMMIT = "c" * 40
 PACED = M.SETTINGS.setting("PACED").default
+#: gate_run.sh's variables for a host run of sessions with one coin a window
+WINDOWED = ("SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
 GIB = 1 << 30
 SESSION = HERE / "fixtures" / "session.json"
 
@@ -82,7 +84,8 @@ class FakeStore:
 def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store holding the two references' runs, which `references.json` is pointed at; and no `research run` around
     the command."""
-    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "ROLE", "SERVE"):
+    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
+                 "HOST_GIB", *WINDOWED):
         monkeypatch.delenv(name, raising=False)
     s = FakeStore(tmp_path / "store")
     s.add(POUS, {"out/summary.json": {"certificate": {"certified": True, "s_bits": 6 * 8 * GIB},
@@ -412,8 +415,9 @@ def gate_run(home: Path, seen: list, *, rc: int = 0):
 
 
 def test_the_node_run_is_a_gate_run_of_one_honest_session_read_from_its_fire_run(store, capsys, monkeypatch, tmp_path):
-    """The node run starts `gate_run.sh PERIOD` with the Llama role, one honest session and one paced word, then
-    waits for the fire run's record, a minute a look, and prints from it."""
+    """The node run starts `gate_run.sh PERIOD` with the Llama role, one honest session and one paced word, no host
+    memory in the store and nothing of a session of one coin a window, then waits for the fire run's record, a minute
+    a look, and prints from it."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COMMIT", "d" * 40)
     seen, waits = [], []
@@ -427,6 +431,7 @@ def test_the_node_run_is_a_gate_run_of_one_honest_session_read_from_its_fire_run
     ((argv, env),) = seen
     assert argv == ["bash", str(ROOT / "benchmarks/remote_session/gate_run.sh"), "some-period"]
     assert (env["ROLE"], env["PLAN"], env["PACED"], env["COMMIT"]) == ("LLAMA32_1B_BF16", "honest", PACED, "d" * 40)
+    assert not {"HOST_GIB", "UNPACED", *WINDOWED} & set(env)
     assert len(PACED.split()) == 1 and waits == [60, 60]
     text, doc, err = printed(capsys)
     assert (doc["value"], doc["run"], doc["commit"], doc["loopback"]) == (0.375, FIRE, COMMIT, False)
@@ -448,6 +453,50 @@ def test_the_node_runs_role_and_pace_can_be_named_and_a_pace_of_several_sessions
     assert bench(store, "q") == 2
     out, err = capsys.readouterr()
     assert out == "" and "the bench runs one session, one word" in err
+
+
+@pytest.mark.parametrize("given, want", [
+    ({"HOST_GIB": "8", "UNPACED": "7:60000:33273"},
+     {"HOST_GIB": "8", "SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"}),
+    ({"HOST_GIB": "8"}, {"HOST_GIB": "8", "PACED": PACED}),
+    ({"UNPACED": "2:1000.5:2773"}, {"SESSIONS": "1", "WINDOWS": "2", "WINDOW_MS": "1000.5", "SAMPLES": "2773"}),
+    ({"UNPACED": ""}, {"PACED": PACED}),
+], ids=["both", "host-memory", "one-coin-a-window", "an-empty-word"])
+def test_the_node_run_can_put_host_memory_in_the_store_and_ask_for_one_coin_a_window(store, capsys, monkeypatch,
+                                                                                    tmp_path, given, want):
+    """HOST_GIB passes through to `gate_run.sh`, which sends it to the node. UNPACED's word is one session of that
+    many windows, each that long with that many openings, as `gate_run.sh`'s variables for the host's run, and then no
+    PACED goes with it; without it the session is PACED's, and no variable of the other form is set."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    for name, value in given.items():
+        monkeypatch.setenv(name, value)
+    seen = []
+    store.add(FIRE, {"out/host-run.txt": "v1", "out/host/v1/out/verifier.json": a_record(a_session(gamma=0.15))})
+    assert bench(store, "p", run=gate_run(tmp_path, seen)) == 0
+    ((argv, env),) = seen
+    assert {k: env[k] for k in ("HOST_GIB", "PACED", *WINDOWED) if k in env} == want
+    assert (env["ROLE"], env["PLAN"]) == ("LLAMA32_1B_BF16", "honest")
+    assert printed(capsys)[1]["value"] == 0.15
+
+
+@pytest.mark.parametrize("given, why", [
+    ({"UNPACED": "7:60000:33273", "PACED": "1:1000:2773:7"},
+     "UNPACED and PACED are both set: the bench runs one session, in one form, so unset one"),
+    ({"UNPACED": "7:60000:33273 7:60000:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
+    ({"UNPACED": "7:60000"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
+    ({"UNPACED": "1:60000:33273:2"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
+    ({"UNPACED": "0:60000:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
+    ({"UNPACED": "7:60000.0005:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
+    ({"UNPACED": "7:a minute:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
+], ids=["both-forms", "two-sessions", "two-numbers", "a-paced-word", "no-window", "a-fourth-place", "not-numbers"])
+@pytest.mark.parametrize("dry", [(), ("--dry-run",)], ids=["run", "dry-run"])
+def test_both_forms_or_a_word_that_is_not_one_session_of_windows_starts_nothing_and_exits_2(store, capsys, monkeypatch,
+                                                                                           given, why, dry):
+    for name, value in given.items():
+        monkeypatch.setenv(name, value)
+    assert bench(store, "p", *dry) == 2
+    out, err = capsys.readouterr()
+    assert out == "" and why in err and store.asked == []
 
 
 def test_a_gate_run_that_did_not_launch_prints_no_number_and_waits_for_nothing(store, capsys, monkeypatch, tmp_path):

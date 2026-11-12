@@ -6,9 +6,11 @@ from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
+import contextlib
 import copy
 import hashlib
 import json
+import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -16,13 +18,13 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import dsv4_mhc_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import mhc_twin as W
 from verity.definitions.registry import mhc as R
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import dsv4_mhc_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 SMALL: dict[str, Any] = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}
 SMALL_NS = {"fused": 2, "tf32": 2, "broadcast": 1, "head": None}
@@ -258,8 +260,6 @@ def test_the_spy_keeps_the_partials_and_restores_the_kernel() -> None:
 
 
 def test_the_source_scan_wants_each_kernel_and_no_fast_math(tmp_path, monkeypatch) -> None:
-    import sys
-
     class Kernel:
         def __init__(self, text):
             self.text = text
@@ -374,9 +374,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main --quick` with the GPU's phases stood in for (small-statics cases, one word flipped in the broadcast's layer input)
     and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case verdicts, the sealed record, the
     TF32 and capture lines and the exit status, so a slip in the orchestration shows here and not in the H200's first hour."""
-    import contextlib
-    import sys
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -430,7 +427,5 @@ def test_the_gate_failure_writes_a_sealed_record(tmp_path, monkeypatch, capsys) 
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_mhc_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)

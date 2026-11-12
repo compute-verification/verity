@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from verity.circuits.types import Array, RecordType, Type, Value
+
 from verity_vllm.engine.profiles import family_facts as FF
 
 #: (config.json key, C key) of the sizes `mhc_config` reads off the rank's config.json; the header check compares the recorded ones
@@ -43,7 +44,7 @@ def mhc_weight_shapes(C: dict[str, Any]) -> dict[str, tuple[tuple[int, ...], int
     (its token table below HASH_LAYERS, else its correction bias), the shared expert and the MXFP4 routed experts in the checkpoint's
     [E][N][K/2] e2m1 bytes and [E][N][K/32] e8m0 scales (`program.frontend.marlin_moe_leaf`)."""
     from verity.definitions.registry import marlin_moe as MM
-    H, HC, V, D, DR, QL, NH, NHP, E, I, SI, IH, ID, OL, TOPK, G = (int(C[k]) for k in (
+    H, HC, V, D, DR, QL, NH, NHP, E, INTER, SI, IH, ID, OL, TOPK, G = (int(C[k]) for k in (
         "H", "HC_MULT", "V", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "NUM_EXPERTS", "I", "SHARED_I", "INDEX_HEADS",
         "INDEX_HEAD_DIM", "O_LORA", "TOPK", "FP8_BLOCK"))
     OUT, OG = HC * (2 + HC), int(C["O_GROUPS"]) // int(C.get("WORLD", 1))
@@ -69,9 +70,9 @@ def mhc_weight_shapes(C: dict[str, Any]) -> dict[str, tuple[tuple[int, ...], int
             lay["attn.indexer.weights_proj.weight"] = ((IH, H), 16)
         lay |= compressor("attn.compressor", D, r)
         lay["ffn.gate.weight"] = ((E, H), 16)
-        lay |= {"ffn.gate.tid2eid": ((int(C["VOCAB"]), TOPK), 32)} if L < int(C["HASH_LAYERS"]) else {"ffn.gate.e_score_correction_bias": ((E,), 32)}
+        lay |= {"ffn.gate.tid2eid": ((int(C["VOCAB"]), TOPK), 32)} if int(C["HASH_LAYERS"]) > L else {"ffn.gate.e_score_correction_bias": ((E,), 32)}
         lay |= fp8("ffn.shared_experts.gate_up_proj", 2 * SI, H) | fp8("ffn.shared_experts.down_proj", H, SI)
-        for k, N, K in (("w13", 2 * I, H), ("w2", H, I)):
+        for k, N, K in (("w13", 2 * INTER, H), ("w2", H, INTER)):
             lay |= {f"ffn.experts.routed_experts.{k}_weight": ((E, N, K // 2), 8), f"ffn.experts.routed_experts.{k}_weight_scale": ((E, N, K // MM.GROUP), 8)}
         lay |= {"attn_norm.weight": ((H,), 16), "ffn_norm.weight": ((H,), 16)}
         out |= {f"model.layers.{L}.{n}": s for n, s in lay.items()}

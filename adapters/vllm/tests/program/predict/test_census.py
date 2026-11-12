@@ -16,21 +16,35 @@ import json
 from functools import lru_cache
 
 import pytest
-
-from tests.program.predict.test_predict import FIX, TINY, _phi
-from tests.program import test_derive_neutrality as GLM
-from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.definitions.circuits.census import PRODUCTS, SILICON, NoBooleanWork, census, family, step_ends
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
+from verity.circuits.program import Program, is_input
+from verity.definitions.boolean import boolean_version, lift
+from verity.definitions.circuits.census import (
+    PRODUCTS,
+    SILICON,
+    NoBooleanWork,
+    census,
+    family,
+    step_ends,
+)
+from verity.definitions.circuits.requirement import (
+    census_gates,
+    census_schedule,
+    from_census,
+    upper_bound,
+)
 from verity.definitions.ops import prims as P
 from verity.definitions.ops.boolean import gemm as BG
-from verity.circuits.program import Program, is_input
-from verity.definitions.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
+from verity.definitions.registry import b1, b1_tp2
+from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import tp_allreduce as TA
+
+from tests.program import test_derive_neutrality as GLM
+from tests.program.predict.test_predict import FIX, TINY, _phi
+from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity_vllm.program.predict.build import build_program, model_shape
-from verity.definitions.boolean import boolean_version, lift
-from verity.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
@@ -156,7 +170,7 @@ def _times(n: int, g: dict[str, int]) -> dict[str, int]:
     return {k: n * v for k, v in g.items()}
 
 
-def _calls(program) -> dict[str, object]:
+def _calls(program) -> dict:
     return {descriptor_id(nd.fn): nd.fn for nd in program.root.body.nodes if not is_input(nd.fn)}
 
 

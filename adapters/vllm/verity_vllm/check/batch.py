@@ -23,7 +23,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Hashable, Iterable, Sequence
 
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.intervals import Intervals, full, isect, norm
 from verity.circuits.liveness import Liveness
 from verity.circuits.types import RecordType, Tuple, Type, field_starts, field_types

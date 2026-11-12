@@ -9,8 +9,8 @@ assertion is `fixtures_query` (the explicit `query_ast.oracle_in` / `oracle_out`
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.parts import Limits, Part, Unsupported
+
 from tests.program import fixtures_query as FX
 
 SLOW_FIXTURES = ("attention", "attention_head", "attention_head_t72", "attention_head_v1")
@@ -108,11 +108,9 @@ def check_part(BD, program, part: Part, *, exact_required: bool) -> tuple[bool, 
         assert frozenset(out) == o_out, f"out_gates mismatch in {part.spec.id} items {sorted(part.items)[:3]}"
     if in_exact:
         assert frozenset(inn) == o_in, f"in_gates mismatch in {part.spec.id} items {sorted(part.items)[:3]}"
-    if not isinstance(w, Unsupported):
+    if not isinstance(w, Unsupported):       # w_out may be Unsupported independently; never a wrong number
         assert w == o_w, f"w_out {w} != oracle {o_w} in {part.spec.id}"
         assert bound >= w
-    else:
-        assert not out_exact or True  # w_out may be Unsupported independently; never a wrong number
     if exact_required:
         assert out_exact and in_exact and not isinstance(w, Unsupported), \
             f"root-body part {sorted(part.items)[:3]} of {part.spec.id} must be exact (got Unsupported)"

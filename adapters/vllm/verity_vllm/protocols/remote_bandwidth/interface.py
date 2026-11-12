@@ -29,11 +29,13 @@ opening     for a sampled (pass, position): the block's bytes as read, its recei
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from verity.commitments.merkle import Opening
+
+__all__ = ["PageLayout"]
 
 TIERS = ("hbm", "host")
 KINDS = ("weights", "kv", "filler", "activations")
@@ -274,9 +276,7 @@ class Lifecycle(Protocol):
                  receipt: Receipt, source: str, encode: bool = True) -> RegionInfo: ...
 
     def register_kv_pool(self, name: str, layers: Sequence[Backing], layout: PageLayout, *, block_bytes: int,
-                         codec: Codec, receipt: Receipt, tier: str = "hbm",
-                         filler: Callable[[int, int], bytes] | None = None, filler_name: str = "as-allocated",
-                         encode: bool = True) -> tuple[RegionInfo, ...]: ...
+                         codec: Codec, receipt: Receipt, encode: bool = True) -> tuple[RegionInfo, ...]: ...
 
     def kv_alloc(self, pages: Sequence[int]) -> None: ...
 

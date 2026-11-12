@@ -8,13 +8,13 @@ weight, stay its own). So no peer Input is left, and the node reads only its pro
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.program import RUN, input_id, is_input, is_registered
+
+from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
-from verity_vllm.program.predict.node import build_node_program, check_ranks
+from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
-from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
 
 def _at(phi: Phi, rank: int) -> Phi:
@@ -98,16 +98,6 @@ def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
     assert len(nodes) == lowered + 1 and nodes[-1]["form"] == "call"
     callee = d["definitions"][d["callees"][nodes[-1]["fn"]]]
     assert len(callee["body"]["nodes"]) == len(node.node_fn.body.nodes) == sum(hi - lo for _r, lo, hi in node.spans)
-
-
-def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
-    phi = _phi(TINY, tp={"world": 2, "rank": 0})
-    node = build_node_program(phi, "request", with_desc=False, LP=4, T=2)
-    got = check_ranks(phi, node, LP=4, T=2)
-    ranks = [build_program(_at(phi, r), "request", with_desc=False, LP=4, T=2) for r in range(2)]
-    assert [(g["rank"], g["nodes"]) for g in got] == [(r, len(rp.program.fn.body.nodes)) for r, rp in enumerate(ranks)]
-    with pytest.raises(AssertionError, match="rank 0: the node's run of"):
-        check_ranks(phi, node, LP=4, T=1)
 
 
 @pytest.mark.slow

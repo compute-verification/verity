@@ -18,17 +18,16 @@ import copy
 import json
 
 import pytest
+from verity.definitions.registry import bf16_gemm_check as BC
 
-from verity_vllm.check.codes import VerificationCode as VC
-
-from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
 from verity_vllm.check import verdict as V
-from verity_vllm.pipeline import cli
+from verity_vllm.check.codes import VerificationCode as VC
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
+from verity_vllm.pipeline import cli
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -244,6 +243,39 @@ def test_decisions_equal_v1_on_one_fault_mutations(label, commit, tokens_equal):
     assert out != V.PASS, f"{label}: v2 PASS where v1 FAILS ({why}); checks {[(c.name, c.outcome) for c in checks if c.outcome != V.PASS]}"
     graded = [c for c in checks if c.outcome in (V.FAIL, V.INSUFFICIENT)]
     assert graded and all(c.differences or c.reason for c in graded), f"{label}: a non-PASS check without a named difference"
+
+
+@pytest.mark.parametrize("block,field", [("extra", "errors_n"), ("extra", "committed_tensors"), ("openings", "verified"), (None, "fa2_zero_rows")])
+def test_a_count_that_is_no_number_is_refused_by_the_rules_as_v1_refuses_it(block, field):
+    commit = _base()
+    (commit if block is None else commit[block])[field] = "many"
+    decl = _decl(commit["classes"])
+    with pytest.raises(ValueError, match="many"):
+        commit_verdict(commit, True, declaration=decl)
+    with pytest.raises(ValueError, match="many"):
+        V.run_checks(commit, True, declaration=decl, ctx={})
+
+
+def test_a_count_the_record_does_not_state_reads_as_zero_in_both():
+    commit = dict(_base(), openings={})
+    (ok, why), out, checks = _both(commit)
+    failed = {c.name: c.reason for c in checks if c.outcome == V.FAIL}
+    assert not ok and out == V.FAIL and failed == {"runtime_match/openings": why} and why == "openings checked 0 < 64"
+    (ok, _), out, checks = _both(dict(_base(), fa2_zero_rows=0))
+    assert ok is True and out == V.PASS and {c.name: c.outcome for c in checks}["runtime_match/fa2_zero_rows"] == V.PASS
+
+
+def test_an_openings_setting_that_is_no_number_is_refused_and_a_number_caps_at_64():
+    run = {"arm": "instrumented", "pair": 0, "tokens_equal_ref": True, "commit": dict(_base(), openings={"n": 8, "verified": 8}, commit_pass=True)}
+    doc = {"commit_pass": True, "required_classes": list(CLASSES)}
+    by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {"openings": 8}}).checks}
+    assert by["runtime_match/openings"].outcome == V.PASS and by["runtime_match/openings"].scope["min_openings"] == 8
+    by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {"openings": 512}}).checks}
+    assert by["runtime_match/openings"].outcome == V.FAIL and by["runtime_match/openings"].scope["min_openings"] == 64
+    by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {}}).checks}
+    assert by["runtime_match/openings"].scope["min_openings"] == 64
+    with pytest.raises(ValueError, match="sixty-four"):
+        V.build([run], doc, execution={"engine_settings": {"openings": "sixty-four"}})
 
 
 def test_pass_record_passes_in_both_and_names_its_scope():

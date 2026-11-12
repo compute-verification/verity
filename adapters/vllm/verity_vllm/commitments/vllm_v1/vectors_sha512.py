@@ -77,8 +77,8 @@ def _chunk_leaf_vectors() -> list[dict[str, Any]]:
 
 
 def _thread_leaf_vectors() -> list[dict[str, Any]]:
-    fields = {"src_mask": 27, "slab": 3, "m_block": 2, "n_block": 1, "tidx": 127, "seqlen_q": 150, "seqlen_k": 300, "launch_tag": 42,
-              "n_block_max": 3, "ok0": True, "ok1": False}
+    fields: dict[str, Any] = {"src_mask": 27, "slab": 3, "m_block": 2, "n_block": 1, "tidx": 127, "seqlen_q": 150, "seqlen_k": 300,
+                              "launch_tag": 42, "n_block_max": 3, "ok0": True, "ok1": False}
     header, words = thread_header(**fields), expand("sha512/thread", 176)
     return [{"fields": fields, "header": header.hex(), "words": words.hex(), "leaf": thread_leaf(header + words, S).hex()}]
 
@@ -120,7 +120,7 @@ def _root_vectors() -> list[dict[str, Any]]:
 def _opening_vectors() -> list[dict[str, Any]]:
     program, template, ctx, geo, layout = (digest_of(x) for x in ("program", "template", "ctx", "geo", "layout"))
     out = []
-    domains = [
+    domains: list[tuple[str, Any, list[bytes], int]] = [
         ("semantic", SemanticDomain(program, b"q-7", template, ctx, 2, 5, hash=S), [expand(f"sha512/open/sem/{i}", 24) for i in range(5)], 3),
         ("step", StepDomain(program, ctx, geo, layout, 6, hash=S), [expand(f"sha512/open/step/{i}", 40) for i in range(6)], 4),
         ("stream", StreamDomain(layout, 7, 63, 16, 5, 2, 8, 1, hash=S), [expand(f"sha512/open/stream/{i}", 64) for i in range(5)], 2),

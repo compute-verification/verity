@@ -16,8 +16,9 @@ import resource
 import shutil
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 SCHEMA = "verity-vllm/build-relabel/v1"
 
@@ -56,7 +57,11 @@ def emit(e: Emit, out: str, pre: dict, session, *, shards: Callable[[int], list[
     """Every rank of `e`: its report from the template's `session` (re-emitted in `context()`, the derive's contexts), then `post`
     (the Boolean lowering when the target's IR is boolean), written by `write(dir, res, rep, rank=r)` with `res` = the template's
     `pre` (its `res` before its own writer ran) at rank r: `tp.rank`, `model_pin.rank` and `tp.embedding_shards` (`shards(r)`)."""
-    from verity_vllm.program.frontend.relabel import RelabelRefused, rank_report, shard_map
+    from verity_vllm.program.frontend.relabel import (
+        RelabelRefused,
+        rank_report,
+        shard_map,
+    )
     for r in e.ranks:
         rep = None                                           # the previous rank's report: freed before this rank's is built
         t0, dst = time.time(), e.dir_of(out, r)
@@ -95,7 +100,8 @@ def finish(e: Emit, out: str, res: dict, write_manifest: Callable[[str, dict], N
             shutil.copyfile(os.path.join(out, "inputs.json"), os.path.join(tmp, "inputs.json"))
             res_r["wall_secs_total"], res_r["max_rss_mb"] = res.get("wall_secs_total"), res.get("max_rss_mb")
             res_r["relabeled_from"] = {"rank": res["tp"]["rank"], "dir": out}
-            json.dump(res_r, open(os.path.join(tmp, "result.json"), "w"), indent=1, default=str)
+            with open(os.path.join(tmp, "result.json"), "w") as f:
+                json.dump(res_r, f, indent=1, default=str)
             write_manifest(tmp, res_r)
             shutil.rmtree(dst, ignore_errors=True)
             os.replace(tmp, dst)
@@ -106,7 +112,8 @@ def finish(e: Emit, out: str, res: dict, write_manifest: Callable[[str, dict], N
         by_rank.setdefault(r, {"rank": r, "dir": e.dir_of(out, r), "ok": False, "error": "the template's derive failed: no relabel ran"})
     doc = {"schema": SCHEMA, "template": {"dir": out, "world": res.get("tp", {}).get("world"), "rank": res.get("tp", {}).get("rank"),
                                           "ok": res.get("ok") is True}, "root": e.root, "ranks": [by_rank[r] for r in e.ranks]}
-    json.dump(doc, open(f"{os.path.normpath(out)}.relabel.json", "w"), indent=1)
+    with open(f"{os.path.normpath(out)}.relabel.json", "w") as f:
+        json.dump(doc, f, indent=1)
 
 
 def read_report(out: str) -> dict:

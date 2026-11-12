@@ -14,14 +14,25 @@ from pathlib import Path
 from typing import Any, Callable
 
 from verity.circuits.defs import bind, composite
-from verity.circuits.refs import Coll as _Coll, concat
+from verity.circuits.refs import Coll as _Coll
+from verity.circuits.refs import concat
+from verity.circuits.types import Array
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
-from verity.circuits.types import Array
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import FoldResult, fold
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Transparent, Unsupported, parts_of
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    PerRow,
+    Profile,
+    Transparent,
+    Unsupported,
+    parts_of,
+)
 
 BF16 = P.BF16
 
@@ -368,8 +379,12 @@ class ToyRecord:
     """The trusted record of the toy: a consistent log, snapshots of the GENUINE fold's transcript, toy weights."""
 
     def __init__(self, snapdir: Path, prompt: list[int] | None = None) -> None:
+        from tests.check.test_compare_synthetic import (
+            ToyWeights,
+            _evaluate_program,
+            _write_snapshots,
+        )
         from tests.observe import test_fold_synthetic as tfs
-        from tests.check.test_compare_synthetic import ToyWeights, _evaluate_program, _write_snapshots
         self.tfs = tfs
         if not tfs._real_memory_available():
             tfs.install_stub_memory()
@@ -387,8 +402,9 @@ class ToyRecord:
         t = _evaluate_program(r, weights)
         snapdir.mkdir(parents=True, exist_ok=True)
         _write_snapshots(r, t, snapdir)
-        from verity_vllm.check.fold_compare import SnapshotStore
         import copy
+
+        from verity_vllm.check.fold_compare import SnapshotStore
         self.genuine, self.weights, self.transcript = r, weights, t
         self.store = SnapshotStore(snapdir)
         self.events = copy.deepcopy(tfs.toy_log())      # the toy header references the module's live PROMPT list
