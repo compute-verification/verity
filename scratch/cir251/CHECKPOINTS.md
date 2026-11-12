@@ -2,3 +2,4 @@
 - 2026-11-12T18:13Z A at 4176404df6 (suites ae82), B at cc269e5261 (suites 372b); scratch merge with CIR-265 3b2b4c2566 (d93f, 66d6); part 2: shards 52f6 6bd2 75a6 6059, opt-in 66fd, caps 35e4.
 - 2026-11-12T18:59Z shards relaunched without --records-manifest (23b5 2b58 1932 1d95; 52f6/6059 failed rc 2 on it, 6bd2/75a6 cancelled); caps 35e4 passed, staging at the caps 481a; long_row tests and pin at A c97c.
 - 2026-11-12T20:07Z suites A ae82 and B 372b: 56/57, verity-vllm 3 failed (vllm long-row tests); long_row c97c: 4 tests fail, pin d27c07cc->877f04d2; item 3 sidecars 66d6 0 failures, suites d93f running; opt-in 66fd 2 passed; caps 481a ok; shards running.
+- 2026-11-12T21:06Z bodies of #9318 and #9371 updated; item 3 d93f: no pin moves; shards 1-3 0 failures, shard 4 1d95 running.
