@@ -2471,7 +2471,7 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     per = [c for c in (serving_cost(ref, ours, n) for n in NUMBER if n in bench_loads(ref)) if c]
     row = prefix_row(by, reference, arm)
     if not per and not row:
-        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join(LOADS)}) sent by vLLM's client: serve "
+        raise SystemExit(f"cost: {reference} and {arm} share no load ({', '.join((*NUMBER, PREFIX))}) sent by vLLM's client: serve "
                          f"both with --client {BENCH} and the same --loads")
     model = MODELS[ours["model_id"]]
     parts = target_parts(model, arm) if target is None and model.target is not None else []

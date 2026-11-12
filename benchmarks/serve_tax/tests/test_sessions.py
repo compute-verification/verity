@@ -284,7 +284,7 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     assert stock["served_all"] and stock["output_tok_per_s"] == pytest.approx(2000.0)
     # beside the rate: tokens a second a GPU of the model's eight, a user's tokens a second at the P90 time a token,
     # and what the engine's drafts gave
-    assert (stock["tok_per_s_a_gpu"], stock["user_tok_per_s_p90"]) == (6500.0, 40.0) and r["gpus"] == 8
+    assert (stock["tok_per_s_a_gpu"], stock["user_tok_per_s_p90"]) == (6500.0, pytest.approx(40.0)) and r["gpus"] == 8
     assert (stock["draft_accepted_share"], stock["tokens_per_draft"]) == (50.0, 3.5)
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.40%, 0.60%] of stock's "
