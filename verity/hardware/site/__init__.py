@@ -22,7 +22,9 @@ auditor's figures for each host and each leaf under one (`HostFigures`, `MemoryF
 the same and its GPU card's, states those figures on the node's locations, and registers each way out, an interface or
 the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's host's time base card
 (`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure `Auditor.drift`
-takes, never both.
+takes, never both; `device_drift` is the drift an auditor's device in that host states, which `node_entry`'s
+certifier and `Auditor.of_files`' `clocks` take, and a premise gives the device's `Account.Premised`
+(`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -348,6 +350,22 @@ class ClockPremise:
     drift: Fraction
     mark: str
     source: str
+
+    def premised(self, device: str) -> tuple[str, Fraction, str]:
+        """The drift of the auditor's device `device`, which runs in the host, taken on this premise: the Lean's
+        `Account.Premised`, its device, drift and premise's name, in that order."""
+        return _str(device, "the device's id"), self.drift, self.name
+
+
+def device_drift(clock: ClockPremise | Fraction | None) -> Fraction | None:
+    """**The drift an auditor's device states** (`Loc.drift`, and its entry in `Auditor.drift`, which `owner` holds
+    it to), from the clock of the host it runs in as `clock_drift` gives it: the figure, or None for a premise or no
+    clock. A number taken on a premise is never the device's figure."""
+    if clock is None or isinstance(clock, ClockPremise):
+        return None
+    if isinstance(clock, bool) or not isinstance(clock, (int, Fraction)):
+        raise Malformed(f"a host's clock is `clock_drift`'s, a premise or a figure, not {clock!r}")
+    return _rat(clock, "a host's clock drift")
 
 
 def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
@@ -740,7 +758,7 @@ class Registration:
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
                    certifier: tuple[str, str, str] | None = None, *, host_card: Mapping[str, Any],
                    ways: Iterable[tuple[str, int | None, bool]], leaves: Any,
-                   time_unit: Fraction = TIME_UNIT) -> Entry:
+                   time_unit: Fraction = TIME_UNIT, clock: ClockPremise | Fraction | None = None) -> Entry:
         """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`),
         the tables of the GPU card and the host card it names (`verity.hardware.cards.load(sku)` each), the file's ways
         out (`ways`: `verity.hardware.nodes.ways_out(node, host)`, the one reader of their rates) and its leaves
@@ -772,7 +790,8 @@ class Registration:
 
         `certifier` is the id, the key and the key's scheme of a network certifier of the auditor's that stands in
         front of the node without splitting its interface (a process on another machine, say). It adds the certifier
-        under the site, stating no drift, and the two links of a certified way out, host to certifier (`host/ID`) and
+        under the site, stating the drift of the clock of the host it runs in (`clock`, `clock_drift`'s: the figure,
+        or no drift for a premise or no clock given; `device_drift`), and the two links of a certified way out, host to certifier (`host/ID`) and
         certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
         stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
         say nothing of it. A certifier on a node none of whose interfaces has a rate is refused, since its links would
@@ -783,6 +802,9 @@ class Registration:
         a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
         than it is."""
         n = _Node.read(node, host_card, host, ways, leaves)
+        if clock is not None and certifier is None:
+            raise Malformed("`clock` is the clock of the host a network certifier runs in, and no certifier is given; "
+                            "register the node without one, or name the certifier")
         rates = [bw for _, bw, split in n.ways if split and bw is not None]
         if certifier is not None and not rates:
             raise Malformed(f"no interface the node file states has a rate ({[i for i, _, split in n.ways if split]})"
@@ -806,7 +828,7 @@ class Registration:
                                 f"{certifier!r}")
             device, key, scheme = certifier
             beta = sum(rates)
-            locs.append(Loc(device, "certifier", site, "auditor", key=key, scheme=scheme))
+            locs.append(Loc(device, "certifier", site, "auditor", key=key, scheme=scheme, drift=device_drift(clock)))
             links += [Link(f"{host}/{device}", (host, device), beta, 0),
                       Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
         return self.entry(() if any(k.digest() == digest for k in before.sheets) else (sheet,), locs, links)
@@ -862,12 +884,17 @@ class Auditor:
     def of_files(cls, cards: Iterable[Mapping[str, Any]], tolerance: Fraction = Fraction(0),
                  keys: Mapping[str, tuple[str, str]] | None = None, *,
                  memory: Iterable[tuple[str, MemoryFigures]] = (), hosts: Iterable[tuple[str, HostFigures]] = (),
-                 drift: Iterable[tuple[str, Fraction]] = ()) -> Auditor:
+                 drift: Iterable[tuple[str, Fraction]] = (),
+                 clocks: Mapping[str, ClockPremise | Fraction] | None = None) -> Auditor:
         """The auditor whose data sheets come from these card files (`verity.hardware.cards.load(sku)` each), at this
         tolerance, with its devices' keys, each a key and its scheme by the device's id, and these figures
-        (`Registration.node_figures` gives a node's)."""
+        (`Registration.node_figures` gives a node's). `clocks` gives, by the id of each of its devices, the clock of
+        the host it runs in, `clock_drift`'s: a figure is the device's drift, after `drift`'s; a premise gives none
+        (`device_drift`), and is the row's to name (`ClockPremise.premised`)."""
+        clocked = [(d, q) for d, c in (clocks or {}).items() if (q := device_drift(c)) is not None]
         return cls(tuple(Sheet.of_file(c) for c in cards), tolerance,
-                   tuple((d, k, c) for d, (k, c) in (keys or {}).items()), tuple(memory), tuple(hosts), tuple(drift))
+                   tuple((d, k, c) for d, (k, c) in (keys or {}).items()), tuple(memory), tuple(hosts),
+                   (*drift, *clocked))
 
     def sheet(self, sku: str) -> Sheet | None:
         """The data sheet for `sku`: the first under it."""

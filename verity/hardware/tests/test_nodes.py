@@ -25,7 +25,7 @@ from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
 from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
                                   HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, check,
-                                  clock_drift, node_figures, refusal)
+                                  clock_drift, device_drift, node_figures, refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
@@ -700,3 +700,52 @@ def test_a_clock_the_card_does_not_bound_is_refused(host: str, card, refusal: st
     give."""
     with pytest.raises(Malformed, match=refusal):
         clock_drift(host, card())
+
+
+def _clocked(kind: str, clock: object) -> tuple[Registration, Auditor]:
+    """Node `kind`'s remote log with `CERTIFIER` in front of it, its host's clock `clock`, and the auditor holding the
+    certifier's key and that clock."""
+    node, log = nodes.load(kind), Registration("remote")
+    log = log.append(log.node_entry(node, cards.load(node["device"]["sku"]), HOST, certifier=CERTIFIER, clock=clock,
+                                    host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
+                                    leaves=nodes.leaves(node, HOST)))
+    held = auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})
+    return log, Auditor(held.sheets, held.tolerance, held.keys, held.memory, held.hosts,
+                        Auditor.of_files((), clocks={CERTIFIER[0]: clock}).drift)
+
+
+@pytest.mark.parametrize("kind", WIRED)
+def test_a_certifier_states_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
+    """A certifier registered in a host whose time base's drift is a premise states no drift, the auditor takes none
+    for it, the log is accepted, and the premise is the device's `Account.Premised`. Marked a ceiling, the same number
+    is the certifier's drift and the auditor's, and the log is accepted only by an auditor that holds it. Held as the
+    auditor's figure while the device states none, the premise's number is refused by `owner`."""
+    cert = CERTIFIER[0]
+    premise = clock_drift("vy-auditor-1", cards.load(TIMEBASE))
+    log, held = _clocked(kind, premise)
+    assert Site.of_log(log).loc(cert).drift is None and held.drift == ()
+    assert check(log, held) == Site.of_log(log)
+    assert premise.premised(cert) == (cert, Fraction(1, 2000), "ClockRateWithin(vy-auditor-1, 5e-4)")
+    with pytest.raises(Refused) as e:
+        check(log, replace(held, drift=((cert, premise.drift),)))
+    assert (e.value.name, e.value.entry) == ("owner", 0)
+    figure = clock_drift("vy-auditor-1", _marked("ceiling"))
+    log, held = _clocked(kind, figure)
+    assert Site.of_log(log).loc(cert).drift == figure and held.drift == ((cert, Fraction(1, 2000)),)
+    assert check(log, held) == Site.of_log(log)
+    with pytest.raises(Refused) as e:
+        check(log, replace(held, drift=()))
+    assert (e.value.name, e.value.entry) == ("owner", 0)
+
+
+def test_a_clock_is_a_certifiers_and_clock_drifts_own() -> None:
+    """A clock given with no certifier, and a clock that is neither a premise nor a figure, are refused."""
+    node = nodes.load(WIRED[0])
+    with pytest.raises(Malformed, match="no certifier is given"):
+        Registration("remote").node_entry(node, cards.load(node["device"]["sku"]), HOST, clock=Fraction(1, 2000),
+                                          host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
+                                          leaves=nodes.leaves(node, HOST))
+    for clock in (5e-4, "5e-4", True):
+        with pytest.raises(Malformed, match="a premise or a figure"):
+            device_drift(clock)
+    assert device_drift(None) is None and device_drift(Fraction(1, 2000)) == Fraction(1, 2000)
