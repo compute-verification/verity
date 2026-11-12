@@ -2,8 +2,7 @@
 # The verified queue's loop on a node, as vy-vqueue under vy-vqueue.service: one tick of `research queue vqueue --once` a pass,
 # run from ci's pinned tree in the loop's own clone.
 #
-#   loop.sh run             the loop: a tick, the sweep started detached, VQ_INTERVAL seconds, again; SIGTERM ends it after
-#                           the tick in progress
+#   loop.sh run             the loop: a tick, the sweep, VQ_INTERVAL seconds, again; SIGTERM ends it after the tick in progress
 #   loop.sh once [FLAG ..]  one tick now, in the mode below, with FLAGs last
 #   loop.sh git get         git's credential helper for the clone: the App's token of the moment
 #
@@ -108,12 +107,7 @@ tick() {
 # What a launch leaves behind (train.sh's tree and its log, check.py's Lean deps), 40 min after its last change, and never
 # while a process works in it or under it (a log: in its tree). train.sh starts check.py in the tree, on the venv under it,
 # where it can stay for as long as its run, and the tree's own time stays at the launch. The processes seen are this user's,
-# which every launch of the loop's is. Each tree's removal takes minutes on a network volume, so the loop starts the sweep
-# detached and goes on (`swept`), one sweep at a time: one that finds another running leaves it be.
-swept() {
-  ( flock -n 9 || exit 0; sweep ) 9> "$H/sweep.lock" < /dev/null > /dev/null 2>&1 &
-}
-
+# which every launch of the loop's is.
 sweep() {
   local before busy p changed at
   before=$(( $(now) - 2400 ))
@@ -138,7 +132,7 @@ run() {
       rc=$?
       echo "vy-vqueue: tick rc=$rc mode=$mode pin=$(git -C "$CODE" rev-parse --short=12 HEAD 2>/dev/null)"
       [ "$rc" != "$CONFIG" ] || exit $CONFIG
-      swept
+      sweep
     fi
     [ -z "$stop" ] || break
     sleep "$INTERVAL" &
