@@ -8,6 +8,7 @@ import fnmatch
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tomllib
@@ -371,6 +372,36 @@ def test_a_trust_store_that_holds_a_distrusted_root_is_drift_until_the_upgrade_r
     assert "root     " in deploy.render("n", "origin/main", rep) and "--only-upgrade ca-certificates" in deploy.render("n", "origin/main", rep)
     (certs / "emSign_ECC_Root_CA_-_G3.pem").unlink()
     assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
+
+
+def test_a_null_device_that_is_not_the_character_device_1_3_with_mode_666_is_drift_with_the_command_that_repairs_it(
+        world, tmp_path, monkeypatch):
+    whole = [stat.S_IFCHR | 0o666, 1, 3]
+    assert deploy.null_fault(whole) is None
+    closed = deploy.null_fault([stat.S_IFCHR | 0o644, 1, 3])
+    assert "has mode 644, not 666" in closed["what"] and closed["fix"] == "sudo chmod 666 /dev/null"
+    remake = "sudo rm -f /dev/null && sudo mknod -m 666 /dev/null c 1 3"
+    for seen, what in (([stat.S_IFREG | 0o666, 0, 0], "is a regular file, not the character device 1,3"),
+                       ([stat.S_IFDIR | 0o755, 0, 0], "is a directory, not the character device 1,3"),
+                       ([stat.S_IFCHR | 0o666, 1, 5], "is the character device 1,5, not the character device 1,3"),
+                       ("FileNotFoundError: [Errno 2] No such file or directory: '/dev/null'", "can't be read (FileNotFoundError")):
+        assert what in deploy.null_fault(seen)["what"] and deploy.null_fault(seen)["fix"] == remake, seen
+    n = world["nodes"]["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["null_device"] is None and deploy.clean(rep), "this machine's own null device, as the probe reads it"
+    null = tmp_path / "null"
+    null.write_text("what a copy onto the device leaves when the device is gone\n")
+    null.chmod(0o644)
+    monkeypatch.setattr(deploy, "NULL", str(null))
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["null_device"] == deploy.null_fault([stat.S_IFREG | 0o644, 0, 0]) and not deploy.clean(rep)
+    line = next(ln for ln in deploy.render("n", "origin/main", rep).splitlines() if ln.startswith("  null     "))
+    assert f"{null} is a regular file" in line and line.endswith(f"(sudo rm -f {null} && sudo mknod -m 666 {null} c 1 3)")
+    null.unlink()
+    assert "can't be read (FileNotFoundError" in deploy.drift(n, "origin/main", local, world["repo"])["null_device"]["what"]
+    assert deploy.main(["drift", "--no-fetch"], run=local, manifest=world["manifest"], repo=world["repo"]) == 1
 
 
 def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
