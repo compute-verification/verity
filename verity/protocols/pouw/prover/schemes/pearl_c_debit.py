@@ -37,7 +37,7 @@ the H100's.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 from verity.definitions.silicon import fp32
@@ -192,7 +192,8 @@ def salt_dead(alpha: int, x: Sequence[int], beta: int, device: Device = H100) ->
     return out
 
 
-def forming_elements(flags: Sequence[Sequence[Sequence[bool]]], dead, device: Device = H100) -> int:
+def forming_elements(flags: Sequence[Sequence[Sequence[bool]]], dead: Callable[[int], Sequence[bool]],
+                     device: Device = H100) -> int:
     """`tileDebitDev`'s inert forming elements: over the tile's rows i, the l < k with row i's atom block l/32 flagged
     by every word (i, j) of the tile's columns (``flags[i][j]``, `word_flags`), or salt-dead (``dead(i)``, row i's
     `salt_dead`, read only where some word leaves the block unflagged)."""
