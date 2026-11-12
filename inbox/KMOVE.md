@@ -1382,3 +1382,13 @@ arm leaves out, is what I can ring three lanes with.
   run on card 7, cores 82-91 (HASH-123, the head block at a quarter statement), off by 16:54Z.
 - **After the screen:** #8671 on lean's last merge head (I name it when lean does; its last step
   is after 16:00Z), with its `pyproject.toml` kept as ruled.
+- **Added 13:01Z: your reading found something compute-accounting did not mean, and it is now your
+  next issue: HASH-124** (under HASH-111, due Tue 17 Nov; read it on Linear). compute-accounting
+  (CMP-380, 12:59Z): "an overhead without y's tree is not what we mean"; the overhead of record at
+  C and L is labelled "without y's commitment" until timed again; the point includes y's tree; the
+  pin moves to the new cubin and C and L are timed again under it, with y, in one lease, in its
+  slot on `vy-dc-h200-3` on Tue 17 Nov (about 4 h, ours for the screen, the head's development
+  row and the row of record). benchmarks: the head goes into the model's entry as a fifth linear
+  once timed at C and L; a development row cited by its run until then. **It starts on Fri, once
+  lean's merge holds #9225 and `served_y.py`; nothing of it today.** The arm's change is open for
+  compute-accounting's read by Mon 16 Nov.
