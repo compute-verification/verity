@@ -191,13 +191,15 @@ def test_the_older_path_is_the_same_tune():
 
 
 def _imported_modules(path: Path, package: list[str]) -> set[str]:
-    """Every module an import statement of the file names: `import a.b`, `from a import b` as `a` and `a.b`, relative ones too."""
+    """Every module an import statement of the file names: `import a.b` as `a.b`, `from a import b` as `a` and `a.b`, and a
+    relative one from the file's own package."""
     out: set[str] = set()
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):
             out.update(a.name for a in node.names)
         elif isinstance(node, ast.ImportFrom):
-            base = ".".join([*package[:len(package) + 1 - node.level], *filter(None, [node.module])]) if node.level else node.module
+            above = package[:len(package) + 1 - node.level] if node.level else []
+            base = ".".join([*above, *([node.module] if node.module else [])])
             out.update({base, *(f"{base}.{a.name}" for a in node.names)})
     return out
 
