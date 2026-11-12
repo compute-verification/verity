@@ -3,12 +3,16 @@ chunks it arrives in: the planted bits are where the receiver reads them, and no
 through the relay on a `VirtualClock` (`served_cheats.relay_run`, the id egress form): the honest responses are
 accepted by the relay's check and by the I/O tie; changed ids and a dropped event pass the relay's check and are
 refused by the tie's content, and the receiver has every planted bit; a withheld response fails late and bytes out of
-the id form fail (format), each refused by the relay's audit in its own words, the second with nothing read."""
+the id form fail (format), each refused by the relay's audit in its own words, the second with nothing read; a held
+response that is on time is accepted and not seen. A refusal counts only where it is the deviation's. What a try
+keeps holds no salt, key or address, and the table is made from it alone."""
 from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -108,60 +112,204 @@ def _requests(users: str = "user") -> tuple[list[dict], list[bytes], list[list[i
 FIELDS, REQUESTS, HONEST = _requests()
 
 
-def _try(tmp: Path, cls: str, bits: list[int], chunk: int = 300, users: str = "user") -> dict:
-    """Class `cls` through the relay on a virtual clock: eight id requests named ``<users>-<k>``, each answered by the
-    stand-in's own ids as the class deviates them, the k-th connection planting from `bits` in turn; its row."""
+def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str = "user", late: bool = False,
+             down: tuple[int, ...] = (), params=PARAMS) -> float:
+    """Class `cls` through the relay on a virtual clock, its run directory `run` as a try leaves it: eight id requests
+    named ``<users>-<k>``, each answered by the stand-in's own ids as the class deviates them, the k-th connection
+    planting from `bits` in turn. Under `late` a held response comes past its deadline, so never; the servers of
+    `down` send nothing, whatever the class."""
     fields, requests, honest = _requests(users)
     bit, served, lines = _bits(bits), [], []
     for k in range(len(requests)):
-        dev = dv.Deviation(cls, bit, P)
+        dev = dv.Deviation(cls, bit, P, 0.5)
         out = _through(dev, ws.id_response(honest[k], P), chunk)
-        served.append((out, not dev.withhold))
+        gone = dev.withhold or (late and dev.delay > 0) or k in down
+        served.append((b"" if gone else out, not gone))
         lines.append({"release": k, "class": cls, "planted": "".join(map(str, dev.planted))})
-    log = sc.relay_run(tmp, tmp.parent / f"key-{cls}", {}, PARAMS, requests=requests, served=served)
+    log = sc.relay_run(run, run.parent / f"key-{run.name}", {}, params, requests=requests, served=served)
     assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(sc.REQUESTS))
-    (tmp / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
-    (tmp / dv.PLANTED).write_text("".join(json.dumps(x) + "\n" for x in lines))
-    (tmp / "check.json").write_text(json.dumps(ws.check(tmp)))
-    return dv.row(cls, tmp, dv.stand_in_ids(tmp))
+    (run / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
+    (run / dv.PLANTED).write_text("".join(json.dumps(x) + "\n" for x in lines))
+    (run / "check.json").write_text(json.dumps(ws.check(run)))
+    return 0.0
+
+
+def _kept(tmp: Path, cls: str, bits: list[int], **how) -> dict:
+    """What class `cls`'s try keeps (`_attempt` in ``tmp/CLASS``), written beside its run directory as `try` does."""
+    _attempt(tmp / cls, cls, bits, **how)
+    kept = dv.keep(cls, tmp / cls, stand_in=True, seconds=0.0, hold_ms=500.0)
+    (tmp / f"{cls}.json").write_text(json.dumps(kept))
+    return kept
+
+
+def _try(tmp: Path, cls: str, bits: list[int], **how) -> dict:
+    """Class `cls`'s row against the stand-in's own ids."""
+    kept = _kept(tmp, cls, bits, **how)
+    return dv.row(kept, dv.stand_in_ids(kept))
 
 
 def test_honest_responses_pass_the_relays_check_and_the_tie(tmp_path):
-    row = _try(tmp_path / "honest", "honest", [])
+    row = _try(tmp_path, "honest", [])
     assert (row["relay"], row["tie"], row["ok"], row["planted"]) == ("accepted", "accepted", True, 0)
 
 
 def test_planted_ids_pass_the_relays_check_and_the_ties_content_refuses_them(tmp_path):
-    row = _try(tmp_path / "tokens", "tokens", [1, 0] * 60)
+    row = _try(tmp_path, "tokens", [1, 0] * 60)
     assert (row["relay"], row["tie"], row["ok"]) == ("accepted", "refused", True)
     assert row["words"].startswith("IoTieWindow.content at window 0, bucket ") and "isn't the Commit's id" in row["words"]
     assert row["planted"] == row["right"] == row["read"] > sc.REQUESTS and row["information"] > 0
 
 
 def test_a_dropped_event_passes_the_relays_check_and_the_tie_finds_the_output_no_cell_carries(tmp_path):
-    row = _try(tmp_path / "length", "length", [(len(ids) + 1) % 2 for ids in HONEST])
+    row = _try(tmp_path, "length", [(len(ids) + 1) % 2 for ids in HONEST])
     assert (row["relay"], row["tie"], row["ok"]) == ("accepted", "refused", True)
     assert row["words"].startswith("IoTieWindow.content at window -1: connection ")
     assert row["planted"] == row["right"] == sc.REQUESTS and row["charged"].startswith(f"{sc.REQUESTS * 7} bits")
 
 
 def test_a_withheld_response_fails_late_and_the_relays_audit_refuses_the_run(tmp_path):
-    row = _try(tmp_path / "fail", "fail", [0, 1, 1, 0, 0, 0, 1, 0])
+    row = _try(tmp_path, "fail", [0, 1, 1, 0, 0, 0, 1, 0])
     assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, 3)
     assert row["words"].startswith("audit: connection 2 failed closed (late) at egress cell 0")
     assert row["planted"] == row["right"] == sc.REQUESTS and row["information"] > 0
 
 
 def test_bytes_out_of_the_id_form_fail_their_connection_and_none_is_read(tmp_path):
-    row = _try(tmp_path / "extra", "extra", [1, 0, 0, 1] * 16)
+    row = _try(tmp_path, "extra", [1, 0, 0, 1] * 16)
     assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, sc.REQUESTS)
     assert "failed closed (format) at egress cell" in row["words"]
     assert (row["planted"], row["read"], row["right"], row["information"]) == (8 * sc.REQUESTS, 0, 0, 0.0)
 
 
+def test_under_a_response_cap_bytes_after_a_full_response_fail_at_its_limit(tmp_path):
+    """A schedule with a response cap holds a response to its request's `max_tokens`: the cell after that many ids
+    fails (limit) before its form is read, and the cell after fewer fails (format). Either is the extra bytes' cell."""
+    capped = replace(PARAMS, max_tokens_cap=32)
+    kept = _kept(tmp_path, "extra", [1, 0, 0, 1] * 16, params=capped)
+    reasons = {c["failed"] for c in kept["connections"]}
+    full = [c for c in kept["connections"] if len(c["ids"]) == c["max_tokens"]]
+    assert full and {c["failed"] for c in full} == {"limit"} and reasons <= {"limit", "format"}
+    assert all(c["failed_at"] == len(c["ids"]) for c in kept["connections"])
+    row = dv.row(kept, None)
+    assert (row["relay"], row["ok"], row["refusals"], row["read"]) == ("refused", True, sc.REQUESTS, 0)
+    kept["connections"][0]["failed_at"] -= 1
+    assert dv.row(kept, None)["ok"] is False
+
+
+def test_a_hold_that_is_on_time_is_accepted_and_not_seen_and_one_past_the_deadline_fails_late(tmp_path):
+    bits = [0, 1, 1, 0, 1, 0, 0, 1]
+    row = _try(tmp_path / "short", "bucket", bits)
+    assert (row["relay"], row["ok"], row["refusals"]) == ("accepted", True, 0)
+    assert row["words"] == ("accepted, and the hold is not seen at the client's bucket: 4 of 8 connections held 500 "
+                            "ms, and the first cell of 8 of 8 is 3 buckets after its admission")
+    assert (row["planted"], row["information"]) == (sc.REQUESTS, 0.0) and "refused" not in row["words"]
+    row = _try(tmp_path / "long", "bucket", bits, late=True)
+    assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, 4)
+    assert row["words"].startswith("audit: connection 2 failed closed (late) at egress cell 0")
+    assert row["right"] == sc.REQUESTS and row["information"] > 0
+
+
+def test_a_refusal_counts_only_where_it_is_the_deviations(tmp_path):
+    """A try the relay's check refuses for something the class didn't do isn't a refusal of the class: a server that
+    is down under the tokens class, a connection that failed and wasn't withheld or held, a Commit id that differs
+    where no bit was planted."""
+    down = _try(tmp_path / "down", "tokens", [1, 0] * 60, down=(3,))
+    assert (down["relay"], down["tie"], down["ok"]) == ("refused", "refused", False)
+    assert down["words"].startswith("the relay's check refused a try that fails no connection: ")
+    for cls, bits in (("fail", [0, 1, 1, 0, 0, 0, 1, 0]), ("bucket", [0] * 8)):
+        other = _try(tmp_path / f"other-{cls}", cls, bits, down=(0,))
+        assert (other["relay"], other["ok"]) == ("refused", False)
+    kept = _kept(tmp_path, "tokens", [1, 0] * 60)
+    commit = dv.stand_in_ids(kept)
+    assert dv.row(kept, commit)["ok"] is True
+    first = min(commit)
+    moved = commit | {first: [commit[first][0] ^ 2, *commit[first][1:]]}
+    assert dv.row(kept, moved)["ok"] is False
+    assert dv.row(kept, commit | {first: commit[first][:-1]})["ok"] is False
+    unplanted = _kept(tmp_path / "unplanted", "tokens", [x & 1 for ids in HONEST for x in ids])
+    assert dv.row(unplanted, dv.stand_in_ids(unplanted))["ok"] is None
+
+
+def test_what_a_try_keeps_holds_no_salt_or_address_and_the_table_is_made_from_it_alone(tmp_path):
+    kept = _kept(tmp_path, "tokens", [1, 0] * 60)
+    run, text = tmp_path / "tokens", (tmp_path / "tokens.json").read_text()
+    assert set(kept) == {"class", "run_id", "digest", "params", "windows", "hold_ms", "seconds", "check",
+                         "connections", "egress", "files"}
+    assert "upstream" not in kept["check"] and "127.0.0.1" not in text and "salt" not in text.replace(".salts", "")
+    digest = dv.hashlib.sha256((run / "deployment.json").read_bytes()).hexdigest()
+    assert kept["files"]["deployment.json"] == {"bytes": (run / "deployment.json").stat().st_size, "sha256": digest}
+    assert set(kept["files"]) == {str(p.relative_to(run)) for p in run.rglob("*") if p.is_file()}
+    conn = kept["connections"][0]
+    assert (conn["user"], conn["release"], conn["held"], conn["failed"]) == ("user-0", 0, True, None)
+    assert [x >> 1 for x in conn["ids"]] == [x >> 1 for x in HONEST[0]]
+    assert conn["planted"] == ("10" * 60)[:len(HONEST[0])] == "".join(str(x & 1) for x in conn["ids"])
+    record = ws.read_records(run, PARAMS)[ws.EGRESS][0]
+    cells = {(t, i): frame for t, row in enumerate(record.grid) for i, frame in enumerate(row)
+             if frame is not None and frame != IT.pad_cell(PARAMS.cell_bytes)}
+    assert {(e[0], e[1]): dv.cell_of(e, PARAMS.cell_bytes) for e in kept["egress"][0]["cells"]} == cells
+    before = dv.row(kept, dv.stand_in_ids(kept))
+    shutil.rmtree(run)
+    assert dv.main(["table", "--out", str(tmp_path), "--stand-in"]) == 0
+    assert json.loads((tmp_path / "rows.json").read_text()) == [json.loads(json.dumps(before))]
+    assert (tmp_path / "table.txt").read_text() == dv.table([before]) + "\n"
+    failed = _kept(tmp_path, "fail", [0, 1, 1, 0, 0, 0, 1, 0])
+    assert [e for e in failed["egress"][0]["cells"] if len(e) == 3] and dv.row(failed, None)["ok"] is True
+    with pytest.raises(SystemExit, match="keeps no try"):
+        dv.main(["table", "--out", str(tmp_path / "none")])
+
+
+def test_the_servers_own_record_names_a_request_by_its_run_and_release(tmp_path):
+    """The certified tick names a request ``verity-<run>-<N>``, and the server's recorder writes its sampled ids under
+    that `id`: the tie reads those rows as they are, among the rows of what the server served before."""
+    kept = _kept(tmp_path, "tokens", [1, 0] * 60) | {"run_id": "ab" * 16}
+    record = tmp_path / "requests.jsonl"
+    rows = [{"id": f"verity-{'ab' * 16}-{k}", "engine_id": f"cmpl-{k}", "output_ids": ids, "finish_reason": "length"}
+            for k, ids in enumerate(HONEST)]
+    earlier = [{"id": f"verity-{'cd' * 16}-{k}", "output_ids": [5, 6, 7]} for k in range(3)]
+    record.write_text("".join(json.dumps(r) + "\n" for r in earlier + rows))
+    commit = dv.committed_ids(kept, dv.read_commit(record))
+    assert commit == dv.stand_in_ids(kept) and dv.row(kept, commit)["ok"] is True
+    assert dv.committed_ids(kept | {"run_id": "cd" * 16}, dv.read_commit(record))[1] == [5, 6, 7]
+    assert set(map(tuple, dv.committed_ids(kept | {"run_id": None}, dv.read_commit(record)).values())) == {()}
+
+
+def test_honest_is_tried_first_and_a_refused_control_stops_the_tries(tmp_path):
+    assert dv.CLASSES == ("honest", "tokens", "length", "fail", "extra", "bucket")
+    flags = ["try", "--stand-in", "--out", str(tmp_path / "out"), "--scratch", str(tmp_path / "scratch")]
+    args = dv.parser().parse_args(flags)
+    bits = {"tokens": [1, 0] * 60, "fail": [0, 1, 1, 0, 0, 0, 1, 0]}
+    tried, stopped = dv.tries(["honest", "tokens", "fail"], args,
+                              lambda cls, run, _: _attempt(run, cls, bits.get(cls, [])))
+    assert (tried, stopped) == (["honest", "tokens", "fail"], False)
+    assert [r["ok"] for r in dv.rows_of(args.out, tried, None, True)] == [True, True, True]
+    assert sorted(p.name for p in args.out.iterdir()) == ["fail.json", "honest.json", "tokens.json"]
+    assert (args.scratch / "honest" / "check.json").exists()
+
+    args = dv.parser().parse_args([*flags[:3], str(tmp_path / "refused")])
+    seen = []
+
+    def down(cls, run, _):
+        seen.append(run)
+        return _attempt(run, cls, [], down=(2,))
+
+    assert dv.tries(["honest", "tokens", "fail"], args, down) == (["honest"], True)
+    assert [p.name for p in args.out.iterdir()] == ["honest.json"] and not seen[0].exists()
+    assert dv.tries(["honest"], args, down) == (["honest"], False)
+
+
+def test_a_tail_shorter_than_a_connection_is_refused_before_any_try(tmp_path):
+    served = ["--", "--slots", "1", "--bucket-ms", "250", "--delay", "60", "--window", "600"]
+    args = dv.parser().parse_args(["try", "--stand-in", "--out", str(tmp_path), *served])
+    assert dv.lane_seconds(args) == (60 + 16 + 2) * 0.25
+    assert dv.lane_seconds(dv.parser().parse_args(["try", "--stand-in", "--out", str(tmp_path)])) == (30 + 8 + 2) * 0.1
+    with pytest.raises(SystemExit, match="--tail 8: .* give --tail at least 20"):
+        dv.main(["try", "--stand-in", "--out", str(tmp_path / "out"), *served])
+    assert not (tmp_path / "out").exists()
+
+
 def test_the_tie_is_not_run_without_the_commits_ids_and_the_row_says_so(tmp_path):
-    _try(tmp_path / "tokens", "tokens", [1, 0] * 60)
-    row = dv.row("tokens", tmp_path / "tokens", None)
+    kept = _kept(tmp_path, "tokens", [1, 0] * 60)
+    row = dv.row(kept, None)
     assert (row["tie"], row["ok"]) == (dv.NOT_RUN, None) and "--ids" in row["words"]
     assert row["charged"] == "nothing, and the tie that refuses it wasn't run"
     table = ["table", "--out", str(tmp_path), "--class", "tokens"]
@@ -182,13 +330,12 @@ def test_a_trys_requests_take_its_name_and_one_record_over_two_tries_holds_each_
                                    "honest-ab"])
     assert [x["ids"]["user"] for x in ws.traffic_of(args, "m")] == ["honest-ab-0", "honest-ab-1"]
 
-    tries = {"honest": tmp_path / "honest", "tokens": tmp_path / "tokens"}
-    _try(tries["honest"], "honest", [], users="honest-ab")
-    _try(tries["tokens"], "tokens", [1, 0] * 60, users="tokens-ab")
+    tries = {"honest": _kept(tmp_path, "honest", [], users="honest-ab"),
+             "tokens": _kept(tmp_path, "tokens", [1, 0] * 60, users="tokens-ab")}
     record = tmp_path / "requests.jsonl"
     record.write_text("".join(json.dumps({"user": f["user"], "output_ids": ids}) + "\n"
                               for users in ("honest-ab", "tokens-ab") for f, ids in zip(*_requests(users)[::2])))
-    rows = {cls: dv.row(cls, run, dv.committed_ids(run, record)) for cls, run in tries.items()}
+    rows = {cls: dv.row(kept, dv.committed_ids(kept, dv.read_commit(record))) for cls, kept in tries.items()}
     assert (rows["honest"]["tie"], rows["tokens"]["tie"]) == ("accepted", "refused")
     assert all(r["ok"] for r in rows.values())
     assert _requests("honest-ab")[2] != _requests("tokens-ab")[2]
