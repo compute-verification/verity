@@ -588,6 +588,34 @@ def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
     assert not [(e["path"], e.get("owner")) for e in entries if e.get("owner") not in handles]
 
 
+LEASE_SH, LEASE_STOP = "/home/research/.research/lease.sh", "/usr/local/sbin/vy-nebius-stop"
+
+
+def test_every_node_that_runs_the_lease_loop_gets_the_loop_and_the_stop_command_and_none_gets_one_without_the_other():
+    """The loop stops its machine only through the stop command, so deploy keeps the pair in step: both come from the tree on
+    the same nodes. Those hold every node the manifest gives a lease unit or a deadline, and every CPU node, where vm_setup.sh
+    writes the unit at first boot. A node with only one of the two runs a loop of one revision against a stop command of
+    another, or a loop deploy never brings up to date."""
+    nodes = deploy.load()
+
+    def on(path):
+        return {n.name for n in nodes.values() if path in {e.path for e in n.entries}}
+
+    loop, stop = on(LEASE_SH), on(LEASE_STOP)
+    assert loop and loop == stop, f"one without the other on {sorted(loop ^ stop)}"
+    cpu = {n for n in nodes if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
+    assert len(cpu) > 2 and not sorted(cpu - loop), "every CPU node"
+    generated = sorted({e.path for n in nodes.values() for e in n.entries if e.by and re.search(r"/vy-(lease|deadline)", e.path)})
+    assert len(generated) >= 5, generated
+    for path in generated:
+        assert on(path) and not sorted(on(path) - loop), path
+    for name in sorted(loop):
+        entries = {e.path: e for e in nodes[name].entries}
+        assert entries[LEASE_SH].src == "tools/research/src/research/pods/sh/lease.sh", name
+        assert entries[LEASE_STOP].src == "tools/research/src/research/pods/nebius/vm_stop.sh", name
+        assert entries[LEASE_SH].run == ["systemd:vy-lease"], "what drift names to restart once the file is installed"
+
+
 PODS = deploy.MANIFEST.parent
 ROOT_UNITS = {"vy-write-probe@.service": "reads every thread's /proc/PID/task/TID/io, as its tmux pane did under sudo -n"}
 
