@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# H1 tile units of one recorded int8 Llama-3.1-8B window through sampled proofs: sampled by the live coin, proved by Flock
+# H1 tile units of one recorded int8 Llama-3.1-8B window through SPOT: sampled by the live coin, proved by Flock
 # --zk and verified by the Lean verifier against the verifier's own public files (run.py's docstring has the protocol).
 #   research run --on MACHINE --project verity --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
-#   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
+#   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean verifier, a venv)
 #   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
 #      quantizers; a second window from other tokens) and run.py prepare commits (each call's A table and z table of its
 #      tiles' z/y records, and the weights' B rows), serves, samples, opens, checks the openings and has the sampled proof blocks
@@ -35,7 +35,7 @@
 #      the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
-#      a session's serve and prove caps, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
+#      a session's serve and prove limits, % of H1_MEM_GB (they run side by side, the stager gone; at K = 4096 with 8
 #      instances the serve passes 131 GB resident and the prover 100 GB, so H1_MEM_GB=500)  HZ_RUNS (1)  HZ_WARM (0)
 #      HZ_CACHE, HZ_STAGE: hidden_zk's
 #      H1_QUANT (h1: H1's ±110/[-126, 125] quantizers; vllm: vLLM's per-row absmax → ±127, over the first H1_K entries
@@ -61,7 +61,7 @@ SW=$W/stage WK=$W/work
 mkdir -p "$OUT/lean"
 
 build_layer_venv() { local D=$1; rm -rf "$D" && uv venv -q --python 3.12 "$D" && uv pip install -q --python "$D/bin/python" numpy==2.5.3 tokenizers==0.22.1; }
-# the stager needs only the venv: it builds the circuit while setup builds flock-circuit and flock-verify
+# the stager needs only the venv: it builds the circuit while setup builds flock-circuit and the Lean verifier
 [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
 PY=$HZ_PYTHON TIME="$HZ_PYTHON $J/timed.py"
 log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER quant=${H1_QUANT:-h1} controls: $CONTROLS"
@@ -111,7 +111,7 @@ VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
   export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
   export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
-  # the ZK server's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # the ZK server's Lean processes are the prover's children, and under an address-space limit (ulimit -v) their runtime
   # can't create its threads: a ZK server session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
