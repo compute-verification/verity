@@ -376,8 +376,9 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
 
 def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
     """One branch held every message for three hours while each `send` said only "pushed". `status` and a later `send` say a
-    message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send` says a
-    target whose turn ended (one finished before its stop messages reached it) takes nothing until resumed."""
+    message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send`, pushed or
+    `--local`, says in its one line that the target's next shell command delivers the message and nothing delivers it at a
+    turn's end: a target whose turn ended (one finished before its stop messages reached it) takes nothing until resumed."""
     origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
     env = {**os.environ, **GIT_ENV}
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
@@ -391,8 +392,13 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
 
     assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
     sent = tool("send", W, "--text", "fresh", "--repo", str(coord))
-    assert "FINISHED or IDLE" in sent.stdout and "resume it with Task" in sent.stdout   # MEMPOOL: a finished target never pulls
+    told = (f"{W}'s next shell command delivers it, and nothing delivers it at a turn's end: if {W} has ended its turn "
+            "(FINISHED or IDLE), resume it with Task (or a follow-up), and its first shell command delivers it")
+    assert re.fullmatch(re.escape(f"pushed for {W}: origin's inbox/{W} at ") + "[0-9a-f]{12}" + re.escape(
+        f"; {told}. `--wait S` says whether its VM took it within S seconds\n"), sent.stdout), sent.stdout
     assert "earlier" not in sent.stderr
+    here = tool("send", W, "--local", "--text", "on this VM", inbox=tmp_path / "local-inbox")
+    assert here.stdout == f"queued for {W}: {tmp_path / 'local-inbox' / f'{W}.md'}; {told}\n", here.stdout
     second = tool("send", W, "--text", "fresh too", "--repo", str(coord))
     assert "1 earlier message(s) uncollected since" in second.stderr and "NOT DELIVERED" not in second.stderr
     fresh = tool("status", W, "--repo", str(coord))
