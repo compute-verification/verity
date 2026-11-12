@@ -280,8 +280,9 @@ NO_PROOF = "R7: no proof for circuit/rep0 (lone rep)"
 #: Lean's refusals on no proof: for want of a session's proof file, and at the statement's setup
 NO_FILE = "session files: no such file or directory (error code: 2)\n  file: session-m0/sessions/l0000/circuit.rep0.bin"
 AT_SETUP = "setup: U2: the draw's K is 4, not the verifier's 1"
-#: a refusal of Lean's on a proof it read
-ON_THE_PROOF = "circuit/rep0: the lincheck's final check fails"
+#: Lean's refusal of a forged unit's proof it read, and the verifier's own of the same proof
+ON_THE_PROOF = "lincheck: ConsistencyFailed (sumcheck-final)"
+PROOF_FAILS = 'Lincheck(ConsistencyFailed { which: "sumcheck-final" })'
 
 
 def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | None = 0, stopped: str | None = None,
@@ -294,7 +295,7 @@ def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | Non
     import a0
 
     accepted = lean_why is None
-    m0_why = None if accepted else NO_PROOF if not proofs else "the proof fails its check"
+    m0_why = None if accepted else NO_PROOF if not proofs else PROOF_FAILS
     session = d / "session-m0"
     if proofs is not None:
         (session / "sessions" / "l0000").mkdir(parents=True)
