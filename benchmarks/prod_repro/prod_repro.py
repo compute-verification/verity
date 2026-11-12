@@ -102,11 +102,15 @@ INDEX_TOPK = "index_topk"
 TOPK, TOPK_LOG = "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG"
 #: what the report keeps in OUT of the canonical top-k's counters, which its processes keep outside it (`topk_kept`)
 TOPK_KEPT = "topk_counters.json"
-#: by model, as the benchmark names it: the context limit a job serves it at where it names none (``max_model_len``)
-#: and what is known of leaving the limit to vLLM (``auto``: whether vLLM then starts, why not, and the run that showed it)
+#: by model, as the benchmark names it: what is known of leaving the context limit to vLLM (``auto``: whether vLLM
+#: then starts, at which settings, why not, and the run that showed it)
 LIMITS = HERE / "limits.json"
 #: the cost's verdict against its target (`under`)
 UNDER, NOT_SHOWN = "under", "not shown"
+#: why a cost on a sessions load is not shown whatever its interval: the benchmark's own cost has no verdict there
+#: (`serve_tax.session_cost`'s ``same_work``)
+UNEQUAL = ("the arms did not do the same work (one left a request unserved, or their prefix caches served different "
+           "shares of the prompts in some rep)")
 
 
 def default_arms(model_id: str | None = None, out: Path | None = None) -> tuple[str, str, str]:
@@ -471,13 +475,14 @@ def under(c: dict, target: float, floor: float) -> str:
 def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | None, load: str, target: float) -> dict:
     """The cost line: ``ours`` over ``stock`` on ``load``, a fraction of stock's serving time, with its interval, the
     noise floor (``again`` over ``stock``, measured the same way) and whether it is under ``target`` percent
-    (`under`). Not measured where an arm did not serve the load, where
-    an arm left requests unserved (the arms then served different tokens), or where the corpus client's arrivals did
-    not saturate stock."""
+    (`under`). On a sessions load it is under only where the benchmark's own cost says the arms did the same work
+    (`serve_tax.session_cost`). Not measured where an arm did not serve the load, where an arm left requests unserved
+    (the arms then served different tokens), where the benchmark's own cost refuses the arms, or where the corpus
+    client's arrivals did not saturate stock."""
     missing = [a for a in (stock, ours) if a not in by or not reps_of(by[a], load)]
     if missing:
         return not_measured(f"{', '.join(missing)} did not serve load {load}")
-    ref, mine, twin = by[stock], by[ours], by.get(again) if again else None
+    ref, mine, twin, same = by[stock], by[ours], by.get(again) if again else None, None
     unserved = {a["arm"]: sum(r["sent"] - r["ok"] for r in reps_of(a, load)) for a in (ref, mine)}
     if any(unserved.values()):
         return not_measured("the arms did not serve the same tokens: " + ", ".join(
@@ -490,6 +495,15 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
         how = {"client": S.BENCH, "rung": c["rung"], "reps": c["reps"], "saturated": c["saturated"],
                "sessions": bool(getattr(S.LOADS.get(load), "sessions", False)),
                "by": "the paired ratio of output tokens a second over reps at one rung (serve_tax.serving_cost)"}
+        if how["sessions"]:
+            try:
+                own = S.session_cost([ref, mine], ours, stock)
+            except SystemExit as e:
+                return not_measured(f"the benchmark's own cost on a sessions load refuses these arms: {e}", how=how)
+            if own is None or own["load"] != load:
+                return not_measured(f"the benchmark's own cost on a sessions load is of {own['load'] if own else 'none'}, "
+                                    f"not of {load}: a job serves one sessions load", how=how)
+            same = own["same_work"]
         c = {k: c[k] for k in ("value", "ci95") if k in c}
     else:
         def tok(a: dict) -> dict:
@@ -510,7 +524,8 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     return {"measured": c["value"] is not None, "value": c["value"], "ci95": c.get("ci95"), "how": how,
             **({} if c["value"] is not None else {"why": "an arm served no token in some rep"}),
             "noise_floor": {"arm": again, "value": noise["value"], "ci95": noise.get("ci95")} if noise else None,
-            "target": target, "verdict": under(c, target / 100, floor)}
+            "target": target, "same_work": same,
+            "verdict": NOT_SHOWN if same is False else under(c, target / 100, floor)}
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -816,6 +831,14 @@ def _engine(e: dict) -> list[str]:
     return lines
 
 
+def _verdict(c: dict) -> str:
+    """A cost's verdict in words: yes, or not shown and, where the interval is not the reason, what is."""
+    if c["verdict"] == UNDER:
+        return "yes"
+    why = UNLIKE if c.get("settings_differ") else UNEQUAL if c.get("same_work") is False else ""
+    return NOT_SHOWN + (f", {why}" if why else "")
+
+
 def text(r: dict) -> str:
     a, t, c, ran = r["arms"], r["tokens"], r["cost"], r["ran"]
     stock, ours = a["stock"], a["ours"]
@@ -874,7 +897,7 @@ def text(r: dict) -> str:
         reps = f"{how['reps']} paired rep{'' if how['reps'] == 1 else 's'}" if bench else f"{how['reps'][0]} and {how['reps'][1]} reps"
         lines += [
             f"cost: {ours} over {stock} {_pct(c['value'])} of stock's serving time{_interval(c)}; under "
-            f"{c['target']:g}%: " + ("yes" if c["verdict"] == UNDER else NOT_SHOWN + (f", {UNLIKE}" if c.get("settings_differ") else "")),
+            f"{c['target']:g}%: {_verdict(c)}",
             f"  over {reps}, {at}: {how['by']}",
             "  noise floor: " + (f"{a['again']} over {stock} {_pct(noise['value'])}{_interval(noise)}"
                                  if noise and noise["value"] is not None else

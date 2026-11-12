@@ -490,6 +490,44 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
     assert "tokens: not measured: no replay ran: none was asked for (--replay PASS names the pass of vLLM's client" in txt
 
 
+def sessions_arm(name: str, rates: list[float]) -> dict:
+    """An arm's metrics with the agentic load served by four users, a rep each rate in thousands of output tokens a
+    second, every request served and 94% of each rep's prompt tokens from the prefix cache."""
+    plan = {"requests": 96, "prompt_tokens": 8000000, "repeated_tokens": 7600000, "span_s": 0.0, "sha256": "a" * 64, "users": 4}
+    reps = [{"rep": i + 1, "rate": None, "concurrency": 4, "sent": 96, "ok": 96, "met": 96, "goodput_req_per_s": 0.5,
+             "req_per_s": 0.5, "output_tok_per_s": 1000 * r, "prompt_tok_per_s": 50000.0, "output_tokens": 60000,
+             "prompt_tokens": 8000000, "prompt_cached_share": 0.94, "total_tok_per_s": 52000.0, "tpot_p90_s": 0.025}
+            for i, r in enumerate(rates)]
+    return {"arm": name, "parent": S.ARMS[name].parent, "what": name, "run_id": "r-1", "commit": "c" * 40,
+            "vllm": "0.1+gd9105ea8", "model_id": "glm53", "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
+            "loads": {S.pass_name(S.AGENTIC, 4): reps}, "planned": {S.AGENTIC: plan}}
+
+
+def test_a_sessions_loads_cost_is_under_its_target_only_where_the_benchmark_says_the_arms_did_the_same_work(tmp_path: Path):
+    ours = [1.99, 1.988, 1.992, 1.99, 1.989, 1.991]
+    by = {"prod": sessions_arm("prod", [2.0] * 6), "prod-record": sessions_arm("prod-record", ours)}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    own = S.session_cost(list(by.values()), "prod-record", "prod")
+    assert c["measured"] and round(100 * c["value"], 2) == own["value"] == 0.5 and c["how"]["sessions"] and c["how"]["rung"] == 4
+    assert (c["same_work"], c["verdict"], P._verdict(c)) == (True, "under", "yes")
+    # one pass an arm has no interval, so nothing is shown
+    one = {n: sessions_arm(n, x) for n, x in (("prod", [2.0]), ("prod-record", ours[:1]))}
+    c = P.cost(tmp_path, one, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["measured"] and c["ci95"] is None and (c["same_work"], c["verdict"], P._verdict(c)) == (True, "not shown", "not shown")
+    # a rep whose prefix cache served another share of the prompts: the benchmark's own cost has no verdict, nor this
+    by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert own["verdict"] == "meets" and S.session_cost(list(by.values()), "prod-record", "prod")["verdict"] == "cannot tell"
+    assert c["measured"] and (c["same_work"], c["verdict"]) == (False, "not shown")
+    assert P._verdict(c) == "not shown, the arms did not do the same work (one left a request unserved, or their prefix " \
+                            "caches served different shares of the prompts in some rep)"
+    assert P._verdict(c | {"settings_differ": ["the context limit"]}) == "not shown, the arms are not at the same settings"
+    # arms the benchmark's own cost refuses are not measured, with its reason
+    by["prod-record"] = sessions_arm("prod-record", ours) | {"vllm": "0.2"}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert not c["measured"] and "refuses these arms: cost: the arms were served by different builds of vLLM" in c["why"]
+
+
 def test_a_pass_vllms_client_sent_is_replayed_where_ours_kept_its_ids(tmp_path: Path):
     out = tmp_path / "out"
     stock = [300.0, 301.0]

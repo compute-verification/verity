@@ -104,6 +104,7 @@ token that does and the first step.
   equal tokens, with its 95% interval and the reps it is over. Beside it, the same figure for stock served a second
   time, the noise floor. `under 1%: yes` is printed only where the interval's upper end, widened by the floor, is under
   the target; otherwise `not shown`, as for a cost of too few reps for an interval: the estimate alone shows nothing.
+  On a sessions load it is also `not shown` where the benchmark's own cost says the arms did not do the same work.
   By the corpus client the figure is
   `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up, the line is not
   measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where stock serves most (for
