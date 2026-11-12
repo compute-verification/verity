@@ -157,6 +157,11 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   planted bit in each output id; `length`, a response's last id event dropped to set its count's parity; `fail`, a
   response withheld; `extra`, bytes out of the id form after the trailer; `bucket`, a response held `--hold-ms`, a bit
   a connection over `--bucket-requests` connections. When honest is refused no other class is tried.
+- Two deviations are not tried, and no row says anything of either:
+  - a response with an id event more than the server's own. `length` only drops a response's last id event and never
+    adds one.
+  - a failure part-way through a response. `fail` withholds a response whole, so the relay fails its connection at
+    the first egress cell; no try has a server send some of a response's cells and withhold the rest.
 - A try is the deviating process, then `warden_serve.py rehearse --ids` through it: a key, the traffic, the relay,
   its client and its offline check, on the host's clock. The flags after `--` are the rehearsal's own, the schedule's
   among them; `--cell-bytes` is the relay's B, which fixes an id event's size. `--tail` covers a connection admitted
