@@ -39,6 +39,7 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
 from verity_vllm.records.schema_ids import CENSUS_RANK_SCHEMA, ENGINE_PROFILE_SCHEMA, LATE_READ_CHECK_SCHEMA
 
@@ -450,7 +451,10 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above, so structure would count fewer collectives per step than the Build's links and FAIL.  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import (
+            mid_module_site_census,
+            patch_targets,
+        )
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])
@@ -483,7 +487,7 @@ class TP2CaptureWorkerExtension:
             st["cur"] = st["cur_stack"].pop() if st["cur_stack"] else None
 
         cand = [(n, type(m).__name__, m) for n, m in model.named_modules()
-                if type(m).__name__ in ("RowParallelLinear", "VocabParallelEmbedding", "LogitsProcessor", "ParallelLMHead") + MOE_COLLECTIVE_CLASSES
+                if type(m).__name__ in (LC.ROW_LINEAR, LC.EMBEDDING, LC.LOGITS, LC.LM_HEAD) + MOE_COLLECTIVE_CLASSES
                 or getattr(m, "reduce_results", False) is True
                 or n in st["mid_sites"]]                                          # mid-module sites: hooked for the module name
         moe_paths = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES]

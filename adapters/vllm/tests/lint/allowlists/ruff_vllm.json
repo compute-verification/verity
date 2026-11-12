@@ -864,7 +864,6 @@
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "T201", "symbol": "_engine_main", "detail": "`print` found", "count": 4},
     {"file": "verity_vllm/pipeline/tp/phases.py", "kind": "T201", "symbol": "warmups", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "I001", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "I001", "symbol": "TP2CaptureWorkerExtension.tp2_commit_make", "detail": "Import block is un-sorted or un-formatted", "count": 3},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "I001", "symbol": "TP2CaptureWorkerExtension.tp2_commit_xrank_dump", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "T201", "symbol": "TP2CaptureWorkerExtension.tp2_close", "detail": "`print` found"},
