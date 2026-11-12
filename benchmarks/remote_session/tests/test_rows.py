@@ -65,3 +65,12 @@ def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
     assert kept["gpu_ms"] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
     assert kept["part_ms"] == [[0.5], [1.5], [2.5], [3.5], [4.5], [5.5], [6.5]]
     assert kept["part_ms"][3] == rows.slow(report)["each"][0]["part_ms"]
+    # the host's side of every pass rides with them: a launch's stamps from its own start, None where it has none
+    trace[2]["launch"] = None
+    host = rows.device.host_side(trace, [1_000_000 * x for x in observed])
+    assert host["launch_ms"] == [[0.0] * 4, [0.0] * 4, None, [0.0] * 4, [0.0] * 4, [0.0] * 4, [0.0] * 4]
+    assert host["launch_at_ms"][2] is None and host["launch_at_ms"][0] == 0.0
+    assert host["root_at_ms"] == [0.0, 10.0, 20.0, 35.0, 45.0, 55.0, 66.0]
+    kept = rows.every(report, {**parts, **host, "offload_ms": [0.25] * 7})
+    assert kept["launch_ms"] == host["launch_ms"] and kept["root_at_ms"][3] == 35.0 and kept["offload_ms"] == [0.25] * 7
+    assert set(rows.every(report, parts)) == {"interval_ms", "gpu_ms", "part_ms"}

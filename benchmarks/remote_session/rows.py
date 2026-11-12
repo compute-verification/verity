@@ -146,10 +146,13 @@ def slow(trace: dict) -> dict:
 def every(trace: dict, parts: dict) -> dict:
     """Every calibration pass, in order: its interval from the root before it (none for the first), its time by the
     device's events and each GPU's own part of it, in ms. A GPU's median over the run and the passes it was slow in
-    are read from these, where `slow` keeps only the passes the node was slow in."""
+    are read from these, where `slow` keeps only the passes the node was slow in. With them, where the device kept
+    it, the host's side of each pass (`device.host_side`) and the offloader's time on it: whether a pass waited on
+    the cards or on the host."""
     return {"interval_ms": [None] + [x / 1e6 for x in trace["intervals_ns"]],
             "gpu_ms": [round(x, 3) for x in parts["gpu_ms"]],
-            "part_ms": [[round(x, 3) for x in p] for p in parts["part_ms"]]}
+            "part_ms": [[round(x, 3) for x in p] for p in parts["part_ms"]],
+            **{k: parts[k] for k in ("launch_at_ms", "launch_ms", "root_at_ms", "offload_ms") if k in parts}}
 
 
 def set_arms(backend: device.GpuBackend, arms: tuple[str, ...]) -> dict:
@@ -215,7 +218,10 @@ def main() -> int:
                     raise RuntimeError(f"the store's openings are not the reference's: {row['openings']}")
                 row["calibration"] = backend.calibrate()
                 row["slow"] = slow(backend.calibration_trace)
-                row["every"] = every(backend.calibration_trace, backend.calibration_parts)
+                try:
+                    row["every"] = every(backend.calibration_trace, backend.calibration_parts)
+                except Exception as e:  # the record of every pass is beside the row's figures, never in their way
+                    row["every_failed"] = repr(e)
             except RuntimeError as e:
                 row["failed"], ok = str(e), False
             row["gates"] = dict(backend.gates)

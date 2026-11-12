@@ -207,6 +207,21 @@ def stall_report(observed: list, trace: list, history, clock0: tuple, stats: lis
             "intervals_ns": iv}
 
 
+def host_side(trace: list, observed: list) -> dict:
+    """Every traced pass's host side, in ms: when its launch began and when its root reached the host, both from the
+    first pass's launch (`launch_at_ms`, `root_at_ms`); and from its own launch's start, each GPU's two stamps in turn
+    (before its kernels are queued, after), the top's and the launch's end (`launch_ms`). None for a pass with no
+    launch trace."""
+    first = next((t["launch"][0] for t in trace if t["launch"]), None)
+    at, stamps = [], []
+    for t in trace:
+        la = t["launch"]
+        at.append(round((la[0] - first) / 1e6, 3) if la else None)
+        stamps.append([round((x - la[0]) / 1e6, 3) for x in la[6:len(la) - 5]] if la else None)
+    return {"launch_at_ms": at, "launch_ms": stamps,
+            "root_at_ms": [None if first is None else round((x - first) / 1e6, 3) for x in observed]}
+
+
 def _faults() -> tuple:
     """This thread's page faults and context switches so far: minor, major, voluntary, involuntary."""
     r = resource.getrusage(resource.RUSAGE_THREAD)
@@ -1327,6 +1342,7 @@ class GpuBackend:
         s.start_chain(challenge, prev)
         observed, gaps, kept, first = [], [], [], None
         g0 = len(s.pass_gpu_ms)
+        f0 = len(s.offload_ns)
         for i, root, handle, at in s.chain(self.calibration_passes):
             if first is None:
                 first = (rb.seed(challenge, 0, prev), root, handle)
@@ -1336,7 +1352,8 @@ class GpuBackend:
             gaps.append(time.perf_counter_ns() - at)
         trace, s.trace = s.trace, None
         # every pass's time by the device's events and each GPU's own part of it, in ms, in the passes' order
-        self.calibration_parts = {"gpu_ms": [t["gpu_ms"] for t in trace], "part_ms": [t["part_ms"] for t in trace]}
+        self.calibration_parts = {"gpu_ms": [t["gpu_ms"] for t in trace], "part_ms": [t["part_ms"] for t in trace],
+                                  **host_side(trace, observed)}
         gc.enable()
         gc.unfreeze()
         s.sync()
@@ -1366,6 +1383,8 @@ class GpuBackend:
         s.open_window([(kept[i], [p for k, p in draws if k == i]) for i in sorted({i for i, _ in draws})])
         open_ns = time.perf_counter_ns() - o0
         del kept
+        # the offloader's time on each of those passes, in their order: it takes them one at a time, as they are queued
+        self.calibration_parts["offload_ms"] = [round(x / 1e6, 3) for x in s.offload_ns[f0:f0 + len(trace)]]
         host_ms = sorted(s.pass_host_ms[1:])
         s.pass_gpu_ms.clear()
         s.pass_host_ms.clear()
