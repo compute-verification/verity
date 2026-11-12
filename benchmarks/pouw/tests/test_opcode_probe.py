@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity_machine_model import model
 
 POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
@@ -94,11 +95,6 @@ def test_schema_is_machine_models():
             r = csv.DictReader(f)
             assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
             lines += r
-    sys.path.insert(0, str(MACHINE_MODEL))
-    try:
-        from verity_machine_model import model
-    finally:
-        sys.path.remove(str(MACHINE_MODEL))
     for d in lines:
         assert rows.u_of(300.08, d["rate"], d["noise"], d["cycles"], d["u"]) == model.u_of(
             300.08, d["rate"], d["noise"], d["cycles"], d["u"])
