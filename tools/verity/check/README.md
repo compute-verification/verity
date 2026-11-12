@@ -39,7 +39,8 @@ the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK
 `where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
 repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. It also keeps
-the environment's values out of a failure's text, since a run's log is published: `os.environ` prints as its names. In a
+the environment's values out of a failure's text, since a run's log is published: `os.environ` prints as its names, and a
+failing comparison that holds the environment or a copy of it names the variables that differ and prints neither side. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
 
 A long suite runs in parts by test file: `suites.py SUITE --files K/M` (or `SUITE:K/M`, `SUITE:1,3/M`) runs part K of M,

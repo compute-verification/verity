@@ -505,14 +505,6 @@ def pytest_unconfigure(config):
 '''
 #: the tests of `FORMS` whose failure still prints a value, each with why the guard doesn't reach it
 STILL = {
-    "test_copy_to_copy": "pytest's explanation of a comparison prints its sides",
-    "test_list_of_copies": "pytest's explanation of a comparison prints its sides",
-    "test_copies_inside_recorded_calls": "pytest's explanation of a comparison prints its sides",
-    "test_comparison_and_another_clause": "pytest's explanation of a comparison prints its sides",
-    "test_copy_held_in_a_variable": "pytest's explanation of a comparison prints its sides",
-    "test_copy_to_the_environment": "pytest's explanation of a comparison prints its sides",
-    "test_copy_with_a_key_no_environment_takes": "pytest's explanation of a comparison prints its sides",
-    "test_name_in_a_copy": "pytest's explanation of a comparison prints its sides",
     "test_call_compared_with_a_number": "pytest prints a call's arguments where the comparison has no explanation of its own",
     "test_call_negated": "no comparison: pytest prints the call's arguments",
     "test_call_on_copies_held_in_variables": "pytest prints a call's arguments, whatever names hold them",
@@ -525,9 +517,17 @@ STILL = {
     "test_copy_in_an_exceptions_message": "an exception's message is its raiser's text",
     "test_python_the_test_starts": "a Python a test starts has Python's own repr, and what it writes is the test's to show",
 }
-#: what the text of the other failures holds: the environment's names-only repr, or the names a test took before its assert
+#: what the text of the other failures holds: the names that differ, the name asked for, or the environment's names-only repr
 NAMED = {
-    "test_name_in_the_environment": "'MISSING' in <os.environ: values withheld",
+    "test_copy_to_copy": "names that differ: ['DUMMY_CHANGED', 'X']",
+    "test_list_of_copies": "names that differ at [0]: ['DUMMY_CHANGED', 'X']",
+    "test_copies_inside_recorded_calls": "names that differ at ['calls'][0][1]: ['DUMMY_CHANGED', 'X']",
+    "test_comparison_and_another_clause": "names that differ: ['DUMMY_CHANGED', 'X']",
+    "test_copy_held_in_a_variable": "names that differ: ['DUMMY_CHANGED']",
+    "test_copy_to_the_environment": "names that differ: ['DUMMY_CHANGED']",
+    "test_copy_with_a_key_no_environment_takes": "the names that differ could not be listed (TypeError)",
+    "test_name_in_a_copy": "'MISSING' in <withheld>",
+    "test_name_in_the_environment": "'MISSING' in <withheld>",
     "test_get_by_name": "<os.environ: values withheld",
     "test_length_of_a_list_of_environments": "<os.environ: values withheld",
     "test_environment_in_the_message": "<os.environ: values withheld",
@@ -550,10 +550,10 @@ def _failures(log: str) -> dict[str, str]:
 def test_a_failure_names_the_environment_and_prints_no_value_of_it(tmp_path, monkeypatch, workers):
     """A suite runs in its caller's environment, credentials included, and a run's log is published. Each test of `FORMS` fails
     with the environment or a copy of it in reach, in a suite `run` starts in an environment of dummy values, in one process
-    and on xdist workers: where the environment itself would print, its text names the variables, says how to see the values
-    and holds none. The forms that still print one are `STILL`, each with why; one that stops printing fails here until it
-    leaves the list. The environment's repr holds no value from before the suite's conftest loads, and is Python's own again once the
-    session is over."""
+    and on xdist workers: its text names the variables that differ, or the one asked for, says how to see the values, and holds
+    no value. The forms that still print one are `STILL`, each with why; one that stops printing fails here until it leaves
+    the list. The environment's repr holds no value from before the suite's conftest loads, and is Python's own again once
+    the session is over."""
     if workers > 1:
         pytest.importorskip("xdist")
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
@@ -573,7 +573,8 @@ def test_a_failure_names_the_environment_and_prints_no_value_of_it(tmp_path, mon
     assert log.count(MARK) == sum(text.count(MARK) for text in texts.values()), log
     for test, named in NAMED.items():
         assert named in texts[test], texts[test]
-        assert G.SEE_VALUES in texts[test] or "<os.environ" not in texts[test], texts[test]
+        withheld = "<withheld>" in texts[test] or "<os.environ" in texts[test]
+        assert G.SEE_VALUES in texts[test] or not withheld, texts[test]
     assert (tmp_path / "pkg" / "tests" / "reprs.txt").read_text() == "<os.environ: environ("
 
 

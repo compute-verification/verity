@@ -38,9 +38,11 @@ Two kinds of skip fail instead: one for an unreachable evidence store under a re
 
 It keeps the environment's values out of a failure's text: a suite runs in its caller's environment, credentials included,
 and a run's log is published. While a suite runs, `os.environ`'s repr names its variables and holds no value
-(`_environ_names`, from this module's load until the session ends). A copy of the environment (`dict(os.environ)`) still
-prints as a dict does, and so does the environment of a Python a test starts (the forms: `STILL` in `tests/test_guard.py`).
-To see a value, run the test alone in an emptied environment.
+(`_environ_names`, from this module's load until the session ends), and a failing comparison that holds the environment, or
+a copy holding most of what the process started with, is explained by the names that differ and prints neither side
+(`pytest_assertrepr_compare`). A copy still prints where no comparison holds it, as a call's argument, a test's own argument
+or in a message, and so does the environment of a Python a test starts (the forms: `STILL` in `tests/test_guard.py`). To see
+a value, run the test alone in an emptied environment.
 """
 from __future__ import annotations
 
@@ -50,6 +52,7 @@ import importlib.metadata
 import importlib.util
 import json
 import os
+import reprlib
 import shutil
 import sys
 import sysconfig
@@ -92,6 +95,7 @@ _traced: set[str] = set()                                        # "F<tab>file" 
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
 _workers_untraced: dict[str, set[str]] | None = None             # in an xdist controller: its workers', which start its tests' programs
 _pid = os.getpid()
+_started = dict(os.environ)                                      # the caller's environment, as this process started with it
 
 
 def _child_reads():
@@ -407,6 +411,8 @@ if _ACTIVE:
 
 #: how to read a value the guard withholds from a failure's text
 SEE_VALUES = "to see them, run the test alone in an emptied environment"
+#: how far into a compared value's lists, tuples and mappings an environment is looked for
+ENVIRON_DEPTH = 3
 _Environ = type(os.environ)
 _environ_repr = _Environ.__repr__
 
@@ -427,6 +433,50 @@ def pytest_unconfigure(config) -> None:
     `pytest.main` returns. A fork the tests made keeps the names-only one for as long as it lives."""
     if _Environ.__repr__ is _environ_names:
         _Environ.__repr__ = _environ_repr
+
+
+def _environment(x) -> bool:
+    """Whether ``x`` is the environment, or a copy of it: a dict holding most of what this process started with (`_started`),
+    whatever a test set or dropped since."""
+    held = sum(1 for k, v in _started.items() if isinstance(w := x.get(k), str) and w == v) if isinstance(x, dict) else 0
+    return isinstance(x, _Environ) or 2 * held > len(_started)
+
+
+def _holds_environment(x, depth: int = ENVIRON_DEPTH) -> bool:
+    """Whether ``x`` is an environment (`_environment`) or holds one among its items or its mapping's values, ``depth`` deep."""
+    inside = x.values() if isinstance(x, dict) else x if isinstance(x, (list, tuple)) else ()
+    return _environment(x) or (depth > 0 and any(_holds_environment(e, depth - 1) for e in inside))
+
+
+def _names_that_differ(left, right, depth: int = ENVIRON_DEPTH, at: str = "") -> list[str]:
+    """A line for each place ``left`` and ``right`` hold a mapping each, one of them an environment: the names that one side
+    lacks or that the two give different values."""
+    if isinstance(left, (dict, _Environ)) and isinstance(right, (dict, _Environ)):
+        if _environment(left) or _environment(right):
+            differ = (k for k in left.keys() | right.keys() if k not in left or k not in right or left[k] != right[k])
+            return [f"names that differ{at and ' at ' + at}: {sorted(differ, key=str)}"]
+        pairs = [(f"[{k!r}]", left[k], right[k]) for k in sorted(left.keys() & right.keys(), key=str)]
+    elif isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)) and len(left) == len(right):
+        pairs = [(f"[{i}]", a, b) for i, (a, b) in enumerate(zip(left, right))]
+    else:
+        pairs = []
+    return [line for where, a, b in pairs if depth > 0 for line in _names_that_differ(a, b, depth - 1, at + where)]
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_assertrepr_compare(config, op, left, right):
+    """A failing comparison that holds an environment on either side (`_holds_environment`) prints neither side, which
+    pytest's own explanation would: it says so, how to see the values, and the names that differ wherever both sides hold a
+    mapping at the same place (`_names_that_differ`). The name `in` asks an environment for is given."""
+    if not (_holds_environment(left) or _holds_environment(right)):
+        return None
+    name = op in ("in", "not in") and isinstance(left, str) and _environment(right)
+    try:
+        names = _names_that_differ(left, right)
+    except Exception as e:  # noqa: BLE001  (a key or a value the two sides can't compare: the failure stays the test's own)
+        names = [f"the names that differ could not be listed ({type(e).__name__})"]
+    return [f"{reprlib.repr(left) if name else '<withheld>'} {op} <withheld>",
+            f"neither side is printed: one holds the environment, whose values a run's log must not hold; {SEE_VALUES}", *names]
 
 
 @pytest.hookimpl(hookwrapper=True)
