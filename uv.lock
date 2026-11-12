@@ -2595,7 +2595,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-machine-model"
 version = "0.0.0"
-source = { editable = "benchmarks/pouw/machine_model" }
+source = { editable = "benchmarks/machine_model" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },

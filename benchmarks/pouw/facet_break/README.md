@@ -1,6 +1,6 @@
 # facet_break: try to beat every facet of the ACCEL model
 
-The ACCEL model (`../machine_model/`) bounds what a program can issue on sm_120 by a polytope of facets: row r says
+The ACCEL model (`../../machine_model/`) bounds what a program can issue on sm_120 by a polytope of facets: row r says
 Σ_k c_kr·x_k ≤ 1 for the program's warp instructions x_k of census class k a SMSP-cycle. ε is proved conditional on every
 facet being a true ceiling. This directory is the standing search for programs that beat one: it generates MMA + lane
 programs around each facet's vertices, times them with opcode_probe's gates, and loads every measured program (its own and
@@ -48,6 +48,6 @@ as unpriced. A violation goes in the lane's note with its row, load,
 program, run id and SASS, and its refit line. `refit --form F` puts form F on the tensor axis of a row over several
 vector classes (JI3n), the vector axis each class at its coefficient over the row's commonest one.
 
-The table route's L2 facet (`../machine_model/data/table.toml`'s `l2`, read bytes a second, what ε's `--lookups` prices a
+The table route's L2 facet (`../../machine_model/data/table.toml`'s `l2`, read bytes a second, what ε's `--lookups` prices a
 lookup against) is the row `L2tbl`: a program's L2 bytes a second (each load that skips L1, `.NA` or `.STRONG.GPU`, at its
 own width, x 32 lanes x the SMs timed x the measured clock) over `l2`. `--l2 B` sets it where `table.toml` is absent.
