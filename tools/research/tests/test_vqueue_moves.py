@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import research.queue as Q
 from research.queue import path_rows
-from research.vqueue import PASS, Advance, Build, Drop, Ready, RecordsRun, Snapshot, _moves_last, decide
+from research.vqueue import PASS, Advance, Build, Commit, Drop, Ready, RecordsRun, Snapshot, _moves_last, decide
 from test_vqueue import MAIN, SEEDS, World, cand, lean, pr, snap, ticks, waiting
 from research.executor import Executor
 from test_vqueue_loop import Env, Fake, _acts, _git, _main_to, _move, env, policy  # noqa: F401 -- env is a fixture
@@ -84,7 +84,7 @@ def test_a_staged_batch_rebuilt_on_the_chain_holding_a_move_has_nothing_built_on
     """A passed staged batch whose Lean member isn't marked at the head it was staged at is built again without it on the
     chain's top; holding a move, nothing is built on that rebuild, as on any candidate holding one."""
     passed = waiting("s1", MAIN, 1, 2, records=RecordsRun(PASS))
-    for two, above in ((mv(2), []), (pr(2), [Build((4,), "s1", 1)])):
+    for two, above in ((mv(2), []), (pr(2), [Build((1,), "s1", 1, records=True), Build((4,), "s1", 1)])):
         s = snap(passed, cand("c2", MAIN, 3), ready=[pr(1, "h1b", lean=True), two, pr(3), pr(4)], records=True, depth=3)
         assert [a for a in decide(s) if isinstance(a, Build)] == [Build((2,), "c2", 2, replaces="s1"), *above]
 
@@ -127,11 +127,25 @@ class Moves(World):
     def ready(self) -> tuple[Ready, ...]:
         return tuple(r for r in super().ready() if r.number not in self.left_out)
 
-    def pool(self, s: Snapshot, acts: list) -> list[Ready]:
+    def pool(self, s: Snapshot, acts: list, aside: bool = False) -> list[Ready]:
         """`World.pool` without the moves while a PR in flight below a build changes the move scripts."""
         built = {r.number: r for r in (*s.ready, *s.flying)}
-        scripts = [m for m in self.below(s, acts, self.chain_top(s, acts)) if built[m].scripts]
-        return [r for r in super().pool(s, acts) if not (r.move and scripts)]
+        scripts = [m for c in self.chain(s, acts) for m in c.members if built[m].scripts]
+        return [r for r in super().pool(s, acts, aside) if not (r.move and scripts)]
+
+    def admits(self, s: Snapshot, acts: list, where: str) -> None:
+        """`World.admits`, but a tick that advances to a candidate holding a move builds and commits nothing, and one whose
+        chain holds a move in flight, the batch its `Commit` puts there among it, builds nothing."""
+        built = {r.number: r for r in (*s.ready, *s.flying)}
+        advancing = [m for c in s.candidates if Advance(c.sha) in acts for m in c.members]
+        flying = [m for c in self.chain(s, acts) for m in c.members]
+        if any(built[m].move for m in (*advancing, *flying)):
+            assert not [a for a in acts if isinstance(a, Build) and a.replaces is None] and not (
+                [m for m in advancing if built[m].move] and any(isinstance(a, Commit) for a in acts)), (
+                f"{where}: built or committed while a move holds the builds")
+            self.seen["a tick's builds held for a move"] += 1
+            return
+        super().admits(s, acts, where)
 
     def check(self, s: Snapshot, acts: list, moved: str | None) -> None:
         super().check(s, acts, moved)
@@ -142,7 +156,8 @@ class Moves(World):
         for a in acts:
             if not isinstance(a, Build):
                 continue
-            moves, below = [m for m in a.members if ready[m].move], self.below(s, acts, a.base)
+            moves, below = [m for m in a.members if ready[m].move], self.below(s, acts, a.base) | set(
+                next((c.members for c in s.candidates if c.sha == a.after), ()))
             assert not set(a.members) & self.left_out, f"{where}: a move with no land verdict whose map isn't on main built"
             assert len(moves) <= 1 and (not moves or a.members[-1] == moves[0]), f"{where}: a move not last and alone"
             assert not [m for m in below if built[m].move], f"{where}: built above a move in flight"

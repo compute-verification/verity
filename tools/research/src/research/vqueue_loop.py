@@ -34,8 +34,8 @@ flight; and `flying` each member of the chain not ready at its head as built, wi
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
 the command's (`--lean`, `--pending-hours`), and `wide` and `pinned` the PRs `--wide-file` and `--pins-file` name, read each
-tick as the priority file is (`World.wide`, `World.pinned`); a tick that builds nothing while a pinned Lean PR waits logs
-why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+tick as the priority file is (`World.wide`, `World.pinned`); a tick that builds nothing while a Lean PR waits for a chain
+it may go on logs why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
@@ -121,8 +121,11 @@ nobody is told of a head what it merges onto holds, `held`, or `main` fetched ag
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
-machines, on its tree), logged (`regenerate`), and the candidate is staged, its check waiting.  Every check starts at one
-seam (`Loop._enqueue`: the enqueue, its line and the run beside it).
+machines, on its tree), logged (`regenerate`), and the candidate is staged, its check waiting; a tick that stages one builds
+its batch of PRs with no Lean change too, on the same base.  One after a Commit of its tick (`vqueue.Build.after`) is built
+on the candidate that Commit put on main's chain, whose check's record, as started, it reads as its base's; it is built
+nowhere, and nothing is logged, when the Commit put none there.  Every check starts at one seam (`Loop._enqueue`: the
+enqueue, its line and the run beside it).
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
 (`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
 Regenerate starts the candidate's records run again and logs it.  Commit puts a staged batch whose records run passed onto
@@ -222,8 +225,9 @@ KEEP_RUNS = Path("/data/vqueue/live/keep-runs")
 #: the PRs whose Lean change is wide, its build expensive, one number a line as the priority file holds them: a candidate
 #: taking one takes no other Lean member, and one on a candidate holding one takes none until it is on `main` (`vqueue._wide`)
 WIDE = Path("/data/vqueue/live/wide")
-#: the pinned PRs, one number a line (`#` comments and blank lines allowed): a pinned Lean PR opens a batch of pinned Lean PRs
-#: only, on `main` or on a top candidate holding no Lean change; no other Lean PR goes ahead of a PR with none (`vqueue._next`)
+#: the pinned PRs, one number a line (`#` comments and blank lines allowed): while a pinned Lean PR waits, a Lean batch holds
+#: pinned Lean PRs only, under no `LEAN` cap: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
+#: opens one; it puts no batch ahead of a PR changing a Lean input, which goes first (`vqueue._next`)
 PINS = Path("/data/drive/pins")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
@@ -238,8 +242,8 @@ FOLLOW_S, UNFINISHED = 24 * 3600, "unfinished"
 #: live candidates', so past them the oldest is given up as at `FOLLOW_S`
 KEPT_MAX = 2
 INTERVAL_S = 60
-#: the most members a candidate holds, candidates stacked at once and members of a candidate whose Lean change compiles (a
-#: spec's or Lean source's, not a lock's alone: `World._judge`)
+#: the most members a candidate holds, candidates stacked at once and members of a Lean batch, each with a Lean change that
+#: compiles (a spec's or Lean source's, not a lock's alone: `World._judge`), unless pinned (`PINS`)
 BATCH, DEPTH, LEAN = 16, 3, 3
 #: the clone's refs the loop fetches into, none of drive's
 NS = "refs/vqueue"
@@ -2064,6 +2068,9 @@ class Tick:
     riding: dict[int, tuple[str, str]] = field(default_factory=dict)
     #: the candidate this tick advanced `main` to, what its build reads as `main`
     advanced: str | None = None
+    #: what each `Commit` of this tick put on main's chain, by the staged batch it committed: the candidate, and the record of
+    #: the run beside its check as started, which a build after it is built on and reads as its base's (`vqueue.Build.after`)
+    committed: dict[str, tuple[str, dict | None]] = field(default_factory=dict)
     #: each candidate a build this tick rebuilt (`vqueue.Build.replaces`): what that build pushed, or what it went on when
     #: no member merged, which a later build naming the candidate as its base goes on
     rebuilds: dict[str, str] = field(default_factory=dict)
@@ -2467,10 +2474,13 @@ class Loop:
         raise QueueError(f"{a}: no such action")
 
     def _build(self, a: Build, t: Tick) -> list[dict]:
-        w = self.world
+        w, base = self.world, t.rebuilds.get(a.base, a.base)
+        if a.after is not None:
+            if a.after not in t.committed:                  # its Commit put nothing on the chain: the next tick decides
+                return []
+            base = t.committed[a.after][0]
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
-        base = t.rebuilds.get(a.base, a.base)
         again = {"replaces": a.replaces} if a.replaces is not None else {}
         tip, merged, recs = self._merged(t, a.members, base)
         if not merged:
@@ -2553,6 +2563,13 @@ class Loop:
         return [*recs, self.record(t, "build", **line, enqueued=True, done=True),
                 *self._start(t, line["sha"], line["base"], {"members": line["members"], "heads": line["heads"]})]
 
+    def _onto(self, t: Tick, c: Candidate, recs: list[dict], line: dict) -> list[dict]:
+        """`_enqueue` of ``line``, the candidate `Commit` puts on main's chain for staged batch ``c``, kept with the record of
+        the run beside its check as started for the builds of this tick that go on it (`Tick.committed`)."""
+        out = self._enqueue(t, recs, line)
+        t.committed[c.sha] = (line["sha"], next((r.get("record") for r in out if r["action"] == "slim"), None))
+        return out
+
     def _regenerate(self, t: Tick, line: dict, why: str = "started") -> list[dict]:
         """Start the records run of candidate ``line["sha"]`` (`vqueue_records.start`), logged with its record; one that fails
         to start is logged with no record, which `vqueue_records.judge` reads as infra."""
@@ -2579,7 +2596,8 @@ class Loop:
         in ``c``'s place, its records run first; and when no member merges, ``c`` is dropped and its members built again.
         The bookkeeping its records run repaired is told to `lean` and each owner a warning names (`_bookkeeping`).  A
         records commit that can't be made, or that the merge gate won't vouch for, is held: logged, and rung to `CI` once,
-        and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`)."""
+        and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`).  The candidate whose check it starts is kept
+        for the builds the tick makes on it (`_onto`)."""
         w = self.world
         rid = ((t.records.get(c.sha) or {}).get("verdict") or {}).get("run")
         line = {"sha": c.sha, "base": c.base, "members": list(c.members), "heads": list(c.heads), "priority": a.priority,
@@ -2603,10 +2621,10 @@ class Loop:
         got = self.records.commit(w.slim_driver(), c.sha, rid, c.members, **({"onto": onto} if onto else {})) \
             if self.records is not None and rid else "its records run passed, but its record names no run"
         if got is None and onto is None:
-            return self._enqueue(t, [], {**line, "why": f"its records run {rid} regenerated nothing: checked as built"})
+            return self._onto(t, c, [], {**line, "why": f"its records run {rid} regenerated nothing: checked as built"})
         if got is None:
             tip, adopted = self._pushed(t, onto, a.base, merged)
-            return self._enqueue(t, recs, {**line, "sha": tip, **({"adopted": True} if adopted else {}),
+            return self._onto(t, c, recs, {**line, "sha": tip, **({"adopted": True} if adopted else {}),
                                            "why": f"its records run {rid} regenerated nothing, and {c.sha[:12]}'s Lean inputs "
                                                   "are its: checked as built"})
         if isinstance(got, str):
@@ -2622,9 +2640,9 @@ class Loop:
             w.push(tip, branch(tip))
         why = f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it" if onto is None else \
             f"{c.sha[:12]}'s records, which {rid} regenerated, carried onto its members merged again onto {a.base[:12]}"
-        return self._enqueue(t, [*recs, *self._bookkeeping(t, c, tip, told)],
-                             {**line, "sha": tip, "why": why, "repairs": c.sha, "files": files,
-                              **({"adopted": True} if adopted else {})})
+        return self._onto(t, c, [*recs, *self._bookkeeping(t, c, tip, told)],
+                          {**line, "sha": tip, "why": why, "repairs": c.sha, "files": files,
+                           **({"adopted": True} if adopted else {})})
 
     def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
         """Tell the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
@@ -2641,10 +2659,13 @@ class Loop:
     def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
         """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is
         logged with no record, which `vqueue_slim.judge` reads as infra.  A base still in flight lends the record of its
-        check, as judged this tick, and the candidates below it theirs, or, landed, the run beside `main` (`_audit_from`)."""
+        check, as judged this tick or, put on the chain by a `Commit` of this tick, as started (`Tick.committed`), and the
+        candidates below it theirs, or, landed, the run beside `main` (`_audit_from`)."""
         if self.slim is None:
             return []
-        below = t.judged[base].record if base not in (t.main, t.advanced) and base in t.judged else None
+        began = dict(t.committed.values())
+        below = began[base] if base in began else \
+            t.judged[base].record if base not in (t.main, t.advanced) and base in t.judged else None
         return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why, below,
                               _lent(t.judged, t.below, t.main, t.advanced))]
 
@@ -3314,20 +3335,22 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
-    ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
-                                                           f"spec's or a Lean source's, not a lock's alone; none while a PR "
-                                                           f"with no Lean change or a pinned one waits, and pinned ones take "
-                                                           f"no cap (--pins-file) (default {LEAN})")
+    ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a Lean candidate, each with a Lean change "
+                                                           f"that compiles (a spec's or a Lean source's, not a lock's "
+                                                           f"alone): one opens whenever none is staged and no PR "
+                                                           f"changing a Lean input with no Lean change waits, of the first "
+                                                           f"in rank, whether or not another PR waits; 0: only pinned ones "
+                                                           f"open one, which take no cap (--pins-file) (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
                          f"one takes none until it is on `main`; none while the file is missing or empty (default {WIDE})")
     ap.add_argument("--pins-file", type=Path, default=PINS,
                     help=f"the pinned PRs, one number a line, `#` comments and blank lines allowed, read each tick as "
-                         f"--priority-file is: a pinned Lean change opens a candidate of pinned Lean changes only, under no "
-                         f"--lean cap, on `main` or on a candidate holding no Lean change; no other Lean change goes ahead of "
-                         f"a PR with none, whatever --priority-file says; none while the file is missing or empty (default "
-                         f"{PINS})")
+                         f"--priority-file is: while a pinned Lean change waits, a Lean candidate holds pinned Lean changes "
+                         f"only, under no --lean cap, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
+                         f"only way into one; it puts none ahead of a PR changing a Lean input, which goes first; none while "
+                         f"the file is missing or empty (default {PINS})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
