@@ -2085,6 +2085,7 @@ class FakeNotion:
 
     def __init__(self):
         self.requests, self.results, self.comments, self.answer, self.pages = [], [], {}, None, {}
+        self.comments_refused = False
 
     def handle(self, method: str, path: str, body: dict | None, headers) -> tuple[int, dict]:
         self.requests.append((method, path, body, headers.get("Authorization"), headers.get("Notion-Version")))
@@ -2096,6 +2097,8 @@ class FakeNotion:
             return 200, {"object": "page", "id": "p-1"}
         if method == "POST" and path.endswith("/query"):
             return 200, {"results": self.results}
+        if method == "GET" and path.startswith("/v1/comments?block_id=") and self.comments_refused:
+            return 403, {"object": "error", "code": "restricted_resource", "message": "Insufficient permissions for this endpoint."}
         if method == "GET" and path.startswith("/v1/comments?block_id="):
             return 200, {"results": self.comments.get(path.split("=")[1].split("&")[0], [])}
         if method == "GET" and path.startswith("/v1/pages/") and path[len("/v1/pages/"):] in self.pages:
@@ -2248,6 +2251,25 @@ def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comme
                                       {"property": "Lane", "select": {"equals": "infra"}}]
     rc, out, _ = run(capsys, "ask-daniel", "pages", "--json")
     assert rc == 0 and json.loads(out)[0]["decision"] == "Option B, and restate gamma"
+
+
+def test_pages_still_lists_the_pages_when_the_connection_cannot_read_comments(notion, registry, capsys, monkeypatch):
+    """A connection without Notion's Read comments capability answers 403 on /comments, which failed the whole command:
+    the pages list with their status and decision, and one line says what to turn on."""
+    monkeypatch.setattr(slack, "_now", lambda: NOW)
+
+    def page(i: int) -> dict:
+        return {"id": f"p-{i}", "url": f"https://pages.example.invalid/p{i}", "last_edited_time": "2026-09-30T20:00:00Z",
+                "properties": {"Ask": {"type": "title", "title": [{"plain_text": f"Ask {i}?"}]},
+                               "Status": {"type": "status", "status": {"name": "Waiting on Daniel"}}}}
+
+    notion.results, notion.comments_refused = [page(1), page(2)], True
+    rc, out, err = run(capsys, "ask-daniel", "pages")
+    assert rc == 0 and "Ask 1?" in out and "Ask 2?" in out and "comment(s)" not in out
+    assert err.count("Read comments capability") == 1 and "HTTP 403" in err
+    assert sum(path.startswith("/v1/comments") for _, path, *_ in notion.requests) == 1
+    rc, out, _ = run(capsys, "ask-daniel", "pages", "--json")
+    assert rc == 0 and [r["comments"] for r in json.loads(out)] == [None, None]
 
 
 PAGE_ID = PAGE_URL.rsplit("/", 1)[1]
