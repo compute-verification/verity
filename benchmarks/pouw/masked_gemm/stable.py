@@ -22,10 +22,11 @@ GROUPS = {"Llama linears": ["qkv", "o", "gate_up", "down"], "4096^3": ["sq4096"]
 def gate_verdicts(path: str) -> dict[str, list[bool]]:
     """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        for key, v in json.loads(line).items():
-            if isinstance(v, bool) and key not in ("ok", "receipts"):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            for key, v in json.loads(line).items():
+                if isinstance(v, bool) and key not in ("ok", "receipts"):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
@@ -64,7 +65,8 @@ def geo(xs: list[float]) -> float:
 
 def main(bench: str, gate: str) -> None:
     """Print the table of one bench file and one gate file."""
-    rows = [json.loads(line) for line in open(bench) if line.strip()]
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f if line.strip()]
     checks = gate_verdicts(gate)
     names = sorted({a for j in rows for a in j["arms"]})
     verdict = {a: arm_gate(a, checks) for a in names}

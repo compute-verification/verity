@@ -33,10 +33,11 @@ DUO = ["sepSd", "fusSd", "prodSd", "prodUd"]
 def gate_verdicts(path: str) -> dict[str, list[bool]]:
     """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        for key, v in json.loads(line).items():
-            if isinstance(v, bool) and key not in ("ok",):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            for key, v in json.loads(line).items():
+                if isinstance(v, bool) and key not in ("ok",):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
@@ -72,7 +73,8 @@ def value(arms: dict[str, dict], parts: list[tuple[str, int]], al: str) -> float
 
 def main(bench: str, gate: str) -> None:
     """Print the table of one bench file and one gate file."""
-    rows = [json.loads(line) for line in open(bench) if line.strip()]
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f if line.strip()]
     checks = gate_verdicts(gate)
     names = sorted({a for j in rows for a in j["arms"]})
     verdict = {a: arm_gate(a, checks) for a in names}
@@ -85,9 +87,10 @@ def main(bench: str, gate: str) -> None:
                   else ", ".join(f"{a} {v}" for a, v in verdict.items() if v != "pass")) + ".")
     for j in rows:
         arms = j["arms"]
-        out += ["", f"## s = {j['s']} (plain P V {arms['plain']['ms']:.4f} ms; noise-free producer prodN {arms['prodN']['ms']:.4f} ms "
-                f"= {arms['prodN']['ms'] / arms['plain']['ms']:.2f}, its row-max pass {arms['prodmax']['ms'] / arms['plain']['ms']:.2f}; "
-                f"duo 32 alone {arms['cduo']['ms'] / arms['plain']['ms']:.2f})", "",
+        out += ["", (f"## s = {j['s']} (plain P V {arms['plain']['ms']:.4f} ms; "
+                     f"noise-free producer prodN {arms['prodN']['ms']:.4f} ms = {arms['prodN']['ms'] / arms['plain']['ms']:.2f}, "
+                     f"its row-max pass {arms['prodmax']['ms'] / arms['plain']['ms']:.2f}; "
+                     f"duo 32 alone {arms['cduo']['ms'] / arms['plain']['ms']:.2f})"), "",
                 "| method | " + " | ".join(ALS) + " |", "|---|" + "---|" * len(ALS)]
         for label, parts in ROWS:
             cells = []

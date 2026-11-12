@@ -35,11 +35,12 @@ def describe(name: str) -> tuple[str, str, str, str, str, str]:
 def gate_verdicts(path: str) -> dict[str, list[bool]]:
     """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        j = json.loads(line)
-        for key, v in j.items():
-            if isinstance(v, bool) and key not in ("ok", "receipts"):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            j = json.loads(line)
+            for key, v in j.items():
+                if isinstance(v, bool) and key not in ("ok", "receipts"):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
@@ -88,7 +89,8 @@ def compact(by: dict[str, dict], shapes: list[str], checks: dict[str, list[bool]
 
 def main(bench: str, gate: str) -> int:
     """Print the table of one bench file and one gate file."""
-    rows = [json.loads(line) for line in open(bench)]
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f]
     checks = gate_verdicts(gate)
     shapes = [r["shape"] for r in rows]
     by = {r["shape"]: r for r in rows}

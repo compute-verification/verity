@@ -66,8 +66,8 @@ def digits(fmt: str, y: np.ndarray, L: int) -> tuple[list[np.ndarray], list[int]
         d = y - 16 * fdiv(y + 8, 16)
         q = (y - d) // 16
         ds.append(d), ws.append(1)
-        for l in range(1, L):
-            if l == 1:
+        for limb in range(1, L):
+            if limb == 1:
                 d = q - 16 * fdiv(q + 8, 16)
                 q = (q - d) // 16
                 ws.append(16)
@@ -220,11 +220,11 @@ def main(d: Path, receipts: bool) -> int:
             XA = np.zeros((m, Kc), dtype=np.int64)
             XB = np.zeros((n, Kc), dtype=np.int64)
             XA[:, :k], XB[:, :k] = At, Bt
-            for l in range(L):
-                XA[:, k + l * r : k + (l + 1) * r] = -wts[l] * U
-                XA[:, k + (L + l) * r : k + (L + l + 1) * r] = -dQ[l]
-                XB[:, k + l * r : k + (l + 1) * r] = dP[l]
-                XB[:, k + (L + l) * r : k + (L + l + 1) * r] = wts[l] * W
+            for i in range(L):
+                XA[:, k + i * r : k + (i + 1) * r] = -wts[i] * U
+                XA[:, k + (L + i) * r : k + (L + i + 1) * r] = -dQ[i]
+                XB[:, k + i * r : k + (i + 1) * r] = dP[i]
+                XB[:, k + (L + i) * r : k + (L + i + 1) * r] = wts[i] * W
             # the masked operands within the grid's bound; the tail's digits within it too, its weights exact in the format
             tail = np.concatenate([XA[:, k:], XB[:, k:]], axis=0)
             exact = np.abs(tail) <= lim
