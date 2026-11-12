@@ -30,6 +30,8 @@ LAKE = shutil.which("lake") or (str(Path.home() / ".elan/bin/lake") if (Path.hom
 #: `fast` replaces `subprocess.run` with a stand-in check.py; a test whose stand-in builds with Lake runs it through this
 RUN = subprocess.run
 BUILD = LC.build
+#: `trying` replaces `link` with one that takes nothing; a test of what a tree's dependencies hold takes them through this
+LINK = LC.link
 
 
 @pytest.fixture(autouse=True)
@@ -962,6 +964,108 @@ def test_after_a_run_left_mid_way_dependencies_off_their_pinned_checkout_are_tak
     LC.repair(tree, ["pkg"], links, {"run": "r-old", "package": "other", "phase": "check"}, said.append)
     assert links == {} and not (tree / "pkg" / ".lake" / "packages").exists()
     assert any("dep is not the checkout its manifest pins (abc)" in s for s in said)
+
+
+#: a manifest naming two fetched dependencies, one by a name Lean escapes, and a package required by path
+FETCHES = json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"},
+                                   {"type": "git", "name": "«doc-gen4»", "rev": "def"},
+                                   {"type": "path", "name": "Sec", "dir": ".."}]})
+#: the mark of a records run killed in its check.py, which is where Lake clones a package's dependencies
+KILLED = {"run": "r-killed", "pid": 7, "package": "Sec/Proofs", "phase": "check", "at": "T", "killed": -15}
+
+
+def fetching(tree: Path, deps: Path, monkeypatch, kept: tuple[str, ...] = ("mathlib", "doc-gen4")) -> Path:
+    """`trying`'s `Sec/Proofs` on a node with a `build` slot and a sandbox, its manifest `FETCHES`, taking its dependencies
+    through the real `link` from the ones this node keeps for it, ``kept``; what a build compiles there is not stored.
+    The package's directory in the tree."""
+    pkg = tree / "Sec" / "Proofs"
+    pkg.mkdir(parents=True, exist_ok=True)
+    (pkg / "lake-manifest.json").write_text(FETCHES)
+    for name in kept:
+        (deps / "k" / name).mkdir(parents=True)
+    (slots := deps.parent / "lean-slots").write_text("build 1\n")
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", slots)
+    monkeypatch.setattr(LC, "link", LINK)
+    monkeypatch.setattr(LC, "sandboxed", lambda: True)
+    monkeypatch.setattr(LC.AUDIT, "sandboxed", lambda: False)
+    return pkg
+
+
+@pytest.mark.parametrize("left", [None, KILLED], ids=["no mark", "left mid-way"])
+def test_try_and_build_take_whole_the_dependencies_a_tree_holds_only_some_of(trying, tmp_path, monkeypatch, capsys, left):
+    """A records run killed while Lake cloned a package's dependencies leaves `.lake/packages` with the ones cloned by
+    then, in no `links.json`. A try kept that directory, as it keeps dependencies no records run took, and Lake in the
+    sandbox, which clones nothing, failed on the first one missing: exit 1, as if FILE had failed. `repair` does not see
+    it, with the killed run's mark or without (a run since clears the mark and keeps the directory). The try and
+    `--build` take such a directory as they take none: they say what it lacks and take the node's, whole, whether
+    `links.json` lists the package or not."""
+    tree, calls = trying
+    deps = tmp_path / "deps"
+    packages = fetching(tree, deps, monkeypatch) / ".lake" / "packages"
+    (packages / "mathlib" / "cloned-here").mkdir(parents=True)
+    (tree / LC.LINKS).write_text(json.dumps({"Sec": "k"}))
+    if left:
+        (tree / LC.DIRTY).write_text(json.dumps(left))
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", deps, log=said.append) == 0, said
+    assert sorted(p.name for p in packages.iterdir()) == ["doc-gen4", "mathlib"], "the ones this node keeps, whole"
+    assert not (packages / "mathlib" / "cloned-here").exists(), "nothing stays of the directory that lacked one"
+    assert LC.read_links(tree) == {"Sec": "k", "Sec/Proofs": "k"} and len(calls["build"]) == 2
+    [line] = [s for s in said if "lacked" in s]
+    assert "Sec/Proofs: its fetched dependencies lacked 1 of the packages its manifest names (doc-gen4)" in line
+    shutil.rmtree(packages / "mathlib")                         # in `links.json` now, and lacking one again
+    said.clear()
+    assert LC.build_files(["Sec/Proofs/Flock/X.lean"], deps, log=said.append) == 0, said
+    doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+    assert doc == {"built": {"Sec/Proofs": 0}, "failed": {}, "skipped": {}}
+    assert sorted(p.name for p in packages.iterdir()) == ["doc-gen4", "mathlib"] and LC.read_links(tree)["Sec/Proofs"] == "k"
+    assert any("lacked 1 of the packages its manifest names (mathlib)" in s for s in said)
+
+
+def test_in_the_sandbox_a_dependency_still_missing_ends_the_try_before_lake_and_build_skips_the_package(
+        trying, tmp_path, monkeypatch, capsys):
+    """Lake in the sandbox clones nothing, and its failure on a package it can't clone reads as FILE's. Where the
+    dependencies this node keeps lack one the manifest names, or it keeps none, the try runs no Lake and exits 2: its
+    line says that this is no verdict on the file, what is missing and the records run that fetches it. `--build` skips
+    the package, saying the same. Without a sandbox the try's Lake clones what is missing; `--build` fetches nothing
+    cold there either."""
+    tree, calls = trying
+    deps = tmp_path / "deps"
+    packages = fetching(tree, deps, monkeypatch, kept=("mathlib",)) / ".lake" / "packages"
+    records = "`lean_changed.py --records Sec/Proofs --rebuild` here fetches them"
+
+    def tried() -> tuple[int, list[str]]:
+        calls["build"].clear()
+        said = []
+        rc = LC.try_file("Sec/Proofs/Flock/X.lean", deps, log=said.append)
+        assert not (tree / LC.DIRTY).exists()
+        return rc, [s for s in said if "says nothing about the file" in s]
+
+    def skipped() -> str:
+        calls["build"].clear()
+        assert LC.build_files(["Sec/Proofs/Flock/X.lean"], deps, log=lambda _: None) == 2
+        doc = json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix(LC.BUILD_LINE))
+        assert doc["built"] == {} and calls["build"] == []
+        return doc["skipped"]["Sec/Proofs"]
+
+    rc, [line] = tried()
+    assert rc == 2 and calls["build"] == [], "no Lake ran"
+    assert "lean-try: Sec/Proofs/Flock/X.lean: not elaborated" in line and records in line
+    assert "the dependencies this node keeps for Sec/Proofs lack 1 of the packages its manifest names (doc-gen4)" in line
+    why = skipped()
+    assert "lack 1 of the packages its manifest names (doc-gen4)" in why and records in why
+    monkeypatch.setattr(LC, "sandboxed", lambda: False)
+    assert tried() == (0, []) and len(calls["build"]) == 2, "without a sandbox Lake clones the one missing"
+    assert "(doc-gen4)" in skipped()
+    monkeypatch.setattr(LC, "sandboxed", lambda: True)
+    shutil.rmtree(deps / "k")                                   # the node keeps none, and the tree holds what it took of them
+    assert [p.name for p in packages.iterdir()] == ["mathlib"]
+    rc, [line] = tried()
+    assert rc == 2 and calls["build"] == []
+    assert "this node keeps no dependencies for Sec/Proofs to take" in line and records in line
+    assert not packages.exists() and "Sec/Proofs" not in LC.read_links(tree), "what lacked one is gone, with its entry"
+    why = skipped()
+    assert "this node keeps no dependencies (Mathlib)" in why and records in why
 
 
 MISMATCH = "sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean differ)"

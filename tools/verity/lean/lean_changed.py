@@ -25,7 +25,13 @@ import declaring what an earlier one did), the two modules it names lose their t
 them against the outputs in place. It never runs check.py, so it reads and writes
 no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
-slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
+slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are while they hold every package
+their manifest names (`cache.py`'s `fetched_deps`). A directory that lacks one, as a run killed while Lake cloned them
+leaves it, in `links.json` or not, is taken as none is: the try says what it lacks and takes the ones the node keeps
+(`link`). In the sandbox, where Lake clones nothing, a package still missing after that (the node keeps none, or its
+copy lacks one) ends the try before Lake runs: it exits 2, which is no verdict on FILE, and its line names what is
+missing and the `--records` run that fetches it. `--build` takes such a directory the same way and skips a package still
+missing, with a sandbox or without, since it fetches nothing cold. Without a sandbox the try's Lake runs
 unsandboxed, fetches dependencies the node does not keep, and restores nothing from a cache, its own included, so it
 compiles every module it needs (`build`). In the sandbox the tree's fetched dependencies are mounted
 read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
@@ -351,6 +357,41 @@ def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print, cop
 def unlink(pkg: str, tree: Path, links: dict[str, str]) -> None:
     shutil.rmtree(tree / pkg / ".lake" / "packages", ignore_errors=True)
     links.pop(pkg, None)
+
+
+_CACHE = None
+
+
+def lacks(pkg: str, tree: Path) -> str | None:
+    """What ``tree/pkg``'s `.lake/packages` lacks of the fetched dependencies its manifest names, in words, or None when it
+    holds a directory for each (`cache.py`'s `unfetched`, whose `fetched_deps` is the one test of that; the file is loaded
+    by what takes a tree's dependencies and not with this one, as `moved.py` is). A run killed while Lake cloned them
+    leaves the ones it had cloned. Lake clones the rest where it may; in the sandbox it fails on the first one missing."""
+    global _CACHE
+    if _CACHE is None:
+        _CACHE = _module(Path(__file__).resolve().parent / "cache.py", "lean_cache_for_lean_changed")
+    gone = _CACHE.unfetched(tree / pkg)
+    names = f"{', '.join(gone[:8])}{' ...' if len(gone) > 8 else ''}"
+    return f"{len(gone)} of the packages its manifest names ({names})" if gone else None
+
+
+def fetched_by(pkg: str) -> str:
+    """The run that fetches ``pkg``'s dependencies where `--try` and `--build` can't: a records run's check.py sets the
+    package up outside the sandbox, where Lake clones what its manifest names. `--rebuild`, since records that need no
+    run are skipped, nothing fetched."""
+    return f"`lean_changed.py --records {pkg} --rebuild` here fetches them, on the tree it takes"
+
+
+def drop_incomplete(pkg: str, tree: Path, links: dict[str, str], log=print) -> None:
+    """Before `--try` or `--build` takes ``tree/pkg``'s dependencies: a `.lake/packages` that `lacks` a package goes, with
+    its entry of ``links`` and of the tree's `LINKS`, and a line says what it lacked, so it is taken as none is: whole,
+    from the ones this node keeps (`link`). Whether a run was left mid-way there (`DIRTY`) does not decide it: a run
+    since can have cleared that mark and kept the directory."""
+    if (tree / pkg / ".lake" / "packages").is_dir() and (what := lacks(pkg, tree)):
+        unlink(pkg, tree, links)
+        write_links(tree, links)
+        log(f"lean-records: {pkg}: its fetched dependencies lacked {what}, as a run killed while Lake cloned them leaves "
+            "them; they were dropped, and are taken whole or not at all")
 
 
 def read_links(tree: Path) -> dict[str, str]:
@@ -1626,18 +1667,25 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             write_links(tree, links)
             mark(tree, package=pkg, phase="deps")
             sandbox = sandboxed()
+
+            def unfetchable(why: str) -> int:
+                log(f"lean-try: {file}: not elaborated, and this says nothing about the file: {why}, and the sandbox can't "
+                    f"fetch them, so nothing ran; {fetched_by(pkg)}")
+                (tree / DIRTY).unlink(missing_ok=True)
+                return 2
+
+            drop_incomplete(pkg, tree, links, log)
             packages = tree / pkg / ".lake" / "packages"
             # dependencies a `--records` run did not take (not in LINKS) are kept as they are, and stay out of LINKS, whose
             # packages the next `--records` run on another package drops
             if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
                 if sandbox:
-                    log(f"lean-try: {pkg}: no dependencies to take on this node, and the sandbox can't fetch them: nothing "
-                        f"ran; run `lean_changed.py --records {pkg}` here once")
-                    (tree / DIRTY).unlink(missing_ok=True)
-                    return 2
+                    return unfetchable(f"this node keeps no dependencies for {pkg} to take")
                 links[pkg] = LA.deps_key(tree / pkg)
                 log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
             write_links(tree, links)
+            if sandbox and (what := lacks(pkg, tree)):
+                return unfetchable(f"the dependencies this node keeps for {pkg} lack {what}")
             since, storing = time.time(), storable(sandbox)
             mark(tree, package=pkg, phase="try")
             opts = SIBLINGS.options(tree / pkg)
@@ -1711,7 +1759,8 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
     """`--build`: the ready mark's preflight's Lean step (`research.queue.Preflight`). On the tree of the `build` slot it takes,
     as `--try` does (slot, tree lock, sync, `repair` and dependencies), `lake build +MODULE...` of ``files``' modules (paths
     from the repository's root) in each package owning one, those it requires by path first; a package whose dependencies
-    this node doesn't keep is skipped, never fetched cold. Its last line is `BUILD_LINE` and a JSON object: `built` ({package:
+    this node doesn't keep, or keeps without one its manifest names (`lacks`), is skipped, never fetched cold. Its last
+    line is `BUILD_LINE` and a JSON object: `built` ({package:
     lake's exit status}), `failed` ({file: its first Lean error}, in a tracked `.lean` file; an import clash this tree left is
     healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
     every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing. Without
@@ -1765,11 +1814,17 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 left = None
                 write_links(tree, links)
                 mark(tree, package=pkg, phase="deps")
+                drop_incomplete(pkg, tree, links, log)
                 packages = tree / pkg / ".lake" / "packages"
                 if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
-                    doc["skipped"][pkg] = "this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched cold"
+                    doc["skipped"][pkg] = ("this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched "
+                                           f"cold; {fetched_by(pkg)}")
                     continue
                 write_links(tree, links)
+                if what := lacks(pkg, tree):
+                    doc["skipped"][pkg] = (f"the dependencies this node keeps for its manifest lack {what}, and they aren't "
+                                           f"fetched cold; {fetched_by(pkg)}")
+                    continue
                 since = time.time()
                 mark(tree, package=pkg, phase="build")
                 mods = [f"+{module_of(pkg, f)}" for f in fs]
