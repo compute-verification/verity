@@ -496,11 +496,11 @@ class HFRotaryTableRule(OpRule):
     modes = frozenset({"reference"})
     info = RuleInfo("HFRotaryTable[reference]", 4, "op-binding",
                     applies_to="matmul(views([to(f32)](inv_freq buffer f32|bf16[R])), to(f32)(static positions[T])) -> transpose -> cat(x,x) -> {cos,sin} -> [mul(scalar)] -> [to(dt)]",
-                    preconditions=("the left operand is a 1-D f32 or bf16 buffer of the module through shape views, same-dtype casts and (bf16 only) "
-                                   "exactly one bf16 -> f32 cast; the buffer dtype and the cast are recorded in the table's derivation",
+                    preconditions=(("the left operand is a 1-D f32 or bf16 buffer of the module through shape views, same-dtype casts and (bf16 only) "
+                                    "exactly one bf16 -> f32 cast; the buffer dtype and the cast are recorded in the table's derivation"),
                                    "the positions are a StaticIndex made from an arange through shape views, same-dtype casts and +/- of a Python int",
-                                   "cos and sin are read exactly by an optional scalar multiply and then EITHER one cast each (to f32|bf16; the cast is the "
-                                   "table) OR no cast (the f32 cos|sin is the table); which one is recorded as `terminal_cast`, the same for both",
+                                   ("cos and sin are read exactly by an optional scalar multiply and then EITHER one cast each (to f32|bf16; the cast is the "
+                                    "table) OR no cast (the f32 cos|sin is the table); which one is recorded as `terminal_cast`, the same for both"),
                                    "the resulting tables are [1, T, D] with D = 2R"),
                     evidence_domain="structural; the tables are prescribed Inputs (derived tables), their derivation recorded in the weights record")
 

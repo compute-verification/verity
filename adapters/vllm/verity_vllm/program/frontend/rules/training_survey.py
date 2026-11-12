@@ -11,7 +11,8 @@ returns no Program for a derivation that left holes. `survey` builds it from the
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import torch
 from verity.circuits.program import Program

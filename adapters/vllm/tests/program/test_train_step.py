@@ -102,8 +102,8 @@ def _run(f, *xs, rules=None) -> tuple[torch.Tensor, torch.Tensor]:
 
 def _same_bits(got: torch.Tensor, want: torch.Tensor) -> None:
     bad = (got.view(torch.int32) != want.view(torch.int32)).nonzero().reshape(-1)
-    assert bad.numel() == 0, f"{bad.numel()} of {got.numel()} words differ, first at {bad[:4].tolist()}: " \
-                             f"{got[bad[:4]].tolist()} vs torch {want[bad[:4]].tolist()}"
+    assert bad.numel() == 0, (f"{bad.numel()} of {got.numel()} words differ, first at {bad[:4].tolist()}: "
+                              f"{got[bad[:4]].tolist()} vs torch {want[bad[:4]].tolist()}")
 
 
 def _data(*shape, positive=False, seed=0) -> torch.Tensor:
@@ -718,8 +718,7 @@ def test_functional_adamw_is_torch_adamw() -> None:
     pp, mm, vv = p.clone(), m.clone(), v.clone()
     for step in (1, 2, 3):
         t.grad = grad * step
-        st = opt.state[t] if t in opt.state else None
-        if st is None:
+        if t not in opt.state:
             opt.state[t] = {"step": torch.tensor(0.0), "exp_avg": m.clone(), "exp_avg_sq": v.clone()}
         opt.step()
         s = {k: torch.tensor(x, dtype=torch.float32) for k, x in f.scalars(step).items()}

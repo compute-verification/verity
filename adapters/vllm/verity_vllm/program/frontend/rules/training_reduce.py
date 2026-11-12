@@ -95,7 +95,7 @@ def reduce_all(ctx, node, x: Coll, square: bool) -> Coll:
 
     if not vec:
         a0 = first(x[:bw])
-        s = a0 if L == bw else _prefix(_batch(ctx, node, P.F32AddV2, a0[:L - bw], first(x[bw:]), axes=(0, 0)), a0, bw)
+        s = a0 if bw == L else _prefix(_batch(ctx, node, P.F32AddV2, a0[:L - bw], first(x[bw:]), axes=(0, 0)), a0, bw)
         return _halves(ctx, node, s, bw, bw)
     n4, T = L // ILP, bw * ctas
     cols: list[Coll] = []

@@ -516,7 +516,7 @@ class FusedAdamW(_TrainRule):
         for i, (p, g, m, v) in enumerate(zip(ps, gs, ms, vs)):
             S = _shape(ctx, p)
 
-            def op(fn, *xs):
+            def op(fn, *xs, S=S):
                 return _flat(_ew(ctx, node, fn, list(xs), S), S)
 
             P_, G_, M_, V_ = (_operand(ctx, node, a, S) for a in (p, g, m, v))
