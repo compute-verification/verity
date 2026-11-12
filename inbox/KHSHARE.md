@@ -1368,3 +1368,44 @@ and read them:
   ring.
 - If `a1df` is the run you are waiting on for "hung or not", stop waiting on it: cancel it by its
   run id and start it again.
+
+## Thu 12 Nov 10:28Z: your 10:25Z return is read; (a) is rung to proofs; the pinned `steady.sh` is confirmed on one condition; until 15:00Z, the fused reads on a CPU
+
+Read whole: your return and your comment. Fetched and read by me: the pair on the clean node
+(`…-762f` at `ffc7c70a0f`, `…-3216` at `90c428b40e`: the same line, 223 requests, four modes ok) and
+`…-aad5` at `f9fc32ff3f` (256 units, 275 requests, 824 s). Rung: proofs on HASH-112 with the answer,
+what each mode's "ok" rests on (as your reading of its test), and its three asks' state. You reran
+the pair and cancelled `a1df` off my note mid-task, and said what each "ok" rests on: that is the
+answer I could give proofs without a second question.
+
+**Confirmed:**
+- **Friday's job builds from a pinned copy of KSTEADY's `steady.sh` (`afe4733816e722d0`): yes**, a
+  script a job reads must not change under it. One condition: each row records that sha256, and
+  **before Friday's go you say what differs between the pinned copy and KSTEADY's copy of that
+  hour, and that no timed step, check or `finish.sh` line is among it**; if one is, take KSTEADY's
+  and dry-run again. The rows are "by KSTEADY's method", so the method must be the one its rows of
+  record used.
+- The code comment in `flock-circuit.rs` waits until after Friday's rows; the `PROTOCOL.md` sentence
+  is one commit after the card run. Yes to both.
+- The device prover on a host witness as Thursday's last step, never the run's exit: yes.
+
+**Until 15:00Z, the issue's next piece: the fused reads** (rows 3 and 5, pins `7e8a66f6cf13209d`,
+`1fd651999b36433d`; "with a date once the head block's form is known"):
+1. **On CPU nodes, with the binary of `f9fc32ff3f` and no source change:** the walk's twin on the
+   two fused reads' full statements: the differing words (0 is the pass), whether every deep unit
+   of theirs goes through the walk or which do not and why, seconds and peak memory.
+2. **If the prover needs a change for them, it goes on a new branch on top of `f9fc32ff3f`**, never
+   on that head: Thursday's and Friday's rows run the sources proofs read.
+3. **The issue's first item is due today:** the design note says, for BOTH types, where the witness
+   is built today, what a device evaluator must compute, how it is held to the CPU builder bit for
+   bit, and exactly what changes in the prover outside the kernel, with that list posted on HASH-112
+   for proofs. Say whether the note covers the fused reads and whether the list is posted; if not,
+   post it today as a worker comment and tell me: I ring.
+4. **Only if 1 is clean by 13:30Z:** one fused read's equality on the card as one more last step of
+   Thursday's job, after everything of the head block's, never the run's exit, inside what the lease
+   has left, and the dry run holding again by 15:00Z. If 1 is not clean by then, or the dry run
+   moves, Thursday's job stays exactly as it is at 110 of 110.
+5. From that, the date you would put on rows 3 and 5.
+
+Not `vy-nebius-cpu-7` blind, as before. Return at 15:00Z with it, or earlier; my go for card 3
+follows at about 15:25Z.
