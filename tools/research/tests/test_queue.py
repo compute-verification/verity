@@ -818,6 +818,68 @@ def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmp
     assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
 
 
+def _regeneration(world: World, ran: Path) -> tuple[Queue, str, PR]:
+    """A queue's clone of a `main` holding stub move scripts: `rename.py` writes its working directory to ``ran`` and adds
+    `moved.txt`, `move_check.py` certifies; (the queue, `main`, a move PR naming the map)."""
+    main = _move_main(world, {
+        "tools/move/rename.py": f"import os, sys\nfrom pathlib import Path\nPath({str(ran)!r}).write_text(os.getcwd())\n"
+                                "Path(sys.argv[sys.argv.index('--root') + 1], 'moved.txt').write_text('m\\n')\n",
+        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('{\"certified\": true}')\n"})
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    return q, main, PR(1, main, "move", "Lane `lane-1`.\nMove: tools/move/x_map.toml\n")
+
+
+def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(world, monkeypatch):
+    """`_regenerated` runs `rename.py` in a worktree of the tip: under TMPDIR, the control pod's network volume, its add and
+    remove took minutes; under `MERGED_ROOT` (--preflight-root, --merged-root), as `merged_worktree`'s, they don't, and it
+    leaves nothing."""
+    import tempfile
+
+    from research import queue
+
+    tmp, fast, ran = world.tmp / "tmpdir", world.tmp / "fast", world.tmp / "ran"
+    tmp.mkdir()
+    q, main, pr = _regeneration(world, ran)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setattr(queue, "MERGED_ROOT", fast)
+    commit, why, report = q._regenerated(main, pr, main)
+    assert commit and why == "" and report == {"certified": True}, why
+    assert _git(q.workdir, "show", f"{commit}:moved.txt") == "m"
+    assert Path(ran.read_text()).is_relative_to(fast), ran.read_text()
+    assert not list(fast.iterdir()) and not list(tmp.iterdir())
+    assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_moves_regeneration_adds_and_removes_its_worktree_under_the_clones_worktree_lock(world, monkeypatch):
+    """train.sh's launches add and prune worktrees of the same clone under its lock (`worktrees_locked`): a regeneration that
+    didn't take it could prune a launch's worktree half made, and that shard then registers no run."""
+    import fcntl
+
+    from research import queue
+
+    q, main, pr = _regeneration(world, world.tmp / "ran")
+    monkeypatch.setattr(queue, "MERGED_ROOT", world.tmp / "fast")
+    lock = Path(_git(q.workdir, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "train.lock"
+    real, held = queue._git, []
+
+    def git(repo, *args, **kw):
+        if args[:1] == ("worktree",):
+            with open(lock, "a") as f:
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    held.append((args[1], False))
+                except BlockingIOError:
+                    held.append((args[1], True))
+        return real(repo, *args, **kw)
+
+    monkeypatch.setattr(queue, "_git", git)
+    commit, why, _ = q._regenerated(main, pr, main)
+    assert commit and why == "", why
+    assert held == [("add", True), ("remove", True), ("prune", True)], held
+
+
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
     """A landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
     member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one
