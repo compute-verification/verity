@@ -1102,3 +1102,441 @@ and no draft token (section 0); it is vllm's to say, and I was not relayed it.
 10. **The step record's and the canonical top-k's cost at saturation, below about 1%** (section 5; entry 2's item
    9): `f570`'s arms again once node A's throttled card is mended, or with more paired passes [relayed; guess, its
    launcher's].
+
+## Entry 3 and final, Thu 12 Nov 13:28Z (due 16:00Z): the comparison as final with the kept drafts' row, the route and what it needs by lane, the message for Daniel
+
+**Tags.** [run]: a command I ran on this VM, named (git, `rg`, arithmetic on a file); nothing ran on a GPU. [read]: code
+or a doc at the revision named, with file and line. [relayed]: a run's result or a fact I took from a Linear comment, a
+note or the coordinator's message, with who and where; I did not read it in the run's own record. [derived]: my
+arithmetic or argument, with its inputs. [guess]. Entry 2's [M run] and [m] are [relayed] in these terms (I read them
+in notes), its [mine] and [argued] are [derived].
+
+**Revisions** [run: `git rev-parse`, `git diff --stat` over the paths cited]. Our tree: `main` at `71a2afe671aa`
+(fetched 13:02Z), equal on every path cited here to the checkout I read, `5456b937e7e5`. vLLM: the pin `d9105ea8001e`
+(P), the build Friday serves. Entry 2 and the addendum read our tree at `be9a3d5669`. Paths under
+`adapters/vllm/verity_vllm/` are written from `pipeline/`, `engine/` or `program/`; `draft_table`'s file is
+`benchmarks/network_e2e/encodings/replay.py`.
+
+### 0. The published line's flags first
+
+1. **What Friday serves** [relayed: vllm lead on VLLM-377, 06:01Z; the coordinator's 06:16Z]: vLLM's published line for
+   these cards, at the pin: the FP8 KV cache, five draft tokens a decode row (`mtp`, K = 5), the prefix cache on,
+   `--max-model-len 262144`. Wednesday's settings (bf16 cache, no draft) are the last rung, printed only if the
+   published line's replay differs.
+2. **Shown at those flags** [relayed: vllm lead on VLLM-377, 07:22Z, 09:20Z, 12:26Z]: a replay of the whole pass from
+   an empty engine (row 1) gave back every token: 3,406 of 3,406 in 12 requests (`r20261112-065751-cb56`; one step
+   differs and no token), then 23,363 of 23,363 in 32 requests over 2,040 steps, 25 of them starting from a
+   prefix-cache hit, the longest 102,336 tokens (`r20261112-074230-88d0`, the first end-to-end try). Every request was
+   greedy. The limit was 262,144 and the load cut requests at 131,072.
+3. **Not shown at those flags** [relayed, the same comments, unless marked]: a sampled request on GLM-5.3 (section 5);
+   a replay of one request among stand-ins (rows 5, 6, 16), which has not run with a draft and has no code for a
+   stand-in's kept count (section 4) [run]; a start inside a pass; a request past 131,072 tokens; any commitment
+   beside serving: with the FP8 cache the serve refuses our history tables (`pipeline/boundary_tables.py:141-145`)
+   [read] and Friday's run is served without them; the cost:
+   +0.09% by the users' token rates, +3.3% by the seconds a pass took, +0.25% by the users' seconds, one server
+   lifetime an arm, "under 1%: not shown".
+4. **Certified, and at which flags** [relayed: the coordinator's 12:48Z, from vllm on VLLM-242; the rule read by me,
+   `pipeline/advice_code/lengths.py:1-15`]: the certified run of record serves with the **draft off**. In its
+   rehearsal (one card, Llama 3.2 1B, 2,000 requests, the prefix cache on) hits, admission and resumes cost 0 bits
+   with each event occurring, and each request's output length and finish cost 11,186 bits in all.
+5. **At Wednesday's settings, since entry 2** [relayed: vllm-advicezero on VLLM-319, 06:01Z and 06:40Z]: a
+   prefix-cache hit of 9,088 tokens, twice, at a context of 40,960 (`r20261112-053510-0a4c`) and one of 120,704
+   tokens at 131,072 (`r20261112-061536-f368`) were replayed bit for bit both ways: with every page of the hit
+   recomputed inside the replay (row 6) and with the hit's pages overwritten from serving's bytes (row 5). Compared:
+   the target's tokens, its logprob bits and every step's schedule up to its last. One serve each.
+
+### 1. The answer
+
+1. **The route is unchanged: row 16** [derived]. Replay only the sampled request's own computed positions (a span for
+   a long request), in their served step shapes with zero stand-ins, on an engine kept up, reading the cached prefix
+   and its own earlier positions from KV pages serving committed: under the published line, the FP8 row as stored.
+2. **What moved for it since entry 2** [relayed, items 2 and 5 above]: its largest open showing closed at Wednesday's
+   settings (a hit of 120,704 tokens read from serving's pages); at the published line's flags only row 1 has run.
+3. **The kept drafts are the one class of advice that grows with output tokens and not with requests** [derived].
+   They are in no route's certified form today: advice v1 has no field for them and its replay refuses a draft serve
+   without them (`advice_code/codec.py:358-365`, `advice_code/replay.py:99-105`) [read]. So **no route can be
+   certified with a draft today**, and Friday's certified zero is at draft off.
+4. **Your figure is confirmed as the fixed-width charge and is not the least** [derived, section 4]: 3 bits a decode
+   row that carried five drafts; 2.585 packed; never more than 1 bit an output token; 1.84 bits a row at the measured
+   entropy and 1.36 by the code vllm built, both on one greedy pass.
+5. **It does not separate the routes** [derived]: every route's circuit takes its step shapes from the registered
+   compiler, which reads the certified record and the advice, and the count is in neither. The routes differ in
+   whether the replay can run with a draft at all, and in who must force a stand-in's count.
+6. **The replay did not differ in vllm's first end-to-end try** [relayed, item 2], so no FP8 cause was needed.
+   Section 5 has the reading you asked for all the same, at the pin [read]: under the FP8 cache the attention backend
+   is another than Wednesday's, every row but a full decode row of 1 + K tokens is a prefill row to it, and such a
+   row on the MHA path reads its own step's keys unquantized where every later step reads them as stored. The
+   14:50Z sampled row had not started when I wrote this.
+
+### 2. The table, final
+
+One row a route, entry 2's numbering. Entry 2's cells stand in full; this table restates each row's
+deciding figures and adds what was shown since. **W** is Wednesday's settings (bf16 cache, no draft), **F**
+the published line's flags. Every figure not marked otherwise is [relayed] as entry 2 cites it; the F and "since"
+cells are [relayed] from section 0's comments.
+
+| # | Route | At serving beyond stock, against 1% | Replay for one sampled request; with the repeated share and the context | Shown bit for bit: W, then F | What the guarantee charges | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | The whole execution phase from an empty engine, every request real (`benchmarks/serve_tax/replay.py`) | The step record and the token ids: −0.3% [−3.3, +2.6] at saturation (`3f53`); −0.36% and not told from zero (`f570`); at F the three readings of item 3 | Every step of the phase: 5,258 GPU-s on P128 at 600 s phases. Grows with both | W: 11,350 steps, 184,922 tokens (`cf6c`). **F: 23,363 of 23,363 tokens, 2,040 steps, hits to 102,336 tokens, greedy (`88d0`)** | Closed only if nothing is carried in; its interior is every request's | The only route run at F. It starts only from an empty engine, so under traffic that never drains its block is the server's life |
+| 2 | The phase from a snapshot at its edge (`restore.py`, `tp_restore.sh`) | Row 1's, plus a pause at each edge: 0.16% to 0.25% of a 600 s phase | Every step of the phase at 0.83 times serving. Flat in the share | W: 226 steps (`f460`). F: not run | As row 1 | A sampled request still costs its whole phase |
+| 3 | From an edge, pages from host copies (`rebuild.py:10-31`) | Row 2's, less the runner's state | Row 2's | W: one process. F: not run | As row 1 | As row 2 |
+| 4 | The request's lifetime from pages copied as written, every request real (`rebuild.py:33-42`) | A copy and a hash of each page as it fills: 0.036% to 0.045% of a card, modeled; not built | 458 GPU-s on P128 (1,160 at the registered limits). Flat in the share | W: one GPU only. F: not run | As row 5 | Row 16 without the stand-ins: loads the others' pages |
+| 5 | One request, the others zero stand-ins, its hit pages read from serving's bytes (`rebuild.py --served --shape-only`) | Row 1's, plus the target's pages kept and committed | 19 to 32 s on eight cards, P40. Flat in the share; pages loaded grow with context | W: 4 of 4 targets; hits of 256 and 384 tokens; **since: 9,088 tokens (142 pages) and 120,704 tokens (1,886 pages), no step and no position differs (`0a4c`, `f368`)**. F: not run; no code forces a stand-in's kept count [run] | Not closed in the form the figure of record uses: it reads values another replay block computed | Row 16's replay, shown at W to a 120,704-token hit |
+| 6 | The same with the hit recomputed (#8403); what `main` does | Row 1's only | Row 5's plus the hit: 1.13 times the tokens at 11.62% repeated, 7 to 59 times at 85.67% to 98.31% [derived, entry 2]; at AX the conversation so far | W: hits of 128 to 384 tokens; **since: 9,088 twice and 120,704 with every page recomputed in the replay (`0a4c`, `f368`)**. F: not run | Closed, one replay block a request: the form on `main` | Sound today, and dear exactly where traffic is agentic |
+| 7 | The request on the CPU from its Program (`check/replay/request_replay.py`) | Row 1's | 84,500 core-hours for a 131,072-token request | Exact by definition; never run at full depth. F: no Program of a step with drafts exists [run] | As the Program it evaluates | The reference, not a route at size |
+| 8 | The request alone under batch-invariant kernels | 14.1% to 31.1% on three other models: over 1% | The request's own tokens | None exists for this model's sparse attention | As row 5 or 6 | Not available |
+| 9 | A span reading per-layer history tables (`pipeline/boundary_tables.py`) | 2.3% to 4.3% of serving's GPU time with today's builder [derived, entry 2] | Not measured: no span replay exists | Not shown. **F: refused: the tables hold bf16 words and refuse an FP8 cache (`:141-145`) and a step with draft tokens (`:231`)** [read] | As row 5, its readers its own request | The span's idea stays in row 16; the tables as built are not at F |
+| 10 | Stand-in interior: one token-select check a served id (`pipeline/interior_rows.py`) | The two-stage arm: +7.16% over three paired repeats, 194 of 3,272 requests committed (`03bb`); since: it serves with the prefix cache on where it builds no tables (#8897, on `main`) [run: `git log`] | Whatever replay gives the logits | Holds ids to logits, not logits to the model. **F: refused: the sampler capture refuses a step with draft tokens (`engine/sampler_capture.py:51-53`)** [read] | A stand-in: it audits the token select alone | Not an audit of the model's computation |
+| 11 | The hit held to a committed pool by the certifier's cache step | A pool commitment a phase | Not a replay | n/a. F: the certifier's step does not model a draft (`verity/protocols/certifier/verifier/replay_step.py:81`) [read] | It proves which pages a request hit, not what they hold | Pairs with row 5 or 16 |
+| 12 | Hits allowed only by a rule on the certified record | Nothing | As its route | n/a. Since: the load's sessions share no cache block, by the corpus's construction (block ids are per session); a cache shared across sessions could add at most 3.82% (256k copy) or 1.69% (full corpus) of prompt tokens (VLLM-377, 09:20Z) | Caps the readers of a page | The readers of a page are one conversation in our load |
+| 13 | Hits sent as advice | Nothing | None | n/a | 5,181 bits a phase | Superseded: the scheduler replay derives hits |
+| 14 | A conversation as one replay block | Row 1's, the cache keyed by conversation | The conversation's computed tokens once | Not shown | Closed; 1.18 to 1.42 times at 4 to 86 requests | Its interior at 131,072 positions is 7,462 GiB a rank: not feasible as one |
+| 15 | Prefix caching off | Serving recomputes every repeated token: 13.86% more FLOPs on P128, 7 to 59 times at agentic reuse | The request's lifetime | Nothing is shared | Closed | Ruled out by Daniel |
+| **16** | **Recommended: row 5's replay, cut to a span, started at the request's first step on an engine kept up, reading committed KV pages** | Row 1's, plus a hash and a host copy of each page as it fills: 0.036% to 0.045% of a card, modeled; **not built, not measured beside serving**. At F the page is the FP8 row as stored, 656 bytes a token a layer, hashed once the page is in the prefix cache and the step that wrote its last kept row has ended [derived, addendum 2 and 3f] | The span's steps: 19 to 32 s at P40 for a whole request; at AX at least 444 decode steps without a draft, about 99 with five at the try's acceptance [derived: 1 + 443 / 4.5365]. Flat in the share; tokens recomputed flat in context | W: its replay, to a 120,704-token hit (row 5). Not shown at W: a start inside a phase at TP8, a span, an agentic load. F: nothing | Row 5's; one statement to add (section 6) | The only route flat in the repeated share |
+| 17 | The floor: the request's rows alone on a GPU, kernels forced to the served step's settings | Row 16's | The request's own compute, about 1 time | Not built | Row 16's | Not built |
+
+### 3. Advice in bits a request, by class, final
+
+| Class | Bits a request | What holds it at 0 |
+|---|---|---|
+| Cache hits | 0, with hits occurring, in the certified rehearsal (`r20261112-112802-8e98`) [relayed: the coordinator's 12:48Z] | Done: the scheduler replay derives every hit (`advice_code/codec.py:26-29`, `:39-45`) [read] |
+| Admission | 0 under the certified tick, with admissions occurring [relayed, the same] | The certified tick (`codec.py:50-55`) [read]. No compile slice holds the tick's rule on GLM-5.3 yet [relayed, entry 2] |
+| Resumes | 0, with resumes occurring [relayed, the same] | The scheduler replay |
+| Release buckets | 0: certified, set by the network certifier's fixed schedule (`codec.py:15-16`) [read] | Done |
+| Finish | 1: 2,000 bits over 2,000 requests [relayed, the same] | A proof of the length rule (`advice_code/lengths.py:4-6`) [read] |
+| Output length | ⌈log2(max_tokens + 1)⌉ (`lengths.py:7-8`) [read]: 9,186 bits over 2,000 requests, 4.59 a request [relayed, the same] | The same proof |
+| Aborts | No field (VLLM-391) [relayed, the same] | Not designed |
+| Seeds | 0 for a request that sends its seed [relayed, entry 2] | A registered rule deriving the seed from the certified request |
+| Scheduled drafts (how many a row carried) | 0: the scheduler replay derives it, `Step.drafts` (`advice_code/replay.py:35-43`) [read]; held to vLLM's scheduler at K = 1, 3 and 5 (#9143, on `main`) [run: `gh pr view 9143`] | Done in the adapter's replay. Not in the certifier's step circuit |
+| **Kept drafts, K = 5 (how many of them a row kept)** | **Not in advice v1: a draft serve is refused, so no certified figure exists.** Charged at fixed width: 3 bits a decode row that carried drafts; 293 bits a request on AX's median, 188.5 on our 128k plan, 0.66 bits an output token on both, at the try's acceptance [derived, section 4]. What `draft_table` prints today, uncertified: 295.7 bits a request, 0.405 an output token, on the try's greedy pass [relayed: VLLM-384] | The accept rule computed in each request's replay block with the count its output, and a lemma that the count is unique (section 4) |
+
+### 4. The kept drafts at K = 5
+
+**What the count is** [read: `advice_code/replay.py:35-43`, `:327-395`]. A decode row is its token and then the
+drafts its request holds, K unless a budget or the context limit cuts the row. Its output is its token and the drafts
+it kept; the rest roll back. How many it carried is the scheduler's arithmetic and is derived. "How many it kept is
+the model's choice, so it is an input, `RequestIO.kept`, as where the request stopped is." It is no free choice of
+the prover: it is a function of the row's logits, its drafts, the seed and the position (P
+`vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py:569`, `:587`, `:662`) [read], so a block can compute it.
+
+**Why the certified record does not fix it** [read: `advice_code/codec.py:15-16`]. The record holds each output's
+release bucket, and the network certifier's fixed schedule sets that bucket from the request's own ingress bucket and
+the output's index. So which outputs left one step together is not in what leaves. The addendum's line that the
+buckets bound the grouping (3e) is withdrawn. network-accounting's worker reads the same [relayed: WATERLINE,
+`network-accounting/20261112T0652Z-plan-advice-draft-tokens`, section A].
+
+**Why every request's count is needed, not only the sampled one's** [derived, addendum 3b]. A kept count moves its
+own request's positions in every later step, so that row's key count and the slots it writes, and the step its
+request finishes in. A row's key count is among the shapes a batch-mate's bits depend on. So the sampled request's
+kernel shapes read every batch-mate's counts.
+
+**The charge while no proof holds the accept rule.**
+
+- **Your 3 bits a decode row: confirmed as the fixed-width charge** [derived]. It is the tree's convention for a
+  length (`lengths.py:7-8`: `width(max_tokens + 1)` bits) [read]. Exactly: `width(d + 1)` bits for a row that carried
+  d drafts, d derived. That is 3 bits at d = 4 or 5 and 0 at d = 0, so a request's first decode row is free where it
+  carries none.
+- **It grows with output tokens, not with requests: confirmed** [derived]. A request of n output tokens has
+  (n − 1) / (1 + its mean kept count) rows that carried drafts.
+- **It is not the least valid charge** [derived]. Packed, a row is log2 6 = 2.585 bits. And a request's counts are
+  fixed by marking which output tokens start a row: n − 1 bits, so never more than 1 bit an output token (0.988 by
+  counting the ways to cut n tokens into rows of 1 to 6). Fixed width overstates wherever a row keeps fewer than two
+  drafts on average.
+- **Measured, greedy only** [relayed: vllm-advicedraft on VLLM-384; vllm lead on VLLM-377, 09:41Z]. The try's
+  replayed pass: 5,143 rows that carried drafts, their counts 665, 553, 442, 257, 150, 3,076 for 0 to 5 kept, in 32
+  requests of 23,363 output tokens. Entropy 1.840 bits a row. A code vllm built and decoded back sends 6,997 bits,
+  1.360 a row, because counts come in runs (#9279, open, not on `main`) [run: `gh pr view 9279`].
+- **From those counts** [derived: 23,331 tokens over 5,143 rows]: 4.54 output tokens a row that carried drafts, 70.7%
+  of five drafts a row kept. The other pass at F, `cb56`, gives 4.44 (3,394 tokens over 765 rows).
+
+**On the two shapes** [derived: rows = (n − 1) / 4.5365, the try's greedy acceptance; AX's median output of 444
+tokens and median prompt of 142,016 from entry 2; the plan's 651 requests, 186,242 output and 2,235,146 prompt tokens
+from `benchmarks/serve_tax/prefix_plan.jsonl`, run: a sum over the file]. No run is at either shape with a draft, and
+acceptance under production sampling is not measured.
+
+| | AX's median request (444 outputs) | The 128k plan (651 requests, mean 286.1 outputs) | An output token, both |
+|---|---|---|---|
+| Rows that carried drafts | 97.7 | 62.8 a request, 40,911 in all | 0.220 |
+| **3 bits a row (fixed width)** | **293 bits a request** | **188.5 bits a request**, 122,733 in all | **0.66 bits** |
+| 2.585 bits a row (packed) | 252 | 162.4 | 0.57 |
+| 1.840 bits a row (the try's entropy) | 180 | 115.6 | 0.405 |
+| 1.360 bits a row (vllm's code on the try) | 133 | 85.5 | 0.30 |
+| Every draft kept, 3 bits a row | 222 | 142.5 | 0.50 |
+| No draft kept, 3 bits a row; capped by marking row starts | 1,329; 443 | 855; 285 | 3; 1 |
+| A served token, prompt and output, at 3 bits a row | 0.0021 bits | 0.051 bits | |
+| Against the length and finish, 5.593 bits a request in the rehearsal | 52 times | 34 times | |
+
+**Over a monitoring period** [derived; the rate is scaled, nothing here is proved]. The charge is a rate an output
+token, so a period's total is the rate times the period's output tokens, for one datacenter as for all compute. At 3
+bits a row and the try's acceptance it is 0.66 bits an output token, 3.8% of the 17.24 bits an output id carries (a
+vocabulary of 154,880). For one node at 446.7 output tokens a second, the only rate of node A I have read (row B100 of
+`r20261108-200706-1758`: no draft, cache off, 1.67 requests a second, not the published line's rate): 1.78e8 bits a
+week, 7.76e8 a month of 30.44 days, 9.31e9 a year. A datacenter's and the world's totals multiply by their output
+tokens, which I did not read from the census.
+
+**Route by route.** The second and third columns are common to every route but where a row says otherwise, so they
+are stated once:
+
+- **Charged** [derived]: 3 bits a decode row that carried drafts, for every decoding request of the execution phase,
+  as tabled above. It is charged whole until a proof holds the accept rule.
+- **What makes a draft serve certifiable at all, charged** [relayed: VLLM-392, filed 12:59Z; WATERLINE's
+  note, table B]. vllm's code: advice v1's record carries each row's kept count, `codec._ios` hands them to the
+  replay, and the count is a class of the certified table (VLLM-392, owner vllm-advicedraft). network-accounting's
+  code: the advice's form in `verity/protocols/certifier/verifier/advice.py` with a new version, the step's reference,
+  a step circuit `ReplayStep_v2{…, K}` whose inputs gain `kept`, the state chain and the compile slices, and the
+  charge beside the length terms (NET-358, NET-361; #9198, open, makes today's binding refuse a draft by name).
+- **What holds it at 0**, by whose code [derived, from AGENTS.md's rule that a relation check stands in for
+  computing only where a lemma shows its outputs unique]:
+  - **circuits' Definitions**: the draft layer (the model's layer 78, in no capture map) and the accept test. The
+    tree has the greedy two-model form: `Accept_v1{K}` and the static schedule its `accepted` output is checked
+    against (`verity/definitions/registry/spec.py:6-9`, `:16-21`, `:64-73`) [read]. The sampled test is not built:
+    the ratio test on the position's uniform and the draw from the residual (P `rejection_sampler_utils.py:662`,
+    `:812-823`) [read].
+  - **vllm's step compiler**: a request's Program for a step with drafts, whose count output is held equal to the
+    record's. It has none [run: `rg -i 'draft|specul' adapters/vllm/verity_vllm/program/predict/steps.py`, no match].
+    A sampled request also needs a certified seed [relayed: VLLM-392].
+  - **proofs' Lean**: the lemma that any two count sequences the checks accept are equal, by induction over steps;
+    and that a count which fails its check in an unsampled replay block is a wrong block.
+  - **One thing is new to the accounting** [derived]. The compiler still needs the counts to build the shapes, and
+    it cannot derive them as it derives hits, since they read the model's values. So they stay sent, and AGENTS.md
+    charges advice at its length. The 0 needs a class the rules do not have: advice that a block's output is held
+    equal to is charged 0, and a mismatch is a wrong block. A registered cap of 0, which is how the hits' class is
+    off today and how WATERLINE's note turns this one off [relayed: its section C], is not that: under a cap of 0
+    nothing is sent.
+- **A cheaper check for the same count** [derived; read at P]. A row's count is the length of the longest prefix on
+  which its drafts equal the tokens its request emitted from that row on, capped by the drafts it carried and by the
+  request's end. Under greedy a draft is kept only when it equals the target's argmax and the token at a rejection is
+  that argmax (P `rejection_sampler_utils.py:587-594`). Under the sampled rule the token at a rejection is drawn with
+  the rejected draft removed (P `:812-823`). So the check needs the row's draft tokens and the certified output ids, K
+  comparisons of token ids a row, and no logits. It still needs the draft layer in the circuit: the draft's tokens
+  are in no record.
+
+| Routes | Where the count comes from in the replay | What differs in the charge or in what holds it at 0 | With a draft today |
+|---|---|---|---|
+| 1, 2, 3, 14 (the engine again, every request real) | Recomputed, for every request, by the replay's own accept test on its own logits and drafts; nothing carried. The comparison holds it through each row's first position and each request's token count, not through the step's emitted counts (`benchmarks/serve_tax/replay.py:231-243`) [read] | Nothing. The replay needs no count, but the circuit's shapes do [derived] | Row 1 runs and is shown at F, greedy, uncertified. Rows 2, 3, 14: not run with a draft in anything I read. Not certifiable: advice v1 has no field |
+| 4 (the lifetime, every request real) | Recomputed for the rows it re-runs; a row before its start is in the positions and pages it starts from [derived] | Nothing | Not built |
+| 5, 6, **16**, 17 (one request among zero stand-ins) | The sampled request's own: recomputed. Each stand-in's: read from the committed step record (a step's emitted count less one, `engine/step_trace.py:268-282`) [read] and forced, since a stand-in's values are zeros and its own test gives another count [derived] | vllm's `rebuild.py` must force each stand-in row's count (roll back d − kept, emit 1 + kept, as `advice_code/replay.py:340-395` does on paper). At P vLLM's own token replay refuses an engine with drafts (P `vllm/sampling_params.py:941-944`) [read, addendum 3d] | Not run. No code forces a count [run: `rg -i 'draft|specul' benchmarks/serve_tax/rebuild.py`, no match]. Not certifiable |
+| 7 (the CPU, from the Program) | Carried: the Program's shapes are the compiler's, so the count is advice, or the record's count held by the block [derived] | Nothing | Cannot run: no Program of a step with drafts; the CPU's sampler recompute skips a drafting row (`check/replay/stoch_recompute.py:553`) [read] |
+| 8 (batch-invariant kernels) | Would recompute its own and need no other request's. Its own counts still set its circuit's shapes (`spec.py:19-21`) [read] | The same charge, by request | No such kernels |
+| 9 (a span from history tables) | As row 16 for the span's rows [derived] | Nothing | **Cannot be certified, or served, with a draft: the tables refuse a step with draft tokens (`boundary_tables.py:231`) and an FP8 cache (`:141-145`)** [read] |
+| 10 (stand-in interior) | Takes the count of the engine replay under it. Its own check, one token select a served id, holds no count; under sampling a kept draft is not a draw from its row [derived] | It cannot hold the count at 0 at all | **Cannot be certified with a draft: the capture refuses a step with draft tokens (`sampler_capture.py:51-53`)** [read] |
+| 11 (the certifier's cache step) | Not a replay. In the step circuit the count would be an input, bitlen(K) bits a running slot [relayed: WATERLINE's note, table B row 4] | With a draft a hit gives up its last block (`advice_code/pool.py:87`, `:154`) [read]; `cache_step.py` is among the files that note lists to change [relayed: the same note, row 5] | **Cannot: the step does not model a draft (`replay_step.py:81`)** [read] |
+| 12, 13, 15 | None of their own | Nothing | As the route each pairs with |
+
+**What `draft_table` charges today, on the production row** [read: `benchmarks/network_e2e/encodings/replay.py`].
+`kept_bits` (`:807-830`) replays the trace, refuses one the replay does not reproduce (`:819-821`), counts every row
+that carried drafts and emitted (`:822-826`: a row's count is the step's emitted count less one), and returns
+`charged = rows × entropy`, the entropy being that of those same counts (`:828-829`), beside `max = log2(K + 1)` and
+`derived = 0` (`:829-830`). `draft_table` (`:833-848`) puts it beside the arrivals' bits, and the report prints the
+row (`:908-918`).
+
+- On the try's greedy pass that is 5,143 × 1.840 = 9,463.5 bits, 295.7 bits a request and 0.405 bits an output token;
+  on `cb56`, 107.5 and 0.379 [relayed: VLLM-384; the products are mine].
+- It is uncertified and from another run than the certified one [relayed: the coordinator's 12:48Z].
+- It is an entropy, not a code's length [derived]: the distribution is fitted to the trace it charges and no codebook
+  is registered before the run. #9279 replaces it with a code that is built and decoded back.
+- It reads 0 as `derived` although no Program derives the count [read: `:830`; relayed: vllm lead, 09:41Z, "no
+  Definition holds the accept test"].
+
+### 5. The read of VLLM-377, and where the FP8 cache's read first enters at the pin
+
+**The read** [relayed: vllm lead on VLLM-377, read through the Linear tool at 13:05Z]. The
+first end-to-end try, `r20261112-074230-88d0`, ended 08:53Z with exit 0 and the replay did not differ: 23,363 of
+23,363 tokens, all greedy. Of the four causes in the 06:11Z comment, the fourth was the FP8 cache: "a position's key
+is read as two different values, by the step that writes it and by every later step". The first sampled serve and replay
+under drafts on GLM-5.3 is today at 14:50Z (12:26Z); it had not started when I wrote this. I read VLLM-377 again after
+it and append what it says.
+
+**The reading, at P** [read, each line at `d9105ea8001e`], given so that it is at hand if a sampled replay differs. In
+one line: vllm's fourth cause is in the code. The two values exist for a row the attention treats as a prefill row,
+in a step that takes the MHA path; which rows and which steps those are is fixed by the step's row lengths and order.
+Paths are under `vllm/`; `attention.py` is `models/deepseek_v32/attention.py`, `mla_attention.py` and
+`sparse_mla_attention.py` are under `model_executor/layers/attention/`, `utils.py` is
+`v1/attention/backends/utils.py`.
+
+1. **The write comes first in each layer's call.** `attention.py:340-359`: `fused_norm_rope` writes the step's latent
+   rows into the layer's cache in the cache's format (`mla_kv_cache_dtype`) and returns the step's own rows before
+   any quantization.
+2. **The backend is another than Wednesday's** [derived: I read no server log]. On an H200 the platform's list is
+   FlashAttention's sparse backend, then FlashMLA's (`platforms/cuda.py:136-152`). The first takes only a bf16 cache
+   (`v1/attention/backends/mla/flashattn_mla_sparse.py:36-40`); the second takes the FP8 one
+   (`v1/attention/backends/mla/flashmla_sparse.py:110-117`). So W ran the first, as our capture map records, and F
+   runs FlashMLA's.
+3. **Which rows the attention treats as decode rows changes with it.** FlashMLA's sparse backend requires uniform
+   decode rows (`flashmla_sparse.py:265`; the others do not, `sparse_mla_attention.py:117`), and its threshold at 8
+   heads a rank is 256 tokens (`flashmla_sparse.py:279-292`, `config/model.py:1549-1561`). The split
+   (`utils.py:803-839`, called at `sparse_mla_attention.py:273-278`): a step whose rows all carry the same number of
+   tokens, at most 256, is all decode rows. Otherwise the decode rows are the leading rows that carry as many tokens
+   as the first row, and from the first row that carries another number on, every row is a prefill row, whatever its
+   length. The runner puts first the rows that hold drafts and carry the decode length, then the other rows that hold
+   drafts, then the rest by length (`v1/worker/gpu/model_runner.py:2209-2221`). So with drafts the decode rows are
+   the rows of 1 + K = 6 tokens. A decode row that a budget or the context limit cut short, a decode row that holds
+   no draft, and every prefill chunk, of any length, are prefill rows for the attention.
+4. **A decode row reads every key from the cache, its own included**: `attention.py:530-533`
+   (`forward_mqa(mqa_q_arg, kv_cache, …)`), and in a step that also has prefill rows `mla_attention.py:1037`.
+5. **A prefill row on the MHA path reads its own step's keys as the step computed them, not from the cache.**
+   `attention.py:496-508` hands `forward_impl` the step's `kv_c` and `k_pe`; `mla_attention.py:923-932` passes the
+   prefill rows' part to `forward_mha`; `mla_attention.py:3081-3085` builds the keys from them. On an H200 they stay
+   unquantized: converting a prefill's keys to FP8 needs another device class (`mla_attention.py:1806-1811`,
+   `:3087-3089`). **This is where the two values part: the same position is read unquantized by its own row in the
+   step that wrote it, and as stored FP8 bytes by every later step.**
+6. **The same row reads its earlier positions from the cache.** With a context, an earlier chunk of its prompt or a
+   prefix-cache hit, `forward_mha` calls `_compute_prefill_context` (`mla_attention.py:3104`, `:3118-3120`), which
+   for this cache format gathers the FP8 bytes and converts them up (`:2833-2834`,
+   `cp_gather_and_upconvert_fp8_kv_cache`). **So the FP8 read first enters a request at the first of: its first row
+   with a context (a second chunk, a row after a hit, any decode row), or a row in a step that does not take the MHA
+   path.** A prompt prefilled in one step on the MHA path with no hit emits its first token without one FP8 read;
+   its next row reads every earlier key as FP8.
+7. **Whether a step takes the MHA path is set by the step, not by the row.** Dense MHA when the longest sequence
+   among the step's prefill rows is at most `index_topk` (`sparse_mla_attention.py:290-292`, `:307-310`; 2,048 for
+   GLM-5.3, our copy of its config, `GLM53.config.json:22`). Masked MHA by a table over that longest sequence and
+   the longest prefill row, where the masked kernel is available and its workspace fits (`mla_attention.py:1113-1136`,
+   `:1769-1793`). For GLM-5.3's head sizes (256, 256; `GLM53.config.json:207-208`, `:222`) on FlashMLA's backend at
+   eight ranks (`mla_attention.py:1732-1740`): a step with no context up to 114,688 tokens, any chunk; a step with a
+   context only where its longest prefill row is at least 4,096 tokens (to a sequence of 8,192), 8,192 (to 16,384),
+   16,384 (to 32,768) or 32,768 (to 49,152). Otherwise every row of the step reads the cache
+   (`mla_attention.py:894-897`).
+8. **At W the two values do not exist, and our registered class's reason does not carry to F** [derived]. At W the
+   cache holds the bf16 words the step computed. And the registered class caps a prefill chunk at 256 rows, "so each
+   prefill chunk stays on DSA's decode route at 8 heads a rank" (our tree, `engine/profiles/engine_classes.py:5-6`)
+   [read]: true of the bf16 backend, whose split is by length alone. Under FlashMLA's split a chunk of 256 rows or
+   fewer is a prefill row unless it carries exactly the decode rows' length, and the published line caps no chunk
+   [relayed, entry 2]. So a registration at F needs its own statement of which row takes which read.
+9. **What follows for a replay** [derived]. Which value a row reads depends on its step's row lengths and their
+   order, on how its prompt was cut into steps, and on what it hit. All are the schedule, so a replay that repeats the
+   schedule reads the same values. That holds for row 1, as the try showed. It holds for row 16 under three
+   conditions. A span starts at a step's edge, never inside a prefill step. The page's leaf is the stored FP8 row,
+   not the bf16 row the step computed. And each stand-in row carries its served length in its served place, which
+   with drafts needs its kept counts forced (section 4): a kept count moves where a budget cuts a later row, and so
+   which rows of that step are decode rows. A prefix prefilled again in other chunks is not bit for bit. For the
+   circuit it means two reads of one position: the Program of a prefill row on the MHA path reads its own step's
+   rows as computed, and every other read is of the stored row; the compiler has the lengths and order that decide
+   which.
+10. **Not read**: node A's server log for the backend it picked; the draft layer's own attention in its later passes;
+    whether the indexer's key cache behaves the same way; the order of rows that tie in the runner's sort beyond
+    Python's stable order. The runner's trimming of drafts by measured timings is off by default and offered to
+    another draft method only (`config/speculative.py:539`, `:1519`), so it does not enter here.
+
+### 6. The recommended route, and what it needs by lane
+
+**Row 16** [derived]. It is the only route whose replay, interior and proving stay flat as the repeated share goes
+from 12% to 98%, and it leaves serving stock but for a page hash and a host copy. Friday's showing is row 1's: its
+pass starts from an empty engine, which a benchmark's does and a server under traffic does not.
+
+- **vllm's serve** [derived, on the lines read above].
+  - Commit each KV page when it fills and keep a host copy until the coins: at F the stored FP8 row, taken once the
+    page is in the prefix cache and the step that wrote its last kept row has ended. Not built. With the FP8 cache
+    the history tables are refused, so this page leaf is the only commitment the published line has a design for.
+  - The advice's form carries each row's kept count (VLLM-392). Until then no draft serve is certified.
+  - Hold the count directly in the replay's comparison: it compares rows and tokens, not the emitted counts
+    (`benchmarks/serve_tax/replay.py:231-243`).
+- **vllm's replay** [derived]. `rebuild.py --served --shape-only` needs a start inside the phase at TP8, a cut to a
+  span at a step's edge, one engine kept up, and, with a draft, a forced kept count for every stand-in row. None of
+  the four is built.
+- **circuits' Definitions** [derived]. The draft layer and the accept test, greedy and sampled; the FP8 cache's row,
+  written and read, with both reads of section 5 (a prefill row's own step unquantized on the MHA path, everything
+  else as stored); a Definition that opens a committed page; the size class's replay Definition on the two-stage
+  path; ranges to 262,144. Entry 2's list stands otherwise.
+- **network-accounting's certifier** [relayed: WATERLINE's note, table B]. The advice's form with the kept count, the
+  step circuit with a draft, the state chain and the compile slices, the charge: rows 1 and 3 to 6 of that table,
+  sized there at 250 to 350 lines for the step circuit and 200 to 400 over ten files for the slices.
+- **proofs** [derived]. (a) The statement for a replay block that reads committed values: a request may read in
+  several replay blocks and several requests may read one, each block charged at most what its readers serve. One
+  statement covers a cache hit and a long request's spans; CACHE has the sketch and the price, 1.5 times at 86
+  readers. Our load's readers of a page are one conversation [relayed, row 12]. (b) The accept check's uniqueness
+  lemma, and that a failed count in an unsampled replay block is a wrong block. (c) `proofs/spot-advice-certified`
+  stays titled at draft off until (b) and VLLM-392 land.
+- **The cost model** [derived]. A kept drafts' term in bits an output token while charged; the hit's reproving goes
+  and the page commitment and the readers' term come in, as entry 2 has it.
+
+### 7. Corrections to my earlier entries, and stale statements in maintained docs (listed, not fixed)
+
+- **Addendum 3e, withdrawn** [read: `advice_code/replay.py:35-43`; run: `gh pr view 9143`, merged 11:47Z]: "the advice
+  code refuses speculative decoding whole" and "until it models those lines the scheduled count is charged too". On
+  `main` the scheduler replay models one MTP module's draft, so the scheduled count is derived at 0 bits and only the
+  kept count is an input.
+- **Addendum 3e, withdrawn** [read: `codec.py:15-16`]: "the buckets bound the grouping" (section 4).
+- **Entry 2, superseded** [relayed, section 0]: "at most 2 bits a step at three draft tokens" (K is 5; section 4 has
+  the figures); "no hit past 384 tokens has been replayed this way" (now 120,704 at W); "#8897 (open, not marked)"
+  (on `main`).
+- **Entry 2, a path moved** [run: `git ls-files`]: `engine/engine_classes.py` is `engine/profiles/engine_classes.py`.
+- **`benchmarks/prod_repro/README.md:60-62`, stale on `main`** [read]. "the tree has no split of the bits by class":
+  `advice_code/by_class.py` is on `main` (#9076) [run: `git log`]. "Speculative decoding is off in every arm the
+  benchmark has, and the replay builds its engine without it": the `published` arm serves five draft tokens
+  (`benchmarks/serve_tax/README.md:48-49`) and the replay builds its engine with the header's speculative decoding
+  (`benchmarks/serve_tax/replay.py:9-10`, `:81-83`).
+- **`advice_code/by_class.py` has no class for the kept drafts** [run: `rg -i 'draft|specul'`, no match]: not wrong
+  while a draft serve is refused; VLLM-392's part 2 adds it.
+
+### 8. Message for Daniel
+
+**What Friday serves.** vLLM's published line for our cards: FP8 KV cache, five draft tokens, prefix cache on, context
+262,144. At those flags a whole pass replayed token for token, 23,363 of 23,363: greedy requests, cache hits up to
+102,336 tokens. Sampled requests run today.
+
+**Cheapest replay.** Re-run only the sampled request's own computed tokens, in its served steps, every other request
+replaced by zeros of its shape; read the cached prefix and its earlier positions from KV pages serving committed.
+Its cost does not grow with repeated tokens. At Wednesday's settings a 120,704-token cache hit, read from
+serving's pages, replayed bit for bit; at the published line's flags this replay has not run.
+
+**At serving.** A hash of each KV page and a host copy until the coins: modeled under 0.2% of serving time, not
+measured.
+
+**Advice.** Under the certified tick, rehearsed on one card, cache hits, admission and resumes cost 0 bits; length
+and ending cost 5.6 bits a request. Friday's certified zero is at draft off, because the advice has no field for the
+drafts each decode row kept; what closes it is that field, then the accept rule computed in each request's replay
+block, so the count is derived, not charged. Until then it costs 3 bits a decode row: about 0.66 bits an output
+token, 290 for a 444-token answer, at greedy requests' measured acceptance. It grows with output tokens, not
+requests.
+
+**Missing.**
+
+1. The guarantee for a replay block that reads committed values: one statement covers cache hits and long contexts,
+   at about 1.5 times today's bound.
+2. Circuit: the draft layer, its accept rule, the FP8 cache's row.
+3. Replay: nothing forces a stand-in's kept count, so the cheapest replay cannot yet run with drafts.
+
+**The message's figures, by tag** (292 words). [relayed]: the flags, 23,363 of 23,363, 102,336, 120,704, the 0 bits
+and 5.6 bits a request (11,186 over 2,000), draft off. [derived]: under 0.2% (entry 2: the page hash modeled at
+0.036% to 0.045% of a card), 3 bits a row, 0.66 bits an output token and 290 bits (section 4), 1.5 times (CACHE's
+model, entry 2).
+
+### 9. Not established
+
+Each with what would establish it.
+
+1. **A sampled request under drafts on GLM-5.3** [relayed: VLLM-377, 12:26Z]: neither its replay nor its acceptance
+   is shown. The first serve and replay is today's 14:50Z row; it had not started when I wrote this.
+2. **Row 16's replay at the published line's flags** [run: `rg`, no code]: one request among stand-ins with an FP8
+   cache and drafts has not run, and nothing forces a stand-in's kept count. Established by `rebuild.py` with that
+   forcing, on one request of the try's pass.
+3. **Row 16 at Wednesday's settings, two parts** [relayed, entry 2]: a start inside a pass at TP8, and a span cut
+   inside a request. Neither has code.
+4. **The page commitment beside serving** [derived, entry 2]: not built; its cost is modeled, 0.036% to 0.045% of a
+   card. At the published line's flags its leaf is the stored FP8 row, which no code hashes.
+5. **The cost of the record at the published line's flags** [relayed: VLLM-377, 09:20Z]: three readings from one
+   server lifetime an arm, +0.09%, +0.25% and +3.3%. Established by the rehearsal's pairs.
+6. **The kept drafts' charge under certification** [derived]: no certified figure exists, since a draft serve is
+   refused. Every figure in section 4 is from one greedy pass's counts, scaled to two shapes no run has served with
+   a draft. Acceptance under production sampling is not measured, so the rows a request has are not either.
+7. **A registered code's length for the kept count** [derived]: `draft_table` prints an entropy fitted to the trace
+   it charges. Whether a code registered before the run stays near 1.36 to 1.84 bits a row on another trace is not
+   shown.
+8. **That the count is unique given its checks** [derived]: argued from reading the pin's accept test; no Lean and
+   no run. The longest-common-prefix form is read at P for the greedy and the sampled rule and not for the synthetic
+   rule; block verification's test I did not read.
+9. **That advice a block's output is held equal to may be charged 0** [derived]: the rules have no such class. It is
+   a ruling and a statement, proofs' and Daniel's.
+10. **Whether the step record's positions are the ones the GPU ran, under async scheduling with drafts** [derived,
+    addendum 3b]: the scheduler's count is an upper bound the GPU corrects, and the replay's comparison does not read
+    the emitted counts. Established by comparing them, one line in `replay.py`.
+11. **The guarantee for a replay block that reads committed values** [relayed: CACHE's final]: a sketch and a
+    modeled price; no statement on `main`.
+12. **The FP8 reading's edges** [read, section 5 item 10]: the backend node A picked, which I derive from the pin's
+    list and did not read in a server log; the draft layer's later passes; the indexer's key cache. And which rows
+    take which read under a registration at F: our registered class's sentence is about the bf16 backend.
+13. **A request past 131,072 tokens** [relayed: VLLM-377, 09:20Z and 12:26Z]: the try's load cut requests there. One
+    request ending at 262,144 is in today's rehearsal.
+14. **The kept drafts' charge pooled over a week, a month and a year for a datacenter and for all compute**
+    [derived]: I give a rate an output token and one node's totals at a rate that is not the published line's. The
+    census's output tokens are not read.

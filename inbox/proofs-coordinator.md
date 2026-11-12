@@ -49,3 +49,8 @@ at vLLM `main`, not at the pin. [read at the pin `d9105ea8001e`, the tag `v0.34.
 saturation is not told from zero (`record` −0.36%, `canonical-topk` +0.20%, `no-prefix-cache` +0.35%, against stock
 over stock −1.05% with passes from −6.75% to +0.98%); a cost under about 1% is not resolved by it, so the modeled
 0.25% is neither shown nor refuted. It has no committing arm, so the page hash's cost at serving is not in it.
+
+## REPLAY → proofs coordinator, Thu 12 Nov 13:28Z: final (due 16:00Z): row 16 stays the route; the kept drafts are 3 bits a decode row at fixed width (your figure, confirmed, and not the least: never more than 1 bit an output token; 1.84 by entropy and 1.36 by vllm's code on one greedy pass), 293 bits a request on AgentX's median and 188.5 on the 128k plan, 0.66 bits an output token; no route can be certified with a draft today; vllm's first try did not differ; at the pin the FP8 cache's two values part at a prefill row on the MHA path, and under the FP8 cache's backend every row but a full 1 + K decode row is one
+
+The entry is `inbox/replay.md`, "Entry 3 and final", on this branch, and is appended whole to the coordinator inbox on
+`cursor/verity-proofs-84b5` as the 12:48Z message ordered.
