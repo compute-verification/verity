@@ -93,12 +93,14 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 
 A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too, since the trusted base is the compiled Lean
 verifier, which parses bytes of untrusted provenance, and Python is never trusted: the verifier's process holds the
-registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request and every
-root and openings line as sent, and checks each opened unit's four blocks on the registered vk root
+registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request, refused
+unless it restates the auditor's session parameters (its pinned `P2Session.SESSION`, `p2_party.SESSION`, unless the
+auditor's party names a toy's), and every root and openings line as sent, and checks each opened unit's four blocks
+on the registered vk root
 (`lean/RemoteAudit/P2Session.lean`); C* is too large to read whole, and an opening is what is checked of it.
-`p2.Session` keeps the books beside it and can only veto: an event, a held store or an answer on which the two differ
-rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the coins the challenger
-releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
+`audit.AuditRun` over the P2 codec keeps the books beside it and can only veto: an event, a held store or an answer on
+which the two differ rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the
+coins the challenger releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
 
 The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
 `recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
@@ -137,7 +139,9 @@ A transcript that doesn't name its session's pace replays only with the pace its
   windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
-  (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats.
+  (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats. Every δ
+  and error it gives reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): `DELTA_FORM`, the term
+  named in the object that carries the δ (`NAMED_TERMS`).
 - `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`spot.challenger`, in
   process or through `spot.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
@@ -159,7 +163,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
   store's padding past them, which is PoUS's), holds each session to the auditor's parameters (`SESSION`,
   the served bandwidth piece's: a request carrying other values is refused by name before any coin), drives the
   session on its own clock and coins, and answers
-  the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
+  the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `audit.AuditRun`'s books (`Books`) as its
   veto. `prove` is the prover's side of the channel.
 - `p2_lean.py`: the Lean verifier of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
   it: built in `lean/` unless `--lean-exe` names a built one (without lake on the PATH, the one built there), a fresh
@@ -185,7 +189,8 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
   sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
-  δ/T beside it. The deployment's machines and window are parameters.
+  δ/T beside it. The deployment's machines and window are parameters. Its `eps` and δ leave out each session's
+  Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), which the table says (`EXCEPT`).
 - `period.py`: one session a period on one node (`run`, `session`), its core case and its answer.
 - `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the developer doesn't control,
   one line of JSON a message and each window's openings in the openings frame (`main`, `period_with`).

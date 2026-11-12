@@ -39,6 +39,7 @@ members = [
     "verity-core-composition",
     "verity-core-evaluate",
     "verity-core-firewall",
+    "verity-core-periods",
     "verity-core-sampled-proofs",
     "verity-difftest",
     "verity-exact-kit",
@@ -2507,6 +2508,23 @@ requires-dist = [
 ]
 
 [[package]]
+name = "verity-core-periods"
+version = "0.0.0"
+source = { virtual = "verity/periods" }
+dependencies = [
+    { name = "hypothesis" },
+    { name = "verity" },
+    { name = "verity-difftest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "hypothesis", specifier = ">=6.100" },
+    { name = "verity", editable = "." },
+    { name = "verity-difftest", editable = "verity/difftest" },
+]
+
+[[package]]
 name = "verity-core-sampled-proofs"
 version = "0.0.0"
 source = { virtual = "verity/protocols/spot/verifier/lean" }
@@ -2595,7 +2613,7 @@ requires-dist = [{ name = "research", editable = "tools/research" }]
 [[package]]
 name = "verity-machine-model"
 version = "0.0.0"
-source = { editable = "benchmarks/pouw/machine_model" }
+source = { editable = "benchmarks/machine_model" }
 dependencies = [
     { name = "numpy" },
     { name = "scipy" },

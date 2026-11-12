@@ -1570,8 +1570,10 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
     closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
-    ``limit`` of each, the longest idle first, each
-    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    ``limit`` of each, the longest idle first, each logged by name.  Each push leases the tip it saw, so a branch pushed to
+    meanwhile is kept.  Drive sweeps with ``into`` its landing branch (`Queue.into`: `checked` under drive.toml's
+    `land_into`), since `main` lags it by hours; a revert on `checked` then leaves its PR's branch deleted, and the PR's head
+    ref (`refs/pull/N/head`) keeps its commits.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
@@ -1717,11 +1719,16 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
-    None when ``repo`` can't make one."""
+    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
+    under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
+    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
     import shutil
 
-    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    from .settings import train_trees
+
+    if root := train_trees():
+        os.makedirs(root, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
     if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
         shutil.rmtree(tree, ignore_errors=True)
         return None

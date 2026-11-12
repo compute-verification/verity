@@ -17,12 +17,12 @@ coins a sample reads are any such run's released coins, or a break (`drawn_relea
 label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
-`Flock.FV3.root` over its leaves, the top of `FrameV3Sha512`'s tree (`Tree.lev`) over them under the run's domain
-(`root_eq`: frame-v3's integers are `natBytes`, `uint_eq`), and `Registered.climbL` is `Attest`'s `climbRec`
-(`climbL_eq`). The device hashes every node of that tree (`node_mem`) and every leaf's strings (`leaf_mem`); the
-reader hashes each opening's (`opening_mem`). So under no collision among what the two hash (`CF`), `Attest.climb_bind`
-makes the opening's leaf digest the run's leaf at its position, and `Coin.coin_eq` makes its coin the run's coin there
-(`coin_of_opening`). A collision among them is a break the finder outputs (`cf_of_not_break`).
+`Flock.FV3.root` over its leaves, the top of `Flock.FV3.Domain`'s tree (`Tree.lev`) over them under the run's domain
+(`root_eq`), and `Registered.climbL` is `Attest`'s `climbRec` (`climbL_eq`). The device hashes every node of that tree
+(`node_mem`) and every leaf's strings (`leaf_mem`); the reader hashes each opening's (`opening_mem`). So under no
+collision among what the two hash (`CF`), `Attest.climb_bind` makes the opening's leaf digest the run's leaf at its
+position, and `Coin.coin_eq` makes its coin the run's coin there (`coin_of_opening`). A collision among them is a break
+the finder outputs (`cf_of_not_break`).
 
 `collisionIn_valid`, `collisionIn_ne_none` and `findBreak_valid` are the finder's two outputs, read over
 `Properties.Challenger`'s definitions.
@@ -34,8 +34,8 @@ namespace Properties.Challenger.Coins
 
 open Lean (Json)
 open Spot Spot.Challenger
-open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_depth lev_size hash_size)
-open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind)
+open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_pow_log2ceil lev_size hash_size)
+open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind climbL_climbRec)
 open Properties.Pouw.LiveSalt (jsonStrIs_eq)
 open Properties.Pouw.LiveSalt.Coin (leafMsg coin_eq reason_ok)
 
@@ -109,36 +109,24 @@ theorem cf_of_not_break (hb : ¬ Break dev key label coins) :
     · cases hf
     · exact collisionIn_ne_none hx hy hne he (Option.map_eq_none_iff.1 hf)
 
-/-! ## frame-v3's integers, climb and tree -/
-
-/-- frame-v3's `uint` is `natBytes`: minimal big-endian, one zero byte for 0. -/
-theorem uint_eq (x : Nat) : Flock.FV3.uint x = FrameV3Sha512.uint x := by
-  have hn : (Nat.log2 x + 8) / 8 = max 1 (((if x = 0 then 0 else Nat.log2 x + 1) + 7) / 8) := by
-    split
-    · subst x; decide
-    · omega
-  unfold Flock.FV3.uint FrameV3Sha512.uint FlockSoundness.Randomness.natBytes
-  simp only [hn]
+/-! ## frame-v3's climb and tree -/
 
 theorem shift_eq (c : Nat) : c >>> 1 = c / 2 := by rw [Nat.shiftRight_eq_div_pow, Nat.pow_one]
 
-theorem node_eq (d : FrameV3Sha512.Domain) (l i : Nat) (a b : ByteArray) :
-    Flock.Registered.node d.id l i a b = d.node l i a b := by
-  simp only [Flock.FV3.Sha512.node, FrameV3Sha512.Domain.node, FrameV3Sha512.hash, uint_eq]
+theorem node_eq (d : Flock.FV3.Sha512.Domain) (l i : Nat) (a b : ByteArray) :
+    Flock.Registered.node d.id l i a b = d.node l i a b := rfl
 
 /-- `Registered.climbL` is `Attest`'s `climbRec`. -/
-theorem climbL_eq (d : FrameV3Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
-    Flock.Registered.climbL d.id cur idx l path = climbRec d l idx cur path
-  | [], _, _, _ => rfl
-  | sib :: rest, cur, idx, l => by
-    rw [Flock.FV3.Sha512.climbL, climbRec, climbL_eq d rest, shift_eq, node_eq, node_eq]
+theorem climbL_eq (d : Flock.FV3.Sha512.Domain) (path : List ByteArray) (cur : ByteArray) (idx l : Nat) :
+    Flock.Registered.climbL d.id cur idx l path = climbRec d l idx cur path :=
+  (Flock.FV3.Sha512.climbL_eq d.id cur idx l path).trans (climbL_climbRec d path l idx cur)
 
 /-- The node frames `Registered.climbL` hashes are `Attest`'s `climbInputs`. -/
-theorem frames_eq (d : FrameV3Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
+theorem frames_eq (d : Flock.FV3.Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
     climbFrames d.id cur idx l path = MemoryChallenger.Attest.Properties.climbInputs d l idx cur path
   | [], _, _, _ => rfl
   | sib :: rest, cur, idx, l => by
-    simp only [climbFrames, MemoryChallenger.Attest.Properties.climbInputs, shift_eq, uint_eq]
+    simp only [climbFrames, MemoryChallenger.Attest.Properties.climbInputs, shift_eq]
     split <;> exact congrArg _ (frames_eq d rest _ _ _)
 
 theorem log2ceil_pow (D : Nat) : Flock.log2ceil (2 ^ D) = D := by
@@ -153,30 +141,30 @@ theorem log2ceil_pow (D : Nat) : Flock.log2ceil (2 ^ D) = D := by
     have hu := (Nat.log2_lt hne).mpr (show 2 ^ (D + 1) - 1 < 2 ^ (D + 1) by omega)
     omega
 
-theorem log2ceil_nextPow2 (n : Nat) : Flock.log2ceil (Flock.nextPow2 n) = FrameV3Sha512.depth n :=
+theorem log2ceil_nextPow2 (n : Nat) : Flock.log2ceil (Flock.nextPow2 n) = Flock.log2ceil n :=
   log2ceil_pow _
 
-theorem fold_next (d : FrameV3Sha512.Domain) (L : Array ByteArray) : ∀ k s,
+theorem fold_next (d : Flock.FV3.Sha512.Domain) (L : Array ByteArray) : ∀ k s,
     (List.range' s k).foldl (fun a l => next d l a) (lev d L s) = lev d L (s + k)
   | 0, _ => rfl
   | k + 1, s => by
     rw [List.range'_succ, List.foldl_cons, show s + (k + 1) = s + 1 + k by omega]
     exact fold_next d L k (s + 1)
 
-/-- **`FV3.root` is the top of `FrameV3Sha512`'s tree** over the same leaves, under the domain `dom`. -/
+/-- **`FV3.root` is the top of `FV3.Domain`'s tree** over the same leaves, under the domain `dom`. -/
 theorem root_eq (dom : ByteArray) (n : Nat) (L : Array ByteArray) :
-    Flock.FV3.root dom L Flock.Sha512.hash = (lev ⟨dom, n⟩ L (FrameV3Sha512.depth L.size))[0]! := by
+    Flock.FV3.root dom L Flock.Sha512.hash = (lev ⟨dom, 0, n⟩ L (Flock.log2ceil L.size))[0]! := by
   unfold Flock.FV3.root
-  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind, uint_eq]
-  have hs : [:Flock.log2ceil (Flock.nextPow2 L.size)].size = FrameV3Sha512.depth L.size := by
+  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind]
+  have hs : [:Flock.log2ceil (Flock.nextPow2 L.size)].size = Flock.log2ceil L.size := by
     simp [Std.Legacy.Range.size, log2ceil_nextPow2]
   rw [hs]
-  have h := fold_next ⟨dom, n⟩ L (FrameV3Sha512.depth L.size) 0
+  have h := fold_next ⟨dom, 0, n⟩ L (Flock.log2ceil L.size) 0
   simp only [Nat.zero_add] at h
-  show ((List.range' 0 (FrameV3Sha512.depth L.size)).foldl (fun a l => next ⟨dom, n⟩ l a)
-    (lev ⟨dom, n⟩ L 0)).getD 0 ByteArray.empty = _
+  show ((List.range' 0 (Flock.log2ceil L.size)).foldl (fun a l => next ⟨dom, 0, n⟩ l a)
+    (lev ⟨dom, 0, n⟩ L 0)).getD 0 ByteArray.empty = _
   rw [h]
-  have h1 := lev_size ⟨dom, n⟩ L _ le_rfl
+  have h1 := lev_size ⟨dom, 0, n⟩ L _ le_rfl
   simp only [Nat.sub_self, Nat.pow_zero] at h1
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by omega), getElem!_pos _ 0 (by omega)]
   rfl
@@ -187,10 +175,9 @@ theorem getElem!_toList (a : Array ByteArray) (i : Nat) : a.toList[i]! = a[i]! :
   simp only [getElem!_def, Array.getElem?_toList]
 
 /-- The node frames of level `l` of the tree over `L` under `d`. -/
-def levFrames (d : FrameV3Sha512.Domain) (L : Array ByteArray) (l : Nat) : List ByteArray :=
+def levFrames (d : Flock.FV3.Sha512.Domain) (L : Array ByteArray) (l : Nat) : List ByteArray :=
   (List.range ((lev d L l).size / 2)).map fun i =>
-    MemoryChallenger.Properties.frameInput "node"
-      [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!]
+    Flock.FV3.input "node" [d.id, Flock.FV3.uint l, Flock.FV3.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!]
 
 /-- One step of the device's node fold: the node frames over a level, and the level above. -/
 def nodeStep (dom : ByteArray) (acc : List ByteArray × List ByteArray) (depth : Nat) :
@@ -204,25 +191,25 @@ def nodeStep (dom : ByteArray) (acc : List ByteArray × List ByteArray) (depth :
 
 /-- The device's node fold over the tree's levels from `s` gives the levels above and their frames. -/
 theorem fold_frames (dom : ByteArray) (n : Nat) (L : Array ByteArray) : ∀ k s (acc : List ByteArray),
-    (List.range' s k).foldl (nodeStep dom) ((lev ⟨dom, n⟩ L s).toList, acc) =
-      ((lev ⟨dom, n⟩ L (s + k)).toList, acc ++ (List.range' s k).flatMap (levFrames ⟨dom, n⟩ L))
+    (List.range' s k).foldl (nodeStep dom) ((lev ⟨dom, 0, n⟩ L s).toList, acc) =
+      ((lev ⟨dom, 0, n⟩ L (s + k)).toList, acc ++ (List.range' s k).flatMap (levFrames ⟨dom, 0, n⟩ L))
   | 0, s, acc => by simp
   | k + 1, s, acc => by
     rw [List.range'_succ, List.foldl_cons]
-    have hf : (List.range ((lev ⟨dom, n⟩ L s).toList.length / 2)).map (fun i =>
-          fv3Message "node" [dom, Flock.FV3.uint s, Flock.FV3.uint i, (lev ⟨dom, n⟩ L s).toList[2 * i]!,
-            (lev ⟨dom, n⟩ L s).toList[2 * i + 1]!]) = levFrames ⟨dom, n⟩ L s := by
-      simp only [levFrames, Array.length_toList, getElem!_toList, uint_eq]
+    have hf : (List.range ((lev ⟨dom, 0, n⟩ L s).toList.length / 2)).map (fun i =>
+          fv3Message "node" [dom, Flock.FV3.uint s, Flock.FV3.uint i, (lev ⟨dom, 0, n⟩ L s).toList[2 * i]!,
+            (lev ⟨dom, 0, n⟩ L s).toList[2 * i + 1]!]) = levFrames ⟨dom, 0, n⟩ L s := by
+      simp only [levFrames, Array.length_toList, getElem!_toList]
       rfl
-    have hl : (levFrames ⟨dom, n⟩ L s).map Flock.Sha512.hash = (lev ⟨dom, n⟩ L (s + 1)).toList := by
+    have hl : (levFrames ⟨dom, 0, n⟩ L s).map Flock.Sha512.hash = (lev ⟨dom, 0, n⟩ L (s + 1)).toList := by
       simp only [levFrames, List.map_map, lev, next, Array.toList_map, Array.toList_range]
       rfl
     simp only [nodeStep, hf, hl]
     rw [fold_frames dom n L k (s + 1), List.flatMap_cons, List.append_assoc, show s + 1 + k = s + (k + 1) by omega]
 
 theorem nodes_eq (dom : ByteArray) (n : Nat) (L : Array ByteArray) (k : Nat) :
-    (List.range k).foldl (nodeStep dom) ((lev ⟨dom, n⟩ L 0).toList, []) =
-      ((lev ⟨dom, n⟩ L k).toList, (List.range k).flatMap (levFrames ⟨dom, n⟩ L)) := by
+    (List.range k).foldl (nodeStep dom) ((lev ⟨dom, 0, n⟩ L 0).toList, []) =
+      ((lev ⟨dom, 0, n⟩ L k).toList, (List.range k).flatMap (levFrames ⟨dom, 0, n⟩ L)) := by
   rw [List.range_eq_range', fold_frames, List.nil_append, Nat.zero_add]
 
 theorem leaves_size (s : Run) (dom : ByteArray) : (s.leaves dom).size = total s.families := by
@@ -244,16 +231,15 @@ theorem leaves_get (s : Run) (dom : ByteArray) {p : Nat} (hp : p < total s.famil
 theorem mem_deviceHashed {pk dom : ByteArray} {s : Run} {c : LiveCommitment} {x : ByteArray} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c)
     (hx : x ∈ ((List.range (total s.families)).flatMap fun p => leafHashed s.scheme dom p (s.coins p) (s.salts p)) ∨
-      x ∈ (List.range (FrameV3Sha512.depth (total s.families))).flatMap
-        (levFrames ⟨dom, total s.families⟩ (s.leaves dom))) :
+      x ∈ (List.range (Flock.log2ceil (total s.families))).flatMap
+        (levFrames ⟨dom, 0, total s.families⟩ (s.leaves dom))) :
     x ∈ deviceHashed dev pk := by
-  have hb : (lev ⟨dom, total s.families⟩ (s.leaves dom) 0).toList =
+  have hb : (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) 0).toList =
       (s.leaves dom).toList ++ ((List.range (Flock.nextPow2 (total s.families) - total s.families)).map fun k =>
         fv3Message "pad" [dom, Flock.FV3.uint (total s.families + k)]).map Flock.Sha512.hash := by
-    simp only [lev, base, leaves_size, Array.toList_append, Array.toList_map, Array.toList_range, List.map_map,
-      uint_eq]
+    simp only [lev, base, leaves_size, Array.toList_append, Array.toList_map, Array.toList_range, List.map_map]
     rfl
-  have hn := nodes_eq dom (total s.families) (s.leaves dom) (FrameV3Sha512.depth (total s.families))
+  have hn := nodes_eq dom (total s.families) (s.leaves dom) (Flock.log2ceil (total s.families))
   rw [hb] at hn
   unfold deviceHashed
   simp only [List.mem_append, List.mem_flatMap]
@@ -271,11 +257,11 @@ theorem mem_deviceHashed {pk dom : ByteArray} {s : Run} {c : LiveCommitment} {x 
 /-- The device hashes every node of its run's tree. -/
 theorem node_mem {pk dom : ByteArray} {s : Run} {c : LiveCommitment} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c) {l i : Nat}
-    (hl : l < FrameV3Sha512.depth (s.leaves dom).size)
-    (hi : i < (lev ⟨dom, total s.families⟩ (s.leaves dom) l).size / 2) :
-    MemoryChallenger.Properties.frameInput "node" [dom, FrameV3Sha512.uint l, FrameV3Sha512.uint i,
-      (lev ⟨dom, total s.families⟩ (s.leaves dom) l)[2 * i]!,
-      (lev ⟨dom, total s.families⟩ (s.leaves dom) l)[2 * i + 1]!] ∈ deviceHashed dev pk := by
+    (hl : l < Flock.log2ceil (s.leaves dom).size)
+    (hi : i < (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) l).size / 2) :
+    Flock.FV3.input "node" [dom, Flock.FV3.uint l, Flock.FV3.uint i,
+      (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) l)[2 * i]!,
+      (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) l)[2 * i + 1]!] ∈ deviceHashed dev pk := by
   refine mem_deviceHashed hs hd hc (.inr ?_)
   rw [leaves_size] at hl
   simp only [List.mem_flatMap, List.mem_range]
@@ -373,17 +359,16 @@ theorem coin_of_opening {pk : ByteArray} {S : List ByteArray} (cf : CF S) {s : R
     subst hdd
     have hpos : pos < total s.families := position_lt hp
     set L := s.leaves dom
-    set d : FrameV3Sha512.Domain := ⟨dom, total s.families⟩
+    set d : Flock.FV3.Sha512.Domain := ⟨dom, 0, total s.families⟩
     have hL : L.size = total s.families := leaves_size s dom
     have hdg : (Flock.Sha512.hash (leafMsg dom pos ⟨s.scheme, s.epoch, s.families, Flock.FV3.root dom L Flock.Sha512.hash⟩
         o)) = (lev d L 0)[pos]! := by
       refine climb_bind cf (leaves_width s dom) ?_ o.path 0 pos _ ?_ ?_ (hash_size _) hw ?_ ?_
       · intro l i hl hi
         exact hD _ (node_mem hs hd hsc hl hi)
-      · rw [Nat.zero_add, hlen, hL]
-        rfl
+      · rw [Nat.zero_add, hlen, hL] <;> rfl
       · rw [Nat.sub_zero, hL]
-        exact Nat.lt_of_lt_of_le hpos (le_depth _)
+        exact Nat.lt_of_lt_of_le hpos (le_pow_log2ceil _)
       · intro x hx
         rw [← frames_eq d] at hx
         refine hR x (liveHashed_mem (o := o) hd hp ?_)

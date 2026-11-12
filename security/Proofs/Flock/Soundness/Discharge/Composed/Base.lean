@@ -1,9 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkBind
-public import Proofs.Flock.Soundness.Discharge.ZkExec
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-public import Proofs.Flock.Soundness.Discharge.ZkView
 public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 public import Proofs.Flock.Soundness.Refine.Regions
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -19,6 +16,56 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
+public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
+public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+public import Proofs.Flock.Soundness.Discharge.ZkView
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.ZkBind.AtM1
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCut
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigMain
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
+public import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
 /-!
 # A sample's `--zk` table: its coins and sizes

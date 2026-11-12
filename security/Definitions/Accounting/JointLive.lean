@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Accounting.JointBlocks
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Claims
 public import Definitions.Core.Game
@@ -190,7 +189,7 @@ structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : �
   /-- the read deadline, in ticks (T_read) -/
   readDeadline : ℕ
 
-/-- **Block `b`'s memory term at share `σ`** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s): at each of
+/-- **Block `b`'s memory term at share `σ`** on the run `o` of the strategy `s`: at each of
 its PoUS challenge times, the bits of device memory its capacity account doesn't hold, `M` less what it holds, are at
 most `σ · M + S_chip + ∑_i cap_i · T_read`, `M` the device's memory. -/
 def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {B : ℕ}

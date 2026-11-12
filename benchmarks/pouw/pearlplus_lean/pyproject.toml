@@ -1,0 +1,17 @@
+# Pearl+'s run verdict in Lean (`pouw-pearlplus`, verity/protocols/pouw/verifier/lean/pearlplus) held to the Python's
+# (`pearl_c_vllm/verify_run.verify_passes`) on the passes verify_run's tests prove on the CPU, and on a recorded H200 run's
+# passes where `POUW_PEARLPLUS_RECORDED` names them. Not a package: the tests run here as a suite.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `lake build pouw-pearlplus` reads the package and what it requires by path, all under verity/core; the passes are
+# test_pearl_c_vllm's (`proved_pass`), which loads the sm_120 kernel's run and fixture, the simt twin, the hash-decode and
+# sm_90 prefill tests at import, the reference verifier and its give-up (pearl_c_vllm) over the clear audit, and
+# pearl_c_sm90 (the H100 kernel bench_arm names, the give-up's device path) with the run result and settings it reads.
+inputs = ["verity", "verity/protocols/pouw/verifier/lean/pearlplus/lakefile.toml", "adapters/vllm/verity_vllm",
+          "verity/configuration/config/verity_config", "verity/protocols/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
+          "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
+          "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",
+          "benchmarks/pouw/run_result.py", "benchmarks/pouw/settings.py"]

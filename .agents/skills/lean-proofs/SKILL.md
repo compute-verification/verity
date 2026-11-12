@@ -122,6 +122,9 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
 ## Before the PR
 
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
+- A PR that adds proof modules no guarantee reads yet sets its area's entry in the unread ratchet's file to the
+  check's count in its own diff, with no room (`unread.py`'s `ratchet`, whose failure names the file and prints the
+  entry), and lists in its body each module, the guarantee that will read it and the date that guarantee is listed by.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
@@ -146,8 +149,9 @@ Their history is in the decisions log.
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
   bounded by what the run carries. No assumed advantage bounds but PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`, in the lock) and the sampled audits' per-finder bound below. An input
-  condition is a verifier refusal, not a hypothesis.
+  (`StraightLineExtraction`, `SeedExtractedAt`), SHA-512 as a PRF, `Hash.Assumptions.Sha512Prf`, whose advantage
+  `ε(t, Q)` is a parameter each bound that takes it adds per test (PoUS's `PeriodHeldSha512`), all in the lock, and
+  the sampled audits' per-finder bound below. An input condition is a verifier refusal, not a hypothesis.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision

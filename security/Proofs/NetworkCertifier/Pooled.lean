@@ -46,9 +46,9 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The incorrect proof blocks over a monitoring period: the escapes multiply
 
-A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(n - f, k) / C(n, k)`, at most
-`(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its wrong
-set fixed before its own sample, every sample missing its window's set while the sets hold `F` units in total has
+A uniform `k`-subset of `n` blocks misses a set of `f` blocks with probability `C(n - f, k) / C(n, k)`, at most
+`(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its incorrect
+set fixed before its own sample, every sample missing its window's set while the sets hold `F` blocks in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
 (`pr_adaptive_le`, the monitoring-period step `prCoin_forall_sum_le_pow` read in `Pr`). With
 each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`.

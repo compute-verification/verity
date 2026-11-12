@@ -8,7 +8,7 @@ own Commit.
   hooks sit on top of the committer's, and closes it first thing at the window's close, before the committer comes off.
   The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit period's steps
   (``--window-steps``); a window that closes early (idle, ``--window-gb``, ``--window-requests``) closes H1's with its
-  remaining steps empty (`pouw_h1.H1Run.close`).
+  remaining steps empty (`pouw_h1.H1Run.close`), unless it served none on in-process coins (`UNSERVED`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
   (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with a
   key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
@@ -100,6 +100,10 @@ SESSIONED = ("challenger", "session", "gate", "period")
 AT = "127.0.0.1:7811"
 #: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
+#: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
+#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is drawn, as it
+#: holds no session, credits nothing and seals nothing
+UNSERVED = "none: the window served no step and holds no session"
 #: an s_a's bytes a row (f32)
 S_A_BYTES = 4
 
@@ -123,15 +127,21 @@ def worker(name: str) -> ThreadPoolExecutor:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class GateOptions:
-    """serve-openai's ``--challenger-gate`` and ``--challenger-peer`` (its ``gate`` group, `sessions_of`)."""
+    """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
+    `sessions_of`, `serve_pearl.live`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
                                          help="with --protocols: the auditor host's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
-                                              "session of its own there and draws its coins from it (serve_h1.GateSessions); "
+                                              "session of its own there and draws its coins from it (serve_h1.GateSessions), "
+                                              "each Pearl+ window a salt-only session (serve_pearl.live); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
                                          help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
                                               "challenger reaches the server (ssh -R)")
+    challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
+                                         help="with --challenger-gate under Pearl+'s arm: the lane whose gate key the gate's "
+                                              "command holds, whose open period in the auditor's ledger each window's "
+                                              "salt-only session joins (pouw_h1_window.reserve_salt); PoUW H1's take none")
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
@@ -139,7 +149,8 @@ class GateOptions:
                                         "published path")
     h1_receipts: bool = option("--h1-receipts", default=False, action="store_true",
                                help="with --protocols: each H1 window registers each call's receipt@<c>, the receipts a "
-                                    "lanes-form K's combine reads (pouw_h1_receipts.Receipts.serving), computed inline")
+                                    "drawn J10-R call statement's o0 and a lanes-form K's combine read "
+                                    "(pouw_h1_receipts.Receipts.serving), computed inline")
     h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
                                   help="with --challenger-gate: the auditor's registration role of the served model (a role "
                                        "of the pinned tree's manifests/checkpoints-int8.json, the gate's models.MANIFESTS); "
@@ -210,6 +221,10 @@ def refusal(opts: Any) -> str | None:
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
+    if opts.gate.challenger_lane:
+        from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
+
+        return f"--challenger-lane is Pearl+'s (--protocols {PEARL}, serve_pearl): PoUW H1's windows take none"
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
     if (opts.gate.h1_prover or opts.gate.h1_receipts or opts.gate.h1_window_commit) and not opts.protocols:
@@ -224,7 +239,10 @@ def refusal(opts: Any) -> str | None:
     if not opts.protocols:
         return None
     if opts.protocols != ENTRY:
-        return f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1) only"
+        from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
+
+        return (f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1, serve_h1) and {PEARL} (Pearl+, "
+                "serve_pearl) only")
     if not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest:
         return (f"--protocols {ENTRY} taps the server's rows-sha512 Commit (its int8 source and step-input port): it needs "
                 "--commit, --scheme rows-sha512 and the bench row's --required-manifest")
@@ -482,12 +500,14 @@ class H1Windows:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the sampling coin
         opened and its session closed), with ``draws`` its sample put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
-        one of the windows ``releasing``."""
+        one of the windows ``releasing``. A window on in-process coins that served no step is `UNSERVED`."""
         t0 = t1 = self.clock()
         end = drawn = None
+        unserved = held is None and error is None and run.step < 0
         try:
             try:
-                comp.close()
+                if not unserved:
+                    comp.close()
             except (ValueError, RuntimeError, OSError) as e:      # the window's failure, its outcome's error
                 error = error or f"{type(e).__name__}: {e}"
             finally:
@@ -501,7 +521,7 @@ class H1Windows:
                 if self.tie is not None:
                     self.tie.bound(window, run)
                 t1 = self.clock()
-                if self.draws is not None:
+                if self.draws is not None and not unserved:
                     drawn = self.drawn(window, run, held, error)
                 if held:
                     end = self.sessions.ended(held["session"])
@@ -510,6 +530,8 @@ class H1Windows:
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
+            if unserved:
+                out.update(steps_served=0, release=UNSERVED)
             if drawn is not None:
                 out["draw"] = drawn
             if kept is not None:
@@ -642,17 +664,17 @@ class H1Windows:
                 "releasing": releasing, "unused": unused[:20]}
 
 
-def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | None = None) -> H1Windows | None:
+def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | None = None, day: Any = None) -> H1Windows | None:
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
     ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` (window
     0's reserved while the Program is declared), its prover state in ``--h1-prover``, its Commit record named by
-    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``, the advice trace's drain) and its release on a
-    `worker` of its own, made ready (`H1Windows.ready`)."""
+    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``, the advice trace's drain, each window naming ``day``,
+    `serve_day.Day`, when given) and its release on a `worker` of its own, made ready (`H1Windows.ready`)."""
     from verity_vllm.pipeline.serve_tie import WindowTie
 
     if not opts.protocols:
         return None
-    tie = WindowTie(opts.gate.h1_window_commit, out, flush=flush) if opts.gate.h1_window_commit else None
+    tie = WindowTie(opts.gate.h1_window_commit, out, flush=flush, day=day) if opts.gate.h1_window_commit else None
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)

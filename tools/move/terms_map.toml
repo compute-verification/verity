@@ -1,0 +1,731 @@
+# The terminology clean: what `tools/move/rename.py --map tools/move/terms_map.toml` renames, GLOSSARY.md's older names
+# to their terms (`tests/lint/test_repo_retired_terms.py` refuses each one's new uses). Phrases come before the words
+# they hold, and a prose phrase before the identifier spelling of its word, so that prose reads in the term and code in
+# its identifier: "the firewall" becomes "the ZK server", `firewall_state` `zk_server_state`. Identifiers are renamed only
+# where GLOSSARY.md's row says "until renamed" (`Flock.Firewall`, `DrawIsCoin`); a row's other identifiers stay, so "law"
+# is renamed in prose only and `law`, `Law` and `drawLaw`'s `Law` stay. What recorded data or another system reads keeps
+# its spelling ([keep]): record keys and reason codes (a quoted lowercase token), kebab-case names (CLI flags and the
+# attributes argparse makes of them, binaries, executables, distributions, check steps, schema names), environment
+# variables, stored labels, domain tags and format ids. A uv workspace member's directory stays where it is ([keep_in]):
+# moving it is a `uv.lock` edit, which is its own layout move's. Declarations keep their place in the locks' records:
+# `rename.py --moves` prints the renames that `tools/verity/lean/check.py --update --moved` takes.
+#
+# This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
+# string, backticks or a data file, nor a name (`firewall_state`, `DrawnUnit`), so it moves no path, renames no
+# declaration, leaves every lock and pin as it is, and `move_check.py` certifies it without a build. The identifier rows
+# take effect only in a move without the scope, which runs `check.py --update --moved` and the pins' commands.
+scope = "prose"
+
+[words]
+# --- Flock (was C-Flock); its stored label `C-Flock` stays ([keep])
+"C-Flock" = "Flock"
+"C Flock" = "Flock"
+
+# --- the ZK server (was the firewall); `FC_FIREWALL*`, `flock-firewall`, `core-firewall`, `--firewall*`, the
+# `verity/firewall-*` formats, `FIREWALL-REFUSED` and the package directory `verity/core/service/firewall/` stay
+"Flock.Firewall" = "Flock.ZkServer"
+"Flock/Firewall" = "Flock/ZkServer"
+"the Lean firewall" = "the Lean ZK server"
+"The Lean firewall" = "The Lean ZK server"
+"Lean firewall" = "Lean ZK server"
+"the firewalls" = "the ZK servers"
+"The firewalls" = "The ZK servers"
+"the firewall" = "the ZK server"
+"The firewall" = "The ZK server"
+"a firewall" = "a ZK server"
+"A firewall" = "A ZK server"
+"its firewall" = "its ZK server"
+"each firewall" = "each ZK server"
+"one firewall" = "one ZK server"
+"no firewall" = "no ZK server"
+"'s firewalls" = "'s ZK servers"
+"'s firewall" = "'s ZK server"
+"statements' firewall" = "statements' ZK server"
+"provers' firewall" = "provers' ZK server"
+"honest firewall" = "honest ZK server"
+"outer firewall" = "outer ZK server"
+"fixed firewall" = "fixed ZK server"
+"new firewall" = "new ZK server"
+"whose firewall" = "whose ZK server"
+"two firewalls" = "two ZK servers"
+"One firewall" = "One ZK server"
+"Flock firewall" = "Flock ZK server"
+"and firewall" = "and ZK server"
+"firewall committed" = "ZK server committed"
+"firewall's" = "ZK server's"
+"Firewall's" = "ZK server's"
+"firewalled session" = "ZK server session"
+"firewalled sessions" = "ZK server sessions"
+"firewalled masked prover" = "masked prover behind the ZK server"
+"unfirewalled" = "unserved"
+"firewalled" = "zk_served"
+"firewalls" = "zk_servers"
+"firewall" = "zk_server"
+"Firewalls" = "ZkServers"
+"Firewall" = "ZkServer"
+"FIREWALL" = "ZK_SERVER"
+
+# --- sampling design (was law, draw law), in prose: GLOSSARY.md keeps `law` identifiers, record keys and the Lean's
+# `Law`, so the bare word is a word only in Markdown ([[words_in]]) and phrases name it elsewhere (the binders
+# `receipt draw law` of `SampledProofs.Record` are two names, not the phrase)
+"receipt draw law" = "receipt sample law"
+"draw laws" = "sampling designs"
+"draw law" = "sampling design"
+"Draw laws" = "Sampling designs"
+"Draw law" = "Sampling design"
+"sampling laws" = "sampling designs"
+"sampling law" = "sampling design"
+"work law" = "work sampling design"
+"subset law" = "subset sampling design"
+"stratified law" = "stratified sampling design"
+"window's law" = "window's sampling design"
+"abort law" = "abort distribution"
+"noise law" = "noise distribution"
+"product law" = "product distribution"
+"coin law" = "coin distribution"
+"partial-sum law" = "partial-sum rule"
+"the laws" = "the sampling designs"
+"The laws" = "The sampling designs"
+"the law" = "the sampling design"
+"The law" = "The sampling design"
+"a law" = "a sampling design"
+"A law" = "A sampling design"
+"its law" = "its sampling design"
+"Its law" = "Its sampling design"
+"each law" = "each sampling design"
+"every law" = "every sampling design"
+"any law" = "any sampling design"
+"one law" = "one sampling design"
+"no law" = "no sampling design"
+"own law" = "own sampling design"
+"whose law" = "whose sampling design"
+"this law" = "this sampling design"
+"that law" = "that sampling design"
+
+# --- the sample, a sampled proof block, to sample (was the draw, a drawn unit)
+"drawn proof blocks" = "sampled proof blocks"
+"drawn proof block" = "sampled proof block"
+"Drawn proof blocks" = "Sampled proof blocks"
+"Drawn proof block" = "Sampled proof block"
+"drawn units" = "sampled proof blocks"
+"drawn unit" = "sampled proof block"
+"Drawn units" = "Sampled proof blocks"
+"Drawn unit" = "Sampled proof block"
+"drawn_units" = "sampled_blocks"
+"drawn_unit" = "sampled_block"
+"drawnUnits" = "sampledBlocks"
+"drawnUnit" = "sampledBlock"
+"DrawnUnits" = "SampledBlocks"
+"DrawnUnit" = "SampledBlock"
+"sampled units" = "sampled proof blocks"
+"sampled unit" = "sampled proof block"
+"Sampled units" = "Sampled proof blocks"
+# coins are flipped, never drawn or sampled: only the verb forms (`the draw the coins give`, `s draws a coin`,
+# `drawn coin stream` are a noun and Lean binders)
+"coins are drawn" = "coins are flipped"
+"coins were drawn" = "coins were flipped"
+"coin is drawn" = "coin is flipped"
+"coin was drawn" = "coin was flipped"
+"coins, drawn" = "coins, flipped"
+"coin, drawn" = "coin, flipped"
+"coins drawn" = "coins flipped"
+"coin drawn" = "coin flipped"
+"draws coins" = "flips coins"
+"draws its coins" = "flips its coins"
+"draws its coin" = "flips its coin"
+"draws the same coins" = "flips the same coins"
+"drew the coins" = "flipped the coins"
+"drew its coins" = "flipped its coins"
+"draw fresh coins" = "flip fresh coins"
+"Draw fresh coins" = "Flip fresh coins"
+"draws fresh coins" = "flips fresh coins"
+"Draw a coin" = "Flip a coin"
+"drawn coins" = "flipped coins"
+"draws the period's weight-side coins" = "flips the period's weight-side coins"
+"draws a stream round's coins" = "flips a stream round's coins"
+"draws the ten batching coins" = "flips the ten batching coins"
+"draw the judged run's coins" = "flip the judged run's coins"
+"draw their in-process coins" = "flip their in-process coins"
+"drawing exactly their coins" = "flipping exactly their coins"
+"draws level 0's query coins" = "flips level 0's query coins"
+"drew independent pair coins" = "flipped independent pair coins"
+"draws every window's coins" = "flips every window's coins"
+"draws its schedule's coins" = "flips its schedule's coins"
+"draws every append's coin" = "flips every append's coin"
+"draws each round's coins" = "flips each round's coins"
+"draws its own live coins" = "flips its own live coins"
+"draws the window's coins" = "flips the window's coins"
+"draws a fresh skip coin" = "flips a fresh skip coin"
+"draws its phase's coins" = "flips its phase's coins"
+"draws its round's coins" = "flips its round's coins"
+"draws the model's coins" = "flips the model's coins"
+"Draw c's openings coin" = "Flip c's openings coin"
+"draw c's openings coin" = "flip c's openings coin"
+"draw d's openings coin" = "flip d's openings coin"
+"draw the append's coin" = "flip the append's coin"
+"draw the model's coins" = "flip the model's coins"
+"draws a stream's coins" = "flips a stream's coins"
+"draws the round's coin" = "flips the round's coin"
+"drawing a run's coins" = "flipping a run's coins"
+"draws its first coins" = "flips its first coins"
+"draws the other coins" = "flips the other coins"
+"draws a uniform coin" = "flips a uniform coin"
+"draws b's check coin" = "flips b's check coin"
+"draws the inner coin" = "flips the inner coin"
+"draws two live coins" = "flips two live coins"
+"draws a random coin" = "flips a random coin"
+"draws its own coins" = "flips its own coins"
+"draws its salt coin" = "flips its salt coin"
+"draw plain's coins" = "flip plain's coins"
+"draw a check coin" = "flip a check coin"
+"draws a live coin" = "flips a live coin"
+"draws three coins" = "flips three coins"
+"drawing no coins" = "flipping no coins"
+"draws every coin" = "flips every coin"
+"draws live coins" = "flips live coins"
+"draw every coin" = "flip every coin"
+"draw their coin" = "flip their coin"
+"draws each coin" = "flips each coin"
+"draws the coins" = "flips the coins"
+"draws no coins" = "flips no coins"
+"draws one coin" = "flips one coin"
+"draws the coin" = "flips the coin"
+"draws no coin" = "flips no coin"
+"draws a coin" = "flips a coin"
+"draw a coin" = "flip a coin"
+"that draw coins" = "that flip coins"
+"redraws the live coins" = "flips the live coins again"
+"redraws the last coin" = "flips the last coin again"
+"redraws the coins" = "flips the coins again"
+# a coin family's role (`the window's draw coin`) is a noun
+"draw coins" = "sampling coins"
+"Draw coins" = "Sampling coins"
+"draw coin" = "sampling coin"
+"Draw coin" = "Sampling coin"
+"undrawn" = "unsampled"
+"Undrawn" = "Unsampled"
+"redraws" = "resamples"
+"redraw" = "resample"
+"Redraw" = "Resample"
+"drawing" = "sampling"
+"Drawing" = "Sampling"
+"draws" = "samples"
+"Draws" = "Samples"
+"DRAWS" = "SAMPLES"
+"drawn" = "sampled"
+"Drawn" = "Sampled"
+"DRAWN" = "SAMPLED"
+"draw" = "sample"
+"Draw" = "Sample"
+"DRAW" = "SAMPLE"
+
+# --- proof block (was proof unit); `proof_unit` (`LinkWindows.proof_unit`) and the `"proof-unit"` kind stay
+"proof units" = "proof blocks"
+"proof unit" = "proof block"
+"Proof units" = "Proof blocks"
+"Proof unit" = "Proof block"
+"proofUnits" = "proofBlocks"
+"proofUnit" = "proofBlock"
+"ProofUnits" = "ProofBlocks"
+"ProofUnit" = "ProofBlock"
+"PROOF_UNITS" = "PROOF_BLOCKS"
+"PROOF_UNIT" = "PROOF_BLOCK"
+"unit classes" = "size classes"
+"unit class" = "size class"
+"Unit classes" = "Size classes"
+"Unit class" = "Size class"
+
+# --- incorrect proof block, the incorrect set (was wrong, faulty or incorrect unit); the audit record's `wrong_units`
+# stays
+"a wrong unit" = "an incorrect proof block"
+"A wrong unit" = "An incorrect proof block"
+"a wrong-unit set" = "an incorrect set"
+"a wrong-unit" = "an incorrect-block"
+"a faulty unit" = "an incorrect proof block"
+"A faulty unit" = "An incorrect proof block"
+"a faulty proof block" = "an incorrect proof block"
+"A faulty proof block" = "An incorrect proof block"
+"a faulty set" = "an incorrect set"
+"A faulty set" = "An incorrect set"
+"wrong units" = "incorrect proof blocks"
+"wrong unit" = "incorrect proof block"
+"Wrong units" = "Incorrect proof blocks"
+"Wrong unit" = "Incorrect proof block"
+"wrong-unit sets" = "incorrect sets"
+"wrong-unit set" = "incorrect set"
+"wrong-unit" = "incorrect-block"
+"faulty units" = "incorrect proof blocks"
+"faulty unit" = "incorrect proof block"
+"incorrect units" = "incorrect proof blocks"
+"incorrect unit" = "incorrect proof block"
+"faulty proof blocks" = "incorrect proof blocks"
+"faulty proof block" = "incorrect proof block"
+"Faulty proof blocks" = "Incorrect proof blocks"
+"faulty sets" = "incorrect sets"
+"faulty set" = "incorrect set"
+"faultySets" = "incorrectSets"
+"faultySet" = "incorrectSet"
+"WrongUnits" = "IncorrectBlocks"
+"WrongUnit" = "IncorrectBlock"
+"incorrect_units" = "incorrect_blocks"
+
+# --- miss probability, P_a (was the escape probability, then its acceptance probability); "escape" alone keeps its
+# other senses, and "acceptance probability" its knowledge-soundness one, so neither is a word here
+"escape probabilities" = "miss probabilities"
+"escape probability" = "miss probability"
+"Escape probabilities" = "Miss probabilities"
+"Escape probability" = "Miss probability"
+"effEscape" = "effAcceptProb"
+
+# --- ε_bind, the binding error (was δ_link, the link term)
+"the link term" = "the binding error"
+"The link term" = "The binding error"
+"link terms" = "binding errors"
+"link term" = "binding error"
+"δ_link" = "ε_bind"
+"δlink" = "εbind"
+"LinkSound" = "BindSound"
+
+# --- the trace (was the transcript, for the values of a run's gates)
+"ExecutionTranscript" = "Trace"
+
+# --- the verifier (was the verifier of record)
+"the verifier of record" = "the verifier"
+"The verifier of record" = "The verifier"
+"the Lean verifier of record" = "the Lean verifier"
+"a verifier of record" = "the verifier"
+"its verifier of record" = "its verifier"
+"verifiers of record" = "verifiers"
+"verifier of record" = "verifier"
+
+# --- after-landing run (was post-landing run, postland)
+"a post-landing run" = "an after-landing run"
+"A post-landing run" = "An after-landing run"
+"post-landing runs" = "after-landing runs"
+"post-landing run" = "after-landing run"
+"Post-landing run" = "After-landing run"
+
+# --- the challenger's live-coin part (was the coin server); `round_digest` strings stay ([keep])
+"live coin servers" = "live-coin parts"
+"live coin server" = "live-coin part"
+"the coin server" = "the challenger's live-coin part"
+"The coin server" = "The challenger's live-coin part"
+"coin servers" = "live-coin parts"
+"coin server" = "live-coin part"
+"coin-server" = "live-coin"
+"CoinServer" = "LiveCoins"
+"coin_server" = "live_coins"
+
+# --- the proof system (was the proof service)
+"the proof service" = "the proof system"
+"The proof service" = "The proof system"
+"proof service" = "proof system"
+
+# "law" alone is a word in Markdown only, where it is prose; [keep] keeps it where it touches a name (`law`, `Audit/Law.lean`)
+[[words_in]]
+files = ["**/*.md"]
+words = { "laws" = "sampling designs", "law" = "sampling design", "Laws" = "Sampling designs", "Law" = "Sampling design" }
+
+# the PoUW budget's plan point, a `Sample` that would declare the concept `Draw` becomes (`tests/test_lean_vocabulary.py`)
+# PoUB's remote audit keeps its own `Draw` ([keep_in]) and names Flock's, which moves
+[[words_in]]
+files = ["Security/Properties/RemoteAudit*", "Security/Proofs/Properties/RemoteAudit*", "Security/*Accounting*Remote*"]
+words = { "Flock.Draw" = "Flock.Sample" }
+
+[[words_in]]
+files = ["benchmarks/pouw/budget.py"]
+words = { "Sample" = "PlanPoint" }
+
+# Dither's noise period L′ is its noise repeat length
+[[words_in]]
+files = ["verity/core/protocols/pouw/**", "verity/ml/protocols/pouw/**", "benchmarks/pouw/**"]
+words = { "noise periods" = "noise repeat lengths", "noise period" = "noise repeat length", "Noise period" = "Noise repeat length" }
+
+# The bandwidth audit's session beside Dither's arms is one run of it, and `dbw.py`'s table keeps its columns; the op
+# `"session"` that sbench sends stays ([keep])
+[[words_in]]
+files = ["benchmarks/hash/dither/dbw.py", "benchmarks/hash/dither/dbw_side.py",
+         "benchmarks/hash/dither/tests/test_dbw.py"]
+[words_in.words]
+"session 0           idle" = "run 0               idle"
+"session 1 + reps    a tampered" = "run 1 + reps        a tampered"
+"no session running" = "no run in progress"
+"sessions" = "runs"
+"Session" = "Run"
+"session" = "run"
+
+# Dither's own words for its execution phase, ahead of PoUW's rows below, which its files also take: the epoch round and
+# root (round 0 and its root) are the execution phase's, and `epoch` is `coins.open_coins`' argument; the challenger's
+# gate session is the run's challenge phase, so the session's window is the run's execution phase, while sbench's
+# bandwidth-audit sessions are runs; the transcript buffers hold the trace; `DitherState.phase` is the Dither state's
+# phase. A GPU lease's booked or clean window stays ([keep])
+[[words_in]]
+files = ["benchmarks/hash/dither/**"]
+[words_in.words]
+"(epoch, steps, final;" = "(execution-phase round, steps, final;"
+"epoch round" = "execution-phase round"
+"epoch root" = "execution-phase root"
+"at epoch 1" = "at `epoch` 1"
+"the window phase" = "the Dither state's phase"
+"window-owned" = "execution-phase-owned"
+"window and step buffers" = "execution-phase and step buffers"
+"window gate" = "execution-phase gate"
+"window check" = "execution-phase check"
+"window close" = "execution-phase close"
+"window end's" = "execution-phase end's"
+"the window's end ----------" = "the execution phase's end -"
+"every capture, the window's end   each" = "every capture and the end         each"
+"the session's window" = "the run's execution phase"
+"session's one window" = "run's one execution phase"
+"one session a window" = "one challenge phase per execution phase"
+"an idle session" = "an idle run"
+"a session's passes" = "a run's passes"
+"a tampered session" = "a tampered run"
+"session run from" = "challenge phase served from"
+"challenger session" = "challenge phase"
+"coin session" = "challenge phase"
+"sessions" = "challenge phases"
+"session" = "challenge phase"
+"transcript" = "trace"
+
+# PoUW's served span is its execution phase (its "window" and "epoch"), with the execution phase's salt and coins, in
+# the files of PoUW's own change of terms and in Dither's benchmarks (`benchmarks/hash/dither/`, with exactlin's step
+# analysis), where the words stand in that sense; elsewhere a window or an epoch is often another thing (a promotion
+# window, a census epoch), so those wait for their owners. What PoUW's records and runs read
+# keeps its spelling: `window`, `epoch` and `pass_epoch` as names, `pouw-window`, the domain tags, and, in [keep],
+# network accounting's certifier window and the windows and epochs of other senses these files name
+[[words_in]]
+files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
+         "benchmarks/pouw/accel_v31/v31lib.py", "benchmarks/pouw/accel_v31/v31.py",
+         "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/run.py", "benchmarks/pouw/highutil/period.py",
+         "benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/verify_run.py",
+         "benchmarks/pouw/served_zk/served_commit.py", "benchmarks/pouw/tests/test_accel_v31.py",
+         "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_served_zk.py",
+         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
+         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py", "verity/core/protocols/pouw/audit.py",
+         "verity/ml/protocols/pouw/circuit/admit.py", "verity/ml/protocols/pouw/circuit/anchors.py",
+         "verity/ml/protocols/pouw/circuit/compile.py", "verity/ml/protocols/pouw/circuit/dither.py",
+         "verity/ml/protocols/pouw/circuit/eps1_reference.py", "verity/ml/protocols/pouw/circuit/h1device.py",
+         "verity/ml/protocols/pouw/circuit/h1tile.circuit-check.py", "verity/ml/protocols/pouw/circuit/h1tile.py",
+         "verity/ml/protocols/pouw/circuit/h1window.circuit-check.py",
+         "verity/ml/protocols/pouw/circuit/h1window.py", "verity/ml/protocols/pouw/circuit/h1zy.py",
+         "verity/ml/protocols/pouw/circuit/__init__.py", "verity/ml/protocols/pouw/circuit/leaves.py",
+         "verity/ml/protocols/pouw/circuit/live.circuit-check.py", "verity/ml/protocols/pouw/circuit/live.py",
+         "verity/core/protocols/pouw/live_reads.py", "verity/ml/protocols/pouw/circuit/ncp2.circuit-check.py",
+         "verity/ml/protocols/pouw/circuit/ncp2.py", "verity/ml/protocols/pouw/circuit/partition.py",
+         "verity/ml/protocols/pouw/circuit/pc8.circuit-check.py", "verity/ml/protocols/pouw/circuit/plan.py",
+         "verity/ml/protocols/pouw/circuit/seeds.py", "verity/ml/protocols/pouw/circuit/segment.circuit-check.py",
+         "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
+         "verity/core/protocols/pouw/dither/PROTOCOL.md", "verity/core/protocols/pouw/grind.py",
+         "verity/core/protocols/pouw/identifier.py", "verity/core/protocols/pouw/__init__.py",
+         "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/pouw/lean/check/PouwCheck/Check.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/CreditDifftest.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Difftest.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/DifftestMain.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/LeafOwn.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/LeafOwnMain.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Opening.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Pass.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Protocol.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Rounds.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/Tile.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/VerifiedDifftest.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/WindowSalt.lean",
+         "verity/core/protocols/pouw/lean/check/README.md",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_check_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_credit_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_live_verified_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_opening_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_pass_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_rounds_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_verified_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/test_coins.py",
+         "verity/core/protocols/pouw/lean/check/tests/test_leaf_own.py",
+         "verity/core/protocols/pouw/lean/commit/PouwCommit/Bindings.lean",
+         "verity/core/protocols/pouw/lean/commit/PouwCommit/Coins.lean",
+         "verity/core/protocols/pouw/lean/commit/PouwCommit/Difftest.lean",
+         "verity/core/protocols/pouw/lean/commit/PouwCommit/Draws.lean",
+         "verity/core/protocols/pouw/lean/commit/PouwCommit/Rows.lean",
+         "verity/core/protocols/pouw/lean/commit/tests/difftest_vectors.py",
+         "verity/core/protocols/pouw/lean/commit/tests/test_pouw_commit_lean_difftest.py",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Difftest.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Draw.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Entry.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Grid.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Inputs.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Json.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Lanes.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Length.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/OwnPorts.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Public.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/RegFile.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Rounds.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean",
+         "verity/core/protocols/pouw/lean/window/PouwWindow/Statement.lean",
+         "verity/core/protocols/pouw/lean/window/README.md",
+         "verity/core/protocols/pouw/lean/window/tests/test_difftest.py",
+         "verity/core/protocols/pouw/lean/window/tests/test_reg_file.py", "verity/core/protocols/pouw/operands.py",
+         "verity/core/protocols/pouw/protocol.py",
+         "verity/core/protocols/pouw/README.md", "verity/core/protocols/pouw/registration.py",
+         "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/serving.py",
+         "verity/core/protocols/pouw/tests/epoch_coins.py", "verity/core/protocols/pouw/tests/epoch_coins_vectors.py",
+         "verity/core/protocols/pouw/tests/pouw_rows_vectors.py",
+         "verity/core/protocols/pouw/tests/splitk_rows_vectors.py",
+         "verity/core/protocols/pouw/tests/test_circuit_anchors.py",
+         "verity/core/protocols/pouw/tests/test_circuit_compile.py",
+         "verity/core/protocols/pouw/tests/test_circuit_h1tile.py",
+         "verity/core/protocols/pouw/tests/test_circuit_h1window.py",
+         "verity/core/protocols/pouw/tests/test_circuit_h1zy.py",
+         "verity/core/protocols/pouw/tests/test_circuit_leaves.py",
+         "verity/core/protocols/pouw/tests/test_circuit_live.py",
+         "verity/core/protocols/pouw/tests/test_circuit_plan.py", "verity/core/protocols/pouw/tests/test_h1device.py",
+         "verity/core/protocols/pouw/tests/test_h1tile_population.py",
+         "verity/core/protocols/pouw/tests/test_pouw_core_check.py",
+         "verity/core/protocols/pouw/tests/test_pouw_epoch_coins.py",
+         "verity/core/protocols/pouw/tests/test_pouw_identifier.py",
+         "verity/core/protocols/pouw/tests/test_pouw_live_window.py",
+         "verity/core/protocols/pouw/tests/test_pouw_operands.py",
+         "verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py",
+         "verity/core/protocols/pouw/tests/test_pouw_registration.py",
+         "verity/core/protocols/pouw/tests/test_pouw_salt.py",
+         "verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py",
+         "verity/core/protocols/pouw/tests/test_pouw_verifier.py",
+         "verity/core/protocols/pouw/tests/test_pouw_window.py", "verity/core/protocols/pouw/tests/test_splitk_rows.py",
+         "verity/core/protocols/pouw/tests/window_vectors.py", "verity/core/protocols/pouw/verifier.py",
+         "verity/core/protocols/pouw/weights.py", "verity/core/protocols/pouw/window.py",
+         "benchmarks/hash/dither/**", "benchmarks/hash/exactlin/tensor_util.py"]
+[words_in.words]
+"PoUW's window salt" = "the execution phase's salt"
+"the epoch's live salt" = "the execution phase's salt"
+"The epoch's live salt" = "The execution phase's salt"
+"the window's live salt" = "the execution phase's salt"
+"The window's live salt" = "The execution phase's salt"
+"the window salt" = "the execution phase's salt"
+"The window salt" = "The execution phase's salt"
+"the epoch salt" = "the execution phase's salt"
+"The epoch salt" = "The execution phase's salt"
+"a window salt" = "an execution phase's salt"
+"window salts" = "execution phases' salts"
+"window salt" = "execution phase's salt"
+"epoch salt" = "execution phase's salt"
+"before epoch coins" = "before the execution phase's coins"
+"the epoch coins" = "the execution phase's coins"
+"The epoch coins" = "The execution phase's coins"
+"epoch coins" = "execution-phase coins"
+"Epoch coins" = "Execution-phase coins"
+"per-window" = "per-execution-phase"
+"per-epoch" = "per-execution-phase"
+"a window's" = "an execution phase's"
+"A window's" = "An execution phase's"
+"a window" = "an execution phase"
+"A window" = "An execution phase"
+"windows" = "execution phases"
+"Windows" = "Execution phases"
+"window" = "execution phase"
+"Window" = "Execution phase"
+"epochs" = "execution phases"
+"Epochs" = "Execution phases"
+"epoch" = "execution phase"
+"Epoch" = "Execution phase"
+
+# Dither's bare cell is its output cell
+[[words_in]]
+files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
+         "benchmarks/pouw/accel_v31/v31lib.py", "benchmarks/pouw/accel_v31/v31.py",
+         "benchmarks/pouw/highutil/period.py", "verity/ml/protocols/pouw/circuit/dither.py",
+         "verity/core/protocols/pouw/dither/PROTOCOL.md"]
+[words_in.words]
+"a cell" = "an output cell"
+"A cell" = "An output cell"
+"cells" = "output cells"
+"Cells" = "Output cells"
+"cell" = "output cell"
+"Cell" = "Output cell"
+
+# H1's period, credit's span, is its credit period where PoUW's credit names it (its other periods stay: [keep])
+[[words_in]]
+files = ["verity/core/protocols/pouw/README.md",
+         "verity/core/protocols/pouw/lean/check/README.md", "verity/core/protocols/pouw/lean/check/PouwCheck.lean",
+         "verity/core/protocols/pouw/lean/check/PouwCheck/VerifiedDifftest.lean",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_credit_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_live_verified_cases.py",
+         "verity/core/protocols/pouw/lean/check/tests/pouw_verified_cases.py",
+         "verity/ml/protocols/pouw/circuit/h1window.py", "verity/ml/protocols/pouw/circuit/live.py",
+         "verity/core/protocols/pouw/live_reads.py", "verity/core/protocols/pouw/core_check.py",
+         "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/verifier.py",
+         "verity/core/protocols/pouw/weights.py", "verity/core/protocols/pouw/tests/test_pouw_core_check.py",
+         "verity/core/protocols/pouw/tests/test_circuit_h1window.py"]
+[words_in.words]
+"periods" = "credit periods"
+"Periods" = "Credit periods"
+"period" = "credit period"
+"Period" = "Credit period"
+
+# p2_stage's staging is the store's load, and PoUB its bandwidth subprotocol (was its leg); its step `stage`, the module
+# `stage.py` and the names `staging_offset` and `staging_bytes` keep theirs until a move renames them
+[[words_in]]
+files = ["benchmarks/torch_gpu/p2_stage/**"]
+[words_in.words]
+"The staging decode" = "The store's load"
+"the staging decode" = "the store's load"
+"stages each layer" = "loads each layer"
+"bandwidth leg" = "bandwidth subprotocol"
+"staging" = "load"
+"staged" = "loaded"
+
+[[words_in]]
+files = ["benchmarks/torch_gpu/README.md"]
+[words_in.words]
+"with the remote bandwidth audit's" = "with PoUB's"
+"staging buffers" = "load buffers"
+"stage through" = "load through"
+
+# The SHA-512 row engine's salts and seed tiles are derived from a key or a seed, not sampled
+[[words_in]]
+files = ["benchmarks/torch_gpu/sha512_rows/**"]
+words = { "draws" = "derives", "drawn" = "generated" }
+
+[rewrite]
+# Never rewritten: the term source and the lints and tables that spell the old words on purpose (the ratchet, the older
+# retired-terms test, which research's message vocabulary reads, and its tests), records of what was (the earlier moves
+# and their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated fixtures, files
+# whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files. The ratchet's allowlist
+# holds only paths and counts, so it is rewritten: its paths follow their files.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json"]
+
+[keep]
+# A domain tag or format id, a note, an artifact, a branch, a lane. Then what recorded data or another system reads: a
+# quoted lowercase token, escaped inside a string too (a record key or a key path, a reason code, a role, a run's output
+# file, a line of a server's protocol: `"draws"`, `"public.draw.units"`, `\"drawn\"`, `"firewall"`, `"draw.json"`,
+# `b"draw\n"`; a capitalized one is a Lean name and follows it, and so do a path, a dotted Python module, a tracked source
+# file's name, an f-string's code, pytest's argnames, an attribute set, read or skipped by name (`_REBUILT`) and a
+# keyword passed as a dict, which follow their Python names, and a `match=` pattern and a lint allowlist's `"symbol"`,
+# which follow their message and their function), a two-part id (`"pouw/draw"`, the claim `uniform/flock-coin-server`), an upper-case
+# snake-case name (an environment variable or a constant: `FC_FIREWALL`, `CR_N2_DRAW`, `FLOCK_DRAW_LAW`), a run's output
+# file after a path, the systemd slice `firewall.slice`, a kebab-case name or a CLI flag (`--draw`, `--firewall-state`,
+# `flock-firewall`, `verity-core-firewall`, `drawn-unit-bundle`), the attribute argparse makes of a flag (`a.draw`,
+# `inner.draw`; not the profile's `a.draws` or a Lean `a.draw = `), a record key a Python name builds (`drawn_at`,
+# `checks_before_draw` and the rest of that list, a keyword of `.update(`, `replay_draw`, `draw_k`) everywhere; the
+# deployment's party and the recursion runs' mode `firewall` where shell, a flag's value or a message spells it bare
+# (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`, `listen: firewall`, `GATE_ABSENT=firewall`), a5's
+# coin family (`need 26 draw coins`) and the coin families' `draw coin 1` and `pouw/draw` where a message names them,
+# the key path `public.draw` a refusal names, the bandwidth audit's `window 0, draw [1, 0]` where another suite reads it,
+# the Lean Hello's request `draw LEN [NONCE]` where a test sends or names it, the
+# module `verity_flock.firewall` (`python -m` runs it, `from .firewall` imports it), the refusal
+# `FIREWALL-REFUSED` and the release's reasons upstream's Rust records (`the firewall serves nothing more of it`,
+# `the firewall's fault`), a line tag or reply that starts a string (`FIREWALL\t` with its timing keys `t.firewall_recheck`,
+# Lean's `DRAW {…}`, which `grep '^DRAW '` reads, the served-ZK reply `DRAWN`), the parties' message types `CoinsDraw`
+# and `Firewall` (a deploy log records them), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit`
+# and the `"proof-unit"` kind, the public items' reasons `Spec.digest` hashes (`N, the window's proof units` and three
+# more), the package directory `verity/core/service/firewall`, its Lake package `core_firewall` and the names of the files
+# [keep_paths] holds; the structure `Accounting.TS.DrawnLayer` and its projection
+# (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
+# own); `law` where it touches a name (GLOSSARY.md keeps `law` identifiers); the other senses of law and draw (a power
+# law, the law of large numbers, nvidia-smi's `power.draw`, a game's coin `Game.draw` (a coin is flipped, not sampled), its bare uses (`← draw F`,
+# `draw C >>= f`, `(draw C)`, `@draw`; a binder's `← draw.mapM` renames), its helpers `drawFin`, `drawK`, `drawKs` and `drawStrat`, and `Plays.drawVec`, which
+# beside Flock's `Transcript.sample` would be ambiguous), the deployment's coin sources' `draw(n)` and the calls that name it
+# from other modules, the `round_digest` strings and the label `replay_set=warden/re-verify`;
+# and what PoUB's kept `draw` names or shares with the rest of the tree: its modules (`Accounting.Remote.Draw`,
+# `RemoteDraw`, `RemoteHeld.Draw`), `draw_salt` (PoUS's and the bandwidth audit's) and the guarantee `drawIsSubset`
+# (`--moves` renames a guarantee by its lock's path, not its file's); in PoUW's words, the certifier window, the windows
+# and epochs of other senses (a promotion, partial, device, row, product, carry or token window, a launch's epoch,
+# A'F_B's windows), the run name `pouw-window` and the tag part `epoch-salt`, an output cell in either case and a numbered
+# compound (`128-cell`), the periods that aren't credit's (`noise period` too, which its own row renames first), a
+# credited period, a period-open, and a quoted `"window"`, `"epoch"`, `"period"` or `"cell"` (a record key); in Dither's,
+# a GPU lease's booked or clean window and the window such a lease grants, and a quoted `"session"` (a record key or op)
+patterns = ['(?i:\bcertifier windows?\b)', '(?i:\b(?:promotion|partial|device|row|product|carry|token|sliding|non-overlapping)[ -]windows?\b)',
+            '\blaunch\x27s epoch\b', '\bA\x27F_B\x27s windows\b', '\bpouw-window\b', '\bepoch-salt\b', '(?i:\boutput cells?\b)',
+            '\b\d+-cells?\b', '(?i:\b(?:credit|credited|monitoring|commit|verification|sampling|integrity|certifier|served|promotion) periods?\b)',
+            '\bperiod-(?:open|close)s?\b', '[\x22\x27](?:window|epoch|period|cell)s?[\x22\x27]',
+            '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '(?<![\w\\])(?<!parametrize\()(?<!parametrize\(\()(?<!match=)(?<!\x22symbol\x22: )(?<!\x22rounds\x22, )(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\("coins", )(?<!reg\.receipt, )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
+            '\\[\x22\x27](?![A-Z])[^\s\x22\x27\\/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27\\/{]*\\[\x22\x27]',
+            '[\x22\x27][a-z_-]+/[\w-]*(?i:draw|law|firewall|coin.server)[\w-]*[\x22\x27]', '\buniform/flock-coin-server\b',
+            '\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)*\b|\b(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)+\b',
+            '(?<=[/.])(?:draw|drawn|draws|firewall|law)\.(?:json|jsonl|log|bin|lock|txt|npz)\b', '\bfirewall\.slice\b',
+            '(?<![\w-])-{0,2}(?:\w+-)+\w*(?i:draw|law|firewall)\w*(?:-\w+)*(?![\w-])',
+            '(?<![\w-])-{0,2}\w*(?i:draw|law|firewall)\w*(?:-\w+)+(?![\w-])',
+            '(?<![\w-])--\w*(?i:draw|law|firewall)\w*(?![\w-])',
+            '(?<!a\.sizes, )\ba\.(?:draw|draws|drawn|undrawn|law|firewall)\b(?! = )',
+            '\b(?:draw_k|draw_file|draws_dir|fresh_draws|os_draws|lean_refuses_drawn|lean_refuses_drawless|rec_inner_draw|replay_draw)\b',
+            '\b(?:drawn_at|checks_before_draw|unit_draw|draw_counts|draw_coin|draw_after|served_is_lean_draw|draw_reason|draws_scan)\b',
+            '\bdraw_salt\b', '\bdrawIsSubset\b', '\bverity_flock[./]firewall\b', '(?<=from verity_flock import )firewall\b',
+            '(?<=from \.)firewall(?= import)', '(?<=b\x22)draws?(?= [\w{])', '(?<=f\x22)draw(?= \{len)',
+            '(?<=a request \x60)draws?\b', '(?<=\x60)draw(?= LEN)',
+            '\binner\.draw\b', '\b(?:every|need \d+) draw coins?\b', '\bdraw coins? \d', '\bpouw/draw\b',
+            '\bpublic\.draws?\b', '\bdraw(?==\{\x22law\x22)', '(?<=window \d, )draw(?= \[)', '(?<=listen: )firewall\b',
+            '\bGATE_(?:ABSENT|PEERS|ROLE)=[^\x22\x27\n]*',
+            '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
+            '\bFIREWALL(?=\\t)', '(?<=[\x22\x27^`])(?:DRAWN?|DRAWS|FIREWALL)(?=[\x22\x27 \\])', '`FIREWALL` lines',
+            '\b(?:t|cpu)\.firewall_\w+', '\bfirewall(?:_record_vectors)?\.json\b', '\bcore_firewall\b',
+            '\bthe firewall(?: serves nothing more of it|\x27s fault)',
+            '\btest_firewall_(?:release_agreement|release_protocol|session_loop)\b',
+            '(?:(?<=\()|(?<=type == )|(?<=messages = \[))\x22Firewall\x22|\bFirewall(?= \{sha512)',
+            '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
+            'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
+            'T proof units per registration, unit t the link-window\x27s bucket row t',
+            '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
+            '\bGame\.draw\b', '\bdrawVec\b',
+            '(?<=← )draw(?= )|@draw\b|\bdraw(?= [A-Z] >>=)|(?<=\()draw(?= [A-Z]\)| \(Fin\b)|\bdraw(?:Fin|Ks?|Strat)\b', '\bCoinsDraw\b',
+            '\bdef draw(?=\(self, n: int\) -> bytes:)|\bself\.draw(?=\(msg\.message\.fields\[)|\b(?:seeded|SeededCoins)\([^()\n]*\)\.draw\b',
+            '(?<=\.update\()(?:draw|draws|drawn|firewall)(?==)', '\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])',
+            '(?<=\]\}, )draw(?==union_draw\[)', '\bdrawn(?==len\(drawn\), exclusion_tiles)', '(?<=subcircuit=sub\.id, )draws(?==)',
+            '(?<=rounds=len\(got\), )draws(?==)',
+            '(?<=[\w.:/`-])[Ll]aws?\b|\b[Ll]aws?(?=[\w/(`-]|\.\w)',
+            '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
+            "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify',
+            '\bMODES\W{1,8}firewall\b', '(?<=,)firewall(?=,)', '--modes [\w,]+', '\(firewall\)', 'dials firewall',
+            '(?i:\b(?:booked|clean) windows?\b)', '\bsuch a window grants\b', '[\x22\x27]sessions?[\x22\x27]']
+# what `tests/test_retired_terms.py`'s ALLOWED holds as written, byte for byte, until its owner renames the line
+strings = ["the PoUW window's keyed draw takes A4 and A5", "no faulty proof block, every one being drawn"]
+
+[keep_in]
+# the placement gate's role `firewall`; the recursion run's mode `firewall`, which its pod script's case statements and
+# shipped binaries spell bare; the binder `draws` of `Flock.Zk.hooks`, which `test_circuit.py` reads by name; the PoUW
+# period cost's field `draws`, which its scans set by name and its report keys; the games' coin `draw`; a name beside the name it would
+# become in one scope (`WorkProfile`'s `drawn` and `sampled`, `network_verdict`'s parameter `drawn` and its local
+# `sampled`, with the keyword its test passes); PoUB's remote audit, whose `draws` (the coins' draws) and `samples` (a
+# window's sample cap), and `draw` (the pooled-draw term) and `sample`, are two things each, so its `draw` and `draws`
+# and their modules wait for a name of its owner's; a vector file Rust includes by name; the vLLM pouw-serve options
+# whose field is its flag's attribute; a versioned schema's file; the served-ZK reply `DRAWN`, where it is named; the
+# names a test reads out of a recorded lock fixture or a fixture module, which the move leaves as it is
+"benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
+"benchmarks/numerical/tests/bench/test_placement_gate.py" = ["firewall", "a firewall"]
+"verity/ml/flock/pod/85-rec-reprice.sh" = ["firewall"]
+"verity/core/service/flock/Flock/Zk.lean" = ["draws"]
+"benchmarks/pouw/period_cost.py" = ["draws"]
+"benchmarks/pouw/tests/test_period_cost.py" = ["draws"]
+"Security/Definitions/Core/Game.lean" = ["draw"]
+"Security/Definitions/Flock/Game.lean" = ["draw"]
+"benchmarks/pouw/clear/clear_audit.py" = ["drawn"]
+"verity/core/protocols/certifier/service.py" = ["drawn"]
+"verity/core/protocols/certifier/tests/test_network_certifier_period.py" = ["drawn"]
+"verity/core/protocols/remote_bandwidth/**" = ["draw", "draws", "Draw", "Draws"]
+"benchmarks/remote_session/**" = ["draw", "draws", "Draw", "Draws"]
+"Security/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
+"Security/Proofs/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
+"Security/*Accounting*Remote*" = ["draw", "draws", "Draw", "Draws"]
+"benchmarks/pous/p2_v1/**" = ["draws"]
+"benchmarks/pous/held_bandwidth.py" = ["draws"]
+"benchmarks/one_stage/a7.py" = ["draws"]
+"benchmarks/one_stage/a8.py" = ["draws"]
+"verity/ml/flock/live/src/firewall_record_vectors.json" = ["firewall"]
+"integrations/vllm/verity_vllm/pipeline/pouw_serve.py" = ["draws"]
+"integrations/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py" = ["draws"]
+"**/drawn-unit-bundle*" = ["drawn"]
+"benchmarks/pouw/served_zk/**" = ["DRAWN"]
+"tools/verity/lean/tests/test_merge.py" = ["Draw", "Drawn"]
+"tools/verity/circuit_check/tests/test_ambient.py" = ["Drawn"]
+"benchmarks/pouw/tests/test_served_zk.py" = ["DRAWN"]
+
+[keep_paths]
+# the ZK server's release-side Lake and uv package and the module `verity_flock.firewall` (`python -m` runs it) stay
+# where they are, while their text follows the map
+"verity/core/service/firewall/**" = ["firewall"]
+"verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]

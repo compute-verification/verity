@@ -881,6 +881,53 @@ def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_exec
     assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
 
 
+#: a served engine's record as ``serve.json`` holds it (`LLM.engine_record`'s): an engine serving below its model's length
+ENGINE = {"execution": "bi-eager", "env_flags": {},
+          "engine_kwargs": {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
+                            "tensor_parallel_size": 1}}
+
+
+def _advice_compile() -> Any:
+    """vllm's ``tools/advice_compile.py``, which writes a served window's row dir's Builds, loaded by its file."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("advice_compile",
+                                                  HERE.parents[2] / "adapters" / "vllm" / "tools" / "advice_compile.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("label", ["serve.json's", "its engine record's"])
+def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(tmp_path, label):
+    """`advice_compile` writes a served window's row dir's Builds and I2 reads each by the digest of the Program it compiles,
+    so the two read one φ of one ``serve.json`` (`predict.phi.served_phi`), its engine's args and world included, wherever
+    it states its execution: a request Program's length rule reads the engine's ``max_model_len``, so under a φ stating
+    none I2 compiles, for an engine serving below its model's length, a Program no Build holds. A launch that left the
+    length to vLLM states the length its engine fitted on both sides. The bodies the two compile are one too."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    AC = _advice_compile()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "target": TARGET, "engine": ENGINE, **({"execution": "bi-eager"} if label == "serve.json's" else {})}
+    (tmp_path / "serve.json").write_text(json.dumps(serve))
+    (tmp_path / "advice" / "w0").mkdir(parents=True)
+    (tmp_path / "advice" / "w0" / "registration.json").write_text(json.dumps({"window": 0}))
+    reqs = [_serve_request(0, list(range(5)), 3, [0], "r0"), _serve_request(1, list(range(3)), 2, [0], "r1")]
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
+    _advice, meta, bodies, _reg = AC.served_inputs(tmp_path, 0)
+    built = AC.phi_of(meta, json.loads(pinned_hf_config(serve["model"], serve["revision"]).read_text()), 0)
+    phi = PP.phi_of_serve(serve)
+    assert phi.to_json() == built.to_json()
+    assert phi.engine == {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
+                          "env": {}}
+    assert (phi.tp, phi.execution) == ({"world": 1, "rank": 0}, "bi-eager")
+    assert PP.serve_ingress(PP.serve_requests(tmp_path, 0)) == bodies
+    fitted = {**ENGINE, "effective": {"max_model_len": 4032}, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": -1}}
+    assert PP.phi_of_serve({**serve, "engine": fitted}).engine == {**phi.engine, "max_model_len": 4032}
+    assert AC.phi_of({**meta, "engine_record": fitted}, phi.hf_config, 0).engine == {**phi.engine, "max_model_len": 4032}
+
+
 def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`, advice_compile's too), so an int8
     serve compiles on both sides with its quantization config beside the target's int8 scope, never the bf16 fixture's."""
@@ -899,8 +946,8 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
     """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
-    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ, the default seed, ℓ and the served
-    model name move it as they move a single-GPU one's."""
+    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ (the engine's args among its
+    fields), the default seed, ℓ and the served model name move it as they move a single-GPU one's."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
     reg = PP.registered_of_serve(serve, None, None, PP.CAP_BITS)
     one = PP.I2Compiler(reg, {}, "", name=SERVER[0], code=SERVER[1])
@@ -912,6 +959,8 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
         ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
         ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
         (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
+    others += [replace(reg, phi=PP.phi_of_serve({**serve, "engine": engine})) for engine in (
+        ENGINE, {**ENGINE, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": 1024}})]
     digests = {PP.I2Compiler(r, {}, "", name=SERVER[0], code=SERVER[1]).digest for r in others}
     assert len(digests) == len(others) and one.digest not in digests
 
@@ -921,13 +970,14 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
 SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8"}, "revision": {"revision": "0" * 40},
                "default_seed": {"default_seed": DEFAULT_SEED + 1}, "execution": {"execution": "eager"},
                "engine-execution": {"engine": {"execution": "eager", "pin": {"world": 1}}},
+               "engine-args": {"engine": {"execution": "bi-eager", "pin": {"world": 1}, "engine_kwargs": {"max_model_len": 512}}},
                "target": {"target": {**TARGET, "device_name": "other-gpu"}}, "hf_config": None}
 
 
 @pytest.mark.parametrize("field", list(SERVE_EDITS))
 def test_a_served_window_under_another_serve_json_than_its_advice_was_registered_under_is_refused(tmp_path, monkeypatch, field):
     """The served compiler's digest covers every field the compile reads of ``serve.json`` (`I2Compiler.digest`), so a window
-    whose ``serve.json`` says another model, revision, execution or target than the one `verity-vllm advice` registered its
+    whose ``serve.json`` says another model, revision, execution, target or engine args than the one `verity-vllm advice` registered its
     advice under (or whose verifier compiles under another config) is refused by name before any commit (`serve_check`'s
     ``compiler``, and ``advice``: its advice tree's domain is the registered compiler), and the records audit's compiler
     table (`compiler_doc`, ``prove_path.py compiler``) holds another digest; one recording another default seed is refused
@@ -1494,6 +1544,38 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
     assert json.loads(out.read_text())["templates"]
 
 
+def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_holds_none(tmp_path, monkeypatch):
+    """At a tied window's close (`serve_tie`, before its sample coin) the row dir holds the seal's commit and no Build:
+    ``advice_compile.py`` writes those once the serve is done. So window-commit's I2 loads each Program from its own Build,
+    written from its compile with its names and no vLLM (`own_builds`) into a directory of its own beside ``--out``, gone
+    once it returns, and writes none into the row dir."""
+    from verity_vllm.program.predict import window_circuit as WC
+
+    monkeypatch.setitem(sys.modules, "vllm", None)
+    s = _tiny_served(tmp_path, monkeypatch)
+    out, seen, load = tmp_path / "v3c-w0" / "window", {}, PP.I2Compiler.load
+
+    class Loaded(Exception):
+        pass
+
+    def loaded(i2, rank, world, requests):
+        p = load(i2, rank, world, requests)
+        seen.update(root=Path(i2.programs_root), held={Path(d).parent for d in p.dirs.values()}, digs=p.digs)
+        raise Loaded
+
+    monkeypatch.setattr(PP.I2Compiler, "load", loaded)
+    monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    with pytest.raises(Loaded):
+        PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                 str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                 "--checkpoint-dir", "unread", "--out", str(out)])
+    assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
+    assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
+    assert not list(Path(s.a.row_dir).glob("build_request*"))
+
+
 def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
                                                                                                       capsys):
     """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
@@ -1550,7 +1632,8 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     """`h1_tie`: with ``--window-registration`` W, H1's registration of the window, and ``--h1-key``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs."""
+    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
+    window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity_vllm.protocols.pouw import h1 as PH
     serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
@@ -1567,11 +1650,51 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
     with pytest.raises(ValueError, match="give --h1-key"):
         tie(h1_key=None)
+    verifier = argparse.Namespace(serve_run=str(serve), window_registration=str(tmp_path / "w.json"))
+    assert PP.h1_tie(verifier, cls, key=False) == (w, meta, tables)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
     with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
+    """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
+    window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
+    the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
+    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    from verity_vllm.program.predict.window_circuit import PearlTables
+
+    d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
+    d.mkdir()
+    mans = []
+    for i in range(3):
+        (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
+        mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
+    (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
+    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
+
+    def tie(cls=cls, **kw):
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
+        return PP.pearl_tie(argparse.Namespace(**args), cls)
+    assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
+    assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
+    with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
+        tie()
+    (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
+    w, got, rounds, tables = tie()
+    assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="give --window-registration W"):
+        tie(window_registration=None)
+    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
+        tie(h1_key="key")
+    (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
+    with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
+        tie(window_registration=str(tmp_path / "h1.json"))
+    (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
+    with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
+        tie()
 
 
 @pytest.fixture(scope="module")

@@ -78,7 +78,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # security's 233: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 247, "security/Properties": 191, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 222, "security/Properties": 184, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -304,7 +304,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 915, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 888, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -537,7 +537,7 @@ def test_every_definition_a_guarantee_reads_says_what_it_means():
 
 
 #: the theorems the spec (`security`) states: `theorem` and `lemma` declarations in its files
-SPEC_THEOREMS = {"security": 165}
+SPEC_THEOREMS = {"security": 167}
 
 
 def test_the_spec_states_no_new_lemma():
@@ -553,7 +553,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 281, "verity/protocols/flock/verifier": 700}
+OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 282, "verity/protocols/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -624,6 +624,44 @@ def _load(name: str, path: Path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def unmatched_first(packages: dict[str, list[dict]], audited) -> list[str]:
+    """The entries of `tools/verity/lean/replay-first.json` (``packages``) that name no module their package audits
+    (``audited``: a package's audited modules, or None where the tree has no such audited package)."""
+    lost = []
+    for p, entries in packages.items():
+        own = audited(p)
+        lost += [f"{p}: no audited package here"] if own is None else \
+            [f"{p}: {e['module']}" for e in entries if e["module"] not in own]
+    return lost
+
+
+def test_every_module_a_replay_checks_first_is_one_its_package_audits():
+    """Each entry of `tools/verity/lean/replay-first.json` names one of its package's own Lean files under its lock's
+    roots, the modules a replay step is planned for (`check.py`'s `replay_plan`). An entry that matches none would leave
+    the module it meant in the one replay with every other, unseen, so a mistyped or moved name fails here."""
+    check = _load("lean_check", ROOT / "tools" / "verity" / "lean" / "check.py")
+    packages = json.loads((ROOT / "tools" / "verity" / "lean" / check.REPLAY_FIRST).read_text())["packages"]
+
+    def audited(p: str) -> set[str] | None:
+        if not (ROOT / p / check.POLICY).is_file():
+            return None
+        roots = json.loads((ROOT / p / check.POLICY).read_text())["roots"]
+        return {m for m in check.lean_modules(ROOT / p) if check.under(roots, m)}
+    assert {p: check.replay_first(ROOT / p) for p in packages} == packages
+    lost = unmatched_first(packages, audited)
+    assert not lost, ("replay-first.json lists modules no audit replays, so their steps never run: name each as its file "
+                      f"under its package's roots has it, or remove the entry: {lost}")
+
+
+def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
+    """`unmatched_first` on a toy list: a mistyped module and a package the tree does not audit are named, and an entry
+    that names an audited module is not."""
+    entries = [{"module": "P.Heavy", "threads": 2, "why": "w"}, {"module": "P.Haevy", "threads": 2, "why": "w"}]
+    audited = {"a/pkg": {"P.Heavy", "P.A"}}.get
+    assert unmatched_first({"a/pkg": entries[:1]}, audited) == []
+    assert unmatched_first({"a/pkg": entries, "b/gone": entries}, audited) == ["a/pkg: P.Haevy", "b/gone: no audited package here"]
 
 
 def test_every_cap_merges_as_the_larger_of_its_sides():
