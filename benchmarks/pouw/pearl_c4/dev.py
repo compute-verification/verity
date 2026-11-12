@@ -99,14 +99,14 @@ class Dev:
         self.fns: dict[str, vp] = {}
         self.smem: dict[str, int] = {}
 
-    def ck(self, f: str, *a) -> None:
+    def ck(self, f: str, *a: object) -> None:
         r = getattr(self.cu, f)(*a)
         if r:
             s = C.c_char_p()
             self.cu.cuGetErrorString(r, C.byref(s))
             raise RuntimeError(f"{f} returned CUresult {r} ({s.value.decode() if s.value else 'unknown'})")
 
-    def get(self, f: str, *a) -> int:
+    def get(self, f: str, *a: object) -> int:
         v = i32()
         self.ck(f, C.byref(v), *a)
         return v.value
