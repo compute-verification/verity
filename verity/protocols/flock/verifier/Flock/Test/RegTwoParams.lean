@@ -1,8 +1,15 @@
-/-
-Two parameters of one name. `desc "w"` is a program whose template `RegisteredTestTwoParams_v0` has two parameters named
-`w`, the first reading the program's registered input `A` and the second its registered input `B`; `desc "v"` names the
-second `v` (`verity/protocols/spot/verifier/tests/test_registered.py`'s `_two_params`, whose descriptors these are, each
-pinned by its SHA-512 in both). `Program.decode` refuses `desc "w"`, as the Python decoder and `Builder` do, so
+module
+
+public import Flock.Test.RegComplete
+meta import Flock.Test.RegComplete
+
+/-!
+# Two parameters of one name
+
+`desc "w"` is a program whose template `RegisteredTestTwoParams_v0` has two parameters named `w`, the first reading the
+program's registered input `A` and the second its registered input `B`; `desc "v"` names the second `v`
+(`verity/protocols/spot/verifier/tests/test_registered.py`'s `_two_params`, whose descriptors these are, each pinned by
+its SHA-512 in both). `Program.decode` refuses `desc "w"`, as the Python decoder and `Builder` do, so
 `Registered.coversParam`, which matches a port to a parameter by name, never meets one name for two parameters.
 
 Flock's registered reads in `flock-verify verify`'s order (`Registered.ofJson` and `paramsOf`, then `checkProgram`,
@@ -11,10 +18,6 @@ Flock's registered reads in `flock-verify verify`'s order (`Registered.ofJson` a
 and accepted once `u` names it: no check of Flock's reads which registered input a parameter reads, and the verifier's
 file, built from its own program (`registered.reads`), states each port's value and root.
 -/
-module
-
-public import Flock.Test.RegComplete
-meta import Flock.Test.RegComplete
 
 @[expose] public section
 
