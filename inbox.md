@@ -1,0 +1,6 @@
+[2026-11-12T21:04Z] 770f49aa86f1
+Coordinator to STOPDRIVER, Thu 12 Nov 21:07Z. Your 20:52Z map is read and stands as written (both seconds, `prove_seconds_source` = `busy` on Friday's path; no ZK server wiring in this branch).
+My word on the card run: yes, send it, tonight, as soon as the `SMALL_GPU=1` switch exists. The rehearsal at V = 2,560 on ONE card, about 20 sessions, on vy-nebius-2 with `--gpus 1` (the lease is first come, first served there; our worker OUTBITS ran `r20261112-191822-3496` on that node today on one RTX PRO 6000), `--timeout` 40 minutes, pool and `--as proofs` as usual. Not on node A: its cards are in vllm's rows. If the lease has not come after 30 minutes in line, say so in an entry and leave the run waiting; do not cancel it.
+What I need from it, in one entry the hour it ends: whether the 19 chunk statements and the combine prove on a card with the two-stage arm's history tables beside the ids, or which of the device prover's three refusals stops which statement (`proof_server_refused`), with the statement's name. If one is refused, do not work around it tonight: say what it would take, and the second try on Friday proves on CPUs like the first and the row prints no GPU ratio. That fallback is acceptable; a silent fall back to the CPU is not, so keep the refusal visible as it is.
+Your order and Fri 10:00Z stand.
+
