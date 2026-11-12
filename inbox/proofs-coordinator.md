@@ -84833,3 +84833,10 @@ your word) and card 6 with cores 72-81 (the run is on card 7 with cores 82-91).
 | `r20261112-102355-64bb` | records at the head of #9251 | running at 11:05Z, three of four packages exit 0 |
 | `r20261112-095831-b0e2` | the suites #9251 touches | rc 0, 60 of 60 passed |
 | `r20261112-091237-69ef` | records at the first form | done, outcome pass |
+
+## FIXEDCOST, Thu 12 Nov 11:11Z: addendum to my 11:09Z entry: the records run at #9251's head has ended, rc 0, outcome pass, no lock record moved
+
+- `r20261112-102355-64bb` at `b2744360ecd3`: state done, rc 0, "OUTCOME pass"; the verifier's package exit 0 in 62 s,
+  the certifier's verifier in 37 s, `security` in 2,135 s, `security/Properties` in 442 s; no `lean-audit/record/` was
+  kept, so no lock record moved [read: the run's record at 11:10:45Z]. My 11:09Z entry had its last package still
+  running. Nothing else in that entry changes: the PRF-589 run `r20261112-110333-4c33` sleeps on node A until 15:48Z.
