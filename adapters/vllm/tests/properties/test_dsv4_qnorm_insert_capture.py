@@ -10,7 +10,6 @@ import contextlib
 import copy
 import functools
 import json
-import sys
 import types
 
 import numpy as np
@@ -20,6 +19,7 @@ from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as W
 from verity.definitions.registry import dsv4_qnorm_insert as R
 
+from tests import fake_vllm
 from tests.properties import dsv4_qnorm_insert_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -381,11 +381,10 @@ def test_main_end_to_end_on_stubbed_launches(padded, short, tmp_path, monkeypatc
     orchestration shows here and not on the H200."""
     o, paths, _ = padded
     good, _ = short
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})

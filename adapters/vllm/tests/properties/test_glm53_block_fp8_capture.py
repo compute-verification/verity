@@ -9,8 +9,6 @@ __models__ = ("zai-org/GLM-5.3",)
 import contextlib
 import copy
 import json
-import sys
-import types
 
 import numpy as np
 import pytest
@@ -20,6 +18,7 @@ from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.rows import moe_sum
 
+from tests import fake_vllm
 from tests.properties import glm53_block_fp8_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
@@ -442,14 +441,13 @@ def test_required_cases_are_every_moe_case_both_probes_and_the_planted_sum() -> 
 
 
 def _stub_vllm(monkeypatch) -> None:
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    ws = types.ModuleType("vllm.v1.worker.workspace")
-    vars(ws).update(is_workspace_manager_initialized=lambda: True, init_workspace_manager=lambda device: None)
-    for name, mod in (("vllm", types.ModuleType("vllm")), ("vllm.config", vc), ("vllm.v1", types.ModuleType("vllm.v1")),
-                      ("vllm.v1.worker", types.ModuleType("vllm.v1.worker")), ("vllm.v1.worker.workspace", ws)):
-        monkeypatch.setitem(sys.modules, name, mod)
+    ws = "vllm.v1.worker.workspace"
+    stood_in = {"vllm.config:CompilationConfig": lambda **kw: kw, "vllm.config:VllmConfig": lambda **kw: kw,
+                f"{ws}:is_workspace_manager_initialized": lambda: True, f"{ws}:init_workspace_manager": lambda device: None}
+    fake = fake_vllm.install(monkeypatch, extra=stood_in)
+    for key, value in stood_in.items():
+        fake.set(key, value)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
 
 
 def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
