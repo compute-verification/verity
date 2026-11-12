@@ -119,6 +119,19 @@ def test_nothing_is_built_while_a_lean_batch_waits_for_its_records_unless_the_ru
     assert built_beside(rule("2a.")) > 0
 
 
+def test_a_change_with_a_lean_input_waits_for_the_records_run_under_the_rule_that_holds_it(tr):
+    def built_beside(r: qr.Rule) -> list[qr.Change]:
+        got, seen = [], 0
+        for run in walk(tr, r):
+            new = [c for c in run.built[seen:] if c.start is not None]
+            seen = len(run.built)
+            if run.side:
+                got += [ch for c in new for ch in c.changes if ch.audit and not ch.lean]
+        return got
+
+    assert built_beside(rule("2.")) and not built_beside(rule("2d."))
+
+
 def test_side_by_side_a_failed_batch_drops_no_other(tr):
     run = qr.Replay(tr, rule("3.")).run()
     assert "dropped base" not in run.lost and run.counts["unions"] > 0
