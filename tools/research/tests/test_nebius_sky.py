@@ -1163,7 +1163,8 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
     """Request directories without a run dir, the clones of runs that are over, the store's lock files and uv's editable shards
     took a node's inodes by the million with nothing removing them. Research's unit points a pass at each (its drop-in, beside the
     capabilities their /proc scan needs), the journal line counts what each removed and why the rest stayed, naming the first path
-    in use, and one that could not run fails the unit. A variable left empty switches its removal off."""
+    in use and the runs whose request or clone went (no lock file or shard: they hold nothing), and one that could not run fails
+    the unit. A variable left empty switches its removal off."""
     import subprocess
     conf = (SKY / "store_evict_src.conf").read_text()
     assert "Environment=VY_EVICT_REQUESTS=/workspace/research/requests VY_EVICT_SCRATCH=/workspace/research/scratch\n" in conf
@@ -1186,9 +1187,13 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
     (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
     (bin_dir / "df").chmod(0o755)
     shard = "/workspace/cache/uv/sdists-v9/editable/0123456789abcdef"
-    left = {"requests": {"deleted": 2, "deleted_bytes": 3e6, "deleted_inodes": 12, "kept": 3, "kept_by": {"recent": 2, "run": 1}, "kept_first": [], "error": None},
-            "clones": {"deleted": 1, "deleted_bytes": 4.5e9, "deleted_inodes": 189264, "kept": 0, "kept_by": {}, "kept_first": [], "error": None},
-            "locks": {"deleted": 316915, "deleted_bytes": 0, "deleted_inodes": 316915, "kept": 4, "kept_by": {"recent": 4}, "kept_first": [], "error": None},
+    a, b = "r20330518-033300-0a1b", "r20330518-033301-0a1b"
+    left = {"requests": {"deleted": 2, "deleted_bytes": 3e6, "deleted_inodes": 12, "kept": 3, "kept_by": {"recent": 2, "run": 1}, "kept_first": [],
+                         "deleted_first": [f"/workspace/research/requests/{a}", f"/workspace/research/requests/{b}"], "error": None},
+            "clones": {"deleted": 21, "deleted_bytes": 4.5e9, "deleted_inodes": 189264, "kept": 0, "kept_by": {}, "kept_first": [],
+                       "deleted_first": [f"/workspace/research/scratch/{a}"], "error": None},
+            "locks": {"deleted": 316915, "deleted_bytes": 0, "deleted_inodes": 316915, "kept": 4, "kept_by": {"recent": 4}, "kept_first": [],
+                      "deleted_first": ["/workspace/research/store/locks/blob-" + "0" * 64 + ".lock"], "error": None},
             "uv": {"deleted": 5, "deleted_bytes": 2e8, "deleted_inodes": 51, "kept": 9, "kept_by": {"2": 1, "recent": 6, "retired": 2},
                    "kept_first": [{"path": shard, "why": "2: its lock is held (.lock)"}], "error": None}}
     env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_ARGV": str(tmp_path / "argv.json"),
@@ -1205,24 +1210,24 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
     assert argv == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir", "/workspace/research/runs",
                     "--requests-dir", "/workspace/research/requests", "--scratch-dir", "/workspace/research/scratch", "--locks",
                     "--uv-cache", "/workspace/cache/uv", "--min-mb", "1e12", "--json"]
-    assert ("target reached: False; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1)"
-            "; clones: deleted 1 (4.5 GB, 189264 inodes), kept 0 (none); store locks: deleted 316915 (0.0 GB, 316915 inodes), kept 4 (recent:4)"
+    assert (f"target reached: False; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1), gone: {a} {b}"
+            f"; clones: deleted 21 (4.5 GB, 189264 inodes), kept 0 (none), gone: {a} ...; store locks: deleted 316915 (0.0 GB, 316915 inodes), kept 4 (recent:4)"
             f"; uv cache: deleted 5 (0.2 GB, 51 inodes), kept 9 (2:1 recent:6 retired:2), e.g. {shard}: 2: its lock is held (.lock)"
             "; no store blob") in r.stdout, r.stdout
     r, argv = run(VY_EVICT_UV="", VY_EVICT_LOCKS="0", VY_EVICT_UV_KEEP_H="72")
     assert r.returncode == 0 and "--uv-cache" not in argv and "--uv-keep-h" not in argv and "--locks" not in argv, "left empty: switched off"
     assert argv[7:11] == ["--requests-dir", "/workspace/research/requests", "--scratch-dir", "/workspace/research/scratch"]
-    assert "uv cache" not in r.stdout and "store locks" not in r.stdout and "; clones: deleted 1" in r.stdout
+    assert "uv cache" not in r.stdout and "store locks" not in r.stdout and "; clones: deleted 21 " in r.stdout
     r, argv = run(VY_EVICT_UV_KEEP_H="72")
     assert argv[12:16] == ["--uv-cache", "/workspace/cache/uv", "--uv-keep-h", "72"]
     failed = {**left, "uv": {**left["uv"], "deleted": 0, "error": "2: /proc/1 is unreadable"}}
     r, argv = run(FAKE_LEFT=json.dumps(failed))
     assert "kept 9 (2:1 recent:6 retired:2), e.g. " in r.stdout and ", nothing more deleted: 2: /proc/1 is unreadable; no store blob" in r.stdout
-    assert r.returncode == 1 and "could not run" in r.stderr and "; clones: deleted 1" in r.stdout, "the unit fails, after the line"
+    assert r.returncode == 1 and "could not run" in r.stderr and "; clones: deleted 21 " in r.stdout, "the unit fails, after the line"
     (tool / "research" / "store" / "cli.py").write_text('ap.add_argument("--requests-dir")\n')
     r, argv = run()
     assert r.returncode == 0 and argv[7:9] == ["--requests-dir", "/workspace/research/requests"] and "--locks" not in argv
-    assert ("; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1); clones: not removed, tool has no --scratch-dir"
+    assert (f"; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1), gone: {a} {b}; clones: not removed, tool has no --scratch-dir"
             "; store locks: not removed, tool has no --locks; uv cache: not removed, tool has no --uv-cache; no store blob") in r.stdout
 
 

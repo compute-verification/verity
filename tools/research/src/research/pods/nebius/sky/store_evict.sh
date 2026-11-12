@@ -28,8 +28,9 @@
 #   VY_EVICT_UV        the editable shards and temporary build directories of the uv cache there (/workspace/cache/uv) that nothing
 #                      wrote for $VY_EVICT_UV_KEEP_H hours (48) and no live process names (`--uv-cache`)
 # The line counts, for each, what went (GB, inodes), what stayed by reason, and the first path kept because it is in use or
-# unknown, with why. One that could not establish its conditions fails the unit like the source-tree pass; a tool too old for
-# one still runs the rest, and the line says so.
+# unknown, with why; it names the runs whose request or clone went (the first twenty: nothing else records them). One that
+# could not establish its conditions fails the unit like the source-tree pass; a tool too old for one still runs the rest, and
+# the line says so.
 #   VY_RESEARCH_TOOL: the research tool to run (default the newest snapshot under /workspace/research/tool).
 set -uo pipefail
 FREE=${VY_EVICT_FREE_GB:-2500}
@@ -152,6 +153,9 @@ for key, name in (("requests", "requests"), ("clones", "clones"), ("locks", "sto
         continue
     line += "; %s: deleted %d (%.1f GB, %d inodes), kept %d (%s)" % (name, p.get("deleted", 0), p.get("deleted_bytes", 0) / 1e9,
         p.get("deleted_inodes", 0), p.get("kept", 0), " ".join("%s:%d" % kv for kv in sorted((p.get("kept_by") or {}).items())) or "none")
+    runs = [x.rsplit("/", 1)[-1] for x in p.get("deleted_first") or []] if key in ("requests", "clones") else []
+    if runs:
+        line += ", gone: " + " ".join(runs) + (" ..." if p.get("deleted", 0) > len(runs) else "")
     for k in (p.get("kept_first") or [])[:1]:
         line += ", e.g. %s: %s" % (k.get("path"), k.get("why"))
     if p.get("error"):
