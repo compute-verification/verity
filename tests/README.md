@@ -15,7 +15,7 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 
 A test's docstring states its rule. Where a rule has exceptions, they are named in the test, one reason each (an `ALLOWED`
 table in the wall-clock, retired-term, seed and verifier-cost tests); the import order's are the listing
-`import_order.toml`, which `test_boundaries.py` reads.
+`import_order.toml`, which `test_boundaries.py` reads and whose tables `tools/verity/check/import_order.py` writes.
 
 ## Lint ratchets
 

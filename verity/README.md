@@ -42,8 +42,10 @@ One distribution, one module per concern. Import from the module that owns an ob
 | `security/` | The Lean every protocol states its guarantees in, and their proofs (root `AGENTS.md`, "Lean"). |
 
 `tests/test_boundaries.py` holds the tree to the import order of `tests/import_order.toml`: a file loads only its own
-row or an earlier one, no verifier loads prover code, what each Python verifier and device loads and reaches (its
-`trusted` entry) only shrinks, and `verity` imports no other distribution. It keeps the plain-integer references
+row or an earlier one, no verifier loads prover code, a place of `verity` imports only the places its `loads` lists,
+what the verifiers' side loads and reaches (the lists of its trusted places) only shrinks, and `verity` imports no
+other distribution. To allow an import between two places, write it and run
+`uv run tools/verity/check/import_order.py`, which writes the line. The test keeps the plain-integer references
 (`STDLIB_ONLY`: `verity/circuits`, `verity/commitments/randomness`, `verity/claims` among them) free of numpy.
 
 ~~~sh

@@ -5,7 +5,7 @@ evaluates or checks a circuit: this package and its subpackages, the served work
 (`verity.definitions`), the private circuits (`verity.definitions.private_circuits`) and `circuit-check`. It says what the
 words mean, names the one front door for each job, and links each part's README.
 
-Everything in this package is on the soundness path (the `trusted` entries of `tests/import_order.toml` reach it): the
+Everything in this package is on the soundness path (the trusted places of `tests/import_order.toml` reach it): the
 verifiers in `verity/protocols/` (each protocol's `verifier/`) read Programs, their digests and these semantics. The
 descriptor format, its canonical bytes and its digests are specified in [`PROTOCOL.md`](PROTOCOL.md), and
 `tests/format_vectors.json` pins them.
