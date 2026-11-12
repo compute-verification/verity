@@ -23,6 +23,7 @@ uv run circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'    # Definitio
 uv run circuit-check MODULE.circuit-check.py                         # what a sidecar's bindings reach in its module
 uv run circuit-check --all                                           # every registered Definition and template
 uv run circuit-check --structural UNIT.tmpl TARGET                   # a template as the Definition's lowering
+uv run circuit-check --structural DIR TARGET                         # a split, its nets wired to lookup slots, as it
 uv run circuit-check --ambient TARGET...                             # each lowering, read under a perturbed interpreter
 ~~~
 
@@ -45,7 +46,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `sidecars.py` | each Definition module's bindings and pins, in its `<module>.circuit-check.py` and `.circuit-check.json`, and where they are found |
 | `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
-| `structural.py`, `ambient.py`, `by_calls.py` | `--structural`, `--ambient`, and a Program root checked by its calls alone |
+| `structural.py`, `structural_slots.py`, `ambient.py`, `by_calls.py` | `--structural` on a template and on a split (`verity_flock.struct_slots`), `--ambient`, and a Program root checked by its calls alone |
 | `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged |
 | `entries.py` | the shared lists' layout, one file per entry (`pins/`) |
 | `cli.py` | the command line and the report (`verity-circuit-check/v1`) |
@@ -57,4 +58,5 @@ module's sidecar: the suite fails any registered Definition family the catalog d
 circuit-check imports `verity` and Flock, and no integration. A package under `adapters/` registers itself by a
 sidecar of its own module (`<package>/__init__.circuit-check.py`), and then its sidecars are found like `verity`'s. What
 a check needs of the integration is in that sidecar: the frontend vocabularies' kinds (`_vocabulary_roots`) and the
-reader of a request Program (`request_program`).
+reader of a request Program (`request_program`). A split is read the same way, by the reader the sidecar beside
+`verity_flock.struct_slots` defines (`struct_slots_split`), so `structural_slots.py` imports nothing of Flock.

@@ -6,7 +6,7 @@ import dataclasses
 
 import pytest
 
-from verity_vllm.records.boundary_commit import KINDS, SCHEMA, BoundaryCommit
+from verity_vllm.records.boundary_commit import KINDS, OPTIONAL, SCHEMA, BoundaryCommit
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 
 
@@ -22,7 +22,9 @@ def _doc() -> dict:
 def test_a_writers_record_loads_and_dumps_back_to_itself():
     rec = BoundaryCommit.of(_doc(), "commit.json")
     assert rec.dump() == _doc() and BoundaryCommit.of(rec.dump(), "w") == rec
-    assert set(KINDS) == {f.name for f in dataclasses.fields(BoundaryCommit)}
+    assert set(KINDS) | set(OPTIONAL) == {f.name for f in dataclasses.fields(BoundaryCommit)}
+    tables = _doc() | {"tables": {"layers": [0, 3], "capacity": 16}}
+    assert BoundaryCommit.of(tables, "w").dump() == tables and rec.tables is None
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))

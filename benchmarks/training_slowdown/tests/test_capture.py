@@ -1,7 +1,9 @@
-"""`capture_step` / `capture_fn` on toy models against hand counts: every GEMM's MACs, phase and role as a multiset
-derived from the architecture alone, the upstream counts, φ and the cut, the token dims, and the refusals."""
+"""`capture_step` / `capture_fn` / `capture_steps` on toy models against hand counts: every GEMM's MACs, phase and role
+as a multiset derived from the architecture alone, the upstream counts, φ and the cut, the token dims, a measured
+step's circuit among its neighbours, and the refusals."""
 from __future__ import annotations
 
+import copy
 from collections import Counter
 from fractions import Fraction
 
@@ -10,7 +12,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
-from training_slowdown.capture import CaptureRefused, capture_fn, capture_step, phase
+from training_slowdown.capture import CaptureRefused, capture_fn, capture_step, capture_steps, phase, products
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
@@ -281,6 +283,135 @@ def test_upstream_sums_are_exact_over_a_wide_bitset(big):
     assert total(m) == want and total(0) == 0 and total(1 << (k - 1)) == Fraction(macs[-1], tokens[-1])
 
 
+# --- consecutive steps, one measured -----------------------------------------------------------------------------------
+
+def standard(m, batch, opts):
+    for o in opts:
+        o.zero_grad(set_to_none=True)
+    lm_loss(m, batch).backward()
+    for o in opts:
+        o.step()
+
+
+def top_block():
+    model = TinyLM(V, H, NH, I, L)
+    model.requires_grad_(False)
+    model.blocks[-1].requires_grad_(True)
+    return model, torch.optim.AdamW(model.blocks[-1].parameters())
+
+
+@pytest.mark.slow
+def test_a_step_among_its_neighbours_is_the_step_alone_with_its_circuit():
+    """Three standard steps training the top block under AdamW, the second measured. Its GEMMs and their roles, its
+    updated MACs, its cut and its raw product rows are the step's captured alone. What the step alone lacks, it has:
+    a step circuit, on which the gradient's cut and one token group's partial are the block's dW at the accumulator's
+    32 bits an element, the carried values no token op reads are AdamW's two moments, the update's profile ends at the
+    block's weights at their 32 bits, and a token reads its id and its label."""
+    model, opt = top_block()
+    alone = capture_fn(standard, model, lm_batch(), optimizers=opt)
+    assert alone.circuit is None and alone.formalism is None
+    g = capture_steps([standard] * 3, model, lm_batch(), measured=1, optimizers=opt)
+    assert roles(g) == roles(alone) and g.structure()["updated"] == alone.structure()["updated"]
+    assert (g.tokens, g.axes, g.cut_bits, g.beta) == (alone.tokens, alone.axes, alone.cut_bits, alone.beta)
+    assert products.raw_on_dial(g) == products.raw_on_dial(alone)
+    weights = 4 * H + 4 * H2 + 2 * HI   # the block's two norms, q k v o, up and down
+    f = g.formalism
+    assert g.circuit is not None and f["region"] == 1
+    assert f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
+    assert f["state_bits"] == 2 * 32 * weights and f["delta_grad_bits"] == 3 * 32 * weights
+    assert (f["tokens"], f["token_factor"], f["tau_ids"], f["tau_other_bits"]) == (T, 1, 2, 0)
+    assert 0 < f["affected_share"] < f["sigma"] < 1   # the frozen block's token work reads no update
+
+
+def test_the_first_of_the_steps_reads_no_update():
+    """Measured at the first step, nothing it reads is the run's own: no affected work and no update to read. A step
+    that isn't one of them is refused."""
+    model, opt = top_block()
+    f = capture_steps([standard] * 3, model, lm_batch(), measured=0, optimizers=opt).formalism
+    assert f["region"] == 0 and f["affected_share"] == 0 and f["u1_bits"] == 0
+    with pytest.raises(ValueError, match="measured is 3"):
+        capture_steps([standard] * 3, model, lm_batch(), measured=3, optimizers=opt)
+
+
+def narrowed(m, batch, _opts):
+    """A step whose update passes through 16 bits on its way into the weights, as an orthogonalised update does."""
+    for p in m.parameters():
+        p.grad = None
+    lm_loss(m, batch).backward()
+    with torch.no_grad():
+        for p in m.blocks[-1].parameters():
+            p.add_(p.grad.bfloat16().float(), alpha=-0.01)
+
+
+def widths(g) -> dict:
+    """The width each operand of the measured step's affected products is passed at, by product."""
+    return {(r["phase"], r["op"], tuple(sorted(r["dims"].items()))): tuple(r["widths"])
+            for r in products.raw_on_dial(g)["rows"] if any(r["affected"])}
+
+
+def test_steps_taken_mid_run_read_the_runs_own_weights():
+    """A step whose update is cast to 16 bits before it is added to a 32-bit weight. Among a run's first steps the
+    measured step's weight is θ plus that update, which a block makes from the update alone, so the weight is passed
+    at the update's 16 bits. Mid-run the first captured step's weight is the run's own, a block needs it at its 32
+    bits, and the measured step's rows are the step's captured alone. The step's circuit is the same either way: the
+    gradient's cut is at the cast, 16 bits an element."""
+    model, _ = top_block()
+    alone = products.raw_on_dial(capture_fn(narrowed, model, lm_batch()))
+    first = capture_steps([narrowed] * 3, model, lm_batch(), measured=1)
+    late = capture_steps([narrowed] * 3, model, lm_batch(), measured=1, mid_run=True)
+    assert products.raw_on_dial(late) == alone and products.raw_on_dial(first) != alone
+    by_weight = {k: (a, b) for (k, a), b in zip(widths(first).items(), widths(late).values()) if a != b}
+    assert by_weight and set(by_weight.values()) == {((32, 16), (32, 32))}
+    assert late.formalism == first.formalism and late.formalism["grad_cut_bits"] == 16 * (4 * H + 4 * H2 + 2 * HI)
+
+
+def mlp_weights(m) -> list:
+    return [m.blocks[-1].up.weight, m.blocks[-1].down.weight]
+
+
+def momentum(through_copy: bool, nesterov: bool):
+    """A momentum step written by hand: each trained matrix's fp32 buffer is scaled and takes the gradient in place,
+    and the update, cast to 16 bits, reads the gradient and the buffer (`nesterov`) or the buffer alone. With
+    `through_copy` the buffer is then written through a copy of itself, as a step that keeps its buffer at any width
+    writes it: ``b.copy_(b.float()...)``, where an fp32 buffer's ``float()`` is the buffer."""
+    def step(m, batch, _opts):
+        for p in m.parameters():
+            p.grad = None
+        lm_loss(m, batch).backward()
+        with torch.no_grad():
+            for i, p in enumerate(mlp_weights(m)):
+                b = m.get_buffer(f"momentum{i}")
+                buf = b.float().mul_(0.9).add_(p.grad)
+                if through_copy:
+                    buf = b.copy_(buf).float()
+                u = p.grad.add(buf, alpha=0.9) if nesterov else buf
+                p.add_(u.bfloat16().float(), alpha=-0.01)
+    return step
+
+
+@pytest.mark.parametrize("nesterov", [True, False])
+def test_a_buffer_written_through_a_copy_of_itself_is_carried(nesterov):
+    """A copy's source that is the storage it writes is read, so a momentum buffer written through a copy of itself
+    keeps what the step scaled and added the gradient into. The measured step reads the buffer as carried, at its 32
+    bits an element; the gradient's cut and one token group's partial are the gradient at 32 bits an element, since
+    the buffer takes it whole, past the update's 16-bit cast; and the step's circuit and product rows are those of
+    the same step writing the buffer in place."""
+    def captured(through_copy: bool):
+        model = TinyLM(V, H, NH, I, 1)
+        model.requires_grad_(False)
+        for i, p in enumerate(mlp_weights(model)):
+            p.requires_grad_(True)
+            model.register_buffer(f"momentum{i}", torch.zeros_like(p))
+        return capture_steps([momentum(through_copy, nesterov)] * 3, model, lm_batch(), measured=1)
+
+    copied, in_place = captured(True), captured(False)
+    weights = 2 * HI   # the one block's up and down
+    f = copied.formalism
+    assert f["state_bits"] == f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
+    assert f["delta_grad_bits"] == 2 * 32 * weights
+    assert f == in_place.formalism and products.raw_on_dial(copied) == products.raw_on_dial(in_place)
+
+
 # --- refusals ----------------------------------------------------------------------------------------------------------
 
 class Branchy(torch.nn.Module):
@@ -385,3 +516,42 @@ def test_refuses_batch_dependent_graph():
     with pytest.raises(CaptureRefused) as e:
         capture_step(model, torch.optim.SGD(model.parameters(), lr=0.1), loss, (torch.empty(4, 8),))
     assert e.value.reason == "batch_dependent"
+
+
+@pytest.mark.parametrize("what", ["model", "parameter", "optimizer"])
+def test_refuses_a_deep_copy_of_what_the_trace_runs_on_and_leaves_every_other_deep_copy_alone(what):
+    """A step that deep-copies the model, one of its parameters or an optimizer is refused at that line, with what
+    to write instead, before torch copies a tensor that has no data (which kills the process later). A step that
+    copies the state dict is traced. The refusal is in force only while a capture records: torch's own deep copy is
+    back after a capture that was refused and after one that was taken, and copies the model as before."""
+    torchs = torch.Tensor.__deepcopy__
+    model = mlp()
+    batch, opts = (torch.empty(4, 8),), [torch.optim.SGD(model.parameters(), lr=0.1)]
+
+    def train(m, rows, optimizers):
+        m(rows[0]).sum().backward()
+        optimizers[0].step()
+        optimizers[0].zero_grad(set_to_none=True)
+
+    def copies(m, rows, optimizers):
+        copy.deepcopy({"model": m, "parameter": m[0].weight, "optimizer": optimizers[0]}[what])
+        train(m, rows, optimizers)
+
+    def keeps(m, rows, optimizers):
+        was = {k: v.detach().clone() for k, v in m.state_dict().items()}
+        train(m, rows, optimizers)
+        assert set(was) == set(m.state_dict())
+
+    def copied() -> None:
+        assert torch.Tensor.__deepcopy__ is torchs
+        twin = copy.deepcopy(model)
+        assert [k for k, v in twin.state_dict().items() if not torch.equal(v, model.state_dict()[k])] == []
+        assert all(a is not b for a, b in zip(twin.parameters(), model.parameters()))
+
+    with pytest.raises(CaptureRefused) as e:
+        capture_steps([copies] * 3, model, batch, measured=1, optimizers=opts)
+    assert e.value.reason == "deep_copy" and e.value.op is None and "in copies: copy.deepcopy(" in e.value.where
+    assert "copy the state dict instead, {k: v.detach().clone() for k, v in model.state_dict().items()}" in str(e.value)
+    copied()
+    assert capture_steps([keeps] * 3, model, batch, measured=1, optimizers=opts).tokens == 4
+    copied()

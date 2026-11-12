@@ -13,6 +13,7 @@ import argparse
 import ctypes
 import json
 import sys
+from typing import Any
 
 GRAPHICS, SM, MEM = 0, 1, 2
 P0 = 0
@@ -49,19 +50,19 @@ class Nvml:
     def err(self, rc: int) -> str:
         return self.lib.nvmlErrorString(rc).decode()
 
-    def call(self, name: str, *args) -> tuple[int, str]:
+    def call(self, name: str, *args: Any) -> tuple[int, str]:
         fn = getattr(self.lib, name, None)
         if fn is None:
             return -1, "absent from this libnvidia-ml"
         rc = fn(self.h, *args)
         return rc, self.err(rc) if rc else ""
 
-    def uints(self, name: str, n: int, *pre) -> dict:
+    def uints(self, name: str, n: int, *pre: Any) -> dict:
         out = [ctypes.c_uint() for _ in range(n)]
         rc, e = self.call(name, *pre, *[ctypes.byref(o) for o in out])
         return {"rc": rc, "error": e} if rc else {"value": [o.value for o in out]}
 
-    def ints(self, name: str, n: int, *pre) -> dict:
+    def ints(self, name: str, n: int, *pre: Any) -> dict:
         out = [ctypes.c_int() for _ in range(n)]
         rc, e = self.call(name, *pre, *[ctypes.byref(o) for o in out])
         return {"rc": rc, "error": e} if rc else {"value": [o.value for o in out]}
@@ -113,7 +114,7 @@ class Nvml:
         return rows
 
     def lock(self, lo: str, hi: str) -> dict:
-        v = [LIMIT_IDS.get(x, None) or int(x) for x in (lo, hi)]
+        v = [LIMIT_IDS.get(x) or int(x) for x in (lo, hi)]
         rc, e = self.call("nvmlDeviceSetGpuLockedClocks", ctypes.c_uint(v[0]), ctypes.c_uint(v[1]))
         return {"op": "nvmlDeviceSetGpuLockedClocks", "min": lo, "max": hi, "rc": rc, "error": e}
 

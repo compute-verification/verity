@@ -6,7 +6,9 @@ from __future__ import annotations
 import base64
 import dataclasses
 import hashlib
+import itertools
 import json
+import math
 import os
 import posixpath
 import re
@@ -2704,11 +2706,15 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Path | None = None, sync=FAKE_SYNC, **kw):
+def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Path | None = None, sync=FAKE_SYNC,
+               budget_s: float = math.inf, **kw):
+    """The preflight on ``world``.  Its checks' budget never runs out, so each waits on its check's end: the preflight is
+    fail-open, and a check a slow disk kept past the real `PREFLIGHT_CHECKS_S` would be skipped, the refusal a test expects
+    missed."""
     from research.queue import Preflight
 
     return Preflight(repo or world.dev, str(world.origin), store or world.store, sync=sync, python=sys.executable,
-                     root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, **kw)
+                     root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, budget_s=budget_s, **kw)
 
 
 def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
@@ -3108,17 +3114,31 @@ PREFLIGHT_REFUSALS = {
 
 @pytest.mark.parametrize("case", list(PREFLIGHT_REFUSALS))
 def test_the_preflight_refuses_a_head_whose_merge_onto_next_breaks_an_invariant_and_names_the_fix(world, capsys, case):
+    """Each check runs to its end however long it takes: under a clock that leaps an hour a reading, the budget `_preflight`
+    gives can't run out, so a slow machine skips no check and misses no refusal."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     files, says = PREFLIGHT_REFUSALS[case]
     _preflight_main(world)
     world.gh.put(2, h2 := world.change(files), ready=False)
-    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
+    hours = itertools.count(0.0, 3600.0).__next__
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, clock=hours)) == 1
     err = capsys.readouterr().err
     assert f"#2 is not marked ready at {h2[:12]}: the preflight of its head merged onto `next` at" in err
     assert says in err, err
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [next(ln for ln in err.splitlines() if says in ln)]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+@pytest.mark.parametrize("deadline, timeout", [(125.0, 120.0), (math.inf, None)])
+def test_a_preflight_check_waits_what_is_left_of_its_budget_and_with_none_to_run_out_waits_on_its_end(world, monkeypatch,
+                                                                                                   deadline, timeout):
+    """A check's timeout is what is left of the budget when it starts; under an unbounded budget it has none, since
+    `subprocess.run` can't wait an infinite one (OverflowError)."""
+    asked = []
+    monkeypatch.setattr(subprocess, "run", lambda argv, **kw: asked.append(kw["timeout"]) or subprocess.CompletedProcess(argv, 0))
+    got, why = _preflight(world, budget_s=deadline - 5.0, clock=lambda: 5.0)._run(["true"], world.tmp, deadline)
+    assert (got.returncode, why, asked) == (0, "", [timeout])
 
 
 def test_the_preflight_refuses_a_head_a_landing_gate_at_main_fails_with_its_fix_and_notes_one_that_cant_judge(world, capsys):
