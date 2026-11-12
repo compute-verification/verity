@@ -306,7 +306,7 @@ class DsaQ:
         if bad:
             return unsupported(node, "fused-q constexprs differ from the recorded GLM-5.3 pin", mismatches=bad)
         q, qo, cs = a.get("q_pe_ptr"), a.get("q_pe_out_ptr"), a.get("q_pe_cos_sin_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (q, qo, cs)):
+        if not (isinstance(q, ViewDesc) and isinstance(qo, ViewDesc) and isinstance(cs, ViewDesc)):
             return unsupported(node, "fused-q RoPE pointers are not bound")
         M = q.shape[0]
         pos = step_positions(node, ctx, a.get("pos_ptr"), M)
@@ -330,7 +330,8 @@ class DsaQ:
         if c.get("HAS_INDEXER") is True:
             iq, ics, iw = a.get("index_q_ptr"), a.get("index_q_cos_sin_ptr"), a.get("index_weights_ptr")
             iqo, iwo = a.get("index_q_fp8_ptr"), a.get("index_weights_out_ptr")
-            if not all(isinstance(v, ViewDesc) for v in (iq, ics, iw, iqo, iwo)):
+            if not (isinstance(iq, ViewDesc) and isinstance(ics, ViewDesc) and isinstance(iw, ViewDesc) and isinstance(iqo, ViewDesc)
+                    and isinstance(iwo, ViewDesc)):
                 return unsupported(node, "indexer-layer fused-q pointers are not bound")
             if c.get("NUM_INDEX_Q_HEADS") != 32 or c.get("INDEX_Q_HEAD_DIM") != 128 or c.get("INDEX_Q_HALF_ROT_DIM") != 32:
                 return unsupported(node, "index-Q dimensions differ from the recorded GLM-5.3 pin")
