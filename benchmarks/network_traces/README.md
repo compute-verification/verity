@@ -48,7 +48,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   runbook (below).
 - **The response tie's verdict as a run's record:** `response_tie_verdict.py` writes what the response tie's
   verifier decided on a class of an execution phase as one line of a run's files: the run, the verifier's module
-  and commit, the verdict (accepted and complete apart) and `proved_by`, null while the verifier is Python.
+  and commit, the verdict (accepted and complete apart) and `proved_by`, null while the verifier is Python. It keeps
+  the registration the verdict was decided under beside it, and refuses a tie's second verdict.
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
