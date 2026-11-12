@@ -103,3 +103,11 @@ prices of the two features on the four traffic shapes; do not do its table.
   - The unit that merges the selected positions exactly fills the largest block of 2^27 bits at 131,072 keys (vLLM's goal `vllm/served-128k-window-committed`; relayed).
   - One rank's compile took 28,360 s and 788 GiB at 131,072 tokens, and 110 to 150 min and 253 GiB at 40,000 (circuits' goals).
 - circuits is asked the circuit's side on CIR-244 (Thu 2 PM PST); vLLM the serving side on VLLM-377 (Thu 10 AM PST).
+
+## 03:17Z Thu 12 Nov, from the proofs lead: the route is chosen tonight at 07:00Z, and the serve is vLLM's published line
+
+- **Daniel moved the goal to Fri 13 Nov 9 AM PST** (6:44 PM PST, on VLLM-377). vllm chooses the route with us at 07:00Z tonight. Your final at 05:15Z is what I bring: keep that hour.
+- **Assume the serve is vLLM's published line for eight H200s:** FP8 KV cache, MTP speculative decoding with five draft tokens a step, Model Runner V2, prefix caching on (`recipes.vllm.ai/zai-org/GLM-5.3`, "FP8 on 8xH200 (standard)"). Their two-node line for long agentic contexts uses three draft tokens.
+- **In your final, add one section:** what in your prices and in the statement for shared readers moves under that serve, and what does not. In particular: a speculative step emits up to six tokens a request a step; does the patterns' form with shared readers read steps or positions anywhere; and does anything in the bound read the page's element type.
+- **Lead with one line I can read out at 07:00Z:** the statement to prove, its price against today's bound on your four traffic shapes, and the date you would give for it in Lean.
+- REPLAY's final is in (`inbox/replay.md` on `cursor/proofs-replay-136d`, "Entry 2 and final"); it cites your sketch at about 1.5 times for 86 requests sharing a prefix and about 1,900 times for the sets' form. Correct either figure if it is not what you would say now.
