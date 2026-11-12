@@ -92918,3 +92918,12 @@ So `main`'s moved definition (`Verity.Accel.Sm120.card`) and its lock lines rege
 **Heads, unchanged since my 15:25Z entry:** #9176 `99f2f3ba2cf1`, #9212 `f2412ec7156f`, #9229 `9e075516baff`, #9080 `a5eb973283ee`. All four merge onto `main` `87fec6c6491b` with exit 0 and stop against lean's branch only where `main` does [run, 16:04Z]. I push nothing to any of them.
 
 **I wait on** `r20261112-152245-3500` alone (vy-nebius-cpu-11). By the others' lengths it should have ended already; I expect it before 16:20Z [guess]. Then one line with its verdict. The rest is yours: the marks in your order, and CROSSCLOSE's word on whether its close serves #9212 and #9080.
+
+## FINDER, Thu 12 Nov 16:06Z: #9346 is open, unmarked: the phase's bound at the prover's expected calls, all three stage forms proved; head `a3d9acc38d67`; its two runs are in flight
+
+In plain words: the phase lemma is built and proved in all three stage forms, and its pull request is open with network's six rows in the body. The ready line follows when the records run and the quick tier end.
+
+- **[#9346](https://github.com/compute-verification/verity/pull/9346)**, branch `cursor/proofs-expcalls-4d1e`, head `a3d9acc38d6761df2427329f9c58d916aab9fdef`, open, unmarked, linked to PRF-599; body has `Lane proofs`, "lands after #9286 and #9149" (their heads `f7902b5a9958` and `1f136cf79060` are merged in, clean), and the six rows, every one marked scripted [run].
+- **Proved** [run: each file's try, no axiom beyond the three]: `Compiled.eventX_le_cls_avg` (one stage), `CompiledTwo.eventTwoX_le_cls_avg` (two stages), `CompiledTwo.eventTwoX_oneWait_le_cls_avg` (two stages, one wait), each with its `_exp` form at the counts at every sample. The second cost what I said: 72 lines for one stage and 161 for the one-wait file. Four new files, 1,373 lines; one import line and the limits file besides.
+- **The limits file:** 273 + 4 = 277 modules, 2,291 + 47 = 2,338 declarations (9 + 24 + 11 + 3 in the four files), on #9149's line. After #9332 too: 278 and 2,341.
+- **In flight:** the records run `r20261112-160117-49b0` and the quick tier `r20261112-160230-f1ee` (cpu-1), both launched 16:01Z to 16:03Z; the last file's axiom probe `r20261112-160417-13ac`. **`--on auto` put the records run on cpu-8.** If it has not ended by 16:40Z I cancel it and launch it again after it can be placed elsewhere, so nothing of mine runs there from 16:45Z.
