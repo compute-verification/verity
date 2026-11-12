@@ -310,7 +310,8 @@ theorem stmtOk_of_check : StmtOkOfCheck := by
     exact ⟨⟨hR t ht, hSc t ht⟩,
       readsOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t (by omega)⟩
 
-/-- **A passing round 2, template by template**: the interior record's order and names are the model's, and where the
+/-- **A passing round 2, template by template**: the interior record's order and names are the model's, the design is
+derived over the model's parts, and where the
 templates' names are distinct, each template `t` has a statement at position `t` that names it and passes the model's
 code check against its part. -/
 theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondStage.Own} {ss : Array Json}
@@ -318,10 +319,11 @@ theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondSt
     (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
     Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true ∧
       Spot.SecondStage.namesOk (ownOf h st rec draw c₀) = true ∧
+      Spot.SecondStage.designOk (partsAt h (ownOf h st rec draw c₀).sample.size) (ownOf h st rec draw c₀) = true ∧
       ∀ t < h.ms.length, ∃ S, Spot.SecondStage.Stmt.ofJson? (ss.getD t .null) = some S ∧
         S.template = h.names.getD t "" ∧ codesOk h (ownOf h st rec draw c₀) t S = true := by
   refine ⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, namesOk_of_check h own ss st rec draw c₀ hA hc,
-    fun t ht => ?_⟩
+    designOk_of_check hA hc, fun t ht => ?_⟩
   have hts : t < ss.size := by
     rw [count_of_check h own ss st rec draw c₀ hA hN hc]
     exact ht
