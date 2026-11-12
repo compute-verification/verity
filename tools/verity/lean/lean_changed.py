@@ -95,7 +95,9 @@ dependencies there drops the rest first: every copy its `links.json` lists but t
 one this run audits (a prover's among them), which its check.py builds, so that dropping one would only have it cloned
 again. Such a copy is kept while its entry is the key its manifest and toolchain give now and it holds every package the
 manifest names (`cache.py`'s `fetched_deps`), and dropped otherwise. Each drop says one line: the package, and whether
-it was outside this run's packages, under another key, or incomplete (`drops`).
+it was outside this run's packages, under another key, or incomplete (`drops`). A package the audited one is proved in
+(`provers`) that then has no copy on the tree takes the ones this node keeps, as the audited package does (`link`), so
+check.py's setup clones a prover's dependencies only on a node that keeps none, and says so (`link_provers`).
 
 A record difference is not a failure of the run. A package that any other run of check.py fails only on record differences
 (check.py's report names the record that settles them, `regenerated`) has that record kept the same way, so a run without
@@ -414,6 +416,20 @@ def drops(pkg: str, todo: list[str], tree: Path, links: dict[str, str]) -> dict[
         elif what := lacks(q, tree):
             why[q] = f"incomplete: it lacks {what}"
     return why
+
+
+def link_provers(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print) -> None:
+    """Before a records run audits ``pkg``: each package it is proved in (`provers`) that has no copy of its fetched
+    dependencies on ``tree`` takes the ones this node keeps, as ``pkg`` does (`link`), so check.py's setup, which runs Lake
+    outside the sandbox, clones them only on a node that keeps none; a line says so there. A copy the tree holds stays as
+    it is: `drops` has dropped a linked one that was not whole, and check.py's setup completes one no run linked. `DIRTY`
+    names the prover while its copy is taken, so a run killed then has it dropped by the next (`repair`)."""
+    for q in provers(pkg):
+        if (tree / q / ".lake" / "packages").is_dir() or LA.deps_key(tree / q) is None:
+            continue
+        mark(tree, package=q, phase="deps")
+        if not link(q, tree, deps, links, log, copy=True):
+            log(f"lean-records: {q}: {pkg} is proved in it, and check.py's setup fetches its dependencies cold")
 
 
 def read_links(tree: Path) -> dict[str, str]:
@@ -1381,7 +1397,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     Before each package's audit, the copies of fetched dependencies `LINKS` lists that this run does not keep go, each
     with a line naming the package and why (`drops`). It keeps those of the packages in the `closure` of one it audits,
     each while its entry is the key its manifest and toolchain give now and it holds every package the manifest names;
-    the others go when the package about to be audited fetches dependencies."""
+    the others go when the package about to be audited fetches dependencies. A package it is proved in that then has no
+    copy on the tree takes the ones this node keeps, as the audited package does (`link_provers`)."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
@@ -1461,6 +1478,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
+                link_provers(p, tree, deps, links, log)
                 write_links(tree, links)
                 mine_out, up, since = reports(out, pkg, p), first_update(p, pkg, update, moved, log), time.time()
                 mark(tree, package=p, phase="check", since=since, out=str(mine_out))

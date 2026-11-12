@@ -1118,6 +1118,66 @@ def test_a_records_run_keeps_the_whole_dependencies_of_the_packages_it_audits_an
     assert not theirs.exists() and LC.read_links(tree) == {S: ks}
 
 
+def test_a_records_run_takes_the_dependencies_the_node_keeps_for_a_prover_with_no_copy_on_the_tree(
+        pair, tmp_path, monkeypatch):
+    """`--records s` audits `s/proofs` beside `s` (`proved_in`), and check.py sets that package up outside the sandbox,
+    where Lake clones what its manifest names when `.lake/packages` holds none: a kill while it does leaves a directory
+    lacking some. A prover with no copy on the tree takes the ones the node keeps, as `s` does, and is in `links.json`,
+    with `dirty.json` naming it while they are taken, so the next run drops a copy a kill left half-made. A copy the tree
+    holds that no run linked stays as it is, and only where the node keeps none is a prover left to check.py, with a
+    line."""
+    root, _, _ = pair
+    git = [{"type": "git", "name": "dep", "rev": "abc"}, {"type": "git", "name": "«doc-gen4»", "rev": "def"}]
+    more = {"s/lean-toolchain": "v1\n", "s/lake-manifest.json": json.dumps({"packages": git[:1]}),
+            "s/proofs/lean-toolchain": "v1\n",
+            "s/proofs/lake-manifest.json": json.dumps({"packages": [
+                *git, *json.loads(PAIR["s/proofs/lake-manifest.json"])["packages"]]})}
+    for f, text in more.items():
+        (root / f).write_text(text)
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: sorted({*PAIR, *more}))
+    tree, deps = tmp_path / "cache" / LC.RECORDS / "local", tmp_path / "deps"
+    ks, kp = LC.LA.deps_key(root / "s"), LC.LA.deps_key(root / "s/proofs")
+    for d in (deps / ks / "dep", deps / kp / "dep" / "kept-here", deps / kp / "doc-gen4"):
+        d.mkdir(parents=True)
+    theirs, taking, real = tree / "s/proofs/.lake/packages", {}, LC.link
+
+    def link(pkg, t, *a, **k):
+        left = json.loads((t / LC.DIRTY).read_text())
+        taking[pkg] = (left["package"], left["phase"])
+        return real(pkg, t, *a, **k)
+
+    monkeypatch.setattr(LC, "link", link)
+
+    def audited(out: str) -> list[str]:
+        """The lines of a records run of `s` on the tree about `s/proofs`' dependencies."""
+        said = []
+        assert LC.audit_records(S, deps, out=tmp_path / out, log=said.append, rebuild=True) == 0, said
+        return [s for s in said if s.startswith(("lean-changed: s/proofs:", "lean-records: s/proofs:"))]
+
+    said = audited("out")
+    assert len(said) == 1 and said[0].startswith(f"lean-changed: s/proofs: dependencies copied ({kp[:12]})"), said
+    assert (theirs / "dep" / "kept-here").is_dir() and (theirs / "doc-gen4").is_dir()
+    assert LC.read_links(tree) == {S: ks, "s/proofs": kp}
+    assert taking == {S: (S, "deps"), "s/proofs": ("s/proofs", "deps"), P: (P, "deps")}
+    (theirs / "dep" / "built-here").mkdir()
+    assert not (deps / kp / "dep" / "built-here").exists(), "a copy: what Lake writes there stays out of what the node keeps"
+
+    taking.clear()
+    assert audited("out2") == [] and (theirs / "dep" / "built-here").is_dir(), "a prover's whole copy is not taken again"
+    assert "s/proofs" not in taking
+
+    (tree / LC.LINKS).write_text(json.dumps({S: ks}))           # as check.py's setup leaves the copy it cloned
+    assert audited("out3") == [] and (theirs / "dep" / "built-here").is_dir() and LC.read_links(tree) == {S: ks}
+    assert "s/proofs" not in taking
+
+    shutil.rmtree(theirs)
+    shutil.rmtree(deps / kp)
+    assert audited("out4") == [
+        f"lean-changed: s/proofs: this machine keeps no dependencies for it ({kp[:12]}) to copy",
+        "lean-records: s/proofs: s is proved in it, and check.py's setup fetches its dependencies cold"]
+    assert not theirs.exists() and LC.read_links(tree) == {S: ks}
+
+
 MISMATCH = "sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean differ)"
 
 
