@@ -6,13 +6,15 @@ skipped when told. On captures built from the fixture's packets: a stream counte
 and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreement, the pairing's counts on each side,
 every capture format read to the same sums, and each thing the reader doesn't read refused by its name, a packet kept
 too short with the least length that reads it and with no length for every capture, a packet shorter than the
-headers it states by its own name. Then a run of the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
-server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
-on it in no sum; a run of two execution phases is counted across both phases' records; a run in the id egress form,
-at the id front's cell, agrees as one in the bytes form does, and its capture kept at 54 bytes a packet holds no
-content and is read as the one kept at 130 is; a request's place in the release order is its `END` cell's in the
-ingress record, where a bucket's are not in their ordinals' order; the answer on a watermark connection in no pair
-makes its direction a bound; and a connection that failed is a bound."""
+headers it states by its own name. Then a run of the network certifier on a `VirtualClock`, published as `serve`
+publishes one, with a capture of exactly the bytes its server's side saw: the two counts agree in each direction, the
+watermark stream's among them and the server's answer on it in no sum; a run of two execution phases is counted
+across both phases' records; a run in the id egress form, at the id front's cell, agrees as one in the bytes form
+does, and its capture kept at the least a TCP packet's headers are, 54 bytes a packet over IPv4 and 74 over IPv6,
+holds no content and is read as the one kept at 130 is; a request's place in the release order is its `END` cell's in
+the ingress record, where a bucket's are not in their ordinals' order; the answer on a watermark connection in no
+pair makes its direction a bound; a capture that holds none of the run's packets is read, and says every byte of the
+record is missing; and a connection that failed is a bound."""
 from __future__ import annotations
 
 import argparse
@@ -698,11 +700,12 @@ def _sent(writer: _Writer) -> bytes:
     return b"".join(data for _, data in writer.writes)
 
 
-def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]], name: str = "seen.pcap", **how) -> Path:
+def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]], name: str = "seen.pcap", server: tuple[str, int] = SERVER,
+          certifier: str = CERTIFIER[0], **how) -> Path:
     """A capture of one connection from the certifier to the server for each of `streams`, (the bytes the certifier
     sent, the bytes the server sent), their packets interleaved, some of their sequence numbers passing the wrap."""
     return _capture(tmp_path, fx.interleaved(*(
-        fx.exchange((CERTIFIER[0], 40001 + k), SERVER, sent, answered, isn=(2 ** 32 - 97 * k, 1000 * k), mss=400)
+        fx.exchange((certifier, 40001 + k), server, sent, answered, isn=(2 ** 32 - 97 * k, 1000 * k), mss=400)
         for k, (sent, answered) in enumerate(streams))), name=name, **how)
 
 
@@ -878,37 +881,53 @@ def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direct
 
 
 def _timestamped(packet: bytes) -> bytes:
-    """One of the fixture's IPv4 TCP packets with the twelve bytes of TCP options a Linux loopback's packets carry,
-    two no-ops and a timestamp: in an Ethernet frame its headers are 66 bytes."""
-    return (packet[:2] + (int.from_bytes(packet[2:4], "big") + 12).to_bytes(2, "big") + packet[4:32] + bytes([8 << 4])
-            + packet[33:40] + b"\x01\x01\x08\x0a" + bytes(8) + packet[40:])
+    """One of the fixture's TCP packets, over IPv4 or IPv6, with the twelve bytes of TCP options a Linux loopback's
+    packets carry, two no-ops and a timestamp: in an Ethernet frame its headers are 66 bytes over IPv4 and 86 over
+    IPv6."""
+    at, size = (20, slice(2, 4)) if packet[0] >> 4 == 4 else (40, slice(4, 6))
+    return (packet[:size.start] + (int.from_bytes(packet[size], "big") + 12).to_bytes(2, "big")
+            + packet[size.stop:at + 12] + bytes([8 << 4]) + packet[at + 13:at + 20] + b"\x01\x01\x08\x0a" + bytes(8)
+            + packet[at + 20:])
 
 
-def test_a_capture_kept_at_54_bytes_a_packet_holds_no_content_and_is_read_as_one_kept_at_130_is(tmp_path):
-    """The id-form run's capture with a Linux loopback's headers, 66 bytes a packet (Ethernet, IPv4, TCP with its
-    timestamp), kept twice: at the reader's 130 bytes a packet and at 54, the least a TCP packet's headers are over
-    IPv4 in an Ethernet frame. The file kept at 130 holds the first 64 bytes of every segment, a request's start and
-    a token id among them; the file kept at 54 holds no byte past any packet's headers. The reader reads none of
-    TCP's options and takes every length from the headers and the length on the wire, so what it reads of the two is
-    equal field for field but for the snapshot length it reports: each direction agrees and every connection pairs."""
+@pytest.mark.parametrize("least, headers, server, certifier", [
+    (54, 66, SERVER, CERTIFIER[0]), (74, 86, fx.SERVER6, fx.CERTIFIER6)], ids=["IPv4 at 54", "IPv6 at 74"])
+def test_a_capture_kept_at_the_least_a_tcp_packets_headers_are_holds_no_content_and_is_read_as_one_kept_at_130_is(
+        tmp_path, least, headers, server, certifier):
+    """The id-form run's capture with a Linux loopback's headers (Ethernet, IP, TCP with its timestamp: 66 bytes a
+    packet over IPv4, 86 over IPv6), kept twice: at the reader's 130 bytes a packet and at the least a TCP packet's
+    headers are in an Ethernet frame, 54 over IPv4 and 74 over IPv6. The file kept at 130 holds the first bytes of
+    every segment, 64 of them over IPv4 and 44 over IPv6: a request's start and a response's among them, and over
+    IPv4 a token id whole. The file kept at the least holds no byte past any packet's headers. The reader reads none
+    of TCP's options and takes every length from the headers and the length on the wire, so what it reads of the two
+    is equal field for field but for the snapshot length it reports: each direction agrees and every connection
+    pairs. Without the timestamp a packet's headers are that least: kept at it, each packet is its headers alone, and
+    is read."""
     out, _, _, _, responses, _, servers, mark = _three_ids(tmp_path)
     streams = [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), ANSWER)]
-    files = {kept: _seen(tmp_path, streams, name=f"kept{kept}.pcap", frame=lambda p: fx.ethernet(_timestamped(p)),
-                         snapshot=kept) for kept in (cf.SNAPSHOT, 54)}
+    files = {kept: _seen(tmp_path, streams, name=f"kept{kept}.pcap", server=server, certifier=certifier,
+                         frame=lambda p: fx.ethernet(_timestamped(p)), snapshot=kept) for kept in (cf.SNAPSHOT, least)}
     held = {kept: [data for _, _, data in cf.packets(path, {})] for kept, path in files.items()}
-    assert {len(data) for data in held[54]} == {54} and min(map(len, held[cf.SNAPSHOT])) == 66
-    start, token = _sent(servers[0])[:64], b'"token_id":%10d' % 4
-    assert start.startswith(b"POST ") and any(data[66:] == start for data in held[cf.SNAPSHOT])
-    assert any(token in data[66:] for data in held[cf.SNAPSHOT])
-    assert not any(word in files[54].read_bytes() for word in (b"POST", b"token_id", b"data:"))
-    results = {kept: cf.read([path], *_given(), run=out) for kept, path in files.items()}
-    assert [f["snapshot"] for f in results[54]["capture"]["files"]] == [54]
-    results[54]["capture"]["files"][0]["snapshot"] = cf.SNAPSHOT
-    assert results[54] == results[cf.SNAPSHOT]
-    got = results[54]["compared"]
+    assert {len(data) for data in held[least]} == {least} and min(map(len, held[cf.SNAPSHOT])) == headers
+    content, seen = cf.SNAPSHOT - headers, [data[headers:] for data in held[cf.SNAPSHOT]]
+    start, token = _sent(servers[0])[:content], b'"token_id":%10d' % 4
+    assert start.startswith(b"POST ") and start in seen
+    assert responses[0][:content].startswith(b"data: {") and responses[0][:content] in seen
+    # a token id lies 39 bytes into one of the segments: whole in the 64 bytes kept over IPv4, cut in IPv6's 44
+    assert any(token in part for part in seen) == (content >= 39 + len(token)) == (headers == 66)
+    assert not any(word in files[least].read_bytes() for word in (b"POST", b"token_id", b"data:"))
+    results = {kept: cf.read([path], *_given(server[0], certifier), run=out) for kept, path in files.items()}
+    assert [f["snapshot"] for f in results[least]["capture"]["files"]] == [least]
+    results[least]["capture"]["files"][0]["snapshot"] = cf.SNAPSHOT
+    assert results[least] == results[cf.SNAPSHOT]
+    got = results[least]["compared"]
     assert got["to_server"]["says"] == got["from_server"]["says"] == got["pairing"]["says"] == "agrees"
     assert got["to_server"]["difference"] == got["from_server"]["difference"] == [0, 0]
     assert (got["pairing"]["connections"], got["pairing"]["flows"], got["pairing"]["pairs"]) == (4, 4, 4)
+    bare = _seen(tmp_path, streams, name="bare.pcap", server=server, certifier=certifier, snapshot=least)
+    tcp = least - 20
+    assert all(len(data) == least == tcp + (data[tcp + 12] >> 4) * 4 for _, _, data in cf.packets(bare, {}))
+    assert cf.read([bare], *_given(server[0], certifier), run=out)["compared"]["pairing"] == got["pairing"]
 
 
 def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ingress_record(tmp_path):
@@ -1010,6 +1029,46 @@ def test_a_byte_the_record_doesnt_hold_and_a_flow_it_doesnt_hold_are_differences
     assert (plain["to_server"]["says"], plain["from_server"]["says"]) == \
         (f"differs by +{len(_sent(mark)):,} bytes", "agrees")
     assert plain["watermark_answer_bytes"] is None and plain["pairing"]["unpaired_flows"] == 1
+
+
+def test_a_capture_that_holds_none_of_the_runs_packets_is_read_and_says_every_byte_of_the_record_is_missing(tmp_path,
+                                                                                                            capsys):
+    """A capture whose filter kept none of the run's packets, as one that keeps IPv4's alone does where the server
+    was reached over IPv6: a file of its 24-byte head. Nothing in it is unread, so the reader refuses nothing and
+    names no cause. It counts no flow, each direction differs by the record's whole count, no connection has a pair,
+    and the command exits 0, as it does on any difference."""
+    out, _, _, responses, servers, mark = _three(tmp_path)
+    empty = _capture(tmp_path, [], name="empty.pcap", snapshot=54)
+    assert empty.stat().st_size == 24
+    result = cf.read([empty], *_given(), run=out)
+    assert result["capture"] == {"files": [{"packets": 0, "link_type": 1, "snapshot": 54}],
+                                 "skipped": {"foreign": {"flows": 0, "packets": 0, "wire_bytes": 0},
+                                             "not_ip": {"packets": 0, "wire_bytes": 0}}}
+    assert result["between"] == result["others"] == []
+    got = result["compared"]
+    to_server, from_server = sum(len(_sent(s)) for s in servers) + len(_sent(mark)), sum(map(len, responses))
+    assert (got["to_server"]["capture"]["stream_bytes"], got["to_server"]["record_bytes"],
+            got["to_server"]["says"]) == (0, to_server, f"differs by -{to_server:,} bytes")
+    assert (got["from_server"]["capture"]["stream_bytes"], got["from_server"]["record_bytes"],
+            got["from_server"]["says"]) == (0, from_server, f"differs by -{from_server:,} bytes")
+    assert got["pairing"] == {"connections": 4, "flows": 0, "pairs": 0, "pairs_inside_bounds": 0,
+                              "unpaired_connections": 4, "unpaired_flows": 0, "partial_flows": 0,
+                              "says": "4 connection(s) and 0 flow(s) have no pair of equal counts"}
+    assert (got["watermark_answer_bytes"], got["watermark_answer_in_sum"]) == (None, 0)
+    path = tmp_path / "result.json"
+    assert cf.main(["--capture", str(empty), "--server", SERVER[0], "--certifier", CERTIFIER[0], "--run", str(out),
+                    "--out", str(path)]) == 0
+    assert json.loads(path.read_text()) == result
+    said = capsys.readouterr()
+    lines = said.out.splitlines()
+    assert said.err == "" and lines[0] == \
+        "capture: 0 packets in 1 file(s); skipped 0 packets of 0 foreign flow(s) and 0 frame(s) that aren't IP"
+    assert [line.split()[:4] + line.split()[-4:] for line in lines[4:6]] == \
+        [["certifier", "to", "server", "0", "differs", "by", f"-{to_server:,}", "bytes"],
+         ["server", "to", "certifier", "0", "differs", "by", f"-{from_server:,}", "bytes"]]
+    assert lines[6] == "pairing, a connection's two counts with a flow's: 0 pair(s) of equal counts, 0 inside a " \
+                       "connection's bounds; unpaired, 4 of 4 connection(s) and 0 of 0 flow(s), 0 of them held in " \
+                       "part: the multisets differ"
 
 
 def test_a_connection_that_failed_is_a_bound_and_an_uncertified_record_is_said(tmp_path):
