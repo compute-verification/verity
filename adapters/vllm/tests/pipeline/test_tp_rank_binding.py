@@ -20,6 +20,7 @@ pytest.importorskip("torch")
 from verity_vllm.commit import binding
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.pipeline.tp import rank_worker as RW
 from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest
 
@@ -144,28 +145,32 @@ def test_a_world_of_one_owes_no_collective_member(world):
     assert _bind()[0]["structure_modules"] == len(SITES)
 
 
-# ---- the steps the population spans
+# ---- the tables the driver states for each request
 
-@pytest.mark.parametrize("field", ["arrivals", "caps"])
 @pytest.mark.parametrize("stated", [ABSENT, None, {}], ids=["absent", "none", "empty"])
-def test_a_table_the_driver_did_not_state_leaves_the_runs_own_steps(field, stated):
-    answer, _rank_ = _bind(**{field: stated})
+def test_a_rank_told_no_arrivals_holds_the_request_to_the_runs_own_steps(stated):
+    answer, rank = _bind(arrivals=stated)
     assert answer["population"]["steps"] == STEPS and answer["population"]["n"] == 6 and answer["coverage"]["ok"] is True
+    assert _population(rank) == {(step, op, member) for step in range(STEPS) for op, member in MEMBERS}
 
 
-def test_the_steps_a_request_ran_are_its_arrival_and_the_steps_the_driver_gave_it():
-    """The table of steps per request cuts the population to them: a request that arrived at step 1 and ran two steps is held
-    to steps 1 and 2, and the rows the rank bound at step 0 are not required."""
-    answer, rank = _bind(arrivals={"r0": 1}, caps={"r0": 2})
-    assert answer["population"]["steps"] == 3 and answer["population"]["n"] == 4
-    assert _population(rank) == {(step, op, member) for step in (1, 2) for op, member in MEMBERS}
+@pytest.mark.parametrize(("arrivals", "at"), [({"r0": 1}, (1, 2)), ({"r7": 1}, (0, 1)), (ABSENT, (0, 1))], ids=["arrived-at-1", "another-request", "absent"])
+def test_a_requests_arrival_places_the_manifests_rows_and_leaves_the_runs_steps(tmp_path, arrivals, at):
+    """A manifest's steps are the request's own.  A request that arrived at step 1 is held to the manifest's steps 0 and 1 at
+    the run's steps 1 and 2; a request the table leaves out arrived at step 0.  The arrival alone does not cut the steps the
+    run spans."""
+    path, doc = _manifest(tmp_path, [row for row in _rows() if row["step"] < 2])
+    answer, rank = _bind(required_manifest=path, manifest_doc=doc, arrivals=arrivals)
+    assert answer["population"]["steps"] == STEPS and answer["population"]["n"] == 4
+    assert _population(rank) == {(step, op, member) for step in at for op, member in MEMBERS}
+    assert answer["coverage"]["missing_n"] == 0
 
 
-def test_a_request_the_tables_leave_out_arrives_at_step_zero_and_runs_none():
-    answer, rank = _bind(arrivals={"r7": 1}, caps={"r7": 2})
-    assert answer["population"]["steps"] == STEPS and answer["population"]["n"] == 6
-    answer, rank = _bind(arrivals=ABSENT, caps={"r0": 2})
-    assert answer["population"]["steps"] == 2 and _population(rank) == {(step, op, member) for step in (0, 1) for op, member in MEMBERS}
+@pytest.mark.parametrize(("stated", "requests", "table"), [
+    (None, 2, {"r0": 0, "r1": 0}), ({}, 2, {"r0": 0, "r1": 0}), ({"r1": 4}, 2, {"r0": 0, "r1": 4}), ({"r0": "3", "r7": 9}, 1, {"r0": 3}), ({"r0": 3}, 0, {})],
+    ids=["none", "empty", "one-left-out", "a-number-as-text", "no-request"])
+def test_a_table_per_request_reads_zero_for_a_request_it_leaves_out(stated, requests, table):
+    assert RW._per_request(stated, requests) == table
 
 
 # ---- a required manifest: its rows for this rank
