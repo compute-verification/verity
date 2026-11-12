@@ -1571,14 +1571,16 @@ def conv_reads(api, agent):
     return api.gets.count(f"/v0/agents/{agent}/conversation")
 
 
-def seat(tmp_path, launched_by=CO):
+def seat(tmp_path, launched_by=CO, listed=False):
     """A seat (W1_) registered as `launched_by`'s, whose one run the API lists ended at T0 with its report, and the watch
-    after its first read of it, a minute later."""
+    after its first read of it, a minute later. The API gives it by id alone, as a Task subagent, or, `listed`, on the
+    agent list, as an agent launched there and resumed with Task since."""
     (tmp_path / "workers.d").mkdir()
     (tmp_path / "workers.d" / "seat.json").write_text(json.dumps({"agent_id": W1_, "lane": "circuits",
                                                                   "launched_by": launched_by}))
-    st = {**worker("IDLE", W.iso(T0), name="SEAT-A"), "latestRunId": "run-w"}
-    api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": W.iso(T0)}}, workers={W1_: st})
+    st = {**worker("IDLE", W.iso(T0), name="SEAT-A"), "latestRunId": "run-w", **({"id": W1_} if listed else {})}
+    api, clock, w = coordinators(tmp_path, [st] if listed else [], {"run-w": {"status": "FINISHED", "updatedAt": W.iso(T0)}},
+                                 workers={} if listed else {W1_: st})
     api.convs[W1_] = [("user_message", "You are SEAT-A: fill the table and report back."),
                       ("assistant_message", "Filled: the table is in the note.")]
     clock.t += 60
@@ -1588,12 +1590,14 @@ def seat(tmp_path, launched_by=CO):
 
 @pytest.mark.parametrize(("resumed", "turn"), [(242, 136), (1461, 447)], ids=["a-short-turn", "a-long-turn"])
 @pytest.mark.parametrize("seen", [True, False], ids=["its-coordinators-call-seen", "a-workers-call-never-seen"])
-def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, resumed, turn, seen):
+@pytest.mark.parametrize("listed", [False, True], ids=["read-by-id", "on-the-list"])
+def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, resumed, turn, seen, listed):
     """A seat resumed with Task ran a turn the API lists no run for: it ended more than `DROPPED_S` after the seat's one
     listed run, moved its `updatedAt`, and no read of the seat fell inside it, so the seat, IDLE and with its report back,
     was rung as a message that never became a run. Its conversation ends with its own text. That holds whoever resumed
-    it: its coordinator, whose Task call the watch saw, or a worker, whose Task calls the watch never sees."""
-    api, clock, w, st = seat(tmp_path, launched_by=CO if seen else W2_)
+    it (its coordinator, whose Task call the watch saw, or a worker, whose Task calls the watch never sees) and however
+    the watch reads it (by id, or on the agent list, where no read of it ACTIVE would have told either)."""
+    api, clock, w, st = seat(tmp_path, launched_by=CO if seen else W2_, listed=listed)
     clock.t = T0 + resumed
     if seen:
         w.child(CO, {"args": {"agentId": W1_, "description": "SEAT-A"}}, clock.t)
@@ -1604,21 +1608,23 @@ def test_a_turn_a_task_resume_ran_to_its_end_is_no_dropped_message(tmp_path, res
     if seen:
         w.child(CO, {"args": {"agentId": W1_, "description": "SEAT-A"}, "status": "completed"}, clock.t)
     sweeps(w, clock, 20, step=1)
-    assert w.workers[W1_]["updated"] == T0 + resumed + turn and not w.workers[W1_].get("no_runs"), "read IDLE, never ACTIVE"
+    if not listed:
+        assert w.workers[W1_]["updated"] == T0 + resumed + turn and not w.workers[W1_].get("no_runs"), "read IDLE, never ACTIVE"
     assert drops(tmp_path) == []
     assert conv_reads(api, W1_) == 1, "asked once for the change, and not again"
 
 
-def test_a_message_nothing_answered_is_still_dropped_once_for_its_owner(tmp_path):
+@pytest.mark.parametrize("listed", [False, True], ids=["read-by-id", "on-the-list"])
+def test_a_message_nothing_answered_is_still_dropped_once_for_its_owner(tmp_path, listed):
     """The fault the ring is for: a message reached an idle seat and became no run and no turn. Its `updatedAt` moved past
     its one run's end and nothing of its own follows the message in its conversation."""
-    api, clock, w, st = seat(tmp_path)
+    api, clock, w, st = seat(tmp_path, listed=listed)
     clock.t = T0 + 600
     api.convs[W1_] += [("user_message", "Check the second table against the first.")]
     st["updatedAt"] = W.iso(clock.t)
     sweeps(w, clock, 20, step=1)
-    assert [(r["agent"], r["run"], r["since"], r["ended"], r["owner"], r["role"]) for r in drops(tmp_path)] == [
-        (W1_, "run-w", W.iso(T0 + 600), W.iso(T0), "circuits", "worker")]
+    assert [(r["agent"], r["run"], r["since"], r["ended"], r["owner"], r["status"]) for r in drops(tmp_path)] == [
+        (W1_, "run-w", W.iso(T0 + 600), W.iso(T0), "circuits", "IDLE")]
 
 
 def test_a_dropped_message_is_judged_once_it_has_sat_and_by_one_read_of_the_conversation(tmp_path):
