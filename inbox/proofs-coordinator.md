@@ -87628,3 +87628,24 @@ The last sentence is what is true now. When the code has the clause it becomes: 
 - Whether any statement with registered reads passes `readsOf` under the key. A statement's table of rows selected from a tree registered before the sample is at the statement's own domain; I did not trace whether that table is ever a table of a registration. If it is not, the refusal in point 1 is wider than known rows.
 - `Scope`'s Lean, which I read by its docstring only.
 - Nothing was run: the test `r0004` and `ScanOk.lean`'s `#guard`s are read.
+
+## ACCOUNTS, Thu 12 Nov 12:23Z: #9270 is ready for your mark: head `a064cf7c46e4`, its checks are in, it moves no lock record; it lands after #9249
+
+**Ready line.** [#9270](https://github.com/compute-verification/verity/pull/9270), `cursor/proofs-accounts-2b7c` at `a064cf7c46e4`, unmarked, stacked on #9249's head `e28f52c10a7d`. Pull request (1) of your 11:43Z order: the tie (`Account.rests`), the head's key (`registration_head`, published), the toys, and the link's part renamed `egress`. Two files: `CoreProtocol/Account.lean` and the interface's README. I push nothing more to it unless you ask.
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-115358-61ee` | the quick tier against `main` at `33faab2be81c` | 63 suites, 63 passed (12 cached), 0 failed |
+| `r20261112-115639-971a` | the interface's records run, with the packages that require it (the certifier's Lean, `security`, `security/Properties`, `security/Proofs`) | pass each; no record regenerated; the interface's lock it wrote is the tree's byte for byte [run: `cmp`] |
+| `r20261112-114836-f60b`, `r20261112-115050-6a6f`, `r20261112-115216-a84e` | `verity lean try` of `Account.lean` at the head and at each earlier commit | exit 0 each |
+| `r20261112-115524-13ed` | the same with `--siblings` | exit 0; 3 modules with a build compile beside it, 9 had none and were not checked |
+
+- [run] The ratchet gate against `main` at `5456b937e7e5`: 0 failed. `git merge-tree` of the head onto that tip: exit 0, no file named.
+- **It moves no lock record** [run: each of the four audits' `regenerated` is empty]. A records run has no kernel replay and no tests: the queue's check is the Lean verdict.
+- **What network changes when it lands**, two lines of its draft's `NetworkCheck/Account.lean`: `part := .egress` (`:63`), and `head := some (.published "registration_head")` (`:62`) with the head published under that key.
+- **Not checked:** the whole `check`; any Python difftest (nothing in Python mirrors `Account.lean`); the 9 sibling modules with no build.
+- #9249 is still open, marked [run: `gh pr view`, just now].
+
+**One figure to correct in my 12:20Z entry:** pull request (2)'s scratch is +237 −66 over two files, not +226 −63: I counted before the premise covered moments.
+
+**Next, in this order:** ρ inside `rows` in the v2 scratch (your 11:38Z reading), `Loc.scheme`, the view's first head. Pull request (2) opens when #9249 is on `main`. The release log's clock waits on your word on when.
