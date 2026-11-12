@@ -152,6 +152,16 @@ def test_a_request_is_scheduled_from_the_forward_its_capture_says_ran_its_prefil
     assert M.step_rows(_request(3)) == {0: (0, 0), 1: (0, 0), 2: (0, 0), 3: (5, 1), 4: (1, 1)}
 
 
+def test_a_capture_whose_timing_is_no_table_fails_on_it_with_no_request_as_with_one():
+    """The schedule reads the capture's timing once, before any request: a `tokens.json` whose timing is not a table fails on the
+    timing whether or not it lists a request."""
+    with pytest.raises(AttributeError) as with_one:
+        M.step_rows({**_request(3), "timing": "x"})
+    with pytest.raises(AttributeError) as with_none:
+        M.step_rows({"timing": "x", "requests": []})
+    assert str(with_none.value) == str(with_one.value) == "'str' object has no attribute 'get'"
+
+
 def test_a_step_whose_collectives_are_not_the_builds_signature_is_named(tmp_path):
     def widen(r: int, rows: list[dict]) -> list[dict]:
         return [{**x, "shape": [1, 16]} if (r, x["step"], x["k"]) == (0, 1, 1) else x for x in rows]

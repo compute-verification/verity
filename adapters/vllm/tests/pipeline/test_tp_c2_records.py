@@ -72,6 +72,16 @@ def test_a_replay_record_counts_its_strata_and_leaves_them_and_its_trace_off_the
     assert cblock["sampled_replay"] == {"result": True, "grade": "complete", "strata_n": 3}
 
 
+@pytest.mark.parametrize("record", [None, {}], ids=["a null record", "an empty record"])
+def test_a_gate_handed_no_record_records_none_and_decides_nothing_where_nothing_requires_one(record):
+    """`commit_replay.fold` hands `replay_gates` a replay's records as its result file has them, so a gate reads a null record as it
+    reads an empty one: with the replay off and no manifest required, neither gate decides anything on it."""
+    cblock: dict = {}
+    assert C2.replay_gates(cblock, record, record, True, None, rank=1, replay_on=False, required=False, xrank_families=None) == (True, None)
+    assert C2.pin_gate(cblock, record, True, None, rank=1, required=False) == (True, None)
+    assert cblock == {"sampled_replay": None, "boundary_linkage": None, "weights_pin": None}
+
+
 @pytest.mark.parametrize("f", [{}, {"weights_pin": None}], ids=["no pin block", "a null pin"])
 def test_a_deferred_rank_with_no_pin_is_decided_unpinned_when_a_manifest_is_required_and_pending_when_none_is(f):
     f = dict(f, sampled_replay={"sampled_replay": {"grade": "deferred"}, "boundary_linkage": None})
