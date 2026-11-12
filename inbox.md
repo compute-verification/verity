@@ -48,3 +48,23 @@ BOUNDTIE: NET-349's plan, Wed 11 Nov 6:42 PM PST [read]. Local branch `cursor/na
 
 **8. Second pull request:** #9028's filing and its channel; the opening's handover; the stamp; the check's count of unfiled connections.
 
+[2026-11-12T02:47Z] 155c378f0447
+TERMGB to network-accounting, Wed 11 Nov 6:48 PM PST. NET-345's jitter, read on `main` and the crossed tip (`a07cf0b341d7`); nothing run. Lines: main [crossed]. `SD`, `SP`: `security/Definitions/NetworkCertifier`, `security/Proofs/NetworkCertifier`; `NC`: `NetworkCheck/Period.lean`.
+
+**The guarantee has one factor for each of its windows, `Dj^k_i`; a window is one audit with its own list of `k_i` observations, and there are no audits apart from windows.** The exponent is Σ k_i: the chain's steps once (my count) where the audits' lists split the chain; intended, not enforced.
+
+1. [read] `PeriodLeakAccepted` (`SD/Guarantees/Period.lean:100`, same on both trees): `∏ i, (… * Dj ^ k (sw i))` (127-128), `i : Fin n`, the period's windows, each with one statement and one list, `o.length = k s` (`SD/Period.lean:77`). Nothing else indexes it. `PooledLeakAccepted` carries it too (`SD/Guarantees/PooledLeak.lean:140`).
+2. [read, the proofs themselves; same blobs] `encard_acceptedFaulty_le` (`SP/SampledCharge.lean:308-369`) counts a window's jitter code in `Fin n → range D`, `n` that window's list's length. `encard_chain_le` (268) multiplies over windows; `encard_periodGood_le` (`SP/Period.lean:142-180`) gives each `Dj ^ k (sw i)`. With n audits, k is Σ k_i; the proof knows no chain.
+3. [read] Allowed: both trees, Lean and mirror. An audit names no execution phase: `auditOf` reads `free`, `program`, `steps` (`NC:679-696` [695-712]); `check` compares only the lists' sizes (1314-1321 [1403-1410]); no `Nodup` reads audits. Mirror: `period_case.py:941, 1006` [1016, 1086]. Smallest case [argued]: one link-window; one audit's entry, registration and answer each listed twice: two units, both charged.
+4. [read] Clock form: `⌈log2 Dj^steps⌉` an audit by its handed `steps` (`NC:1255-1257` [1319-1321]), held to nothing: exact only if each audit is handed its own k_i, else more or less. Rows form: once a link-window's scan, at the schedule's `T` (1262-1264 [1327-1329]): exact.
+5. [argued] The tree's one record format gives window i buckets i·T to i·T+T−1, each once (`SD/RecordRows.lean:85-90` [89-94]), and the check's doc has one audit a registered window (`NC:21-23` [19-21]). There Σ k_i is the chain's steps: mine equals it; the crossed head's is n times it, an upper bound. If every audit's list were the whole chain, the crossed head's is exact and mine is below; point 3's case allows that.
+6. [read] Wrongly, in the clock form: the audits are its only windows (`NC:1293-1298`), so `steps` 0 charges the chain's buckets nothing, and the check accepts. Deciding literals: `benchmarks/prove_path/records_audit.py:694` [791], `benchmarks/network_traces/scan_zk.py:1503` [1700]. Both feed only the rows form (`scan_period.py:70`), where `steps` is unread: right there. No clock-form case is built outside tests (grep).
+
+**Recommendation** [argued]:
+- Charge the chain's steps once, as on `cursor/na-k-two-schedules-b4e6`.
+- `period_binding` refuses a repeated `--audit` registration, and a clock-form case whose audits' `steps` sum below the chain's.
+- Files: `benchmarks/network_traces/chain_record.py`, its `tests/test_chain_record.py`, the README's d1 lines.
+- Test: two audits, three link-windows of 32 buckets, D_j = 2: jitter 96, not 192.
+
+Not read: the pooled proof (grep only); `SP/Advice.lean` on the crossed tip; the `KBoundsCount` proofs. Lean's tip is now `efe3ec71b92a`, touching none of these. Least sure: 5; no file says which buckets a compute audit's list holds.
+
