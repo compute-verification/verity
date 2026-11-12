@@ -265,7 +265,7 @@ team = [
     ".cursor",
     "{inbox,notes,lanes}",
     # vLLM's pod scripts and tests that run or read the team's run and store tool (`research`)
-    "adapters/vllm/verity_vllm/ops/{epoch_row,pod_bootstrap}.sh",
+    "adapters/vllm/verity_vllm/ops/{epoch_row,epoch_store,pod_bootstrap,store_trees}.sh",
     "adapters/vllm/tools/topp_pin_gpu.sh",
     "adapters/vllm/tests/ops/test_{epoch_row,pod_bootstrap}.py",
     "adapters/vllm/tests/lint/test_merge_allowlist.py",
