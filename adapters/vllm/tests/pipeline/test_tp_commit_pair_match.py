@@ -136,6 +136,19 @@ def test_one_rank_that_does_not_agree_with_the_match_record_fails_alone_by_name(
     assert pair.read("coverage.json")["value_correspondence"]["components"]["oracle_compare"]["result"] is False
 
 
+def test_the_match_oracle_line_names_the_first_moe_align_witness_that_differs_over_the_ranks(pair, tmp_path, capsys):
+    def witness(rank: int, step: int, k: int) -> dict[str, Any]:
+        return {"rank": rank, "step": step, "k": k, "module": f"m.moe{k}", "implies": "another route"}
+    pair.alter("tp2_commit_finalize", 0, _compared(oracle=ORACLE | {"witnesses": {"equal": 1, "unpaired_n": 0, "differs": [witness(0, 3, 0)]}}))
+    pair.alter("tp2_commit_finalize", 1, _compared(oracle=ORACLE | {"witnesses": {"equal": 0, "unpaired_n": 2, "differs": [witness(1, 3, 1), witness(1, 2, 4)]}}))
+    assert pair.run("--match-dir", str(_match(tmp_path))) == 0
+    line = next(said for said in capsys.readouterr().out.splitlines() if said.startswith("[tp2commit] match oracle"))
+    # a witness that differs is not the oracle's verdict: the line says which comes first, by step, then k, then rank
+    assert line == ("[tp2commit] match oracle (tp partials vs capture), 3 differing MoE align witness(es), first rank 1 step 2 k 4 m.moe4 implies another route: "
+                    "rank 0 PASS steps 3 tensors 6 equal 6 mismatch 0 missing 0 not_in_oracle 0 witnesses equal 1 unpaired 0 {'part': 6} ; "
+                    "rank 1 PASS steps 3 tensors 6 equal 6 mismatch 0 missing 0 not_in_oracle 0 witnesses equal 0 unpaired 2 {'part': 6} ")
+
+
 def test_with_no_match_oracle_a_rank_is_made_with_no_capture_and_its_attribution_alone_decides(pair, driver, tmp_path, capsys):
     for r in (0, 1):
         pair.alter("tp2_commit_finalize", r, _compared(oracle=None))
