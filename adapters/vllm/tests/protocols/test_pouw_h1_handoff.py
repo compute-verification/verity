@@ -20,7 +20,10 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_gpu as GPU
 from tests.protocols.test_pouw_h1 import (
     Int8Arm,
     K,
@@ -144,7 +147,6 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
     measured and released on the challenge phase's stream, its sample's challenge phase opened through ``--gate``, and the
     record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
     its round's root."""
-    from tests.protocols import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
     run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
     HO.suspend(run, tmp_path / "state")
@@ -169,7 +171,6 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
 def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     """The live gate's forced command splits ssh's remote command line with ``shlex.split``: a reserve's ``--families``
     (JSON, with spaces) arrives as one word, and a local gate gets the words as they are."""
-    from tests.protocols import pouw_h1_gpu as GPU
     ssh = ["ssh", "-i", "k", "-o", "BatchMode=yes", "research@host"]
     verb = ["reserve", "--peer", "vy-nebius-2", "--families", PHC.families(18)]
     got = GPU.gate_argv(ssh, verb)
@@ -203,7 +204,6 @@ def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(
 
     Slow, about two minutes on a check node: it holds every leaf of every tree, which a sample of rows would not, so a
     rebuild that is right for a tree's first rows and wrong past a call's or a step's boundary is caught."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
     _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),
