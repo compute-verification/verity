@@ -5,13 +5,16 @@ with a greedy draft and the standard method) as registered Definitions, read fro
                                      temp: F32) -> (Array<K, I32>, I32, Array<K+1, I32>)    verdicts, accepted, appended
 
 The Call is past a Flock block at every layout it takes, so its body is units of at most a block each and their wiring
-(`plan`, which `cut` counts by Definition for `CUTS`), every unit reading its own lanes of the rows:
+(`plan`, which `cut` counts by Definition for `CUTS`), every unit reading its own lanes of the rows, each as rows of `ROW`
+lanes (x0, x1, ..: Array<32, F32> each, the last one shorter where the row ends inside it), the rows the top-p's mask
+chunks write (`topp_stages.mask_plan`; `pass_plan` wires them):
 
-    AcceptTileHead_v1{N,FIRST,LAST}   (x: Array<N, F32>, d: I32[, i: I32, at: F32]) -> (F32[, I32], F32)
-                                      a tile's maximum; the row's logit at draft token d, a scan carried tile to tile
-    AcceptTileSum_v1{N,AT,LAST}       (x: Array<N, F32>, m: F32[, acc: Array<128, F32>]) -> Array<128, F32> | F32
+    AcceptTileHead_v1{N,AT,FIRST,LAST} (x0 .., d: I32[, i: I32, at: F32][, m: F32]) -> (F32[, I32], F32)
+                                      lanes AT .. AT+N of a tile: its maximum so far; the row's logit at draft token d, a
+                                      scan carried head to head
+    AcceptTileSum_v1{N,AT,LAST}       (x0 .., m: F32[, acc: Array<128, F32>]) -> Array<128, F32> | F32
                                       lanes AT .. AT+N of a tile: tl.exp(x - m) into the 128 thread sums; LAST, the tile's sum
-    AcceptRowEnd_v1{T,N,AT}           (x: Array<N, F32>, m: F32[, acc], at: F32, seed, pos: I64, m0, s0, .. : F32) -> I32
+    AcceptRowEnd_v1{T,N,AT}           (x0 .., m: F32[, acc], at: F32, seed, pos: I64, m0, s0, .. : F32) -> I32
                                       the last tile's last part and the other T-1 tiles' maxima and sums: the ratio test
     AcceptResample_v1{K,N,FIRST,LAST} (x0 .. xK: Array<N, F32>, t0 .. t{K-1}: I32, draft: Array<K, I32>, seed: I64,
                                        pos: Array<K+1, I64>, temp: F32[, c: Array<3, I32>]) -> Array<3, I32> | the Call's
@@ -63,10 +66,11 @@ no longer run it.  The Definition is lane 0's arithmetic there too; `sampled_acc
 `TILE` is the stats kernel's `BLOCK_SIZE`, 8192 at the pin; another multiple of 512 keeps the thread layout (128 threads,
 four lanes a vector) with fewer vectors a thread, for tests at small vocabularies.
 
-The units.  A draft row's tile is a head and its parts of `part` lanes (4,096 at the pin: the exponentials of 8,192 lanes
-are past a block); the row's last part is in `AcceptRowEnd_v1`, so the unit that reads the tiles' 4-byte maxima and sums
-also reads a row past 111 bytes, which a proof block needs.  The K ratio tests are K units of one Definition, each row's
-tiles read once; the bonus row has no test.  The resample is `GumbelSelectF32_v3{V}`'s function on the residual row,
+The units.  A draft row's tile is its heads of `head` lanes (4,096 at the pin: 128 rows and the unit's others stay within a
+proof block's 256, `windows.interface.check_proof_block`), each handing the tile's maximum so far to the next, and its parts
+of `part` lanes (2,048 at the pin: at 4,096 a part's exponentials and its rows' hm96 slots, one a row, are past a Flock
+block); the row's last part is in `AcceptRowEnd_v1`.  The K ratio tests are K units of one Definition, each row's tiles
+read once; the bonus row has no test.  The resample is `GumbelSelectF32_v3{V}`'s function on the residual row,
 written over its own steps (`GumbelStreamKey_v1`, `GumbelNoiseLane_v1`, `GumbelSelectStep_v1`) in chunks of `chunk` lanes
 of all K + 1 rows: every chunk selects the row, its position and its refused draft token by the tests, so the select runs
 once, on rows that are operands, and no residual row is committed.
@@ -382,10 +386,10 @@ def _sum_sig(S):
 
 @composite("AcceptTileSum", 1, ["N", "AT", "LAST"], _sum_sig, conformance=_CONF, refuse=_sum_refuse)
 def AcceptTileSum(B, S, *args):
-    """Lanes AT .. AT + N of a tile of `_compute_local_logits_stats_kernel` (rows x0, ..) and the tile's maximum m: ``tl.exp(x - m)`` of each
-    lane added into the tile's 128 thread sums in the kernel's order (a thread's lanes in (r, j) order), ``acc`` the sums
-    after the lanes before AT.  The tile's LAST part returns its sum: the warp's butterfly 16 .. 1, the warps' butterfly 2, 1,
-    and 0 when m is -inf.  A lane past the vocabulary adds +0 on the GPU, which changes no sum, so it has no gate here."""
+    """Lanes AT .. AT + N of a tile of `_compute_local_logits_stats_kernel` (rows x0, ..) and the tile's maximum m:
+    ``tl.exp(x - m)`` of each lane added into the tile's 128 thread sums in the kernel's order (a thread's lanes in (r, j)
+    order), ``acc`` the sums after the lanes before AT.  The tile's LAST part returns its sum: the warp's butterfly 16 .. 1,
+    the warps' butterfly 2, 1, and 0 when m is -inf.  A lane past the vocabulary adds +0 on the GPU, which changes no sum, so it has no gate here."""
     x, (m, *acc) = _joined(S.N, args)
     threads = _thread_sums(B, B.batch(AcceptExpLane, x, m, axes=(0, None)), S.AT, acc[0] if acc else None)
     return _tile_sum(B, threads, m) if S.LAST else array_of(threads)

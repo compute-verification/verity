@@ -318,6 +318,79 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
     assert plan[-1].key == ("resample", v // A.RESAMPLE_N - 1)
 
 
+def _fields(defn) -> list[int]:
+    ret = defn.signature()[1]
+    fs = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else [ret]
+    return [len(list(f.leaf_widths())) for f in fs]
+
+
+def _run(units, ops: dict, done: dict) -> dict:
+    """``units`` evaluated in order, each on its reads of ``ops`` and its wires to the outputs in ``done`` (each unit's output
+    fields by key, each a list of words; a unit already there is not evaluated)."""
+    from verity.circuits.types import Value
+
+    for u in units:
+        if u.key in done:
+            continue
+        args = {name: _operand(ops, ref) for name, ref in u.reads}
+        args.update({name: done[key][i] for name, key, i in u.wires})
+        params = u.defn.signature()[0]
+        flat = [int(v) for v in evaluate(u.defn, *(args[n][0] if isinstance(t, Value) and isinstance(args[n], list) else args[n]
+                                                   for n, t in params))]
+        done[u.key], at = [], 0
+        for n in _fields(u.defn):
+            done[u.key].append(flat[at:at + n])
+            at += n
+    return done
+
+
+def _operand(ops: dict, ref: tuple):
+    name, *at = ref
+    if name == "logits":
+        return [int(w) for w in ops[name][at[0]][at[1]:at[2]]]
+    return ops[name][at[0]] if at else ops[name]
+
+
+@pytest.mark.slow
+def test_a_pass_is_each_rows_top_p_mask_then_the_sampled_accept():
+    """`pass_plan` at K = 2 over three rows of 17 tiles of 512 bf16 logits: each row's mask chunks, on the twin's top-p
+    pipeline outputs (`topp_stage_twins`, which `test_topp_stages` holds each pipeline unit to), then the accept's units, each
+    on its wires alone, give the references composed: `TopPMask_v4{V,S}`'s function (`sampling_rows.topp_mask_row` at
+    ``splits`` = S) on each temperature-scaled row, then `sampled_accept`.  Each row has a lane of about 0.993 of its mass and
+    one of about 0.0067 that top_p keeps, so the draft tokens are accepted everywhere, outside the kept set at the first
+    row, and refused by the second row's test.  It is the one test of the masked rows' wires from the mask chunks into the
+    accept's units; about two minutes, most of it the twin and 771 mask chunks evaluated one by one."""
+    from verity.definitions.numerics import topp_stage_twins as TW
+    from verity.definitions.registry import sampling_rows as SR, topp_stages as TS
+
+    rng = np.random.default_rng(273)
+    S, temp, top_p, seed, pos = 8, int(F(0.8).view(np.uint32)), int(F(0.999).view(np.uint32)), 0x5EED_0273, [90, 91, 92]
+    x = rng.normal(0, 3, (K + 1, V)).astype(F)
+    for p in range(K + 1):
+        x[p, rng.choice(V, 2, replace=False)] = (30.0, 26.0)
+    lg = (x.view(np.uint32) >> 16).astype(np.uint16)
+    plan = A.pass_plan(K, V, TILE)
+    done: dict = {}
+    for p in range(K + 1):
+        _, outs = TW.stage_rows(V, lg[p], top_p=top_p, seed=seed, pos=pos[p], temp=temp, splits=S)
+        done.update({("topp", p, *key): [[int(w) for w in f] for f in fs] for key, fs in outs.items() if key[0] != "select"})
+    ops = {"logits": lg, "temp": temp, "top_p": top_p, "splits": S, "seed": seed, "pos": pos}
+    masked = np.stack([SR.topp_mask_row(SR.temperature_scale_row(lg[p], temp), top_p, S) for p in range(K + 1)]).astype(np.uint32)
+    done = _run([u for u in plan if u.key[0] == "topp"], ops, done)
+    wrote = [[w for u in TS.mask_plan(V) if u.key[0] == "mask" for w in done[("topp", p, *u.key)][0]] for p in range(K + 1)]
+    assert np.array_equal(np.array(wrote, np.uint32), masked)
+    kept = [np.flatnonzero(masked[p] != NEG_INF) for p in range(K)]
+    best = [int(kept[p][np.argmax(masked[p][kept[p]].view(F))]) for p in range(K)]
+    outside = int(np.flatnonzero(masked[0] == NEG_INF)[0])
+    seen = set()
+    for draft in (best, [outside, best[1]], [best[0], int(kept[1][np.argmin(masked[1][kept[1]].view(F))])]):
+        want = A.sampled_accept(masked.view(F), draft, seed, pos, temp, TILE)
+        got = _run([u for u in plan if u.key[0] == "accept"], {**ops, "draft": [d & M32 for d in draft]}, dict(done))
+        assert tuple(w for f in got[plan[-1].key] for w in f) == _outputs(want), draft
+        seen.add(want["accepted"])
+    assert seen == {0, 1, 2}
+
+
 @pytest.mark.parametrize("fn, statics, why", [
     (A.AcceptTileSum, dict(N=100, AT=0, LAST=False), "whole vectors of every thread"),
     (A.AcceptTileSum, dict(N=16, AT=100, LAST=True), "multiple of 512"),
