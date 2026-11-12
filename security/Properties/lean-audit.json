@@ -1417,7 +1417,7 @@
   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
    "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
    "missing": "honest",
-   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes: the evidence's key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet",
+   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes under the verifier's key: a key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet",
    "unfolded_hash": "efc27f982579ec13ebbf8c7ad2c5de5834f478f37618f1581927d4e5ee214873"
   },
   "Properties.Composition.acceptMeans": {

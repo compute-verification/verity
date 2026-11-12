@@ -14,9 +14,11 @@ openings are exactly the coins the family released, from its first, so the prove
 coin opened.
 
 `coinsReason` is `coins_reason`: the commitment and the roots come from the code that already trusts them,
-`trustedSessionOf` over the evidence `{key, ledger, main, pins, segment, session}` (the verifier's challenger key, the
-auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the
-session's files) for the window the verifier holds (its open root R, `windowRoot`, which it reads from the challenger's
+`trustedSessionOf` under the verifier's challenger key and its copy of main's first-parent history, which its caller
+holds and hands it (`key`, `main`), over the evidence `{ledger, pins, segment, session}` (the auditor's ledger, the
+host's pins log, the segment and the session's files), which names neither: evidence that carries a key or a history is
+refused in form, so the session is one signed under the verifier's key, whoever wrote the evidence. It is the session of
+the window the verifier holds (its open root R, `windowRoot`, which it reads from the challenger's
 signed open of the registration's window, never from the record or the evidence), so the record names neither, the
 prover picks no window, and the session counts only from a commit the pins log records on main's first-parent line
 (`pinnedSession`): coins a session of another window released after the registration's digest are refused. The family
@@ -53,7 +55,7 @@ open Flock (V)
 def SEGMENT_FORM : String :=
   "a draw's coins are {after, label, openings, start}: the prover's commitment (64 bytes in lowercase hex), the challenger family, its coins' openings and the first one's index"
 def COINS_FORM : String :=
-  "a draw's coin evidence is {key, ledger, main, pins, segment, session}: the verifier's challenger key, the auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files"
+  "a draw's coin evidence is {ledger, pins, segment, session}: the auditor's ledger, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files; the challenger's key and main's first-parent history are the verifier's own, and the evidence names neither"
 
 /-- The refusal of a family whose roots, as the challenger's log shows them, are not all the prover's commitment. -/
 def FAMILY_ROOT : String :=
@@ -111,14 +113,16 @@ def withheldOn (ledger : Json) (window : String) : Bool :=
   !opens.isEmpty && opens.all fun e => match getD e.body "withheld" with | .bool true => true | _ => false
 
 /-- `coins_reason` (module docstring): why `coins`, the evidence of a sample's coins, does not show `read` to be the coins
-of the verifier's family `label` that the session the auditor's ledger opens for window `window` (its open root)
-released after `after`; `none` when it does. The session must be a withheld one (`withheldOn`), as `drawCoins`'s, and
-the segment of family `label`, as `drawCoins`'s. -/
-def coinsReason (coins : Json) (window label : String) (after read : ByteArray) : Option String :=
-  if keys? coins != some #["key", "ledger", "main", "pins", "segment", "session"] then some COINS_FORM else
-  let trusted : V (LiveCommitment × Roots) := do
-    trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])
-      (← ChallengerKey.ofJson (getD coins "key")) (getD coins "pins") (getD coins "main") (getD coins "session")
+of the verifier's family `label` that the session the auditor's ledger opens for window `window` (its open root), under
+the verifier's challenger key `key` and from a commit on its copy `main` of main's first-parent history, released after
+`after`; `none` when it does. The session must be a withheld one (`withheldOn`), as `drawCoins`'s, and the segment of
+family `label`, as `drawCoins`'s. -/
+def coinsReason (key : ChallengerKey) (main coins : Json) (window label : String) (after read : ByteArray) :
+    Option String :=
+  if keys? coins != some #["ledger", "pins", "segment", "session"] then some COINS_FORM else
+  let trusted : V (LiveCommitment × Roots) :=
+    trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins") main
+      (getD coins "session")
   match trusted with
   | .error why => some why
   | .ok (c, roots) =>
@@ -202,15 +206,18 @@ def readPiece (j : Json) : V Json := do
   pure <| refusing do
     return reasonJson (readReason (← LiveCommitment.ofJson (getD j "commitment")) (getD j "segment") after read roots)
 
-/-- `{"after", "coins", "label", "read", "window"}` to `coins_reason`'s, `window` the window's open root and `label` the
-verifier's family. -/
+/-- `{"after", "coins", "key", "label", "main", "read", "window"}` to `coins_reason`'s, `key` the verifier's challenger
+key (`ChallengerKey.from_json`'s form), `main` its copy of main's first-parent history, `window` the window's open root
+and `label` the verifier's family. -/
 def drawCoinsPiece (j : Json) : V Json := do
-  request j #["after", "coins", "label", "read", "window"]
+  request j #["after", "coins", "key", "label", "main", "read", "window"]
   let after ← lowerHex (getD j "after") "after"
   let read ← lowerHex (getD j "read") "read"
   let .str window := getD j "window" | throw "window is not a string"
   let .str label := getD j "label" | throw "label is not a string"
-  return reasonJson (coinsReason (getD j "coins") window label after read)
+  pure <| refusing do
+    let key ← ChallengerKey.ofJson (getD j "key")
+    return reasonJson (coinsReason key (getD j "main") (getD j "coins") window label after read)
 
 /-- `{"coins", "limits"}` to `coins_within`'s, `limits` `{hellos, ledger, log, openings, path, pins}` or null for
 `LIMITS`: the limits read and the refusal past them. -/
