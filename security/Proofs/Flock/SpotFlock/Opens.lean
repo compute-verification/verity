@@ -11,9 +11,10 @@ public import Proofs.Flock.Claims.Sampling.ProgReads
 `sessionOpensTwo h`: `Claims.SamplingGeneric.SessionOpensTwo` at SPOT[Flock]'s two-stage code (`code h`), Flock's
 masked record and SHA-512, from what one session statement establishes (`StmtOpens h`).
 
-**The run** (`run_seenAt`). An accepted run of `V h` answered rounds 0 and 1 with their coins and round 2 with nothing,
-so the verifier's check of the session statements passed there (`stmtOk h x m₁ m₂ c₀ c₁`, at the round-1 message `m₁`,
-the round-2 message `m₂` and the coins `c₀`, `c₁` of rounds 0 and 1), and its transcript is `seenAt` of them. A checked
+**The run** (`run_seenAt`). An accepted run of `V h` answered rounds 0 to `stage` with their coins, the prover sending
+nothing in rounds 2 to `stage`, and round `stage + 1` with nothing, so the verifier's check of the session statements
+passed there (`stmtOk h x m₁ m₂ c₀ c₁`, at the round-1 message `m₁`, round `stage + 1`'s message `m₂`, round 0's coin
+`c₀` and the second stage's coins `c₁`, rounds 1 to `stage`'s), and its transcript is `seenAt` of them. A checked
 unit's session is its template's, at the statement `m₂` states for that template (`unitStmt`), which the run answered
 every round before (`SessionSeq.session_acc`); the interior roots are those `m₁` states, and its checked units are the
 second stage's on `c₀` and `c₁` (`checked_eq`).
@@ -66,37 +67,89 @@ theorem stepWith_succ_msg {f : ℕ} {hist : List (Msg × Msg)} {as : List Msg} {
                  pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo } := by
   simp only [stepWith, h]
 
-/-- **A run whose verifier answers its first two rounds and checks its third** accepts only past a third round it
-answered with nothing, at a check that passed. -/
-theorem stepWith_three (c₀ c₁ : Msg) (ok : Msg → Msg → Bool) (hv1 : ∀ a, vn [a] = .ret (.msg c₀))
-    (hv2 : ∀ a b, vn [a, b] = .ret (.msg c₁))
-    (hv3 : ∀ a b c, vn [a, b, c] = .ret (if ok b c then .msg [] else .rej)) :
+/-- **The later rounds of a second stage**: a verifier that, past its first two rounds, answers each of `n` rounds
+with that round's message `c j` where the prover sent nothing and refuses it otherwise, and then checks the next round,
+accepts only past those rounds answered and a round answered with nothing, at a check that passed. -/
+theorem stepWith_pad (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ a₁ : Msg)
+    (hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ n + 1 →
+      (a = [] ∧ vn (as ++ [a]) = .ret (.msg (c as.length))) ∨ vn (as ++ [a]) = .ret .rej)
+    (hstmt : ∀ as : List Msg, as.length = n + 3 → vn as = .ret (if ok as then .msg [] else .rej)) :
+    ∀ (d k : ℕ), k + d = n → ∀ (f : ℕ) (hist : List (Msg × Msg)) (t : Transcript),
+      (stepWith H P x ω vn f hist (a₀ :: a₁ :: List.replicate k []) t).out = .acc →
+      t.msgs = (a₀, .msg (c 0)) :: (a₁, .msg (c 1)) ::
+        (List.range k).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) →
+      ∃ m₂ rest, (stepWith H P x ω vn f hist (a₀ :: a₁ :: List.replicate k []) t).msgs =
+          (a₀, .msg (c 0)) :: (a₁, .msg (c 1)) ::
+            ((List.range n).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) ++ (m₂, .msg []) :: rest) ∧
+        ok ((a₀ :: a₁ :: List.replicate n []) ++ [m₂]) = true := by
+  intro d
+  induction d with
+  | zero =>
+    intro k hk f hist t hacc hmsgs
+    have hkn : n = k := by omega
+    subst hkn
+    cases f with
+    | zero => simp [stepWith] at hacc
+    | succ g =>
+      have hl : ((a₀ :: a₁ :: List.replicate n ([] : Msg)) ++ [((P.next x hist ω).eval H).1]).length = n + 3 := by
+        simp
+      cases hok : ok ((a₀ :: a₁ :: List.replicate n []) ++ [((P.next x hist ω).eval H).1]) with
+      | false =>
+        have e : (vn ((a₀ :: a₁ :: List.replicate n []) ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, []) := by
+          rw [hstmt _ hl, hok]; rfl
+        simp only [stepWith, e] at hacc
+        cases hacc
+      | true =>
+        rw [stepWith_succ_msg H P x ω vn (m := []) (lo := []) (by rw [hstmt _ hl, hok]; rfl)]
+        obtain ⟨rest, hr⟩ := Claims.Sampling.stepWith_msgs_prefix H P x ω vn g _ _ _
+        refine ⟨((P.next x hist ω).eval H).1, rest, ?_, hok⟩
+        rw [hr, hmsgs]
+        simp
+  | succ d ih =>
+    intro k hk f hist t hacc hmsgs
+    cases f with
+    | zero => simp [stepWith] at hacc
+    | succ g =>
+      have hl : (a₀ :: a₁ :: List.replicate k ([] : Msg)).length = k + 2 := by simp
+      rcases hpad (a₀ :: a₁ :: List.replicate k []) ((P.next x hist ω).eval H).1 (by rw [hl]; omega)
+        (by rw [hl]; omega) with ⟨ha, hv⟩ | hv
+      · rw [hl] at hv
+        rw [stepWith_succ_msg H P x ω vn (m := c (k + 2)) (lo := []) (by rw [hv]; rfl)] at hacc ⊢
+        have has : (a₀ :: a₁ :: List.replicate k ([] : Msg)) ++ [((P.next x hist ω).eval H).1] =
+            a₀ :: a₁ :: List.replicate (k + 1) [] := by
+          rw [ha]
+          exact (congrArg (fun l => a₀ :: a₁ :: l) List.replicate_succ').symm
+        rw [has] at hacc ⊢
+        refine ih (k + 1) (by omega) g _ _ hacc ?_
+        simp [hmsgs, List.range_succ, ha]
+      · have e : (vn ((a₀ :: a₁ :: List.replicate k []) ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, []) := by
+          rw [hv]; rfl
+        simp only [stepWith, e] at hacc
+        cases hacc
+
+/-- **A run whose verifier answers its first two rounds with their messages, then `n` rounds with theirs where the
+prover sent nothing, and checks the next** accepts only past that round answered with nothing, at a check that
+passed. -/
+theorem stepWith_stage (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (hv1 : ∀ a, vn [a] = .ret (.msg (c 0)))
+    (hv2 : ∀ a b, vn [a, b] = .ret (.msg (c 1)))
+    (hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ n + 1 →
+      (a = [] ∧ vn (as ++ [a]) = .ret (.msg (c as.length))) ∨ vn (as ++ [a]) = .ret .rej)
+    (hstmt : ∀ as : List Msg, as.length = n + 3 → vn as = .ret (if ok as then .msg [] else .rej)) :
     ∀ (f : ℕ), (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).out = .acc →
-      ∃ m₀ m₁ xS rest, (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).msgs =
-        (m₀, .msg c₀) :: (m₁, .msg c₁) :: (xS, .msg []) :: rest ∧ ok m₁ xS = true
+      ∃ m₀ m₁ m₂ rest, (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).msgs =
+          (m₀, .msg (c 0)) :: (m₁, .msg (c 1)) ::
+            ((List.range n).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) ++ (m₂, .msg []) :: rest) ∧
+        ok ((m₀ :: m₁ :: List.replicate n []) ++ [m₂]) = true
   | 0, hacc => by simp [stepWith] at hacc
   | 1, hacc => by simp [stepWith, hv1, OC.eval] at hacc
-  | 2, hacc => by simp [stepWith, hv1, hv2, OC.eval] at hacc
-  | g + 1 + 1 + 1, hacc => by
-    rw [stepWith_succ_msg H P x ω vn (m := c₀) (lo := []) (by rw [List.nil_append, hv1]; rfl)] at hacc ⊢
+  | g + 1 + 1, hacc => by
+    rw [stepWith_succ_msg H P x ω vn (m := c 0) (lo := []) (by rw [List.nil_append, hv1]; rfl)] at hacc ⊢
     simp only [List.nil_append] at hacc ⊢
-    rw [stepWith_succ_msg H P x ω vn (m := c₁) (lo := []) (by rw [List.singleton_append, hv2]; rfl)] at hacc ⊢
+    rw [stepWith_succ_msg H P x ω vn (m := c 1) (lo := []) (by rw [List.singleton_append, hv2]; rfl)] at hacc ⊢
     simp only [List.cons_append, List.nil_append] at hacc ⊢
-    generalize ((P.next x [] ω).eval H).1 = a₀ at hacc ⊢
-    generalize ((P.next x [(a₀, c₀)] ω).eval H).1 = a₁ at hacc ⊢
-    cases hok : ok a₁ ((P.next x [(a₀, c₀), (a₁, c₁)] ω).eval H).1 with
-    | false =>
-      have e₂ : (vn ([a₀, a₁] ++ [((P.next x [(a₀, c₀), (a₁, c₁)] ω).eval H).1])).eval H = (.rej, []) := by
-        rw [List.cons_append, List.singleton_append, hv3, hok]; rfl
-      simp only [stepWith, e₂] at hacc
-      cases hacc
-    | true =>
-      rw [stepWith_succ_msg H P x ω vn (m := []) (lo := [])
-        (by rw [List.cons_append, List.singleton_append, hv3, hok]; rfl)]
-      obtain ⟨rest, hr⟩ := Claims.Sampling.stepWith_msgs_prefix H P x ω vn g _ _ _
-      refine ⟨a₀, a₁, _, rest, ?_, hok⟩
-      rw [hr]
-      simp
+    obtain ⟨m₂, rest, hm, hok⟩ :=
+      stepWith_pad H P x ω vn c n ok _ _ hpad hstmt n 0 (Nat.zero_add n) g _ _ hacc rfl
+    exact ⟨_, _, m₂, rest, hm, hok⟩
 
 end Steps
 
@@ -104,41 +157,124 @@ variable (h : Held)
 
 theorem k_pos (x : Msg) : 0 < (V h).k x := by show 0 < off h h.ms.length + 1; omega
 
-theorem one_lt_k (x : Msg) : 1 < (V h).k x := by
-  have := three_le_off h h.ms.length
-  show 1 < off h h.ms.length + 1
-  omega
+/-- **A run's transcript through its session statements**: round 0 answered with its coin `c₀`, rounds 1 to `stage`
+with the second stage's coins `c₁`, the prover sending `m₁` in round 1 and nothing after it, round `stage + 1`'s message
+`m₂` answered with nothing, then `rest`, accepted. -/
+def seenAt {h : Held} (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) : Seen :=
+  ⟨(m₀, .msg c₀.bytes) :: (m₁, .msg (coinSeq c₁ 0).bytes) ::
+    (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq c₁ (i + 1)).bytes)) ++ (m₂, .msg []) :: rest),
+    .acc⟩
 
-/-- **A run's transcript through its session statements**: rounds 0 and 1 answered with their coins `c₀` and `c₁`,
-round 2's message `m₂` answered with nothing, then `rest`, accepted. -/
-def seenAt (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) : Seen :=
-  ⟨(m₀, .msg c₀.bytes) :: (m₁, .msg c₁.bytes) :: (m₂, .msg []) :: rest, .acc⟩
+/-- The session statements' message of `seenAt`, round `stage + 1`'s. -/
+theorem seenAt_stmts {m₀ m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {rest : List (Msg × Out)} :
+    ((seenAt m₀ m₁ m₂ c₀ c₁ rest).msgs.getD (h.stage + 1) ([], .rej)).1 = m₂ := by
+  have hl : ((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq c₁ (i + 1)).bytes)).length = h.more := by
+    simp
+  have e := List.getD_append_right
+    ((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq c₁ (i + 1)).bytes)) ((m₂, Out.msg []) :: rest)
+    ([], Out.rej) h.more hl.le
+  rw [hl, Nat.sub_self] at e
+  exact congrArg Prod.fst e
 
-/-- **An accepted run passed the session statements' check**: its transcript is `seenAt` of its first three messages
-and the coins of rounds 0 and 1, and `stmtOk` held at them. -/
+/-- The verifier's step at a run's coins in round 0: the round's coin. -/
+theorem next_run_one {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a : Msg) :
+    next h x [a] ((List.range [a].length).map (coinSeq r)) = .ret (.msg (coinSeq r 0).bytes) := by
+  have e := next_two h x (as := [a]) (cs := (List.range [a].length).map (coinSeq r)) (List.cons_ne_nil a [])
+    (by simp) (by simp)
+  rw [getD_map_range (coinSeq r) (show [a].length - 1 < [a].length by simp) default] at e
+  exact e
+
+/-- The verifier's step at a run's coins in round 1: the round's coin. -/
+theorem next_run_two {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (a b : Msg) :
+    next h x [a, b] ((List.range [a, b].length).map (coinSeq r)) = .ret (.msg (coinSeq r 1).bytes) := by
+  have e := next_two h x (as := [a, b]) (cs := (List.range [a, b].length).map (coinSeq r)) (List.cons_ne_nil a [b])
+    (by simp) (by simp)
+  rw [getD_map_range (coinSeq r) (show [a, b].length - 1 < [a, b].length by simp) default] at e
+  exact e
+
+/-- **The verifier's step at a run's coins in rounds 2 to `stage`**: the round's coin where the prover sent nothing,
+refused otherwise. -/
+theorem next_run_pad {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : List Msg) (a : Msg)
+    (h2 : 2 ≤ as.length) (hle : as.length ≤ h.more + 1) :
+    (a = [] ∧ next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) =
+        .ret (.msg (coinSeq r as.length).bytes)) ∨
+      next h x (as ++ [a]) ((List.range (as ++ [a]).length).map (coinSeq r)) = .ret .rej := by
+  have hs : h.stage = h.more + 1 := rfl
+  have hl : (as ++ [a]).length = as.length + 1 := by simp
+  have hn := next_coin h x (as := as ++ [a]) (cs := (List.range (as ++ [a]).length).map (coinSeq r)) (by simp)
+    (by simp) (by rw [hl]; omega)
+  rw [hl, Nat.add_sub_cancel, getD_concat, getD_map_range (coinSeq r) (Nat.lt_succ_self as.length)] at hn
+  rw [hl]
+  by_cases ha : a = []
+  · exact Or.inl ⟨ha, by rw [hn, ite_eq_left (Or.inr ha)]⟩
+  · exact Or.inr (by rw [hn, ite_eq_right fun hc => hc.elim (fun h' => by omega) ha])
+
+/-- **The verifier's step at a run's coins in round `stage + 1`**: the session statements' check at round 0's coin and
+the second stage's. -/
+theorem next_run_stmt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (as : List Msg)
+    (hlen : as.length = h.more + 3) :
+    next h x as ((List.range as.length).map (coinSeq r)) =
+      .ret (if stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r) then
+        .msg [] else .rej) := by
+  have hs : h.stage = h.more + 1 := rfl
+  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
+  have hst : stageOf h ((List.range (h.stage + 2)).map (coinSeq r)) = stageCoins h x r :=
+    funext fun i => (getD_map_range (coinSeq r) (show i.val + 1 < h.stage + 2 by have := i.isLt; omega) default).trans
+      (coinSeq_stage h x r i)
+  have hlen' : as.length = h.stage + 2 := hlen
+  rw [next_stmt h x (by simp) hlen', hlen', getD_map_range (coinSeq r) (show 0 < h.stage + 2 by omega), e0, hst]
+
+/-- The session statements' message of a run's prover messages through round `stage + 1`. -/
+theorem getD_stmts (m₀ m₁ m₂ : Msg) :
+    ((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [] = m₂ := by
+  have hs : h.stage = h.more + 1 := rfl
+  have hl : (m₀ :: m₁ :: List.replicate h.more ([] : Msg)).length = h.stage + 1 := by simp [hs]
+  rw [← hl]
+  exact getD_concat _ _ _
+
+/-- **A run's messages through round `stage + 1` are `seenAt`'s**, at the run's coins. -/
+theorem msgs_seenAt {x : Msg} (r : Fin ((V h).k x) → FlockDeploy.Coin) (m₀ m₁ m₂ : Msg) (rest : List (Msg × Out)) :
+    ((m₀, Out.msg (coinSeq r 0).bytes) :: (m₁, Out.msg (coinSeq r 1).bytes) ::
+        (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes)) ++
+          (m₂, Out.msg []) :: rest)) =
+      (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs := by
+  have hs : h.stage = h.more + 1 := rfl
+  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
+  have h1 : coinSeq (stageCoins h x r) 0 = coinSeq r 1 := coinSeq_stageCoins h x r (Nat.succ_pos _)
+  have hpadl : ((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq (stageCoins h x r) (i + 1)).bytes)) =
+      (List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes) :=
+    List.map_congr_left fun i hi => by
+      rw [coinSeq_stageCoins h x r (show i + 1 < h.stage by have := List.mem_range.1 hi; omega)]
+  show _ = (m₀, Out.msg (r ⟨0, k_pos h x⟩).bytes) :: (m₁, Out.msg (coinSeq (stageCoins h x r) 0).bytes) ::
+    (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq (stageCoins h x r) (i + 1)).bytes)) ++
+      (m₂, Out.msg []) :: rest)
+  rw [h1, hpadl, ← e0]
+
+/-- **An accepted run passed the session statements' check**: its transcript is `seenAt` of its messages of rounds 0, 1
+and `stage + 1`, round 0's coin and the second stage's (`stageCoins`), and `stmtOk` held at them. -/
 theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((V h).k x) → FlockDeploy.Coin) (hacc : (run H P (V h) x ω r).out = .acc) :
-    ∃ m₀ m₁ m₂ rest, (run H P (V h) x ω r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest ∧
-      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) = true := by
-  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
-  have e1 : coinSeq r 1 = r ⟨1, one_lt_k h x⟩ := dite_eq_left (one_lt_k h x)
-  obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := stepWith_three H P x ω
-    (fun as => (V h).next x as ((List.range as.length).map (coinSeq r)))
-    (r ⟨0, k_pos h x⟩).bytes (r ⟨1, one_lt_k h x⟩).bytes
-    (fun m₁ m₂ => stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩))
-    (fun a => by show next h x [a] [coinSeq r 0] = _; rw [e0]; rfl)
-    (fun a b => by show next h x [a, b] [coinSeq r 0, coinSeq r 1] = _; rw [e1]; rfl)
-    (fun a b c => by show next h x [a, b, c] [coinSeq r 0, coinSeq r 1, coinSeq r 2] = _; rw [e0, e1]; rfl)
-    ((V h).k x) hacc
-  refine ⟨m₀, m₁, m₂, rest, ?_, hok⟩
-  have hm' : (run H P (V h) x ω r).msgs = _ := hm
+    ∃ m₀ m₁ m₂ rest, (run H P (V h) x ω r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest ∧
+      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true := by
+  obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := stepWith_stage H P x ω
+    (fun as => (V h).next x as ((List.range as.length).map (coinSeq r))) (fun j => (coinSeq r j).bytes) h.more
+    (fun as => stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r))
+    (next_run_one h r) (next_run_two h r) (next_run_pad h r) (next_run_stmt h r) ((V h).k x) hacc
+  have hok' : stmtOk h x m₁ (((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [])
+      (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true := hok
+  rw [getD_stmts h] at hok'
+  refine ⟨m₀, m₁, m₂, rest, ?_, hok'⟩
+  have hm' : (run H P (V h) x ω r).msgs =
+      (m₀, Out.msg (coinSeq r 0).bytes) :: (m₁, Out.msg (coinSeq r 1).bytes) ::
+        (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes)) ++
+          (m₂, Out.msg []) :: rest) := hm
   show (⟨(run H P (V h) x ω r).msgs, (run H P (V h) x ω r).out⟩ : Seen) = _
   rw [hm', hacc]
-  rfl
+  exact congrArg (fun l => (⟨l, .acc⟩ : Seen)) (msgs_seenAt h r m₀ m₁ m₂ rest)
 
 /-- **Template `t`'s session statement as the verifier's check passes it is the template's reference one** (`pinOk`)
 but for its sample, its registered reads and its public file. -/
-theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ}
+theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {t : ℕ}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
     ∃ w w₀, FlockDeploy.decode xS = some w ∧ FlockDeploy.decode (h.xS₀ t) = some w₀ ∧
       { w with draw := none, registered := none, publicFile := .empty } =
@@ -171,9 +307,10 @@ theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : �
               simp only [hw₀, decide_eq_true_eq] at hpin
               exact ⟨w, w₀, rfl, rfl, hpin⟩
 
-/-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
+/-- **The checked units** of a run whose statement decodes: the second stage's on round 0's coin and the stage's. -/
 theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
-    (code h).checked x r = h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) := by
+    (code h).checked x r =
+      h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) := by
   have hr : reg h x = some h.reg := by simp [SpotFlock.reg, hst]
   show Option.getD (Option.map _ (reg h x)) [] = _
   rw [hr, Option.map_some, Option.getD_some]
@@ -181,7 +318,7 @@ theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((
 
 /-! ## The session statements' openings -/
 
-/-- **Unit `u`'s session statement** as the round-2 message `m₂` states it: its template's. -/
+/-- **Unit `u`'s session statement** as round `stage + 1`'s message `m₂` states it: its template's. -/
 abbrev unitStmt (m₂ : Msg) (u : ℕ) : Msg := stmtAt h m₂ (templateOf h.ms u)
 
 /-- **The session statements open every unit they check**: at a run's statement in the two-stage scope, session
@@ -191,9 +328,9 @@ witness in the relation of unit `u`'s statement, each unit `u` the two stages ch
 witness reveals and that pass (under the run's roots, and the interior roots `m₁` states for `ρ`) make `b` correct on
 `ρ`'s values. -/
 def StmtOpens : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     ∃ b ρ rb, Pt.blocks[u]? = some b ∧ replayOf Pt d.part u = some ρ ∧ d.part.blocks[ρ]? = some rb ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
@@ -213,18 +350,18 @@ theorem sessionOpensTwo (hs : StmtOpens h) :
   obtain ⟨ms, rest', hms, hlen, hses⟩ := (seq h _root_.Flock.Readable.relation).session_acc FlockDeploy.sha512 x P ω
     r u ((seq h _root_.Flock.Readable.relation).idx_lt x r u hu) hacc
   have hseen' : (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x ω r).seen =
-      seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest := hseen
-  have h3 : (ms.take 3).map Prod.fst = [m₀, m₁, m₂] := by
-    have hl : 3 ≤ ms.length := hlen ▸ three_le_off h _
+      seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest := hseen
+  have h3 : ((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) [] = m₂ := by
+    have hl : h.stage + 2 ≤ ms.length := hlen ▸ stage_le_off h _
     have hms' : (run FlockDeploy.sha512 P (V h) x ω r).msgs = ms ++ rest' := hms
     have hm : (run FlockDeploy.sha512 P (V h) x ω r).msgs =
-        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest).msgs := congrArg Seen.msgs hseen
-    rw [← List.take_append_of_le_length hl (l₂ := rest'), ← hms', hm]
-    all_goals rfl
+        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs := congrArg Seen.msgs hseen
+    rw [← getD_fst_pre h ms rest' (by omega), ← hms', hm]
+    exact seenAt_stmts h
   have hxS : xS = unitStmt h m₂ u := by
     have e : (deploy _root_.Flock.Readable.relation (code h)).session x u
         (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x ω r).seen =
-          some (stmtAt h (((ms.take 3).map Prod.fst).getD 2 []) (templateOf h.ms u),
+          some (stmtAt h (((ms.take (h.stage + 2)).map Prod.fst).getD (h.stage + 1) []) (templateOf h.ms u),
             cutSeen [] (k₀ h (templateOf h.ms u)) rest') := hses
     rw [hsess, h3] at e
     exact (Prod.mk.inj (Option.some.inj e)).1
@@ -236,9 +373,9 @@ theorem sessionOpensTwo (hs : StmtOpens h) :
     | none => simp [SpotFlock.parse, hdx] at hx'
     | some st => exact ⟨st, rfl⟩
   obtain ⟨p, hp⟩ := hu
-  have hum : u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) :=
+  have hum : u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) :=
     (congrArg (u ∈ ·) (checked_eq h x hst r)).mp (List.mem_of_getElem? hp)
-  exact hs x s Pt d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest wF u hx hP hd hin hok hum hck
+  exact hs x s Pt d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest wF u hx hP hd hin hok hum hck
 
 /-! ## The witness's values -/
 
@@ -259,8 +396,8 @@ theorem units_base {x : Msg} {s : AuditStatement} {Pt : Partition} (hx : parse h
 
 /-- **A checked unit's template is a member's**: at a run's statement that parses, each unit the two stages check is
 below the members' units. -/
-theorem templateOf_lt_of_checked {x : Msg} {s : AuditStatement} {c₀ c₁ : FlockDeploy.Coin} {u : ℕ}
-    (hx : parse h x = some s) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁)) :
+theorem templateOf_lt_of_checked {x : Msg} {s : AuditStatement} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
+    (hx : parse h x = some s) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁)) :
     templateOf h.ms u < h.ms.length := by
   have hN : units (base h) x = Properties.Spot.unitBase h.ms h.ms.length := by
     show (match parse h x with
@@ -270,10 +407,10 @@ theorem templateOf_lt_of_checked {x : Msg} {s : AuditStatement} {c₀ c₁ : Flo
     exact _root_.Flock.Bridge.Members.length_blocks_membersPart (ms := h.ms)
   exact templateOf_lt (hN ▸ mem_checked_lt hu)
 
-/-- **The round-2 check holds at each checked unit's statement**, at its template (`stmtOkAt`). -/
-theorem stmtOkAt_unit {x m₁ m₂ : Msg} {s : AuditStatement} {c₀ c₁ : FlockDeploy.Coin} {u : ℕ}
+/-- **The statement check holds at each checked unit's statement**, at its template (`stmtOkAt`). -/
+theorem stmtOkAt_unit {x m₁ m₂ : Msg} {s : AuditStatement} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {u : ℕ}
     (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
-    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁)) :
+    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁)) :
     stmtOkAt h x m₁ (unitStmt h m₂ u) c₀ c₁ (templateOf h.ms u) = true :=
   stmtOkAt_of h hok (templateOf_lt_of_checked h hx hu)
 
@@ -288,9 +425,9 @@ boundary values `W` and interior values `I` that make `b` correct on `ρ`'s valu
 `b`'s correctness needs by an opening that passes: one of `ρ`'s interior under the interior roots `m₁` states for `ρ`,
 every other under the run's roots. -/
 def WitOpens : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     ∃ (W : ℕ → Option Bool) (I : ℕ → Bool), s.prog.Correct (s.prog.refIn rb W I) b ∧
@@ -342,9 +479,9 @@ abbrev Dec : Type := Msg → Msg → Msg → Claims.Flock.Wit → ℕ → ℕ �
 Flock witness in the relation of a unit's statement, each unit the two stages check is correct on its replay block's
 values with the decoded values for both the committed and the interior ones. -/
 def Decodes (dec : Dec) : Prop :=
-  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u b ρ rb,
+  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     s.prog.Correct (s.prog.refIn rb (fun g => some (dec x m₁ (unitStmt h m₂ u) wF u g))
@@ -354,9 +491,9 @@ def Decodes (dec : Dec) : Prop :=
 its inputs holds, in the decoded values, its value on the decoded values of the gates it reads, and each constant
 gate's decoded value is the constant. -/
 def Evaluates (dec : Dec) : Prop :=
-  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u b ρ rb,
+  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     (∀ g ∈ b, ∀ y : BGate, s.prog.gates[g]? = some y → y ≠ .input →
@@ -375,9 +512,9 @@ theorem decodes_of_evaluates (dec : Dec) (he : Evaluates h dec) : Decodes h dec 
 `Prog.Needs` names, the reveal holds an opening of the decoded value at that gate that passes, under the interior roots
 `m₁` states for the replay block where the gate is one of its interior gates, and under the run's roots otherwise. -/
 def Reveals (dec : Dec) : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     ∀ g, s.prog.Needs b g →
