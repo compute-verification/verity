@@ -87,13 +87,14 @@ CLASSES = tuple((size, size, 16) for size in (2, 16, 64, 256, 1024, 4096))
 # The schedule's flags.
 
 def _class(text: str) -> tuple[int, ...]:
+    refusal = argparse.ArgumentTypeError(f"a class is P,O,ROWS under --lengths 1 and P,O under --lengths 2, integers, "
+                                         f"not {text!r}")
     try:
         numbers = tuple(int(x) for x in text.split(","))
     except ValueError:
-        numbers = ()
+        raise refusal from None
     if len(numbers) not in (2, 3):
-        raise argparse.ArgumentTypeError(f"a class is P,O,ROWS under --lengths 1 and P,O under --lengths 2, integers, "
-                                         f"not {text!r}")
+        raise refusal
     return numbers
 
 
