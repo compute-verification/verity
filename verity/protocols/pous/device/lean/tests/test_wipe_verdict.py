@@ -3,8 +3,8 @@
 `wipe_verdict.py` writes them from honest sessions at every batch size (each above 1 refused as uncovered), sessions
 under one adversarial edit (`wipe_cases.MUTATIONS`), records under one JSON edit, and each accepted-schemes mapping a
 caller passes; then the named negative controls through `wipe_verdict.verdict` and `judge`, the calls a caller makes, the
-format (a v1 session, a session that names an egress and a start mark that is not one refused, an empty mark and a
-digest read), and the switch itself."""
+format (a v1 session, a session that names an egress, a commitment that names the slewed clock and a start mark that is
+not one refused, an empty mark and a digest read), and the switch itself."""
 
 from __future__ import annotations
 
@@ -184,15 +184,17 @@ def test_negative_controls(server):
 
 
 def test_the_format_is_v2(server):
-    """A record of an honest session, with a start mark or none, is read, and its signed session names no egress; the
-    same session as the v1 format wrote it (no start mark, a signed egress, the v1 protocol in its commitments), a
-    signed session that names an egress, and a start mark in upper case or of another length, are refused by the Lean
-    and by the reference."""
+    """A record of an honest session, with a start mark or none, is read, its signed session names no egress and its
+    header names the raw clock; the same session as the v1 format wrote it (no start mark, a signed egress, the v1
+    protocol in its commitments), a signed session that names an egress, a commitment that names `CLOCK_MONOTONIC ns`
+    (the published one, the signed session's, or both), and a start mark in upper case or of another length, are
+    refused by the Lean and by the reference."""
     port_ = port(st.none())
     for s in (_honest(), _honest(certificate=CERTIFICATE)):
         rec = record(s)
         mark = rec["signed"]["start_mark"]
         assert mark == s.signed.start_mark.hex() and len(mark) in (0, 128)
+        assert rec["commitment"]["clock"] == rec["signed"]["commitment"]["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
         assert sorted(rec["signed"]) == ["batches", "commitment", "ended", "fill_end_ns", "fill_start_ns", "public_key",
                                          "scheme", "signature", "start_mark"]
         assert D.replay(port_, rec, server)[0] == "output"
@@ -207,6 +209,10 @@ def test_the_format_is_v2(server):
                    rec | {"signed": rec["signed"] | {"commitment": rec["signed"]["commitment"] | v1}},
                    rec | {"commitment": rec["commitment"] | v1,
                           "signed": rec["signed"] | {"commitment": rec["signed"]["commitment"] | v1}}]
+        slewed = {"clock": "CLOCK_MONOTONIC ns"}
+        refused += [rec | {"commitment": rec["commitment"] | slewed},
+                    rec | {"signed": rec["signed"] | {"commitment": rec["signed"]["commitment"] | slewed}},
+                    W._slewed_clock(rec, 0)]
         refused += [rec | {"signed": rec["signed"] | {"start_mark": bad}}
                     for bad in (digest.upper(), digest[:-2], digest + "00", digest[:64], "00", digest[:-1], None)]
         assert digest.upper() != digest

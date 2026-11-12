@@ -297,6 +297,14 @@ def _v1(j: dict, x: int) -> dict:
     return j | {"commitment": j["commitment"] | v1, "signed": signed | {"commitment": signed["commitment"] | v1}}
 
 
+def _slewed_clock(j: dict, x: int) -> dict:
+    """The record with `CLOCK_MONOTONIC ns`, the memory challenger's clock, named in both commitments where a wipe's
+    header names the raw clock."""
+    slewed = {"clock": "CLOCK_MONOTONIC ns"}
+    return j | {"commitment": j["commitment"] | slewed,
+                "signed": j["signed"] | {"commitment": j["signed"]["commitment"] | slewed}}
+
+
 def _marks(mark: str, x: int) -> str:
     """A `start_mark` that is not one: upper case, or hex of another length."""
     other = mark or hashlib.sha512(b"a certificate").hexdigest()
@@ -304,8 +312,9 @@ def _marks(mark: str, x: int) -> str:
 
 
 #: One edit of a valid record's JSON: a field extra or missing, a header constant not the protocol's, the v1 format,
-#: parameters `WipeParams` refuses, a tier not a pair, hex not lowercase, a start mark of another length, a signed
-#: session that names an egress, a boolean or string where an integer goes, a scheme id the port doesn't verify.
+#: the slewed monotonic clock named for the raw one, parameters `WipeParams` refuses, a tier not a pair, hex not
+#: lowercase, a start mark of another length, a signed session that names an egress, a boolean or string where an
+#: integer goes, a scheme id the port doesn't verify.
 JSON_MUTATIONS = [
     lambda j, x: j | {"extra": x},
     _drop,
@@ -319,6 +328,9 @@ JSON_MUTATIONS = [
     _at(("commitment",), lambda c, x: c | {"records_tree": "verity-pous/round-records/frame-v3-sha512/v1"}),
     _at(("commitment",), lambda c, x: c | {"label_bytes": 32}),
     _at(("commitment",), lambda c, x: c | {"clock": "CLOCK_REALTIME ns"}),
+    _at(("commitment",), lambda c, x: c | {"clock": "CLOCK_MONOTONIC ns"}),
+    _at(("signed", "commitment"), lambda c, x: c | {"clock": "CLOCK_MONOTONIC ns"}),
+    _slewed_clock,
     _at(("commitment",), lambda c, x: c | {"session": c["session"].upper() or "A"}),
     _at(("commitment",), lambda c, x: c | {"labels": [-1, 0, c["labels"] + 1, str(c["labels"]), True][x % 5]}),
     _at(("commitment",), lambda c, x: c | {"k": [0, c["batch"] - 1, 2 ** 32, -c["k"]][x % 4]}),
