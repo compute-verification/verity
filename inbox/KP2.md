@@ -843,3 +843,7 @@ Return at your release with the arms' table, or at 07:30Z if no line has come.
   your starts: only a slot line that names the windows file pauses ahead of a booked window, and no
   live line on the node does (the gpu pool's slots `g0` to `g7` have none). The fill runner is up
   with an empty queue. The eight CPU places are closed 19:30Z to 23:30Z.
+- **Added 04:35Z: infra closed the node's eight CPU places from 04:35Z to 07:45Z** (INF-660, 04:34Z), so no
+  check or CPU run starts beside word 3 or your 20 minutes. Your start goes through the gpu pool's
+  slots as tonight (`CHECK_SLOTS=/workspace/research/locks/gpu/slots`), which do not read that hold;
+  a start through a CPU place would be refused until 07:45Z. The hold ends by itself at 07:45Z, your END.
