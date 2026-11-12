@@ -21,12 +21,11 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 * `wiresFirst_held`, `wiresMove_held`: there are no wires;
 * `sourcesNamed_held`: every source bit's port is one of `R`'s ports (`Ref.named`), each of which a link names;
 * `builtWired_held`: the frame is SPOT's own at the wired program;
-* `two_held`: the design evaluates.
+* `two_held`, `scope_held`: the design evaluates, and every statement that decodes is in the two-stage scope at the
+  compiled code, so an accepted run gives `InScope` (`inScope_of_accepts`).
 
 ## What this does not show
 
-* `InScope` at the instance: the compiled code's design is `twoConnected`, the design at the wiring map, which
-  `two_held` doesn't yet reach;
 * `AddressesConnected` at the instance: it holds only where round 1's record carries each linked port and the interior
   registers none (`not_addresses_of_input`, `not_addresses_of_readsInterior`);
 * an accepted run (`Accepts`): it needs a concrete `Ref`, a reference statement with hidden outputs and
@@ -239,6 +238,112 @@ theorem two_held (s : AuditStatement) :
   rw [ite_eq_left hc, ms_held]
   rfl
 
+/-! ## The wiring moves nothing -/
+
+theorem wireCell_held (t : ℕ) (port : String) (c : ℕ) : wireCell (held R B desc q c₀) t port c = none := by
+  unfold wireCell
+  split <;> simp_all [heldWire_held]
+
+theorem wireTarget_held (x : ℕ) : wireTarget (held R B desc q c₀) x = none := by
+  unfold wireTarget wireUnit
+  simp [wireCell_held]
+
+/-- **The wiring map is the identity**: there are no wires. -/
+theorem wireMap_held : wireMap (held R B desc q c₀) = id :=
+  funext fun x => by simp [wireMap, wireTarget_held]
+
+/-! ## Returning fewer gates keeps the two-stage scope -/
+
+theorem wired_id_keep (C : Prog) (keep : ℕ → Bool) : C.wired id keep = ⟨C.gates, C.outs.filter keep⟩ := by
+  cases C with
+  | mk gates outs =>
+    have hg : gates.map (BGate.rewire id) = gates :=
+      (List.map_congr_left fun x _ => BGate.rewire_id x).trans (List.map_id _)
+    show (⟨gates.map (BGate.rewire id), outs.filter keep⟩ : Prog) = ⟨gates, outs.filter keep⟩
+    rw [hg]
+
+theorem cut_id (P : Partition) : P.cut id = P := by
+  cases P with
+  | mk classes =>
+    show (⟨classes.map (List.map (List.map (cutBlock id)))⟩ : Partition) = ⟨classes⟩
+    simp [cutBlock_id]
+
+theorem boundary_filter {C : Prog} {keep : ℕ → Bool} {u : List ℕ} {g : ℕ}
+    (hb : Prog.Boundary ⟨C.gates, C.outs.filter keep⟩ u g = true) : C.Boundary u g = true := by
+  unfold Prog.Boundary at hb ⊢
+  simp only [Bool.or_eq_true] at hb ⊢
+  rcases hb with (hb | hb) | hb
+  · exact Or.inl (Or.inl (List.elem_eq_true_of_mem (List.mem_filter.1 (List.mem_of_elem_eq_true hb)).1))
+  · exact Or.inl (Or.inr hb)
+  · exact Or.inr hb
+
+theorem committed_filter_le (C : Prog) (keep : ℕ → Bool) (u : List ℕ) :
+    committed ⟨C.gates, C.outs.filter keep⟩ u ≤ committed C u := by
+  unfold committed
+  rw [← List.countP_eq_length_filter, ← List.countP_eq_length_filter]
+  exact List.countP_mono_left fun _ _ hg => boundary_filter hg
+
+theorem partitions_filter {P : Partition} {C : Prog} (keep : ℕ → Bool) (hP : P.Partitions C) :
+    P.Partitions ⟨C.gates, C.outs.filter keep⟩ := by
+  obtain ⟨hnd, hlt, hall, hne, hcls⟩ := hP
+  refine ⟨hnd, hlt, fun g hg hc hu => hall g hg hc fun hU => hu ⟨hU.1, fun ho => hU.2.1 (List.mem_filter.1 ho).1,
+    hU.2.2⟩, hne, fun u hu => ?_⟩
+  obtain ⟨w, hw, hle⟩ := hcls u hu
+  have hm : w ∈ sizeClasses := List.mem_of_find?_eq_some hw
+  have hsome : (sizeClasses.find? fun w => decide (committed ⟨C.gates, C.outs.filter keep⟩ u ≤ w)).isSome :=
+    List.find?_isSome.2 ⟨w, hm, decide_eq_true ((committed_filter_le C keep u).trans hle)⟩
+  obtain ⟨w', hw'⟩ := Option.isSome_iff_exists.1 hsome
+  exact ⟨w', hw', of_decide_eq_true (List.find?_some hw')⟩
+
+/-- **Returning fewer gates keeps the two-stage scope**: the gates are the same, so is every read, and a gate is
+committed only where it was. -/
+theorem inScopeTwo_filter {Pt : Partition} {d : Design.Two} {s : AuditStatement} {C : Prog} (keep : ℕ → Bool)
+    (h : InScopeTwo Pt d s) (hs : s.prog = C) :
+    InScopeTwo Pt d { s with prog := ⟨C.gates, C.outs.filter keep⟩ } := by
+  subst hs
+  obtain ⟨ht, hp, hn, hr, hw⟩ := h
+  exact ⟨⟨ht.1, fun o ho => ht.2 o (List.mem_filter.1 ho).1⟩, partitions_filter keep hp, hn, hr, hw⟩
+
+/-! ## Every statement that parses is in the two-stage scope -/
+
+theorem parse_compiled (h : Held) :
+    (compiled h).parse = parseWired h (wireMap h) (returned h) := rfl
+
+theorem partition_compiled (h : Held) : (compiled h).partition = partitionWired h (wireMap h) := rfl
+
+theorem two_compiled (h : Held) : (compiled h).two = twoConnected h := rfl
+
+/-- **Every statement that decodes is in the two-stage scope at the compiled code**: the program is the members'
+returning the gates the boundary record holds, the partition and design are uncut since the wiring moves nothing,
+and the two-stage scope holds of the members' (`Ref.scope`), which returning fewer gates keeps
+(`inScopeTwo_filter`). -/
+theorem scope_held (x : Msg) (st : Roots) (hx : decode x = some st) : (compiled (held R B desc q c₀)).Scope x := by
+  obtain ⟨s₁, hs₁⟩ : ∃ s₁, parse (held R B desc q c₀) x = some s₁ := by simp [parse, hx]
+  refine ⟨{ s₁ with prog := (bitsProgs (held R B desc q c₀).ms).wired (wireMap (held R B desc q c₀))
+      (returned (held R B desc q c₀)) }, membersPart (ms2 R.x),
+    ⟨filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩, ?_, ?_, ?_, ?_⟩
+  · rw [parse_compiled]
+    simp [parseWired, hs₁]
+  · rw [partition_compiled]
+    show ((partition (held R B desc q c₀) _).map fun P => P.cut (wireMap (held R B desc q c₀))) = _
+    rw [wireMap_held]
+    (simp only [partition, Option.map_some, cut_id]) <;> rfl
+  · rw [two_compiled]
+    show ((two (held R B desc q c₀) _).map fun d =>
+      ({ d with part := d.part.cut (wireMap (held R B desc q c₀)) } : Design.Two)) = _
+    rw [two_held, wireMap_held]
+    (simp only [Option.map_some, cut_id]) <;> rfl
+  · rw [wireMap_held, wired_id_keep]
+    exact inScopeTwo_filter (s := { s₁ with prog := bitsProgs (held R B desc q c₀).ms }) _
+      (scopeOk_sound R.scope _ rfl) rfl
+
+/-- **An accepted run's statement is in scope**: its statement decodes. -/
+theorem inScope_of_accepts (hA : Accepts (held R B desc q c₀)) : InScope (held R B desc q c₀) := by
+  obtain ⟨r, Pt, d, spec, hp, -⟩ := hA
+  cases hx : decode r.x with
+  | none => simp [parse, hx] at hp
+  | some st => exact ⟨r.x, scope_held R B desc q c₀ r.x st hx⟩
+
 /-! ## The statements the instance owes -/
 
 /-- **The instance's premises, short of the address premise**: what `wiresFirst_held`, `wiresMove_held`,
@@ -249,16 +354,16 @@ theorem design_held :
   ⟨wiresFirst_held R B desc q c₀, wiresMove_held R B desc q c₀, sourcesNamed_held R B desc q c₀,
     builtWired_held R B desc q c₀⟩
 
-/-- **What the instance owes for `Honest`**: its address premise, a statement in scope and an accepted run, at some
-reference statement and boundary registration. -/
+/-- **What the instance owes for `Honest`**: its address premise and an accepted run, at some reference statement
+and boundary registration. -/
 def Owed : Prop :=
   ∃ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code),
-    AddressesConnected (held R B desc q c₀) ∧ InScope (held R B desc q c₀) ∧ Accepts (held R B desc q c₀)
+    AddressesConnected (held R B desc q c₀) ∧ Accepts (held R B desc q c₀)
 
 /-- **What the instance owes is all `Honest` lacks.** -/
 theorem honest_of_owed (hO : Owed) : Honest := by
-  obtain ⟨R, B, desc, q, c₀, hA, hS, hR⟩ := hO
+  obtain ⟨R, B, desc, q, c₀, hA, hR⟩ := hO
   obtain ⟨h1, h2, h3, h4⟩ := design_held R B desc q c₀
-  exact ⟨held R B desc q c₀, ⟨h1, h2, h3, h4, hA⟩, hS, hR⟩
+  exact ⟨held R B desc q c₀, ⟨h1, h2, h3, h4, hA⟩, inScope_of_accepts R B desc q c₀ hR, hR⟩
 
 end SpotFlock.Honest
