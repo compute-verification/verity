@@ -229,12 +229,13 @@ def publish(o: Any, d: str, runs: dict[str, dict[str, Any]], research: tuple[lis
     Attempt's source commit.  A dirty or unknown source publishes nothing."""
     (b, _), (m, m_run), (c, c_run) = ((runs[s]["artifact"], runs[s]["run_id"]) for s in OF_RECORD)
     src = _attempt(research, c_run).get("source")
-    if not field_of(src, "commit") or field_of(src, "dirty") is not False:
+    commit = field_of(src, "commit")
+    if not commit or field_of(src, "dirty") is not False:
         _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: publishes nothing: the Commit {c_run} ran source {src or 'unknown'}, "
                              f"not a clean commit")
         return PUBLISH_REFUSED
     argv = [sys.executable, *CLI, "records", "publish", d, o.row, "--build", b, "--match", m, "--match-run", m_run, "--commit", c,
-            "--commit-run", c_run, "--tree", f"{how['ref']}@{src['commit']}", "--by", how["by"],
+            "--commit-run", c_run, "--tree", f"{how['ref']}@{commit}", "--by", how["by"],
             *(["--tier", how["tier"]] if how["tier"] else []), "--summary", f"{d}/commit/summary.json", "--newest-captures"]
     _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: {' '.join(argv[1:])}")
     r = subprocess.run(argv, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=research[1])
