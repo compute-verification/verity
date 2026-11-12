@@ -9,7 +9,7 @@ public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
 `challengerStream` reads the segment's openings as its family's coins `start`, `start + 1`, … of the commitment it is
 given (`liveReason`), concatenates their coins, and requires their indices to be exactly those the family's roots, as
-the run's release log shows them, released after `after` (`stream_ok`). So when the commitment and the roots are a
+the run's release log shows them, released after `after`, every one of those roots `after` (`stream_ok`). So when the commitment and the roots are a
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
 (`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
 of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedSession_record`), so the
@@ -434,8 +434,8 @@ theorem forIn_ok {P : Json × Nat → LiveOpening → Prop} {f : Json × Nat →
       exact ⟨o :: os, .cons ho hos, hout⟩
 
 /-- **What `challengerStream` reads when it accepts**: the segment's label, start and openings, each opening read as
-the family's coin `start + i` and accepted, the stream their coins concatenated, and their indices those the roots show
-released after `after`. -/
+the family's coin `start + i` and accepted, the stream their coins concatenated, their indices those the roots show
+released after `after`, and every root `after`. -/
 theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {rs : List ByteArray}
     (h : challengerStream c segment after (some rs) = .ok ξ) :
     ∃ (l : String) (start : Nat) (openings : Array Json) (os : List LiveOpening),
@@ -444,7 +444,8 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
       List.Forall₂ (fun (p : Json × Nat) (o : LiveOpening) => LiveOpening.ofJson p.1 = .ok o ∧
         liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none) openings.toList.zipIdx os ∧
       ξ = os.foldl (fun acc o => acc ++ o.coin) .empty ∧
-      (rs.zipIdx.filter (·.1 == after)).map (·.2) = List.range' start openings.size := by
+      (rs.zipIdx.filter (·.1 == after)).map (·.2) = List.range' start openings.size ∧
+      ∀ r ∈ rs, r = after := by
   unfold challengerStream at h
   simp only [bind, Except.bind] at h
   split at h
@@ -458,12 +459,13 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
         · rename_i v hv
           split at h
           · split at h
-            · rename_i hord
+            · rename_i hall hord
               cases h
               refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
                 LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
                 ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
-                  ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord⟩
+                  ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord,
+                    fun r hr => beq_iff_eq.1 (List.all_eq_true.1 hall r hr)⟩
               intro ⟨doc, i⟩ b r hr
               simp only at hr
               split at hr
@@ -532,7 +534,7 @@ theorem stream_released {s : Run} {c : LiveCommitment} {roots : Roots} {r : Chal
   · exact .inr hb
   refine .inl ?_
   have cf := cf_of_not_break hb
-  obtain ⟨l, start, openings, os, hl', hst, hop, hos, rfl, hord⟩ := stream_ok h
+  obtain ⟨l, start, openings, os, hl', hst, hop, hos, rfl, hord, -⟩ := stream_ok h
   rw [hl] at hl'
   cases hl'
   subst hrc

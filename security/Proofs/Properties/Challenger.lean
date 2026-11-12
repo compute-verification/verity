@@ -10,7 +10,9 @@ import all Init.Data.Array.Basic
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
 the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
-`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
+`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement, and
+`FamilyOneCommitment`'s, which says more of the same run (`FamilyOneCommitmentAt.drawn`,
+`familyOneCommitment_nontrivial`).
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
 challenger and a window its parameters name, so `oneStageZk_drawn`, `coinsFromLog` for v2, is never vacuous.
@@ -81,6 +83,17 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
   · simp at hs
   · rw [hnone] at hw
     cases hw
+
+/-- A reader `FamilyOneCommitment` holds of is one `DrawnByDevice` holds of: the family's roots are a further conclusion
+about the same run. -/
+theorem FamilyOneCommitmentAt.drawn {read} (h : FamilyOneCommitmentAt read) : DrawnByDeviceAt read :=
+  fun dev key w label after coins ξ hr =>
+    (h dev key w label after coins ξ hr).imp (fun ⟨s, hs, ho, e, _⟩ => ⟨s, hs, ho, e⟩) id
+
+/-- `FamilyOneCommitment`'s statement is not trivially true: a reader that accepts every record fails it, as it fails
+`DrawnByDevice`. -/
+theorem familyOneCommitment_nontrivial : ¬ FamilyOneCommitmentAt (fun _ _ _ _ _ => .ok ByteArray.empty) :=
+  fun h => drawnByDevice_nontrivial h.drawn
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}

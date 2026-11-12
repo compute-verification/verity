@@ -17,6 +17,8 @@ what that record shows, for every input: the coins the challenger device drew, o
   concatenation of the coins of that family that a run of the device released after `after`, a run the device's
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
+* `FamilyOneCommitment`: that run's own log shows every coin of the family released after `after`, so the coins read
+  are every coin the family released, from its first, and no other root stands in the family.
 
 **The device's history** (`History`) is the proof system's challenger as `challenger.py` runs it. Under its key it runs
 sessions, each a run (`Run`): it flips each coin and its salt by position, commits to the frame-v3 root over their live
@@ -379,6 +381,46 @@ from `coins` under the verifier's key `key`, window `w` (its open root, lowercas
 after `after`, then `ξ` is the coins of `label` that a run of the device under `key` released after `after`, a
 run the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
 def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
+
+/-! ## A family's coins follow one commitment -/
+
+/-- The roots the run's own log shows family `label`'s coins released after, in order: root `i` is the 64 bytes the run
+received before it released the family's coin `i` (`releasedRootsOf` over the whole of its log); none when its log
+doesn't read as its commitment's. -/
+def Run.roots (s : Run) (label : String) : List ByteArray :=
+  match s.commitment with
+  | none => []
+  | some c =>
+    match releasedRootsOf c s.log with
+    | .error _ => []
+    | .ok roots => ((roots.find? (·.1 == label)).map (·.2)).getD []
+
+/-- `FamilyOneCommitment` for the reader `read` in `drawCoins`' place. -/
+def FamilyOneCommitmentAt (read : ChallengerKey → String → String → ByteArray → Json → Flock.V ByteArray) : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    read key w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+        ∀ r ∈ s.roots label, r = after) ∨
+        Break dev key label coins
+
+/-- **A family's coins follow one commitment, from the family's first coin.** For every challenger device, if
+`drawCoins` reads `ξ` from `coins` under the verifier's key `key`, window `w` and family `label`, released after
+`after`, then a run of the device under `key`, which its own ledger opens withheld on `w`, released `ξ` as its coins of
+`label` after `after` (`DrawnByDevice`), and every root that run's own log shows a coin of `label` released after is
+`after` (`Run.roots`); or the fixed finder outputs a break from the run (`Break`). So, with `label` and `after` the
+verifier's (its parameters' family and the registration's digest):
+
+* the coins the sample reads are coins of that family, and every coin it released, from its first: nothing the
+  evidence carries chooses where they start (`Run.released` keeps coin `i` where root `i` is `after`, which is each);
+* every root in the family, up to the last coin read and past it, is the registration's digest: a prover that reads a
+  sample's coins and registers again has no coin of the family for the second registration;
+* the family's first line carries the digest, and the log read is the device's own, whole from its head to its close,
+  so no line of the family stands before that one.
+
+That the digest is fixed before the family's first coin exists is then the device's, and this property does not take
+it: the challenger flips a coin only after the 64 bytes it answers are recorded (`flips-after-recorded`, of the device
+on `trusted-host`), which a statement over the plays takes by that name. -/
+def FamilyOneCommitment : Prop := FamilyOneCommitmentAt drawCoins
 
 /-! ## The target: a component's coins, from the device's log -/
 
