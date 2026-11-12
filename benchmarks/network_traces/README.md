@@ -387,7 +387,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
 - No term for incorrect proof blocks with every proof block sampled.
-- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
+- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
   one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The certifier hands each bucket
   to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
@@ -447,7 +447,7 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
-- The jitter term is T bits a sampling block, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
+- The jitter term is T bits an execution phase, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
   host-state channel).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.

@@ -183,8 +183,8 @@ round trips and refusals; `core-protocol-example` runs it.
 The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
 verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
 clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
-spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
-when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
+spans, and for each execution block the boundaries that cut its span again, into the spans each of its samples is over
+(`samplingSpans`); `valid` holds when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
 `{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
 that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.periods` mirrors it in
 Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest

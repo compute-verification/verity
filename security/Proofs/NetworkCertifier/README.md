@@ -37,8 +37,8 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
 ../../Definitions/NetworkCertifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
     (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
     (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
-../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
-    committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
+../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the incorrect proof blocks add under a sampled audit: their
+    committed bits (faultyBits), the possible incorrect sets at δ (faultySets), the
     sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
     audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
     run, which a period's operator reads (runsBefore)
@@ -128,15 +128,15 @@ Period.lean     the leak through the network certifier over a monitoring period:
     the period)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
     period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
-Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
+Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform sample misses `f` blocks with
     probability at most `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over
     windows on independent coins (pr_adaptive_le), and with each window's
     soundness error added, the monitoring period's bound (pooledIncorrectBlocks)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
     each window's error added (pr_adaptive_add_le, the monitoring-period step
-    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
+    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of incorrect sets
     under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
-    decode to at each draw, read back from the certifier's record
+    decode to at each sample, read back from the certifier's record
     (encard_pooledGood_le, pooledLeak; pooledLeak_fixed at operators fixed
     before the period), each over any per-window event
     (encard_pooledFam_le, pr_pooled_le), the count also over any event on the
@@ -180,7 +180,7 @@ CountWitnesses.lean  the thirteen counts' pairs, seven egress and six ingress: t
     `fxRate` or at `sampProg`, or has every status complete, and each bound is
     false at the verifier that accepts everything (`acceptAll`)
 PeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
-    false at one incorrect unit
+    false at one incorrect proof block
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
     definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
@@ -367,7 +367,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
   `SampledLeakAccepted`.
 - **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledIncorrectBlocksLe` is the bound over
   many periods, cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows
-  on independent live coins (the period's coins are the product `Fin m → Ω`), window `i` sampling a uniform
+  on independent live coins (their coins are the product `Fin m → Ω`), window `i` sampling a uniform
   `k_i`-subset of its `n_i` proof blocks, with the blocks incorrect at its registration fixed by the earlier windows'
   coins and its audit accepting while its sample meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every
   window, every window accepts while the monitoring period holds at least `F` incorrect blocks with probability at most
@@ -470,9 +470,9 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 
 ## Modelling choices a reader of the statements checks
 
-1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
-   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read a monitoring period of whole blocks,
-   each with its parent's hypotheses at that length and no other. The reference schedule's bound is
+1. **Steps are buckets across all of ∂X.** The note states its bounds per execution phase of a link. The guarantees
+   count steps, and Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read a monitoring period
+   of whole blocks, each with its parent's hypotheses at that length and no other. The reference schedule's bound is
    `(2^k · D^(g·T))^m` over any `m` execution blocks of `g·T` buckets from block `e₀`, for the runs that agree on
    everything observed before block `e₀` (`EncardAccSeqsLeConstantRatePerWindow`,
    `EncardDecodableLeConstantRatePerWindow`; at `e₀ = 0` the run's first `m` blocks). It holds whatever came before
