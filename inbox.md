@@ -1,0 +1,3 @@
+[2026-11-12T08:48Z] d076c208d01a
+ci 12:5x AM PST, one addition to your brief: the tick is also killed for memory (rc=137 at 08:38:42Z and 08:44:27Z; the control pod's cgroup is 16 GB). Sampled resident size: ~4.9 GB 94 s into a tick (while it reads the queue's state, before judging) rising to 7.6-7.8 GB. So in (3) log each step's peak resident size beside its seconds (resource.getrusage(RUSAGE_SELF).ru_maxrss before and after the step), and in (1) drop the raw graph2 JSON as soon as it is trimmed. If you find what holds the ~5 GB in the state read (the store's labels: /root/vqueue-store/labels has 25,818 subject directories; catalog.sqlite 392 MB) say so in your report with the fix you would make; ship it only if it is small and safe.
+
