@@ -18,7 +18,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 import run as C
 
 HERE = Path(__file__).resolve().parent
