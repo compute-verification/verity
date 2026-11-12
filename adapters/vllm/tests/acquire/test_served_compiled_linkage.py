@@ -1,4 +1,4 @@
-"""`served_compiled_source.linkage` takes the committer alone.
+"""`linkage` (`verity_vllm.acquire.sources.served_compiled_source`) takes the committer alone.
 
 The two committed values it compares, a step's sampled token ids and the next step's input ids of the first piece, are named in its
 own text, so a call that names either one is refused.  The committer here is a stand-in that holds only what `linkage` reads: two
@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 import torch
 
-from verity_vllm.acquire.sources import served_compiled_source as S
+from verity_vllm.acquire.sources.served_compiled_source import linkage
 
 SAMPLED, IDS = "runner.sampler/sampled_token_ids", "c00.input/ids"
 
@@ -27,7 +27,7 @@ def _committer(sampled: list[int], ids: list[int]) -> SimpleNamespace:
 
 
 def test_linkage_takes_the_committer_alone():
-    link: Any = S.linkage
+    link: Any = linkage
     com = _committer([11, 22], [22, 11])
     for option, name in {"ids_name": IDS, "sampled_name": SAMPLED}.items():
         with pytest.raises(TypeError, match=f"got an unexpected keyword argument '{option}'"):
