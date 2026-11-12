@@ -85108,3 +85108,54 @@ Clock read: 11:17Z. Mailbox read through the 11:02Z section. Tags: [run] a run's
 **6. `bece`** (the closed merge with #9199, #9234, #9215) [run]: the six Lean tries exit 0 (`FlockVerify.lean`, `Flock/ProvedScope.lean`, `Spot/SecondWires.lean`, `Spot/MembersRefusal.lean`, `Spot/ZkMain.lean`, `Spot/DifftestMain.lean`), `test_a5_wiring.py` exit 0, the cap test exit 1 (the 727 of item 2); suites 2 passed, none failed.
 
 **Runs** [run, 11:11Z]: `aa34` 22 of 126 suites passed, none failed (ETA about 12:45Z). `fc27` 5 passed, none failed. `7b52` 33 passed, 1 failed (`benchmarks/spot_figures`, the #9185 × #9087 test). `02ef` 9 passed, none failed. `9949`, `9bb1` started.
+
+## COUNT, Thu 12 Nov 11:17Z: the program's read at 609.3 and 692.0 s moves only the rows where every session is a fresh verifier process (best designed configuration: 5,163.5 GB at 1,006 becomes 3,720.7 to 4,016.0, modeled); 933.8, 710.8 and 683.5 GB charge no read at all and stay, on a condition the model does not hold: each kept process must serve about 1,180 to 1,340, 96 to 109 and 145 to 165 sessions before it ends; one correction to my 11:09Z entry
+
+Tags: [run] a run or command of mine read now; [read] a place I read now; [relayed] another lane's statement I did not check; [derived] my arithmetic; [guess] mine. Times from `date -u`. Mailbox read 11:16Z: 33 sections, the newest yours of 10:58Z, which this answers. KEPT's 10:55Z entry read (section 1 and 2). Everything below is modeled: the cost model's arithmetic, each figure a design of the planner unless it says otherwise. Nothing here ran on the served engine. No branch moved, nothing marked, nothing launched on a card.
+
+**1. Where the model reads the 1,006 s.**
+
+- [run: `git grep` at `origin/main` `afa939410f6f`, `366a6ece9985`, `5a4b6dc7102b`, as in my 11:09Z section 6] Not in the tree. Neither #9112's nor #9185's figures hold it.
+- [read] In the notes' tooling behind my rows: `lanes/proofs/tools/count_measured.py:33` (`READS`), `:93` (taken off the pricing run's verifier seconds), `:98` and `:109` (added back, a session, in row A), and `count_fixed.py:119`. Its source is the pricing run `r20261111-163515-2cd7`, which adds 1,006 core-seconds to every block type's statement.
+- [read: `count_measured.py:10-15`] Three kinds of row. A: every session a fresh verifier process, which pays the read. B: a kept verifier process, no read charged. C: B with the circuit file kept, no read charged.
+- [read: `r20261112-102141-c21f`'s `out/sessions_axis2.json`, rows `r/kit/today`, `r/kit/fold`, `r/kit/pass_timed`, each `"row": "C"`] The three figures you quote, 933.8, 710.8 and 683.5 GB, are row C.
+
+**2. Row A with the timed reads in place of 1,006** [run: `r20261112-110317-d04c`, vy-nebius-cpu-3, exit 0, tree `c8b46edd10e4`, record `art:f947324d50c35265030f97551ad6260c85a7c2a25065589e415d2da05e8d1778`; the kit of `r20261112-054659-8921` with the read's seconds a parameter].
+
+- Controls [run]: the 28 entries the run shares with `8921` (row A at 1,006 and at 459, rows B and C, both settings of the head) are the same designs, field for field.
+- A datacenter's 600 s (12,500 machines, 90,237,980 replay blocks), one table a session, GB at the planner's rate. 609.3 and 692.0 are the two timed reads of today's served sparse-attention program, 2,765,984,170 bytes [relayed: KEPT 10:55Z, `r20261112-075056-d29f`]. 491 and 558 are those reads by proportion to the 2,228,325,393-byte file the 1,006 was timed on [relayed: KEPT, derived there, not timed]. 459 is the proportion I used at 05:17Z.
+
+| configuration, the head statement's seconds | 1,006 | 692.0 | 609.3 | 558 | 491 | 459 | B | C |
+|---|---|---|---|---|---|---|---|---|
+| the partition `main` defines, head at 160 | 11,531.0 | 9,060.1 | 8,456.1 | 7,927.6 | 7,461.2 | 7,046.7 | 3,382.4 | 2,749.0 |
+| the same, head at 287.5 | 12,656.5 | 9,757.0 | 9,060.1 | 8,747.6 | 8,183.3 | 7,927.6 | 4,228.0 | 3,235.0 |
+| the best designed configuration, head at 160 | 4,865.6 | 3,720.7 | 3,465.9 | 3,225.9 | 2,957.1 | 2,942.0 | 1,045.4 | 807.8 |
+| the same, head at 287.5 | 5,163.5 | 4,016.0 | 3,720.7 | 3,548.5 | 3,329.1 | 3,202.7 | 1,367.0 | 987.3 |
+| the plan of record's case with the read added (head at the assumed 60.56 s) | 11,005.7 | 8,183.3 | 7,687.3 | 7,248.1 | 6,675.8 | 6,342.1 | 2,558.2 | 2,372.3 |
+
+- [derived] A fresh process also reads the head's circuit file, so row A's own lines are the ones with the head at 287.5; the lines at 160 are there to set beside B and C. The count of sampled replay blocks is whole, so a figure repeats (9,060.1 twice, 3,720.7 twice).
+- [derived] So, for "every session a fresh verifier process, as `main` runs `verify` today": the best designed configuration is 3,720.7 to 4,016.0 GB with the read as timed, between `8921`'s 5,163.5 at 1,006 and 3,202.7 at 459. The partition `main` defines is 9,060.1 to 9,757.0 GB, between its 12,656.5 and 7,927.6. The best designed configuration is designed, not on `main`.
+- [guess] The read was timed on the sparse-attention program of 11 templates. The modeled configurations have 193 and 258 block types; their own program files were not built or read, and the read goes with the file's bytes (0.220 to 0.250 s a MB [relayed: KEPT]).
+
+**3. Do 933.8, 710.8 or 683.5 GB move? Not by the model's rule. The rule's condition is not in the model, and it is not small.**
+
+- [read: `count_measured.py:13`, and `wires_axis.py`'s row C as SESSIONS' entry states it] Rows B and C charge the program's read to no session. What they assume: the phase's sessions are verified by kept processes so few that their reads do not count. The model holds no count of verifier processes [run: `grep -i process` over `count_fixed.py`, `count_common.py`, `plansearch.py`: no line].
+- [read: `Flock/VerifyMembers.lean` at #9190's head `f6d1341b85`, the module's text] As built on that branch, `verify-members` reads its program once and then serves members from standard input for as long as its caller writes them, one after another. So the reads paid are one for each kept process the caller starts, and a process may outlive a verification phase when the program's bytes are the same. On `main` there is no kept process.
+- [derived from `sessions_axis2.json`'s three rows; the planner not rerun] The size of it. A datacenter's 600 s has a budget of 3,325,305 GPU-seconds in the model's units (the 10% point's budget of the world's year, 6.55 × 10^14, times 90,237,980 of 1.778 × 10^16 replay blocks). One read is 8.48 GPU-seconds at 609.3 and 9.63 at 692.0. One read is 7 to 28 times a session's average verifier seconds in these rows.
+
+| the quoted row | sessions in the phase | the verifier's seconds in them, core-s (a session's average) | unspent budget | kept processes whose reads fit in the unspent budget, at 609.3 / 692.0 | so each kept process serves at least, sessions | and verifies for at least, at one core a process [guess] | one process more than that |
+|---|---|---|---|---|---|---|---|
+| 933.8 GB, as timed on `main` | 980,563 | 8.37 × 10^7 (85.3) | 0.21% | 834 / 734 | 1,176 / 1,336 | 27.9 h / 31.7 h | 959.1 GB |
+| 710.8 GB, the faster check | 1,290,145 | 3.79 × 10^7 (29.4) | 3.42% | 13,409 / 11,806 | 96 / 109 | 0.8 h / 0.9 h | 740.5 GB |
+| 683.5 GB, its one-pass form | 1,341,762 | 3.27 × 10^7 (24.4) | 2.36% | 9,253 / 8,147 | 145 / 165 | 1.0 h / 1.1 h | 710.8 GB |
+
+- [derived] Read it as: each row stays where it is while a kept process serves at least that many sessions before it ends. The 933.8 row has almost no unspent budget, so it is the first to move: with processes that each live a day it is already 959.1 GB.
+- [derived, cost taken as proportional to the count of sampled replay blocks at the row's own design] The far end, to show the size and not as a figure to quote: if a datacenter's 600 s were verified inside 600 s by processes that each read the program once a phase (139,400, 63,100 and 54,500 processes), the reads would take 36% to 40%, 16% to 18% and 14% to 16% of the budget, and the rows would be about 1,267 to 1,314, 808 to 846 and 773 to 808 GB. With processes kept from phase to phase the reads are paid once in their lives and the rows do not move.
+- [guess] So what decides it is the driver's side: how many verifier processes a datacenter's audit runs and how long each is kept. That is neither built nor timed, and I found no statement of it. SESSIONS' script can price it exactly as a fourth axis (seconds of read for each so many sessions) if you want the figure instead of the condition.
+- [relayed: KEPT 10:55Z, section 2] A second cost of keeping the process, not in any row: under the allocator setting `main`'s callers use it stays near 108 GB resident for today's program. The model prices no memory.
+
+**4. Correction to my 11:09Z entry, section 6.** I wrote "One read a phase, 692 core-seconds, is 9.6 GPU-seconds of a budget of 6.55 × 10^14". That budget is the world's year's. A datacenter's 600 s has 3,325,305 GPU-seconds of it [derived, above]. One read is still nothing (3 parts in a million), but "one read a phase" is one process, which is the condition of section 3 and not a fact. The sentence "933.8, 710.8 and 683.5 GB do not move, whatever the read takes" should read "by the model's rule, which charges a kept process's read to no session".
+
+**For the table** (modeled, each line):
+- The program's read, timed at 609.3 and 692.0 s of one core on today's served sparse-attention program, is charged only where every session is a fresh verifier process, as on `main` today. There the best designed configuration is 3,720.7 to 4,016.0 GB (5,163.5 at the 1,006 s the model held) and the partition `main` defines is 9,060.1 to 9,757.0 GB (12,656.5 at 1,006), for a datacenter's 600 s.
+- 933.8, 710.8 and 683.5 GB are rows with a kept verifier process, which is on a branch and not on `main`, and they charge no read of the program. They stay if each kept process serves at least about 1,180 to 1,340, 96 to 109 and 145 to 165 sessions before it ends (a day or more of one core for the first, about an hour for the other two). How many processes a datacenter's audit keeps, and for how long, is not built and not in the model.
