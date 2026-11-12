@@ -39,7 +39,8 @@ Files:
   `+packed-weights` for those arms)
   at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
   fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
-  a second ÷ the block's MACs), marginal and amortized at each size. A unit may carry its own sizes (`UNIT@N,N`), and a
+  a second ÷ the block's MACs), marginal and amortized at each size, from the statements whose prover exited 0 with every
+  session accepted and every timed session filed (any other's record says why it has no time). A unit may carry its own sizes (`UNIT@N,N`), and a
   census type's size may be `full` or `full/D` (the most instances a statement holds at the block's k_log, over D).
   `PT_STATEMENTS` proves statements staged elsewhere as they are. It times one prover on the device; K provers at once are
   `benchmarks/one_stage/server_rate.py`'s, which times them on the verifier's clock.
@@ -54,7 +55,7 @@ Files:
   circuit or the witness) and each statement's seconds (`out/seconds.tsv`, finished only where the prover exited 0),
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
-- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
+- `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_time.py`'s summary on stub records, `settings.py`, `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME` and `full/D` on a stub stager, `stage_window.py`'s member choice and public-body check, and
   `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in each) held to
   the tree.
