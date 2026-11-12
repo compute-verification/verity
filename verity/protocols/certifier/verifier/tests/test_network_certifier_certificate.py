@@ -1,7 +1,8 @@
 """Network certificates (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
 and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
 audit's on every scenario of the audit and commitment tests. The mark certificate: what it signs, each refusal of
-its opening by name, and the issuer signing none when its signer refuses or its coins repeat."""
+its opening by name, and the issuer signing none when its signer refuses or its coins repeat. A certificate's
+bytes: the layout, its inverse, the same bytes inside both record encoders, and each refusal by name."""
 
 import hashlib
 import itertools
@@ -14,9 +15,10 @@ import pytest
 from verity.commitments import domains
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import lean_audit, service
 from verity.protocols.certifier.verifier.audit import Audit
 from verity.protocols.certifier.verifier.certificate import (
-    MARK_TAG, STATUS_CODES, Certificate, CertifiedMark, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead,
+    MARK_TAG, SALT_BYTES, STATUS_CODES, Certificate, CertifiedMark, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead,
     certificate_digest, certificate_message, depth, empty, frames_root, mark_digest, marks_link, open_frame,
     parameters_digest, real_frames, record_head, verify_frame)
 from verity.protocols.certifier.verifier.commitment import commit
@@ -549,3 +551,118 @@ def test_the_issuer_signs_no_mark_when_its_signer_refuses_or_its_coins_repeat(tm
         Issuer(signer, SESSION, coins=lambda n: bytes(n - 1)).mark("responses", 6, MARK)
     assert signers.used(signer) == [0, 1] and issuer.refused == [("responses-marks", EGRESS, 5)]
     assert issuer.mark_salts == {m.salt}
+
+
+def layout(c: Certificate) -> bytes:
+    """A certificate's bytes restated field by field: u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖
+    u64be execution phase ‖ digest (64) ‖ u32be len(signature) ‖ signature."""
+    link = c.link.encode()
+    return (struct.pack(">H", len(c.key_id)) + c.key_id + struct.pack(">H", len(link)) + link
+            + struct.pack(">BQ", c.direction.code, c.window) + c.digest + struct.pack(">I", len(c.signature))
+            + c.signature)
+
+
+def one_of_each(tmp_path):
+    """The signer's key, a certified record, and a certificate of each kind the issuer signs: a record's at each end,
+    a clock's and a mark's."""
+    signer = signers.signer(tmp_path)
+    issuer = Issuer(signer, SESSION, coins=fresh_coins())
+    record = certify_all(issuer, run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))[:1])[0]
+    ingress = certify_all(issuer, ingress_run([[2, 0, 0, 0]]), INGRESS)[0]
+    clock = issuer.salted_clock("responses", 0, SYNCS[0])
+    mark = issuer.mark("responses", 3, MARK)
+    return signer.public_key(), record, {"record": record.certificate, "ingress": ingress.certificate,
+                                         "clock": clock.certificate, "mark": mark.certificate}
+
+
+def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path):
+    """`Certificate.encode` is the layout field by field for a record's certificate at each end, a clock's and a
+    mark's, and `Certificate.decode` gives the certificate back, which still verifies and encodes to the same bytes.
+    Two certificates that differ in one field have different bytes."""
+    key, _, kinds = one_of_each(tmp_path)
+    assert {c.direction for c in kinds.values()} == {EGRESS, INGRESS}
+    assert kinds["mark"].link == "responses-marks" and len({c.encode() for c in kinds.values()}) == 4
+    for c in kinds.values():
+        data = c.encode()
+        assert data == layout(c) and len(data) == 2 + 16 + 2 + len(c.link) + 1 + 8 + 64 + 4 + len(c.signature)
+        back = Certificate.decode(data)
+        assert back == c and back.verify(key, SESSION) and back.encode() == data
+        assert Certificate.decode(bytearray(data)) == c
+    c = kinds["mark"]
+    others = [replace(c, key_id=b"J" * 16), replace(c, link="responses"), replace(c, link="réponses-marks"),
+              replace(c, direction=INGRESS), replace(c, window=c.window + 1), replace(c, window=2 ** 64 - 1),
+              replace(c, digest=bytes(64)), replace(c, signature=c.signature[:-1]), replace(c, signature=b""),
+              replace(c, key_id=b"")]
+    assert len({x.encode() for x in [c, *others]}) == len(others) + 1
+    assert all(Certificate.decode(x.encode()) == x and x.encode() == layout(x) for x in others)
+
+
+def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
+    """The commitment's leaf of a certified record (`service.encode`) is its head, its 64-byte salt and then the
+    certificate, which is where the Lean reads it; the Lean audit's encoding of the record (`lean_audit.encode`) is
+    a kind byte, the leaf's length and that leaf. The certificate's part of both is `Certificate.encode`, for a
+    record's certificate at each end, a clock's and a mark's, and `Certificate.decode` reads it back from there."""
+    _, record, kinds = one_of_each(tmp_path)
+    head = record.head.encode()
+    for c in kinds.values():
+        held = replace(record, certificate=c)
+        leaf = service.encode(held)
+        assert leaf[:len(head)] == head and leaf[len(head):len(head) + SALT_BYTES] == record.salt
+        assert leaf[len(head) + SALT_BYTES:] == c.encode()
+        body = lean_audit.encode(held)
+        assert body[0] == lean_audit.CERTIFIED and int.from_bytes(body[1:9], "big") == len(leaf)
+        assert body[9:] == leaf and body[9 + len(head) + SALT_BYTES:] == c.encode()
+        assert Certificate.decode(leaf[len(head) + SALT_BYTES:]) == c
+
+
+def test_a_certificates_bytes_are_refused_by_name():
+    """`Certificate.decode` refuses bytes left after the signature, bytes that end inside a fixed-width part, and a
+    length that names more bytes than are left, each saying which; every proper prefix of a certificate's bytes is
+    one of the last two. It refuses a direction code other than 0 and 1 and a link that is not UTF-8. `encode`
+    refuses a certificate the layout cannot hold."""
+    c = Certificate(b"I" * 16, "responses-marks", EGRESS, 5, bytes(range(64)), b"signature")
+    data = c.encode()
+    assert Certificate.decode(data) == c
+    for more in (b"\0", data):
+        with pytest.raises(ValueError, match=f"{len(more)} bytes are left after a certificate's signature"):
+            Certificate.decode(data + more)
+    key_end, link_end = 2 + 16, 2 + 16 + 2 + len("responses-marks")
+    ends = {0: "key id's length", 1: "key id's length", key_end: "link's length", key_end + 1: "link's length",
+            link_end: "direction", link_end + 1: "execution phase", link_end + 8: "execution phase",
+            link_end + 9: "digest", link_end + 9 + 63: "digest", link_end + 9 + 64: "signature's length",
+            link_end + 9 + 64 + 3: "signature's length"}
+    for n, part in ends.items():
+        with pytest.raises(ValueError, match=f"a certificate's bytes end inside its {part}: "):
+            Certificate.decode(data[:n])
+    fits = {2: "key id", key_end - 1: "key id", key_end + 2: "link", link_end - 1: "link",
+            link_end + 9 + 64 + 4: "signature", len(data) - 1: "signature"}
+    for n, part in fits.items():
+        with pytest.raises(ValueError, match=f"a certificate's {part} does not fit: "):
+            Certificate.decode(data[:n])
+    for n in range(len(data)):
+        with pytest.raises(ValueError, match="end inside its|does not fit"):
+            Certificate.decode(data[:n])
+    longer = data[:link_end + 9 + 64] + struct.pack(">I", len(c.signature) + 1) + c.signature
+    with pytest.raises(ValueError, match="a certificate's signature does not fit: it is 10 bytes by its length, and 9"):
+        Certificate.decode(longer)
+    with pytest.raises(ValueError, match="a certificate's key id does not fit: it is 65535 bytes"):
+        Certificate.decode(b"\xff\xff" + data[2:])
+    shorter = data[:link_end + 9 + 64] + struct.pack(">I", len(c.signature) - 1) + c.signature
+    with pytest.raises(ValueError, match="1 bytes are left after a certificate's signature"):
+        Certificate.decode(shorter)
+    for code in (2, 255):
+        with pytest.raises(ValueError, match=f"a certificate's direction code is 0 or 1, not {code}"):
+            Certificate.decode(data[:link_end] + bytes([code]) + data[link_end + 1:])
+    with pytest.raises(ValueError, match="a certificate's link is not UTF-8"):
+        Certificate.decode(data[:key_end + 2] + b"\xff" + data[key_end + 3:])
+    for bad, why in ((replace(c, digest=bytes(63)), "a certificate's digest is 64 bytes, not 63"),
+                     (replace(c, digest=bytes(65)), "a certificate's digest is 64 bytes, not 65"),
+                     (replace(c, window=-1), "a certificate's execution phase is an unsigned 64-bit integer"),
+                     (replace(c, window=2 ** 64), "a certificate's execution phase is an unsigned 64-bit integer"),
+                     (replace(c, window=True), "a certificate's execution phase is an unsigned 64-bit integer"),
+                     (replace(c, key_id=bytes(2 ** 16)), "an unsigned 16-bit integer"),
+                     (replace(c, link="l" * 2 ** 16), "an unsigned 16-bit integer"),
+                     (replace(c, direction="egress"), "its direction a Direction"),
+                     (replace(c, signature=bytearray(b"signature")), "signature are bytes")):
+        with pytest.raises(ValueError, match=why):
+            bad.encode()
