@@ -67888,3 +67888,24 @@ Tags: [run] with its id or command, [read] with the place, [derived], [guess]. T
 - [run: `research fetch r20261112-012750-4788 --on vy-nebius-cpu-6`, 02:16Z] "waiting in the check line since 2026-11-12T01:28:04Z, not started: every check slot is taken (r1: busy; r2: busy; r3: busy; r4: busy)". My 02:15Z entry's "3 checks ahead of it at 02:14Z" was a copy of the run's record cached at 01:46Z, which I read as fresh; nothing is ahead of it now.
 - [run: `r20261111-215130-ee1e`'s status] The same try at `e553abb84cc8` took 1,378 s from its slot to its verdict, not the ten minutes I wrote. [guess] So a verdict about 03:15Z if a slot frees by 02:50Z; nothing bounds when one does but the other checks' own limits.
 - Nothing else changed: #9086 is marked at `0d7e39d29f1d` and waits on a reviewer's land verdict.
+
+## 02:18Z KEPT: the second branch is pushed at `01488189d0` with `5e87ff2c83` taken out; its two files and its test pass there; the quick tier and the one Lean check are running
+
+Everything here is on a branch, not on `main`.
+
+- **Pushed:** `cursor/proofs-keptcircuit-7c1e` at `01488189d0` [run: `git ls-remote`]. Its files are exactly those of `4f4443d306`, the commit before `5e87ff2c83` [run: `git rev-parse`, both trees `1e62aec96496`]. The first branch is unchanged at `0963ff842e`.
+- **Passed at that head:**
+  - `Flock/CircuitRead.lean` elaborates, exit 0; none of its 7 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound` [run: `r20261112-015538-0e06`].
+  - `FlockVerify.lean` elaborates, exit 0; the same for its 7 theorems, `verifyMember_eq` among them [run: `r20261112-015606-3599`].
+  - `test_lean_verify_members.py`: 6 passed [run: `r20261112-015647-48d4`].
+- **Running:**
+  - The quick tier against the first branch's head: `r20261112-015719-9916` on cpu-1. It got its slot at 02:13Z and runs 60 suites [read: its log]. About 03:00Z [guess].
+  - The one Lean check of the verifier's package at this head (`--records verity/protocols/flock/verifier`): `r20261112-021332-277b` on cpu-11. Six checks were ahead of it at 02:17Z [read: its log]. About 04:00Z [guess].
+- **The second pull request's body** is drafted in the notes, `lanes/proofs/20261112T0135Z-draft-keptcircuit-pr-body.md`. It opens with the sentence you gave: until the scan of the order of members is on `main`, a kept process's verdicts are per member only, and a window of more than one member gets no counted verdict. It is filled except the two verdicts above.
+- **About #9042, since the first pull request waits on it:** GitHub shows it as conflicting with `main` [read: `gh pr view 9042`: CONFLICTING, DIRTY, updated 01:44Z]. Here the repository's own merge of its head `00963f01` with `main` at `be9a3d5669` has no conflict [run: `git merge-tree`, exit 0], and the queue lists it admitted [read: `research queue status`]. Its head already holds `main`'s moved `Circuits/Program.lean` [run: `git cat-file`]. I think GitHub's merge does not run the locks' merge driver [guess]. Nothing in it is mine to change.
+
+**Not done:**
+
+- The two verdicts above. If either fails I say so at once.
+- Neither pull request is open. The first waits on #8949 and #9042 reaching `main`; `main` is still `be9a3d5669` [run: `git fetch`, 02:13Z]. Then I merge `main` into the first branch, run the Lean check once and the tier at the merged head, and open it; the second branch then merges the first and its checks run again. So `01488189d0` is the head that stands today, not the head that lands.
+- The measurement still starts the Lean verifier under whatever its job's environment holds. At the merge with `main` I make it start it as `main`'s Python callers do and record the setting.
