@@ -23,7 +23,6 @@ public import Definitions.Pouw.PearlC.DevicePrices
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
-public import Definitions.Pouw.PearlC.FlockTile.Audit
 
 /-!
 # Pearl-C's statements at device records: lemmas
@@ -41,9 +40,8 @@ salt's bytes `salt`, and rests on that form at W1 (`Definitions.Pouw.Assumptions
 `Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1`, and the chain-cap and U-only forms' `…W1` beside them).
 Pearl-C4's rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
 `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
-row-seed readers) are still stated over any `CostModel`. `HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` is the
-hidden-audit form at Flock's TileRead session (`Definitions.Pouw.PearlC.FlockTile`), and `EpsFp4Sm120_8192` Pearl-C4's
-gap at 8192³ in ε form.
+row-seed readers) are still stated over any `CostModel`. `EpsFp4Sm120_8192` is Pearl-C4's gap at 8192³ in ε form.
+The hidden-audit form at the served record is `Proofs.Pouw.Lemmas.PearlCFlockTile`'s.
 -/
 
 @[expose] public section
@@ -1000,45 +998,6 @@ def SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
       (pearlCTilesDevRev1K (devSm120v1 Prices.sm120) sem (1 / 1000) (218 / 25 - 8))
       (pearlCDomainDevShapes (devSm120v1 Prices.sm120) llama31_8bLinears)
       ((106307 / 27386000 : ℚ) : ℝ) δPearlC
-
-end Pouw.Guarantees.PearlC
-
-namespace Pouw.Guarantees.PearlC
-
-open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
-
-/-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under Flock's hidden audit**, FP32 at 8.376, the honest
-cast at 8.72: `g = 1648180439/446072750000` (0.36949%), at `t·δzk(q)` more error than the sampled audit, for Flock's
-hidden audit over a TileRead session `F` (`F.audit`: the window root, each sampled tile's TileRead `--zk` session
-relabelled to flock-verify's verdict, and the class of batch provers whose every induced strategy meets the session's `Cls`).
-
-Its hypotheses, at the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`:
-* `TTOutTilePearlCDevRev1W1` (the device's timing at the cap at W1, a named assumption, as in the sampled audit);
-* `TileReadSound` (T3 at the session, an open obligation to be discharged by Flock's soundness of the TileRead
-  statement, whose CR hypotheses, `TableCRZ` at `cr/sha-512` and `LinkCRZC` at `ecr/sha-512`, are `F.Cls`);
-* `TileReadBinds` (the binding, an open obligation to be proved from TileRead's gates, L4's registered reads,
-  hm96-sha512's binding, L3 and L8);
-* `0 ≤ δzk`.
-
-The session is a parameter until TileRead's Definition lands. The statement says something about Flock only at the
-session whose `game` is TileRead's live session and whose `Cls` is T3's CR hypotheses: at a session with an empty `Cls`,
-`F.audit`'s class is empty and both obligations hold with `Bad` everything. It is cited beside the honest prover's
-`HiddenAudit.ProverBounded` at `F.audit` (`HiddenAudit`'s docstring). -/
-def HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
-  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : PearlCSem Q R S) (F : TileReadSession Q R S) (δzk : ℕ → ℝ),
-    (∀ q, 0 ≤ δzk q) →
-    TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
-    TileReadSound (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
-      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) F δzk →
-    TileReadBinds (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
-      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
-      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) F →
-    Pouw.PearlC.GGapHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)
-      (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
-      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
-      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) F.audit
-      ((1648180439 / 446072750000 : ℚ) : ℝ) δPearlC δzk
 
 end Pouw.Guarantees.PearlC
 

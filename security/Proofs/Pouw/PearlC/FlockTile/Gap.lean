@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.Lemmas.PearlCRecords
+public import Proofs.Pouw.Lemmas.PearlCFlockTile
 public import Proofs.Pouw.PearlC.FlockTile.Audit
 public import Proofs.Pouw.PearlC.HiddenTileGame
 
@@ -13,8 +13,8 @@ public import Proofs.Pouw.PearlC.HiddenTileGame
 * `pearlCHiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`: so `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`'s
   `hzk` is discharged there, and v1 under rev1 per tile at 1/1,000, 8192³ keeps 0.36949% under Flock's hidden audit
   at W1, given `TTOutTilePearlCDevRev1W1`, T3 and the binding.
-* `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`: the guarantee
-  `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`Proofs.Pouw.Lemmas.PearlCRecords`),
+* `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`: the statement
+  `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`Proofs.Pouw.Lemmas.PearlCFlockTile`),
   which is the last.
 
 Both open obligations are about TileRead, whose Definition and Flock soundness are not in Lean yet; the session is a
