@@ -23,6 +23,19 @@ Linear through `research msg`), `stop_hook.py` (a message still waiting when a t
 `git` that keeps credentials out of remote URLs and gives every push `pre_push.py`, which `install.sh` puts ahead of
 the system's), and `settings.py` (every environment variable the hooks share, read once).
 
+A checkout belongs to the first agent that runs git in it, and the stamp outlives the agent. `worktree_guard.py reclaim
+DIR` gives the checkout holding DIR, and every branch registered to its owner, to the VM's coordinator once that owner
+is gone. Both tests read what the VM records and nothing the caller says, so a running worker is never evicted on a
+guess and a worker can't take another's checkout. The coordinator is an agent that holds a handle in the Slack
+registry: the hook takes the caller from Cursor's event, which no command line sets, and refuses a `reclaim` typed by
+any other agent; the command stamps only an id that holds a handle, so a made-up id gives the checkout to a
+coordinator, never to the agent that made it up. Gone is no hook run in two hours, six times the 20 minutes one
+command may block, in the record every hook run adds a line to (`settings.EVENT_LOG`: each shell command, each Task,
+dynamic-tool and MCP call, each turn's end). The record must reach back those two hours, since it rotates by size, and
+must hold a shell-hook run of the caller's within them, since where no shell hook runs every agent would read as gone;
+short of either, nothing is taken back. A worker whose turn ended over two hours ago reads as gone: its files stay, and
+`hand` gives a branch back. A refused branch switch or push names `reclaim` to a coordinator once it would succeed.
+
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
@@ -47,7 +60,8 @@ python3 tools/agent-guard/inbox.py list                            each agent's 
 python3 tools/agent-guard/inbox.py check AGENT_ID                  on its own VM: whether its hook polls for it
 python3 tools/agent-guard/procs.py [PATTERN]                       processes and their command lines, tokens cut
 python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent
-python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner
+python3 tools/agent-guard/worktree_guard.py reclaim DIR            a coordinator: take back a gone agent's checkout
+python3 tools/agent-guard/worktree_guard.py list                   each registered branch's owner
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer
 uv run tools/verity/check/suites.py tools/agent-guard              its tests
 ~~~

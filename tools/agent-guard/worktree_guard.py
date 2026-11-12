@@ -3,11 +3,19 @@
 `git push`, and the branch registry it keeps.
 
     python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent (its new owner)
-    python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner and each registered branch's
+    python3 tools/agent-guard/worktree_guard.py reclaim DIR            as the VM's coordinator, take back the checkout DIR, and
+                                                                       the branches its owner holds, once that owner is gone
+    python3 tools/agent-guard/worktree_guard.py list                   each registered branch's owner
 
 A worktree belongs to the first agent (Cursor conversation) that runs a git command in it: the coordinator's `/workspace`, or
 the worktree a worker made with `git worktree add`. The owner is stamped in the worktree's git dir (`agent-owner`), and the
-branch it had then is registered to it. The hook then refuses, from any other agent:
+branch it had then is registered to it. The stamp outlives its agent, so the VM's coordinator takes a checkout back from an
+owner that is gone (`reclaim`): the coordinator is an agent that holds a handle in the Slack registry (`task_hook.holders`,
+origin/main's copy where `hook.sh` runs the hook), and gone is no hook run of the owner's in the last GONE_S, by the VM's
+record of every hook run (`settings.recorded_runs`), which must reach back that far and hold a shell-hook run of the caller's
+(`gone_reason`). The checkout and every branch registered to its owner are then the coordinator's. The hook refuses a
+`reclaim` typed by an agent that holds no handle, the command judges the rest when it runs, and a checkout goes to no agent
+but one that holds a handle. The hook then refuses, from any other agent:
   - switching that worktree's branch (`git checkout BRANCH|-b|-B`, `git switch`), since everything installed editable from it
     (the `research` CLI) follows the switch; checking out files (`git checkout -- PATH`, `git checkout REF -- PATH`) passes;
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
@@ -42,14 +50,20 @@ import os
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
-from settings import PUSH_REMOTES
+from settings import CONVERSATION_ID, EVENT_LOG, PUSH_REMOTES, recorded_runs
+from task_hook import REGISTRY, holders
 
 STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
+#: an owner with no hook run for this long is gone: six times the longest one command may block (shell_hook.BLOCK_CAP_S), so
+#: an agent that is waiting on a command never reads as gone
+GONE_S = 2 * 3600
+RECLAIM = "python3 tools/agent-guard/worktree_guard.py reclaim"
 
 #: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names
 QUEUE_REPOS = ("compute-verification/verity", "compute-verification/infra")
@@ -103,16 +117,113 @@ def owner(gitdir: str, agent: str, directory: str) -> str:
     return agent
 
 
-def hand_reason(commands: list[list[str]], agent: str) -> str | None:
+def stamp(gitdir: str) -> str:
+    """The agent stamped as the owner of the worktree whose git dir is `gitdir`, "" when it has none; it claims nothing."""
+    f = Path(gitdir) / OWNER_FILE
+    return f.read_text().strip() if f.is_file() else ""
+
+
+def ago(t: float, now: float) -> str:
+    return f"{(now - t) / 60:.0f} min ago ({time.strftime('%H:%M', time.gmtime(t))} UTC)"
+
+
+def gone_reason(owner: str, caller: str, now: float | None = None) -> str:
+    """Why the VM's record of hook runs (`settings.recorded_runs`) can't show agent `owner` gone, or "" when it does: gone is
+    no hook run of its own in the last GONE_S. The record must hold a shell-hook run of `caller` in that time, since on a VM
+    whose shell hook runs for no one every agent would read as gone, and must reach back that far, since it rotates by size
+    and an owner it holds no run of may have run one just before its oldest line."""
+    now, window = time.time() if now is None else now, f"{GONE_S / 3600:g} h"
+    try:
+        runs = recorded_runs()
+    except OSError as e:
+        return f"the VM's record of hook runs is unreadable ({e}), so it shows no agent gone"
+    if not any(agent == caller and hook == "shell_hook.py" and t > now - GONE_S for t, hook, agent in runs):
+        return (f"{EVENT_LOG} holds no shell-hook run of yours in the last {window}, so it can't show that another agent ran "
+                f"none: no shell hook records your commands on this VM (`python3 tools/agent-guard/inbox.py guard` says why, "
+                f"and the fix)")
+    if (since := min(t for t, _, _ in runs)) > now - GONE_S:        # `runs` holds the caller's, so it is not empty
+        return (f"the VM's record of hook runs ({EVENT_LOG}) reaches back only {ago(since, now)}, and {owner} may have run a "
+                f"command before that: gone is no hook run in {window}. Try again after "
+                f"{time.strftime('%H:%M', time.gmtime(since + GONE_S))} UTC")
+    if (last := max((t for t, _, agent in runs if agent == owner), default=0)) > now - GONE_S:
+        return (f"agent {owner} ran a command on this VM {ago(last, now)}, so it is not gone (gone is no hook run in {window}): "
+                f"ask it for what you need, or work in a checkout of your own")
+    return ""
+
+
+def reclaim_note(owner: str, agent: str, top: str) -> str:
+    """What a refusal that names `owner`, the agent stamped on the checkout `top`, adds for `agent`: the command that takes the
+    checkout back, when `agent` is the VM's coordinator and `owner` is gone; else ""."""
+    if (handle := holders().get(agent)) is None or gone_reason(owner, agent):
+        return ""
+    return (f" Agent {owner} has run no command on this VM in the last {GONE_S / 3600:g} h, and you hold @{handle}: take back "
+            f"{top} and the branches {owner} holds with `{RECLAIM} {top}`.")
+
+
+def not_coordinator(agent: str, directory: str) -> str:
+    """The refusal of a `reclaim` by an agent that holds no handle."""
+    return (f"only the VM's coordinator takes a checkout back, and {agent or 'this shell (no CURSOR_CONVERSATION_ID)'} holds no "
+            f"handle in the Slack registry ({REGISTRY}): ask your coordinator to run `{RECLAIM} {directory}`, or work in a "
+            f"checkout of your own (`git worktree add ../wt-<name> -b <branch>`)")
+
+
+def reclaim(directory: str, agent: str, now: float | None = None) -> tuple[int, str]:
+    """Give the checkout holding `directory`, and every branch registered to its stamped owner, to `agent`: (0, what changed),
+    or (1, why not). Only an agent that holds a handle takes a checkout back, only one stamped to another agent, and only
+    once that owner is gone (`gone_reason`)."""
+    if (handle := holders().get(agent)) is None:
+        return 1, not_coordinator(agent, directory)
+    gitdir, top = git(directory, "rev-parse", "--absolute-git-dir"), git(directory, "rev-parse", "--show-toplevel")
+    if gitdir is None:
+        return 1, f"{directory} is in no checkout: name a checkout's directory"
+    top = top or directory
+    if not (owner := stamp(gitdir)):
+        return 1, (f"{top} has no owner to take it back from: a checkout belongs to the first agent that runs git in it, so run "
+                   f"`git -C {top} status` and it is yours")
+    if owner == agent:
+        return 0, f"{top} is already {agent}'s"
+    if why := gone_reason(owner, agent, now):
+        return 1, f"{top} stays agent {owner}'s: {why}"
+    tmp = Path(gitdir) / f"{OWNER_FILE}.{os.getpid()}"
+    tmp.write_text(agent + "\n")
+    os.replace(tmp, Path(gitdir) / OWNER_FILE)
+    held = sorted(b for b, a in registry().items() if a == owner)
+    for b in held:
+        register(b, agent, replace=True)
+    return 0, (f"{top} is now {agent}'s (@{handle}); it was {owner}'s, gone by the VM's record of hook runs"
+               + (f". So are the branches {owner} held: {', '.join(held)}" if held else ""))
+
+
+def reclaim_reason(commands: list[list[str]], agent: str) -> str | None:
+    """A `worktree_guard.py reclaim DIR` typed by an agent that holds no handle: the command reads who runs it from its
+    environment, which the caller sets, and the hook from Cursor's event, which it doesn't."""
+    for words in commands:
+        for i, w in enumerate(words[:-1]):
+            if w.endswith("worktree_guard.py") and words[i + 1] == "reclaim":
+                return None if agent in holders() else not_coordinator(agent, " ".join(words[i + 2:i + 3]) or "DIR")
+    return None
+
+
+def hand_reason(commands: list[list[str]], agent: str, cwd: str = "") -> str | None:
     """A `worktree_guard.py hand BRANCH AGENT_ID` from an agent other than the one BRANCH is registered to: only its owner gives
-    a branch away, or any agent could take another's branch by handing it to itself."""
+    a branch away, or any agent could take another's branch by handing it to itself. Where the checkout the command runs in
+    (`cwd`) is that owner's and it is gone, the VM's coordinator is told how to take both back (`reclaim_note`)."""
     reg = registry()
     for words in commands:
         for i, w in enumerate(words[:-2]):
             if w.endswith("worktree_guard.py") and words[i + 1] == "hand" and reg.get(b := words[i + 2], agent) != agent:
                 return (f"branch {b} belongs to agent {reg[b]}, so only that agent can hand it on: ask it to run `python3 "
-                        f"tools/agent-guard/worktree_guard.py hand {b} <agent-id>`. If it is gone, push a branch of your own.")
+                        f"tools/agent-guard/worktree_guard.py hand {b} <agent-id>`."
+                        + (held_note(reg[b], agent, cwd) or " If it is gone, push a branch of your own."))
     return None
+
+
+def held_note(owner: str, agent: str, directory: str) -> str:
+    """`reclaim_note` for the checkout holding `directory`, when `owner` is the agent stamped on it; else ""."""
+    gitdir = git(directory, "rev-parse", "--absolute-git-dir") if directory else None
+    if gitdir is None or stamp(gitdir) != owner:
+        return ""
+    return reclaim_note(owner, agent, git(directory, "rev-parse", "--show-toplevel") or directory)
 
 
 #: git's own options that take the next word as their value (`git -h`; git takes none of its own options by a prefix)
@@ -368,15 +479,16 @@ def next_repaired(targets: set[str], ok: str, record: dict) -> bool:
     return True
 
 
-def owner_reason(branches: list[str], agent: str) -> str | None:
+def owner_reason(branches: list[str], agent: str, directory: str = "") -> str | None:
     """Why `agent` may not push `branches`: the first that is registered to another agent, until that agent hands it over.
-    An unregistered branch passes."""
+    An unregistered branch passes. Where the checkout the push runs in (`directory`) is that agent's and it is gone, the VM's
+    coordinator is told how to take both back (`held_note`)."""
     reg = registry()
     for b in (n for given in branches for n in (fnmatch.filter(reg, given) if "*" in given else [given])):
         if reg.get(b, agent) != agent:
             return (f"branch {b} belongs to agent {reg[b]} (it created it, or its checkout had it): push a branch of "
                     f"your own (`git push -u origin <your-branch>`), or have its owner hand it to you: `python3 "
-                    f"tools/agent-guard/worktree_guard.py hand {b} {agent}`.")
+                    f"tools/agent-guard/worktree_guard.py hand {b} {agent}`." + held_note(reg[b], agent, directory))
     return None
 
 
@@ -441,7 +553,7 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
         return why
     if not agent:
         return None
-    if why := hand_reason(commands, agent):
+    if why := hand_reason(commands, agent, cwd) or reclaim_reason(commands, agent):
         return why
     for i, d, args, _, unknown in indexed:
         sub = args[0]
@@ -458,9 +570,9 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
             return (f"{top} is agent {mine}'s checkout, and switching its branch moves everything installed from it under that "
                     f"agent (the `research` CLI follows it). Work in a checkout of your own: `git -C {top} worktree add "
                     f"../wt-<name> -b <branch>` (or `git worktree add ../wt-<name> <existing-branch>`), then run git there "
-                    f"with `git -C ../wt-<name> ...`. One agent per checkout (AGENTS.md).")
+                    f"with `git -C ../wt-<name> ...`. One agent per checkout (AGENTS.md)." + reclaim_note(mine, agent, top))
         if sub == "push" and (judgment := judged(pushes[i])) is not None and (
-                why := owner_reason(push_targets(pushes[i]), agent)):
+                why := owner_reason(push_targets(pushes[i]), agent, "" if unknown else d)):
             return why + judged_note(judgment)
         if (b := created_branch(sub, args[1:])) and sub in ("checkout", "switch", "worktree"):
             register(b, agent)
@@ -472,6 +584,10 @@ def main(argv: list[str]) -> int:
         register(argv[1], argv[2], replace=True)
         print(f"worktree_guard: {argv[1]} is now {argv[2]}'s")
         return 0
+    if argv[:1] == ["reclaim"] and len(argv) == 2:
+        code, said = reclaim(argv[1], CONVERSATION_ID)
+        print(f"worktree_guard: {said}", file=sys.stderr if code else sys.stdout)
+        return code
     if argv[:1] == ["list"]:
         print(json.dumps(registry(), indent=1, sort_keys=True))
         return 0

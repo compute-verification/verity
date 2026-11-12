@@ -750,6 +750,152 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 
+LEAD, PAST, WORKER = (f"bc-{d * 8}-{d * 4}-4{d * 3}-8{d * 3}-{d * 12}" for d in "abc")
+WORKTREE_GUARD = HOOK.parent / "worktree_guard.py"
+
+
+@pytest.fixture
+def vm(tmp_path, event_log):
+    """A coordinator's VM: its checkout `ws` on branch `lead`, a worker's worktree `wt` on `work` and one nobody has run git
+    in, `fresh`; LEAD holds @infra in the registry the hooks read. `ask` is the hook's answer to a command an agent types,
+    `reclaim` the command as that agent's shell runs it, and `long_ago` moves every hook run recorded so far back to 1970."""
+    env = {**os.environ, **GIT_ENV, "AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0",
+           "AGENT_GUARD_REGISTRY": str(tmp_path / "registry.json"), "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}
+    (tmp_path / "registry.json").write_text(json.dumps({"handles": [{"handle": "infra", "holder": LEAD}]}))
+    ws, origin = tmp_path / "ws", tmp_path / "origin.git"
+    for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)],
+                 ["-C", str(ws), "checkout", "-q", "-b", "lead"], ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "work"],
+                 ["-C", str(ws), "worktree", "add", "-q", str(tmp_path / "fresh"), "-b", "unused"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env=env)
+
+    class VM:
+        root = tmp_path
+
+        @staticmethod
+        def ask(command: str, agent: str, cwd: Path = ws) -> dict:
+            event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent, "cwd": str(cwd)}
+            return json.loads(subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                                             env=env, check=True).stdout)
+
+        @staticmethod
+        def reclaim(directory: Path, agent: str) -> subprocess.CompletedProcess:
+            return subprocess.run([sys.executable, WORKTREE_GUARD, "reclaim", str(directory)], capture_output=True, text=True,
+                                  env={**env, "CURSOR_CONVERSATION_ID": agent})
+
+        @staticmethod
+        def long_ago() -> None:
+            event_log.write_text(re.sub(r'"t": \d+', '"t": 1000', event_log.read_text()))
+
+        @staticmethod
+        def owner(directory: Path) -> str:
+            gitdir = subprocess.run(["/usr/bin/git", "-C", str(directory), "rev-parse", "--absolute-git-dir"], check=True,
+                                    capture_output=True, text=True, env=env).stdout.strip()
+            stamp = Path(gitdir) / "agent-owner"
+            return stamp.read_text().strip() if stamp.exists() else ""
+
+        @staticmethod
+        def branches() -> dict:
+            return json.loads((tmp_path / "state" / "branches.json").read_text())
+    return VM
+
+
+def test_the_vms_coordinator_takes_back_a_checkout_and_its_branches_from_an_owner_that_is_gone(vm):
+    """A checkout belongs to the first agent that runs git in it, and the stamp outlived the agent: a coordinator whose
+    workspace a past worker had claimed could neither switch its branch nor push it, and the refusals' advice was another
+    checkout and another branch. Its refusals now name `reclaim`, which gives it the checkout and the branches the gone owner
+    held."""
+    ws, command = vm.root / "ws", f"python3 tools/agent-guard/worktree_guard.py reclaim {vm.root / 'ws'}"
+    assert vm.ask("git status", PAST) == {"permission": "allow"}             # the past worker claims ws, and its branch
+    assert (vm.owner(ws), vm.branches()) == (PAST, {"lead": PAST})
+    vm.long_ago()
+    taking = f"take back {ws} and the branches {PAST} holds with `{command}`"
+    for refused, said in (("git switch -c other", f"{ws} is agent {PAST}'s checkout"),
+                          ("git push origin lead", f"branch lead belongs to agent {PAST}"),
+                          ("python3 tools/agent-guard/worktree_guard.py hand lead bc-third", "only that agent can hand it on")):
+        out = vm.ask(refused, LEAD)
+        assert out["permission"] == "deny" and said in out["agent_message"] and taking in out["agent_message"], out
+        assert "you hold @infra" in out["agent_message"] and "If it is gone, push a branch of your own" not in out["agent_message"]
+        out = vm.ask(refused, WORKER)
+        assert out["permission"] == "deny" and said in out["agent_message"] and "worktree_guard.py reclaim" not in out["agent_message"], out
+    assert "If it is gone, push a branch of your own." in vm.ask("python3 worktree_guard.py hand lead bc-third", WORKER)["agent_message"]
+
+    assert vm.ask(command, LEAD) == {"permission": "allow"}
+    done = vm.reclaim(ws, LEAD)
+    assert done.returncode == 0 and f"{ws} is now {LEAD}'s (@infra); it was {PAST}'s" in done.stdout, done.stdout + done.stderr
+    assert f"So are the branches {PAST} held: lead" in done.stdout
+    assert (vm.owner(ws), vm.branches()) == (LEAD, {"lead": LEAD})
+    for command in ("git switch -c other", "git push origin lead"):
+        assert vm.ask(command, LEAD) == {"permission": "allow"}, command
+    assert vm.ask("git switch lead", WORKER)["permission"] == "deny", "and it is the coordinator's against every other agent"
+    again = vm.reclaim(ws, LEAD)
+    assert again.returncode == 0 and "is already" in again.stdout
+
+
+def test_reclaim_takes_nothing_from_a_live_owner_for_a_caller_without_a_handle_or_from_a_checkout_no_one_owns(vm):
+    """What `reclaim` must not do: evict a worker that is running, on a guess; hand a checkout to a worker, whatever it says
+    it is; or claim a checkout that has no owner. Each refusal says why, and what to do instead."""
+    ws, wt, fresh = (vm.root / d for d in ("ws", "wt", "fresh"))
+    typed = "python3 tools/agent-guard/worktree_guard.py reclaim"
+    assert vm.ask("git status", PAST) == {"permission": "allow"}
+    vm.long_ago()
+    assert vm.ask("git status", WORKER, wt) == {"permission": "allow"}           # a worker claims wt, and is running
+    assert (vm.owner(ws), vm.owner(wt), vm.owner(fresh)) == (PAST, WORKER, "")
+
+    # a caller that holds no handle: the hook refuses what it types, whoever its command line says it is, and so does the command
+    for command in (f"{typed} {ws}", f"CURSOR_CONVERSATION_ID={LEAD} {typed} {ws}", f"cd {ws} && {typed} .",
+                    f"bash -c '{typed} {ws}'", f"tmux send-keys '{typed} {ws}' C-m"):
+        out = vm.ask(command, WORKER)
+        assert out["permission"] == "deny" and "only the VM's coordinator takes a checkout back" in out["agent_message"], command
+        assert f"{WORKER} holds no handle in the Slack registry" in out["agent_message"], out
+    assert f"ask your coordinator to run `{typed} {ws}`" in vm.ask(f"{typed} {ws}", WORKER)["agent_message"]
+    for agent in (WORKER, PAST, ""):
+        out = vm.reclaim(ws, agent)
+        assert out.returncode == 1 and "only the VM's coordinator takes a checkout back" in out.stderr, out.stderr
+    assert vm.owner(ws) == PAST
+
+    # a live owner: the coordinator's command is let run, and refuses
+    assert "worktree_guard.py reclaim" not in vm.ask("git switch lead", LEAD, wt)["agent_message"], "nothing to take back from a running worker"
+    assert vm.ask(f"{typed} {wt}", LEAD) == {"permission": "allow"}
+    out = vm.reclaim(wt, LEAD)
+    assert out.returncode == 1 and f"{wt} stays agent {WORKER}'s: agent {WORKER} ran a command on this VM" in out.stderr, out.stderr
+    assert "so it is not gone (gone is no hook run in 2 h)" in out.stderr and "work in a checkout of your own" in out.stderr
+    assert (vm.owner(wt), vm.branches()["work"]) == (WORKER, WORKER)
+
+    # a checkout with no stamp, and a directory in no checkout
+    out = vm.reclaim(fresh, LEAD)
+    assert out.returncode == 1 and f"{fresh} has no owner to take it back from" in out.stderr, out.stderr
+    assert f"run `git -C {fresh} status` and it is yours" in out.stderr and vm.owner(fresh) == ""
+    out = vm.reclaim(vm.root, LEAD)
+    assert out.returncode == 1 and "is in no checkout" in out.stderr, out.stderr
+
+    assert vm.reclaim(ws, LEAD).returncode == 0, "and the gone owner's still goes"
+
+
+def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is_writing(vm, event_log):
+    """Gone is no hook run in two hours by the VM's record of hook runs. An owner the record holds no run of is gone only if
+    the record reaches back that far (it rotates by size), and only if it holds the caller's own shell-hook run: where no
+    shell hook runs, no agent's commands are recorded, and every one of them would read as gone."""
+    ws, typed = vm.root / "ws", "python3 tools/agent-guard/worktree_guard.py reclaim"
+    assert vm.ask("git status", PAST) == {"permission": "allow"}
+    event_log.write_text(event_log.read_text().replace('"hook": "shell_hook.py"', '"hook": "task_hook.py"'))
+    vm.long_ago()                                    # the record: one Task-hook run of the past worker's, long ago
+    out = vm.reclaim(ws, LEAD)
+    assert out.returncode == 1 and "holds no shell-hook run of yours in the last 2 h" in out.stderr, out.stderr
+    assert "`python3 tools/agent-guard/inbox.py guard` says why" in out.stderr and vm.owner(ws) == PAST
+
+    event_log.unlink()
+    assert vm.ask(f"{typed} {ws}", LEAD) == {"permission": "allow"}             # the record starts with this run
+    out = vm.reclaim(ws, LEAD)
+    assert out.returncode == 1 and "reaches back only " in out.stderr and "Try again after " in out.stderr, out.stderr
+    assert f"{PAST} may have run a command before that" in out.stderr and vm.owner(ws) == PAST
+    assert "worktree_guard.py reclaim" not in vm.ask("git switch -c other", LEAD)["agent_message"], "nor does a refusal name it yet"
+
+    vm.long_ago()
+    assert vm.ask(f"{typed} {ws}", LEAD) == {"permission": "allow"}
+    assert vm.reclaim(ws, LEAD).returncode == 0 and vm.owner(ws) == LEAD
+
+
 #: a GitHub installation token's shape, from parts, as the URL a Cursor VM's insteadOf rewrites to carries one
 TOKEN = "gh" "s_" "dummyDUMMYdummy0123456789abcdefABCDEF"
 QUEUE_URLS = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",

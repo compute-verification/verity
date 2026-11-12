@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 
@@ -16,7 +17,11 @@ INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 INBOX_POLL_S = os.environ.get("AGENT_INBOX_POLL_S", "30")
 #: one line per hook run: which hook, the event's name, its conversation, tool name and key names (never a value)
 EVENT_LOG = os.environ.get("AGENT_GUARD_EVENT_LOG", "/tmp/agent-guard-events.jsonl")
-EVENT_LOG_MAX_BYTES = 1 << 20
+#: the log rotates at this size and keeps one older file, so it holds between one and two times this much: enough to reach
+#: back past `worktree_guard.GONE_S` on a VM many agents share, which is as far as `reclaim` has to see
+EVENT_LOG_MAX_BYTES = 4 << 20
+#: the head of a line `record_event` wrote for an agent's hook run: its time, the hook and the agent
+RUN = re.compile(r'^\{"t": (\d+), "hook": "([^"]*)", "event": (?:"[^"]*"|null), "conversation_id": "([^"]+)"', re.M)
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 #: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
@@ -39,3 +44,14 @@ def record_event(hook: str, event: object) -> None:
             f.write(line + "\n")
     except OSError as e:                                # the hook's verdict never waits on its log
         print(f"agent-guard: event not recorded in {EVENT_LOG}: {e}", file=sys.stderr)
+
+
+def recorded_runs() -> list[tuple[int, str, str]]:
+    """(time, hook, agent) of every hook run EVENT_LOG still holds for an agent, in the file it last rotated to and in itself:
+    the VM's one record of when each agent last ran a command."""
+    runs = []
+    for path in (EVENT_LOG + ".1", EVENT_LOG):
+        if os.path.isfile(path):
+            with open(path, errors="replace") as f:
+                runs += [(int(t), hook, agent) for t, hook, agent in RUN.findall(f.read())]
+    return runs
