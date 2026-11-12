@@ -162,6 +162,8 @@ def test_the_routes_process_gets_no_name_of_the_stores_key_and_finds_its_directo
     entry, command = route["argv"][:route["argv"].index("--")], route["argv"][route["argv"].index("--") + 1:]
     assert entry[:2] == ["-m", "training_slowdown.sandbox"] and entry[-2:] == ["--hide", str(staged)]
     assert command[:3] == [str(standin), "-m", "training_slowdown.run"]
+    inside = command.index("--inside")
+    assert command[inside - 2:inside] == ["--threads", str(run.THREADS)]
     seen = subprocess.run([python, *entry, "--", python, "-c", f"import os; print(os.listdir({str(staged)!r}))"],
                           cwd=Path(run.__file__).parents[1], capture_output=True, text=True)
     assert (seen.returncode, seen.stdout) == (0, "[]\n"), seen.stderr[-2000:]

@@ -170,7 +170,7 @@ back, and one whose record's fused attention rows `as_math` can't rewrite. `--ou
 verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
     [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
-    [--device cuda] [--keep-weights] [--state DIR]      # one job
+    [--device cuda] [--threads 8] [--keep-weights] [--state DIR]      # one job
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
@@ -313,7 +313,10 @@ A job on a CPU computes with oneDNN held below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_C
 its two processes sets the limit itself, over whatever it was started with, before torch computes anything, because
 oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU and a step run twice then gives two results.
 The record names the variable and the value the route's process set (`cpu_isa`); on a GPU a job sets nothing and
-the field is null.
+the field is null. Each of its processes also holds torch at the job's CPU thread count, `--threads` (default 8,
+`run.THREADS`), before torch computes anything, since what a job trains on a CPU follows that count and the cores
+only its speed. The record states the count (`threads`), and a stopped job continues only at the count its kept
+record states: started at another, it is refused with the `--threads` that continues it.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a

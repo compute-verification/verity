@@ -3,6 +3,7 @@ import json
 import math
 
 import pytest
+import torch
 from synthetic import SHAPE, tiny_registry, write_config
 
 from training_slowdown import as_math, codecs, config, library, of_record, starts
@@ -493,18 +494,24 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
 def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):
     """The command on a count made up here, so no step is counted: a step equal to its record's exits 0, and so does
     one whose record has a line more that the data file names; a product the record lacks, which no rule names, is
-    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing."""
+    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing. The step
+    is counted at the CPU thread count its record states, and at a job's default (held at one by the suite's
+    fixture) where the record names none, as the output says."""
     reg = tiny_registry(tmp_path / "reg")
     path = write_config(tmp_path / "a.toml")
     cfg = config.load(path, starts.registry(reg))
-    mine = count()
-    monkeypatch.setattr(of_record, "counted", lambda *a: mine)
+    mine, at = count(), []
+    monkeypatch.setattr(of_record, "counted", lambda *a: at.append(torch.get_num_threads()) or mine)
     rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": dict(mine["structures"]),
            "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
+    records, held = held_to(tmp_path / "counted", "a", rec | {"threads": 3})
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    assert "\n  threads   3, the record's\n" in capsys.readouterr().out and at.pop() == 3
     records, held = held_to(tmp_path, "a", rec)
     argv = [str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main(argv) == 0
     out = capsys.readouterr().out
+    assert at.pop() == 1 and "\n  threads   1, a job's default: the record names no count\n" in out
     assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n") and "DIFFERS" not in out
     assert ("  step      the config's step 2, 2 forwards of one row, counted on a CPU, beside the record's modal "
             "structure, which 3 of its 3 steps have, 1 row a forward divided out\n") in out

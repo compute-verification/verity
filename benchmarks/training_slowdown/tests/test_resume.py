@@ -127,6 +127,7 @@ def test_a_segment_from_a_kept_state_runs_the_steps_that_remain_as_the_unbroken_
     2 and 3; the two records joined are the unbroken job's, with every keyed weight digest."""
     whole = run.joined(None, segment(tiny))
     assert [cp["step"] for cp in whole["checkpoints"]] == [0, 1, 2, 3]
+    assert whole["threads"] == stopped["record"]["threads"] == rest["threads"] == torch.get_num_threads() == 1
     assert len(stopped["record"]["steps"]) == 2 and stopped["state"]["stream"] == 2 * BUDGET["batch"]
     assert_continues(whole, run.joined(run.joined(None, stopped["record"]), rest), at=2)
 
@@ -297,6 +298,14 @@ def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, stopped):
     refused(whole[:-9], "its state.json doesn't parse")
     refused(json.dumps({k: v for k, v in other.items() if k != "elapsed_s"}),
             "its state.json lacks what a state holds .KeyError: 'elapsed_s'.")
+    assert other["record"]["threads"] == torch.get_num_threads() == 1
+    refused(json.dumps(other | {"record": other["record"] | {"threads": 3}}),
+            "its record states 3 CPU threads and this job holds 1, and what a job trains on a CPU follows its thread "
+            "count: start the job with `--threads 3` to continue it. Remove")
+    uncounted = {k: v for k, v in other["record"].items() if k != "threads"}
+    manifest.write_text(json.dumps(other | {"record": uncounted}))
+    assert state.load(0, "final")["record"] == uncounted
+    manifest.write_text(whole)
     segment = other["record"]["segments"][-1]
     bare = {k: v for k, v in segment.items() if k != "kept"}
     refused(json.dumps(other | {"record": other["record"] | {"segments": [bare]}}),
@@ -372,9 +381,11 @@ def test_a_state_rewritten_whole_is_refused_against_the_stopped_runs_record(tmp_
 def test_a_segment_that_names_another_job_than_the_kept_record_is_refused(stopped, rest):
     first = run.joined(None, stopped["record"])
     for over, why in (({"config": {"digest": "b" * 64}}, "config digest"), ({"seed": 5}, "seed"),
-                      ({"steps": rest["steps"][1:]}, "first step")):
+                      ({"steps": rest["steps"][1:]}, "first step"), ({"threads": 3}, "CPU threads")):
         with pytest.raises(SystemExit, match=f"the kept record's {why} is .* no record is written"):
             run.joined(first, rest | over)
+    before = {k: v for k, v in first.items() if k != "threads"}
+    assert run.joined(before, rest | {"threads": 3})["threads"] == 3
 
 
 @pytest.fixture(scope="module")
@@ -545,20 +556,21 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     job of another config on that state, refused by both digests before it trains, the state left; the stopped job
     on its state with one bit of the optimizers' part flipped, in the state directory and then only in the copy
     handed to the route's process, refused each time by that part's two SHA-512; the stopped job told to continue
-    from nothing, and from a `state.json` of another sha256, refused each time; and the stopped job again, told
-    the sha256 of its `state.json`, which continues while its state directory, hidden from the route's process,
-    still holds the state, writes the unbroken job's record in two segments, the first with the digests of the
-    state it kept, and removes the state. Every checkpoint's state is the unbroken job's bit for bit; its score is
-    another forward pass's, so within `SCORE_REL`."""
+    from nothing, from a `state.json` of another sha256, and at another CPU thread count, refused each time; and
+    the stopped job again, at its count and told the sha256 of its `state.json`, which continues while its state
+    directory, hidden from the route's process, still holds the state, writes the unbroken job's record in two
+    segments, the first with the digests of the state it kept, and removes the state. Every job but the one at
+    another count runs at two threads, which its record states. Every checkpoint's state is the unbroken job's bit
+    for bit; its score is another forward pass's, so within `SCORE_REL`."""
     root, reg, path = tiny
 
-    def job(out, state, cfg=path, *more):
+    def job(out, state, cfg=path, *more, threads=2):
         return run.main(["--config", cfg, "--seed", 0, "--split", "final", "--out", tmp_path / out, "--starts", reg,
-                         "--device", "cpu", "--state", tmp_path / state, *more])
+                         "--device", "cpu", "--state", tmp_path / state, "--threads", threads, *more])
 
     assert job("whole", "state-whole") == 0 and not (tmp_path / "state-whole").exists()
     whole = json.loads((tmp_path / "whole" / "run.json").read_text())
-    assert whole["invalid"] == [] and len(whole["segments"]) == 1
+    assert whole["invalid"] == [] and len(whole["segments"]) == 1 and whole["threads"] == 2
 
     write = run.Kept.write
 
@@ -614,11 +626,16 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     with pytest.raises(SystemExit, match=f"its state.json hashes to {stored} .sha256. and the one this job was "
                                          f"started to continue from, in the stopped run's record, to {'0' * 64}"):
         job("changed", "state", path, "--continues", "0" * 64)
+    assert so_far["threads"] == 2
+    with pytest.raises(SystemExit, match="its record states 2 CPU threads and this job holds 1, and what a job "
+                                         "trains on a CPU follows its thread count: start the job with `--threads 2`"):
+        job("changed", "state", path, "--continues", stored, threads=1)
     assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "changed").exists()
 
     assert job("cut", "state", path, "--continues", stored) == 0 and not (tmp_path / "state").exists()
     cut = json.loads((tmp_path / "cut" / "run.json").read_text())
     assert cut["invalid"] == [] and cut["digest_key"] == so_far["digest_key"] != whole["digest_key"]
+    assert cut["threads"] == whole["threads"] == 2
     assert [s.get("kept") for s in cut["segments"]] == [stated, None] and "kept" not in whole["segments"][0]
     assert_continues(whole, cut, at=2, keyed=False)
     # the states are the unbroken job's bit for bit; their scores are two forward passes' each

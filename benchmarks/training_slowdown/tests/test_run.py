@@ -777,6 +777,24 @@ def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_inside_or_
             assert (said, held) == (({name: limit}, before | {name: limit}) if device == "cpu" else (None, before))
 
 
+def test_each_of_a_jobs_processes_holds_its_thread_count_before_inside_or_outside_is_entered(tmp_path, monkeypatch):
+    """Each of a job's processes holds torch at the job's CPU thread count, `--threads` or `run.THREADS` (held at
+    one here, by the suite's fixture), before `inside` or `outside` is entered; a process in which torch then holds
+    another count is refused."""
+    entered = []
+    monkeypatch.setattr(run, "inside", lambda a: entered.append((a.threads, torch.get_num_threads())) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: entered.append((a.threads, torch.get_num_threads())) or 0)
+    job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
+    for threads, more in ((run.THREADS, []), (3, ["--threads", 3])):
+        for process in ([], ["--inside", tmp_path]):
+            torch.set_num_threads(2)
+            assert run.main([*job, *more, *process]) == 0 and entered.pop() == (threads, threads)
+    assert run.set_threads(2) == 2 == torch.get_num_threads()
+    monkeypatch.setattr(run.torch, "set_num_threads", lambda n: None)
+    with pytest.raises(SystemExit, match="this process is to hold 3 CPU threads, and torch holds 2"):
+        run.set_threads(3)
+
+
 #: the route's process's interpreter: the job's own, started without the limit and with oneDNN's log on
 LOGGED = """#!{python}
 import os, sys
