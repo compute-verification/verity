@@ -107,6 +107,7 @@ def test_the_planner_loads_the_programs_of_record_and_says_what_the_linkage_read
     ready, _plan = served(steps)
     assert steps.seen["workload"] == "workload.json" and steps.seen["partition"] == (MANIFEST, None, "/programs")
     sources, labels, definitions = steps.seen["programs"]
+    assert isinstance(sources, C2.ProgramSources)
     assert (sources.args.program_digest, sources.manifest, sources.reqs, sources.sampling) == ("d0", MANIFEST, REQS, SAMPLING)
     assert labels == LABELS and definitions is False, "a plan evaluates no row, so it checks no Definitions"
     programs, ranks, arrivals, executed_prefix, ring, kw = steps.seen["populate"]
@@ -121,7 +122,9 @@ def test_the_sample_is_the_replays_own_read_only_and_each_read_comes_back_once(t
     _ready, plan = served(steps)
     programs, bmap, weights, kw = steps.seen["replay"]
     assert (programs, bmap) == (PROGRAMS, BINDING_MAP)
-    assert weights is None, "a plan evaluates no row and reads no weight"
+    assert weights is C2.no_weights, "a plan evaluates no row and reads no weight"
+    with pytest.raises(RuntimeError, match="no weights provider"):
+        weights("model.w", 0, 4)
     assert kw.pop("memo") is steps.memo, "the populations the planner enumerated before the seed existed"
     assert kw == {"arrivals": {"r0": 0, "r1": 2}, "per_stratum": 2, "seed": 7, "seed_source": "coins", "seed_challenge": "challenge",
                   "max_evaluate": 50, "targets": [], "replay_k": None, "replay_draw": "family", "ring_slots": 4, "manifest": MANIFEST,
