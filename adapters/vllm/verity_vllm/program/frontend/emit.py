@@ -287,9 +287,7 @@ def _occurrences(
     ctx, body, node_fx: dict[int, Any], source_of: Callable[[Any, Any], tuple[str, str | None]], rank: tuple[int, int] | None
 ) -> tuple[list[dict], dict[Any, int], list[list[tuple[Any, Any, dict | None]]], list[dict]]:
     """`(occurrences, occ_index, occ_inputs, occ_outputs)`: one occurrence per fx node that some Call was lowered from, in graph
-    order (`node_fx`: Call index -> its fx node), each node's index among them, and per occurrence what the Calls are located in:
-    `(fx arg node, its value, interval index of its value AS READ)` per fx input, and the interval index over its produced and
-    written collections, tagged by port."""
+    order (`node_fx`: Call index -> its fx node), each node's index among them, and what `_calls` locates each Call in."""
     from verity_vllm.program.frontend.derive import (  # local: derive imports this module
         _mutates,
         fx_arg_nodes,
@@ -305,8 +303,8 @@ def _occurrences(
     collectives = 0
     occurrences: list[dict] = []
     occ_index: dict[Any, int] = {}
-    occ_inputs: list[list[tuple[Any, Any, dict | None]]] = []
-    occ_outputs: list[dict] = []
+    occ_inputs: list[list[tuple[Any, Any, dict | None]]] = []   # per occurrence: (fx arg node, its value, interval index of its value AS READ)
+    occ_outputs: list[dict] = []                        # per occurrence: interval index over its produced / written collections, tagged by port
     bindings: dict[Any, dict] = getattr(ctx, "occurrence_bindings", {})
     index_memo: dict[int, tuple[Any, dict | None]] = {}   # id(refs) -> (refs kept alive, its interval index): a cache read by many
                                                           # occurrences is indexed once
