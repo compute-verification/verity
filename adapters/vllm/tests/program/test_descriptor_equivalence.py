@@ -9,14 +9,27 @@ import json
 import random
 
 import pytest
-
-from verity.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, REGISTRY
+from verity.circuits import (
+    REGISTRY,
+    Array,
+    Program,
+    Value,
+    bind,
+    composite,
+    decode_program,
+    encode_program,
+)
 from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
-from verity_vllm.program.descriptor_equivalence import Mismatch, canonical_runs, canonical_runs_by_leaf, compare
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, concat
 from verity.definitions.registry import b1
 
 from tests.program.test_running_example import Add16, Id16, Mul16, make_program
+from verity_vllm.program.descriptor_equivalence import (
+    Mismatch,
+    canonical_runs,
+    canonical_runs_by_leaf,
+    compare,
+)
 
 V16 = Value(16)
 

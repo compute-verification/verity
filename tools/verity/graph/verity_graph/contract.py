@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 SCHEMA_GRAPH = "verity-graph/v2"
+#: graph/v2 packed (`graph.pack`): the same document, each task's inputs and reads as runs of indices
+SCHEMA_PACKED = "verity-graph/v2-packed"
 SCHEMA_RESULT = "verity-result/v1"
 SCHEMA_EVENTS = "verity-events/v1"
 KEY_TAG = b"verity-key/v1\n"

@@ -18,12 +18,11 @@ import struct
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_topp_difftest as D
-from verity.definitions.registry import topp_split as TS
 from verity.definitions.registry import topp_geometry
+from verity.definitions.registry import topp_split as TS
 
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000

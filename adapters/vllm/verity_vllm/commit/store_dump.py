@@ -256,7 +256,10 @@ def held_of(com: Any) -> dict[int, tuple[list[tuple[int, int]], int]]:
 def not_retained_of(fams: set[str], C: int, held: dict[int, tuple[list[tuple[int, int]], int]],
                     layouts: dict[int, Any]) -> dict[str, Any]:
     """`not_retained` over the blocks' retained ranges (`held_of`) and the steps' metas."""
-    from verity_vllm.commit.committer.host_retention import _excluded_chunk_ranges, outside
+    from verity_vllm.commit.committer.host_retention import (
+        _excluded_chunk_ranges,
+        outside,
+    )
 
     by, committed, retained, stray = dict.fromkeys(sorted(fams), 0), 0, 0, []
     for s, (ranges, used) in sorted(held.items()):
