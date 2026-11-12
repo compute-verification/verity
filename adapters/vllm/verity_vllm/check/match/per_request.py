@@ -203,7 +203,8 @@ def _prepare_requests(run: MatchRun, att: Attribution, param_of: dict, proj: dic
         P._all_seed_nodes = set(seed_index)
         P.cached_rows = PX.cached_rows(run.header, run.steps, rid)
         proj[rid] = P
-        cd = (g.get("component") or {}).get("dir")
+        declared = g.get("component")   # the request's declared component; its `dir` is None where the Build derived none for the shape
+        cd = declared.get("dir") if declared else None
         A = None
         if cd:
             A = A_cache.get(cd)

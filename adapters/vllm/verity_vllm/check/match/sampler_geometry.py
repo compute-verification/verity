@@ -168,7 +168,9 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     sg = sg if isinstance(sg, dict) else {}
     nsm = sg.get("num_sms")
     if nsm is None:
-        nsm = ((gp.get("applicability") or {}).get("components") or {}).get("num_sms")
+        app = gp.get("applicability")   # the Program's declared conditions, its components' facts among them; an older declaration has none
+        comps = app.get("components") if app else None
+        nsm = comps.get("num_sms") if comps else None
     info["num_sms"] = nsm
     info["declared_by"] = "sampler_geometry" if sg.get("num_sms") is not None else ("applicability.components.num_sms" if nsm is not None else None)
     if nsm is None:

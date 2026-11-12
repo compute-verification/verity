@@ -34,6 +34,13 @@ def test_an_artifact_that_states_no_inputs_address_map_or_chronology_gives_a_dec
     assert gp["gprog_artifact"]["relocated_components"] == {}
 
 
+def test_the_relocated_components_of_a_declaration_not_read_from_an_artifact_are_none():
+    moved = {"3,3": {"from": "/pod/build_request_LP3_T3", "to": "/here/build_request_LP3_T3"}}
+    assert GD.relocated_components({"gprog_artifact": {"relocated_components": moved}}) == moved
+    assert GD.relocated_components({"gprog_artifact": {"path": "p"}}) == {} and GD.relocated_components({"schema": GD.GP_SCHEMA}) == {}
+    assert GD.relocated_components(None) == {}
+
+
 def test_a_declaration_without_applicability_fails_by_name_and_reports_nothing_declared():
     problems: list[str] = []
     res: dict = {}

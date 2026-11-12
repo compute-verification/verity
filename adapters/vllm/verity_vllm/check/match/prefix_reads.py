@@ -217,8 +217,8 @@ class CachedKv:
 def check_hits(g: dict, P) -> tuple[list[str], dict | None]:
     """GM-01 (G5) for one request: the engine served the Program's declared prefix rows, and every cached block's rows were read from the
     request the Program declares for it.  (problems, the request's `prefix` entry | None for a cold request on both sides)."""
-    decl = g.get("prefix") or {}
-    C_decl, C_obs = int(decl.get("rows") or 0), int(getattr(P, "cached_rows", 0) or 0)
+    decl = g.get("prefix")   # the Program's declared prefix-cache hit {rows, producers}; a request it declares cold has no entry
+    C_decl, C_obs = (int(decl.get("rows") or 0) if decl else 0), int(getattr(P, "cached_rows", 0) or 0)
     if not C_decl and not C_obs:
         return [], None
     rid, why = g["request_id"], []
@@ -227,7 +227,8 @@ def check_hits(g: dict, P) -> tuple[list[str], dict | None]:
     rows = P.prefix_producers() if C_obs else {}
     if C_obs and sorted(rows) != list(range(C_obs)):
         why.append(f"{rid}: {C_obs - len(rows)} of its {C_obs} cached rows are read from no other request's row of the same layer and position")
-    want = list(decl.get("producers") or [])
+    producers = decl.get("producers") if decl else None
+    want = list(producers) if producers else []
     bs = C_decl // len(want) if want else 0   # the plan caches whole blocks: one declared producer per block
     got = [sorted(set().union(*(rows.get(j, set()) for j in range(b * bs, min((b + 1) * bs, C_obs))))) for b in range(len(want))] if bs else []
     bad = [b for b, (w, h) in enumerate(zip(want, got)) if h != [w]]
