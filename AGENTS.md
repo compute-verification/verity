@@ -234,8 +234,8 @@ ratchet-gate run beside them; under `--gate check`, every job in shards), and fa
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
 fails on its base too. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
-names), every PR when none does: a lone suspect is ejected, several are bisected, and the candidate is rebuilt without
-them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
+names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
+those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
 commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
 `warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
 next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to

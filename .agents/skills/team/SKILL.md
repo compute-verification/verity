@@ -80,7 +80,10 @@ it, and fast-forwards `main` only to a candidate with no new failure, each gatin
   unmarked PR stacked on its PRs is told to merge `main`. A failure its base shares blames no PR and holds nothing: @ci
   and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
   suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks
-  and their logs, several are bisected, and the candidates above are dropped and built again. A failure of the machines
+  and their logs, several are bisected, and in the same tick the candidate and those above it are built again in order
+  without the suspects; a PR a reviewer holds or someone else ejects or unmarks leaves the same way, taking no other PR
+  out. A failure above the lowest candidate waits for its base's check unless only its own PRs meet it, where `main`'s
+  word decides it. A failure of the machines
   is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) holds nothing; under `--gate check`, one
   its base's run doesn't share is rung to who acts on it, and under graph2 to no one.
   Only the loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
