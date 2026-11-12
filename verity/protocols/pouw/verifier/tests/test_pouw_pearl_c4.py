@@ -1106,15 +1106,17 @@ def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
         W.records_root(epoch.salt, epoch.weights_root, splits, plain)
     assert CW.exclusion_tiles(s, records) == CW.exclusion_tiles(s, plain)
     out = CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8)
-    assert out.audit.accepted and out.wref == CW.cell_wref(s, records[0]) * 18 * 15
+    assert out.audit.accepted and out.wref == 0  # the band rule: row 5's band and B row 2's block hold the whole unit
     as_excluded = [W.UnitRecord(epoch.workload.matmuls[0], 20, K, (3, 5), ())]
     reasons = [v.reason for v in CW.audit(s, epoch, prover, tr, splits, as_excluded, E.challenger(), 8).audit.verdicts]
     assert any("A row 5 is excluded but passes" in (r or "") for r in reasons)
 
 
 def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
-    """A voluntary row doesn't shelter the others: a credited row over R1's bound still fails its tile, and so does a
-    tile whose credited rows' debit passes the cap.  The spike row itself may be given up instead of excluded."""
+    """A voluntary row doesn't shelter the others from R1: a row declared credited over R1's bound still fails its tile.
+    The spike row itself may be given up instead of excluded.  By the band rule a voluntary row takes its band's credit,
+    so a tile whose rows share its band has nothing under the cap; a credited row of the next band still has its cap, and
+    a tile whose credited rows' debit passes it fails."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
     reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (1,)), tile, a_rows, b_rows, ops)
@@ -1130,7 +1132,11 @@ def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
     a_rows, b_rows = dead_rows(2), dead_rows(2)
     tile = type(s.tiles(Shape(64, 1024, 64))[0])(range(2), range(2))
     ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
-    reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 2, 1024, (), (), (0,)), tile, a_rows, b_rows, ops)
+    assert CW.check_opened(s, W.UnitRecord(ctx.matmul, 2, 1024, (), (), (0,)), tile, a_rows, b_rows, ops) is None
+    ctx = V.ctx_of("dead", (128, 1024, 1024), 0, 0)
+    tile = type(tile)((63, 64), range(2))
+    ops = s.encode(ctx, s.noise(ctx), a_rows, b_rows, tile)
+    reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 65, 1024, (), (), (63,)), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("the replayed debit") and "exceeds the cap" in reason
 
 

@@ -101,12 +101,12 @@ def test_encode_in_processes_is_the_serial_encode():
 
 
 def test_a_kept_store_is_audited_again(tmp_path):
-    """A store set up once and saved (`Store.save`) loads as it was, and each audit of it is a fresh session: two
+    """A store set up once and saved (`EncodedStore.save`) loads as it was, and each audit of it is a fresh session: two
     periods, each accepted, under session ids of their own."""
     held = period.setup_store(b"a period's records", hashlib.sha512(b"setup coins").digest(),
                               period.point_for(18, period.W, period.C0))
     held.save(tmp_path / "pous-store")
-    again = period.Store.load(tmp_path / "pous-store")
+    again = period.EncodedStore.load(tmp_path / "pous-store")
     assert again == held and len(again.blocks) == held.point.params.blocks
     signer, log = TestSigner(b"period", 3), session_log()
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
@@ -115,7 +115,7 @@ def test_a_kept_store_is_audited_again(tmp_path):
     assert {p.public("s_bits") for p in got} == {0}
 
 
-def _certified_store() -> period.Store:
+def _certified_store() -> period.EncodedStore:
     """A `C*` of uniformly random canonical blocks at the certified point, with a setup case of its own: what the run
     checks of it (the table, its root and the session) doesn't read how it was encoded, and a 256-block encode is 16
     core-minutes. No setup accepts it (a random block is no codeword), so the tie refuses its audits."""
@@ -125,8 +125,8 @@ def _certified_store() -> period.Store:
     digests = b"".join(mc.block_digest(b) for b in blocks)
     rows = [digests[64 * i:64 * (i + 1)] for i in range(q.blocks)]
     root, commitment = VerifierKey.from_row_digests(q, SALT, rows).root, hashlib.sha512(b"W").digest()
-    return period.Store(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
-                        period.setup_case(q, commitment, SALT, [list(blocks)]))
+    return period.EncodedStore(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
+                               period.setup_case(q, commitment, SALT, [list(blocks)]))
 
 
 def _run_of(case: dict) -> tuple:

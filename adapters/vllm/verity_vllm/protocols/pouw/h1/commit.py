@@ -100,6 +100,20 @@ def _same(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
     return all(a.get(k) == b.get(k) for k in ("root", "domain", "leaves"))
 
 
+def _theirs(served: Any, call: Any, held: Sequence[tuple[np.ndarray, np.ndarray]], words: np.ndarray) -> bool:
+    """Whether the Commit's rows ``held`` of a step's calls of K (each call's codes and s_a, in call order) are the
+    window's step A table ``words``, i.e. ``words`` is their `Served.a_words` call after call, without building the
+    padding: each call's block is its rows' words, then zero words, which are `chunk_words`'s zero codes of scale 0."""
+    block = Wt.chunks(call.k) * served.m
+    if len(words) != block * len(held):
+        return False
+    for i, (codes, scales) in enumerate(held):
+        mine, theirs = served.a_words(call, codes, scales, slots=len(codes)), words[i * block:(i + 1) * block]
+        if not np.array_equal(mine, theirs[:len(mine)]) or np.count_nonzero(theirs[len(mine):]):
+            return False
+    return True
+
+
 @dataclass
 class CommitTap:
     """What the Commit acquired, kept for H1 (`tap` on a committer, `attach`), and the Commit's values built from it.
@@ -124,8 +138,8 @@ class CommitTap:
     _x: dict[str, list[Any]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
     _steps: dict[int, int | None] = field(default_factory=dict)
-    #: each open step A table's rows as the Commit acquired them so far (one block a call, by call) and where
-    _rows: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
+    #: each open step A table's rows as the Commit acquired them so far (by call: its codes and s_a) and where
+    _rows: dict[str, dict[int, tuple[np.ndarray, np.ndarray]]] = field(default_factory=dict)
     _at: dict[str, dict[int, tuple[int, int | None, str, int]]] = field(default_factory=dict)
     _last: int = -1
     _com: Any = None
@@ -203,14 +217,15 @@ class CommitTap:
             self.refused.append(f"call {call.index}: the Commit's {len(codes)} rows are past its {served.m} slots")
             codes, scales = codes[:served.m], scales[:served.m]
         rows, cs = self._rows.setdefault(value, {}), served.step_calls(call.index)
-        rows[call.index] = served.a_words(call, codes, scales)
+        rows[call.index] = (codes, scales)
         self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
         if len(rows) < len(cs):
             return
         rows, got = self._rows.pop(value), self._at.pop(value)
-        mine, at = np.concatenate([rows[c] for c in cs]), [got[c] for c in cs]
-        same = words is not None and np.array_equal(mine, words) and value in served.registered
-        reg = served.registered[value] if same else served.a_tree(run, call, mine)
+        held, at = [rows[c] for c in cs], [got[c] for c in cs]
+        same = words is not None and value in served.registered and _theirs(served, call, held, words)
+        reg = served.registered[value] if same else served.a_tree(
+            run, call, np.concatenate([served.a_words(call, cc, sc) for cc, sc in held]))
         self._put(CR.commit_rows(call.step, call.k), reg, same,
                   {"round": call.step, **{f: [x[i] for x in at] for i, f in enumerate(("calls", "steps", "sites", "rows"))}})
 
@@ -292,16 +307,29 @@ def untied(run: Any) -> str | None:
     return None
 
 
-def registration(run: Any, previous: str | None = None) -> dict[str, Any]:
+def registration(run: Any, previous: str | None = None, day: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The window's registration W at its close: a ``verity/registration/v2`` record of its served trees' entries
     (`pouw_h1_served.Served.entries`: its tables' and weights' roots, each domain binding the window Program and its
     open root) under the window Program, with what the served trees refused, chained after ``previous``, the digest of
-    the prover's last record (`registration.digest`; None for its first). It is the one-stage log's record whose
-    tables a named Commit record reuses (`reused`)."""
+    the prover's last record (`registration.digest`; None for its first). With ``day`` (`serve_day.Day.naming`), its
+    window also names the day's declaration (``day``, ``declaration``). It is the one-stage log's record whose tables a
+    named Commit record reuses (`reused`)."""
     served = run.served
     return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
-            "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused)},
+            "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused),
+                       **dict(day or {})},
             "registered": served.entries(), "previous": previous}
+
+
+#: what a window's registration names of its day's declaration (`registration`'s ``day``)
+DAY_KEYS = ("day", "declaration")
+
+
+def day_of(window: Any) -> dict[str, Any] | None:
+    """The day's declaration ``window`` (a registration W) names in its window, or None."""
+    w = window.get("window") if isinstance(window, Mapping) else None
+    named = {k: w[k] for k in DAY_KEYS if isinstance(w, Mapping) and k in w}
+    return named or None
 
 
 def reused(run: Any, window: Any, record: Any) -> str | None:
@@ -314,7 +342,7 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
     served = run.served
     if served.refused or served.program is None:
         return "the window's served trees were refused, so it has no tables a Commit record can reuse"
-    if not isinstance(window, Mapping) or dict(window) != registration(run, window.get("previous")):
+    if not isinstance(window, Mapping) or dict(window) != registration(run, window.get("previous"), day_of(window)):
         return ("the window's registration is not its own: a verity/registration/v2 record of the window's served "
                 "trees' entries under its Program and open root (pouw_h1_commit.registration)")
     if not isinstance(record, Mapping):
@@ -514,6 +542,6 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
     return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
 
 
-__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind", "calls_root",
-           "committed", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused", "roots1", "shape", "site",
-           "untied"]
+__all__ = ["DAY_KEYS", "IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind",
+           "calls_root", "committed", "day_of", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused",
+           "roots1", "shape", "site", "untied"]

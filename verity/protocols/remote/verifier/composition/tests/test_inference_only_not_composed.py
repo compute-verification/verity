@@ -1,7 +1,7 @@
 """No composite composes a protocol that publishes private data in the clear (`IN_THE_CLEAR`) unless `KNOWN` lists it
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
-composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
+composites compose it as a stated exception until v1's private form replaces it. The
 composites' subprotocols are read wherever they are listed: their Lean (`Core.Onsite.components` and
 `Core.Remote.components`, with the ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`,
 `REMOTE`), and the ids a configuration may name as subprotocols (`parties.IDS`), read from its source: importing
@@ -28,7 +28,7 @@ COMPOSITES = {"Core.Onsite": ROOT / "verity/protocols/onsite/verifier/CoreOnsite
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
 #: composite composes any more fails `test_known_only_shrinks`.
-KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; v1's private form replaces it"}
+KNOWN = {"verity/inference-only/v0": "stated exception for the demos' runs until v1's private form replaces it"}
 
 
 def v0_names() -> set[str]:
@@ -40,12 +40,14 @@ def v0_names() -> set[str]:
 
 
 def lean_components(path: Path) -> tuple[list[str], list[str]]:
-    """A composite's `components`, the Lean names it lists, and the ids its `#guard` pins them to."""
+    """A composite module's `components` (each composite's it defines), the Lean names they list, and the ids their
+    `#guard`s pin them to."""
     text = path.read_text()
-    names = re.search(r"^def components\s*:[^\n]*?:=\s*\[(.*?)\]", text, re.M | re.S)
-    ids = re.search(r"^#guard components\.map \(·\.id\) ==\s*\[(.*?)\]", text, re.M | re.S)
-    assert names and ids, f"{path.name}: no `def components : ... := [...]` or no `#guard` on their ids"
-    return [n.strip() for n in names[1].split(",")], re.findall(r'"([^"]*)"', ids[1])
+    names = re.findall(r"^def components\s*:[^\n]*?:=\s*\[(.*?)\]", text, re.M | re.S)
+    ids = re.findall(r"^#guard components\.map \(·\.id\) ==\s*\[(.*?)\]", text, re.M | re.S)
+    assert names and len(names) == len(ids), f"{path.name}: a `def components : ... := [...]` without a `#guard` on its ids"
+    return ([n.strip() for ns in names for n in ns.split(",")],
+            [i for xs in ids for i in re.findall(r'"([^"]*)"', xs)])
 
 
 def configuration_ids() -> list[str]:
@@ -67,7 +69,7 @@ def unlisted(where: str, ids: list[str]) -> list[str]:
 def composed() -> set[str]:
     """Every id a composite's Lean or the reference composes."""
     return {i for p in COMPOSITES.values() for i in lean_components(p)[1]} | {
-        C.id for p in (R.ONSITE, R.REMOTE) for C in p.components}
+        C.id for p in (R.ONSITE, R.REMOTE_V1, R.REMOTE) for C in p.components}
 
 
 @pytest.mark.parametrize("composite", sorted(COMPOSITES))
@@ -78,7 +80,7 @@ def test_lean_components(composite):
     assert not v0_names() & set(names) or V0 in ids, f"{composite}.components holds v0 under an id its `#guard` doesn't pin"
 
 
-@pytest.mark.parametrize("product", [R.ONSITE, R.REMOTE], ids=lambda p: p.id)
+@pytest.mark.parametrize("product", [R.ONSITE, R.REMOTE_V1, R.REMOTE], ids=lambda p: p.id)
 def test_reference_components(product):
     ids = [C.id for C in product.components]
     assert not unlisted(f"the reference's {product.id}", ids), unlisted(f"the reference's {product.id}", ids)

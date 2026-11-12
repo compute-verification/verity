@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "PearlCUnscale_v2{TM=2,TN=2,BIAS=False}": {
+   "and": 28460,
+   "type": "52ff838f268b39e94f8f1702be7d29f30d2eb0a2e4a197530de5dccb321923c5691ebdeea5f7269d76cf771f5e71a4753c2fc03bb2e5fac572d1cb60dc737d7d"
+  },
+  "PearlCUnscale_v2{TM=2,TN=2,BIAS=True}": {
+   "and": 31328,
+   "type": "7aa4a1b08370f0e2990c2957a29f9ef5ff62345e872b7eb7f3c7c5a349d8e06fa272d5d0afb52bcd43fa1a1fda9cab784f0f0c9d5ca2c1f750b49280d0133050"
+  }
+ }
+}

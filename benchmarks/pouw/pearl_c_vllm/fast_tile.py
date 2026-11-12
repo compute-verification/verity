@@ -6,7 +6,9 @@ atom's bit-exact batch form).
   (`peel_factors_a`, `peel_factors_b`) and G (`gram`).
 - `form_v1`: `pearl_c.form_v1`, the per-element atom of v1's forming, with its scalar statistics, E′ and cast.
 - `chain_debit`: `pearl_c_debit.chain_debit`, every word's masked group words, its totals, the backward bisection of the
-  later promotions' intervals and its flags, over the tile's words together.
+  later promotions' intervals and its flags, over the tile's words together; `word_debits` keeps each word's counts apart
+  (`volunteer_pass.py` sums them over any rows and columns); `tile_debit`, `pearl_c_debit.tile_debit`, adds the forming
+  elements from the words' flags and each row's salt-dead elements (the support's two ends on every element at once).
 
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
@@ -31,7 +33,7 @@ from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
 _TOP = 0x7F7FFFFF
 _NEG_ZERO = np.uint32(0x80000000)
-_SCALAR = {"chain": C.chain, "form_v1": C.form_v1, "chain_debit": D.chain_debit}
+_SCALAR = {"chain": C.chain, "form_v1": C.form_v1, "chain_debit": D.chain_debit, "tile_debit": D.tile_debit}
 
 
 class _Scalar(Exception):
@@ -206,7 +208,15 @@ def _carried(x: np.ndarray, w: np.ndarray) -> np.ndarray:
     return _key(_plus_zero(_add(_word(x), w)))
 
 
-def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[int, int]:
+def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[np.ndarray, np.ndarray]:
+    """Per word (a's rows by b's, row-major): its flagged atoms and its later promotions into a +0 total."""
+    flags, zeros = _flags(a, b, device)
+    return flags.sum(axis=1, dtype=np.int64), zeros
+
+
+def _flags(a: np.ndarray, b: np.ndarray, device) -> tuple[np.ndarray, np.ndarray]:
+    """Per word (a's rows by b's, row-major): its atom flags (`pearl_c_debit.word_flags`, words x k/32) and its later
+    promotions into a +0 total."""
     g_, atom = device.g, device.atom.k
     ra, k = a.shape
     if g_ is None or b.shape[1] != k or k % (g_ * atom):
@@ -234,7 +244,7 @@ def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[int, int]:
                   _least(lambda x, w=w, hi=hi: _carried(x, w) > hi, n) - 1)
         bounds.append((lo, hi))
     bounds.reverse()
-    atoms = 0
+    flags = np.zeros((n, k // atom), bool)
     for g, masked in enumerate(groups):
         lo, hi = bounds[g]
         keep = np.zeros((1 << g_, n), bool)
@@ -242,9 +252,37 @@ def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[int, int]:
             v = _key(_promote(totals[g], masked[mask]))
             keep[mask] = (lo <= v) & (v <= hi)
         for j in range(g_):
-            atoms += int(keep[[m for m in range(1 << g_) if m >> j & 1]].any(axis=0).sum())
-    zeros = sum(int((t == 0).sum()) for t in totals[1:-1])
-    return atoms, zeros
+            flags[:, g * g_ + j] = keep[[m for m in range(1 << g_) if m >> j & 1]].any(axis=0)
+    zeros = np.zeros(n, np.int64)
+    for t in totals[1:-1]:
+        zeros += t == 0
+    return flags, zeros
+
+
+def _fp8(w: np.ndarray) -> np.ndarray:
+    """`pearl_kw.f32_to_fp8` on finite FP32 words: nearest-even, saturating to 448."""
+    w = _finite(w).astype(np.int64)
+    sign, field, fm = np.where(w >> 31 == 1, 0x80, 0), (w >> 23) & 0xFF, w & 0x7FFFFF
+    e = field - 127
+    # |x|·2⁹ below 2⁻⁶ is M·2^-s, M the significand as an integer; s ≥ 25 rounds to 0 whatever M < 2²⁴ is
+    m_int = np.where(field == 0, fm, fm | 0x800000)
+    s = np.minimum(np.where(field == 0, 140, 14 - e), 40)
+    q, r, half = m_int >> s, m_int & ((1 << s) - 1), 1 << (s - 1)
+    sub = q + ((r > half) | ((r == half) & (q & 1 == 1)))
+    exp, mant, rem = e + 7, fm >> 20, fm & 0xFFFFF
+    mant = mant + ((rem > 0x80000) | ((rem == 0x80000) & (mant & 1 == 1)))
+    exp, mant = np.where(mant == 8, exp + 1, exp), np.where(mant == 8, 0, mant)
+    normal = np.where((exp > 15) | ((exp == 15) & (mant >= 7)), 0x7E, (exp << 3) | mant)
+    return sign | np.where(e < -6, sub, normal)
+
+
+def _salt_dead(alpha: int, x: np.ndarray, beta: int, device) -> np.ndarray:
+    """`pearl_c_debit.salt_dead` on one formed row: the support's two ends from f32(α·x), each element's codes compared."""
+    k, atom = x.shape[0], device.atom.k
+    acc = _finite(_mul(np.full(k, alpha, np.uint32), x.astype(np.uint32)))
+    cb = np.full((k, atom), D.flat_code(beta), np.int64)
+    c = [_fp8(_step(device.atom, acc, cb, np.full((k, atom), f, np.int64))) for f in D.F_ENDS]
+    return (c[0] == c[1]) | ((c[0] | c[1]) & 0x7F == 0)
 
 
 def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100) -> tuple[int, int]:
@@ -252,9 +290,47 @@ def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]
     try:
         if not len(a_rows) or not len(b_rows):
             raise _Scalar
-        return _debit(_rows(a_rows), _rows(b_rows), device)
+        atoms, zeros = _debit(_rows(a_rows), _rows(b_rows), device)
+        return int(atoms.sum()), int(zeros.sum())
     except _Scalar:
         return _SCALAR["chain_debit"](a_rows, b_rows, device)
+
+
+def tile_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
+               formed: Sequence[tuple[int, Sequence[int], int]], device=D.H100) -> tuple[int, int, int]:
+    """`pearl_c_debit.tile_debit`: (flagged atoms, later +0 promotions, forming elements) over every word of the tile."""
+    try:
+        if not len(a_rows) or not len(b_rows) or len(formed) != len(a_rows):
+            raise _Scalar
+        a = _rows(a_rows)
+        flags, zeros = _flags(a, _rows(b_rows), device)
+        flags = flags.reshape(len(a_rows), len(b_rows), -1)
+        every = flags.all(axis=1)
+        elements = 0
+        for i, (alpha, x, beta) in enumerate(formed):
+            if every[i].all():
+                elements += a.shape[1]
+                continue
+            dead = _salt_dead(alpha, _rows([x], a.shape[1])[0], beta, device)
+            elements += int((np.repeat(every[i], device.atom.k) | dead).sum())
+        return int(flags.sum()), int(zeros.sum()), elements
+    except _Scalar:
+        return _SCALAR["tile_debit"](a_rows, b_rows, formed, device)
+
+
+def word_debits(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100
+                ) -> tuple[np.ndarray, np.ndarray]:
+    """`pearl_c_debit.word_debit` on every word (a, b) of the tile: (flagged atoms, later +0 promotions), each an
+    a_rows x b_rows array, whose sums over any rows and columns are `chain_debit`'s on them."""
+    try:
+        if not len(a_rows) or not len(b_rows):
+            raise _Scalar
+        atoms, zeros = _debit(_rows(a_rows), _rows(b_rows), device)
+        return atoms.reshape(len(a_rows), len(b_rows)), zeros.reshape(len(a_rows), len(b_rows))
+    except _Scalar:
+        got = [[D.word_debit(a, b, device) for b in b_rows] for a in a_rows]
+        return (np.array([[sum(f) for f, _ in row] for row in got], np.int64).reshape(len(a_rows), len(b_rows)),
+                np.array([[z for _, z in row] for row in got], np.int64).reshape(len(a_rows), len(b_rows)))
 
 
 # ---- installing them ----------------------------------------------------------------------------------------------------
@@ -277,7 +353,8 @@ def _native_blake3():
 def install(scheme, debit: bool = True) -> callable:
     """Put the batch forms in place for `scheme` (Pearl-C v1 on a promoted device), and the `blake3` package's BLAKE3 in place
     of the plain-Python one wherever a loaded module holds it; returns the undo.  ``debit=False`` leaves
-    `pearl_c_debit.chain_debit` to the caller (`served_debit.py` records it through a wrapper of its own)."""
+    `pearl_c_debit.chain_debit` and `tile_debit` to the caller (`served_debit.py` records the tile rule's through a
+    wrapper of its own)."""
     import sys
     from verity.commitments.crypto import blake3 as pure
     if scheme.forming != "v1" or scheme.device.g is None:
@@ -324,6 +401,7 @@ def install(scheme, debit: bool = True) -> callable:
     swap(C, "peel_factors_b", peel_factors_b)
     if debit:
         swap(D, "chain_debit", chain_debit)
+        swap(D, "tile_debit", tile_debit)
     swap(type(scheme), "checked", checked)
 
     def undo():

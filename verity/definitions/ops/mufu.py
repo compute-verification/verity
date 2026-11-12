@@ -413,7 +413,7 @@ def mufu_tanh_coverage() -> dict:
 
 @primitive("MufuTanh", 1, [("x", F32)], F32,
            conformance="quarantine: measured exact table (RTX 4090 sm_89, driver 580.178.04, triton 3.7.1) covering all 2^32 "
-                       "words — in-tree tables/mufu_tanh_sm89.xzblocks (sha256 5e261b88…) + three exhaustively-scanned rules; the "
+                       "words - in-tree tables/mufu_tanh_sm89.xzblocks (sha256 5e261b88...) + three exhaustively-scanned rules; the "
                        "manifest's conformance job: 400,077 words 0 mismatches; exercised end-to-end by the "
                        "dense/AttentionSoftcap@v1 difftest vs FA2 (25/25 bitwise, driver 595.91.07)",
            tables=(("tanh_mufu", library.LIBRARY),))

@@ -68,9 +68,31 @@ install -m 0644 -o root -g root /tmp/q/* /var/lib/vy-verifier/models/QWEN25_32B_
 verifier.py holds every pinned file to its SHA-512 before it listens, so the files are trusted because they match the
 pin, not because of where they came from. A run binds to a role once the pinned tree's `models.json` pins it.
 
+## The compose gate
+
+The same `host.py`, pinned under `/opt/vy-compose/<commit>` (its `pins.jsonl`, `/var/lib/vy-compose`), is
+`vy-compose-gate`, which serves one verb: `compose`, a served run's final record and composite composed off the served
+node from its compose hand-off. The lane's own gate key is forced to `vy-compose-gate --ssh "$SSH_ORIGINAL_COMMAND"
+--key LANE` for `research` on the auditor host's public address (`restrict`, and `from=` the hosts that send
+hand-offs), and the compose itself runs as `auditor`, and the sender is
+`served_verdicts.sh gate-compose`, which runs:
+
+~~~sh
+tar --create --files-from=private/compose/inputs.txt --file=- | $COMPOSE_GATE compose
+~~~
+
+`COMPOSE_GATE` is the sender's setting: `ssh` with the lane's gate key, as `research` on that address.
+
+At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean
+packages the compose runs (`verity/protocols/recursion/verifier/recursive`, whose `vstar-recursive` the record runs, and the
+composite's), and records the pin with the branch it is on (`host.py pinned COMMIT BRANCH`). The compose runs as
+`auditor` with `HOME=/var/lib/vy-compose`, so `lake` and `elan` resolve from `/usr/local/bin` or that home's
+`.elan/bin`. The docstring says what the gate refuses and what it answers.
+
 ## Tests
 
 `tests/test_host.py` runs the gate in-process with its root steps injected. It holds the whitelist to verifier.py's own
-parser, including a bound run's binding to a `models.json`-shaped pin and the host's main list. It also runs one
-session through `tests/stub_verifier.py` (slow). Run the suite as
+parser, including a bound run's binding to a `models.json`-shaped pin and the host's main list, and the compose gate's
+receive and compose on toy hand-offs (`benchmarks/one_stage/tests/test_served_verdicts.py` sends one through it with
+`gate-compose`). It also runs one session through `tests/stub_verifier.py` (slow). Run the suite as
 `uv run tools/verity/check/suites.py verity/protocols/poub/device/live_verifier`, on a node (the testing skill).

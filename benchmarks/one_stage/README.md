@@ -27,10 +27,10 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
-  a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
-  and that window, whose private bodies stay on the node with the row dir: of the row's files the run's record holds only
-  the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing of a request, and no file of the row's
-  `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
+  a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
+  `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: of the
+  row's files the run's record holds only the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing
+  of a request, and no file of the row's `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
@@ -284,8 +284,28 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
 - `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's utilization (the work its step trace's
-  steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall) and its accounted share
-  (the period credit's work at J10-R's 9/64 floor at θ, over the same wall), at the tensor and boost clock readings.
+  steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
+  credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at
+  the tensor and boost clock readings.
+- `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
+  After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
+  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
+  verdict rejects a run on a drawn row over its debit cap (over-cap rule `reject`, which `served_passes.py
+  volunteer-needed` reports before anything is served) gives up the passes' rows over a debit cap before the verifier's
+  coin (`served_passes.py volunteer --device`: every word's counts from the card's debit cubin, every
+  `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
+  far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
+  verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict
+  over all of them (`served_passes.py verify`, `--over-cap` from `PEARLPLUS_OVER_CAP`; its coin, where the lane's gate is
+  set, a draw session's of its own there, reserved as the lane's first reserve after its Pearl-C period closed, right
+  before the draw, and opened on the run's commitment, `bench_arm.LiveDraw`), and writes the piece through
+  `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
+  (`served_shares.pearlplus_shares`), and why it credits nothing.
+- `served_compare.py`: the served compare, `served_verdicts.sh`'s step under `PEARLPLUS_TIE` once Pearl+'s piece wrote W
+  and before the record, on the CPU. It holds the serve to the row of record: serve.json's φ is the row's declared φ and
+  lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
+  W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
+  one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

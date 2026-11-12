@@ -14,8 +14,8 @@ was rejected.
 A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
 for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
 accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows (Lean
-`SecurityProofs.EncardAccSeqsLeSync`, whose timing advice is `Fin W → Sync`): 7 bits per window at 16 × 8. A sync per
-link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
+`Properties.NetworkCertifier.EncardAcceptedObservationsLe`, whose timing advice is `Fin W → Σ_sync`): 7 bits per window
+at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
 
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
 set, or other than the unit's, is an `advice` violation in its own window only. A window's grid reads only the syncs of
@@ -60,10 +60,10 @@ from dataclasses import dataclass, field
 from verity.protocols.certifier.verifier.certificate import (Certificate, CertifiedRecord, Direction, PublicKey,
                                                                           parameters_digest, record_head)
 from verity.protocols.certifier.verifier.commitment import CommittedRecord, record_digest
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Record
+from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid
 from verity.protocols.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 
-Published = Record | CommittedRecord | CertifiedRecord
+Published = BlockGrid | CommittedRecord | CertifiedRecord
 
 
 @dataclass(frozen=True, slots=True)

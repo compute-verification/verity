@@ -20,7 +20,8 @@ records go to `sampled_replay_p<pair>_rank<r>.json`, so a rank replayed is never
 different hosts.  Once every rank's record is there, `fold` decides the Commit as the in-process Commit would have: each rank's
 gates after its pre-replay verdict (`c2.replay_gates`), the row's verdict, `finalize_pair<k>.json`, coverage, `sampled_replay.json`,
 `summary.json` and `runs.jsonl`.  Exit 0 PASS, 3 FAIL, 4 ranks remain, 2 refused (a bundle that is not this record's, a pick too
-large for this host's memory).
+large for this host's memory).  Like the single-GPU replay (`pipeline.cpu_replay`), it's the prover's pre-flight check, and it
+leaves no keep.
 """
 from __future__ import annotations
 
