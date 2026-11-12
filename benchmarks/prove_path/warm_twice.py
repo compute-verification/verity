@@ -19,7 +19,8 @@ kept. The cache holds every composed circuit at once, so it is this job's own, o
 GB is 10^9 bytes throughout; the lines it prints give GiB beside it.
 
 With ``--then-window`` the second pass warms another window over the cache the first one's pass filled: a kept compose cache
-offered to a later window. Its lines say which of its templates the cache held (``kept``), and it composes and keeps the rest,
+offered to a later window. Before the first pass the job reads that window as the take does, from the empty cache (``pass0``
+logs; exit 64 if it can't, with nothing composed). The second pass's lines say which of its templates the cache held (``kept``), and it composes and keeps the rest,
 so the cache can grow past what the first pass left: the floor ends the pass if the disk doesn't take it. ``--take`` then
 takes each template of the last window from the cache as its audit's staging does (`a5.own_composed`), one at a time into a
 directory beside the cache, removing each before the next: a link where the entry was composed under this window's partition
@@ -447,6 +448,16 @@ class Job:
                     "--law", a.law, "--compose-cache", str(cache), "--jobs", str(a.jobs)]
 
         self.r["second_window"] = bool(a.then_window)
+        if a.then_window:  # before the first pass composes anything: this tree reads the second window (a take of the empty cache)
+            self.check()
+            try:
+                self.run_pass(0, argv(windows[-1], "take"), env)
+            except Stop as e:
+                if isinstance(self.r["passes"][-1]["exit"], int):
+                    raise Stop(EXIT_ARG, f"REFUSED: the second window isn't read here, and nothing was composed: {e.why}") from None
+                raise
+            finally:
+                self.r["second_window_read"] = self.r["passes"].pop()
         for n, w in enumerate(windows, 1):
             self.check()
             self.run_pass(n, argv(w, "warm"), env)

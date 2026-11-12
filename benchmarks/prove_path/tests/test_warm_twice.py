@@ -148,6 +148,17 @@ def test_a_second_window_is_warmed_over_the_first_ones_cache_and_then_taken(tmp_
                              "bound_here": False, "meta_is_the_lines": True, "bound_to_window": True}]
     assert took["take"] == {"templates": 1, "copy": 1} and took["cache"] == second["cache"]
     assert r["take"] == {"link": 0, "copy": 1, "no room": 0, "as_the_audit_reads": True} and "after_take" in r["free_bytes"]
+    # before pass 1 the second window was read as the take reads it, with the cache still empty
+    assert r["second_window_read"]["pass"] == 0 and r["second_window_read"]["cache"]["circuits"] == 0
+    assert r["second_window_read"]["command"].split()[-2:] == [str(tmp_path / "two"), "take"]
+
+
+def test_a_second_window_the_take_cannot_read_is_refused_before_anything_is_composed(tmp_path: Path) -> None:
+    stand_in = 'if [ "$3" = take ]; then exit 9; fi\n' + COMPOSE
+    rc, lines, r = ended(tmp_path, job(tmp_path, stand_in, "--min-free-gb", "0", "--then-window", str(tmp_path / "two"), "--take"))
+    assert rc == 64 and r["passes"] == [] and lines[-1].startswith("CACHE REMOVED (in ")
+    assert any(ln.startswith("REFUSED: the second window isn't read here, and nothing was composed: PASS 0 FAILED") for ln in lines)
+    assert r["cache"]["at_removal"]["circuits"] == 0 and r["second_window_read"]["exit"] == 9
 
 
 def test_a_second_window_without_a_second_pass_is_refused(tmp_path: Path) -> None:
