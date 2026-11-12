@@ -994,7 +994,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
     # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
-    # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. A server's challengers audit
+    # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. Given cards (`devices`) the
+    # proof server has a prover a card and no ZK server: a card's sessions run in that order, and sessions on different
+    # cards overlap, each still one session of a statement staged before any coin. A server's challengers audit
     # its sessions at its close, each member's audit then a verdict. On the window's challenger session (`window_trees`)
     # a session is submitted once the one before has closed its tree there, and the session's log is the audit of them all.
     relayed: list[str] = []
