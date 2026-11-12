@@ -208,9 +208,7 @@ class RankCommit(RankExtension):
         no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
         rank's site of the same name. A rank that holds no H1 window (before `h1rank_install`, after `h1rank_release`) is
         refused."""
-        st = self._h1rank
-        if st is None:
-            raise RuntimeError("this rank holds no H1 window: h1rank_install has not run on it, or h1rank_release has")
+        st = self._h1rank_state()
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()
         names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}

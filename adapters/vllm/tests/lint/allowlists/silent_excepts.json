@@ -3,7 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_extra_norm_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_moe_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
-    {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "silent-except", "symbol": "_cpu_quota", "detail": "except (OSError, ValueError): pass"},
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._end_step", "detail": "except OSError: pass"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._expand_step_rows", "detail": "except TypeError: per_row = None"},

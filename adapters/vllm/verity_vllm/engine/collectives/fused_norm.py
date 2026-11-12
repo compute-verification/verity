@@ -20,6 +20,8 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
+__all__ = ["FUSED", "KIND", "expected_residual", "recording", "silenced", "targets"]
+
 FAR_MODULE = "vllm.models.common.ops.fused_allreduce_rms_norm"
 FAR_NAME = "fused_allreduce_rms_norm"
 KIND = "fused_allreduce_rms_norm"

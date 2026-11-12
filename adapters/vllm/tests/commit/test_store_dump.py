@@ -9,6 +9,8 @@ import pytest
 
 pytest.importorskip("torch")
 
+import torch
+
 from tests.check.opened import commit_steps, retained_block
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.commit import opened as OV
@@ -32,6 +34,14 @@ def test_the_store_imports_where_torch_is_not_installed():
     hidden = "import sys; sys.modules['torch'] = None; import verity_vllm.commit.store_dump"
     child = subprocess.run([sys.executable, "-c", hidden], capture_output=True, text=True, check=False)
     assert child.returncode == 0, child.stderr
+
+
+def test_as_bytes_is_a_tensors_and_an_arrays_bytes_in_memory_order():
+    """`verity_vllm.commit.store_dump.as_bytes`: one byte an item, whatever the value's dtype and shape."""
+    t = torch.arange(6, dtype=torch.int32).reshape(2, 3)
+    for value in (t, t.numpy()):
+        view = SD.as_bytes(value)
+        assert view.format == "B" and view.ndim == 1 and bytes(view) == t.numpy().tobytes()
 
 
 def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
