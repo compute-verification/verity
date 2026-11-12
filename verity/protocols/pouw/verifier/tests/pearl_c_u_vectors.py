@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pearl_c_vectors as CV
 from verity.definitions.silicon.models import HOPPER_BF16_WGMMA_K16
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_u as U
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c_u.json"
 CASE, INDEX, WEIGHT, SHAPE = "gpu-check", 5, 1, (256, 384, 1024)
