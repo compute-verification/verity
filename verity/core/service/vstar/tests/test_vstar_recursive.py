@@ -37,8 +37,8 @@ import settings
 import verity_difftest as D
 
 LEAN = Path(__file__).resolve().parents[1]
-RECURSIVE = LEAN / "recursive"
-FLOCK = LEAN.parent / "flock"
+RECURSIVE = Path(__file__).resolve().parents[5] / "verity/core/service/vstar/recursive"
+FLOCK = Path(__file__).resolve().parents[5] / "verity/core/service/flock"
 STATEMENT = "verity/flock-circuit"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Nci.Guarantees.RemotePeriod
 public import Proofs.Nci.Remote
+public import Proofs.Nci.CutWitness
 public import Proofs.Flock.Soundness.Audit.Periods
 
 /-!
@@ -24,7 +25,8 @@ Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped
 sources.
 
 The witnesses, `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivial`, are at constructed instances of one
-window with no incorrect proof block and no declared run, where each event holds on every run or on none. The `example` at
+window with no incorrect proof block, the first with one declared day (the toy `Nci.Cut.Toy`), the second with none,
+where each event holds on every run or on none. The `example` at
 the end applies `DampenerRemotePeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
 -/
 
@@ -340,17 +342,21 @@ over windows: at most `∑_t ks t`); or no window does and some identity has mor
 (`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the wrong windows hold at most `ε' C`,
 each identity's escaped blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
 `(JΔ/H) C + J K B`, and the residual's hypothesis is `DampenerThreaded`'s at
-`(1 − ε_W) W_cert − ε' C − (JΔ/H) C − J K B`; the declared runs sum their `Throttled` bounds under `Λ` and the
-monitored compute `C`; `remote_core` gives both forms. -/
+`(1 − ε_W) W_cert − ε' C − (JΔ/H) C − J K B`; each day's verdict bounds its MACs by `CountHE`, summed over the days into
+`X`; `remote_core` gives both forms, at `ρ = C/X` (`declaredShare_div`). -/
 theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
   intro T Ω _ _ cap wrong p ε β ι _ bad drawn detected win I idW τw w ks K Φ Δ H q B εW κ C U χ mfu W M Mu Mr Mx R _
-    r d Th c k b_w b_a Λ dd e hp hε hc hcC hpouw hS hq0 hq1 hId hH hΔ hTD hw hB0 hκ hC hU hmfu hmfu1 hk hba hΛ hRT
-    hsize hM0 hM hu hres hx
+    d n c k γ V _ _ _ Wk val βw βx b hp hε hc hcC hpouw hS hq0 hq1 hId hH hΔ hTD hw hB0 hκ hC hU hmfu hmfu1 hβw hβx hb
+    hcomp hval hshare hHard hExp hM0 hM hu hres hx
   classical
   obtain ⟨hbadP, hdrawnA, hmiss, hks⟩ := hS
   obtain ⟨hord, hI, hΦ, hcap, hwB⟩ := hId
-  obtain ⟨hthr, hbound⟩ := hRT
-  have hrate : (0 : ℝ) ≤ k / c := div_nonneg hk (Nat.cast_nonneg c)
+  -- each day's verdict bounds its MACs (`CountHE`), pooled over the period's days
+  have hdecl : ((∑ i, (Wk i).N : ℕ) : ℝ) ≤ C / (C / ∑ i, Cut.workHE (n i) k (βw * βx) b (Wk i).O) := by
+    refine declared_le_div hC ?_
+    rw [Nat.cast_sum]
+    exact Finset.sum_le_sum fun i _ => (Cut.SecurityProofs.CountHE γ V (d i) (Wk i) (val i) c k (n i) βw βx b hβw hβx
+      hb (hval i) (hshare i) (hHard i) (hExp i) (hcomp i)).1
   set μ := PMF.uniformOfFintype ((t : Fin T) → Ω t)
   -- window `t` samples a faulty block and detects none
   let Bad : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ =>
@@ -407,23 +413,10 @@ theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
           κ * (C - ((1 - εW) * W ξ - ε * C - lagShare I.card Δ H * C - (I.card * K * B / C) * C)) :=
         mul_le_mul_of_nonneg_left (by linarith) hκ.le
       linarith
-    have hdecl : ((∑ i, (Th i).M.card : ℕ) : ℝ) ≤ C / rhoT (k / c : ℝ) b_a Λ := by
-      unfold rhoT
-      rw [div_div_eq_mul_div, le_div_iff₀ hba, Nat.cast_sum, Finset.sum_mul]
-      calc ∑ i, ((Th i).M.card : ℝ) * b_a ≤ ∑ i, (k / c : ℝ) * Λ * ((d i).D.size (d i).D.computed : ℝ) :=
-            Finset.sum_le_sum fun i _ => by
-              have h1 := hthr i
-              have h2 : (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed ≤
-                  (k / c : ℝ) * Λ * (d i).D.size (d i).D.computed :=
-                mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left (hbound i) hrate) (Nat.cast_nonneg _)
-              linarith
-        _ = (k / c : ℝ) * Λ * ∑ i, ((d i).D.size (d i).D.computed : ℝ) := by rw [Finset.mul_sum]
-        _ ≤ (k / c : ℝ) * Λ * C := mul_le_mul_of_nonneg_left hsize (mul_nonneg hrate hΛ)
-        _ = C * ((k / c : ℝ) * Λ) := by ring
-    have hMξ : M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Th i).M.card + Mx ξ := hM ξ
-    have hMc : (M ξ : ℝ) ≤ Mu ξ + Mr ξ + ((∑ i, (Th i).M.card : ℕ) : ℝ) + Mx ξ := by exact_mod_cast hMξ
+    have hMξ : M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Wk i).N + Mx ξ := hM ξ
+    have hMc : (M ξ : ℝ) ≤ Mu ξ + Mr ξ + ((∑ i, (Wk i).N : ℕ) : ℝ) + Mx ξ := by exact_mod_cast hMξ
     obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ξ)) hMc (hu ξ) hr hdecl (hx ξ)
-    rw [residualShare_sub hC] at h1 h2
+    rw [residualShare_sub hC, declaredShare_div hC hU] at h1 h2
     exact ⟨h1, h2⟩
   · calc prob μ (fun ξ => (ε * C < wrongCapacity cap (fun t => wrong t ξ) ∨ ∃ t ∈ Finset.univ, Bad t ξ) ∨
           ∃ j ∈ I, Esc j ξ)
@@ -447,43 +440,52 @@ theorem prob_uniform_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → P
   exact ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using prCoin_le_one E)
 
 /-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something** (`DampenerRemotePeriod_honest`): one
-window run by one identity, its certificate right (`wrong` empty) at capacity `C = 2`, all of the monitored compute
-certified (`W_cert = 2`), no incorrect proof block and no declared run, and the run's one counted multiplication on its
-unmonitored compute `U = 2` at `MFU₀ = 1/2`, `κ = 2`, at `p = 3 · 2⁻⁴⁰`, `ε' = 2p/10⁻⁶`, `q = 1` and `K = 0`. Then
-`δ = 1/(2 · 10⁶)`, and the overhead bound on the hardware multiple is `1/(1/2 + ε' + 1/100)`, in `(1, 2]`, the run's
-own multiple being 2. -/
+window run by one identity, its certificate right (`wrong` empty) at capacity `C = 100`, all of the monitored compute
+certified (`W_cert = 100`), no incorrect proof block, unmonitored compute `U = 100` at `MFU₀ = 1/2`, `κ = 2`, and one
+declared day, the toy `Nci.Cut.Toy` at `CompliesAtMost 1 2 2`, (H) at unit costs and (E) at `b = 2`, so `α = 1` and the
+day's bound is `X = 2 (2 + 1) + √4 = 8`, its two MACs the run's counted multiplications; at `p = 3 · 2⁻⁴⁰`,
+`ε' = 2p/10⁻⁶`, `q = 1` and `K = 0`. Then `δ = 1/(2 · 10⁶)`, and the overhead bound on the hardware multiple is
+`1/(1/2 + ε' + 2/25)`, in `(1, 2]`, the run's own multiple being 50. -/
 theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := by
-  refine ⟨1, fun _ => Bool, inferInstance, inferInstance, fun _ => 2, fun _ _ => False, 3 / 2 ^ 40,
+  refine ⟨1, fun _ => Bool, inferInstance, inferInstance, fun _ => 100, fun _ _ => False, 3 / 2 ^ 40,
     2 * (3 / 2 ^ 40) * 10 ^ 6, Empty, Unit, inferInstance, fun _ => ∅, fun _ => ∅, fun _ => ∅, fun b => b.elim,
-    Finset.univ, fun _ => (), fun _ => 0, fun _ => 0, fun _ => 0, 0, 0, 0, 1, 1, 0, 0, 2, 2, 2, 0, 1 / 2,
-    fun _ => 2, fun _ => 1, fun _ => 1, fun _ => 0, fun _ => 0, Empty, inferInstance, fun i => i.elim,
-    fun i => i.elim, fun i => i.elim, 1, 1, 0, 100, 1, 0, 0,
-    by norm_num, by positivity, fun _ => by norm_num, by simp, fun t ξ => ?_,
-    fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, by norm_num, le_rfl,
-    fun t ξ => by simpa using prob_uniform_le_one _,
-    fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h],
-    fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _), by simp, one_pos, le_rfl,
-    by norm_num, by simp [Assumptions.TerminalDetection], by simp, fun _ => le_rfl, le_rfl, by simp,
-    two_pos, two_pos, zero_le_two, by norm_num, by norm_num, zero_le_one, by norm_num, zero_le_one,
-    fun i => i.elim, fun i => i.elim, by simp,
-    fun _ => Nat.one_pos, fun _ => by simp, fun _ => by norm_num, fun _ => by simp [wrongCapacity],
-    fun _ => by norm_num, by norm_num [Finset.card_univ], fun ξ => ?_⟩
-  · rw [prob_of_forall_not _ fun _ h => h]
+    Finset.univ, fun _ => (), fun _ => 0, fun _ => 0, fun _ => 0, 0, 0, 0, 1, 1, 0, 0, 2, 100, 100, 0, 1 / 2,
+    fun _ => 100, fun _ => 2, fun _ => 0, fun _ => 0, fun _ => 0, Unit, inferInstance, fun _ => Cut.Toy.d, fun _ => 2,
+    1, 2, Unit, Finset (Fin Cut.Toy.C.N), inferInstance, inferInstance, inferInstance, fun _ => Cut.Toy.W,
+    fun _ => Cut.Toy.val, 1, 1, 2,
+    by norm_num, by positivity, fun _ => by norm_num, by simp [Assumptions.WithinCompute], ?_, ?_, by norm_num, le_rfl,
+    ?_, one_pos, le_rfl, by simp [Assumptions.TerminalDetection], fun _ => le_rfl, le_rfl,
+    two_pos, by norm_num, by norm_num, by norm_num, by norm_num, one_pos, one_pos, two_pos,
+    fun _ => Cut.SecurityProofs.toy_complies, fun _ => Cut.SecurityProofs.toy_values,
+    fun _ => Cut.SecurityProofs.toy_noSharedPair, fun _ => Cut.SecurityProofs.toy_hardness 2,
+    fun _ => Cut.SecurityProofs.toy_exports 2,
+    fun _ => two_pos, fun _ => by simp [Assumptions.SourcesCover, Cut.SecurityProofs.toy_N],
+    fun _ => by norm_num [Assumptions.UnmonitoredAtMost], fun _ => by simp [Assumptions.ResidualAtMost, wrongCapacity],
+    fun _ => by norm_num [Assumptions.CheatingAtMost], by norm_num [Finset.card_univ], fun ξ => ?_⟩
+  · intro t ξ
+    rw [prob_of_forall_not _ fun _ h => h]
     positivity
+  · unfold Assumptions.SampledPerWindow
+    exact ⟨fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, fun t ξ => by simpa using prob_uniform_le_one _,
+      fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h]⟩
+  · unfold Assumptions.IdentitySchedule
+    exact ⟨fun t t' _ h => absurd h (by rw [Subsingleton.elim t t']; exact lt_irrefl _), by simp, by norm_num, by simp,
+      by simp⟩
   · simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
-      declaredShare, rhoT, Finset.card_univ, Fintype.card_unit]
+      Fintype.univ_unit, Finset.sum_singleton, Cut.SecurityProofs.toy_workHE]
     norm_num
 
 /-- **`DampenerRemotePeriod` is false without PoUW's per-window bound** (`DampenerRemotePeriod_nontrivial`), at
 `AcceptAll`: the window's certificate is wrong on every run, so PoUW's per-window probability is 1, above `p = 0`. The
 residual counts the wrong capacity, so the run's one counted multiplication (`M_r = 1`, `κ = 2`, `MFU₀ = 1`) has compute
-efficiency 1, above the bound `51/100`, and hardware multiple 1, below the overhead bound `100/51`, on every run, while
+efficiency 1, above the bound `1/2`, and hardware multiple 1, below the overhead bound `2`, on every run, while
 `δ = 0`. -/
 theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontrivial := by
-  refine ⟨le_rfl, by norm_num, fun _ => zero_le_one, by simp [Assumptions.WithinCompute], ?_, zero_le_one, le_rfl, ?_,
+  refine ⟨fun _ => ⟨true⟩, le_rfl, by norm_num, fun _ => zero_le_one, by simp [Assumptions.WithinCompute], ?_,
+    zero_le_one, le_rfl, ?_,
     one_pos, le_rfl, by simp [Assumptions.TerminalDetection], fun _ => le_rfl, le_rfl,
-    two_pos, one_pos, le_rfl, one_pos, le_rfl, zero_le_one, by norm_num, zero_le_one,
-    ⟨fun i => i.elim, fun i => i.elim⟩, by simp [Assumptions.WithinCompute], fun _ => Nat.one_pos,
+    two_pos, one_pos, le_rfl, one_pos, le_rfl, one_pos, one_pos, one_pos,
+    fun i => i.elim, fun i => i.elim, fun i => i.elim, fun i => i.elim, fun i => i.elim, fun _ => Nat.one_pos,
     fun _ => by simp [Assumptions.SourcesCover], fun _ => by norm_num [Assumptions.UnmonitoredAtMost],
     fun _ => by simp [Assumptions.ResidualAtMost, wrongCapacity], fun _ => by norm_num [Assumptions.CheatingAtMost],
     fun h => ?_, ?_⟩
@@ -503,7 +505,7 @@ theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontri
   · rw [prob_of_forall_not _ fun ξ hG => by
       have h2 := hG.2
       simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
-        declaredShare, rhoT, Guarantees.AcceptAll.M, Guarantees.AcceptAll.W] at h2
+        Finset.univ_eq_empty, Finset.sum_empty, Guarantees.AcceptAll.M, Guarantees.AcceptAll.W] at h2
       norm_num at h2]
     norm_num [Guarantees.AcceptAll.ks]
 
@@ -513,10 +515,10 @@ theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontri
 open Guarantees.AcceptAll in
 example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),
     prob (PMF.uniformOfFintype Bool) (fun a => wrong t (Function.update ξ t a)) ≤ 0) : False := by
-  obtain ⟨h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
-    h24, h25, h26, h27, h28, h29, -, hnot⟩ := DampenerRemotePeriod_nontrivial
+  obtain ⟨-, h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
+    h24, h25, h26, h27, h28, h29, h30, h31, h32, -, hnot⟩ := DampenerRemotePeriod_nontrivial
   exact hnot (DampenerRemotePeriod 1 (fun _ => Bool) cap wrong 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
-    ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty r d Th 1 1 0 100 1 0 0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12 h13
-    h14 h15 h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29)
+    ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty d n 1 1 Unit Unit Wk val 1 1 1 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12
+    h13 h14 h15 h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31 h32)
 
 end Nci.SecurityProofs

@@ -28,7 +28,9 @@ The client downloads every file itself and checks it against the record before L
 hashes aren't cryptographic. A module whose input hash
 has no checked file is built from source, as is every module after a mismatch, when the kill switch (the docs site's
 `/api/lean-cache/state`) is disabled, quarantines the scope or can't be reached, or when `LEAN_CACHE=off`. Lake's input
-hashes don't depend on where a checkout is, so a build published from `/build/verity` restores in any checkout.
+hashes don't depend on where a checkout is, so a build published from `/build/verity` restores in any checkout, and one
+published before a layout move renamed the package's directory restores at its new path: where a package has no record
+under its path, the client reads the newest under each path it had before (`moved.py`, from the recorded moves).
 
 The publisher signs its uploads directly with the bucket-scoped key, as root, outside the sandbox the build ran in; no
 broader credential sits on the machine to mint a shorter-lived one. Every write is conditional (`If-None-Match: *`). A
@@ -45,6 +47,7 @@ import base64
 import datetime
 import hashlib
 import hmac
+import importlib.util
 import json
 import os
 import re
@@ -434,6 +437,24 @@ def unescape(name: str) -> str:
     return name[1:-1] if name.startswith("«") and name.endswith("»") else name
 
 
+def newest(s3: S3, sc: str, revs: list[str]) -> str | None:
+    """The first of ``revs`` (newest first) with a record under the scope ``sc``."""
+    have = {o["key"][len(sc) + 1: -len(RECORD)] for o in s3.list(sc + "/") if o["key"].endswith(RECORD)}
+    return next((r for r in revs if r in have), None)
+
+
+def former(root: Path, pkg: str) -> list[str]:
+    """The paths ``pkg`` had before the layout moves ``root`` records, latest first (`moved.py`, beside this file); none
+    where that file isn't (another repository's copy of the cache)."""
+    p = Path(__file__).resolve().with_name("moved.py")
+    if not p.is_file():
+        return []
+    spec = importlib.util.spec_from_file_location("lean_moved_for_cache", p)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return [f for f in m.former(pkg, m.recorded(root)) if PACKAGE.match(f) and ".." not in f.split("/")]
+
+
 def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=print, env=os.environ, plat: str | None = None,
             lake: list[str] | None = None) -> bool:
     """Main's newest cached build of ``pkg`` among ``revs`` into Lake's local cache, every file checked first. False when
@@ -450,15 +471,22 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
     if not fetched_deps(root / pkg):
         log(f"lean-cache: {pkg}: its dependencies aren't fetched (run tools/verity/lean/setup.sh {pkg}); building from source")
         return False
-    have = {o["key"][len(sc) + 1: -len(RECORD)] for o in s3.list(sc + "/") if o["key"].endswith(RECORD)}
-    rev = next((r for r in revs if r in have), None)
+    rev, at = newest(s3, sc, revs), ident
+    if rev is None:
+        # A layout move renames a package's directory and no byte Lake hashes, and records are keyed by that directory:
+        # until integration publishes a commit after the move, main's build is under the path the package had before it.
+        for old in former(root, pkg):
+            was = {**ident, "package": old}
+            if not quarantined(scope(was), q) and (rev := newest(s3, scope(was), revs)) is not None:
+                at = was
+                break
     if rev is None:
         log(f"lean-cache: {pkg}: no cached build of an ancestor of HEAD ({sc}); building from source")
         return False
-    raw = s3.get(record_key(ident, rev))
+    raw = s3.get(record_key(at, rev))
     if raw is None:
-        raise CacheError(f"{record_key(ident, rev)} was listed but can't be read")
-    rec = check_record(raw, ident, rev)
+        raise CacheError(f"{record_key(at, rev)} was listed but can't be read")
+    rec = check_record(raw, at, rev)
     local = lake_cache(ident, env)
     deps = sorted(n[len(DEP):-len(".jsonl")] for n in rec["files"] if n != MAPPING and mapping(n))
     t0 = time.monotonic()
@@ -486,7 +514,8 @@ def restore(root: Path, pkg: str, s3: S3, revs: list[str], q: list[str], log=pri
     got = sum(f["bytes"] for _, f in todo)
     arts = sum(not mapping(n) for n in rec["files"])
     with_deps = f", with {len(deps)} dependencies ({', '.join(deps)})" if deps else ""
-    log(f"lean-cache: {pkg}: main's build at {rev[:12]} restored ({arts} artifacts"
+    moved = "" if at is ident else f" (published as {at['package']}, before a layout move)"
+    log(f"lean-cache: {pkg}: main's build at {rev[:12]}{moved} restored ({arts} artifacts"
         f"{with_deps}; {got >> 20} MiB in {len(todo)} files "
         f"fetched and checked in {time.monotonic() - t0:.0f} s, {len(rec['files']) - len(todo)} already here); "
         f"`lake build` unpacks them")

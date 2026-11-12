@@ -238,7 +238,7 @@ def _sealed(roots: list[Path], name: str, **kw) -> Path:
 @not_root
 def test_gc_deletes_a_sealed_run_through_the_helper_which_it_refused_as_read_only_before(roots, tmp_path, helper):
     d = _sealed(roots, "r1")
-    kw = dict(now=lambda: NOW, usage=Disk([d]), remote_check=lambda a, p: None, in_use=lambda p: None, node=None, force=True,
+    kw = dict(now=lambda: NOW, usage=Disk([d]), remote_check=lambda a, p: R.Stored("verified", ""), in_use=lambda p: None, node=None, force=True,
               low_pct=0, apply=True)
     SL.SEALED_UID = ME + 1                      # not the sealer's: gc treats it as any read-only tree
     plan = R.gc(tmp_path, **kw)

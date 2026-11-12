@@ -59,7 +59,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, Sy
 PACKAGE = Path(__file__).resolve().parents[1] / "network" / "lean"
 EXE = PACKAGE / ".lake" / "build" / "bin" / "network-records"
 # `verity_difftest.build`'s lock: no two `lake build`s of a package overlap, across processes and suites.
-BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/core/difftest/lean" / ".lake" / "harness-build.lock"
 RAW, COMMITTED, CERTIFIED = 0, 1, 2
 DISAGREEMENT = "disagreement"
 _KEY = LmsKey(lms.Params(8, 8, 1, toy=True), bytes(24))

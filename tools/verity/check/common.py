@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import os
 import subprocess
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -13,6 +14,16 @@ ROOT = Path(__file__).resolve().parents[3]
 #: `check`, and every check launched under `slot.py` (drive's trains, Lean checks and after-landing runs), whose tool is
 #: `python3`
 RECORDED_CHECKS = "(tool = 'check' OR (tool = 'python3' AND manifest_json LIKE '%tools/verity/check/check.py%'))"
+#: how far back a launch lists the store's attempts (`recent`): well past the longest a recorded check runs, its steps
+#: running at once and each stopped after `check.STEP_BUDGET_S`, so the newest recorded checks all started since; listing every
+#: attempt the store holds instead takes half a minute
+RECENT_S = 48 * 3600
+
+
+def recent(now: float) -> str:
+    """The run id prefix (`rYYYYMMDD-HHMMSS`, UTC) `RECENT_S` before ``now`` (seconds since the epoch): the ``since`` of a store
+    refresh that lists only the attempts started after it (`LocalStore.refresh`)."""
+    return time.strftime("r%Y%m%d-%H%M%S", time.gmtime(now - RECENT_S))
 
 
 def cache_dir() -> Path:

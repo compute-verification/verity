@@ -22,7 +22,8 @@ from verity.ml.circuits.codec import canonical_json
 
 PROTOCOL = "verity/certifier/v0"
 #: the block record's owner by default: the lane that runs the network's sessions (``site.json``'s ``lane``)
-OWNER: str = json.loads(Path(__file__).resolve().with_name("site.json").read_text())["lane"]
+OWNER: str = json.loads(
+    (Path(__file__).resolve().parents[2] / "benchmarks/network_traces/site.json").read_text())["lane"]
 #: the block record's δs (``verity/block-record/v2``'s ``at``): a leg's certificate holds at δ where its error is at
 #: most δ. A period's answer at δ has error δ when each of its terms was decided at its share of δ.
 BLOCK_DELTAS = reporting.DELTAS

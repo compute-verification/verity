@@ -74,6 +74,18 @@ def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
     assert got["public"] == "ee" * 64 and got["proof"].public == tmp_path / "pub-4.bin" and got["proof"].sessions == (s,)
 
 
+def test_v2_hands_v2_the_tables_its_circuit_looks_up_alone(tmp_path):
+    """The stage holds every MUFU table a circuit with lookup slots may read, and v2 holds the blobs' pinned tables to the
+    circuit's META lookups (`OneStageZk.tablesHeld`): the case names those tables and no other."""
+    (tmp_path / "circuit.txt").write_text('flock-hm 1\nMETA {"lookups": {"ex2": {}, "rcp": {}}}\ng 1 2\n')
+    (tmp_path / "tables").mkdir()
+    for n in ("rsq", "sqrt", "rcp", "ex2"):
+        (tmp_path / "tables" / f"{n}.u32").write_bytes(n.encode())
+    mm = {"st": {"dir": tmp_path, "public": "ee" * 64}, "m": types.SimpleNamespace(n=4), "pin": "cc" * 64}
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True)
+    assert got["tables"] == [tmp_path / "tables" / "ex2.u32", tmp_path / "tables" / "rcp.u32"]
+
+
 def test_v2_says_why_an_audit_has_no_case():
     assert "plain" in a5.v2_proof([{}], zk=False)
     assert "drew 2 members" in a5.v2_proof([{}, {}], zk=True)

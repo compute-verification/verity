@@ -27,6 +27,7 @@ from verity.core.protocols.certifier.warden import (END, REFUSED, Shim, Warden, 
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 #: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128, egress="bytes")
@@ -39,7 +40,8 @@ SLOW_COMMIT_S = 0.4
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_serve", HERE / "warden_serve.py")
+    spec = importlib.util.spec_from_file_location("network_traces_warden_serve",
+                                                  ROOT / "benchmarks/network_traces/warden_serve.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -70,7 +72,7 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
     minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
     origin's delay and 30 s for the key and the check."""
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
     args = ws.parser().parse_args(argv[2:])
@@ -93,7 +95,7 @@ def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_
     stream of the request's shape relayed to the sink tunnels' local ends for its program, the endpoint given the
     gate's `LOAD_READY_S`; a request without a load passes none. The gate's shapes are `load_relay`'s, and its
     `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 46 at H200."""
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     program, sinks = "ab" * 64, [("127.0.0.1", 50001 + i) for i in range(4)]
     req = {"device": "warden", "requests": 7, "scan": True,
@@ -117,7 +119,7 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
     """`warden-rehearse` always passes its temperature and top_p (0 and 1 by default), and `rehearse` puts both on
     every request, so an endpoint's own generation config never applies; the arrivals, prompts, lengths and seeds stay
     the seed's, so `warden_minutes` still bounds the run."""
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     given = ws.parser().parse_args(
         A.warden_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
@@ -145,7 +147,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import scan_zk as sz
     req = {"device": "warden", "requests": 7, "scan": True, "temperature": 0.6, "top_p": 0.9}
@@ -183,7 +185,7 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
     bounds a prompt by its KI and the tokens by its KO. w63k4's class refuses the class of record's schedule (65
     egress cells past its KO + 1 = 5), so a w63k4 run needs its own."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import scan_zk as sz
     assert A.SCAN_CLASS == sz.W63.name and set(A.SCAN_CLASSES) == {"w63", "w63k4"} <= set(sz.SETUPS)
@@ -211,7 +213,7 @@ def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows
     default (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's
     most requests are 1064 execution phases of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import scan_zk as sz
     plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
@@ -241,7 +243,7 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     windows (`groups`), which `warden_group_minutes` covers with the origin's delay and 30 s for the key and the
     check. Without `--window-per-group` the prompts go at the gate's arrivals."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import scan_zk as sz
     prompts = [[70001, 3], [5], [7]]
@@ -284,7 +286,7 @@ def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_
     it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
     run."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import scan_zk as sz
     lo, hi = A.SCAN_BUCKET_MS
@@ -318,7 +320,7 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     `rehearse` takes `--prompts` only with `--ids` and `--window-per-group` only with `--prompts`, and a group is at most
     `lanes` prompts."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import scan_zk as sz
     longest = [[(1 << A.WARDEN_PROMPT_ID_BITS) - 1] * A.WARDEN_PROMPT_IDS[1]]
@@ -375,7 +377,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     the bytes the network certifier certified, every connection ends within the two execution phases 24 tokens take at D
     = 27, and the check accepts the run."""
     sys.path.insert(0, str(HERE))
-    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
     import auditor as A
     import demo_stub as D
     import scan_zk as sz
@@ -816,7 +818,8 @@ def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_
     out.mkdir()
     lr, program = ws.lr, hashlib.sha512(b"the reading program").hexdigest()
     lr.write_store(store, lr.TINY)
-    sink = subprocess.Popen([sys.executable, str(HERE / "load_relay.py"), "sink", "--listen", "127.0.0.1:0",
+    sink = subprocess.Popen([sys.executable, str(ROOT / "benchmarks/network_traces/load_relay.py"), "sink",
+                             "--listen", "127.0.0.1:0",
                              "--weights", str(tmp_path / "weights.bin"), "--witness", str(tmp_path / "witness.bin")],
                             stdout=subprocess.PIPE, text=True)
     port = json.loads(sink.stdout.readline())["listening"][1]

@@ -416,7 +416,6 @@ def exposures(th: dict) -> list[dict]:
     p = T.DEFAULTS
     loud = p | X.SCENARIOS["served today, R_wipe 4 GB"] | {"sigma": 1e7}
     falls = alpha_falls(next(r for r in th["defaults"]["T3"] if r["key"] == "K"))
-    chi = cheat(p)
     out = [
         ("r̂ added by a thousand identities' verdict lag", 1000 * p["lag_s"] / (p["years"] * T.YEAR)),
         ("ν at 100 times today's K", X.nu(p | {"K": 100 * p["K"]})),
@@ -426,8 +425,9 @@ def exposures(th: dict) -> list[dict]:
         ("η at T4, served today with a 4 GB wipe residual and σ = 1e7 bit/s", X.eta(loud, "T4")),
         ("R_wipe there, helpers refilling within the read deadline, GB", X.wipe_residual(loud) / T.GB),
         ("multiple of today's proving cost at which χ reaches 1%",
-         bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1.0, 1e4)),
-        ("the same if χ were linear in it, 0.01/χ", 0.01 / chi),
+         bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1e-6, 1e4)),
+        ("the same if χ were linear in it, 0.01 over the closed form's χ (which the fleet's capacity doesn't stop at 1)",
+         0.01 / X.chi(p)),
     ]
     for tier in T.TIERS:
         key, share = tornado(tier)

@@ -81,7 +81,7 @@ def _sha(b: bytes) -> str:
 def _capture(tmp: Path, monkeypatch, fused_op, norm_out_given: bool):
     """Each rank's call recorded by capture.py's recorder, committed in the layout stage.py's `Capture` checks."""
     capture = _load("capture", monkeypatch)
-    S = capture._State({"capture": str(tmp), "steps": [STEP], "mla_tokens": 0, "open": {}, "keep": "all"})
+    S = capture._State({"capture": str(tmp), "steps": [STEP], "mla_tokens": 0, "open": {}, "keep": "all", "min_free_gib": 0})
     monkeypatch.setattr(capture, "S", S)
     rng = np.random.default_rng(7 + norm_out_given)
     PARTS["parts"] = parts = _bf16(rng, (W, T, H), 0.5)

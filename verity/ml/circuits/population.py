@@ -31,33 +31,51 @@ def _population_version(version: int) -> int:
     return version
 
 
+def leaf_type(width: int | Sequence[int]) -> Value | Array:
+    """A value's leaf type (`mixed_population_program`'s ``values``): ``Value(width)`` for an integer width, or for a shape
+    ``(d_1, ..., d_k, width)`` of two or more naturals ``Array(d_1, ... Array(d_k, Value(width)))``. A `Digest`, eight
+    SHA-512 words of 64 one-bit leaves, is ``(8, 64, 1)``."""
+    if _natural(width):
+        return Value(width)
+    *dims, w = width
+    t: Value | Array = Value(w)
+    for d in reversed(dims):
+        t = Array(d, t)
+    return t
+
+
+def _leaf_ok(width: Any) -> bool:
+    return _natural(width) or (isinstance(width, tuple) and len(width) >= 2 and all(_natural(x) for x in width))
+
+
 def mixed_population_program(members: Sequence[tuple[SpecializedDefinition, int]], *, version: int = 1,
-                             values: Sequence[tuple[str, int, int]] = ()) -> Program:
+                             values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> Program:
     """`TemplatePopulations_v1{templates, counts}`: one batch per member `(template, n)`, in order; member j's parameters are
     `j.<name>`, arrays over its instances, and the result is the tuple of the batches' results. `templates` are the members'
     descriptor ids, in order. A member whose population declares ports (`_instance_ports`) keeps them, under `j.<name>` and at
     its batch's offset in the result. ``values``: ``(name, leaves, width)`` each, values a window registers that the root
-    takes ahead of the members' parameters, each the parameter ``name`` of type ``Array(leaves, Value(width))``, read by no
-    node and declared by no port, named in order in the binding record (`TemplatePopulations_v1{templates, values,
-    counts}`): one-stage's R7 registers only a program's parameters, and the proof blocks read the values only through
-    their registered reads. `version=0` builds `TemplatePopulations_v0{counts}` (`POPULATION_VERSIONS`), which takes no
-    values."""
+    takes ahead of the members' parameters, each the parameter ``name`` of type ``Array(leaves, leaf_type(width))``
+    (``width`` an integer, or a shape such as a `Digest`'s ``(8, 64, 1)``, which the binding record holds as a list), read
+    by no node and declared by no port, named in order in the binding record (`TemplatePopulations_v1{templates, values,
+    counts}`): one-stage's R7 registers only a program's parameters, reading each by its type, and the proof blocks read
+    the values only through their registered reads. `version=0` builds `TemplatePopulations_v0{counts}`
+    (`POPULATION_VERSIONS`), which takes no values."""
     if not members or any(n < 1 for _, n in members):
         raise ValueError("every member has at least one instance")
     _population_version(version)
     sigs = [t.signature() for t, _ in members]
-    values = tuple((name, leaves, width) for name, leaves, width in values)
+    values = tuple((name, leaves, tuple(width) if isinstance(width, list) else width) for name, leaves, width in values)
     own = [f"{j}.{name}" for j, (ps, _) in enumerate(sigs) for name, _ in ps]
     if values and version == 0:
         raise ValueError("a v0 population takes no values: its id names its counts alone")
-    if any(not (isinstance(v, str) and v and _natural(n) and _natural(w)) for v, n, w in values) \
+    if any(not (isinstance(v, str) and v and _natural(n) and _leaf_ok(w)) for v, n, w in values) \
             or len({v for v, _, _ in values} | set(own)) != len(values) + len(own):
         raise ValueError(f"values {[v for v, _, _ in values]}: each (name, leaves, width), a new name beside the members' "
-                         f"parameters, at least one leaf of at least one bit")
+                         f"parameters, at least one leaf of at least one bit, a shape two or more naturals")
 
     def signature(S):
         params = tuple((f"{j}.{name}", Array(n, t)) for j, ((ps, _), n) in enumerate(zip(sigs, S.counts)) for name, t in ps)
-        held = tuple((v, Array(n, Value(w))) for v, n, w in getattr(S, "values", ()))
+        held = tuple((v, Array(n, leaf_type(w))) for v, n, w in getattr(S, "values", ()))
         return held + params, Tuple(*(Array(n, ret) for (_, ret), n in zip(sigs, S.counts)))
 
     def body(B, S, *args):
@@ -145,4 +163,4 @@ def population(template: SpecializedDefinition, n: int, *, version: int = 1) -> 
     return bind(defn, **named, N=n)
 
 
-__all__ = ["POPULATION_VERSIONS", "mixed_population_program", "population", "population_program"]
+__all__ = ["POPULATION_VERSIONS", "leaf_type", "mixed_population_program", "population", "population_program"]

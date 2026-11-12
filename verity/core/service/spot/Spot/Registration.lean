@@ -410,7 +410,7 @@ def poolOpen (rec : Json) (v : Verifier) (p : Pool) : Option (String × String) 
     | .ok mine => match mine.find? (·.value == p.pin) with
       | some want =>
         match Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
-            p.pin #[#[("bytes", p.genesis)]] want with
+            #[] p.pin #[#[("bytes", p.genesis)]] want with
         | .ok r => some (want.domain, r)
         | .error _ => none
       | none => none
@@ -537,7 +537,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
+        v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
   return c
@@ -608,7 +609,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
-      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
+      (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
+        v.schemas)
       v.outputs v.log
     c := kept (poolChained rec v) c "R7-pool-chain"
   return c

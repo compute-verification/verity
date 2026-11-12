@@ -2,15 +2,17 @@
 # interior windows, the link members' rows read from the boundary record (`verity.ml.windows.links`), the verifier's own
 # reads of them, and the auditor's reference headers round 2 holds the sessions' to. Not a package: the tests load toy.py
 # from this directory. Only the reference statements' templates are lowered (one slow test); nothing is proved (audit.py
-# does, on a node).
+# does, on a node). Opt-in (`VERITY_TWO_STAGE_GUARD`; `tests/guard_node.py --pytest` on a node): SPOT[Flock]'s two-stage
+# Lean model evaluated on a run's guard export (`guard.py`), the fetched fixture `tests/fixtures/guard.tar.xz`.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (the Lean verifier of record): keyed on the suite's whole tree
-untraced = ["tests/test_toy.py"]
+untraced = ["tests/test_toy.py", "tests/test_guard.py"]
 # `verity`: the circuits the toy builds and evaluates, the windows it commits, the one-stage verifier's check and registered
 # reads the tests hold them to, and the Lean packages its verifier of record builds from; that lakefile, named on its own, is
-# the package the tests build (`one_stage.verifier.executable`), so check runs them after lean-build
-inputs = ["verity", "verity/core/service/spot/lakefile.toml"]
+# the package the tests build (`one_stage.verifier.executable`), so check runs them after lean-build; `verity_config`, which
+# reads the guard's command from this directory's settings registry
+inputs = ["verity", "verity/core/service/spot/lakefile.toml", "tools/config/verity_config"]

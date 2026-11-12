@@ -224,8 +224,9 @@ class Wipe:
     host_residual_bits: float = 0.0
     #: bits each server's boot disk keeps through a wipe that doesn't reach it (today's), on top of either form
     boot_disk_bits: float = 0.0
-    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (the streamed wipe's retention game)
-    game_delta_coin: float = 2.0**-128
+    #: one game's failure: the coins' and the pseudorandom function's advantage (the streamed wipe's retention game),
+    #: each the registry's (`regime.onsite`)
+    game_delta_coin: float = 0.0
     prf_advantage: float = 0.0
 
     #: the per-server bound against `M_s` is a draft; per device, the streamed wipe

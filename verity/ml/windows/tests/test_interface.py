@@ -5,8 +5,9 @@ the units change inference block, its step and slot and a form of the window's),
 against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
 cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
 the value's salts, every other input row is
-declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
-reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
+declared registered, ingress or free and counted from the description, the verifier's window (and its registered
+reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads, and a history table's
+writer commits each row as the table's leaf, whose root the verifier pins from the public bodies. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
 (`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
@@ -32,12 +33,13 @@ from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.commitments import row_table as RT
+from verity.ml.commitments import history as HT, row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row, row_leaf
-from verity.ml.windows import flock_inputs as FI, interface as I, rows as CS, wiring as WI
+from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row,
+                                           row_leaf)
+from verity.ml.windows import flock_inputs as FI, history as HW, interface as I, rows as CS, wiring as WI
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -738,6 +740,184 @@ def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
     bad.record(GEMM, [x, ins[1]], [np.asarray(evaluate_batch(GEMM, x, ins[1], kernel="reference"), dtype=np.uint16).reshape(3, 16)])
     with pytest.raises(ValueError, match="x#1 row is not the o0 row"):
         bad.close(salt_key=bytes(32))
+
+
+def latent(n: int = 6, at: int = 0, capacity: int = 16, **edit) -> I.History:
+    """History table ``latent``: `sliced`'s six ``Gemm_v2{K=16, N=8}`` outputs, unit u at position ``at + u``, after ``at``
+    rows the verifier holds from the table's earlier windows."""
+    runs = ([{"start": 0, "count": at, "held": "latent", "row": 0}] if at else []) + [
+        {"start": at, "count": n, "writer": G8ID, "out": "o0", "radix": [n], "base": 0, "step": [1]}]
+    return I.History(**{"name": "latent", "program": "program", "writer": G8ID, "out": "o0", "words": 8, "runs": runs,
+                        "capacity": capacity, **edit})
+
+
+def history_window(table: HT.HistoryTable, seed: int = 0) -> tuple[I.Window, CS.Committed, dict[str, bytes]]:
+    """`sliced`, its slices' outputs appended to ``table`` as history table ``latent``'s next rows, committed: -> the
+    window, its commitment and its members' public bodies."""
+    ins8, outs8, ins, outs = sliced_values(seed)
+    at = len(table.rows)
+    table.append(outs8[0])
+    win = I.Window(sliced(registered=I.Registered({}, histories=(latent(at=at, capacity=table.leaves),))), RUN, LAW, 2,
+                   registered={"latent": table})
+    win.record(G8, ins8, outs8)
+    win.record(GEMM, ins, outs)
+    got = win.close(salt_key=bytes(32))
+    return win, got, {m.key: got.public_body(k) for k, m in enumerate(win.window.members)}
+
+
+def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
+    """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
+    each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
+    holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
+    history tables, whose root the verifier of record computes from its writers' public bodies, the root the window
+    registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    win, got, publics = history_window(table)
+    ms = win.window.members
+    assert [(m.template, m.schema("o0")) for m in ms] == [(G8ID, SEG)] * 3 + [(GID, V2)] * 2
+    assert [m.schema(p) for p in ("x#0", "x#1", "w") for m in ms[3:4]] == [SEG, SEG, V2]
+    assert b"".join(bytes(s) for m in ms[:3] for s in WI.strings(publics, m, "o0")) == b"".join(table.bcs)
+    assert WI.check(ms, publics) == {}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert doc["statements"][G8ID]["out_rows"] == [[SEG, [0]]] and doc["registered"]["histories"] == [latent().doc()]
+    assert [r[1] for r in doc["statements"][GID]["in_rows"]] == [SEG, SEG, V2]
+    assert I.Registered.of(doc["registered"]) == win.circuit.registered
+    resolve = {GID: GEMM, G8ID: G8}.__getitem__
+    mine = I.window_of_record(doc, LAW, resolve)
+    assert mine.members == ms
+    roots = {"latent": table.root.hex()}
+    pinned = HW.pins(doc, roots)
+    hist = HW.params(doc, mine, publics, pinned)
+    assert HT.roots_of(CS.leaf_layer(publics), hist) == {"latent": (table.root, table.domain.domain_id)}
+    assert pinned == {"latent": table.entry()} and hist["registered"] == {"latent": pinned["latent"]["root"]}
+    strings = {"latent": HW.strings(win.circuit.registered.histories[0], mine, publics, {})}
+    assert strings == {"latent": table.bcs}
+    listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "sliced", [(G8ID, 6), (GID, 3)], doc["statements"],
+                                                         declared={"registered": doc["registered"]})))
+    assert I.window_of_record(listed, LAW, resolve).members == ms
+    assert HW.params(listed, mine, publics, HW.pins(listed, roots)) == hist and HW.pins(listed, roots) == pinned
+    later, _, bodies = history_window(table, seed=1)
+    doc2 = json.loads(I.circuit_bytes(later.circuit_record()))
+    roots2, mine2 = {"latent": table.root.hex()}, I.window_of_record(doc2, LAW, resolve)
+    hist2 = HW.params(doc2, mine2, bodies, HW.pins(doc2, roots2), strings)
+    assert len(table.rows) == 12 and hist2["held"] == {"latent": {"latent": [s.hex() for s in strings["latent"]]}}
+    assert HT.roots_of(CS.leaf_layer(bodies), hist2) == {"latent": (table.root, table.domain.domain_id)}
+    assert HW.strings(later.circuit.registered.histories[0], mine2, bodies, strings) == table.bcs
+    assert table.bcs[:6] == strings["latent"]
+    with pytest.raises(ValueError, match="holds no rows of"):
+        HT.roots_of(CS.leaf_layer(bodies), HW.params(doc2, later.window, bodies, HW.pins(doc2, roots2)))
+
+
+def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_strings():
+    """The verifier's history tables (`history.params`) hold the window's registered root to the root over its writers'
+    public strings, the root of the pin the reads are made from (`history.pins`): a registered root over other rows, a
+    body whose strings another unit wrote (under the leaf layer over it, or the window's), a registration naming no root
+    for the table, a table without a pin or with another table's, and a writer member's missing body are each refused."""
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    win, _got, publics = history_window(table)
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    roots, leaf = {"latent": table.root.hex()}, CS.leaf_layer(publics)
+    pinned = HW.pins(doc, roots)
+    assert HT.roots_of(leaf, HW.params(doc, win.window, publics, pinned))["latent"][0] == table.root
+    other = HT.HistoryTable("program", "latent", 8, 16)
+    other.append(np.stack(table.rows[::-1]), table.salts[::-1])
+    with pytest.raises(ValueError, match="not the table's root"):
+        HT.roots_of(leaf, HW.params(doc, win.window, publics, HW.pins(doc, {"latent": other.root.hex()})))
+    m0 = win.window.members[0]
+    body = bytearray(publics[m0.key])
+    body[-1] ^= 1
+    flipped = {**publics, m0.key: bytes(body)}
+    with pytest.raises(ValueError, match="not the table's root"):
+        HT.roots_of(CS.leaf_layer(flipped), HW.params(doc, win.window, flipped, pinned))
+    with pytest.raises(ValueError, match="not the leaf layer"):
+        HT.roots_of(leaf, HW.params(doc, win.window, flipped, pinned))
+    with pytest.raises(ValueError, match="records no root"):
+        HW.pins(doc, {})
+    for wrong in ({}, {"latent": {**pinned["latent"], "words": 16}}, {"latent": {**pinned["latent"], "value": "other"}}):
+        with pytest.raises(ValueError, match="is not the table's"):
+            HW.params(doc, win.window, publics, wrong)
+    with pytest.raises(ValueError, match="no public body"):
+        HW.params(doc, win.window, {k: v for k, v in publics.items() if k != m0.key}, pinned)
+
+
+def test_a_history_tables_window_refuses_rows_it_cant_commit_as_the_tables():
+    """The committer refuses a history table not given, or given for another program, rows other than its runs'
+    positions, a writer's output that isn't the table's row at its position, a unit writing two positions, and a unit of
+    the writer writing none, since its row would need a salt of its own."""
+    ins8, outs8, ins, outs = sliced_values()
+
+    def close(table: HT.HistoryTable | None, history: I.History) -> None:
+        win = I.Window(sliced(registered=I.Registered({}, histories=(history,))), RUN, LAW, 2,
+                       registered=None if table is None else {"latent": table})
+        win.record(G8, ins8, outs8)
+        win.record(GEMM, ins, outs)
+        win.close(salt_key=bytes(32))
+
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    table.append(outs8[0])
+    close(table, latent())
+    with pytest.raises(ValueError, match="give its committed table"):
+        close(None, latent())
+    with pytest.raises(ValueError, match=r"committed as \(program, table, words, capacity\)"):
+        close(HT.HistoryTable("other", "latent", 8, 16), latent())
+    short = HT.HistoryTable("program", "latent", 8, 16)
+    short.append(outs8[0][:5])
+    with pytest.raises(ValueError, match="holds 5 rows, not its runs' 6 positions"):
+        close(short, latent())
+    wrong = HT.HistoryTable("program", "latent", 8, 16)
+    wrong.append(outs8[0][::-1])
+    with pytest.raises(ValueError, match="not its history table's row"):
+        close(wrong, latent())
+    twice = {"start": 0, "count": 6, "writer": G8ID, "out": "o0", "radix": [2, 3], "base": 0, "step": [0, 1]}
+    with pytest.raises(ValueError, match="writes two positions"):
+        close(table, latent(runs=[twice]))
+    with pytest.raises(ValueError, match=r"units \[5\] write no history table's row"):
+        five = HT.HistoryTable("program", "latent", 8, 16)
+        five.append(outs8[0][:5])
+        close(five, latent(n=5))
+
+
+def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_table():
+    """A history table names its writer's output and runs that tile its positions over the writer's units, and is
+    refused otherwise; its table reads and openings take its supplied root, domain id and 1 from the verifier's pin of
+    it, a parameter of its own, and count registered where the window registers the pinned root."""
+    with pytest.raises(ValueError, match="at most its capacity"):
+        latent(capacity=4)
+    with pytest.raises(ValueError, match="its runs are"):
+        latent(runs=[{"start": 0, "count": 6}])
+    for edit, why in [(dict(out="o1"), "whose output o1 is 8 words"), (dict(words=4), "whose output o0 is 4 words"),
+                      (dict(writer=GID), f"its writer {re.escape(GID)}"), (dict(n=7), "outside the writer's 6"),
+                      (dict(runs=[{"start": 1, "count": 6, "writer": G8ID, "out": "o0", "radix": [6], "base": 0,
+                                   "step": [1]}]), "leave a gap or overlap"),
+                      (dict(runs=[{"start": 0, "count": 6, "writer": GID, "out": "o0", "radix": [6], "base": 0,
+                                   "step": [1]}]), "not the table's writer")]:
+        with pytest.raises(ValueError, match=why):
+            sliced(registered=I.Registered({}, histories=(latent(**edit),)))
+    with pytest.raises(ValueError, match="a new name"):
+        sliced(registered=I.Registered({"latent": 8}, histories=(latent(),)))
+    with pytest.raises(ValueError, match="a registered read names its writer's o0"):
+        sliced(registered=I.Registered({"y": 48}, reads=(I.Read(G8ID, "o0", "y", 0, (6,), 0, (8,)),),
+                                       histories=(latent(),)))
+    reg = I.Registered({}, (), (), (I.TableRead(EID, "root", "latent", "root", 0, 3),
+                                    I.TableRead(EID, "domain", "latent", "domain", 0, 3)),
+                       (I.Opening(EID, "latent", "tok", ("row", "salt", "path"), "o1", 0, 3),),
+                       histories=(latent(words=16, out="o0", writer=EID, runs=[
+                           {"start": 0, "count": 3, "writer": EID, "out": "o0", "radix": [3], "base": 0, "step": [1]}],
+                           capacity=4),))
+    c = I.Circuit("read", ((EMB, 3),), registered=reg)
+    assert I.seg_rows(c.registered) == {(EID, "o0")}
+    assert [(r.port, r.param) for r in I.committed_reads(reg)] == [
+        ("root", "latent/root"), ("domain", "latent/domain"), ("o1", "latent/opened")]
+    table = HT.HistoryTable("program", "latent", 16, 4)
+    got = I.supplied(reg, {"latent": table.entry()}, "p", module=REG)
+    assert {v: x.rows.tolist() for v, x in got.items()} == {
+        "latent/root": [I.digest_words(table.root)], "latent/domain": [I.digest_words(table.domain.domain_id)],
+        "latent/opened": [[1]]}
+    words = dict(I.layout(EMB).rows)
+    pin = {"latent": table.root.hex()}
+    assert I.input_count(c.description(), pins=pin, roots=pin)["registered"] == 16 * 3 * (
+        64 + words["row"] + words["salt"] + words["path"])
+    assert I.input_count(c.description(), pins=pin, roots={"latent": "cd" * 64})["registered"] == 0
 
 
 def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():

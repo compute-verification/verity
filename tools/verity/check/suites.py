@@ -27,7 +27,7 @@ of them, read from git's view of the working tree, so uncommitted edits count. T
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
 `~/.cache/verity/tests` (`VERITY_TEST_CACHE` overrides it) and reused while the key is unchanged, on this machine or, through a
-verdict pack (`verdicts.py`; a recorded check gathers one from the newest recorded checks), on any other. A pass names the
+verdict pack (`verdicts.py`; a recorded check imports the newest recorded checks' packs), on any other. A pass names the
 recorded run that earned it (`--run`, which check passes), and a reuse prints that run.
 
 A suite nested in another's directory is its own. The outer suite's directory leaves it out of the outer one's key and inputs

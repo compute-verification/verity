@@ -437,7 +437,9 @@ run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
 # The Lean check cache's caps: lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
-# used, or one per `build` Lean slot where lean-slots has more (uncapped, they fill a node's /). lean_audit.py loads common.py by its repository path, so both keep that layout.
+# used, or one per `build` Lean slot where lean-slots has more (uncapped, they fill a node's /). lean_audit.py loads its modules
+# by their repository paths, so each keeps that layout: common.py, module_keys.py, settings.py, and module_keys's headers.py and
+# the task graph's contract.py (test_lean_prune runs the prune from these files alone).
 # After installing, `sudo systemctl enable --now vy-lean-prune.timer`.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py"
@@ -449,6 +451,34 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
 src = "tools/verity/check/common.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/module_keys.py"
+src = "tools/verity/lean/module_keys.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/settings.py"
+src = "tools/verity/lean/settings.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/headers.py"
+src = "tools/verity/lean/headers.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/graph/verity_graph/contract.py"
+src = "tools/verity/graph/verity_graph/contract.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 owner = "infra"
@@ -704,17 +734,23 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
-[[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (the evictors alone can leave a disk there with terabytes collectable)
+# The retention collector: hourly `research retention gc --apply` while /workspace is over 80% of its blocks or its inodes, on every
+# node that holds research runs: vy-store-evict-research's nodes and the nodes whose research pool `--on auto` places runs in
+# (auto.spill: every CPU node). The evictors alone can leave a disk there with terabytes collectable. After a node's first install,
+# `sudo systemctl daemon-reload && sudo systemctl enable --now vy-retention-gc.timer`.
+[[file]]
 path = "/etc/systemd/system/vy-retention-gc.service"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-retention-gc.timer"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 

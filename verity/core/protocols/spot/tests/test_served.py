@@ -302,7 +302,7 @@ def test_r7_counts_a_bit_row_trees_rows_in_its_format():
     ([("W", G.SCHEMA_V2)], {"W": 1}),
 ])
 def test_r7_refuses_a_row_format_of_another_form(schemas, registered):
-    """A row format names a value the verifier expects registered and doesn't fill, in one of `registered.SCHEMAS`, as
+    """A row format names a value the verifier expects registered, in one of `registered.SCHEMAS`, as
     `OneStage.paramsOfJson` reads it."""
     prog = _program()
     rec, ports = _record(prog, [])

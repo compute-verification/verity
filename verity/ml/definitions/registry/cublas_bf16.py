@@ -69,6 +69,16 @@ taking its k-tiles of TILE_K words residue first, as the launched cutlass kernel
 Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the batch on grid.z and no reduction kernel: `attention_bmm` binds
 `BatchedGemm_v2` on `TRAIN_DOT` over B members (heads), one query or key row each.  Either refuses a shape or role the capture
 does not cover.
+
+Under cuda.matmul.allow_tf32 an f32 torch.mm on sm_120 at the rotation codecs' shapes (`TRAIN_TF32`) is an unsplit
+`cutlass_80_tensorop_s1688gemm` kernel whose k8 TF32 steps are `mhc.HopperTf32WgmmaDot8_v1`'s (`CONFORMANCE_TF32`):
+
+    DotTf32_v1{K}                   (x, wrow: Array<K, F32>) -> F32
+                                    K/8 `HopperTf32WgmmaDot8_v1` steps in ascending k from +0, no epilogue
+    GemmTf32_v1{K, N}               (x: Array<K, F32>, w: Array<N, Array<K, F32>>) -> Array<N, F32>
+                                    `DotTf32_v1{K}` of x against each W row
+
+`train_tf32` binds `GemmTf32_v1` at a captured (M, K, N) and refuses any other; `boolean_sigma` lifts both to bits (their v2).
 """
 from __future__ import annotations
 
@@ -88,19 +98,20 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import Coll, array_of, broadcast, concat
 from verity.ml.circuits.types import Array, Type
 from verity.ml.definitions.evidence import EVIDENCE
+from verity.ml.definitions.registry import mhc as MHC
 
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmAligned",
            "CublasSerialSplitKGemmAlignedWord", "CublasSerialSplitKGemmWord", "CublasSplitKGemm", "CublasSplitKGemmAligned",
            "CublasSplitKGemmAlignedWord", "CublasSplitKGemmBf16Partials", "CublasSplitKGemmBf16PartialsAligned",
            "CublasSplitKGemmBf16PartialsAlignedWord", "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out",
-           "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
-           "GemmF32Out", "GemmF32OutWord", "GemmPad", "GemmPadWord", "HOPPER_STEP", "HOPPER_STEP_V3",
+           "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord", "DotTf32",
+           "GemmF32Out", "GemmF32OutWord", "GemmPad", "GemmPadWord", "GemmTf32", "HOPPER_STEP", "HOPPER_STEP_V3",
            "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstV2", "HopperBf16Dot16StepFirstX",
            "HopperBf16Dot16StepFirstXV2", "HopperBf16Dot16StepV2", "HopperBf16Dot16StepX", "HopperBf16Dot16StepXV2",
            "LF_LINEARS", "LF_M", "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_CC", "TRAIN_DOT", "TRAIN_LINEARS",
-           "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
+           "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES", "TRAIN_TF32",
            "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
-           "split_bounds", "train_linear", "train_route"]
+           "split_bounds", "train_linear", "train_route", "train_tf32"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
 _CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
@@ -561,3 +572,52 @@ def attention_bmm(op: str, S: int, D: int, B: int = 1) -> Any:
         raise ValueError(f"attention_bmm: B = {B}")
     K, N = TRAIN_BMM[op][2](S, D)
     return bind(BatchedGemm, B=B, K=K, N=N, DOT=TRAIN_DOT)
+
+
+#: torch.mm(a[M, K], b[K, N]) of f32 operands under cuda.matmul.allow_tf32 at these (M, K, N), each operand row- or
+#: column-major (the rotation codecs': x.reshape(-1, 64) @ R and y @ R^T per tensor and over all of them, and y @ R^T, z @ R at
+#: 2,048 rows of 512), where cuBLAS launches an unsplit `cutlass_80_tensorop_s1688gemm` kernel (`CONFORMANCE_TF32`)
+TRAIN_TF32 = ((4096, 64, 64), (11264, 64, 64), (301056, 64, 64), (2048, 512, 512))
+_TF32_CAPTURE = EVIDENCE["cc12_tf32_gemm_capture"]
+CONFORMANCE_TF32 = ("exact-model-tested: every sampled output word (rows 0, 1, 2, M/2, M - 2 and M - 1, at N 512 the first 160 "
+                    "and last 32 columns) of torch.mm of f32 operands under allow_tf32 on cc 12.0 with 188 SMs (torch "
+                    "2.14.0+cu130 on cuBLAS 13.1.1.3, deterministic) at each (M, K, N) of `TRAIN_TF32` in all four operand "
+                    "layouts, on normal words over 13 binades, where cuBLAS launches an unsplit "
+                    "`cutlass_80_tensorop_s1688gemm` kernel, fitting it alone among the k8 step's alternatives (groups of 8, "
+                    "4 + 4 or 2 + 2 + 2 + 2 products, adders 24 to 28 bits wide, each operand rounded to TF32 by RNE, RNA or "
+                    f"truncation) and an f32 FFMA chain: capture {_TF32_CAPTURE['run_record']}, fit {_TF32_CAPTURE['fit']}")
+
+
+def _refuse_k8(b: dict) -> str | None:
+    K = b.get("K")
+    if isinstance(K, int) and (K < 8 or K % 8):
+        return f"K={K} is not a positive multiple of 8: the GEMM takes whole k8 TF32 steps"
+    return None
+
+
+def _dot_tf32(B, S, x, wrow):
+    acc = B.call(P.ZERO32)
+    for s in range(S.K // 8):
+        acc = B.call(MHC.HopperTf32WgmmaDot8, acc, x[8 * s:8 * s + 8], wrow[8 * s:8 * s + 8])
+    return acc
+
+
+DotTf32 = CompositeDefinition(
+    "DotTf32", 1, ("K",), lambda S: ((("x", Array(S.K, P.F32)), ("wrow", Array(S.K, P.F32))), P.F32), _dot_tf32,
+    doc="one output word of an f32 `x @ W^T` under TF32: K/8 `HopperTf32WgmmaDot8_v1` steps in ascending k from +0 (each "
+        "operand rounded RNE to TF32 inside the step), no epilogue",
+    conformance=CONFORMANCE_TF32, refuse=_refuse_k8)
+GemmTf32 = CompositeDefinition(
+    "GemmTf32", 1, ("K", "N"), _gemm_f32_type(P.F32, P.F32),
+    lambda B, S, x, w: B.batch(bind(DotTf32, K=S.K), x, w, axes=(None, 0)),
+    doc="`x[K] @ W[N, K]^T -> [N]` of f32 words as cuBLAS's unsplit TF32 GEMM computes it: `DotTf32_v1{K}` of x against each "
+        "W row",
+    conformance=CONFORMANCE_TF32, refuse=_refuse_k8)
+
+
+def train_tf32(M: int, K: int, N: int) -> Any:
+    """`GemmTf32_v1{K, N}`: one row of torch.mm(a[M, K], b[K, N]) of f32 operands under allow_tf32 as sm_120's cuBLAS computes
+    it, x a row of a and W b^T; refuses an (M, K, N) the capture does not cover (`TRAIN_TF32`)."""
+    if (M, K, N) not in TRAIN_TF32:
+        raise ValueError(f"train_tf32: (M, K, N) = ({M}, {K}, {N}) is not captured (only {TRAIN_TF32})")
+    return bind(GemmTf32, K=K, N=N)
