@@ -1,6 +1,6 @@
 """What H1's readers make of a part their input leaves out: a rank's release whose committer states no errors, a pull
 from a rank that shipped no acquisitions, a window's record with no commitment object, a slot of a round the round
-log does not hold, and an engine that holds no executor in its own process."""
+log does not hold, and an engine that holds no executor in its own process; and of a round the log names by no number."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -13,7 +13,12 @@ from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.protocols.pouw.h1.challenger import drawn_of
 from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME
 from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
-from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason
+from verity_vllm.protocols.pouw.h1.requests import (
+    RoundOpening,
+    slot_reason,
+    step_digest,
+    tables_reason,
+)
 from verity_vllm.protocols.pouw.h1.served import declared, descriptor
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
@@ -139,6 +144,25 @@ def test_a_slot_of_a_round_the_log_does_not_hold_is_refused_before_anything_is_o
     coins = LiveCommitment("pouw-h1/rounds", 0, (("round", 2),), bytes(64))
     slot = RoundOpening(round=3, position=0, value=b"", path=())
     assert slot_reason([{"round": 0}, {"round": 1}], coins, b"salt", 4, [], slot) == "the round log has no round 3"
+
+
+def _step(r: Any) -> list[dict[str, Any]]:
+    """The manifest row of the one call of the step the log names `r`, with its A table's root."""
+    return [{"step": r, "index": 0, "tables": {"a": "ab" * 64}}]
+
+
+@pytest.mark.parametrize("r", [0, "0"], ids=["a number", "a string"])
+def test_a_step_is_held_to_its_rounds_calls_digest_whatever_the_log_names_the_round(r):
+    """`tables_reason` holds a step to `step_digest` over the name the log gives its round, and the name to nothing else."""
+    rows = _step(r)
+    assert tables_reason(b"salt", [{"round": r, "calls": step_digest(b"salt", r, rows).hex()}], rows) is None
+    assert tables_reason(b"salt", [{"round": r, "calls": "00"}], rows) == (
+        f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root")
+
+
+def test_a_round_the_log_names_by_what_no_digest_takes_raises_as_the_digest_does():
+    with pytest.raises(TypeError, match="parts are bytes, str or nonnegative int, got float"):
+        tables_reason(b"salt", [{"round": 0.0, "calls": "00"}], _step(0))
 
 
 def _engine(**holds: Any) -> SimpleNamespace:
