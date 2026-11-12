@@ -88,9 +88,10 @@ shared = [
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/protocols/reporting.py",
     "verity/configuration/config",
-    # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
-    # Accounting's B200 sheet, so it stays private)
-    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,tests/test_cards.py}",
+    # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
+    # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
+    # and the node files' test reads the Site, so each stays private)
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,nodes,tests/test_cards.py}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
     "security/Properties/Spot/{Draw,Bits}.lean",
@@ -286,6 +287,7 @@ flock_bench = [
 nested = [
     "verity/definitions/{evaluate,requirement}",
     "verity/hardware/tests/test_lean.py",
+    "verity/hardware/tests/test_nodes.py",
     "verity/protocols/flock/sigma",
     "verity/protocols/inference_only",
     "verity/protocols/poub/device/live_verifier",
