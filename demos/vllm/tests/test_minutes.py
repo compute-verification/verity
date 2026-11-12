@@ -74,11 +74,22 @@ def test_a_verdict_of_the_three_checks_on_a_commit_of_main_is_its_minutes(tmp_pa
     assert capsys.readouterr().out.startswith("MINUTES {")
 
 
-def test_a_rejecting_verdict_still_has_its_minutes(tmp_path, repo):
+def test_a_rejecting_verdict_gives_its_minutes_to_the_log_and_no_value(tmp_path, repo, monkeypatch, capsys):
     r, on, _ = repo
     c = accepted()
     c["verdict"]["verdict"] = "reject"
-    assert M.minutes(demo(tmp_path / "runs", on, c), tmp_path / "runs", "main", r)["verdict"] == "reject"
+    runs = demo(tmp_path / "runs", on, c)
+    with pytest.raises(M.Rejected, match="r-compose: the verdict is reject, after 201.3 minutes"):
+        M.minutes(runs, tmp_path / "runs", "main", r)
+    out = tmp_path / "me"
+    out.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(out))
+    monkeypatch.setattr(M, "ROOT", r)
+    assert M.main([*runs, "--runs-dir", str(tmp_path / "runs"), "--main", "main"]) == 1
+    doc = json.loads((out / "result.json").read_text())
+    assert (doc["measurements"], doc["validation"]["status"]) == ([], "failed")
+    assert capsys.readouterr().out == ("MINUTES refused: r-compose: the verdict is reject, after 201.3 minutes; only an "
+                                       "accepting demo has minutes\n")
 
 
 @pytest.mark.parametrize("composite, why", [

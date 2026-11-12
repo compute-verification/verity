@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The remote demo's minutes from its first command to its verdict, read off its finished runs' records: the metric
-``vllm/remote-demo-minutes`` (`benchmarks/metrics.toml`). Standard library only.
+``vllm/remote-demo-minutes`` (`benchmarks/metrics.toml`). Standard library only; the onsite demo's reader
+(`demos/onsite_served/minutes.py`) is this one with its own verdict.
 
     research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN [--runs-dir DIR] [--main REF]
 
@@ -17,7 +18,9 @@ It refuses, with no measurement and the reason (exit 1):
 - a verdict covering fewer checks than the goal names (`CHECKS`: sampled proofs, Pearl+ and inference only), or one
   composed as a development check, on the served node;
 - a served commit (the first run's ``computation.tree_sha``, in its ``job.json``) that is not a commit of ``--main``
-  (default ``origin/main``) in the tree this file is in.
+  (default ``origin/main``) in the tree this file is in;
+- a verdict other than accept: the demo's minutes are those of a demo that ended accepting, so its line gives the verdict
+  and the minutes for the log, and the result holds no value.
 
 Under ``research run`` it writes its own run's ``result.json``: the minutes under `METRIC`, with the verdict, the runs
 and the served commit beside them, or no measurement and the refusal as its validation's detail. It prints the same
@@ -30,6 +33,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -46,7 +50,11 @@ RESULT = "research/result/v0.1"
 
 
 class Refused(Exception):
-    pass
+    status = "not_run"
+
+
+class Rejected(Refused):
+    status = "failed"
 
 
 def run_dir(run: str, root: Path) -> Path:
@@ -64,6 +72,7 @@ def utc(d: Path, key: str) -> datetime:
 
 
 def verdict(d: Path) -> str:
+    """Remote's verdict in run ``d``'s composite of `PRODUCT`; `Refused` where it is none of the goal's."""
     f = d / "out" / "composite" / PRODUCT / "composite.json"
     if not f.is_file():
         raise Refused(f"{d.name}: no verdict line, since its out/ holds no composite/{PRODUCT}/composite.json")
@@ -96,41 +105,48 @@ def on_main(sha: str, ref: str, repo: Path) -> None:
         raise Refused(f"can't tell whether the served commit {sha} is a commit of {ref}: {p.stderr.strip()}")
 
 
-def minutes(runs: list[str], root: Path, ref: str, repo: Path | None = None) -> dict:
-    """The measurement for the demo's ``runs``, first to last; `Refused` where it can't stand. ``repo`` is the tree
-    holding ``ref`` (default this file's)."""
+def minutes(runs: list[str], root: Path, ref: str, repo: Path | None = None, *,
+            read: Callable[[Path], str] = verdict, metric: str = METRIC) -> dict:
+    """The measurement for the demo's ``runs``, first to last, whose last run's verdict ``read`` gives; `Refused` where
+    it can't stand. ``repo`` is the tree holding ``ref`` (default this file's)."""
     ds = [run_dir(r, root) for r in runs]
     start, end = utc(ds[0], "started_utc"), utc(ds[-1], "ended_utc")
     if end < start:
         raise Refused(f"{ds[-1].name} ended before {ds[0].name} started: the runs are not in the demo's order")
-    v, sha = verdict(ds[-1]), commit(ds[0])
+    v, sha = read(ds[-1]), commit(ds[0])
     on_main(sha, ref, repo or ROOT)
-    return {"name": METRIC, "value": round((end - start).total_seconds() / 60, 1), "unit": "minutes",
-            "better": "lower", "target": TARGET, "verdict": v, "runs": [d.name for d in ds], "commit": sha}
+    m = {"name": metric, "value": round((end - start).total_seconds() / 60, 1), "unit": "minutes", "better": "lower",
+         "target": TARGET, "verdict": v, "runs": [d.name for d in ds], "commit": sha}
+    if v != "accept":
+        raise Rejected(f"{ds[-1].name}: the verdict is {v}, after {m['value']} minutes; only an accepting demo has "
+                       f"minutes")
+    return m
 
 
-def result(run_id: str, runs: list[str], m: dict | None, why: str | None) -> dict:
-    return {"schema": RESULT, "run_id": run_id, "workload_fingerprint": {"demo": "vllm", "metric": METRIC, "runs": runs},
-            "validation": {"status": "passed" if m else "not_run", "checker": "demos/vllm/minutes.py",
-                           "detail": why or f"{m['value']} minutes to a verdict of {m['verdict']}", "evidence": []},
+def result(run_id: str, runs: list[str], m: dict | None, why: Refused | None, metric: str, checker: str) -> dict:
+    return {"schema": RESULT, "run_id": run_id, "workload_fingerprint": {"metric": metric, "runs": runs},
+            "validation": {"status": why.status if why else "passed", "checker": checker,
+                           "detail": str(why) if why else f"{m['value']} minutes to a verdict of {m['verdict']}",
+                           "evidence": []},
             "measurements": [m] if m else [], "measurement_files": [], "artifacts": []}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("runs", nargs="+", metavar="RUN", help="the demo's runs, first to last (module docstring)")
+def main(argv: list[str] | None = None, *, read: Callable[[Path], str] = verdict, metric: str = METRIC,
+         checker: str = "demos/vllm/minutes.py", nargs: str | int = "+", doc: str = __doc__) -> int:
+    ap = argparse.ArgumentParser(description=doc.split("\n\n")[0])
+    ap.add_argument("runs", nargs=nargs, metavar="RUN", help="the demo's runs, first to last (module docstring)")
     ap.add_argument("--runs-dir", type=Path, default=settings.runs_root())
     ap.add_argument("--main", default="origin/main", help="the ref the served commit must be a commit of")
     a = ap.parse_args(argv)
     try:
-        m, why = minutes(a.runs, a.runs_dir, a.main), None
+        m, why = minutes(a.runs, a.runs_dir, a.main, read=read, metric=metric), None
     except Refused as e:
-        m, why = None, str(e)
+        m, why = None, e
     print(f"MINUTES {json.dumps(m, sort_keys=True)}" if m else f"MINUTES refused: {why}")
     if d := settings.run_dir():
         f = d / "result.json"
         tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
-        tmp.write_text(json.dumps(result(settings.run_id() or d.name, a.runs, m, why), indent=1) + "\n")
+        tmp.write_text(json.dumps(result(settings.run_id() or d.name, a.runs, m, why, metric, checker), indent=1) + "\n")
         os.replace(tmp, f)
     return 0 if m else 1
 
