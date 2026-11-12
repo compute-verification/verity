@@ -62,9 +62,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
   serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``, and ``tables`` for each span's latent history tables:
-  `servetax_plugin`), at ``--window-s``; the server is held after its loads until its windows' commits account for
-  every finished request (`await_commits`).
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``tables`` for each span's latent history tables
+  (`servetax_plugin`) or ``stop``, the serve's stop rule, which has no tables), at ``--window-s``; the server is held
+  after its loads until its windows' commits account for every finished request (`await_commits`).
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
   rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
@@ -204,8 +204,8 @@ PRIVATE = "{private}"
 #: counters kept on the node
 TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
 TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
-#: the boundary commitment's object (`verity_vllm.pipeline.boundary_rows.BoundaryWindows.of`): a replay block of one
-#: check a served id with the check template's body in place, a window closed when it drains
+#: the boundary commitment's object (`verity_vllm.pipeline.boundary_windows.BoundaryWindows.of`): a replay block of
+#: one check a served id with the check template's body in place, a window closed when it drains
 ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
@@ -2628,7 +2628,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
-                        "drained, inline, tables")
+                        "drained, inline, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")
     r.add_argument("--private", metavar="DIR",
                    help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
                         "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "
