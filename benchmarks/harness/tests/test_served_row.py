@@ -7,7 +7,6 @@ which `spot_status` prints; and the command prints the section from a record tha
 from __future__ import annotations
 
 import json
-import re
 
 import pytest
 from test_served_record import LAYOUT, served
@@ -113,14 +112,15 @@ def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
     # (the verdict's record names the theorem in its own fields, as the command's verdicts of record do)
     lines = out.split("\nThe verdict as a record")[0]
     assert THEOREM not in lines and not any(h in lines for h in spot_status.HOLES)
-    # the record names no proof while anything is open, and says what is
+    # the record names no proof while anything is open, and says what is, as the command's own reader requires
+    assert E.verdict(doc["verdict_record"], "the section's record") == doc["verdict_record"]
     assert (doc["verdict_record"]["verdict"], doc["verdict_record"]["proved_by"]) == ("accept", None)
     assert doc["verdict_record"]["open"] == {
         "theorem": f"{THEOREM} takes 1 open premise", "hole": "not closed at the run's commit: redrawn sample",
         "unknown hole": "not closed at the run's commit: re-committed execution phase"}.get(how, "; ".join(said))
 
 
-def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path, monkeypatch):
+def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     """Under the tree's own table: every check held and the outcome is refused by the two-stage form alone."""
 
     record = record_of(tmp_path)
@@ -136,14 +136,13 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path, mon
     assert {k["kind"]: k["decided_by"] for k in doc["verdicts"]} == {"lean-draw": "lean", "lean-verify": "lean",
                                                                      "m0-verifier": "rust and python"}
     assert "  - decided by a verifier that is not Lean: `m0-verifier` (" in out and "`round_two` (" in out
-    # its record takes the command's word for a withheld accept once the command has one
-    waits = "the two-round form's soundness is not proved"
-    assert (doc["verdict_record"]["verdict"], doc["verdict_record"]["open"]) == (
-        "withheld" if "withheld" in E.VERDICT_READS else "refuse", waits)
-    monkeypatch.setattr(E, "VERDICT_READS", (*E.VERDICT_READS, "withheld"))
-    assert W.verdict_record(doc)["verdict"] == "withheld" and W.verdict_record(doc)["proved_by"] is None
+    # its record is the command's word for an accept the verifier withheld, and one the command's own reader takes
+    assert doc["verdict_record"] == E.verdict(doc["verdict_record"], "the section's record") == {
+        "piece": "second_stage", "control": None, "run": record["run"],
+        "verifier": {"module": "sampled-proofs-verifier", "commit": record["commit"]}, "verdict": "withheld",
+        "proved_by": None, "open": "the two-round form's soundness is not proved"}
     # no issue's id is printed, and none is in the table
-    assert not re.search(r"\b[A-Z]{2,}-\d+\b", out + W.TABLE.read_text())
+    assert not E.ISSUE_ID.search(out + W.TABLE.read_text())
 
 
 def test_a_refused_outcome_and_no_outcome_are_said_as_they_are(tmp_path):
@@ -152,6 +151,7 @@ def test_a_refused_outcome_and_no_outcome_are_said_as_they_are(tmp_path):
     assert doc["verdict"]["line"].endswith("; the final accept refused, `second-wires`")
     assert doc["to_fully_proved"][-1]["said"] == "the final accept is refused"
     assert (doc["verdict_record"]["verdict"], doc["verdict_record"]["open"]) == ("refuse", "the verifier refused it: second-wires")
+    assert E.verdict(doc["verdict_record"], "the section's record") == doc["verdict_record"]
     # the form's code beside another, or under a check that did not hold, is a refusal, not a withheld accept
     both = refused | {"statements": ["two-stage-form", "second-wires"]}
     assert W.account(record_of(tmp_path, outcome=both), tree(tmp_path), holes=CLOSED)["outcome"]["final"] == "refused"

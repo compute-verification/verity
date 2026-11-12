@@ -216,12 +216,12 @@ def verdict_record(doc: Mapping) -> dict | None:
         return None
     proved = doc["verdict"]["mark"] == PROVED
     if final["final"] == "withheld":
-        word, waits = (WITHHELD if WITHHELD in E.VERDICT_READS else "refuse"), final["withheld"]["why"]
+        word, waits = WITHHELD, final["withheld"]["why"]
     elif final["final"] == "refused":
         word, waits = "refuse", "the verifier refused it" + (f": {', '.join(final['codes'])}" if final["codes"] else "")
     else:
         n = reads["open_premises"]
-        opened = [h for h, status in reads["holes"].items() if status != spot_status.CLOSED]
+        opened = [h for h in spot_status.HOLES if reads["holes"].get(h) != spot_status.CLOSED]
         word, waits = "accept", None if proved else "; ".join(filter(None, (
             "no Lean theorem is cited for its verifier" if reads["theorem"] is None else
             n and f"{reads['theorem']} takes {n} open premise{'s' * (n != 1)}",
