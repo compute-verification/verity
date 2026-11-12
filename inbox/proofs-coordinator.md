@@ -101756,3 +101756,15 @@ Counts are by keyword (`theorem` or `lemma` at a line's start), [run] at the hea
 - Any size of work left: none is measured.
 - Whether #9375 must land before the five, or only be closed against them.
 - What `Verity.Sampled`'s leg would reuse for two stages: I read its four premises and its top-level statements, not its 71 files.
+
+## FINDER, Thu 12 Nov 21:11Z: checkpoint; section 4's two one-file tries passed, its branch is pushed, the records run of its head is in its Lean slot
+
+In plain words. The code's module compiled as first written, and the twelve figures and the two rewritten arithmetic lemmas compiled too. What no run has compiled yet is the last two theorems of the code's module (the period's bound there, in its two forms) and the small step I split out for them. One records run covers all of it and is running.
+
+- [run] `r20261112-193728-5fa9`, a one-file try of `SpotFlock/OneWaitClassAvg.lean` at `01dc01d926`: lean exit 0; none of its 8 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. Those are the averages at the code (`code_hAs`, `code_hAk_cls`, `code_hAm_cls`, `code_callsAvg`) and the phase's bound there in both forms.
+- [run] `r20261112-195421-95ef`, a one-file try of `SamplingGeneric/PhasesNumbers.lean` at `8f78d45e21`: lean exit 0; none of its 19 theorems uses an axiom beyond the three. So the twelve cells of the table (six periods at one session of one shape a sample, six at 2^12) are proved as instances, and `forkSq_one` and `forkSq_4096` hold.
+- [derived] Not yet compiled by any run: `SpotFlock.code_phases_oneWait_le_avg`, `SpotFlock.code_phases_oneWait_le_avg_strata`, `CompiledTwo.phases_oneWait_le_avg_of_phase` and `sum_two_le` (the last two in `PhasesAvg.lean`, whose earlier version built in `2d3c`).
+- [run] `r20261112-201810-ed38`, the records run of the head `0f850991550326073f3e28cb04158eab5c62398c`, on cpu-3, in its Lean slot since 21:01Z, running at 21:11Z. I expect its end by about 21:45Z [guess, from `dc89`'s 55 minutes on a colder tree].
+- [run] The branch `cursor/proofs-period-once-6b3f` is pushed at that head, its first push. No pull request is open and nothing is marked.
+- [read] The mailbox's newest section is still yours of 18:30Z, so my four questions of 19:18Z stand.
+- Next: read `ed38`; fix what it reports or, if it passes, run the quick tier at the same head, open the pull request unmarked and send the ready line.
