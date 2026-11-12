@@ -1,4 +1,4 @@
-"""What the config record reads of a row dir's documents when a block of one is left out (`pipeline.config_record`).
+"""What the config record reads of a row dir's documents when a block of one is left out (`verity_vllm.pipeline.config_record`).
 
 Each part of the record is read from a document a stage wrote: the circuit database's index, a fold Match's verdict, a Commit's
 summary, a line of `commit/runs.jsonl`, a Build's summary, a manifest, a sampled replay's result.  A block of such a document may be
