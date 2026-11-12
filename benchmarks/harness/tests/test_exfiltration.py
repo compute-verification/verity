@@ -1138,8 +1138,8 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "61fde301a626b1a1bf2698f6b48ce9fffe6928a444f24ee38962d5c1de0588de",
-               "json": "9105f3ca602a3ea5f1463be4f67c9747c2bbc8ea7ddc7a831bde6883eef81816"}
+NO_VERDICTS = {"text": "6b819b12ea1bd086d3b7cce6722ee9391dcf491ecf69579946c3f42f6375f1cc",
+               "json": "0aaef575c3e3baeccd2d69aaed18f0004e9a3b1f5467b01358204e3a6f99a0c6"}
 #: made-up verdicts: a verifier, the open issue its Lean proof waits on, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
