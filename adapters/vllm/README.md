@@ -153,14 +153,14 @@ Imports point down a fixed layer order, with `pipeline` at the top and `config` 
 `tests/lint/test_p09_layering.py` states the order and holds the package to it. `tests/regression/` holds the reference
 regression, skipped unless `VERITY_REGRESSION=1`.
 
-The modules directly under `verity_vllm/` are the package's face, and where one declares `__all__` it lists the names
-other code reads from it. `verity_vllm` gives outside code `EnginePin`, `EngineSpec`, `LLM` and `TargetProfile`.
-`llm.py` adds `protocol_context` and `resolve_options`, which the benchmark harness's tests read, and `ENGINE_ARGS`,
-`SUPPORTED` and `class_options` for the package's own tests. `errors.py` gives every module `Refused`, and `log.py`
+The modules directly under `verity_vllm/` are the package's face. Where one declares `__all__`, it lists the names
+that library code and code outside the adapter read from it; a name only the tests read is not listed. `verity_vllm`
+gives outside code `EnginePin`, `EngineSpec`, `LLM` and `TargetProfile`. `llm.py` adds `protocol_context` and
+`resolve_options`, which the benchmark harness's tests read. `errors.py` gives every module `Refused`, and `log.py`
 gives `init_logger`, `configure` and `VerityLogger`. `target_family.py` gives the package `device_token_of_row` and
-`declared_profile`, with `row_family`, `check`, `summary_line`, `Options` and `main` for its command and its tests.
-`config.py` and `settings.py` declare none. The command line is run and not imported: outside code calls
-`verity-vllm` or `python -m verity_vllm.pipeline.cli`, and takes from that module only `main`.
+`declared_profile`, and the command line its `Options` and `main`. `config.py` and `settings.py` declare none. The
+command line is run and not imported: outside code calls `verity-vllm` or `python -m verity_vllm.pipeline.cli`, and
+takes from that module only `main`.
 
 ## Running
 
