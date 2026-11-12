@@ -25,3 +25,12 @@ def test_a_protocol_reads_its_own_settings_and_fills_and_not_another_s() -> None
     assert ctx.filled_of("pouw") == ("runner", "coins")
     assert ctx.settings_of("pous") == {"key": "k"}
     assert ctx.filled_of("pous") == ("key",)
+
+
+def test_an_entry_that_is_none_reads_as_an_absent_one() -> None:
+    """`load_settings` refuses such an entry from a file, so only a `Context` built by hand holds one: it reads as no
+    settings and no fills, never as None."""
+    none: dict[str, Any] = {"pouw": None}
+    ctx = Context(stage="serve", enabled=ENABLED, settings=none, filled=none)
+    assert ctx.settings_of("pouw") == {}
+    assert ctx.filled_of("pouw") == ()
