@@ -166,7 +166,12 @@ reads. Proved:
   guarantee: `pearlCGapH100Rev1_llama32_1b` (`security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s
   (n = 2048, K = 8192); as an advantage, ε = g/(1 − g) = 69533/10666467 (0.652%). This is the assumption's gap alone:
-  sampling's ε_s at δ_s multiplies in as (1 + ε)/(1 − ε_s), and the assumption's own δ adds.
+  sampling's ε_s at δ_s multiplies in as (1 + ε)/(1 − ε_s), and the assumption's own δ adds. Its sampled form is
+  listed over the two named assumptions TT_OUT at the H100 splits into (`security/Definitions/Assumptions/PearlC.lean`):
+  `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` (and `…S8_8192` at 8192³), under `w1-complete-h100` (the
+  card's cost model is simulated by W1 on the H100 with INT8, at zero SHA-512 and fetch prices) and the conjecture
+  `tt-out-tile-pearl-c-h100-rev1` (TT_OUT per audit tile over that W1 setting, whose falsification test is
+  `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`).
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
   `security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, and the
   sample misses more than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts
@@ -193,7 +198,8 @@ against its code.
 
 The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
-`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
+`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and, at the H100, `Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`
+beside the device model `Pouw.PearlC.Assumptions.W1CompleteH100`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
 (`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled
 tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
 and `prf/sha-512` (`verity.claims`).
