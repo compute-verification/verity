@@ -169,10 +169,10 @@ def row_digests(d: Path) -> dict[str, Any]:
     """One row's digests from its run directory."""
     ranks = build_programs(d)
     man, vd = _doc(d / "manifest.json"), _doc(d / "verdict.json")
+    query_id, partitions = _of_query(man, "query_id"), _partition_digests(_of_query(man, "partition"))
     roots = vd.get("run_roots")   # the roots of the runs the Commit's verdict graded; a row with no verdict has none
     return {"row": d.name, "programs": ranks, "manifest_digest": man.get("manifest_digest"), "program_digest": man.get("program_digest"),
-            "query_id": _of_query(man, "query_id"), "partition_digests": _partition_digests(_of_query(man, "partition")),
-            "run_roots": list(roots) if roots else [], "verdict": vd.get("outcome")}
+            "query_id": query_id, "partition_digests": partitions, "run_roots": list(roots) if roots else [], "verdict": vd.get("outcome")}
 
 
 def digests_markdown(rows: list[dict[str, Any]]) -> str:
@@ -180,9 +180,9 @@ def digests_markdown(rows: list[dict[str, Any]]) -> str:
     md = ["| row | verdict | step (rank 0) | workload (rank 0) | requests | manifest | partitions | run roots |", "|---|---|---|---|---|---|---|---|"]
     for r in rows:
         p0 = r["programs"].get("0")   # rank 0's Programs; a row with no Build has none, and its cells are dashes
+        cells = f"| {r['row']} | {r['verdict'] or '-'} | {short(_of(p0, 'step'))} | {short(_of(p0, 'workload'))} "
         requests = _of(p0, "requests")
-        md.append(f"| {r['row']} | {r['verdict'] or '-'} | {short(_of(p0, 'step'))} | {short(_of(p0, 'workload'))} "
-                  f"| {len(requests) if requests else 0} "
+        md.append(cells + f"| {len(requests) if requests else 0} "
                   f"| {short(r['manifest_digest'])} | {len(r['partition_digests'])} | {', '.join(x[:16] for x in r['run_roots']) or '-'} |")
     return "\n".join(md) + "\n"
 
