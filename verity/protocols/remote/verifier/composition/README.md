@@ -138,7 +138,7 @@ record the policy's commitment is, and the digest of each window's Commit record
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
-through the harness's `ProtocolPort` (`../../../../difftest`), holding every field of each outcome but its reason to
+through the harness's `ProtocolPort` (`../../../../../tools/difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the composition rule above, over the harness's framing of the core interface
 (`verity_difftest.protocol.answer`), and each subprotocol's own Python, which that subprotocol's own difftest holds its
 Lean to:

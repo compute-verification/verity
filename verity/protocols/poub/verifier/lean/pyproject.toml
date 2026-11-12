@@ -38,11 +38,11 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/claims/__init__.py",
           "verity/protocols/spot/verifier/__init__.py", "verity/protocols/spot/device/challenger.py",
           "verity/protocols/spot/device/remote.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
-          "verity/commitments/randomness", "verity/difftest/python",
+          "verity/commitments/randomness", "tools/difftest/python",
           "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/randomness", "verity/difftest/lean",
+          "verity/commitments/randomness", "tools/difftest/lean",
           # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
           # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; its sessions' party (`p2_party.py`), whose books
           # test_p2.py holds to `RemoteAudit.P2Session` and whose sessions test_p2_party.py runs on the Lean of record

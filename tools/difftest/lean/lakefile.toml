@@ -13,11 +13,11 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "core_base"
-path = "../../circuits/base"
+path = "../../../verity/circuits/base"
 
 [[require]]
 name = "core_circuits"
-path = "../../circuits/lean"
+path = "../../../verity/circuits/lean"
 
 [[lean_lib]]
 name = "Difftest"

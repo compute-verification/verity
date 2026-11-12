@@ -12,7 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
 ROOT=$(cd ../../.. && pwd)
-export PYTHONPATH=$ROOT:$ROOT/verity/difftest/python${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT:$ROOT/tools/difftest/python${PYTHONPATH:+:$PYTHONPATH}
 PY=${PY:-python3}
 
 if [ "${1:-}" = leased ]; then

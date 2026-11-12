@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[5]
 PACKAGE = ROOT / "verity/protocols/poub/verifier/lean"
 EXE = "remote-audit-verifier"
 REFUSED = {"refused": True}
-BUILD_LOCK = ROOT / "verity/difftest/lean/.lake/harness-build.lock"
+BUILD_LOCK = ROOT / "tools/difftest/lean/.lake/harness-build.lock"
 """`verity_difftest.BUILD_LOCK`: Lake builds the package's path requires in place, so a build here and the difftest's
 build of `remote-audit-difftest` (a suite beside this one) take turns."""
 

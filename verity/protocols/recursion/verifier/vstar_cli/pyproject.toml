@@ -13,7 +13,7 @@ untraced = ["tests/test_vstar_difftest.py", "tests/test_vstar_in_difftest.py", "
 inputs = ["verity/protocols/flock/prover/python", "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/definitions/kernels",
           "verity/commitments/randomness", "verity/commitments/windows", "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/flock/verifier",
-          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "verity/difftest",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean", "tools/difftest",
           "verity/protocols/spot/verifier/__init__.py",
           "verity/protocols/spot/verifier/one_stage/__init__.py",
           "verity/protocols/spot/verifier/one_stage/partition.py",

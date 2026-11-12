@@ -1,4 +1,4 @@
-"""`pous_check` against the Python reference, through the core difftest harness (`verity/difftest`).
+"""`pous_check` against the Python reference, through the core difftest harness (`tools/difftest`).
 
 The protocol: `pous-setup serve` (`PousCheck.SetupProtocol`, `verity/pous/p2/v4/setup`) against
 `protocol.verifier_key(P2(params), commitment, salt, mode=PUBLIC, encoded=C*)` behind the interface's framing, on honest

@@ -28,7 +28,7 @@ CHALLENGER_SP=$CHALLENGER_REPO/verity/protocols/spot/verifier/lean
 
 challenger_build() {
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  local lock=$CHALLENGER_REPO/verity/difftest/lean/.lake/harness-build.lock
+  local lock=$CHALLENGER_REPO/tools/difftest/lean/.lake/harness-build.lock
   mkdir -p "$CHALLENGER_WORK" "$(dirname "$lock")"
   # under one_stage.verifier's own build lock: in a tree other runs share (--cwd source), they build here too
   ( cd "$CHALLENGER_SP" && flock "$lock" lake build sampled-proofs-verifier sampled-proofs-difftest \

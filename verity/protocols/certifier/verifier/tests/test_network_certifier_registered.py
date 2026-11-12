@@ -22,7 +22,7 @@ from verity.protocols.certifier.verifier import registered as R
 PACKAGE = Path(R.__file__).resolve().parent / "lean"
 SCRIPT = Path(__file__).resolve().parent / "lean" / "RegisteredVectors.lean"
 # `verity_difftest.build`'s lock: no two `lake build`s of a package overlap, across processes and suites.
-BUILD_LOCK = Path(__file__).resolve().parents[5] / "verity/difftest/lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[5] / "tools/difftest/lean" / ".lake" / "harness-build.lock"
 
 KEY0, KEY1 = "a" * 96, "b" * 96
 LINKS = "the network certifiers' links there are [up0, up2]"

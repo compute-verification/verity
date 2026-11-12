@@ -308,7 +308,7 @@
     {"file": "verity/definitions/evaluate/Evaluate/GeluErfTable.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/definitions/evaluate/Evaluate/Main.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/definitions/evaluate/Evaluate/MufuFits.lean", "rule": "module-doc", "count": 1},
-    {"file": "verity/difftest/lean/AnnotDifftestMain.lean", "rule": "module-doc", "count": 1},
+    {"file": "tools/difftest/lean/AnnotDifftestMain.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/flock/verifier/Flock.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/flock/verifier/Flock/Blake3Row.lean", "rule": "module-doc", "count": 1},
     {"file": "verity/protocols/flock/verifier/Flock/ByteLines.lean", "rule": "module-doc", "count": 1},

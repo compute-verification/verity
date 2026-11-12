@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 LEAN = Path(__file__).resolve().parents[2] / "lean"
 EXE = "annot-difftest"
 FNS = ("annot.term", "annot.check", "annot.reference", "annot.sets")
-INPUTS = ("verity/difftest/lean", "verity/circuits/base", "verity/circuits/lean")
+INPUTS = ("tools/difftest/lean", "verity/circuits/base", "verity/circuits/lean")
 
 
 def server() -> Server:

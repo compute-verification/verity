@@ -26,7 +26,7 @@ What code outside this directory may use. Everything else here is internal.
 - `CircuitRequirement.lean`: `Instance`, `Store`, `Placement` and the functions, on lists with membership through hash sets, so a
   registry row of tens of thousands of gates runs in seconds.
 - `CircuitRequirement/Difftest.lean`: `requirement`, which `requirement-difftest` serves through the difftest harness's line
-  protocol (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "requirement", "input": {"width", "registered",
+  protocol (`Difftest.serve`, [harness](../../../tools/difftest/README.md)): `{"fn": "requirement", "input": {"width", "registered",
   "inputs", "ops", "uses", "step", "value", "block", "offset", "encoded", "store", "plans", "block_bits", "steps", "leaf",
   "ticks", "price", "windows"}}` gives whether the wiring is topological, each step's values, bits, blocks and verdicts and each window's
   region (at its ticks and at its engine steps), ingress and credits, or `{"reject": "<reason>"}` for a malformed

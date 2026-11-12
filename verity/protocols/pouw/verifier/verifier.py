@@ -34,7 +34,7 @@ RECORD_VERDICT = "lean"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
 EXE = "pouw-check-difftest"
-BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/difftest/lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "tools/difftest/lean" / ".lake" / "harness-build.lock"
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
 COINS_MAX = 1 << 24
 
