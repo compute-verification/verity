@@ -1427,7 +1427,8 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
                      window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None,
                      pins: list[str] | None = None, main: list[str] | None = None, statements: Any = (),
-                     live: Any = None, draw_directory: str | None = None) -> dict[str, Any]:
+                     live: Any = None, draw_directory: str | None = None,
+                     lean_answers: str | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
@@ -1445,10 +1446,13 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     (`pouw_h1_served.descriptor`; none refuses it), the sampled calls' `statements` (`pouw_h1_challenger.statement`'s) and
     the window's `live` evidence (`credit.LIVE_STATEMENTS`, ``h1_prove/live.py evidence``'s; none refuses it).
     `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
-    its tree), from which its sampling coin is read (none refuses it)."""
+    its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
+    verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
+    and its ``lean_answers`` says how many."""
     from verity.protocols.spot.device import remote
 
     from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
@@ -1479,8 +1483,12 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     doc["manifest"] = PHC.manifest_reason(rec)
     if key is not None:
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
-        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, statements, pins=pins, main=main,
-                                          live=live, draw_directory=draw_out)
+        run = None if lean_answers is None else A.Answers(Path(lean_answers), by="the challenger check")
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, statements, run=run, pins=pins,
+                                          main=main, live=live, draw_directory=draw_out)
+        if run is not None:
+            doc["lean_answers"] = {"ran": run.ran, "taken": run.taken, "unkeyed": run.unkeyed}
+            print(f"LEAN-ANSWERS {run.summary()}", flush=True)
     if period is not None:
         try:
             if key is None:
@@ -1579,6 +1587,9 @@ def main(argv: list[str] | None = None) -> int:
                                                             "h1_prove/live.py evidence's {descriptor, statements}")
     ap.add_argument("--main", metavar="FILE", help="with --check-challenger: the auditor's own `git rev-list --first-parent "
                                                    "origin/main`, a commit a line; none refuses every session")
+    ap.add_argument("--lean-answers", metavar="DIR", help="with --check-challenger: the verifier's memo of its verifier "
+                                                          "runs' answers (answers.Answers), shared by key with the "
+                                                          "period's check")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
     ap.add_argument("--skip-register", action="store_true", help="fill with --served: record the window's entries but "
@@ -1696,7 +1707,7 @@ def main(argv: list[str] | None = None) -> int:
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
         live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
         return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
-                                     a.pins, main, statements, live, a.draw_dir)["ok"] else 1
+                                     a.pins, main, statements, live, a.draw_dir, a.lean_answers)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1

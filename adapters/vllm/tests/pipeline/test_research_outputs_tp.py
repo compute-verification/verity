@@ -6,9 +6,23 @@ import json
 from pathlib import Path
 
 from verity_vllm.pipeline import research_outputs as ro
+from verity_vllm.pipeline import research_result, serve_commit
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
 WDS = ["d" * 64, "a" * 64, "c" * 64, "b" * 64]
+#: an evidence dir's files that hold request values, where each rank ran or when each process ran: never published
+PRIVATE_FILES = {"match/capture/tokens.json": {"prompt_token_ids": [[1, 2]], "generated_token_ids": [[3]], "timing": {}},
+                 "match/control/tokens.json": {"prompt_token_ids": [[1, 2]]}, "commit/tokens_p0.json": {"generated_token_ids": [[3]]},
+                 "match_stoch.json": {"rows": [{"served": 3, "recomputed": 3}]},
+                 "commit/sampled_replay_p0.json": {"facts_of_record": {"served": [3]}},
+                 "commit/sampled_replay.json": {"facts_of_record": {"served": [3]}},
+                 "serve/requests.jsonl": '{"engine_id": "0", "prompt_ids": [1, 2], "output_ids": [3]}\n',
+                 "serve/step_trace.jsonl": '{"step": 0, "rows": {"0": 2}}\n',
+                 "serve/advice_trace.jsonl": '{"kind": "arrive", "request": "0", "prompt": 2, "params": {"seed": 1}}\n',
+                 "load.jsonl": '{"user": "u", "prompt": 2, "response": {"ids": [3]}}\n', "rep-0/load-1.jsonl": "{}\n",
+                 "match/capture/topology.json": {"ranks": [{"pid": 7, "cuda_visible_devices": "0"}]},
+                 "match/control/topology.json": {"driver_pid": 8}, "build/rank0/build_step/topology.json": {"build_s": 1.0},
+                 "timeline.jsonl": '{"utc": "2026-10-28T00:00:00Z", "pod": "computeinstance-x"}\n', "timeline_report.json": {}}
 
 
 def _w(p: Path, doc) -> None:
@@ -43,7 +57,7 @@ def test_tp_digest_of_record_is_the_rank_fold(tmp_path):
     assert dig["tp"] == 4
     assert dig["rank_workload_digests"] == WDS
     assert dig["step_digest"] == "0" * 64
-    assert dig["program_digest"] == hashlib.sha256(("tp-ranks/" + ",".join(sorted(WDS))).encode()).hexdigest()
+    assert dig["program_digest"] == hashlib.sha512(("tp-ranks/" + ",".join(sorted(WDS))).encode()).hexdigest()
 
 
 def test_tp_digest_absent_when_a_rank_has_no_workload_program(tmp_path):
@@ -217,29 +231,43 @@ def test_a_tp_replay_stage_decides_in_the_folded_commit_summary_unless_a_config_
     assert (v["meta"]["decision_record"], v["meta"]["outcome"]) == ("config_record.json", "PASS")
 
 
-def test_a_replay_stage_publishes_its_slim_keep_whole_and_never_the_bundle(tmp_path, monkeypatch):
-    monkeypatch.setattr(ro, "MAX_FILE", 16)
+def test_a_replay_stage_publishes_neither_its_slim_keep_nor_the_bundle(tmp_path):
+    """A keep holds clear values (committed values with their salts, the requests and tokens, opened weights): it stays on the node."""
     row = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
     d = tmp_path / "row"
     _w(d / "stages.txt", "commit PENDING 2026-09-30T00:00:01Z rc=0\nreplay PASS 2026-09-30T00:00:02Z rc=0\n")
     _w(d / "config_record.json", {"outcome": "PASS"})
     _w(d / "commit" / "verdict.json", {"commit_pass": True})
     k = d / "commit" / "replay_slim_p1"
-    slim = {"pair": 1, "run_root": "ab" * 32, "program_digest": "cd" * 32, "picked": 460, "bytes": 3, "dump_sha256": "ef" * 32,
-            "commit_pass": True, "picks": [["r0", 0, 1, "model.embed_tokens"]] * 460}
-    _w(k / "slim.json", slim)
+    _w(k / "slim.json", {"pair": 1, "run_root": "ab" * 32, "picked": 460})
     _w(k / "store" / "store.json", {"steps": []})
-    (k / "store" / "raw").mkdir()
-    (k / "store" / "raw" / "s0.bin").write_bytes(b"\x01" * (ro.MAX_FILE + 1))
+    (k / "store" / "salts").mkdir()
+    (k / "store" / "salts" / "s0.bin").write_bytes(b"\x01" * 64)
     _w(d / "commit" / "replay_bundle_p1" / "MANIFEST.json", {})
-    _w(d / "commit" / "replay_slim_p2.partial" / "slim.json", {})
     doc = ro.build_outputs(d, row, "replay", tmp_path / "run", {})
-    s = next(e for e in doc["outputs"] if e["name"] == "replay_slim_p1")
-    assert (s["kind"], s["tree"]) == ("vllm-replay-slim/v1", "outputs/replay_slim_p1") and "refs" not in s
-    assert {x: s["meta"][x] for x in ro.SLIM_META} == {x: slim[x] for x in ro.SLIM_META} and s["meta"]["stage"] == "replay"
-    got = tmp_path / "run" / "outputs" / "replay_slim_p1"
-    assert sorted(x.relative_to(got).as_posix() for x in got.rglob("*") if x.is_file()) == ["slim.json", "store/raw/s0.bin", "store/store.json"]
-    assert (got / "store" / "raw" / "s0.bin").stat().st_size == ro.MAX_FILE + 1, "a slim keep's planes are published whatever their size"
-    assert [e["name"] for e in doc["outputs"] if e["kind"] == "vllm-replay-slim/v1"] == ["replay_slim_p1"]
-    v = tmp_path / "run" / "outputs" / "verdict"
-    assert not [x for x in v.rglob("*") if "replay_slim_p" in x.as_posix() or "replay_bundle_p" in x.as_posix()]
+    assert [(e["name"], e["kind"]) for e in doc["outputs"]] == [("verdict", "vllm-verdict/v1"), ("evidence", "execution-evidence/v1")]
+    assert not [x for x in (tmp_path / "run").rglob("*") if "replay_slim_p" in x.as_posix() or "replay_bundle_p" in x.as_posix()]
+
+
+def test_no_stage_publishes_request_values_placement_or_timing(tmp_path):
+    """Every stage at TP1 and TP, alone or as one run's stages, publishes none of PRIVATE_FILES wherever it sits (a listed record, under
+    a glob dir, or the evidence), and the sweep's result.json copies none beside the run: the requests' prompt and served token ids
+    are values, and where each part of the workload ran and when are private."""
+    t1 = tmp_path / "t1"
+    _w(t1 / "build_summary.json", {"request": {"program_digest": "r" * 64}, "step": {"program_digest": "s" * 64}})
+    _w(t1 / "verdict.json", {"outcome": "PASS"})
+    for d, row in ((t1, "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"), (_tp_dir(tmp_path, world=2), ROW)):
+        _w(d / "stages.txt", "".join(f"{s} PASS 2026-10-28T00:00:0{i}Z rc=0\n" for i, s in enumerate(ro.KINDS)))
+        for rel, doc in {"commit/summary.json": {"pass": True}, "commit/verdict.json": {"commit_pass": True}, "config_record.json":
+                         {"outcome": "PASS"}, "match/run.json": {}, "global_match.json": {"verdict": "PASS"}, **PRIVATE_FILES}.items():
+            _w(d / rel, doc)
+        for stages in [[s] for s in ro.KINDS] + [list(ro.KINDS)]:
+            run = tmp_path / f"run_{d.name}_{'_'.join(stages)}"
+            ro.build_stages(d, row, stages, run, {})
+            staged = {p.relative_to(run / "outputs").as_posix().split("/", 1)[1] for p in (run / "outputs").rglob("*") if p.is_file()}
+            assert "stages.txt" in staged and not staged & set(PRIVATE_FILES), (d.name, stages, staged & set(PRIVATE_FILES))
+        doc = research_result.build_result(d, row, "v2", ["build", "match", "commit"], "r", tmp_path / f"result_{d.name}")
+        assert "evidence/match/run.json" in doc["artifacts"]
+        assert not {f.removeprefix("evidence/") for f in doc["artifacts"]} & set(PRIVATE_FILES), doc["artifacts"]
+    assert [rel for rel in PRIVATE_FILES if not ro.private(rel)] == [] and [r for r in research_result.RECORDS if ro.private(r)] == []
+    assert [n for n in serve_commit.MIRRORED if ro.private(n)] == [], "a served run's $OUT gets no request value"

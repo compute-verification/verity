@@ -117,9 +117,23 @@ def excluded(fails: Any, unsure: Any, x: Any) -> tuple[int, ...]:
     `pearl_c.live_row` rejects on their words."""
     import torch
     rows = unsure.nonzero().flatten()
-    out = {int(i) for i in fails.nonzero().flatten().tolist()}
-    if len(rows):
-        for r, row in zip(rows.tolist(), x[rows].view(torch.int32).cpu().numpy().astype("<u4")):
-            if not C.live_row([int(v) for v in row]):
-                out.add(int(r))
+    words = x[rows].view(torch.int32).cpu().numpy().astype("<u4") if len(rows) else ()
+    return _excluded(fails.nonzero().flatten().tolist(), rows.tolist(), words)
+
+
+def excluded_host(flags: Any, rows: Any) -> tuple[int, ...]:
+    """`excluded` from host bytes: a call's flags (uint8, m x 2: fails, unsure) and its A rows as BF16 (m or more rows),
+    whose words widened exactly are A's FP32 words."""
+    import numpy as np
+    flags = np.asarray(flags)
+    unsure = np.flatnonzero(flags[:, 1]).tolist()
+    words = (np.asarray(rows)[unsure].astype("<u4") << 16) if unsure else ()
+    return _excluded(np.flatnonzero(flags[:, 0]).tolist(), unsure, words)
+
+
+def _excluded(fails: list[int], unsure: list[int], words: Any) -> tuple[int, ...]:
+    out = {int(i) for i in fails}
+    for r, row in zip(unsure, words):
+        if not C.live_row([int(v) for v in row]):
+            out.add(int(r))
     return tuple(sorted(out))

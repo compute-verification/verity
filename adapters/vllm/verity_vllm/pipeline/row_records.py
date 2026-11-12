@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import glob
 import gzip
-import hashlib
 import json
 import os
 import time
@@ -18,6 +17,7 @@ from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
 from verity_vllm.pipeline.row_json import load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.query.manifest.format import components_fold_digest
 from verity_vllm.target_family import declared_profile
 
 __all__ = ["COMPOSE_PEAK_RATIO", "FOLD_PART_MIN_S", "applicable_taps", "build_jobs_auto", "compose_bytes", "composed_ok", "declared_target", "decomp_rc",
@@ -566,7 +566,7 @@ def program_digest_of_record(d: str, batch: int) -> str:
         w = read_json(wp)
         wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
     comps = sorted(v["program_digest"] for k, v in b.items() if k.startswith("build_request_LP") and isinstance(v, dict) and v.get("program_digest"))
-    return wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode()).hexdigest() if comps else "")
+    return wd or (components_fold_digest(comps) if comps else "")
 
 
 def snapshot_steps_of_record(d: str) -> str:

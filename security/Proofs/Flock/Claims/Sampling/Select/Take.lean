@@ -44,7 +44,7 @@ theorem loop_inv_ex {σ ε β : Type} (f : Unit → β → StateT σ (Except ε)
 
 theorem take_run (src : ByteArray) (need p : ℕ) :
     (Draw.take src need).run p =
-      if src.size < p + need then Except.error "the randomness source ran out"
+      if src.size < p + need then Except.error Draw.RAN_OUT
       else Except.ok (src.extract p (p + need), p + need) := by
   unfold Draw.take
   by_cases h : src.size < p + need <;> simp [h, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get,

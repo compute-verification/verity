@@ -634,7 +634,7 @@ theorem target_of_periods : TargetOfPeriods := by
   unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
-    obtain ⟨-, hcr, hun⟩ := hcr
+    obtain ⟨-, -, hcr, hun⟩ := hcr
     obtain ⟨ρ, hρ⟩ := (play_couples (V.families θ) (V.signer θ) θ F c σ
       fun o => acc o ∧ ¬ V.Holds k θ F c σ (.ofAudit b) o).2
     obtain ⟨q, δ, hs, hδ, hb⟩ := h θ F c σ ρ
@@ -685,10 +685,16 @@ theorem soundness_of_upFront : SoundnessOfUpFront := by
 
 namespace Idle
 
-/-- At `exact`, PoUW's target fails at remote for a verifier that accepts everything. -/
-theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw :=
-  exact.sound_of_nontrivial .remote .pouw .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
-    (pouw_fails .remote _ _ _ _) (lt_of_eq_of_lt (error_exact _ _ _ _ _) zero_lt_one)
+/-- At `exact`, PoUW's target fails at remote for a verifier that accepts everything: its claim fails on every play
+after the empty commitment (`pouw_fails`), and every such play has probability one (`prob_play_eq_one`). -/
+theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw := by
+  intro h
+  have h1 := prob_play_eq_one (exact.families .empty) (D := exact.signer .empty) .empty #[.empty] .empty
+    (fun o => (fun _ : Exchange => True) o ∧
+      ¬ exact.Holds .remote .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty) .pouw o)
+    (fun o ho => ⟨trivial, pouw_fails .remote _ _ _ o ho⟩) (exact.honest .empty #[.empty] .empty)
+  exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h .empty #[.empty] .empty _)).trans_lt
+    (lt_of_eq_of_lt (error_exact _ _ _ _ _) zero_lt_one))
 
 end Idle
 

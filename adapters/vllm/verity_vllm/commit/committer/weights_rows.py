@@ -66,4 +66,4 @@ class WeightsRows:
         return r, 1
 
     def tree(self, names: list, roots: list[bytes]) -> dict:
-        return step_rows.weights_tree(self.geo, names, step_rows.names_digest(names), roots, self.wk)
+        return step_rows.weights_tree(self.geo, names, roots, self.wk)

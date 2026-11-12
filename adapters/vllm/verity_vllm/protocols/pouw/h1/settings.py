@@ -133,9 +133,12 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
                    "that round's coin: the pouw settings 'runner' (the engine's model runner, where its scheduler's "
                    "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
-    elif scheme != PH.SCHEME and (settings.runner is not None or settings.rounds is not None
-                                  or settings.admission is not None or settings.served is not None):
-        out.append(f"{scheme}: the pouw settings 'runner', 'rounds', 'admission' and 'served' are H1's ({PH.SCHEME})")
+    elif scheme != PH.SCHEME:
+        if settings.runner is not None and scheme not in PPD.SCHEMES:
+            out.append(f"{scheme}: the pouw setting 'runner' is H1's ({PH.SCHEME}) and Pearl-C's device path's, which "
+                       "ends each pass at its execute_model")
+        if settings.rounds is not None or settings.admission is not None or settings.served is not None:
+            out.append(f"{scheme}: the pouw settings 'rounds', 'admission' and 'served' are H1's ({PH.SCHEME})")
     if scheme != PH.SCHEME and (settings.unit is not None or settings.ks is not None):
         out.append(f"{scheme}: the pouw settings 'unit' and 'ks' are H1's ({PH.SCHEME})")
     if settings.commit_record is not None and (scheme != PH.SCHEME or settings.served is None):

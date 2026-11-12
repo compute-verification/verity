@@ -51,8 +51,10 @@ roots the boundary values are committed under (`portRoots`).
   coin by coin (`stageByte`, read by `Select.selectSecond`);
 * round `stage + 1` (round 2 at one coin): the prover's message is the session statements, one per template in template
   order (`stmtsOf`), which the verifier checks (`stmtOk`): the run's statement decodes and its partition and design
-  evaluate, and template `t`'s statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked
-  scope, in the scope Flock's soundness proof covers and with hidden outputs, and with `xS₀ t`'s table shapes
+  evaluate; the run's two records name their registrations' ports and registered values, each once, as `Run.run`'s
+  registration check holds them (`recordsOk`); and template `t`'s statement sets up as a masked Flock statement with
+  `k₀ t` rounds, in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and
+  with `xS₀ t`'s table shapes
   (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`); round 2's
   statement check passes the statement against template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public
   file's header is `xS₀ t`'s placed in the run (`SecondStage.atRun`) but for the run's fields, names the part's slots
@@ -83,9 +85,10 @@ value is one of that block's interior values and under the run's roots otherwise
 So every checked unit has its template's session (`templateOf`) on that session's rounds (`session`), and at a run
 refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The
 coins are the verifier's own here; that the deployed challenger's bytes are such coins is the assumptions'
-(`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`), and `Run.run`'s registration and outcome steps,
-which read the challenger's logs and the sessions' verdicts, are not in this verifier: it accepts every run they accept
-whose sessions Flock accepts.
+(`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`). Of `Run.run`'s registration step this verifier makes
+only the names its records must name (`recordsOk`), and of its outcome step nothing; the rest of them read the
+challenger's logs and the sessions' verdicts, and this verifier accepts every run they accept whose sessions Flock
+accepts.
 -/
 
 @[expose] public section
@@ -105,10 +108,17 @@ def zkOk (xS : Msg) : Bool :=
       sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
   | none => false
 
+/-- **A registration's names, as the auditor holds them**: its ports' (`ports`) and its registered values'
+(`values`), each listed once. -/
+structure Names where
+  ports : List String
+  values : List String
+
 /-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), each template's units
 (`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
 stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`), wires (`wires`) and
-the rows their units read (`rows`) round 2's statement check reads, template `t`'s reference session statement
+the rows their units read (`rows`) round 2's statement check reads, the names the boundary and interior registrations'
+records must name (`boundaryNames`, `interiorNames`), template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
 null for none (`refReads t`), the commitment's layout and the reference prover's framing
 (`frame`), and the rounds after round 1 whose coins the second stage reads too (`more`). Template `t`'s circuit is
@@ -125,6 +135,8 @@ structure Held where
   links : Option (Array Spot.SecondStage.Link)
   wires : Option (Array Spot.SecondStage.Wire)
   rows : Array Spot.SecondStage.Rows
+  boundaryNames : Names
+  interiorNames : Names
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
   refReads : ℕ → Json
@@ -170,6 +182,29 @@ def regList (rec : Json) : List (String × Json) :=
     match Spot.getD e "value" with
     | .str v => some (v, e)
     | _ => none
+
+/-- **A record's names under `field`**: the string under `key` of each of its entries, in its order (its roots' ports
+at `roots` and `port`, its registered values at `registered` and `value`), empty where it has none; none where one of
+them isn't a string. -/
+def namesAt (rec : Json) (field key : String) : Option (List String) :=
+  (match Spot.getD rec field with | .arr es => es.toList | _ => []).mapM fun e =>
+    match Spot.getD e key with
+    | .str s => some s
+    | _ => none
+
+/-- **`got` names exactly the names `want` lists, each once.** -/
+def namesEq (got : Option (List String)) (want : List String) : Bool :=
+  match got with
+  | some ns => decide ns.Nodup && ns.all (want.contains ·) && want.all (ns.contains ·)
+  | none => false
+
+/-- **A record names its registration's names** (`n`): its roots' ports are the registration's ports and its registered
+values the registration's registered values, each a string named once (`namesEq`). `Run.run`'s registration check
+(`Registration.check`) holds a record to this at its registration's verifier, whose ports and registered values are
+each listed once: `R3-ports` of the ports, and of the registered values `R7-values` where the registration registers
+some and the record's keys, which then have no `registered`, where it registers none. -/
+def recordOk (rec : Json) (n : Names) : Bool :=
+  namesEq (namesAt rec "roots" "port") n.ports && namesEq (namesAt rec "registered" "value") n.values
 
 /-- **A record's entries, each with its kind**: its ports (`0`), in its port order (`Record.byPort`), then its
 registered values (`1`). -/
@@ -286,7 +321,7 @@ def scopeOkFast (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
 the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
 `ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
 per slot and proof block, none per gate. -/
-def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : List ℕ) : Bool :=
+def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (k : List ℕ) : Bool :=
   g.ns.size == ms.length && (List.range ms.length).all (fun t => k.getD t 0 == g.ks.getD t 0) &&
     (List.range l.blocks.size).all fun ρ =>
       match l.blocks[ρ]? with
@@ -505,15 +540,25 @@ def stmtAt (m₂ : Msg) (t : ℕ) : Msg :=
   | some xs => xs.getD t (h.xS₀ t)
   | none => h.xS₀ t
 
+/-- **The run's records name their registrations' names** (`recordOk`): the run's statement, the boundary
+registration's record, names the boundary registration's (`boundaryNames`), and round 1's message, the interior
+registration's record, the interior registration's (`interiorNames`). So a port the auditor registered is one of its
+record's ports, and round 2's registered-value arm (`SecondStage.registeredEntry`) finds only a value the auditor
+registered, registered once. -/
+def recordsOk (x m₁ : Msg) : Bool :=
+  match decode x, jsonMsg m₁ with
+  | some st, some rec => recordOk st.record h.boundaryNames && recordOk rec h.interiorNames
+  | _, _ => false
+
 /-- **The session statements are the run's**, at the round-1 message `m₁`, the message `m₂` that states them, round 0's
 coin and the second stage's coins: the run's statement decodes and its partition and design evaluate; `m₂` states one
-session statement per template; and template `t`'s sets up as a masked Flock statement with `k₀ t` rounds, in scope
-(`sessionOk`), and passes round 2's statement check against round 1's record and the second stage's draw, and is
-otherwise `xS₀ t` (`readsOk`). -/
+session statement per template; the run's records name their registrations' names (`recordsOk`); and template `t`'s
+statement sets up as a masked Flock statement with `k₀ t` rounds, in scope (`sessionOk`), and passes round 2's
+statement check against round 1's record and the second stage's draw, and is otherwise `xS₀ t` (`readsOk`). -/
 def stmtOk (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool :=
   match parse h x, stmtsOf m₂ with
   | some s, some xs =>
-    (partition h s).isSome && (two h s).isSome && xs.length == h.ms.length &&
+    (partition h s).isSome && (two h s).isSome && xs.length == h.ms.length && recordsOk h x m₁ &&
       (List.range h.ms.length).all fun t =>
         (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) == k₀ h t && sessionOk h t (xs.getD t (h.xS₀ t)) &&
           readsOk h t x m₁ (xs.getD t (h.xS₀ t)) c₀ c₁

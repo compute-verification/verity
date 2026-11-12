@@ -2,7 +2,8 @@
 process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
-their handles (`_Driver`), and a retained pass's files (`_write`, `write_manifest`).
+their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`) and its
+completion behind its step (`behind`).
 """
 from __future__ import annotations
 
@@ -10,7 +11,10 @@ import ctypes
 import hashlib
 import json
 import os
+import threading
+from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -40,6 +44,14 @@ UPLOAD_SLOTS = 1024
 PRIORITY = {"least": 0, "caller": 0, "greatest": -(1 << 10)}
 #: the rows of the call the native keys are held to `call_keys` at, once (any row count of the domain does)
 CHECK_ROWS = 16
+#: the threads that write a retained pass's call files behind its calls (`write_behind`)
+WRITE_THREADS = 8
+#: the pinned host bytes a device's copies to its retained files land in (`_Arena`): this many rings of this many bytes
+RING_BYTES = 1 << 30
+ARENA_RINGS = 4
+_writers: tuple[int, ThreadPoolExecutor] | None = None     # the pool and the process it was made in
+_finisher: tuple[int, ThreadPoolExecutor] | None = None    # the thread `behind` runs on, and its process
+_copiers: dict[tuple[int, int | None], Any] = {}           # each (process, device)'s `_Copies`
 
 
 def torch_uint8() -> Any:
@@ -264,15 +276,197 @@ def memmove(dst: int, src: int, n: int, raw: int) -> None:
     ctypes.memmove(dst, src, n)
 
 
+def _entry(path: Path, n: int) -> dict:
+    nested = path.parent.name in ("calls", "weights", "y")
+    return {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": n}
+
+
 def _write(path: Path, data: bytes, digest: bool = True) -> dict:
     """A transcript file.  Row files carry no digest: the committed roots bind them, and the verifier checks every opened row
     against them."""
-    path.write_bytes(data)
-    nested = path.parent.name in ("calls", "weights")
-    out = {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": len(data)}
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        f.write(data)
+    out = _entry(path, len(data))
     if digest:
         out["sha256"] = hashlib.sha256(data).hexdigest()
     return out
+
+
+class _Ring:
+    """Pinned host bytes handed out in order and given back in any order: a region is free again once it and every region
+    handed out before it are given back."""
+
+    def __init__(self, n: int):
+        import torch
+        self.buf, self.n, self.head, self.live = torch.empty(n, dtype=torch.uint8, pin_memory=True), n, 0, deque()
+
+    def take(self, size: int) -> tuple[list, Any] | None:
+        if not self.live:
+            self.head = 0
+        tail = self.live[0][0] if self.live else 0
+        if self.live and self.head <= tail:                   # wrapped: free from head to tail
+            if tail - self.head <= size:
+                return None
+        elif self.n - self.head < size:
+            if tail <= size:
+                return None
+            self.live.append([self.head, self.n, True])       # the end past head, skipped
+            self.head = 0
+        region = [self.head, self.head + size, False]
+        self.live.append(region)
+        self.head += size
+        return region, self.buf[region[0]:region[1]]
+
+    def give(self, region: list) -> None:
+        region[2] = True
+        while self.live and self.live[0][2]:
+            self.live.popleft()
+
+
+class _Arena:
+    """The pinned host bytes a device tensor's copy lands in on its way to its file: `ARENA_RINGS` rings of `RING_BYTES`,
+    made at the first take; a copy past half a ring gets pinned memory of its own.  A take waits for a give where no ring
+    has room."""
+
+    def __init__(self, ring_bytes: int, rings: int):
+        self.ring_bytes, self.count, self.rings, self.cv = ring_bytes, rings, [], threading.Condition()
+
+    def take(self, size: int) -> tuple[Callable[[], None], Any]:
+        import torch
+        if size > self.ring_bytes // 2:
+            return (lambda: None), torch.empty(size, dtype=torch.uint8, pin_memory=True)
+        size = -(-size // 512) * 512
+        with self.cv:
+            if not self.rings:
+                self.rings = [_Ring(self.ring_bytes) for _ in range(self.count)]
+            while True:
+                for ring in self.rings:
+                    got = ring.take(size)
+                    if got is not None:
+                        return (lambda: self._give(ring, got[0])), got[1]
+                self.cv.wait()
+
+    def _give(self, ring: _Ring, region: list) -> None:
+        with self.cv:
+            ring.give(region)
+            self.cv.notify_all()
+
+
+class _Copies:
+    """A device's copies to the host behind its current stream: a stream of their own, which waits for the current stream's
+    work so far, and the arena they land in."""
+
+    def __init__(self, device: Any):
+        import torch
+        self.stream, self.arena = torch.cuda.Stream(device=device), _Arena(RING_BYTES, ARENA_RINGS)
+
+    def start(self, srcs: list[Any], fresh: bool = False, here: bool = False) -> tuple[list[Any], list[Callable[[], None]], Any]:
+        """Each source's bytes as they are now on the current stream, copied to host memory behind it: (the host tensors,
+        each one's give-back, the event after the copies).  `fresh`: nothing writes the sources after this, so they are
+        read as they are, not copied on the device first.  `here`: the copies go on the current stream itself, in its
+        order (a stream already behind the caller's, `PassEnds._retained`'s)."""
+        import torch
+        current = torch.cuda.current_stream(srcs[0].device)
+        kept = srcs if fresh else [s.clone() for s in srcs]
+        if here:
+            return self._copied(kept, current, False)
+        self.stream.wait_stream(current)
+        with torch.cuda.stream(self.stream):
+            return self._copied(kept, self.stream, True)
+
+    def _copied(self, kept: list[Any], stream: Any, held: bool) -> tuple[list[Any], list[Callable[[], None]], Any]:
+        import torch
+        hosts, gives = [], []
+        for src in kept:
+            give, host = self.arena.take(src.numel())
+            host = host[:src.numel()]
+            host.copy_(src, non_blocking=True)
+            if held:
+                src.record_stream(stream)
+            hosts.append(host)
+            gives.append(give)
+        done = torch.cuda.Event()
+        done.record(stream)
+        return hosts, gives, done
+
+
+def _copies(device: Any) -> _Copies:
+    key = (os.getpid(), device.index)
+    if key not in _copiers:
+        _copiers[key] = _Copies(device)
+    return _copiers[key]
+
+
+def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = False, here: bool = False) -> list[dict]:
+    """`_write`'s entries for tensors' bytes, each file (path, tensor, digest[, then, *also]), with the files written
+    behind the caller: the bytes are copied as they are now on the current stream (a device's to the host on a stream of its
+    own, through `_Copies`' arena, with no wait on the caller's), and one of `WRITE_THREADS` threads writes the files in
+    order, its future appended to `pending`, which the pass's end joins (`joined`) before its manifest names them; a
+    digest's ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its
+    `also` tensors (uint8 host tensors, copied with it) once they are written.  `fresh` and `here`: `_Copies.start`'s."""
+    import torch
+    files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
+    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
+    if srcs and srcs[0].is_cuda:
+        hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh, here)
+    else:
+        hosts, gives, done = [s.clone() for s in srcs], [], None
+    global _writers
+    if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
+        _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
+    entries, batch, at = [], [], 0
+    for path, _, digest, then, also in files:
+        k = 1 + len(also)
+        entry = _entry(path, hosts[at].numel())
+        batch.append((path, hosts[at:at + k], digest, entry, then))
+        entries.append(entry)
+        at += k
+    if batch:
+        pending.append(_writers[1].submit(_landed, batch, done, gives))
+    return entries
+
+
+def _landed(batch: list[tuple], done: Any, gives: list[Callable[[], None]]) -> None:
+    try:
+        if done is not None:
+            done.synchronize()
+        for path, hosts, digest, entry, then in batch:
+            _write_host(path, hosts[0], digest, entry)
+            if then is not None:
+                then(*hosts)
+    finally:
+        for give in gives:
+            give()
+
+
+def _write_host(path: Path, host: Any, digest: bool, entry: dict) -> None:
+    data = memoryview(host.numpy())
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        left = data
+        while left:
+            left = left[os.write(fd, left):]
+    finally:
+        os.close(fd)
+    if digest:
+        entry["sha256"] = hashlib.sha256(data).hexdigest()
+
+
+def behind(fn: Callable[[], None]) -> Future:
+    """`fn` on the thread that ends retained passes behind their steps, one at a time in the order they were given."""
+    global _finisher
+    if _finisher is None or _finisher[0] != os.getpid():
+        _finisher = (os.getpid(), ThreadPoolExecutor(1, thread_name_prefix="pearl-c-retain-end"))
+    return _finisher[1].submit(fn)
+
+
+def joined(pending: list[Future]) -> None:
+    """`write_behind`'s writes in `pending` done, and `pending` cleared; the first failed write's error is raised."""
+    try:
+        for f in pending:
+            f.result()
+    finally:
+        pending.clear()
 
 
 def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True) -> dict:
@@ -298,7 +492,8 @@ def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[
     the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and
     tree levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
     levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 64 bytes a node; the
-    head also holds the prover's hm96 salt key."""
-    path = d / "manifest.json"
-    path.write_text(json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n")
+    head also holds the prover's hm96 salt key.  It appears whole or not at all."""
+    path, part = d / "manifest.json", d / "manifest.json.part"
+    _write(part, (json.dumps({**head, "weights": weights, "matmuls": matmuls}, indent=1) + "\n").encode(), digest=False)
+    os.replace(part, path)
     return path

@@ -151,7 +151,7 @@ def test_a_batch_rows_digest_of_record_is_the_workload_programs(tmp_path):
     _put(tmp_path / "build_summary.json", {"request": {"program_digest": "r" * 64}, "build_request_LP8_T3": {"program_digest": "a" * 64}})
     assert R.program_digest_of_record(d, 1) == "r" * 64
     folded = R.program_digest_of_record(d, 2)
-    assert len(folded) == 64 and folded != "a" * 64
+    assert len(folded) == 128 and folded != "a" * 64
     _put(tmp_path / "build_workload" / "workload_program.json", {"program_digest": "p" * 64, "digest": "g" * 64})
     assert R.program_digest_of_record(d, 2) == "p" * 64
     _put(tmp_path / "build_workload" / "workload_program.json", {"workload_digest": "w" * 64, "program_digest": "p" * 64})
@@ -396,11 +396,11 @@ def test_the_outputs_command_prints_the_digest_of_record_and_declares_a_stages_o
     assert capsys.readouterr().out == "a" * 64 + "\n"
     assert RO.main(RO.DigestOptions(evidence_dir=str(tmp_path / "absent"), row=row)) == 0
     assert capsys.readouterr().out == "\n"
-    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="build")) == 0
+    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stages=["build"])) == 0
     assert "RESEARCH_RUN_DIR not set" in capsys.readouterr().err and not run.exists()
     _put(run / "job.json", {"store": {"inputs": {"match": "art:" + "1" * 64, "weights": "/a/path"}}})
     given = ["build=art:" + "2" * 64, "plan=art:short", "=art:" + "3" * 64]
-    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="build", run_dir=str(run), input=given)) == 0
+    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stages=["build"], run_dir=str(run), input=given)) == 0
     doc = json.loads((run / "outputs.json").read_text())
     assert doc["inputs"] == {"build": "art:" + "2" * 64, "match": "art:" + "1" * 64}
     assert [(e["name"], e["kind"]) for e in doc["outputs"]] == [("build", "vllm-build/v1"), ("evidence", "execution-evidence/v1")]
@@ -408,7 +408,7 @@ def test_the_outputs_command_prints_the_digest_of_record_and_declares_a_stages_o
     assert "build=vllm-build/v1(1 files), evidence=execution-evidence/v1(1 files)" in capsys.readouterr().out
     (run / "outputs.json").unlink()
     _put(d / "stages.txt", "commit PASS 2026-09-23T00:00:00Z rc=0\n")
-    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="commit", run_dir=str(run))) == 0
+    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stages=["commit"], run_dir=str(run))) == 0
     assert "FAILED to write outputs.json: ValueError: commit stage PASS but its decision document verdict.json" in capsys.readouterr().err
     assert not (run / "outputs.json").exists()
 

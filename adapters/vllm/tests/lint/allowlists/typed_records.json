@@ -98,7 +98,7 @@
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "schema-literal", "symbol": "SingleRow.prepare", "detail": "verity-sweep/executing-tree/v1"},
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/pipeline/row_tp.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
-    {"file": "verity_vllm/pipeline/serve_commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
+    {"file": "verity_vllm/pipeline/serve_commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-window/v1"},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 8},
     {"file": "verity_vllm/pipeline/served_match.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
@@ -214,6 +214,7 @@
     {"file": "verity/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"},
     {"file": "verity/definitions/word.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/unit-rule/v1"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/check/match_oracle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 24}
+    {"file": "verity_vllm/check/match_oracle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 24},
+    {"file": "verity_vllm/pipeline/spans.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"}
   ]
 }

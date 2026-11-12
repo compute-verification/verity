@@ -11,6 +11,9 @@ challenge phase (`pouw_h1_challenger.session_reason`'s Pearl-C branch, `salt_ses
 recomputing R from W and ``pass_index``: it counts only reserved salt-only and ended closed and complete, and the pass's
 coins and salt are read from the challenge phase, never from the pass.
 
+Served Pearl-C's passes end at each engine step under a committer that patched the model runner itself before the install
+(`pearl_c.passes.hook_steps`' ``runner``), once a step.
+
 CPU only: the auditor host is `challenger_host.Host` or `challenger_host.Gate` in this process, and the device run a
 stand-in that starts its epoch through `pouw_pearl_c_device.epoch_of` (no GPU here).
 """
@@ -45,6 +48,7 @@ from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW
 from verity_vllm.protocols.pouw.pearl_c import manifest as PPM
+from verity_vllm.protocols.pouw.pearl_c import passes as PP
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"
@@ -115,6 +119,59 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(PHW, "EPOCHS", {})
     RUNS.clear()
+
+
+class Stepping:
+    """A model runner class: ``execute_model`` runs the step's forward."""
+
+    def execute_model(self, scheduler_output):
+        return scheduler_output
+
+
+def _committed(runner, seen):
+    """A committer's patch of ``runner`` itself, as `NativeHostCommitter.install` makes it: it calls the method it read
+    at its install."""
+    orig = runner.execute_model
+
+    def execute_model(scheduler_output):
+        seen.append(scheduler_output)
+        return orig(scheduler_output)
+    return hooks.patch(runner, "execute_model", execute_model)
+
+
+def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_first(monkeypatch):
+    """A committer's patch of the runner, installed before the option, never reaches the class's wrapper, so its steps end
+    no pass; with the setting ``runner`` the option wraps the runner itself on top, and each step ends one pass. With the
+    committer's patch installed after the option both wrappers run, and a step still ends one pass. The option's hooks
+    put the class and the runner back."""
+    monkeypatch.setattr(PP, "model_runners", lambda: (Stepping,))
+    original = vars(Stepping)["execute_model"]
+
+    def stepped(runner_setting):
+        runner, seen, ends = Stepping(), [], []
+        run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]),
+                              end_pass=lambda step=False: ends.append(step))
+        first, h = _committed(runner, seen), hooks.Hooks(ENTRY)
+        PP.hook_steps(h, run, 1, None, runner if runner_setting else None)
+        assert [runner.execute_model(s) for s in (1, 2)] == [1, 2] and seen == [1, 2]
+        h.uninstall()
+        first.uninstall()
+        return ends, runner
+
+    assert stepped(False)[0] == []
+    ends, runner = stepped(True)
+    assert ends == [True, True] and "execute_model" not in vars(runner) and vars(Stepping)["execute_model"] is original
+
+    runner, seen, ends = Stepping(), [], []
+    run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]), end_pass=lambda step=False: ends.append(step))
+    h = hooks.Hooks(ENTRY)
+    PP.hook_steps(h, run, 1, None, runner)
+    last = _committed(runner, seen)
+    assert runner.execute_model(3) == 3 and seen == [3] and ends == [True]
+    assert run.details["pass_ends"] == "each engine step, at the model runner's execute_model"
+    last.uninstall()
+    h.uninstall()
+    assert "execute_model" not in vars(runner) and vars(Stepping)["execute_model"] is original
 
 
 def _host(tmp_path, monkeypatch, seed=1, challenger=None):

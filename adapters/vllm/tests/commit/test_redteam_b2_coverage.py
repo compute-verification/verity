@@ -28,7 +28,7 @@ from verity_vllm.query.manifest import bind as MB
 from verity_vllm.query.manifest import format as MF
 
 CHUNK = step_rows.ROW_BYTES
-PD = hashlib.sha256(b"program").hexdigest()
+PD = hashlib.sha512(b"program").hexdigest()
 NH = KVH = 4
 D = 64
 LP = {"r0": 5, "r1": 3}                       # both prompts arrive at engine step 0: one prefill launch over two sequences

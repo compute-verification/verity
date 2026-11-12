@@ -44,7 +44,8 @@ from verity_vllm.engine.hooks import Hooks
 __all__ = ["Context", "Option", "Target"]
 
 #: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
-#: observed run executes what the Commit serves); ``commit`` is the Commit stage of a row.
+#: observed run executes what the Commit serves); ``commit`` is a Commit: a row's Commit stage, or serve-openai's Commit
+#: windows, whose composition states the executor beside the server's own Commit (`serve_pearl`).
 STAGES = ("serve", "capture", "commit")
 
 
