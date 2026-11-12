@@ -103931,3 +103931,222 @@ None is a run of record: made-up logits, no engine, local challenger sessions, t
 - That Flock takes a statement cut down from a larger member (`af5e`).
 - Anything about a member larger than eight slots, a session behind the ZK server, or the padded Definition, which is not out.
 - Every size in sections 3 and 4 marked [guess].
+
+## GATHER, Thu 12 Nov 21:54Z: the tree's head is `bdf9fd1086` (the serve's branch at `cc0cef0ccc` merged, the summary's top key kept); its rehearsal `7ad8` held on cpu-13 with the one-stage record accepted, the first run to show the fix; at Friday's shape round 2 derives 21 links over two values (`logits`, `o0`) and 19 wires, so serving must commit `logits` in round 1's record and `o0` is there already; the audit's verdict is `summary.json`'s `outcome`; the second try with #9176 stops in three files of mine and needs the serve's change by Fri 06:00Z
+
+**In short.** [run: `git -C /tmp/gather/s rev-parse HEAD`, `gh pr view 9480`, 21:44Z] Friday's tree, `cursor/proofs-gather-served-select-b88b` (#9480, unmarked), is at `bdf9fd1086283f147234059462f6c6c6cc77637a`. [run: `research fetch r20261112-214101-7ad8 --all --on vy-nebius-cpu-13`, 21:50Z] Its small rehearsal `r20261112-214101-7ad8` (the 20-unit class, V = 2,560, CPUs, no engine) exited 0 at 21:48Z: 20 sessions, Lean's verifier accepted 20 of 20, round 2 gave no code, the stream's outcome is refused by `two-stage-form` alone, `held` is true, and the one-stage audit's own record is accepted by both verifiers with nothing failed, where every earlier run printed `registered`. [run: `research fetch`, 21:50Z] The rehearsal of `d5f8313e35`, the head you named for the first try, has no slot yet (`0aa9`, 4 ahead on cpu-10); I say in section 2 why I would name the head instead, and it is your call. [run: `second_stage.replay_links`, `replay_wires`, `replay_rows` on the layout at V = 154,880, 8 spans, the stop rule with T = 64, on the VM, 21:53Z] Your 21:51Z check: at Friday's shape round 2 derives 21 links, 19 wires and 40 rows; every chunk and the combine read the one value `logits`, the combine returns `o0`, and the combine's 19 other inputs are wires from the chunks' outputs, so no port is left unnamed and the two ports serving must commit in round 1's record are `logits` and `o0`, of which `o0` is committed today and `logits` is not (section 0 has the output). [read: `benchmarks/one_stage/two_stage.py`'s `second_stage`, `outcome_of`, `held`] The audit's verdict for Friday's row is the key `outcome` of `second/summary.json` (`outcome.accepted`); the top-level `accepted` is the one-stage audit's own and `held` is the driver's. [derived, from the trial merges below] The second try with #9176 and #9212 stops in three files of mine, five places, and with them in a run staged as today's never holds; a run that holds needs the serve to commit the logits in round 1's record, and I need that change by Fri 06:00Z to rehearse it twice before my Fri 11:00Z entry, Fri 08:30Z at the very latest. [derived] The estimate for Friday's shape is not in this entry: it waits on `4978` (512 units a template) and on `b876`, which I launched at Friday's own shape; it comes by Fri 05:30Z, and the word that it cannot be done by Fri 03:00Z.
+
+**Tags.** [run] a command of mine, with the time I read it; [read] a file or record, named; [relayed] another's word; [derived] my arithmetic or inference from the tagged facts beside it; [guess] no evidence beyond judgement. Times are `date -u`'s.
+
+### 0. Your 21:51Z check: what round 2 derives at Friday's shape, from the call
+
+[run: `round-two-derives-probe.py 154880 64 8 stop` on the VM at `bdf9fd1086`, 21:53Z, 17 s; the whole output is `round-two-derives-friday.log` in my artifacts, and the same at V = 2,560 is `round-two-derives-2560.log`] The layout is the small rehearsal's own (`two_stage_small.layout`) at V = 154,880, the select in 20 units, 8 spans, a stop class with T = 64; the stop rule's one id is a stand-in, and nothing below reads it. The calls are `second_stage.replay_links`, `replay_wires`, `replay_rows` and `replay_returns` on the layout's program and its replay block's descriptor id, with round 1's record naming the layout's own ports.
+
+```text
+layout: V 154880 outputs a span 64 spans 8 stop rule {'ids': (1,), 'T': 64}
+replay block TemplateInlined_v1{template="GreedySelect_v1{V=154880,N=7744}",N=64}
+templates 20
+round 1's record's ports today {"b.request": 8, "b.prompt": 8, "b.egress": 8, "o0": 512}
+the stop record's ports {"b.stop": 8}
+
+(a) replay_links: 21
+  GreedyChunk_v2{N=7744,OFF=0}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=7744}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=15488}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=23232}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=30976}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=38720}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=46464}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=54208}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=61952}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=69696}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=77440}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=85184}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=92928}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=100672}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=108416}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=116160}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=123904}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=131648}.logits <- logits
+  GreedyChunk_v2{N=7744,OFF=139392}.logits <- logits
+  GreedyCombine_v2{V=154880,N=7744}.logits <- logits
+  GreedyCombine_v2{V=154880,N=7744}.o0 <- o0
+
+(b) replay_wires: 19
+  GreedyCombine_v2{V=154880,N=7744}.r0 <- GreedyChunk_v2{N=7744,OFF=0}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r1 <- GreedyChunk_v2{N=7744,OFF=7744}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r2 <- GreedyChunk_v2{N=7744,OFF=15488}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r3 <- GreedyChunk_v2{N=7744,OFF=23232}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r4 <- GreedyChunk_v2{N=7744,OFF=30976}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r5 <- GreedyChunk_v2{N=7744,OFF=38720}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r6 <- GreedyChunk_v2{N=7744,OFF=46464}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r7 <- GreedyChunk_v2{N=7744,OFF=54208}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r8 <- GreedyChunk_v2{N=7744,OFF=61952}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r9 <- GreedyChunk_v2{N=7744,OFF=69696}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r10 <- GreedyChunk_v2{N=7744,OFF=77440}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r11 <- GreedyChunk_v2{N=7744,OFF=85184}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r12 <- GreedyChunk_v2{N=7744,OFF=92928}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r13 <- GreedyChunk_v2{N=7744,OFF=100672}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r14 <- GreedyChunk_v2{N=7744,OFF=108416}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r15 <- GreedyChunk_v2{N=7744,OFF=116160}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r16 <- GreedyChunk_v2{N=7744,OFF=123904}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r17 <- GreedyChunk_v2{N=7744,OFF=131648}.o0
+  GreedyCombine_v2{V=154880,N=7744}.r18 <- GreedyChunk_v2{N=7744,OFF=139392}.o0
+
+(c) replay_rows: 40
+  GreedyChunk_v2{N=7744,OFF=0}.logits: per 1280, runs [(0, 64, 0, 20)]
+  GreedyChunk_v2{N=7744,OFF=7744}.logits: per 1280, runs [(0, 64, 1, 20)]
+  GreedyChunk_v2{N=7744,OFF=15488}.logits: per 1280, runs [(0, 64, 2, 20)]
+  GreedyChunk_v2{N=7744,OFF=23232}.logits: per 1280, runs [(0, 64, 3, 20)]
+  GreedyChunk_v2{N=7744,OFF=30976}.logits: per 1280, runs [(0, 64, 4, 20)]
+  GreedyChunk_v2{N=7744,OFF=38720}.logits: per 1280, runs [(0, 64, 5, 20)]
+  GreedyChunk_v2{N=7744,OFF=46464}.logits: per 1280, runs [(0, 64, 6, 20)]
+  GreedyChunk_v2{N=7744,OFF=54208}.logits: per 1280, runs [(0, 64, 7, 20)]
+  GreedyChunk_v2{N=7744,OFF=61952}.logits: per 1280, runs [(0, 64, 8, 20)]
+  GreedyChunk_v2{N=7744,OFF=69696}.logits: per 1280, runs [(0, 64, 9, 20)]
+  GreedyChunk_v2{N=7744,OFF=77440}.logits: per 1280, runs [(0, 64, 10, 20)]
+  GreedyChunk_v2{N=7744,OFF=85184}.logits: per 1280, runs [(0, 64, 11, 20)]
+  GreedyChunk_v2{N=7744,OFF=92928}.logits: per 1280, runs [(0, 64, 12, 20)]
+  GreedyChunk_v2{N=7744,OFF=100672}.logits: per 1280, runs [(0, 64, 13, 20)]
+  GreedyChunk_v2{N=7744,OFF=108416}.logits: per 1280, runs [(0, 64, 14, 20)]
+  GreedyChunk_v2{N=7744,OFF=116160}.logits: per 1280, runs [(0, 64, 15, 20)]
+  GreedyChunk_v2{N=7744,OFF=123904}.logits: per 1280, runs [(0, 64, 16, 20)]
+  GreedyChunk_v2{N=7744,OFF=131648}.logits: per 1280, runs [(0, 64, 17, 20)]
+  GreedyChunk_v2{N=7744,OFF=139392}.logits: per 1280, runs [(0, 64, 18, 20)]
+  GreedyCombine_v2{V=154880,N=7744}.logits: per 1280, runs [(0, 64, 19, 20)]
+  GreedyCombine_v2{V=154880,N=7744}.o0: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r0: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r1: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r2: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r3: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r4: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r5: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r6: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r7: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r8: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r9: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r10: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r11: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r12: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r13: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r14: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r15: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r16: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r17: per 64, runs [(0, 64, 0, 1)]
+  GreedyCombine_v2{V=154880,N=7744}.r18: per 64, runs [(0, 64, 0, 1)]
+
+replay_returns: ('o0',)
+seconds 15.9 | peak resident MiB 413
+```
+
+- **(a) The links: 21, over two values.** [run: above] Each of the 19 chunk templates reads `logits` at its port `logits`; the combine's template reads `logits` at its port `logits` too (the 20th unit holds the last slice with the combine); and the combine's `o0` is the value `o0`, the return. So **the ports serving must commit in round 1's record before the first sample are two: `logits` and `o0`**, the same two names as HONEST2's rule for the one-template select. [run: the line "round 1's record's ports today"] `o0` is there already (512 leaves: 8 spans of 64 ids). `logits` is not: today it is a value of the interior registration.
+- **What the `logits` port is, at this shape** [run: the rows above]. One value, 1,280 rows a span: 20 rows a token for 64 tokens, row k of a token read by template k (the `runs` `(0, 64, k, 20)`: 64 units from row k, every 20th). Over 8 spans that is 10,240 rows, every one of them committed before the first sample, each a slice of 7,744 of the token's 154,880 logits.
+- **(b) The wires: 19, and it derives them.** [run: above] `GreedyCombine_v2.r<k> ← GreedyChunk_v2{OFF = k × 7,744}.o0` for k = 0 to 18: the combine has one parameter a chunk, each one field of one chunk instance, which `replay_wires` wires as it stands. Your guess is right: the per-position Definitions avoid what HONEST2 found at `TokenSelectChunk_v2` and `TokenSelectCombine_v2`, whose combine gathers the chunks' outputs into `best` and `idx`. No port of the combine is left unnamed: its 21 ports are `logits` (a link), `r0` to `r18` (wires) and `o0` (the return's link); a chunk's two are `logits` (a link) and `o0` (a wire's writer).
+- **(c) The rows: 40**, one for each linked or wired port: the 20 `logits` ports at 1,280 rows a span, and the combine's `o0` and `r0` to `r18` at 64 rows a span.
+- **What I have not checked** [derived]: that `SourcesNamed` as Lean states it holds at this design. The call shows every input port of every template named by a link or a wire; whether a chunk's `o0`, which a wire writes from and nothing links, counts as a source bit there is HONEST2's to read, not mine. [run: `7ad8`, `c30d`, `86b4`, `5a5c`] Round 2 itself accepted the statements with no code in all four runs, `second-wires` and `second-links` among the codes it could have given.
+
+### 1. What moved on the tree since my 21:07Z entry, and one thing I undid
+
+| Head | What it adds | Why |
+|---|---|---|
+| `d5f8313e35` | (the 21:07Z entry's head) the audit record's fix `f801b050fd`, the serve's branch at `cfd26a2b842f` | [read: my 21:07Z entry] |
+| `b26ce00139` | the summary's top-level `accepted` moved under `record`; the toy's `own_reads_only` and `own_ports` removed | [derived] my reading of your 21:18Z (b) |
+| `2ee7f0ec3b` | the serve's branch at `584412f2d924` merged, no stop: ids committed in the two-stage arm's object only; `two_stage_small.py serve --stop` | [relayed: your 21:12Z item 3, "Merge its head as it moves"] |
+| `0afa8a090c` | the top-level `accepted` back under its own name; `record` is `{"own_reads": true, "failed": []}` | [relayed: your 21:50Z, "keep the key's name"] |
+| `bdf9fd1086` | the serve's branch at `cc0cef0cccc4` merged, no stop: `rebuild.py`'s capture takes the serve's check when no template is named | [run: `git merge --no-ff --no-commit cc0cef0cccc4`, 21:38Z; `test_rebuild.py` 33 passed] |
+
+- **What I undid.** [read: your 21:50Z message] `b26ce00139` moved the top-level `accepted`, and you then said to keep the key's name. `0afa8a090c` puts it back. [run: `git diff --stat d5f8313e35 bdf9fd1086`, 21:46Z] Net of the two, the head differs from `d5f8313e35` in 10 files, all under `benchmarks/`, none under `verity/`, `adapters/`, `security/` or `tools/`: the summary gains `record.own_reads`, the rehearsal's exit asks for it, the toy asks that the one-stage audit's record is accepted (it no longer needs a check of its own, since that audit takes the reads as the stream does), and the serve's three later commits.
+- **`9d4aec0111fb` is an ancestor of every head above** [run: `git merge-base --is-ancestor 9d4aec0111fb HEAD`, 21:38Z at `bdf9fd1086`; at each earlier head when I made it]. Merges only; no rebase, no force.
+- **#9480's body** is brought to `bdf9fd1086` [run: `research queue edit 9480 --body-file`, 21:39Z, 11,456 bytes]: 66 files against `main`, 16 this change's own; it says which key is the run's verdict and names the top-level `accepted` as the one-stage audit's.
+
+### 2. The first try: two heads you can name, and the one I would
+
+- **`d5f8313e35`**, as you wrote. [run: `research fetch`, 21:45Z] Its rehearsal is `r20261112-211740-0aa9` (20-unit class, V = 2,560, cpu-10, the lane's pool): waiting since 21:17:50Z, 4 ahead. `964a`, which you named, never got a slot; I cancelled it at 21:17Z and `0aa9` is the same job. [run: `research run --on vy-nebius-cpu-13 --mem-gb 32` from a checkout at `d5f8313e35`, 21:50Z] cpu-13 refused it (18 GB available), so it stays in the pool's line; `r20261112-205700-5640` (the class of whole instances, same head, 1 ahead) is beside it.
+- **`bdf9fd1086`**, the head. [run: `research fetch r20261112-214101-7ad8 --all --on vy-nebius-cpu-13`; `second/summary.json`, `second/audit/audit.json` read as JSON, 21:50Z] Its rehearsal `r20261112-214101-7ad8` ran on cpu-13 with no wait (32 GB asked, 14.1 GiB used) from 21:41:10Z to 21:48:29Z and exited 0. **Its summary line:** 20 sessions (19 chunks at `k_log` 22 and m = 25, the combine at `k_log` 24 and m = 27; 2 of 8 units proved in each); `lean-draw`, `lean-verify` and `m0-verifier` each 20 of 20; 22 of 22 checks before the sample; 20 of 20 pins; 18 of 18 negatives refused; first-stage sample spans 0 and 1 of 6; `round_two.ok` true with no code; `outcome`: refused, `interior: ["statements"]`, `statements: ["two-stage-form"]`, `replay_sample: []`; `accepted: true`; `record: {"own_reads": true, "failed": []}`; `held: true`; all seven of `expect`'s checks true.
+- **I would name `bdf9fd1086`, for two reasons** [derived]. (a) It holds the serve's own later commits, so vllm serves from the SHA what its branch has: at `d5f8313e35` every arm's rows carry `"ids": true`, at the head only the two-stage arm's do [read: `benchmarks/serve_tax/serve_tax.py`, `ROWS` and `TWO_STAGE_ROWS`, at both]. (b) Friday serves under a stop rule, and the small rehearsal can be run under one only from `2ee7f0ec3b` on [read: `two_stage_small.py:139`, `--stop`, absent at `d5f8313e35`]: `d5f8313e35` cannot be rehearsed at Friday's form by this script. Against it: the head is 35 minutes old and its summary has one more field. It is your call, and vllm's on (a); both heads hold the fix and both rehearsals are out.
+- **Nothing else goes in before the first try** [derived]. If the serve's branch moves again I merge it and rehearse, and say so in an entry; I change no file of my own on this branch until you have named the SHA, unless a rehearsal fails.
+
+### 3. Your 21:18Z correction: (a) the reading, (c) the key
+
+- **(a) Your reading is right, with one addition** [run: `second/audit/audit.json` of `5a5c`, `86b4` and `c30d` read as JSON, 21:39Z]. In all three, `verifiers.of_record` is `lean`, `agree` is true, and Lean's `failed` is `["registered"]`; the check's detail wants `["logits"]`, lists 20 opened names (`logits` and the 19 chunks' `o0`), and `wrong` is empty. So the one-stage audit refused its own record for reading the 19 chunk outputs the interior registration itself registers, at their own roots. [read: `verity/protocols/spot/verifier/service.py:2440-2475`; `benchmarks/one_stage/two_stage.py`'s `held`] The stream's records are taken with own reads, and `held` reads the stream's outcome. The addition: `held` also reads the one-stage audit's `complete`, `registered_reads`, its verdicts and its negatives; it never read that audit's `accepted` or its record's failed checks, which is why the run held with the failure printed.
+- **(b), as it now stands** [read: `benchmarks/one_stage/a5.py`, `two_stage.py`, `two_stage_small.py` at `bdf9fd1086`]. The one-stage audit takes its record with own reads whenever it is handed a sample (`f801b050fd`), as the stream's records do, and says so (`record.own_reads: true`). In a run that holds, `accepted` is true and `record.failed` is empty, and the rehearsal's exit asks for exactly that (`expect`'s `record`). A `registered` failure at any other port still fails the run twice over: the one-stage record fails, so `accepted` is false and the rehearsal exits non-zero; and the stream's record fails, so `outcome.interior` names `registered` and `held` is false. [run: `own-reads-record-probe.py` on `5a5c`'s inputs, 20:49Z; `test_difftest.py`'s own-reads case, read] Shown so far by the Python verifier on `5a5c`'s inputs and by the difftest's case for Lean's; and now by a run: in `7ad8` the record is accepted by both (`verifiers.of_record: lean`, `agree: true`, no failing check, `own_reads: true`).
+- **(c) The audit's verdict is `outcome`, in `second/summary.json`** [read: `two_stage.py`'s `outcome_of`]. `outcome.accepted` is the verdict; `outcome.interior`, `outcome.statements` and `outcome.replay_sample` name what refused. While the two-stage form is off in the verifier, a run with nothing wrong reads `outcome.accepted: false`, `outcome.interior: ["statements"]`, `outcome.statements: ["two-stage-form"]`, `outcome.replay_sample: []`. Not the top-level `accepted` (the one-stage audit's own: its record accepted, its registered reads right, its negatives refused, its challengers right), and not `held` (the driver's own check that the run is what today's verifier should give). [read: COUNT's 21:37Z entry] COUNT already reads the stream's outcome; the key's name for its reader is `outcome`.
+
+### 4. `86b4` read whole, and `c30d`, the same shape on this tree
+
+[run: `research fetch --all`, the records under `out/second/` and `resources.jsonl` read as JSON, 20:58Z to 21:44Z; tables under `served-select/86b4/` and `served-select/c30d/` in my artifacts] Both: V = 154,880, the 20-unit class, 6 spans of 2 output tokens, 2 spans sampled, the second stage one unit of each template in each sampled span (40 of 80 units), CPUs, no engine. `86b4` is STOPS' branch at `7c2636e740e0` on cpu-10 (30 cores); `c30d` is this tree at the earlier head `08528b27dcc8` on cpu-7 (22 cores), exit 0 at 21:31:36Z.
+
+| | `86b4` | `c30d` |
+|---|---|---|
+| `first`, wall | 3 min 58 s (20:07:35Z to 20:11:33Z) | 4 min 1 s (20:46:33Z to 20:50:34Z) |
+| `second`, wall | 45 min 10 s (20:11:33Z to 20:56:43Z) | 40 min 50 s (20:50:34Z to 21:31:24Z) |
+| a session's own proving seconds, 2 units (`timing.prove_total_s`) | 3.6 to 49.2, sum 450.6 over the 20 | 1.4 to 13.1, sum 71.0 |
+| Lean's verifier, a session (`lean_verify_s`) | 53.2 to 82.9, sum 1,382 | 28.2 to 49.7, sum 682 |
+| the other verifier, a session (`verify_s`) | sum 34.6 | sum 6.8 |
+| composing a member's circuit (`compose_s`) | 14.5 to 22.5, sum 343 | 17.4 to 33.1, sum 440 |
+| staging before the sample (`staging.before_draw_s`) | 355 | 455 |
+| the job's own peak memory (PSS summed over its processes) | 49.3 GiB, in `second` | 57.4 GiB, in `second` |
+| the job's memory in `first` | 5.7 GiB | 4.0 GiB |
+| a chunk's session | `k_log` 24, `unit_log` 21, 1 unit a proof block, 2 of 4 units proved, m = 27 | the same |
+| the combine's session | `k_log` 25, m = 28 | the same |
+| verdicts | `lean-draw`, `lean-verify`, `m0-verifier` each 20 of 20; 18 of 18 negatives refused; round 2 no code; outcome refused by `two-stage-form` alone; `held` true | the same |
+
+- **The times are the files' own** [read: mtimes of `serve.json`, `first.log`, `second.log` under each run's `out/`]. The sessions' seconds are each session's own (`timing.prove_total_s`), not `session_s`, which has the wait in.
+- **The memory is the job's** [read: `resources.jsonl`'s `pss` samples, 1,061 and 1,227 of them]. The 99.2 GiB and 107.7 GiB in the resources files are the shared pod's, as you said.
+- **Where `second`'s time goes at this sample** [derived, on `c30d`]: of 2,450 s, composing the 20 circuits is 440 s, the 20 sessions 666 s (proving 71 s of it), Lean's verifier 682 s, and 660 s is the rest (the sampled spans' replay, the negatives, the draws, round 2). Each of the first three is serial over the 20 members. Proving is 3% of `second`; Lean's verifier and the circuits are the larger parts.
+- **Both runs printed the failure that was none** [run: same]: both are at heads before `f801b050fd`.
+- **m in general** [read: `benchmarks/prove_path/served_statics_zk.py:201`; derived]: a chunk's m is 24 + max(3, ⌈log2 n⌉) and the combine's 25 + the same, n the template's units in the sampled spans (sampled spans times the output cap), bound 35.
+
+### 5. The estimate for Friday's shape (your 21:12Z item 2): owed, and how I get it
+
+- **Not in this entry** [derived]. Both finished runs have 4 units a template. Friday's shape (8 requests, the stop rule with T = 64) has 64 units a template for each sampled span: 128 at two sampled spans (m = 31 and 32), 512 at all eight (m = 33 and 34). What grows with that count (the sampled spans' replay, staging and committing the population, a session's commitment) no finished run shows.
+- **Two runs will show it.** [run: `research fetch`, 21:51Z] `r20261112-201421-4978` (this tree at `f461ac0edeb2`, cpu-8, 128 GB, 4 h): 512 units a template, the size of Friday's shape at a full sample. Its stand-in serve of 1,024 tokens took 58 min 40 s (20:40:41Z to 21:39:21Z), which is the stand-in's reference evaluator and not on Friday's path; `first` took 4 min 1 s (21:39:23Z to 21:43:24Z), the same as at 12 tokens, so `first` does not grow with the tokens served; `second` began at 21:43:27Z; the job's own memory was 6.9 GiB at 21:43Z. [run: `research run`, 21:47Z] `r20261112-214729-b876` (the head, cpu-12, the lane's pool, 96 GB, 4 h): Friday's own shape, `--v 154880 --outputs 64 --spans 8 --stop`, first-stage law `rate:2/8`, one unit of each template in each sampled span. [guess] `4978` ends between 23:00Z and its limit at 00:34Z. `b876` has 13 ahead of it and needs about two hours once it has a slot; if cpu-13 has 96 GB before then I move it there, as your 20:23Z rule says.
+- **The sample I would set, until a run says otherwise** [guess]: two of the eight spans and one unit of each template in each (`rate:2/8`, `--k 1`), which is the sample every rehearsal so far has proved (2 units a session), so the measured sessions carry over and only the population differs.
+- **cpu-13** [run: four `research run --on vy-nebius-cpu-13 --mem-gb 64`, refused `MemoryNotAvailable` at 20:56Z, 21:17Z, 21:29Z, 21:40Z]: at 21:40Z it had 38.3 GB available of 754.7, with 668.5 GB reserved by 4 live reservations; `7ad8` ran there on 32 GB; at 21:50Z it had 18 GB, 693.4 GB reserved by 5. Friday's audit will need at least the 57 GiB `c30d` used [derived]. Whoever holds those reservations must have let go by Fri 13:10Z; that is yours or infra's to arrange, and I name it now so it is not found then.
+
+### 6. The two trees, and what each costs
+
+**(1) The first try (Fri 13:10Z).** Section 2. Cost: nothing more than the rehearsals now out. It needs no merge of `main`.
+
+**(2) The second try (Fri 20:00Z): (1) plus STOPDRIVER's piece, plus, if vllm says yes, #9176 and #9212.**
+
+- **What stops** [run: `git merge --no-commit --no-ff 99f2f3ba2cf1`, then `f2412ec7156f`, in a scratch worktree at `0afa8a090c`, 21:33Z; removed after]. Five places in three files, all mine: `benchmarks/one_stage/two_stage_small.py` (2: its constants, and `expect`), `benchmarks/one_stage/two_stage_small.sh` (1: the header), `benchmarks/one_stage/tests/test_two_stage_second.py` (2). Everything else merges by itself: `two_stage.py`, `service.py`, `second_stage.py`, the Lean files, `test_difftest.py`, `security/lean-audit.json`. #9212 holds #9176's head and adds no stop.
+- **What the stops hide** [read: #9176's `two_stage.py` and `two_stage_small.py` at `99f2f3ba2cf1`]. #9176 was written before round 1 committed the block's return. Its driver expects today's run to be refused by `second-inputs` and `second-read`, and its `held` is false whenever `second-inputs` is among round 2's codes. This tree already commits the return (`o0`, the ids) as a port of round 1's record and reads it at round 1's rows, so half of what FRAME asks is in. The other half is not: the 20 chunks' `logits` are registered with the interior, after the first sample. So with #9176 merged and nothing else changed, every run on this tree is refused by `second-inputs`, as it should be.
+- **What makes a run hold then** [derived; the exact shape is FRAME's, due 22:30Z]. Round 1's record gains a `logits` port; the 20 chunk templates' `logits` links point at it, at round 1's rows; the interior registration registers no `logits`. In files: vllm's layout of round 1's record (`boundary_rows`) and the engine's commit of the logits while serving; `adapters/vllm/verity_vllm/pipeline/interior_rows.py` (`pieces` stops emitting `logits`); mine: the stand-in serve and `expect` in `two_stage_small.py`, the links in `two_stage.py`'s `design`, and the tests. [guess] 150 to 300 lines of mine, half of it tests.
+- **What I can do before vllm's change exists** [derived]. Merge #9176 and #9212 on a branch of my own made from the tree's head, make the stand-in serve commit the logits in round 1's record, and rehearse at V = 2,560 and once at 154,880. Then vllm's change meets a driver that already expects it, and the join is one merge. I start this when FRAME's shape is in, on a new branch, and touch tree (1) not at all. Say no if you would rather I did not.
+- **The latest hour** [guess, from tonight's waits of 20 to 50 minutes for a pool slot, 10 minutes a small rehearsal, and about 50 minutes for `first` and `second` at 154,880 after the stand-in serve]. vllm's change on a branch made from this tree by **Fri 06:00Z** leaves the merge, two small rehearsals with a fix between, and one run at 154,880 before my Fri 11:00Z entry. **Fri 08:30Z** is the last hour for one small rehearsal with no fix and no run at the served vocabulary. After that the second try runs tree (1) with STOPDRIVER's piece, and the run a proof can cover is a third run.
+- **One thing that would stop it whatever the hour** [derived]: at the served vocabulary the logits of one token are 154,880 values, and round 1 would commit them for every token served, not only the sampled ones. What that costs the serve is vllm's to say; it is the question I would put to it first.
+
+### 7. For the proof's side: Friday's class has its wires
+
+Section 0 has the call's output. [read: HONEST2's 21:40Z entry, premise 3 and its STOP RULE] What HONEST2 found (no wires for the combine) is true of the inlined `TokenSelectChunk_v2` and `TokenSelectCombine_v2` at the base it read (`bb527fd2e2d2`), and not of Friday's class on this tree: the second way it names, one parameter a chunk, is what `GreedyCombine_v2` already is, with #9075's Definitions. So at Friday's shape the conditions on wires can be met as it is served, and what is left is the address premise (section 6).
+
+### 8. Whether the tree merges clean with what lands on Friday (your 21:12Z item 5)
+
+- **#9237 and #9075**: [run: `git merge-base --is-ancestor`, 21:25Z; heads re-read by `gh pr view`, 21:44Z] their heads `9d4aec0111fb` and `cbe0bcdd160d` are ancestors of the tree, so if each lands as it is, merging `main` brings nothing of theirs to resolve.
+- **#9375** (`bafae2eaec2e`, open): [run: three trial merges in a scratch worktree at `bafae2eaec2e`, 21:44Z] with the tree's head, one stop: `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, the import from `verity.protocols.spot.device.coins`, where both sides added names (keep both). With #9237's head alone, the same one stop: it is #9237's line, so **#9237 will stop against `main` once #9375 lands**, before it reaches me. With #9075's head alone, no stop.
+- **The two settings** [read: `settings.py:195`, `:200` at `bafae2eaec2e`]: `VERITY_INT8_FUSED_PRODUCERS` and `VERITY_ROPE_CACHE_FUSED` default true there. I merge `main` past #9375 only after an entry, as you ruled.
+
+### 9. Runs
+
+| Run | What | Head | Where | State at 21:51Z |
+|---|---|---|---|---|
+| `r20261112-214101-7ad8` | 20-unit class, V = 2,560 | `bdf9fd1086` | cpu-13, 32 GB | **done, exit 0**, 21:48:29Z (section 2) |
+| `r20261112-211740-0aa9` | 20-unit class, V = 2,560 | `d5f8313e35` | cpu-10, pool, 64 GB | waiting since 21:17:50Z, 4 ahead |
+| `r20261112-205700-5640` | class of whole instances, default sizes | `d5f8313e35` | cpu-10, pool, 64 GB | waiting since 20:57:26Z, 1 ahead |
+| `r20261112-214142-5326` | 20-unit class, V = 2,560, under a stop rule | `bdf9fd1086` | cpu-12, pool, 32 GB | waiting since 21:42:04Z, next for a slot's memory |
+| `r20261112-214205-9e10` | the two-stage toy, honest and altered | `bdf9fd1086` | cpu-10, pool, 48 GB | waiting since 21:42:29Z, 9 ahead |
+| `r20261112-214729-b876` | Friday's shape: V = 154,880, 8 spans, stop rule with T = 64, `rate:2/8` | `bdf9fd1086` | cpu-12, pool, 96 GB, 4 h | waiting since 21:47:37Z, 13 ahead |
+| `r20261112-201421-4978` | V = 154,880, 4 spans of 256 output tokens, 2 sampled (512 units a template) | `f461ac0edeb2` | cpu-8, 128 GB, 4 h | running; `second` since 21:43:27Z |
+| `r20261112-193739-c30d` | V = 154,880, 6 spans of 2 output tokens | `08528b27dcc8` | cpu-7 | **done, exit 0**, 21:31:36Z (section 4) |
+
+Cancelled by me since 21:07Z, none of which had a slot: `964a` (21:17Z, relaunched as `0aa9`), `a359` (21:30Z), `0e7d`, `7c38` and `f327` (21:41Z: each at a head whose summary no kept head has; relaunched at `bdf9fd1086` as `7ad8`, `5326` and `9e10`).
+
+### 10. Not established
+
+- [run: `research fetch`, 21:51Z] No rehearsal has ended at `d5f8313e35` (`0aa9`, `5640` wait). At `bdf9fd1086` one has (`7ad8`); the stop-rule form (`5326`) and the served vocabulary (`b876`) have not.
+- [derived] No run on the served engine. Every run here is the stand-in serve on CPUs.
+- [derived] The estimate for Friday's shape, and whether the CPU ends it inside Fri 14:00Z to 19:00Z: section 5.
+- [derived] The toy (`benchmarks/two_stage/audit.sh`) has not run since its check changed: `9e10` is waiting.
+- [run: `7ad8`] Lean's verdict on a one-stage audit's record taken with own reads is seen in one run, at V = 2,560; not yet at the served vocabulary (`b876`).
+- [relayed: your 20:50Z] vllm's `select20` dry line on VLLM-412 is due 23:30Z and its small serve's result on VLLM-300 at 01:00Z; I read both then and enter them.
