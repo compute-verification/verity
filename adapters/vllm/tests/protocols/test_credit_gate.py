@@ -629,10 +629,10 @@ def _record(run):
 def _credit(host, rec, statements=(), k=None, descriptor=None, run=None, live=None):
     return PHC.credit_reason(rec, host.directory, [host.ledger.path], host.window, host.key,
                              _descriptor() if descriptor is None else descriptor, statements, k, run=run,
-                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, draw_directory=_draw_dir(host))
+                             pins=[host.ledger.pins_path], main=CH.MAIN, live=live, draw_directory=_sample_dir(host))
 
 
-def _draw_dir(host):
+def _sample_dir(host):
     """The ``out/`` of the sample's challenge phase `host`'s gate opened for its window, None when it opened none."""
     return None if host.draw is None else host.draw.directory
 
@@ -1031,7 +1031,7 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
     ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _draw_dir(auditor))
+    evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live, _sample_dir(auditor))
     got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
     assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
                                    "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
@@ -1068,7 +1068,7 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
                                 [auditor.window["root"], rec["commitment"]["draw"]["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor(),
-                                   draw_directory=_draw_dir(auditor))
+                                   draw_directory=_sample_dir(auditor))
     assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
