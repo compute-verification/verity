@@ -24,6 +24,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
 from mref import decode, duo_receipts, words
 
+#: what pvref.py and lpref.py import
+__all__ = ["fold", "noise", "sigma"]
+
 FMTS = ["i8", "e4"]
 ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
 M64 = (1 << 64) - 1

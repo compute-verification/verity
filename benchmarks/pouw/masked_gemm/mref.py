@@ -19,6 +19,9 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
 from ref import key_mul, key_xor, mix32, rot_of, rotl, tbc_receipts
 
+#: what the later kernels' references import
+__all__ = ["decode", "duo_receipts", "words"]
+
 RANKS = [8, 16, 32, 64, 128]
 FMTS = ["i8", "e4"]
 
