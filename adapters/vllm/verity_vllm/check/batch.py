@@ -11,8 +11,9 @@ A label says who holds a parameter's leaves: `SHARED` (weights, tables, constant
 the batch picks, such as its live row count: no output may read it), `Rows(owners)` (equal rows,
 row i held by ``owners[i]``) or `Fields(labels)` (a tuple or a record, field by field). An owner is any hashable request label.
 
-`circuit-check --batch` runs both over the templates a compiler declares (`verity_vllm.program.predict.batch.templates`), and the
-compiler holds each composition to (a) (`verity_vllm.program.predict.batch.check_compiled`).
+`check` runs both over the templates a compiler declares (`verity_vllm.program.predict.batch.templates`), each held to the
+verdict declared beside it, and the compiler holds each composition to (a)
+(`verity_vllm.program.predict.batch.check_compiled`).
 """
 
 from __future__ import annotations

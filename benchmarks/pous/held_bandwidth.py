@@ -23,7 +23,9 @@ form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` 
 
 **The session's length** is the request's: ``windows`` of ``window_s`` each (`WINDOWS`, `WINDOW_S`: two minutes), each of
 ``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`), by default the auditor's (`p2_party.SESSION`, which
-its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ draws/2^64, and the pooled bound leaves at most 0.45% of its receipts wrong at those defaults over a store of 2^17
+its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ samples/2^64, which leaves out
+Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed; `p2_party.EPS_TERMS`), and the pooled bound leaves at most
+0.45% of its receipts wrong at those defaults over a store of 2^17
 units (6 windows of 4 passes, 1,024 draws each; `pooled.bound`), so q_bytes is at least 99.5% of the reads.
 """
 from __future__ import annotations
@@ -31,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -45,6 +48,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 
 from p2_v1 import bandwidth as B
 
+from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import verifier as V
 from verity.protocols.poub.verifier import coins, p2, p2_case, p2_party, receipts
 from verity.commitments import advice
@@ -191,7 +195,10 @@ def _write(path: Path, doc: Any, mode: int | None = None) -> None:
 def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_per_s: int | None,
                   private: Path) -> dict[str, Any]:
     """The case's answer `judged` in public: its commitment a hiding one to the case's digest under `bind`, whose
-    opening goes to `private`, its profile without the registration's digest and with `scope`, and γ against R."""
+    opening goes to `private`, its profile without the registration's digest and with `scope`, and γ against R. A
+    refusal with no commitment, the Lean's of a case it decodes no commitment of, has none to hide."""
+    if judged.get("commitment") is None and judged.get("verdict") != "accept":
+        return dict(judged) | {"reason": f"{judged.get('reason')}; {scope}"}
     row = bytes.fromhex(judged["commitment"])
     hidden = advice.commit([row], 8 * len(row), bind)
     o = hidden.open(0)
@@ -224,7 +231,10 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
     ``--pous-session`` and PoUS's session id `sid` are added; its port reached at `party_host`), under `request_`: the
     case and everything naming the store to `private` (0700, files 0600), the public answer and a summary to `public`
     (``answer.json``, ``bandwidth.json``); the public answer, also returned. With `pous_case` (PoUS's run case), a case
-    whose store isn't PoUS's (`p2_case.same_store`) is refused."""
+    whose store isn't PoUS's (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean
+    answers the case and its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the
+    session undecided and no case written. The summary names the program whose verdict the answer is and the host it
+    ran on (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(private, 0o700)
     public.mkdir(parents=True, exist_ok=True)
@@ -232,7 +242,7 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
     command = f"{party} --pous-session {sid.hex()}"
     summary: dict[str, Any] = {"window": window, "request": dict(request_), "party_host": party_host,
                                "pous_session": "the PoUS session the PoUS piece ran (its id private)",
-                               "private": str(private), "judge": "lean" if case_exe else "python"}
+                               "private": str(private), "decided_by": period.decided_by(None)}
     with open(private / "prover.log", "a") as log_f:
 
         def log(m: str) -> None:
@@ -269,21 +279,29 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
     elif pous_case is not None and (why := p2_case.same_store(kept, pous_case)) is not None:
         out = _no("reject", f"the bandwidth session's store is not PoUS's: {why}; {scope}")
     else:
-        judged = p2_case.judged(kept, answer, case_exe)
-        p2_case.write(private, kept, judged)
-        out = public_answer(judged, bind, scope, r_bytes_per_s, private)
         summary["same_store"] = pous_case is not None
+        t = time.perf_counter()
+        try:
+            judged = p2_case.judged(kept, answer, case_exe)
+        except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
+            out = _no("undecided", f"{case_exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
+        else:
+            if case_exe is not None:
+                summary |= {"decided_by": period.decided_by(case_exe), "lean_s": round(time.perf_counter() - t, 3)}
+            p2_case.write(private, kept, judged)
+            out = public_answer(judged, bind, scope, r_bytes_per_s, private)
     _write(public / "answer.json", out)
     _write(public / "bandwidth.json", summary | {"verdict": out["verdict"], "reason": out["reason"]})
     return out
 
 
 def missing(public: Path, window: int, reason: str) -> dict[str, Any]:
-    """No session ran: the public answer undecided, saying why."""
+    """No session ran: the public answer undecided, saying why, by this Python (``decided_by``)."""
     public.mkdir(parents=True, exist_ok=True)
     out = _no("undecided", f"{reason}; {SCOPE.format(k=window)}")
     _write(public / "answer.json", out)
-    _write(public / "bandwidth.json", {"window": window, "verdict": out["verdict"], "reason": out["reason"]})
+    _write(public / "bandwidth.json", {"window": window, "verdict": out["verdict"], "reason": out["reason"],
+                                       "decided_by": period.decided_by(None)})
     return out
 
 

@@ -1,6 +1,6 @@
 module
 
-public import Flock.Program
+public import Circuits.Program
 public import Evaluate.Scalar
 public import Evaluate.Casts
 public import Evaluate.TC.Dots

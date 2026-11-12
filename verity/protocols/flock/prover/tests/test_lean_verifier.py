@@ -1,5 +1,6 @@
-"""The Lean verifier's trust surface: a pinned toolchain, no dependencies, and no escape hatch that would let compiled code
-differ from the definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
+"""The Lean verifier's trust surface: a pinned toolchain, no dependency from outside the tree (it requires the base
+packages by path, and they require only each other), and no escape hatch that would let compiled code differ from the
+definitions a proof is about (`native_decide`, `implemented_by`, `extern`, `unsafe`)."""
 from __future__ import annotations
 
 import fcntl
@@ -11,11 +12,14 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
+#: the base packages the verifier requires by path: bytes, hashes and parsing; the circuit format; the commitments
+BASE = [LEAN.parents[2] / d for d in ("circuits/base", "circuits/lean", "commitments/lean")]
 VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
 PROOFS = Path(__file__).resolve().parents[5] / "security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
@@ -32,22 +36,30 @@ def build_proofs_verifier() -> None:
 
 
 def sources():
-    """The executable's sources (its proofs are under `security/Proofs/Flock/`, with their own dependencies and checks)."""
-    return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts)
+    """The executable's sources, the base packages' among them (its proofs are under `security/Proofs/Flock/`, with their
+    own dependencies and checks)."""
+    return sorted(p for d in (LEAN, *BASE) for p in d.rglob("*.lean") if ".lake" not in p.parts)
 
 
 def test_toolchain_is_pinned():
-    assert (LEAN / "lean-toolchain").read_text().strip() == TOOLCHAIN
+    assert all((d / "lean-toolchain").read_text().strip() == TOOLCHAIN for d in (LEAN, *BASE))
 
 
-def test_no_dependencies():
-    assert "require" not in (LEAN / "lakefile.toml").read_text()
-    assert json.loads((LEAN / "lake-manifest.json").read_text())["packages"] == []
+def test_no_dependencies_from_outside_the_tree():
+    """The verifier's package and the base packages require only base packages, each by path; nothing is fetched."""
+    for d in (LEAN, *BASE):
+        requires = tomllib.loads((d / "lakefile.toml").read_text()).get("require", [])
+        assert all(set(r) == {"name", "path"} and (d / r["path"]).resolve() in BASE for r in requires), (d, requires)
+        locked = json.loads((d / "lake-manifest.json").read_text())["packages"]
+        assert all(e["type"] == "path" and (d / e["dir"]).resolve() in BASE for e in locked), (d, locked)
+        assert {e["name"] for e in locked} >= {r["name"] for r in requires}
+    assert sorted(r["name"] for r in tomllib.loads((LEAN / "lakefile.toml").read_text())["require"]) == [
+        "core_base", "core_circuits", "core_commitments"]
 
 
 def test_no_escape_hatches():
     assert sources()
-    hits = [f"{p.relative_to(LEAN)}:{i}: {line.strip()}" for p in sources()
+    hits = [f"{p.relative_to(LEAN.parents[2])}:{i}: {line.strip()}" for p in sources()
             for i, line in enumerate(p.read_text().splitlines(), 1) if FORBIDDEN.search(line)]
     assert not hits, ("the verifier of record runs only the definitions its proofs are about: write each of these in "
                       "plain Lean, with no @[extern], @[implemented_by], unsafe or native_decide (reword a comment that "

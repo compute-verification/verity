@@ -21,7 +21,7 @@ from verity_config.settings import of
 #: the stand-in: the modules the grader calls, at the capture it reads beside
 STANDIN = {f"{G.PACKAGE}/__init__.py": 'VERSION = "stand-in"\n',
            f"{G.PACKAGE}/opnames.py": "def gemm_like(name):\n    return name in ('mm', 'bmm')\n",
-           f"{G.PACKAGE}/formalism.py": "HE_BITS = {}\n",
+           f"{G.PACKAGE}/work.py": "HE_BITS = {}\n",
            f"{G.PACKAGE}/capture/__init__.py": "",
            f"{G.PACKAGE}/capture/products.py": f"CAPTURE = {G.CAPTURE!r}\n"}
 SLOWDOWN_CODE = of(__file__).VERITY_GRADER_SLOWDOWN_CODE

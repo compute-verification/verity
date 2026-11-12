@@ -1,0 +1,15 @@
+# SGD with Nesterov momentum on every parameter, the embedding included; E is the trained tensors.
+start = "s-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 838, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "*"
+opt = "sgd"
+lr = 0.1
+weight_decay = 1e-4
+warmup = 0.02
+decay = 0.4

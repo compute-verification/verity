@@ -191,6 +191,46 @@ def test_roots_read_each_request_s_computed_tokens_only() -> None:
     assert d["differing"] == 1 and d["first"] == ["a"] and not d["roots_equal"]
 
 
+@pytest.mark.parametrize("dtype, row", [("bfloat16", 576 * 2), ("uint8", 656)])
+def test_the_one_gpu_pool_fills_nan_by_byte_in_a_bf16_cache_and_in_an_fp8_one(dtype: str, row: int, monkeypatch: Any) -> None:
+    """`LocalKv`'s NaN (a dummy page, a tail past a prefix, the rest of the pool) is `FILL_BYTE`'s byte in every byte:
+    bf16 words read it as NaN, and so does each part of an FP8 cache's 656-byte row (512 e4m3, four f32 scales, 64
+    bf16), which a NaN written through the layer's dtype could not hold."""
+    torch = pytest.importorskip("torch")
+    pytest.importorskip("numpy")
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
+    bs, blocks = 4, 6
+    cache = torch.ones(blocks, bs, row // getattr(torch, dtype).itemsize, dtype=getattr(torch, dtype))
+    rows = [cache.view(torch.int8).view(blocks, bs * row)]
+    kv = RB.LocalKv(rows, bs, None, {"views": [{"shape": list(cache.shape)}]})
+    assert (kv.slot, kv.block_bytes) == (row, bs * row)
+
+    def nan(slots: Any) -> bool:
+        """Whether every value of the slots ``slots`` (k x row bytes, int8) is NaN, in each part of the row."""
+        b = slots.contiguous().view(torch.uint8)
+        if dtype == "bfloat16":
+            return bool(b.view(torch.bfloat16).float().isnan().all())
+        # e4m3's NaN is the byte S.1111.111
+        return bool(((b[:, :512] | 0x80) == 0xFF).all() and b[:, 512:528].view(torch.float32).isnan().all()
+                    and b[:, 528:].view(torch.bfloat16).float().isnan().all())
+
+    flat = rows[0].view(blocks * bs, row)
+    kv.fill_blocks([1, 4], "nan")
+    kv.fill_slots([2 * bs + 3], "nan")
+    assert nan(flat[bs:2 * bs]) and nan(flat[4 * bs:5 * bs]) and nan(flat[2 * bs + 3:2 * bs + 4])
+    untouched = [i for i in range(blocks * bs) if i // bs not in (1, 4) and i != 2 * bs + 3]
+    assert bool((cache.view(blocks * bs, -1)[untouched] == 1).all())
+    kv.fill_blocks([1], "zero")
+    assert not flat[bs:2 * bs].any() and nan(flat[4 * bs:5 * bs])
+    # a NaN tail past block 3's first slot leaves every slot of the pool NaN; a zero tail touches that tail only
+    kv.fill_blocks([3], "zero")
+    kv.load([], [(3, 1)], "nan")
+    assert nan(flat) and bool((rows[0].view(torch.uint8) == RB.FILL_BYTE["nan"]).all())
+    cache.fill_(1)
+    kv.load([], [(3, 1)], "zero")
+    assert not flat[3 * bs + 1:4 * bs].any() and bool((cache.view(blocks * bs, -1)[3 * bs] == 1).all())
+
+
 def test_mirror_save_and_saved_read_back_rows_and_pages(tmp_path: Any) -> None:
     np = pytest.importorskip("numpy")
     m = RB.Mirror.__new__(RB.Mirror)
@@ -269,7 +309,7 @@ def test_hits_seed_poisons_a_dummy_s_missing_pages_and_never_lets_one_stand_in_f
     pool = Pool({(b"p0", 0): 7, (b"t1", 0): 8})
     kv = Writes()
     taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0}
-    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken)
+    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken, recompute=False, forget=lambda blocks: None)
     h = RB.Hits(NS(block_pool=pool), kv, lambda h: None, {}, 4, lambda: 0, shape, lambda h: None)
     h.seed(NS(request_id="d", block_hashes=[b"p0", b"p1"]), 8)
     h.put()
@@ -296,7 +336,7 @@ def test_hits_writes_a_step_s_pages_at_once_each_block_s_last_and_takes_the_targ
     kv = Writes()
     taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0, "target_pages_loaded": 0,
              "target_pages_overwritten": 0}
-    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken)
+    shape = NS(dummy=lambda rid: rid != "t", mode="zero", taken=taken, recompute=False, forget=lambda blocks: None)
     served = {b"t0": ("near", 3), b"t1": ("far", 4)}
     h = RB.Hits(NS(block_pool=pool), kv, served.get, {"t": [(5, 16)]}, 4, lambda: 5, shape,
                 lambda x: RB.OWN_PAGE if x in (b"t2", b"t3") else None)
@@ -310,6 +350,62 @@ def test_hits_writes_a_step_s_pages_at_once_each_block_s_last_and_takes_the_targ
     h.ops[7] = RB.FILL_PAGE
     h.put()
     assert kv.calls[-1] == ({7: RB.FILL_PAGE}, "zero") and h.ops == {}
+
+
+class Fills(Writes):
+    """A K/V that records `Hits`' writes and `Dummies`' refills."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.slots: list[int] = []
+        self.blocks: list[int] = []
+
+    def fill_slots(self, slots: list[int], mode: str) -> None:
+        self.slots += slots
+
+    def fill_blocks(self, ids: list[int], mode: str) -> None:
+        self.blocks += ids
+
+
+def test_recompute_hits_keeps_a_dummy_s_slots_on_the_target_s_pages_and_counts_only_blocks_this_replay_filled(
+        kv_cache_utils: None) -> None:
+    """``--recompute-hits``: a dummy keeps its tokens and what it computes where they are the target's, through its
+    decode while its tokens are all the target's, and refills the rest; the target's hit counts as recomputed only on
+    blocks those writes filled in full, and a block poisoned or handed out again no longer counts. Nothing of serving's
+    is written."""
+    sched = NS(requests={"d": NS(all_token_ids=[1, 2, 3, 4, 5, 6, 7, 8, 40, 41, 42, 43, 44]),
+                         "p": NS(all_token_ids=[1, 2, 3, 4, 5, 6])})
+    kvm = NS(get_block_ids=lambda rid: ([10, 11, 12, 13],))
+    kv = Fills()
+    d = RB.Dummies("t", "zero", sched, kvm, kv, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9], {}, recompute=True)
+    assert (d.kept_len("d"), d.kept_len("p")) == (8, 9)
+    prompt, outs = d.tokens([1, 2, 3, 4, 5, 6], [7, 50])
+    assert prompt == [1, 2, 3, 4, 5, 6] and outs[0] == 7 and RB.SUBSTITUTE_IDS[0] <= outs[1] < RB.SUBSTITUTE_IDS[1]
+    shape_only = RB.Dummies("t", "zero", sched, kvm, kv, 4, [1, 2, 3, 4, 5, 6, 7, 8, 9], {})
+    assert shape_only.tokens([1, 2, 3, 4, 5, 6], [])[0][4:] != [5, 6]
+    d.scheduled(NS(scheduled_new_reqs=[NS(req_id="d", num_computed_tokens=0)], num_scheduled_tokens={"d": 6}))
+    d.scheduled(NS(scheduled_cached_reqs=NS(req_ids=["d"], num_computed_tokens=[6]), num_scheduled_tokens={"d": 5}))
+    d.flush()
+    assert kv.slots == [48, 49, 50] and d.taken["slots_kept_shared"] == 8 and d.taken["slots_poisoned"] == 3
+    assert [d.recomputed(b) for b in (10, 11, 12)] == [True, True, False]
+    pool = Pool({(b"h0", 0): 10, (b"h1", 0): 11, (b"h2", 0): 12})
+    h = RB.Hits(NS(block_pool=pool), kv, lambda h: ("near", 0), {}, 4, lambda: 0, d, None)
+    h.seed(NS(request_id="t", block_hashes=[b"h0", b"h1", b"h2", b"h3"]), 16)
+    h.put()
+    assert (d.taken["target_pages_recomputed"], d.taken["target_pages_unrecomputed"]) == (2, 2) and kv.calls == []
+    d.poison([11])
+    d.filled[51] = set(range(4))
+    h.seed(NS(request_id="d", block_hashes=[b"x"]), 4)
+    assert kv.blocks == [11] and not d.recomputed(11) and not d.recomputed(51) and pool.cache[(b"x", 0)] == 51
+
+
+def test_recompute_hits_needs_the_shape_only_target_to_arrive_inside_the_block(tmp_path) -> None:
+    with pytest.raises(SystemExit, match="goes with --shape-only"):
+        RB.main(["--arm-dir", "arm", "--kv-dir", "kv", "--recompute-hits", "--out", str(tmp_path)])
+    a = NS(shape_only="t", hits="forced", recompute_hits=True, dummy="zero")
+    begin = {"processed_through": 0, "requests": {"t": {"prompt": [1], "outputs": []}}, "finished_before": []}
+    with pytest.raises(SystemExit, match="t is held at step 1"):
+        RB.dummies(a, {"outputs": {}, "arrive": [], "steps": {}}, {}, begin, 1, None, None, None, 4)
 
 
 def test_rank_kv_groups_a_step_s_loads_by_dump_fills_the_rest_and_refills_a_dummy_s_slots_by_block() -> None:

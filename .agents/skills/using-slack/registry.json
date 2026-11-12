@@ -127,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
@@ -179,7 +178,6 @@
         "benchmarks/served_units/",
         "benchmarks/unit_block/",
         "benchmarks/served_commit/",
-        "benchmarks/g2/",
         "benchmarks/compile_cost/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
@@ -198,7 +196,6 @@
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
-        "adapters/vllm/verity_vllm/pipeline/commit_group.py",
         "adapters/vllm/verity_vllm/pipeline/commit_plan.py",
         "adapters/vllm/workloads/",
         "adapters/vllm/manifests/",
@@ -245,13 +242,11 @@
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
         "verity/protocols/pouw/clear/",
-        "benchmarks/pouw/machine_model/",
+        "benchmarks/machine_model/",
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "verity/protocols/inference_only/nci/",
-        "benchmarks/int8_class_rate/",
-        "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
@@ -297,14 +292,11 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
-        "demos/dither_full_util/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
         "e9ac",
-        "ea24",
         "1de3"
       ],
       "examples": [
@@ -324,7 +316,22 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/"
+        "verity/hardware/",
+        "benchmarks/pouw/tensor_kinds/",
+        "benchmarks/pouw/opcode_probe/",
+        "benchmarks/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/",
+        "benchmarks/pouw/dc/",
+        "benchmarks/pouw/theory/",
+        "benchmarks/pouw/lean_headline.py",
+        "benchmarks/pouw/lean_headline_dc.py",
+        "benchmarks/pouw/tests/test_lean_headline.py",
+        "benchmarks/pouw/tests/test_lean_headline_dc.py",
+        "benchmarks/tensor_duty/",
+        "benchmarks/int8_class_rate/"
+      ],
+      "branch_suffixes": [
+        "ea24"
       ]
     },
     {
@@ -453,10 +460,12 @@
         "security/Definitions/NetworkCertifier/",
         "security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/certifier_term/",
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "benchmarks/prove_path/",
+        "benchmarks/certifier_timing/"
       ],
       "branch_suffixes": [
         "728f",
@@ -512,9 +521,7 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py",
-        "tools/research/src/research/drive.py",
-        "tools/research/tests/test_queue_drive.py"
+        "tools/research/src/research/merge.py"
       ],
       "branch_suffixes": [
         "4292",
@@ -607,8 +614,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {
@@ -652,6 +658,7 @@
         "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
+        "benchmarks/exfiltration/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
@@ -704,6 +711,7 @@
       "owns": [
         "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
+        "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [

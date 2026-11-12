@@ -1,4 +1,10 @@
 """`research queue stats` with no `--log`: the queue's table (`queue_table`), its pure parts on a small made-up day."""
+import ast
+import importlib.util
+import json
+import types
+
+import pytest
 from research import queue_table as qt
 
 DAY = "2026-11-10"
@@ -344,3 +350,251 @@ def test_the_low_risk_heads_are_the_marked_ones_with_no_verdict_and_no_hold(monk
     assert sorted(asked) == ["5", "7", "8"]         # not #3 (a land verdict), #4 (held) or #6 (its mark withdrawn)
     flags.write_text('lowrisk_lane = false\nlowrisk_excludes = ["verity/core/"]\n')
     assert qt.lowrisk_heads(d["open"], d["labels"], d["now"]) == {}
+
+
+def test_a_restacks_last_commit_names_the_head_it_was_made_from():
+    old, pins, onto = "a1" * 20, "b2" * 20, "c3" * 20
+    assert qt.restack_of(f"Merge {onto[:12]} (the layout move) into {old}, restacked", [old, "d4" * 20]) == old
+    assert qt.restack_of(f"Merge {onto[:12]} (the layout move) into {old[:12]}, restacked", [pins, "e5" * 20, old]) == old
+    assert qt.restack_of(f"Merge {onto[:12]} (the layout move) into {old}, restacked", [pins]) is None      # not one of its parents
+    assert qt.restack_of(f"Merge {onto[:12]} (the layout move) into cursor/a-branch, restacked", [old]) is None
+    assert qt.restack_of(f"Merge {onto[:12]} into {old}", [old]) is None                                     # a merge of `main`
+    assert qt.restack_of("restack: regenerate stale pins", [old]) is None
+
+
+def test_restacks_follow_a_head_across_each_move_it_crossed():
+    subject = "Merge cccccccccccc (the layout move) into {}, restacked"
+    known = {"n3": (subject.format("abc1234"), ["abc1234" + "0" * 33]), "abc1234" + "0" * 33: (subject.format("def5678"), ["x", "def5678" + "1" * 33]),
+             "def5678" + "1" * 33: ("a change", ["p"]), "h4": ("a change", ["q"])}
+    asked = []
+
+    def commits(shas):
+        asked.append(sorted(shas))
+        return {s: known[s] for s in shas if s in known}, [f"no commit for {s}" for s in shas if s not in known]
+
+    made, unread = qt.restacks(["n3", "h4", "gone"], commits)
+    assert made == {"n3": "abc1234" + "0" * 33, "abc1234" + "0" * 33: "def5678" + "1" * 33}
+    assert unread == ["no commit for gone"]                                                          # said, not dropped
+    assert asked == [["gone", "h4", "n3"], ["abc1234" + "0" * 33], ["def5678" + "1" * 33]]         # each head once
+    assert qt.chain(made, "n3") == ["n3", "abc1234" + "0" * 33, "def5678" + "1" * 33] and qt.chain(made, "h4") == ["h4"]
+    assert qt.chain({"a": "b", "b": "a"}, "a") == ["a", "b"]                                         # never round a loop
+
+
+def test_the_commits_github_did_not_give_are_counted_with_what_went_wrong(monkeypatch):
+    a, b, c = "a1" * 20, "b2" * 20, "c3" * 20
+    subject = f"Merge cccccccccccc (the layout move) into {b}, restacked"
+    answer = {"data": {"repository": {
+        "c0": {"message": subject + "\n\nits body", "parents": {"nodes": [{"oid": b, "parents": {"nodes": [{"oid": c, "parents": {"nodes": []}}]}}]}},
+        "c1": None}}}
+    monkeypatch.setattr(qt.subprocess, "run", lambda argv, **kw: types.SimpleNamespace(stdout=json.dumps(answer)))
+    got, unread = qt._commits([a, c, "a-branch"])
+    assert got == {a: (subject, [b, c])}
+    assert unread == ["GitHub: 1 heads whose name is no commit's, which count as not restacked (first 'a-branch')",
+                      "GitHub: 1 heads it has no commit for, which count as not restacked (first c3c3c3c3c3c3)"]
+    monkeypatch.setattr(qt.subprocess, "run", lambda argv, **kw: types.SimpleNamespace(stdout="rate limited"))
+    assert qt._commits([a, c]) == ({}, ["GitHub: the commits of 2 heads, which count as not restacked "
+                                        "(JSONDecodeError('Expecting value: line 1 column 1 (char 0)'))"])
+    monkeypatch.setattr(qt.subprocess, "run", lambda argv, **kw: types.SimpleNamespace(stdout='{"data": null, "errors": []}'))
+    made, unread = qt.restacks([a])                                                # no restack is read from an answer that failed
+    assert made == {} and unread == ["GitHub: the commits of 1 heads, which count as not restacked "
+                                     "(TypeError(\"'NoneType' object is not subscriptable\"))"]
+
+    def down(argv, **kw):
+        raise FileNotFoundError(2, "No such file or directory: 'gh'")
+
+    monkeypatch.setattr(qt.subprocess, "run", down)
+    assert qt._commits([a])[1] == ["GitHub: the commits of 1 heads, which count as not restacked "
+                                   "(FileNotFoundError(2, \"No such file or directory: 'gh'\"))"]
+
+
+def restacked() -> dict:
+    """The day with #1 landed at `n1` and #3 open at `n3`, each a restack of the head its owner marked; #1's owner marked `n1`
+    again 45 minutes after the first mark."""
+    d = doc()
+    for r in d["control"]["decisions"]:
+        if r["sha"].startswith("a") and r.get("heads"):
+            r["heads"] = ["n1", "h2"]
+    d["labels"]["1@n1"], d["open"]["3"] = [lab("ready", True, "00:55")], "n3"
+    d["restacks"] = {"n1": "h1", "n3": "h3"}
+    return d
+
+
+def test_a_mark_and_a_land_verdict_carry_across_a_restack():
+    d = restacked()
+    rows = {r["name"]: r for r in qt.table(d)}
+    assert rows["Mark to `main`"]["day"] == "p50 95, p90 111 min (n=2); 1 of the heads a restack's, 1 marked before it"     # still 115 and 75
+    assert rows["Marked and waiting now (the backlog)"]["now"].startswith("3 PRs: 1 with a land verdict, 2 without")           # #3 at n3
+    assert rows["Marked heads with no land verdict now"]["now"].startswith("2: 1 held by a reviewer, 1 not looked at")
+    bare = dict(d, labels={k: v for k, v in d["labels"].items() if k != "3@h3"})    # #3 marked at h3 alone would need a verdict at n3
+    bare["labels"]["3@h3"] = [lab("ready", True, "01:00")]
+    assert {r["name"]: r for r in qt.table(bare)}["Marked heads with no land verdict now"]["now"].startswith("3: 1 held by a reviewer, 2 not looked at")
+    one = {p["pr"]: p for p in qt.parts(d)}["1"]
+    assert (one["total"], one["review"], one["to_build"]) == (115, 30, 20)          # the verdict at h1, the build of n1
+    assert qt.carried(d["labels"], d["restacks"], "3", "n3") == d["labels"]["3@h3"] and qt.carried(d["labels"], {}, "3", "n3") == []
+    plain = dict(d, restacks={})                                                    # read at the landed head alone: 70 and 75 min
+    assert {r["name"]: r for r in qt.table(plain)}["Mark to `main`"]["day"] == "p50 72, p90 74 min (n=2)"
+    d["labels"]["3@n3"] = [lab("ready", False, "02:00")]                            # a mark withdrawn at the new head is withdrawn
+    assert {r["name"]: r for r in qt.table(d)}["Marked and waiting now (the backlog)"]["now"].startswith("2 PRs: 0 with a land verdict")
+    d["labels"]["1@h1"] = d["labels"]["1@n1"] = []                                  # a restack's head nobody marked was not marked before it
+    assert {r["name"]: r for r in qt.table(d)}["Mark to `main`"]["day"] == "p50 75, p90 75 min (n=1); 1 of the heads a restack's, 0 marked before it"
+
+
+def left() -> list[dict]:
+    """The loop's lines leaving heads out: #4 before the build that took it, #5 for `main`, #3 for a PR built before it, and a
+    closed PR's head."""
+    def line(action, hhmm, number, head, why):
+        return {"action": action, "at": at(hhmm), "number": number, "heads": [head], "why": why, "shadow": False, "done": True}
+
+    return [line("conflict", "02:10", "4", "h4", "conflicts with `main` in a.py"), line("conflict", "02:15", "5", "h5", "conflicts with `main` in a.py"),
+            line("skip", "02:45", "3", "h3", "conflicts with #4, merged before it, in b.py (it merges onto `main`)"),
+            line("skip", "02:50", "9", "h9", "conflicts with `main` in c.py")]
+
+
+def test_the_heads_the_loop_leaves_out_are_a_row_of_their_own():
+    d = doc()
+    d["control"]["decisions"] = sorted(d["control"]["decisions"] + left(), key=lambda r: r["at"])
+    out = qt.left_out(d["control"]["decisions"], d["open"])
+    assert {pr: (r["action"], qt.with_main(r)) for pr, r in out.items()} == {"5": ("conflict", True), "3": ("skip", False)}   # #4 was built since
+    rows = {r["name"]: r for r in qt.table(d)}
+    row = rows["Marked heads the loop leaves out now"]
+    assert row["now"] == ("1 refused until the owner merges `main` in: conflict with `main`, 0 of them with a land verdict, marked up to "
+                          "1.5 h ago; 1 more out of the newest candidate: conflict with a PR built before them")
+    assert row["hour"] == "3 heads for a conflict with `main`, 1 for one with a PR built before them"
+    assert rows["Marked heads with no land verdict now"]["now"] == "1: 1 held by a reviewer, 0 not looked at"       # #5 waits on its owner
+    assert rows["Mark to `main`"]["day"] == "p50 95, p90 111 min (n=2)"
+
+
+def test_a_window_that_ended_is_cut_to_what_was_known_then():
+    d = qt.cut(dict(doc(), read=qt.ts(at("03:00"))), qt.ts(at("02:00")))
+    assert d["now"] == d["until"] == qt.ts(at("02:00"))
+    assert [r["action"] for r in d["control"]["decisions"]][-1] == "slim" and d["control"]["ticks"] == []
+    assert d["open"] == {"1": "h1", "2": "h2", "3": "h3", "4": "h4", "5": "h5", "6": "h6"}            # #1 and #2 landed at 02:05
+    runs = {r["id"][-4:]: r for r in d["nodes"]["vy-nebius-cpu-1"]["runs"]}
+    assert sorted(runs) == ["aaaa", "bbbb", "cccc"]                                                     # the others were asked for later
+    assert (runs["cccc"]["took"], runs["cccc"]["slot_state"], runs["cccc"]["end"]) == (None, "waiting", None)   # its slot came at 02:20
+    assert (runs["aaaa"]["end"], runs["aaaa"]["state"]) == (None, "running")                            # it ended at 02:06
+    assert runs["aaaa"]["steps"] == [{"step": "pytest", "state": "passed", "seconds": 3000, "end": qt.ts(at("01:56"))},
+                                     {"step": "circuit-check", "state": "running", "start": None}]
+    assert runs["bbbb"]["failed"] == [["tools/research", qt.ts(at("02:00"))]] and "parallel" not in runs["bbbb"]
+    rows = {r["name"]: r for r in qt.table(d)}
+    assert rows["Mark to `main`"]["day"] == "none" and rows["Candidates by outcome"]["day"].startswith("3 built: 0 green, 0 red, 0 dropped")
+    assert rows["Marked and waiting now (the backlog)"]["now"].startswith("5 PRs: 2 with a land verdict, 3 without; 5 in a candidate being checked")
+    assert "a floor" in rows["Marked and waiting now (the backlog)"]["now"]
+    for name in ("Cores busy over cores paid, the check nodes", "Slots busy over slots, the check nodes", "Reserved against used, a check's shard",
+                 "Parallel suites running in a shard: a worker's memory against what it declares",
+                 "Executor: share served from the cache; tasks waiting on other tasks"):
+        assert rows[name]["now"] == qt.PAST, name
+    assert rows["Cores busy over cores paid, the check nodes"]["hour"] == qt.PAST
+    text = qt.render(list(rows.values()), d, short=True)
+    assert text.startswith("The merge queue's numbers for the windows that ended at 2026-11-10 02:00Z, read at 2026-11-10 03:00Z.")
+    assert "| # | Number | At its end | Its last hour | Its 24 h | Target |" in text and "in the 24 hours to 2026-11-10 02:00Z" in text
+    later = qt.cut(dict(doc(), read=qt.ts(at("03:00"))), qt.ts(at("02:35")))                          # after B's drop, before D's build
+    assert {r["name"]: r for r in qt.table(later)}["Candidates by outcome"]["day"] == "3 built: 1 green, 1 red, 1 dropped for another reason, 0 being checked"
+    assert [r["id"][-4:] for r in later["nodes"]["vy-nebius-cpu-1"]["runs"]] == ["aaaa", "bbbb", "cccc", "eeee"]
+    assert later["nodes"]["vy-nebius-cpu-1"]["runs"][2]["end"] is None                                  # the quick tier ended at 02:50
+
+
+def test_a_windows_end_is_a_past_time_with_its_offset(capsys):
+    now = qt.ts(at("03:00"))
+    assert qt.window_end("2026-11-10T02:00:00Z", now) == qt.window_end("2026-11-09T18:00:00-08:00", now) == qt.ts(at("02:00"))
+    for until, why in (("2026-11-10T02:00:00", "it has no UTC offset"), ("2026-11-10T03:00:00Z", "it is not in the past"),
+                       ("soon", "Invalid isoformat string: 'soon'")):
+        with pytest.raises(ValueError, match=why):
+            qt.window_end(until, now)
+    # the command refuses each before it reads anything, saying which it is and the form to write
+    assert qt.main(until="2026-11-10T02:00:00") == 2 and qt.main(until="9999-01-01T00:00:00Z") == 2 and qt.main(until="soon") == 2
+    said = capsys.readouterr().err.splitlines()
+    assert [line.split(". Write a past time")[0] for line in said] == [
+        "research queue stats: --until 2026-11-10T02:00:00: it has no UTC offset",
+        "research queue stats: --until 9999-01-01T00:00:00Z: it is not in the past",
+        "research queue stats: --until soon: Invalid isoformat string: 'soon'"]
+    assert all(line.endswith("like 2026-01-31T08:00:00Z or 2026-01-31T00:00:00-08:00") for line in said)
+
+
+def test_an_audit_logs_lines_say_what_it_reused():
+    log = {"staged": "security/Proofs: 857 of 4982 keyed modules restored from the artifact cache; missed: 3553 reads a module not restored",
+           "audited": "security, security/Proofs, security/Properties audited in 3957 s (exit 0)", "verdict": "lean-audit: PASS: 0 of 3 packages reused"}
+    assert qt.reuse(log) == {"staged": [857, 4982], "reused": [0, 3], "passed": True, "audit_s": 3957, "unread": None}
+    failed = qt.reuse({"verdict": "lean-audit: FAIL (security, security/Properties): 1 of 3 packages reused"})
+    assert failed == {"staged": None, "reused": [1, 3], "passed": False, "audit_s": None, "unread": None}
+    assert qt.reuse({}) == {"staged": None, "reused": None, "passed": None, "audit_s": None, "unread": None}
+
+
+def node_function(name: str, tmp_path, **given):
+    """One function of the script a node runs, as a module of its own under ``tmp_path``, with ``given`` in place of the
+    globals it would find."""
+    fn = next(n for n in ast.parse(qt.NODE_SCRIPT).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    path = tmp_path / f"node_{name}.py"
+    path.write_text("import os\n\n\n" + ast.unparse(fn) + "\n")
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for key, value in given.items():
+        setattr(module, key, value)
+    return getattr(module, name)
+
+
+def test_a_node_says_why_an_audit_log_that_is_there_was_not_read(tmp_path):
+    log = tmp_path / "lean-audit.log"
+    assert node_function("audit", tmp_path)(str(log)) == {}                 # a shard that ran no Lean audit has no log
+    log.write_text("stage: /scratch/x/security: 3 of 3 keyed modules restored from the artifact cache\n"
+                   "stage: /scratch/x/security/Proofs: 10 of 40 keyed modules restored from the artifact cache; missed: 30 its source\n"
+                   "lean-audit: security audited in 12 s (exit 0)\nlean-audit: PASS: 2 of 3 packages reused\n")
+    read = node_function("audit", tmp_path)(str(log))
+    assert read == {"staged": "security/Proofs: 10 of 40 keyed modules restored from the artifact cache; missed: 30 its source",
+                    "audited": "lean-audit: security audited in 12 s (exit 0)", "verdict": "lean-audit: PASS: 2 of 3 packages reused"}
+    assert qt.reuse(read) == {"staged": [10, 40], "reused": [2, 3], "passed": True, "audit_s": 12, "unread": None}
+
+    def broken(path, **kw):
+        raise OSError(5, "Input/output error")
+
+    unread = node_function("audit", tmp_path, open=broken)(str(log))
+    assert unread == {"unread": "OSError(5, 'Input/output error')"}
+    d = rounds_doc()
+    d["nodes"]["vy-nebius-cpu-1"]["runs"][0]["audit"] = unread
+    row = qt.rounds(d)[0]
+    assert (row["staged"], row["reused"], row["unread"]) == (None, None, "OSError(5, 'Input/output error')")
+    cell = "log not read: OSError(5, 'Input/output error')"
+    assert f"| 3,000 | 2,000 | {cell} | {cell} | not run / not run |" in qt.render_rounds(qt.rounds(d), d)
+
+
+def rounds_doc() -> dict:
+    """The day with each candidate's base, A's Lean audit (ended 01:39), B judged red early, and a shard of D's the loop never named."""
+    d = doc()
+    bases = {"a": "", "b": "a" * 40, "c": "b" * 40, "d": "a" * 40}
+    for r in d["control"]["decisions"]:
+        if r["action"] == "build":
+            r["base"] = bases[r["sha"][0]]
+    d["control"]["decisions"].insert(8, {"action": "slim", "at": at("02:25"), "sha": "b" * 40, "why": "judged fail", "verdict": None,
+                                          "ids": ["r20261110-012500-bbbb"], "shadow": False})
+    a = d["nodes"]["vy-nebius-cpu-1"]["runs"][0]
+    a["steps"].append({"step": "lean-audit", "state": "passed", "seconds": 2000, "end": a["took"] + 2000})
+    a["audit"] = {"staged": "security/Proofs: 10 of 40 keyed modules restored from the artifact cache", "verdict": "lean-audit: PASS: 2 of 3 packages reused",
+                  "audited": "security audited in 1500 s (exit 0)"}
+    d["nodes"]["vy-nebius-cpu-1"]["runs"].append(
+        {"id": "r20261110-024200-dddd", "kind": "shard", "sha": "d" * 12, "shard": "2/3", "took": qt.ts(at("02:43")), "end": None, "failed": [],
+         "steps": [{"step": "lean-changed", "state": "passed", "seconds": 3, "end": qt.ts(at("02:44"))},
+                   {"step": "lean-suites", "state": "running", "start": qt.ts(at("02:44"))}]})
+    return d
+
+
+def test_a_round_says_what_it_changed_what_it_was_checked_on_and_how_it_went():
+    d = rounds_doc()
+    a, b, c, e = qt.rounds(d)
+    assert (a["lean"], a["below"], a["first"]) == (0, [], {"node": "vy-nebius-cpu-1", "id": "r20261110-010500-aaaa"})
+    assert (a["outcome"], a["verdict_min"], a["landed_min"], a["staged"], a["reused"], a["audit_s"]) == ("green", 60, 65, [10, 40], [2, 3], 1500)
+    assert a["steps"]["pytest"] == {"state": "passed", "seconds": 3000} and a["steps"]["lean-audit"] == {"state": "passed", "seconds": 2000}
+    assert a["pole"] == {"shard": "1/1", "step": "pytest", "state": "passed", "min": 56}           # circuit-check is off the gate
+    # B's first shard was asked for at 01:25, before A's audit ended: B audits what A changed, and C, built at 01:40, only B's
+    assert (b["lean"], b["below"], b["below_lean"]) == (2, ["a" * 12], 0) and (c["lean"], c["below"], c["below_lean"]) == (None, ["b" * 12], 2)
+    assert (b["outcome"], b["why"], b["verdict_min"], b["dropped_min"]) == ("red", "test", 65, 70)   # judged in the loop's reason alone
+    assert c["first"] is None and c["steps"]["pytest"] is None and c["pole"] is None
+    assert (e["below"], e["first"], e["shards"]) == ([], None, 1)                                    # `main` had moved to A; its shard by its commit
+    assert e["steps"]["lean-changed"] == {"state": "passed", "seconds": 3} and e["steps"]["lean-suites"] == {"state": "running", "seconds": 960}
+    text = qt.render_rounds(qt.rounds(d), d)
+    assert text.startswith("The candidates built in the last 24 hours, oldest first: 4.")
+    assert ("| `aaaaaaaaaaaa` 11-10 01:00Z | 2 | 0 | 0 | cpu-1 `r20261110-010500-aaaa` | **green**: verdict at 60.0, on `main` at 65.0 | 3,000 | "
+            "2,000 (1,500) | 10 of 40 | 2 of 3 | not run / not run | 1/1 `pytest` at 56.0 |") in text
+    assert ("| `cccccccccccc` 11-10 01:40Z | 1 | not known | 2 (`bbbb`) | none of its 0 ran `pytest` | **dropped** (dropped base): no verdict, "
+            "dropped at 51.0 | not run | not run | no line | no line | not run / not run | none ended |") in text
+    assert "being checked: no verdict, built 20 min ago | not run | not run | no line | no line | 3 / 960 (running) | 2/3 `lean-changed` at 4.0 so far |" in text

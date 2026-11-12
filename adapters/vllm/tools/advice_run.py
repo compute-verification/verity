@@ -5,8 +5,9 @@ One in-process engine (`verity_vllm.LLM`, the pinned model) serves `--requests` 
 sampled at temperature 0.8 (half of those with a client seed, the rest under the served default, `engine.served_seed.DEFAULT_SEED`),
 arriving at seeded engine steps while others decode, with `--gaps` idle gaps (each a window boundary).  A small
 `--max-batched-tokens` chunks the long prompts; `--kv-bytes` shrinks the KV cache until the scheduler preempts.
-`--engine-class G` serves a registered engine class (`engine.profiles.engine_classes`) at its settings, with prompts up to its
-prompt limit by default; the engine refuses a longer prompt, and each gap and the run's end close a window, refused while a request
+`--engine-class G` serves a registered engine class (`engine.profiles.engine_classes`) at its settings and at the context limit
+`--max-model-len` states (a length, with prompts up to it by default, or -1: the longest request the engine's KV pool holds); the
+engine refuses a longer prompt, and each gap and the run's end close a window, refused while a request
 is in flight (`engine.class_admission`).  `engine.step_trace` records every step.  It writes, under `--out`:
 
     step_trace.jsonl   the scheduler's step trace
@@ -16,7 +17,8 @@ is in flight (`engine.class_admission`).  `engine.step_trace` records every step
     advice/            `verity-vllm advice` on the above
 
     cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src /workspace/jobs/venv312/bin/python tools/advice_run.py \\
-        --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0] [--execution bi-eager] [--engine-class G]
+        --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0] [--execution bi-eager]
+        [--engine-class G --max-model-len N]
 """
 from __future__ import annotations
 
@@ -78,7 +80,7 @@ def engine_options(a: argparse.Namespace) -> dict:
     """The `LLM` options the arguments set: under an engine class the class sets what they leave unset, and the LLM refuses what
     contradicts it; without one, 8 sequences and 256-token steps."""
     kw = {"max_num_seqs": a.max_seqs, "max_num_batched_tokens": a.max_batched_tokens, "kv_cache_memory_bytes": a.kv_bytes,
-          "execution": a.execution, "engine_class": a.engine_class}
+          "execution": a.execution, "engine_class": a.engine_class, "max_model_len": a.max_model_len}
     if a.engine_class is None:
         kw = {**kw, "max_num_seqs": a.max_seqs or 8, "max_num_batched_tokens": a.max_batched_tokens or 256}
     return {k: v for k, v in kw.items() if v is not None}
@@ -99,19 +101,14 @@ def target_of(device: dict, record: dict, device_name: str) -> dict:
     return out
 
 
-def prompt_limit(engine_class: str) -> int:
-    from verity_vllm.engine.profiles import engine_classes
-    return engine_classes.prompt_limit(engine_class)
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="Qwen/Qwen3-8B")
     ap.add_argument("--revision", default="b968826d9c46dd6066d109eabc6255188de91218")
     ap.add_argument("--requests", type=int, default=48)
-    ap.add_argument("--max-prompt", type=int, default=None, help="the longest prompt (default: the engine class's prompt limit, "
-                                                                 "else 1024)")
+    ap.add_argument("--max-prompt", type=int, default=None, help="the longest prompt (default: --max-model-len where it states a "
+                                                                 "length, else 1024)")
     ap.add_argument("--gaps", type=int, default=2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--max-seqs", type=int, default=None, help="max_num_seqs (default: the engine class's, else 8)")
@@ -120,14 +117,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kv-bytes", type=int, default=None)
     ap.add_argument("--execution", default=None, help="the engine's execution label (engine.served.EXECUTIONS), such as bi-eager")
     ap.add_argument("--engine-class", default=None, help="a registered engine class (engine.profiles.engine_classes), such as G")
+    ap.add_argument("--max-model-len", type=int, default=None, help="the engine's context limit, which an engine class's launch "
+                                                                    "states: a length, or -1 for the longest request the KV pool holds")
     ap.add_argument("--max-tokens", default="8,16,32,64,128,200", help="the max_tokens values requests draw from")
     ap.add_argument("--sampled", type=float, default=0.3, help="the share of requests sampled at temperature 0.8 (0: all greedy)")
     a = ap.parse_args(argv)
     kw = engine_options(a)
-    limit = None if a.engine_class is None else prompt_limit(a.engine_class)
+    limit = a.max_model_len if (a.max_model_len or 0) > 0 else None
     if limit is not None and (a.max_prompt or 0) > limit:
-        raise SystemExit(f"[advice-run] --max-prompt {a.max_prompt} is over engine class {a.engine_class}'s prompt limit {limit}, "
-                         "whose engine refuses a longer prompt")
+        raise SystemExit(f"[advice-run] --max-prompt {a.max_prompt} is over --max-model-len {limit}, whose engine refuses a longer "
+                         "prompt")
     a.max_prompt = a.max_prompt or limit or 1024
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

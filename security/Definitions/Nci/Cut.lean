@@ -23,8 +23,9 @@ runs from the inputs towards the outputs. The input gates outside `θ` are the u
   arithmetic enters, and the summation order is free.
 * The **charged work** (`Work`) is a family of matmuls whose MACs are pairwise disjoint: `N` MACs (`Work.N`), `O` output
   wires `∑ |y|` (`Work.O`), and `W_M`, `X_M` the `w`- and `x`-words of matmul `M`.
-* `π(S) = ∑_M |S ∩ W_M| |S ∩ X_M|` (`Work.pi`) and `Π(k) = max {π(S) : κ(S) ≤ k}` (`piMax`). For a set `A` of computed
-  gates, `E(A)` (`Work.clear`) is the outputs fed by a MAC inside `A` with no wire in `A`,
+* `π(S) = ∑_M |S ∩ W_M| |S ∩ X_M|` (`Work.pi`) and `Π(k) = max {π(S) : κ(S) ≤ k}` (`piMax`). A set `A` of gates
+  holds a MAC whole when every gate of the MAC is in `A` (`Work.inside`). For a set `A` of computed gates, `E(A)`
+  (`Work.clear`) is the outputs fed by a MAC inside `A` with no wire in `A`,
   `b_y = min_{E(A) ≠ ∅} κ(A → E(A)) / |E(A)|` (`Work.bY`, `0` when every `E(A)` is empty, where `b_y = ∞` would give the
   same `α`), and `α = √(k Π(k) / b_y)` (`alpha`).
 
@@ -136,6 +137,9 @@ def allW : Finset (Finset (Fin C.N)) := univ.biUnion W.wWords
 /-- `X`: every matmul's `x`-words. -/
 def allX : Finset (Finset (Fin C.N)) := univ.biUnion W.xWords
 
+/-- The MACs a set `A` of gates holds whole: every gate of the MAC is in `A`. -/
+def inside (A : Finset (Fin C.N)) : Finset W.Mac := univ.filter fun s => W.mac s ⊆ A
+
 variable [DecidableEq ι]
 
 /-- `E(A)`: the outputs fed by a MAC inside `A` with no wire in `A`. -/
@@ -167,6 +171,11 @@ noncomputable def alphaHE (k : ℕ) (q b : ℝ) : ℝ := √(k ^ 3 / (q * b)) / 
 /-- The work bound under (H) and (E) at `m` blocks, each reading at most `k` gates outside `θ`:
 `m (k + α) + (k/2) √(m O / q)` at `α = alphaHE k q b`, for work of `O` output wires at `q = β_w β_x`. -/
 noncomputable def workHE (m k : ℕ) (q b O : ℝ) : ℝ := m * (k + alphaHE k q b) + k / 2 * √(m * O / q)
+
+/-- The work bound under (H) and (E) over a set of blocks: `T + ½ √(S O / q) + ½ √(S T / (q b))`, for blocks that read
+`T` gates outside `θ` between them, the squares of what each block of the set reads summing to `S`, and work of `O`
+output wires at `q = β_w β_x`. At `T = m k` and `S = m k²` it is `workHE m k q b O`. -/
+noncomputable def workHEOn (T S : ℕ) (q b O : ℝ) : ℝ := T + √(S * O / q) / 2 + √(S * T / (q * b)) / 2
 
 /-- `F = √(2 (1 - 1/ω))`, what shared arrays with no `ω + 1` of them pairwise read together put on both terms of the
 bound: `1` at `ω = 2`, `2/√3` at `ω = 3`. -/

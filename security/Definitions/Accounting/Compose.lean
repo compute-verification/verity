@@ -451,9 +451,10 @@ checkpoint (W6), the form of the operand luck its template proves, and the three
   product, times a word's products), and `0` where none is proved, which charges a group its whole weight;
 * `wholeRate`: the rate `θ₀_k`, per committed word, at which a seed group of kind `k`'s whole-skip gain at `κ₀` has
   moment at most `1` over its seed. From the guess bound it is `x₀/w_k`, `x₀` the largest per-tile rate with
-  `guess·e^{x₀} + (1 − guess)·e^{−κ₀·x₀} ≤ 1` (`44.34` nats a tile at `2^-64`, `κ₀ = 0.092`; a premium of about `2.8`
-  tiles a seed group at `T_q = 2^128`, whatever `K` is; at `guess = ½` it needs `κ₀ > 1` and is below `ln 2`, about
-  `177` tiles a seed group), and `0` where none is proved. No ruling grants a whole-tile luck per seed query, so a
+  `guess·e^{x₀} + (1 − guess)·e^{−κ₀·x₀} ≤ 1` (`44.34` nats a tile at `2^-64`, `κ₀ = 0.092`; a premium
+  `ln(T_q/δ_g)/x₀` of about `2.8` tiles a seed group at `T_q = 2^128` and `δ_g = 2^-40/(2·rounds)` at 192 rounds,
+  whatever `K` is; at `guess = ½` it needs `κ₀ > 1` and is below `ln 2`, about `177` tiles a seed group at the same
+  `T_q` and `δ_g`), and `0` where none is proved. No ruling grants a whole-tile luck per seed query, so a
   value here is a condition the seeded statements' numbers are labelled by. It is not `seedRate`: at the
   folded rate a tile's whole-skip moment is `guess·e^{K/8}` (`e^{467}` at `K = 4096`, past `1` from `K = 355`), so
   `seedRate` may stand here only under `Assumptions.Compose.WholeEntropyAt` at `K/8` nats a tile.

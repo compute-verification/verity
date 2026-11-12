@@ -4,7 +4,8 @@ openings at p512/k2 and p1024/k3/masked, appended and registered, and names the 
 block, a payload not the committed one or not the committed KV, a word at or above p, a wrong append coin, a wrong receipt
 leaf, salt or path, a plan without the block at the sampled position, a receipt the pass's tree commits but the block doesn't
 give. The Boolean unit equals its reference on toy blocks with those negatives, and the parts equal theirs at the deployed
-fields and cost the gates pinned here."""
+fields and cost the gates pinned here. The second version's reference gives v1's verdict on every opening under the identity
+plan, opens a block past 2^16 in a store past 2^16 blocks and refuses one a position off, and its unit equals it."""
 from __future__ import annotations
 
 import random
@@ -19,8 +20,9 @@ from verity.protocols.poub.verifier import receipts as RC
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments import Commitment, CommitmentDomain, Opening, verify_opening
+from verity.commitments import CommitmentDomain, Opening, verify_opening
 from verity.protocols.poub.verifier.commitments.gates import block_check as BC
+from verity.commitments.gates import frame_v3 as FV
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import MerkleTree, merkle_depth
 
@@ -40,6 +42,7 @@ PARTS = {
     ("CodecMatch", (512,)): (512, 512, 512),
     ("SketchRow", (4096,)): (36863, 214292, 4099),
     ("LeafMatch", (16, 40)): (9646, 9034, 561),
+    ("LeafMatchV2", (16,)): (8848, 8316, 561),
     ("BlockVerdict", (64,)): (69, 2, 5),
 }
 V2 = "hm96-sha512/row/v2"
@@ -154,7 +157,7 @@ def _cases(rng: random.Random, S, encode) -> list[tuple[str, SimpleNamespace, di
     out = []
     for bound in (True, False):
         o = _opening(rng, S, bound, encode)
-        a, w, S_ = o.args, S.N // 16, o.S
+        a, S_ = o.args, o.S
         k = o.pos % BC.PER_LEAF
         top = BC._p(S) + rng.randrange(S.C)
         over = top.to_bytes(S.N // 8, "little") + o.block[S.N // 8:]
@@ -376,3 +379,150 @@ def test_the_parts_cost_the_pinned_gates() -> None:
 @pytest.mark.slow
 def test_the_toy_unit_is_boolean() -> None:
     assert BL.is_boolean(bind(BC.BlockOpeningCheck, **vars(TOY)))
+
+
+# --- the second version: the identity plan, u32 positions -------------------------------------------------------------------
+
+def _v2(S, **kw) -> SimpleNamespace:
+    """v1's statics as v2's: no P, and ``kw`` over them."""
+    return SimpleNamespace(**{**{k: v for k, v in vars(S).items() if k != "P"}, **kw})
+
+
+#: v2's statics where v1's are also defined: a store of up to 64 blocks, a pass of up to 4 receipt leaves
+SMALL = dict(DR=2, DP=6, DV=2)
+TOY_V2 = _v2(TOY, **SMALL)
+#: a store past 2^16 blocks: 70,003, so a receipt tree of 13 levels, a payload tree of 17 and a last leaf of 3 receipts
+DEEP, DEEP_N = _v2(TOY_V2, DR=13, DP=17), (1 << 16) + 4467
+
+
+def _identity_opening(rng: random.Random, S, bound: bool, encode, n: int, j: int | None = None) -> SimpleNamespace:
+    """An honest opening of block j, sampled at position j of a pass whose plan is the identity over a store of n blocks
+    (appended under a coin past the registration's first 4, or registered), every tree sparse: the opened path's siblings
+    random and the root the one they give (`frame_v3.root_at_ref`)."""
+    first = 4 if bound else 0
+    j = rng.randrange(first, n) if j is None else j
+    seed, coin = rng.randbytes(32), (rng.randbytes(32) if bound else None)
+    pay, salt = _payload(rng, S), rng.randbytes(BC.SALT_BYTES)
+    block = encode(S, seed, j, pay, coin)
+    if S.BYTES == CO.BLOCK_BYTES:
+        pass_seed = rng.randbytes(64)
+        prefix, signs = RC.sketch_prefix(pass_seed), RC.sign_bits(pass_seed, S.ROWS)
+    else:
+        prefix, signs = rng.randbytes(128), [rng.randbytes(S.BYTES // 8) for _ in range(S.ROWS)]
+    c = j // PER_LEAF
+    ys = [rng.randbytes(64) for _ in range(min(PER_LEAF, n - PER_LEAF * c))]
+    ys[j % PER_LEAF] = BC.receipt(prefix, j, block, signs)
+    row, rsalt = b"".join(ys), rng.randbytes(BC.SALT_BYTES)
+
+    def tree(value: bytes, rank: int, position: int, count: int) -> tuple:
+        dom, depth = rng.randbytes(64), merkle_depth(count)
+        path = [rng.randbytes(64) for _ in range(depth)]
+        return FV.root_at_ref(dom, V2, value, rank, position, path), dom, depth, path
+
+    rroot, rdom, rdepth, rpath = tree(_hidden(row, rsalt), c, c, -(-n // PER_LEAF))
+    proot, pdom, pdepth, ppath = tree(_hidden(pay, salt), j - first, j, n - first)
+    values, vpath = None, []
+    if bound:
+        vcount = rng.randrange(2, (1 << S.DV) + 1)
+        vat = rng.randrange(vcount)
+        vroot, vdom, vdepth, vpath = tree(_hidden(pay, salt), vat, vat, vcount)
+        values = (vroot, vdom, vat, vdepth)
+    S = SimpleNamespace(**{**vars(S), "LEAF": len(ys)})
+    trees = ((rroot, rdom, rdepth), (proot, pdom, j - first, pdepth), values)
+    pub = BC.opening_public_v2(S, seed, j, coin, prefix, signs, *trees)
+    return SimpleNamespace(S=S, j=j, first=first, seed=seed, coin=coin, prefix=prefix, signs=signs, trees=trees,
+                           args=BC.opening_args_v2(S, pub, block, pay, row, rsalt, salt, rpath, ppath, vpath))
+
+
+def _as_v1(S, a: dict) -> tuple[SimpleNamespace, dict]:
+    """v1's binding and arguments for v2's (S, a) at a position below 2^16: the plan the identity row of 64 entries."""
+    assert a["pos"][1] == 0
+    return SimpleNamespace(**vars(S), P=64), dict(a, pos=a["pos"][:1], plan=list(range(64)))
+
+
+def _v2_cases(o: SimpleNamespace) -> dict[str, dict]:
+    """The honest opening, then each with one thing wrong; a position or a sample off by one where the store has one."""
+    a, j = o.args, o.j
+    k = j % PER_LEAF
+    out = {"honest": a, "tampered block": dict(a, block=_flip(a["block"], 3)),
+           "other payload": dict(a, payload=_flip(a["payload"], 1, 4)),
+           "receipt leaf altered": dict(a, leaf=_flip(a["leaf"], 32 * k + 2)),
+           "receipt path": dict(a, rpath=_flip(a["rpath"], 7)), "payload path": dict(a, ppath=_flip(a["ppath"], 9)),
+           "receipt leaf's salt": dict(a, salts=_flip(a["salts"], 5)), "other pass's signs": dict(a, signs=[x ^ 0x5A5A for x in a["signs"]]),
+           "position one past": dict(a, pos=BC._u16s(j + 1, 2)), "position one before": dict(a, pos=BC._u16s(j - 1, 2)),
+           "the sample one past": dict(a, **BC.opening_public_v2(o.S, o.seed, j + 1, o.coin, o.prefix, o.signs, o.trees[0],
+                                                                 (*o.trees[1][:2], j + 1 - o.first, o.trees[1][3]), o.trees[2]))}
+    if o.coin is not None:
+        out["value path"] = dict(a, vpath=_flip(a["vpath"], 3))
+    return out
+
+
+@pytest.mark.parametrize("S", [TOY_V2, _v2(P512, **SMALL), _v2(P1024, **SMALL)], ids=["toy", "p512-k2", "p1024-k3-masked"])
+def test_v2_gives_v1s_verdict_under_the_identity_plan(S) -> None:
+    """Where both are defined (positions below 2^16, v1's plan the identity row), v2's reference returns v1's verdict word
+    on the honest opening and on each wrong one: a wrong block, receipt path, payload path or position among them."""
+    encode = _toy_encode if (S.N, S.C) == BC.TOY else _core_encode
+    rng = random.Random(S.N + 2)
+    for bound in (False, True):
+        o = _identity_opening(rng, S, bound, encode, 40, rng.randrange(17, 39))
+        for name, a in _v2_cases(o).items():
+            got = BC.opening_check_v2(o.S, a)
+            assert got == BC.opening_check(*_as_v1(o.S, a)), (bound, name)
+            assert (got == 1) == (name == "honest"), (bound, name, got)
+
+
+def test_a_position_past_2_16_opens() -> None:
+    """A store of 70,003 blocks opened at positions above 65,535: the honest opening is accepted, and the same block at a
+    position one off, or 2^16 off (which a u16 position would not tell apart), or the next block's sample, refused."""
+    rng = random.Random(17)
+    for bound in (False, True):
+        o = _identity_opening(rng, DEEP, bound, _toy_encode, DEEP_N, rng.randrange(1 << 16, DEEP_N - 1))
+        assert o.args["pos"][1] == 1 and o.args["rdepth"] == [13] and o.args["pdepth"] == [17]
+        cases = _v2_cases(o)
+        cases["position 2^16 before"] = dict(o.args, pos=BC._u16s(o.j - (1 << 16), 2))
+        for name, a in cases.items():
+            got = BC.opening_check_v2(o.S, a)
+            assert (got == 1) == (name == "honest"), (bound, name, got)
+            if name.startswith("position"):
+                assert BC.verdict(got) == "receipt-path", (bound, name, got)
+
+
+def test_v2s_rows_hold_every_parameter_and_its_public_rows_are_the_verifiers() -> None:
+    rng = random.Random(18)
+    for S in (_v2(P512), TOY_V2, DEEP):
+        params, _ = BC._opening_signature_v2(S)
+        laid = BC.opening_rows_v2(S)
+        assert [p for _r, _b, ps in laid for p in ps] == [n for n, _ in params]
+        assert sum(b for _r, b, _ps in laid) == sum(t.leaves for _, t in params)
+        assert [r for r, _b, _ps in laid] == ["pub", "signs", "block", "payload", "leaf", "aux"]
+    o = _identity_opening(rng, TOY_V2, True, _toy_encode, 40)
+    rows = BC.opening_rows_v2(o.S)
+    pub = {k: o.args[k] for _r, _b, ps in rows[:2] for k in ps}
+    assert BC.row_words(rows[:2], pub) == BC.row_words(rows[:2], o.args)
+
+
+@pytest.mark.parametrize("bad", [dict(N=64, C=59), dict(BYTES=64), dict(K=1), dict(K=4), dict(MASKED=2), dict(ROWS=17),
+                                 dict(ROWS=64), dict(LEAF=17), dict(DR=29), dict(DP=33), dict(DV=33), dict(DR=0),
+                                 dict(DR=28, DP=32, DV=5), dict(DR=24, DP=28, DV=13)])
+def test_a_v2_binding_past_its_range_is_refused_by_name(bad) -> None:
+    with pytest.raises(ValueError, match="^BlockOpeningCheck_v2: "):
+        BC.opening_rows_v2(_v2(P1024, **bad))
+
+
+def test_v2s_costliest_legal_bindings_are_admitted() -> None:
+    for field in ((1024, 105), (512, 569), BC.TOY):
+        S = SimpleNamespace(N=field[0], C=field[1], K=3, MASKED=1, BYTES=4096, ROWS=16, LEAF=16, DR=28, DP=32, DV=BC.LEVELS - 60)
+        assert BC.opening_rows_v2(S)
+
+
+@pytest.mark.slow
+def test_the_toy_unit_v2_is_its_reference() -> None:
+    """A few minutes (the compressions' and the deep reads' first trace): the only evaluation of v2's wiring, its u32
+    position into the receipt leaf's rank, position and entry and pos = j, at a store past 2^16 blocks as at a small one."""
+    rng = random.Random(19)
+    for S, n in ((TOY_V2, 35), (_v2(TOY_V2, MASKED=1), 35), (DEEP, DEEP_N)):
+        group = [a for bound in (False, True) for a in _v2_cases(_identity_opening(rng, S, bound, _toy_encode, n, n - 2)).values()]
+        S_ = SimpleNamespace(**{**vars(S), "LEAF": 3})
+        refs = [BC.opening_check_v2(S_, a) for a in group]
+        assert refs.count(1) == 2
+        assert _gates(bind(BC.BlockOpeningCheckV2, **vars(S_)), group) == refs

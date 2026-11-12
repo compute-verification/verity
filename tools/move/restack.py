@@ -6,8 +6,8 @@ With no `--move-commit`, the moves are every commit `--main` (default origin/mai
 has a move line, oldest first: `Move: MAP` runs `tools/move/rename.py --map MAP`, as drive and `stage.py` write it, and
 `Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`, as `stage.py` writes it.
 The branch crosses each in turn as below, the last merging `--onto` (default `--main`), so one command carries it across a
-window's moves. A `--move-commit` without `--script` runs its own move line's script, else `layout.py`; with `--script`,
-that script and its `--script-arg`s.
+window's moves; one of them it is based after may be skipped (below). A `--move-commit` without `--script` runs its own
+move line's script, else `layout.py`; with `--script`, that script and its `--script-arg`s.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
 the root of a checkout of its parent B. Because the move is a deterministic, idempotent codemod, a branch is migrated by the
@@ -17,7 +17,8 @@ same script rather than by rename detection:
    before the move: the owner merges main first, as without the move.
 2. check that merge out in a scratch worktree, run B's `tools/move/layout.py` at its root, and commit what it changed. Files
    the branch added are moved and rewritten too, which rename detection can't do. Where the branch edited `tools/move/`
-   itself, B's copy runs and the branch's is put back before the commit.
+   itself, B's copy runs and the branch's is put back before the commit. B's script runs with no limit on the text it
+   reads (its `TEXT_LIMIT`), so a file the move rewrote is rewritten here too when the branch grew it past the limit.
 3. merge `--onto` (default M; the moved main once M has landed, which must contain M), with M as the merge base. M is the
    script run on B, so against it the branch's side holds only the branch's own changes, in moved paths and names, and the
    other side only what landed after the move: what conflicts here is real content. (Against B instead, a line the script
@@ -32,16 +33,27 @@ restack across a move pays for the check and the rest don't. The file's key is e
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
 
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
-(default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
-report clean (duplicate imports and lock entries). Its owner merges main instead (`git merge origin/main`); the
-restack is for branches based at or before B. The branch, its ref and the caller's checkout are never changed: the
+(default origin/main) is `based-after` M: step 3 would bring main's commits since B in a second time and still report
+clean (duplicate imports and lock entries), so M's script never runs on it. A `--move-commit` it is based after refuses
+it, and so does the last of the moves found on `--main`: there is no result, and its owner merges main instead (`git merge
+origin/main`); the restack is for branches based at or before B. An earlier one of the moves found is skipped where a
+later one's base contains it, and named (`skipped`, and a line of the output): that later move's step 1 merges it in on
+main's side, as its owner's merge of main would, so M's script is not run on the branch's own lines, and its owner looks
+for M's map's old names in what the branch adds. A carry that skipped a move never ends `clean`: it ends `clean-skipped`
+(or `locks-stale`), pushes nothing and exits 1, and its output gives the command that crosses the same moves named, with
+`--onto` (`confirming`). A named move is never skipped, so that command builds the same result and reports it `clean`:
+running it is the owner saying the skip is right. Where no later move's base contains it, no merge of a base brings M in,
+and the branch is refused as above. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
-id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
-output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
+id), `up-to-date`, `clean-skipped` (the result's id; a move was skipped), `conflicted` (the step and the files), `no-row`
+(the branch holds tracked files under a path the move's map retires, and no row moves them: each file, and the fix, a row
+for it in the rows file the branch commits beside the map, `NAME.rows.toml`, which `layout.py` reads after the map and
+deletes, so no result holds one), `script-failed` (the script's exit code and the tail of its output), `locks-stale` (the
+last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
 and its owner regenerates them with `check.py --update`; `--push-to` pushes it; a pinned `TRUSTED.sha256` in
 conflict there likewise takes `--onto`'s and the pins step regenerates it) or `pins-stale` (the result's id, and the tail of `--regen`'s output, which names each stale pin's command). `plain` beside it is what an ordinary `git merge` of the branch into `--onto` gives, for comparison. `--push-to`
-pushes a clean result of one branch to a new branch on `--remote`, and refuses a name that already exists there. Exit 0 when
-every branch is clean or up to date, 1 otherwise.
+pushes a clean result of one branch to a new branch on `--remote`, never one that skipped a move, and refuses a name that
+already exists there. Exit 0 when every branch is clean or up to date, 1 otherwise.
 
 Before any branch, a clone that defines no merge driver for one `.gitattributes` names gets them registered (`DRIVERS`, as
 `research`'s own clones have them), since without them a lock or a Lean import list merges as text and stops a branch its
@@ -68,7 +80,16 @@ SCRIPT_ARGS: tuple[str, ...] = ()
 #: what a script takes on a branch's tree rather than main's: layout.py notes the branch's own references to a directory the map
 #: splits instead of failing on them (they're its owner's to check, and the move's commit is the same either way)
 BRANCH_ARGS = {"tools/move/layout.py": ("--report-splits",)}
+#: layout.py's exit when tracked files under a path its map retires have no row (its `NO_ROW`): its stderr then holds the
+#: fix in its first line and each file on a line of its own, indented by two spaces
+NO_ROW = 3
+#: what a map's rows file is named by, beside the map (layout.py's `ROWS_SUFFIX`): the script deletes the one it read
+ROWS_SUFFIX = ".rows.toml"
 SCRIPT_DIR = "tools/move"
+#: the mover's limit on the text files it reads, in the file every move script reads it from. A crossing runs the script with
+#: none: a file under the limit on the move's base was rewritten by the move, and the branch's copy, grown past it, must be
+#: too (a Lean lock that crossed with every old path in it). `check_generated` holds the script so run to the move itself
+LIMIT_IN, LIMIT, NO_LIMIT = "tools/move/layout.py", re.compile(rb"^TEXT_LIMIT = .*$", re.M), b"TEXT_LIMIT = 1 << 62"
 TRAILER_MOVE, TRAILER_OF = "Restack-move", "Restack-of"
 #: a move commit's line naming its map, and so its script (`stage.py` writes both kinds, drive's queue `Move:`)
 MOVE_LINE = re.compile(r"^(Move|Layout-move): (tools/move/[\w.-]+\.toml)((?: --no-lock)?)$", re.M)
@@ -91,14 +112,26 @@ KEEP = False
 #: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
 #: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
 WORKTREES_LOCK = "research-worktrees.lock"
+#: the options the command that confirms a skip takes from its run, where given (`confirming`): every one that names no move
+CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", "json")
 #: what registers in a clone the merge drivers `.gitattributes` names, as `research`'s own clones have them
 #: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
 #: at a merge its owner's clone would make clean
 DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
+#: git's own merge drivers, which no clone defines: `.gitattributes` gives every `.gitignore` `merge=union`
+GIT_OWN = frozenset({"text", "binary", "union"})
 
 
 class ScriptFailed(Exception):
     pass
+
+
+class NoRow(ScriptFailed):
+    """layout.py stopped on tracked files with no row (`NO_ROW`): what it said, and the files it named."""
+
+    def __init__(self, said: str):
+        super().__init__(said)
+        self.files = [line[2:] for line in said.splitlines()[1:] if line.startswith("  ")]
 
 
 def git(*args: str, cwd: str | None = None, input: bytes | None = None, ok: tuple[int, ...] = (0,)) -> subprocess.CompletedProcess:
@@ -154,11 +187,11 @@ def out(*args: str, cwd: str | None = None) -> str:
 
 def missing_drivers(cwd: str | None = None) -> list[str]:
     """The merge drivers the checkout's `.gitattributes` names (`merge=NAME`) that its clone's config defines no
-    `merge.NAME.driver` for."""
+    `merge.NAME.driver` for. Git's own (`GIT_OWN`) need none."""
     attrs, names = os.path.join(out("rev-parse", "--show-toplevel", cwd=cwd), ".gitattributes"), []
     if os.path.isfile(attrs):
         with open(attrs) as f:
-            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())))
+            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())) - GIT_OWN)
     have = git("config", "--get-regexp", r"^merge\..*\.driver$", cwd=cwd, ok=(0, 1)).stdout.decode().splitlines()
     got = {key.split(".")[1] for key, _, _ in (line.partition(" ") for line in have) if key.count(".") == 2}
     return [n for n in names if n not in got]
@@ -261,28 +294,45 @@ def pinned_uv_env(base: str, tmp: str, cwd: str | None) -> dict[str, str] | None
     return {**os.environ, "PATH": shim + os.pathsep + os.environ.get("PATH", "")}
 
 
+def swap(path: str, old: bytes, new: bytes) -> None:
+    with open(path, "rb") as f:
+        text = f.read()
+    with open(path, "wb") as f:
+        f.write(text.replace(old, new))
+
+
 def run_script(merged: str, base: str, python: str, cwd: str | None) -> tuple[str, list[str], list[str]]:
-    """Check `merged` out in a scratch worktree, run `base`'s layout script at its root, and return the tree it leaves (every
-    change staged, ignored files left out), the `tools/move/` paths whose branch copy was put back, and the tail of the
-    script's output."""
+    """Check `merged` out in a scratch worktree, run `base`'s layout script at its root with no limit on the text it reads
+    (`LIMIT`), and return the tree it leaves (every change staged, ignored files left out), the `tools/move/` paths whose
+    branch copy was put back, and the tail of the script's output. A rows file the script deleted is spent, and the branch's
+    copy of it is not put back."""
     script, mine = blobs_under(base, SCRIPT_DIR, cwd), blobs_under(merged, SCRIPT_DIR, cwd)
     if SCRIPT not in script:
         raise SystemExit(f"the move's base {base[:12]} has no {SCRIPT}")
     restored = sorted(p for p in script.keys() | mine.keys() if script.get(p) != mine.get(p))
+    limit = LIMIT.search(git("show", f"{base}:{LIMIT_IN}", cwd=cwd, ok=(0, 128)).stdout)
     with tempfile.TemporaryDirectory(prefix="restack-", ignore_cleanup_errors=True) as tmp:
         wt = os.path.join(tmp, os.path.basename(tmp))  # a unique worktree name, so restacks can run side by side
         add_worktree(wt, merged, cwd)
         try:
-            if restored:
+            if restored or limit:
                 # committed, so that the script sees a clean checkout (layout.py refuses a dirty one)
                 git("checkout", base, "--", SCRIPT_DIR, cwd=wt)
+                if limit:
+                    swap(os.path.join(wt, LIMIT_IN), limit[0], NO_LIMIT)
+                    git("add", "--", LIMIT_IN, cwd=wt)
                 overlay = commit_tree(out("write-tree", cwd=wt), [merged], f"restack: {SCRIPT_DIR}/ as at {base}\n", wt)
                 git("reset", "-q", "--soft", overlay, cwd=wt)
             p = subprocess.run([python, SCRIPT, *BRANCH_ARGS.get(SCRIPT, ()), *SCRIPT_ARGS], cwd=wt, capture_output=True, env=pinned_uv_env(base, tmp, cwd))
             output = (p.stdout + p.stderr).decode(errors="replace").strip().splitlines()[-15:]
+            if p.returncode == NO_ROW and SCRIPT == LINE_SCRIPT["Layout-move"]:
+                raise NoRow(p.stderr.decode(errors="replace").strip())
             if p.returncode:
                 raise ScriptFailed(f"exit {p.returncode}: " + "\n".join(output))
+            if limit and os.path.exists(os.path.join(wt, LIMIT_IN)):
+                swap(os.path.join(wt, LIMIT_IN), NO_LIMIT, limit[0])    # the script's file as it left it, with its limit again
             git("add", "-A", cwd=wt)
+            restored = [f for f in restored if not f.endswith(ROWS_SUFFIX) or os.path.lexists(os.path.join(wt, f))]
             for path in restored:
                 if path in mine:
                     git("checkout", merged, "--", path, cwd=wt)
@@ -403,9 +453,13 @@ def check_generated(move: str, base: str, python: str, cwd: str | None) -> None:
                 raise SystemExit(f"{SCRIPT} fails on the move's base {base[:12]}: {e}") from None
             if full and _GENERATED[key] == want:
                 keep_generated(full, want)
-    if _GENERATED[key] != tree_of(move, cwd):
+    if _GENERATED[key] != (want := tree_of(move, cwd)):
+        differ = out("diff", "--name-only", "--no-renames", want, _GENERATED[key], cwd=cwd).splitlines()
         raise SystemExit(f"--move-commit {move[:12]} isn't what {SCRIPT} writes on {base[:12]}: pass the commit the script "
-                         "generated, and a later commit on the move's branch as --onto")
+                         "generated, and a later commit on the move's branch as --onto (the script runs here with no limit "
+                         f"on the text it reads: a text file of {base[:12]} over the script's own limit, which the move left "
+                         f"as it was, is one more cause). The {len(differ)} paths that differ"
+                         + (", the first 20" if len(differ) > 20 else "") + ":\n  " + "\n  ".join(differ[:20]))
 
 
 def based_after(head: str, base: str, refs: list[str], cwd: str | None) -> str | None:
@@ -449,6 +503,8 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
             r["steps"].append({"step": "base", "commit": tip})
         try:
             tree, restored, output = run_script(tip, base, python, cwd)
+        except NoRow as e:
+            return {**r, "status": "no-row", "step": "script", "files": e.files, "error": str(e)}
         except ScriptFailed as e:
             return {**r, "status": "script-failed", "step": "script", "error": str(e)}
         ran = True
@@ -499,20 +555,31 @@ def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple
 
 
 def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str | None = None, base: str | None = None,
-          python: str = sys.executable, cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
+          python: str = sys.executable, cwd: str | None = None, pins: bool = True, main: str | None = None,
+          found: bool = False) -> dict:
     """``branch`` restacked across each of ``moves`` in order, each with its own script and arguments, the last merging
-    ``onto``: the last step's outcome (`restack`'s), or the first that isn't clean, with `crossed`, the moves it crossed."""
+    ``onto``: the last step's outcome (`restack`'s), or the first that isn't clean, with `crossed`, the moves it crossed.
+    One that skipped a move is `clean-skipped` where it would be `clean` or `up-to-date`.
+
+    With ``found`` (the moves are `moves_on`'s, none of them named), a move the branch is `based-after` is skipped, and
+    named in `skipped`, where a later move's base contains it: crossing that later move starts by merging its base, which
+    is the merge of main the refusal asks of the owner, up to that base. A skipped move is then in the base of a move that
+    is crossed, or the carry stops before a result: the later move is crossed, or skipped under the same rule, or stops it.
+    The last move has no later one, so it still refuses."""
     global SCRIPT, SCRIPT_ARGS
-    head, tip, crossed, locks = rev(branch, cwd), branch, [], []
+    head, tip, crossed, skipped, locks = rev(branch, cwd), branch, [], [], []
     if not moves:
-        return {"branch": branch, "head": head, "crossed": [], "status": "no-moves", "plain": {"status": "clean", "files": []},
-                "error": f"no move to cross: merge {main or onto} as usual"}
+        return {"branch": branch, "head": head, "crossed": [], "skipped": [], "status": "no-moves",
+                "plain": {"status": "clean", "files": []}, "error": f"no move to cross: merge {main or onto} as usual"}
     for i, (move, script, args) in enumerate(moves):
         SCRIPT, SCRIPT_ARGS = script, tuple(args)
         last = i == len(moves) - 1
         r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
                     pins=pins and last, main=main)
-        r = {**r, "branch": branch, "head": head, "crossed": crossed}
+        r = {**r, "branch": branch, "head": head, "crossed": crossed, "skipped": skipped}
+        if found and r["status"] == "based-after" and any(contains(move, move_base(m, cwd), cwd) for m, *_ in moves[i + 1:]):
+            skipped = [*skipped, {"move": r["move"], "script": script, "args": list(args)}]
+            continue
         if r["status"] not in ("clean", "up-to-date", "locks-stale"):
             return r
         crossed = [*crossed, move]
@@ -524,7 +591,21 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         r = {**r, "status": "locks-stale", "files": locks,
              "error": f"the Lean locks {', '.join(locks)} took the moves' side: regenerate them on the result "
                       "(tools/verity/lean/check.py --update) before marking it"}
-    return {**r, "crossed": crossed}
+    if skipped and r["status"] in ("clean", "up-to-date"):
+        r = {**r, "status": "clean-skipped"}
+    return {**r, "crossed": crossed, "skipped": skipped}
+
+
+def confirming(r: dict, a: argparse.Namespace, ap: argparse.ArgumentParser) -> list[str]:
+    """The command that carries ``r``'s branch across the moves ``r`` crossed, each named, onto what ``r`` merged last, with
+    this run's other options as given. A named move is never skipped, so it does what ``r``'s carry did after its skips and
+    reports it with none: running it is the owner saying the skip was right."""
+    named = [x for m in r["crossed"] for x in ("--move-commit", m)]
+    rest: list[str] = []
+    for k in CARRIED:
+        if (v := getattr(a, k)) != ap.get_default(k):
+            rest += [f"--{k.replace('_', '-')}", *([] if v is True else [v])]
+    return ["python3", f"{SCRIPT_DIR}/restack.py", r["branch"], *named, "--onto", r["onto"], *rest]
 
 
 def push(result: str, new: str, remote: str, cwd: str | None) -> None:
@@ -536,15 +617,24 @@ def push(result: str, new: str, remote: str, cwd: str | None) -> None:
 def line(r: dict) -> str:
     plain = f"plain merge {r['plain']['status']}" + (f" ({len(r['plain']['files'])})" if r["plain"]["files"] else "")
     if len(r.get("crossed", [])) > 1 or r["status"] not in ("clean", "up-to-date", "no-moves") and r.get("crossed"):
-        plain += f"; crossed {len(r['crossed'])} moves: {', '.join(c[:12] for c in r['crossed'])}"
-        if r["status"] not in ("clean", "up-to-date", "locks-stale"):
+        plain += (f"; crossed {len(r['crossed'])} move{'s' if len(r['crossed']) != 1 else ''}: "
+                  f"{', '.join(c[:12] for c in r['crossed'])}")
+        if r["status"] not in ("clean", "clean-skipped", "up-to-date", "locks-stale"):
             plain += f"; stopped at the move {r['move'][:12]}"
-    if r["status"] in ("clean", "up-to-date"):
-        return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
-    if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after", "no-moves"):
-        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after", "no-moves") else ""
-        return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
-    return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
+    skipped = "".join(
+        f"\n    skipped the move {s['move'][:12]} ({shlex.join([s['script'], *s['args']])}): {r['branch']} is based after its "
+        "base, so its script was NOT run on the branch's own lines, and the base merge of a later move carries it. Look for "
+        "that map's old names in what the branch adds." for s in r.get("skipped", []))
+    if "confirm" in r:
+        skipped += ("\n    with a move skipped nothing is pushed and the exit is 1. If the skip is right, say so by crossing "
+                    f"with the moves named, which skips none:\n    {shlex.join(r['confirm'])}")
+    if r["status"] in ("clean", "clean-skipped", "up-to-date"):
+        return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]" + skipped
+    if r["status"] in ("script-failed", "no-row", "pins-stale", "locks-stale", "based-after", "no-moves"):
+        at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "no-row", "based-after", "no-moves") else ""
+        return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ") + skipped
+    return (f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n"
+            + "".join(f"    {f}\n" for f in r["files"]) + skipped.lstrip("\n"))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -558,15 +648,17 @@ def main(argv: list[str] | None = None) -> int:
                     help="what to merge last: the moved main (default: the last --move-commit, else --main)")
     ap.add_argument("--base", metavar="REF", help="the tree one --move-commit ran on (default: its parent)")
     ap.add_argument("--main", default="origin/main", metavar="REF",
-                    help="main, when it resolves: a branch that shares a commit after the move's base with it or --onto is "
-                         "refused (default origin/main)")
+                    help="main, when it resolves: a branch that shares a commit after a move's base with it or --onto is based "
+                         "after that move, and refused; where the move is one found here, and a later one's base contains "
+                         "it, it is skipped and named instead, and the result is clean-skipped (default origin/main)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs the move's script")
     ap.add_argument("--script", help=f"one --move-commit's script, under {SCRIPT_DIR}/ (default: its move line's, else "
                                      f"{SCRIPT}; a rename move's is tools/move/rename.py)")
     ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
                     help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
                          "(a rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/MAP.toml)")
-    ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
+    ap.add_argument("--push-to", metavar="NEWBRANCH",
+                    help="push the clean result to this new branch; never one that skipped a move")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--kept", action="store_true",
                     help=f"keep each move's check, once it passed, under {KEPT_DIR}/, and read one kept there: on one "
@@ -590,14 +682,21 @@ def main(argv: list[str] | None = None) -> int:
     results = []
     for b in a.branches:
         moves = named or moves_on(a.main, b, None)
-        r = carry(b, moves, a.onto or (None if named else a.main), a.base, a.python, pins=not a.no_pins, main=a.main)
+        r = carry(b, moves, a.onto or (None if named else a.main), a.base, a.python, pins=not a.no_pins, main=a.main,
+                  found=not named)
+        if r["skipped"] and r["status"] in ("clean-skipped", "locks-stale"):
+            r["confirm"] = confirming(r, a, ap)
         results.append(r)
         if not a.json:
             print(line(r), flush=True)
     if a.push_to and not a.dry_run:
         r = results[0]
-        if r["status"] not in ("clean", "locks-stale"):
+        if r["status"] not in ("clean", "clean-skipped", "locks-stale"):
             print(f"--push-to {a.push_to}: {r['branch']} is {r['status']}; nothing pushed", file=sys.stderr)
+        elif r["skipped"]:
+            print(f"--push-to {a.push_to}: {r['branch']} skipped the move{'s' if len(r['skipped']) != 1 else ''} "
+                  f"{', '.join(s['move'][:12] for s in r['skipped'])}, whose script did not run on its own lines; nothing "
+                  f"pushed. If the skip is right, cross with the moves named: {shlex.join(r['confirm'])}", file=sys.stderr)
         else:
             push(r["result"], a.push_to, a.remote, None)
             r["pushed"] = f"{a.remote}/{a.push_to}"

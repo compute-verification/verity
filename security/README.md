@@ -362,7 +362,7 @@ hardware.
 acceptance, the run lies in 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p (`Verity.Soundness`; the subprotocols' guarantees are the table under "The
 guarantees to read first"):
 
-- **sampled proofs:** F lies in the confidence set M_δ, which bounds the incorrect proof blocks in each size class, and
+- **SPOT:** F lies in the confidence set M_δ, which bounds the incorrect proof blocks in each size class, and
   with each class's block size the faulty share φ;
 - **PoUW:** Φ_D ≥ (1 − φ)·Φ_cred − Φ_gap − Φ_bk, with each credited gate a distinct gate of A;
 - **the inference-only policy:** every 𝓘_j is a (c, k)-partition;
@@ -460,7 +460,7 @@ None of these is assumed silently; each would restate the conclusion:
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
+| SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
@@ -472,22 +472,22 @@ None of these is assumed silently; each would restate the conclusion:
 
 ## Three trees
 
-- `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
-  (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and
-  its guarantee statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on
-  without proof, are declared in `Definitions/Assumptions.lean` or a module under it; a premise declared elsewhere is
-  open (The lock).
-- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
-  runs, one `Properties.<Protocol>` module per protocol.
-- `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
-  guarantee, and the lemmas behind them.
+Each tree's README has its import rule, which the lock's `layers` and `trees` hold, and its areas:
+[`Definitions/`](Definitions/README.md) (package `security`), the spec; [`Properties/`](Properties/README.md)
+(`security_properties`), statements about the code's Lean functions; and [`Proofs/`](Proofs/README.md)
+(`security_proofs`), every proof.
 
-What may import what (`tests/test_lean_packages.py`): `security` requires only Mathlib; `security_properties` requires
-`security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
-ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
-import, and its `trees` forbid a statement from reading, or a definitions or
-properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
-guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
+## What outside code may do
+
+Outside code may run the Lean check on the packages, read a file here as data (a lock, or Lean a test holds its Python
+to) and build or run Lean in a package's Lake environment. No outside package requires them
+(`tests/test_lean_packages.py`), and a generated file is written only by the generator its header names. Today:
+
+- Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
+- The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
+- Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
+  in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
 
 ## The lock
 
@@ -528,7 +528,7 @@ conditions it places on its inputs and setup are left out (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
+| SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
@@ -548,9 +548,9 @@ policy and the one-stage audit commit to one record and every window of the peri
 (`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,
 PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
 
-- **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
+- **Guarantees:** the table's SPOT row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in
-  `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. Remote's sampled proofs' one-stage form is
+  `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. At remote, SPOT's one-stage form is
   v2, which runs `flock-verify --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
   verdicts as evidence, is refused); where v2 accepts, its session is in V3's and V5's events
   (`Verity.Sampled.checkBlobs_event`), and only V5's has a coupling.
@@ -579,9 +579,9 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 With the toolchain `lean-toolchain` pins:
 
 ~~~text
-lake build                                    # in security/: the spec
-lake build                                    # in security/Properties/, then security/Proofs/ (fetches ArkLib)
-python3 tools/verity/lean/check.py Security   # from the repository root
+lake build   # in security/: the spec
+lake build   # in security/Properties/, then security/Proofs/ (fetches ArkLib)
+python3 tools/verity/lean/check.py security/   # from the repository root
 ~~~
 
 The check audits `Proofs/` with the spec, from one build, and refuses a machine below its memory floor.

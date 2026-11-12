@@ -10,9 +10,9 @@
    "why": "the requirement is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct); Properties.Accounting.Requirement holds it to Accounting.Requirement's definitions"
   },
   "CircuitRequirement.Difftest": {
-   "imports": ["CircuitRequirement", "Difftest", "Flock.Canon", "Lean.Data.Json"],
+   "imports": ["CircuitRequirement", "Difftest", "Base.Canon", "Lean.Data.Json"],
    "except": [],
-   "why": "the difftest's function reaches Lean only through the requirement, the harness and C-Flock's canonical JSON"
+   "why": "the difftest's function reaches Lean only through the requirement, the harness and the base's canonical JSON"
   }
  },
  "dependencies": {

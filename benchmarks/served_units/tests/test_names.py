@@ -2,10 +2,13 @@
 `prove` looks for under FLOCK_WORK/data/NAME-KEY is the directory prove_time.sh staged it into only while the two agree. The
 names are compared on every block type a served card's plan stages, each at the sizes it takes, and on the cases the rule
 treats apart (case, characters outside the name's, a trailing dash, the 96-character cut); the key on a stand-in tree, as
-files under its hashed paths and outside them change."""
+files under its hashed paths and outside them change. The paths each key hashes (its KEY_PATHS) are held to this tree, and
+on a stand-in tree without one of them, or with a file its pipeline fails on, each key refuses: a digest of what is left
+would keep its value across a change to what is missing."""
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -14,6 +17,9 @@ import pytest
 from conftest import HERE, load
 
 PT = (HERE / "prove_time.sh").read_text()
+ROOT = HERE.parent.parent
+#: what both refusals of a tree without one of KEY_PATHS say to do
+FIX = "correct KEY_PATHS in benchmarks/served_units/prove_time.sh and window.py together"
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 _MLA = 'DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'
@@ -87,24 +93,43 @@ def tree(root: Path, files: dict[str, str]) -> None:
         (root / f).write_text(text)
 
 
+#: the stand-in tree: files under each of the key's paths, and outside them
+FILES = {"benchmarks/served_units/stage.py": "s", "benchmarks/served_units/window.py": "w",
+         "verity/circuits/a.py": "a", "verity/definitions/sub/b.py": "b", "verity/commitments/c.txt": "c",
+         "verity/protocols/p.py": "p",
+         "adapters/vllm/verity_vllm/d.py": "d", "adapters/vllm/tests/e.py": "e",
+         "tools/verity/circuit_check/src/circuit_check/f.py": "f", "verity/core/g.py": "g"}
+
+
 @pytest.fixture
 def repo(tmp_path):
-    tree(tmp_path, {"benchmarks/served_units/stage.py": "s", "benchmarks/served_units/window.py": "w",
-                    "verity/circuits/a.py": "a", "verity/definitions/sub/b.py": "b", "verity/commitments/c.txt": "c", "verity/protocols/p.py": "p",
-                    "adapters/vllm/verity_vllm/d.py": "d", "adapters/vllm/tests/e.py": "e",
-                    "tools/verity/circuit_check/src/circuit_check/f.py": "f", "verity/core/g.py": "g"})
+    tree(tmp_path, FILES)
     return tmp_path
 
 
+def sh_key_paths() -> list[str]:
+    paths = re.search(r'^KEY_PATHS="([^"\n]+)"$', PT, re.M)
+    assert paths, "prove_time.sh's KEY_PATHS is not where this test reads it"
+    return paths[1].split()
+
+
+def sh_key(repo: Path) -> subprocess.CompletedProcess:
+    """prove_time.sh's own lines, from KEY_PATHS to the end of KEY's assignment, run in `repo` under the script's shell
+    options: the key is its output's last line where they compute one."""
+    opts = re.search(r"^set -\w+ pipefail$", PT, re.M)
+    lines = re.search(r"^KEY_PATHS=.*?^KEY=\$\(.*?\n(?=\n)", PT, re.M | re.S)
+    assert opts and lines, "prove_time.sh's KEY is not where this test reads it"
+    return subprocess.run(["bash", "-c", f'{opts[0]}\nREPO="{repo}"\n{lines[0]}echo $KEY'], capture_output=True, text=True)
+
+
 def test_key_agrees(monkeypatch, repo):
-    assign = re.search(r"^KEY=\$\(.*?\)$", PT, re.M | re.S)
-    assert assign, "prove_time.sh's KEY is not where this test reads it"
     w = load(monkeypatch, "window.py")
     monkeypatch.setattr(w, "REPO", repo)
 
     def both() -> str:
-        sh = subprocess.run(["bash", "-c", f'REPO="{repo}"\n{assign[0]}\necho $KEY'], capture_output=True, text=True,
-                            check=True).stdout.strip()
+        r = sh_key(repo)
+        assert r.returncode == 0, r.stdout + r.stderr
+        sh = r.stdout.strip()
         assert re.fullmatch(r"[0-9a-f]{16}", sh) and sh == w.key()
         return sh
 
@@ -120,3 +145,47 @@ def test_key_agrees(monkeypatch, repo):
     tree(repo, {"verity/protocols/new.py": ""})
     keys.add(both())
     assert len(keys) == 6, "a change to a staged source left the key as it was"
+
+
+def test_key_paths_in_tree(monkeypatch):
+    """Each key's paths, read from prove_time.sh's KEY_PATHS and window.py's, are one list, and this tree holds each. A
+    rename that leaves an old name in them would take what was under it out of the key."""
+    sh, py = sh_key_paths(), load(monkeypatch, "window.py").KEY_PATHS.split()
+    assert sh == py, f"prove_time.sh's KEY_PATHS {sh} and window.py's {py} differ: {FIX}"
+    gone = [p for p in sh if not (ROOT / p).exists()]
+    assert not gone, (f"KEY_PATHS names {gone}, which this tree does not hold: {FIX}, naming every path that now holds the "
+                      "Python that was under it, and this test's FILES with them")
+
+
+def test_key_refuses_a_missing_path(monkeypatch, tmp_path):
+    """On a stand-in tree without one of the key's paths, each of them in turn, prove_time.sh's lines stop before any key and
+    window.py's key() raises, each naming the path and the fix."""
+    w = load(monkeypatch, "window.py")
+    for i, gone in enumerate(sh_key_paths()):
+        repo = tmp_path / str(i)
+        tree(repo, FILES)
+        monkeypatch.setattr(w, "REPO", repo)
+        whole = sh_key(repo)
+        assert whole.returncode == 0 and whole.stdout.strip() == w.key(), f"FILES, whole: {whole.stdout}{whole.stderr}"
+        if (repo / gone).is_dir():
+            shutil.rmtree(repo / gone)
+        else:
+            (repo / gone).unlink()
+        why = f"no {gone} in {repo}, a path of the staging key: {FIX}"
+        r = sh_key(repo)
+        assert r.returncode == 1 and r.stdout.strip() == f"prove_time.sh: {why}", r.stdout + r.stderr
+        with pytest.raises(SystemExit) as stop:
+            w.key()
+        assert str(stop.value) == f"window.py: {why}"
+
+
+def test_key_refuses_a_failed_pipeline(monkeypatch, repo):
+    """Each key reads its pipeline's status: where a step before the last fails (here xargs, at the unmatched quote in a
+    file's name), prove_time.sh's lines stop and window.py's key() raises, rather than keep the digest of what got through."""
+    w = load(monkeypatch, "window.py")
+    monkeypatch.setattr(w, "REPO", repo)
+    tree(repo, {"verity/circuits/it's.py": ""})
+    r = sh_key(repo)
+    assert r.returncode == 1 and r.stdout.startswith("prove_time.sh: no staging key: "), r.stdout + r.stderr
+    with pytest.raises(subprocess.CalledProcessError):
+        w.key()

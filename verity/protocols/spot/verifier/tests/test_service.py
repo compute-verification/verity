@@ -332,7 +332,7 @@ def test_one_stage_refusals_come_through_register():
 def test_a_bernoulli_law_is_refused_at_register():
     """A Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
     count varies; at p = 0 it samples nothing, so a stream would accept having verified nothing): `register` refuses it
-    (`bernoulli`, with `BERNOULLI`) after R1-R7, and logs nothing. A rate, a stratified or work rate and All register."""
+    (`bernoulli`, with `BERNOULLI`) after R1-R8, and logs nothing. A rate, a stratified or work rate and All register."""
     for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
         with pytest.raises(S.Refused) as e:
@@ -410,7 +410,7 @@ def test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need(
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
     """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks samples 8 (not 7) and
     `rate:1/5:4` over 12 samples 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
-    over 6 proof blocks, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
+    over 6 proof blocks, 8) is refused at register (`rate`) before R1-R8 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
     tables, in ASCII digits."""
     for text, n, k in (("rate:1/3:4", 20, 8), ("rate:1/5:4", 12, 4)):
         stream = _stream(_spec(S.Law(text)))

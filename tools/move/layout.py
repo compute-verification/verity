@@ -7,13 +7,25 @@
     python3 tools/move/layout.py --resolve M  the name module M has after the move (for readers of recorded data)
 
 It is idempotent and reruns on any later main: a file still at an old path moves, a reference to an old path or module is
-rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it fails when a tracked file under a
-retired directory has no destination, so a file that lands on main later gets a row in the map rather than a guess.
+rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it stops, with an exit of its own
+(`NO_ROW`) and each file's name, when a tracked file under a path the map retires ([retired]) has no row, so the file gets
+a row rather than a guess: in the map when it is main's, and when an open branch adds it, in the branch's rows file.
+
+The rows file of `NAME.toml` is `NAME.rows.toml` beside it, a file the branch commits, with [paths] alone. It is read
+after the map: a row there moves its file, or every file under its directory, and rewrites each reference to it, as a row
+of the map does, and the module renames it implies are derived, not declared. The script deletes the rows file once it has
+read it, so the moved tree holds none, and leaves its rows out of `moves.json`, which records the move's own. It refuses
+(exit 1) a rows file that would change what the map says: a row for a path the map sends elsewhere or deletes, a directory
+row over a path the map names, a module the map renames another way; and a row no tracked file is at or under.
+
+A text file is one with no NUL in its first 8 KiB. One of more than `TEXT_LIMIT` bytes is not read, and the move stops and
+names it rather than leave its lines as they were, until the map excludes it; a Lean lock is read whatever its size.
 
 What it rewrites, in every tracked text file the map doesn't exclude:
 - paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`, and
   after each prefix the map lists as standing for the root: [rewrite] root_prefixes, `/opt/vy-verifier/current/`),
-  ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`), ones relative to an old package
+  ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`; a Lake requirement's `path` and
+  a manifest's `dir` however written, `composition` too, a package inside the requiring one), ones relative to an old package
   root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), the
   `Path(__file__).parents[N]` anchors of a moved file, and a shell script's paths from its own directory
   (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path or its own
@@ -31,7 +43,8 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   `module:attr`, docs). A module whose own row keeps its name (a [paths] row with old == new) stays where it is when its
   package moves;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
-A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
+A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. A
+Lake package's path to another package that named one before the move names one after it, or the move stops (exit 1). An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
@@ -47,12 +60,13 @@ not run by path (`tests/`, `lean/`), gets an `__init__.py` in each directory fro
 left where a package held more and now holds only such files is deleted with the package. It appends [paths] to research's
 `moves.json` (once), each row whose path the tree has, and never rewrites the moves recorded there.
 
-It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
-with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
+It fails on a rewritten reference to a directory the map splits across destinations (`verity/ml/flock/` to
+`verity/protocols/flock/prover/` with its `verifier/` to `verity/protocols/flock/agreement/`): the rewrite follows the
+larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
 with the reason; one that no longer occurs is an error too. Where the file means another part, the row names it
-(`"old file: old directory" = { to = "verity/core/service/flock", why = "..." }`), and the file's references to the
-directory go there.
+(`"old file: old directory" = { to = "verity/protocols/flock/agreement", why = "..." }`), and the file's references to
+the directory go there.
 """
 from __future__ import annotations
 
@@ -76,17 +90,32 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 _ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
+#: the largest text file the rewrite reads, a Lean lock apart, which it reads whatever its size
 TEXT_LIMIT = 4 << 20
+LOCK = "lean-audit.json"
 #: old paths that the move empties, when the map has no [retired]; a tracked file left under one has no row in the map
 RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/direct/", "backends/ligero-verify/",
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
            "benchmarks/ir_call/")
+#: the exit when a tracked file under a retired path has no row: stderr then holds the fix in its first line and each
+#: file on a line of its own, indented by two spaces (`restack.py` reads both)
+NO_ROW = 3
+#: what a map's rows file is named by, beside the map: `NAME.rows.toml` for `NAME.toml`
+ROWS_SUFFIX = ".rows.toml"
 #: a dotted name ending in one of these is a file name (`verity_pouw.json`), not a module
 MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [paths], for reading a tool from an older tree
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: the Lake files that name other packages' directories, each from its own: a lakefile by a requirement's `path`, a
+#: manifest by a path package's `dir` (`lake_dirs` reads them, `lake_spans` finds them in the text)
+LAKE_FILES = ("lakefile.toml", "lake-manifest.json")
+_LAKE_PATH = re.compile(r'[ \t]*path[ \t]*=[ \t]*"(?P<p>[^"\\\n]+)"')
+_LAKE_PACKAGE = re.compile(r"\{[^{}]*\}")
+_LAKE_DIR = re.compile(r'"dir"\s*:\s*"(?P<p>[^"\\\n]+)"')
+#: a distribution's directory as `uv.lock` writes it: a package's `source` and a `requires-dist` or manifest entry
+_LOCK_SOURCE = re.compile(r'\b(editable|virtual|directory) = "([^"\n]+)"')
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
 _SH_DIRNAME = r'\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\)'
 _SH_REL = r"(?P<rel>(?:/[\w.\-]+)+)"
@@ -136,6 +165,41 @@ def is_shell(path: str, text: str) -> bool:
     return path.endswith(".sh") or re.match(r"#!\S*(?:/|\s)(?:ba|da|z)?sh\b", text) is not None
 
 
+def lake_dirs(name: str, text: str) -> list[str]:
+    """The directories of other packages that a Lake file named `name` holds, as written and in the file's order: a
+    lakefile's path requirements, a manifest's path packages. Empty for any other file and for an empty one. A Lake file
+    that doesn't parse raises `ValueError`: its paths can't be read, so nothing can say they still name their packages."""
+    if name not in LAKE_FILES or not text.strip():
+        return []
+    if name == "lakefile.toml":
+        held, key, kind = tomllib.loads(text).get("require", []), "path", None
+    else:
+        data = json.loads(text)
+        held, key, kind = data.get("packages", []) if isinstance(data, dict) else [], "dir", "path"
+    return [e[key] for e in (held if isinstance(held, list) else [])
+            if isinstance(e, dict) and isinstance(e.get(key), str) and (kind is None or e.get("type") == kind)]
+
+
+def lake_spans(name: str, text: str) -> list[tuple[int, int]]:
+    """Where `text` writes each of `lake_dirs`, in the forms Lake's files have: a `path` line of a `[[require]]` table, and
+    the `dir` of a flat object whose `type` is `path`. A requirement written another way is in `lake_dirs` alone, so the
+    rewrite leaves it and the check after the rewrite still reads it."""
+    spans = []
+    if name == "lakefile.toml":
+        table, at = "", 0
+        for line in text.splitlines(keepends=True):
+            if line.lstrip().startswith("["):
+                table = line.split("#")[0].strip()
+            elif table == "[[require]]" and (m := _LAKE_PATH.match(line)):
+                spans.append((at + m.start("p"), at + m.end("p")))
+            at += len(line)
+    elif name == "lake-manifest.json":
+        for package in _LAKE_PACKAGE.finditer(text):
+            if re.search(r'"type"\s*:\s*"path"', package.group(0)) and (m := _LAKE_DIR.search(package.group(0))):
+                spans.append((package.start() + m.start("p"), package.start() + m.end("p")))
+    return spans
+
+
 def sh_ref(ref: str) -> str:
     """`$0`, `${BASH_SOURCE[0]}` or `$SELF` as the name it reads."""
     return ref[1:].strip("{}")
@@ -166,6 +230,15 @@ def git(root: Path, *args: str, check: bool = True) -> str:
     if check and r.returncode:
         raise SystemExit(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout
+
+
+class NoRow(SystemExit):
+    """Tracked files under a path the map retires that no row moves (`files`, every one; the message a caller that lets
+    it through exits with names the first of them)."""
+
+    def __init__(self, files: list[str]):
+        super().__init__("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(files[:50]))
+        self.files = files
 
 
 # ---------------------------------------------------------------------------------------------------------------- the map
@@ -415,6 +488,24 @@ def alternation(words) -> str:
     return regex(trie)
 
 
+def oversize(src: Path) -> bool:
+    """Whether `src` is left unread for its size alone: more than `TEXT_LIMIT` bytes of text (no NUL in its first 8 KiB) that
+    is no Lean lock. A move never leaves such a file as it is without saying so: it stops and names it (`refuse_unread`)."""
+    if src.name == LOCK or src.stat().st_size <= TEXT_LIMIT:
+        return False
+    with open(src, "rb") as f:
+        return b"\0" not in f.read(8192)
+
+
+def refuse_unread(unread: dict[str, int]):
+    """Stop a move that would leave `unread` (path -> bytes, the text files `oversize` names) with every line as it was."""
+    if unread:
+        raise SystemExit(f"text files over {TEXT_LIMIT} bytes, which the move would leave unread, with every path and name in "
+                         "them as it was:\n" + "".join(f"  {p} ({n} bytes)\n" for p, n in sorted(unread.items()))
+                         + "exclude in the map one that names nothing the move changes, or raise TEXT_LIMIT in "
+                         "tools/move/layout.py")
+
+
 # ------------------------------------------------------------------------------------------------------------- the run
 
 class Run:
@@ -428,6 +519,7 @@ class Run:
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
         self.leftover: list[str] = []               # the `__init__.py` files left alone in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
+        self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
@@ -486,7 +578,7 @@ class Run:
                 continue
             moves.append((p, new))
         if left:
-            raise SystemExit("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(left[:50]))
+            raise NoRow(left)
         clash = Counter(n for _, n in moves)
         dup = [n for n, c in clash.items() if c > 1] + [n for _, n in moves if n in self.tracked_old and self.L.file(n) is None]
         if dup:
@@ -605,6 +697,8 @@ class Run:
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
                        for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
+        lake_before = {p: self._lake_packages(self.old_of.get(p, p), self._read(p) or "", self.tracked_old)
+                       for p in self.new_files if posixpath.basename(p) in LAKE_FILES}
         created = set(self.L.data.get("create", {}))
         for p in sorted(self.new_files - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
             if p == "pyproject.toml":
@@ -622,6 +716,18 @@ class Run:
         for p, before in lean_before.items():
             if self._lean_records(self.texts.get(p) or self._read(p)) != before:
                 raise SystemExit(f"{p}: the rewrite would change a guarantee or reads record")
+        lost = []
+        for p, before in sorted(lake_before.items()):
+            after = self._lake_packages(p, self._read(p) or "", self.new_files)
+            lost += [f"  {p}: {after[i][0]} (it named {was})\n" for i, (_, was) in enumerate(before)
+                     if was is not None and i < len(after) and after[i][1] is None]
+        if lost:
+            raise SystemExit("the move would leave a Lake package's path to another package naming no package, so neither "
+                             "it nor what requires it would build:\n" + "".join(lost)
+                             + "each is a file the map excludes from the rewrite ([rewrite] exclude: take it out), a package "
+                             "the map deletes ([drop]: take the requirement out first, in a change of its own), or a "
+                             "requirement written in a form `lake_spans` doesn't find (write it as a `path` line of a "
+                             "`[[require]]` table)")
         registered = {v for k, v in json.loads(self._read("fixtures/artifacts.json") or "{}").items()
                       if k.startswith("art:") and isinstance(v, str)}
         for p in sorted(registered & set(self.texts)):
@@ -671,11 +777,15 @@ class Run:
         return json.dumps([d.get("guarantees"), d.get("reads")], sort_keys=True)
 
     def _read(self, p: str) -> str | None:
+        """The text of `p` as it will be written, or None for a file that isn't text (a NUL in its first 8 KiB, or not UTF-8)
+        or is over `TEXT_LIMIT` and no Lean lock: one `oversize` names goes to `unread`, unless the map excludes it."""
         if p in self.texts:
             return self.texts[p]
         src = self.root / (p if not self.dry else self.old_of.get(p, p))
         try:
-            if src.stat().st_size > TEXT_LIMIT:
+            if (size := src.stat().st_size) > TEXT_LIMIT and src.name != LOCK:
+                if oversize(src) and not self.L.excluded(old := self.old_of.get(p, p), p):
+                    self.unread[old] = size
                 return None
             raw = src.read_bytes()
         except OSError:
@@ -699,7 +809,7 @@ class Run:
         if posixpath.basename(path) == ".gitignore":
             out = self._gitignore(path, out)
         else:
-            out = self._paths(path, old, out)
+            out = self._lake_paths(path, old, self._paths(path, old, out))
         if path.endswith(".py"):
             out = self._anchors(path, old, out)
             out = self._joins(path, old, out)
@@ -931,6 +1041,37 @@ class Run:
                 return new + token[len(stripped):]
             text = self._plain_re.sub(plain, text)
         return text
+
+    def _lake_paths(self, path: str, old: str, text: str) -> str:
+        """A Lake file's paths to other packages that `_paths` takes for no path: a requirement's `path` or a path
+        package's `dir` written as one word (`composition`: a package inside this one's directory), or with a `/` and no
+        leading `./` in a file that stays, where `_paths` reads only a moved file's."""
+        for a, b in reversed(lake_spans(posixpath.basename(path), text)):
+            token = text[a:b]
+            if token.startswith(".") or ("/" in token and path != old):
+                continue
+            new = self._map_relative(token, path, old)
+            if new is None or new == token:
+                continue
+            self._count(path, "relative paths")
+            self.note("relative paths rewritten", f"{path}: {token} -> {new}")
+            text = text[:a] + new + text[b:]
+        return text
+
+    def _lake_packages(self, path: str, text: str, files: set[str]) -> list[tuple[str, str | None]]:
+        """Each directory Lake file `path` names (`lake_dirs`), as written, with the package's directory among `files`, or
+        None where that holds no lakefile. A Lake file that doesn't parse stops the move: its paths can't be checked."""
+        try:
+            dirs = lake_dirs(posixpath.basename(path), text)
+        except ValueError as e:
+            raise SystemExit(f"{path}: not a Lake file the mover can read ({e}), so it can't say that the paths it holds "
+                             "to other packages still name them after the move: fix the file first, in a change of its "
+                             "own") from e
+        out = []
+        for d in dirs:
+            at = posixpath.normpath(posixpath.join(posixpath.dirname(path), d))
+            out.append((d, at if {f"{at}/lakefile.toml", f"{at}/lakefile.lean"} & files else None))
+        return out
 
     def _short_form(self, new: str) -> str:
         """A new path as a package-relative one when it lands under a new root, else root-relative."""
@@ -1631,12 +1772,29 @@ class Run:
             if old.endswith("/"):
                 return any(p.startswith(old) for p in self.tracked_old) or any(p.startswith(new) for p in self.new_files)
             return old in self.tracked_old or new in self.new_files
-        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands
-        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if here(o, n)}}
+        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands; a row
+        # of a branch's rows file is no row of the move: an entry that differed by branch would conflict where two land
+        own = self.L.data.get("rows", ())
+        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if o not in own and here(o, n)}}
         if entry not in doc["moves"]:
             doc["moves"].append(entry)
             self.texts[path] = json.dumps(doc, indent=2) + "\n"
             self._count(path, "layout moves recorded")
+
+    def lock(self):
+        """Name each moved distribution by its new directory in `uv.lock`. `uv lock` doesn't: where a map moves a
+        distribution and no member's name changes, it reads the locked one's metadata at the old directory and fails
+        (`Distribution not found at`), and so does `uv sync` on the moved tree."""
+        if (text := self._read("uv.lock")) is None:
+            return
+        def moved(m: re.Match) -> str:
+            if (new := self.L.file(f"{m.group(2)}/pyproject.toml")) is None:
+                return m.group(0)
+            self._count("uv.lock", "distribution directories")
+            return f'{m.group(1)} = "{posixpath.dirname(new)}"'
+        new = _LOCK_SOURCE.sub(moved, text)
+        if new != text:
+            self.texts["uv.lock"] = new
 
     # ---------------------------------------------------------------------------------------------- writing
 
@@ -1877,6 +2035,66 @@ def load(path: Path) -> Layout:
     return Layout(tomllib.loads(path.read_text()))
 
 
+def rows_path(map_path: Path) -> Path:
+    """The rows file of the map at `map_path`: beside it, `NAME.rows.toml` for `NAME.toml`."""
+    return map_path.with_name(map_path.name.removesuffix(".toml") + ROWS_SUFFIX)
+
+
+def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
+    """The map `data` with the rows of `rows_file`, a tracked file of the checkout at `root`, read after it: [paths] gains
+    each row the map lacks ([rows] names them), [modules] is what the paths now imply, and [drop] gains the rows file itself,
+    which is spent once read. It refuses a rows file that is not the checkout's own, that holds more than [paths], or a row
+    of which changes what the map alone says or moves nothing."""
+    tracked = {p for p in git(root, "ls-files", "-z").split("\0") if p}
+    here = rows_file.resolve()
+    rel = here.relative_to(root).as_posix() if here.is_relative_to(root) else None
+    if rel not in tracked:
+        raise SystemExit(f"{rows_file}: a rows file is its branch's own, committed beside the map in the checkout that moves")
+    try:
+        doc = tomllib.loads(rows_file.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise SystemExit(f"{rows_file}: {e}") from e
+    rows = doc.get("paths", {})
+    if set(doc) - {"paths"} or not isinstance(rows, dict):
+        raise SystemExit(f"{rows_file}: a rows file holds [paths] alone, not {sorted(set(doc) - {'paths'}) or 'a key named paths'}: "
+                         "what else a move needs is its map's")
+    lay = Layout(data)
+    named = [k.rstrip("/") for k in (*data["paths"], *data.get("tokens", {}), *lay.drop)]
+    bad = []
+    for old, new in rows.items():
+        o, is_dir = old.rstrip("/"), old.endswith("/")
+        if not isinstance(new, str) or not o or not new.strip("/") or is_dir != new.endswith("/"):
+            bad.append(f'{old!r} = {new!r}: a file to a file, or a directory to a directory, each ending in "/"')
+            continue
+        if data["paths"].get(old) == new:           # the map's own row, said again
+            continue
+        if not (any(p.startswith(old) for p in tracked) if is_dir else old in tracked):
+            bad.append(f"{old!r}: no tracked file is {'under' if is_dir else 'at'} it")
+            continue
+        if is_dir:                                  # where the map alone sends it ("": it deletes it), and what it names there
+            to = next((f"{n}{o[len(k):]}/" for k, n in lay.dirs if o == k or o.startswith(k + "/")), None)
+            under = sorted(k for k in named if k == o or k.startswith(o + "/"))
+        else:
+            to, under = "" if old in lay.drop else lay.file(old), []
+        if to == "":
+            bad.append(f"{old!r}: the map deletes it")
+        elif to is not None and to != new:
+            bad.append(f"{old!r} = {new!r}: the map sends it to {to!r}")
+        elif to is None and under:
+            bad.append(f"{old!r}: the map names {len(under)} path{'s' * (len(under) != 1)} at or under it ({under[0]}"
+                       f"{', ...' * (len(under) > 1)}), so it speaks for that directory: give each file a row of its own")
+    own = {o: n for o, n in rows.items() if data["paths"].get(o) != n}
+    merged = {**data, "paths": {**data["paths"], **own}, "rows": sorted(own),
+              "drop": {"paths": sorted(lay.drop | {rel})}}
+    if not bad:
+        modules = derived_modules(Layout(merged))
+        bad = [f"module {k}: the map renames it {v}, and these rows {modules.get(k) or 'not at all'}"
+               for k, v in sorted(data.get("modules", {}).items()) if modules.get(k) != v]
+    if bad:
+        raise SystemExit(f"{rows_file}: rows that change what the map says, or move nothing:\n  " + "\n  ".join(bad))
+    return {**merged, "modules": modules}
+
+
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
@@ -1926,8 +2144,17 @@ def main(argv: list[str] | None = None) -> int:
     if not a.dry_run and not a.no_lock and (why := unpinned_uv(root)):
         raise SystemExit(f"{why}: put the pinned uv first on the PATH, or pass --no-lock")
     base = git(root, "rev-parse", "HEAD").strip()
+    if (rows := rows_path(a.map)).is_file():
+        layout = Layout(with_rows(layout.data, rows, root))
     run = Run(root, layout, a.dry_run)
-    moves = run.plan()
+    try:
+        moves = run.plan()
+    except NoRow as e:
+        print(f"no row for {len(e.files)} tracked file{'s' * (len(e.files) != 1)} under a path the map retires: give each a "
+              f"row, in the map when main tracks the file, else in {rows} on the branch that adds it ([paths], \"old path\" = "
+              f"\"new path\", a directory ending in \"/\"; committed, it is read after the map), or delete the file\n  "
+              + "\n  ".join(e.files), file=sys.stderr)
+        return NO_ROW
     run.index(moves)
     for old, new in moves:
         if old.endswith(".py") and (mo := module_name(old, layout.old_roots)) and (mn := module_name(new, layout.new_roots)):
@@ -1936,6 +2163,7 @@ def main(argv: list[str] | None = None) -> int:
     run.move(moves)
     run.create()
     run.rewrite_all()
+    refuse_unread(run.unread)
     unacknowledged, stale = run.unacknowledged_splits()
     if a.report_splits:
         for x in unacknowledged:
@@ -1945,10 +2173,13 @@ def main(argv: list[str] | None = None) -> int:
                          + "".join(f"  {x}\n" for x in unacknowledged)
                          + "".join(f"  [split] acknowledges what no reference needs any more: {k}\n" for k in stale))
     run.record()
+    run.lock()
     run.write()
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
                           and mo != module_name(n, layout.new_roots))
     run.changes["modules renamed"] = renamed_modules
+    if "rows" in layout.data:
+        run.changes[f"rows read from {rows}"] = len(layout.data["rows"])
     if not a.dry_run:
         git(root, "add", "-A")
         if moves:
@@ -1974,6 +2205,10 @@ def main(argv: list[str] | None = None) -> int:
         a.report.write_text(json.dumps({"base": base, "changes": run.changes, "notes": run.notes,
                                         "files": {p: dict(c) for p, c in sorted(run.files_changed.items())},
                                         "moves": dict(moves)}, indent=1, sort_keys=True))
+    if "uv lock failed" in run.notes:
+        print("`uv lock` failed, so uv.lock doesn't match the moved tree and `uv sync` fails on it: fix what uv names "
+              "above and run the move again", file=sys.stderr)
+        return 1
     return 0
 
 
