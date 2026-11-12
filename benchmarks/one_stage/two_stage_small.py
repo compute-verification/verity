@@ -6,12 +6,13 @@ sampler inputs as a replay writes it (`engine.sampler_capture.write`): each toke
 the id `TokenSelect_v4{V}` selects from it, which is the id the class's egress row and its return's row commit.
 ``--units K`` makes the check the greedy select in K units, `GreedySelect_v1{V, N=V / K}`, which selects the same id.
 ``expect`` reads a ``two_stage.py second`` summary and says whether the run held, check by check: round 2 accepting
-the statements, the return's read at round 1's rows among them, and the stream's outcome accepted or refused by the
-two-stage form alone. ``--inline`` writes the class as a served vocabulary's is, its replay block the check's body
-inlined. `TokenSelect_v4`'s body is chunks and a combine a token, which round 2 derives no wires from and whose record
-commits no return: ``second --unlinked`` runs it, and ``expect --unlinked`` holds that run to round 2's refusal of the
-wires. `GreedySelect_v1`'s body is one unit of each of its K templates a token, each wired row one chunk's output row,
-which round 2 derives its wires and its return link from: its record commits the ids, and ``second`` runs it linked.
+the statements, the return's read at round 1's rows among them, the stream's outcome accepted or refused by the
+two-stage form alone, and the summary saying what the stage cost. ``--inline`` writes the class as a served
+vocabulary's is, its replay block the check's body inlined. `TokenSelect_v4`'s body is chunks and a combine a token,
+which round 2 derives no wires from and whose record commits no return: ``second --unlinked`` runs it, and ``expect
+--unlinked`` holds that run to round 2's refusal of the wires. `GreedySelect_v1`'s body is one unit of each of its K
+templates a token, each wired row one chunk's output row, which round 2 derives its wires and its return link from:
+its record commits the ids, and ``second`` runs it linked.
 The window's run is the serve nonce's (``--serve``, `SERVE` unless given): a challenger host opens a run's root once,
 ever, so a first stage on one takes a nonce no run has used.
 
@@ -86,7 +87,8 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     outcome are the run's. For a record of round 1 that commits the block's return (``code`` None): round 2 accepts
     the statements with no code, and the outcome is accepted, or refused by its interior record's statements check
     with the two-stage form's code alone (`FORM`). For an unlinked run (``code`` `UNWIRED`): round 2 refuses the
-    statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing."""
+    statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing, and
+    the summary says what the stage cost (`costed`)."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
     negatives = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (audit.get("negatives") or {}).values()]
@@ -100,7 +102,29 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
             "pins": bool(summary.get("pins")) and all(summary["pins"].values()),
             "lean_verdicts": bool(inner.get("verdicts")) and all(v is True for v in inner["verdicts"].values()),
             "negatives": bool(negatives) and all(negatives),
-            "round_two": r2_ok, "outcome": o_ok and o.get("replay_sample") == []}
+            "round_two": r2_ok, "outcome": o_ok and o.get("replay_sample") == [], "cost": costed(summary)}
+
+
+#: the field of a session's timing that holds the seconds its ``prove_seconds_source`` names
+PROVE_SECONDS = {"busy": "busy_s", "session": "session_s"}
+
+
+def costed(summary: Mapping[str, Any]) -> bool:
+    """Whether a ``two_stage.py second`` summary says what the second stage cost (`two_stage`'s module docstring):
+    every session the cards it held, its card where it held one, and the seconds its ``prove_seconds_source`` names;
+    the audit's staging its cards; and the interior's commitment its seconds, on no card."""
+    audit, commit = summary.get("audit") or {}, summary.get("interior_commit") or {}
+    timing, staging = audit.get("timing") or {}, audit.get("staging") or {}
+
+    def seconds(x: Any) -> bool:
+        return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+    def session(t: Mapping[str, Any]) -> bool:
+        return (t.get("gpus") in (0, 1) and (t.get("device") is None) == (t["gpus"] == 0)
+                and seconds(t.get(PROVE_SECONDS.get(t.get("prove_seconds_source"), ""))))
+
+    return (bool(timing) and all(session(t) for t in timing.values()) and staging.get("gpus") == 0
+            and seconds(commit.get("seconds")) and commit.get("gpus") == 0)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
