@@ -144,7 +144,7 @@ def test_a_share_of_the_plan_gets_long_prompts_joined_from_the_plans_own():
 
 
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
-    T.edge_site(tmp_path)
+    T.edge_site(tmp_path, T.S.ARMS["record"])
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))
     assert eps == ["[vllm.general_plugins]\nverity_serve_tax = servetax_plugin:register\n",
                    "[vllm.general_plugins]\nverity_tp_edge = tp_edge:register\n"]

@@ -1,4 +1,4 @@
-"""`verity bench rho`: the slowdown for every scenario, how it moves, and where it falls below a target.
+"""`run.py`: the slowdown for every scenario, how it moves, and where it falls below a target.
 
     uv run python verity/protocols/inference_only/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]

@@ -86,9 +86,9 @@ SETTINGS: dict[str, Setting] = _declare(
       "pod_setup.sh)", "placement: which slots a check may take"),
     S("CHECK_SLOT_MEM_GB", str, "", WHERE, "the GB the check slot gives the run it holds (slot.py sets it): circuit-check's "
       "budget and the suites' jobs", "it sizes how much runs at once, never what a step computes"),
-    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: drive's after-landing run's "
-      "and lock run's (`research.drive.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: the order drive's checks "
-      "take slots in"),
+    S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: the verified queue's checks "
+      "of a candidate and its records run's (`research.landing.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: "
+      "the order the verified queue's checks take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
     S("CHECK_VERDICT_URLS", str, None, WHERE, "a file of the newest recorded checks' verdict packs and their presigned URLs, "
@@ -104,8 +104,9 @@ SETTINGS: dict[str, Setting] = _declare(
       "placement: which pool an audit waits in"),
     # ---- what check hands its steps (`check.env`), and the suites' runner (suites.py)
     S("VERITY_STORE_REQUIRED", str, None, VALUE, "1: a store-backed test fails where the store is unreachable instead of "
-      "skipping; check sets it in a recorded run"),
-    S("VERITY_REGRESSION", str, None, VALUE, "1: adapters/vllm's reference regression runs; check sets it in a recorded run"),
+      "skipping; check sets it in a recorded run, as do the quick tier and suites.py inside a `research run`"),
+    S("VERITY_REGRESSION", str, None, VALUE, "1: adapters/vllm's reference regression runs; check sets it in a recorded "
+      "run, as do the quick tier and suites.py inside a `research run`"),
     S("VERITY_SKIP_STORE", str, None, DEBUG, "1: the store-backed tests skip, for a hand run without the store"),
     S("VERITY_TEST_CACHE", str, None, WHERE, "the suites' kept passes; unset, $XDG_CACHE_HOME/verity/tests",
       "a kept pass is reused only under its inputs' hash"),

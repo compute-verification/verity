@@ -69,7 +69,7 @@ of the tree's own (`qsort_perm`), and `object` inserts them into a tree alike at
 
 @[expose] public section
 
-open private Flock.hex4 from Flock.Canon
+open private Flock.hex4 from Base.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace FlockComplete.JsonRT.ReadBack

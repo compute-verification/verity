@@ -991,6 +991,19 @@ LANDER_ID = "bc-8ece7cde-78d8-5ed9-84b0-a0a81b19f628"
 REG = {"handles": [{"handle": "infra", "holder": "the infra coordinator (bc-17cc41f1-6227-5fab-bc64-3fa2f224558b)"},
                    {"handle": "circuits", "holder": "the circuits coordinator (bc-b8aaadaa-aefd-503e-9863-5eabb3a28c79)"},
                    {"handle": M.LANDER, "holder": f"the lander: the research coordinator ({LANDER_ID})"}]}
+#: ci.toml's jobs and their owners, as GitHub gives the file (`monitors._jobs`)
+CI_TOML = "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n\n' for j, o in (("pytest", "ci"), ("circuit-check", "circuits"),
+                                                                          ("lean-audit", "lean"), ("ratchet-gate", "vllm")))
+
+
+def ci_toml(argv, refs=None) -> subprocess.CompletedProcess | None:
+    """GitHub's answer to `monitors._jobs`' read of ci.toml at a commit (`CI_TOML`, or ``refs``'s answer for that ref: None for
+    a commit GitHub doesn't hold), None for another command."""
+    if argv[:2] != ["gh", "api"] or "/contents/tools/verity/check/ci.toml?ref=" not in argv[-1]:
+        return None
+    text = (refs or {}).get(ref := argv[-1].rpartition("?ref=")[2], CI_TOML)
+    return subprocess.CompletedProcess(argv, *((0, text, "") if text is not None else
+                                                (1, "", f"gh: No commit found for the ref {ref}")))
 
 
 def write_run(root: Path, rid: str, *, command, state="failed", rc=1, steps=(), logs=None, failure=None, by=""):
@@ -1102,6 +1115,48 @@ def test_the_reader_names_a_suites_runs_failed_suite_as_it_happens_from_its_stdo
     assert row["line"] == "FAILED tests/test_keeper.py::test_a - assert False" and row["state"] == "running"
 
 
+#: a ratchet-gate log failing two merges (`ratchet_gate.render`)
+RATCHET_LOG = ("ratchet gate 0123456789ab..cccccccccccc: 3 change(s), 2 failed\n"
+               "  #12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries\n      shrink p01.json\n"
+               "  #13 (bbbbbbbbbbbb): passed: grows nothing\n  #14 (cccccccccccc): failed: adds an env read\n")
+RATCHET_LINES = ["  #12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries", "  #14 (cccccccccccc): failed: adds an env read"]
+
+
+def test_the_reader_gives_a_failed_ratchet_gates_lines_though_another_step_failed_first(tmp_path, monkeypatch):
+    """Each merge a failed ratchet gate fails is a lane to ring (`failed_check`), and circuit-check, before the gate in ci.toml,
+    can fail first: the gate's lines come with the row whichever step failed first, at most `RATCHET_LINES` of them.  A gate
+    that passed gives none, and one that failed with no log, or none on disk, an empty list; its log is read to its first
+    8 MiB (`log_bytes`), as every log the reader opens."""
+    slot = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py"]
+    write_run(tmp_path, "r20261003-200000-aaaa", command=slot, state="failed", rc=1,
+              steps=[{"step": "circuit-check", "status": "failed", "rc": 1, "log": "circuit-check.log"},
+                     {"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}],
+              logs={"circuit-check.log": "FAIL lowering/pin-mismatch X_v1 [x]: and 1 -> 2\n", "ratchet-gate.log": RATCHET_LOG})
+    write_run(tmp_path, "r20261003-200000-bbbb", command=slot, state="failed", rc=1,
+              steps=[{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"},
+                     {"step": "ratchet-gate", "status": "passed", "log": "ratchet-gate.log"}],
+              logs={"pytest.log": "FAILED tests/test_a.py::test_b - x\n", "ratchet-gate.log": RATCHET_LOG})
+    write_run(tmp_path, "r20261003-200000-cccc", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed"}])
+    write_run(tmp_path, "r20261003-200000-dddd", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}])
+    write_run(tmp_path, "r20261003-200000-eeee", command=slot, state="failed", rc=1,
+              steps=[{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}],
+              logs={"ratchet-gate.log": "." * (8 << 20) + "\n" + RATCHET_LOG})
+
+    def rows():
+        script = M.failed_reader(T0, runs=str(tmp_path / "runs"), requests=str(tmp_path / "requests"), line=str(tmp_path / "none"))
+        return {r["run"][-4:]: r for r in json.loads(subprocess.run([sys.executable, "-"], input=script, capture_output=True,
+                                                                    text=True, check=True).stdout)["rows"]}
+
+    got = rows()
+    assert got["aaaa"]["step"] == "circuit-check" and got["aaaa"]["ratchet"] == RATCHET_LINES
+    assert "ratchet" not in got["bbbb"] and got["cccc"]["step"] == "ratchet-gate" and got["cccc"]["ratchet"] == []
+    assert got["dddd"]["ratchet"] == got["eeee"]["ratchet"] == []
+    monkeypatch.setattr(M, "RATCHET_LINES", 1)
+    assert rows()["aaaa"]["ratchet"] == RATCHET_LINES[:1]
+
+
 def test_a_trains_prs_are_its_merges_from_the_head_and_a_merge_of_main_between_them():
     assert M.train_prs(["Merge main (2546d8362)", "Merge #1497 (7a4b5b0a2)", "Merge #1541 (fbf9d25b2) onto 0928: x",
                         "Merge 0058fab8ec7f (0058fab8)", "Merge #1462 (c3a6dd31)"]) == [1497, 1541]
@@ -1130,6 +1185,8 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
+        if toml := ci_toml(argv):
+            return toml
         out = (255, "", "ssh: connect to host cpu1: Connection timed out") if argv[-2] == "vy-nebius-cpu-1" else \
             (0, rows[argv[-2]] if isinstance(rows[argv[-2]], str) else json.dumps({"rows": rows[argv[-2]], "waiting": []}), "") \
             if argv[0] == "ssh" else \
@@ -1141,6 +1198,7 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
     memo: dict = {}
     got = {f.key: f for f in M.failed_checks(M.Ctx(now=T0, memo=memo, run=answer))}
     assert set(got) == {"vy-nebius-1:r1", "vy-nebius-2:r4"}
+    assert sum(c[:2] == ["gh", "api"] for c in calls) == 1                 # r1's job's owner; r4 failed no step
     f = got["vy-nebius-1:r1"]
     assert f.owners == ("infra", M.LANDER) and f.thread == M.MERGE_THREAD
     assert f.text == ("*Check `r1` failed step `pytest` on vy-nebius-1* at 20:20Z (the run goes on): its log's first failing line "
@@ -1156,6 +1214,62 @@ def test_a_failed_check_rings_the_lane_of_each_open_pr_and_the_lander_in_the_mer
         rows[n] = "not json"
     with pytest.raises(RuntimeError, match="vy-nebius-cpu-1: RuntimeError"):
         M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer))
+
+
+def test_a_ratchet_gate_row_with_no_open_pr_at_its_commit_rings_the_lane_of_each_merge_it_fails_and_its_jobs_owner(monkeypatch):
+    """The after-landing run of `main`'s tip checks no open PR, so its failed step rang the lander alone.  It rings the owner
+    ci.toml gives the failed job too (the ratchet gate's is vllm), read at `main` where GitHub doesn't hold the run's commit,
+    and of a failed ratchet gate, the lane of each merge its log says the gate fails, landed or not, though another step
+    failed first; first who acts, the lanes, then the jobs' owners, then the lander."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-2", "vy-n2"),))
+    tip = {"state": "failed", "rc": 1, "step_ended": "2026-10-03T20:20:00Z", "subjects": ["Queue: #14 y", "Queue: #12 x"],
+           "sha": "abc123def456", "by": LANDER_ID}
+    rows = [{**tip, "run": "r1", "step": "ratchet-gate", "line": RATCHET_LINES[0].strip(), "ratchet": RATCHET_LINES},
+            {**tip, "run": "r2", "step": "circuit-check", "line": "FAIL lowering/pin-mismatch X_v1", "ratchet": RATCHET_LINES[1:]},
+            {**tip, "run": "r3", "step": "lean-audit", "line": "error: x"},
+            {**tip, "run": "r4", "step": "suite verity-ops", "suite": True, "line": "FAILED x"}]
+    prs = {"12": ("MERGED", "cursor/x-558b"), "14": ("MERGED", "cursor/y-8c79")}
+    refs: dict = {"abc123def456": None}
+
+    def answer(argv, input=None, **kw):
+        if toml := ci_toml(argv, refs):
+            return toml
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": rows, "waiting": []}), "")
+        if argv[:5] == ["gh", "-R", M.REPO_SLUG, "pr", "view"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps(dict(zip(("state", "headRefName"), prs[argv[5]]))), "")
+        assert argv[:5] == ["gh", "-R", M.REPO_SLUG, "pr", "list"] and "abc123def456" in argv
+        return subprocess.CompletedProcess(argv, 0, "[]", "")
+
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", "vllm", M.LANDER)
+    assert got["r1"].text == ("*Check `r1` failed step `ratchet-gate` on vy-nebius-2* at 20:20Z: its log's first failing line is "
+                              "`#12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries`. `ratchet-gate` fails #12 "
+                              "`cursor/x-558b`, #14 `cursor/y-8c79`.")
+    assert got["r2"].owners == ("circuits", "vllm", M.LANDER)
+    assert got["r2"].text.endswith(" `ratchet-gate` fails #14 `cursor/y-8c79`.")
+    assert got["r3"].owners == ("lean", M.LANDER) and got["r4"].owners == (M.LANDER,)
+    refs["main"] = None                   # nor main's: the lanes and the lander still hear of it, and the post says why
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith(
+        "`cursor/y-8c79`. Its jobs' owners are unread (RuntimeError: `gh api -H Accept: application/vnd.github.raw` exited 1: "
+        "gh: No commit found for the ref main).")
+    refs["abc123def456"] = CI_TOML.replace('"vllm"', '"ratchets"')     # the run's commit's own, where GitHub holds it
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", "ratchets", M.LANDER)
+    refs["abc123def456"] = ""                                           # one declaring no job
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", "circuits", M.LANDER) and got["r1"].text.endswith("#14 `cursor/y-8c79`.")
+    prs["14"] = ("MERGED", "cursor/z-0000")                             # a branch no lane in the registry holds
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("infra", M.LANDER) and got["r1"].text.endswith(
+        "#12 `cursor/x-558b`, #14 `cursor/z-0000` (no lane in the registry).")
+    refs.clear()
+    prs.clear()                           # GitHub can't say whose the merges are: the job's owner and the lander hear of it
+    got = {f.key[len("vy-nebius-2:"):]: f for f in M.failed_checks(M.Ctx(now=T0, memo={}, run=answer))}
+    assert got["r1"].owners == ("vllm", M.LANDER) and got["r1"].text.endswith(
+        "`#12 (aaaaaaaaaaaa): failed: grows p01.json 2 -> 3 entries`. Its PRs are unread (KeyError: '12').")
 
 
 # ---- what node 2 runs ---------------------------------------------------------------------------------------------------------
@@ -1428,6 +1542,8 @@ def test_an_after_landing_run_of_main_runs_on_though_a_ticket_waits_for_its_slot
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
+        if toml := ci_toml(argv):
+            return toml
         if argv[0] == "ssh":
             return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
         if argv[:2] == ["gh", "-R"]:
@@ -1450,6 +1566,8 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
 
     def answer(argv, input=None, **kw):
         calls.append(argv)
+        if toml := ci_toml(argv):
+            return toml
         if argv[0] == "ssh":
             return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row] if argv[-2] == "n1" else [],
                                                                     "waiting": waiting if argv[-2] == "n1" else []}), "")
@@ -1467,7 +1585,7 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     got = M.failed_checks(M.Ctx(now=T0 + 120, memo=memo, run=answer, act=True))
     assert [g.key for g in got] == ["vy-nebius-1:r1", "vy-nebius-1:r1:cancelled"] and got[0].text == f.text
     assert got[1].text == ("*Check `r1` on vy-nebius-1*: Cancelled at 20:42Z, since r20261003-203000-5415 waited for a check slot "
-                           "on vy-nebius-1.") and got[1].owners == ("infra", M.LANDER)
+                           "on vy-nebius-1.") and got[1].owners == ("infra", "lean", M.LANDER)
     assert [c for c in calls if "cancel" in c][0][-1].startswith("failed-checks: step lean-audit failed while 1 waited")
     n = len(calls)
     assert len(M.failed_checks(M.Ctx(now=T0 + 180, memo=memo, run=answer, act=True))) == 2 and not any("cancel" in c for c in calls[n:])
@@ -1478,50 +1596,80 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
 
 
-def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path, monkeypatch):
-    """Main must not go days with no passing post-landing check and nobody outside ci hearing. The relay reads
-    drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
-    oldest landing after it: main's first-parent commits (drive's merges), not GitHub's compare, which lists each PR's own
-    commits, dated when their branch made them."""
-    state = tmp_path / M.DRIVE_STATE
-    state.parent.mkdir(parents=True)
-    verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
-    state.write_text(json.dumps({"drive": {"postland": {"verified": verified}}}))
-    monkeypatch.setenv("RESEARCH_DEPLOY_REPO", str(tmp_path / "repo"))
-    since = T0 - 3 * 3600 - 60                                              # drive's first landing past it, 3 h 1 min ago
-
-    def git(*landings):
-        log = "".join(f"{i:040x} {int(t)}\n" for i, t in enumerate(landings))
-        return Run((has("fetch"), (0, "", "")), (lambda a, _i: f"{verified}..FETCH_HEAD" in a and "--first-parent" in a,
-                                                  (0, log, "")))
-
-    run = git(T0 - 60, T0 - 1800, since)                                    # git log lists the newest first
-    log = tmp_path / M.DRIVE_LOG
-    log.parent.mkdir(parents=True)
-    log.write_text(f"{M.iso(T0 - 31 * 60)} tick rc=0 1\n{M.iso(T0 - 31 * 60)} other line\n")      # drive's last tick: 31 min ago
-    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
-    assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
-    assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "3 landing(s)" in f.text
-    assert ["git", "-C", str(tmp_path / "repo"), "fetch", "-q", "origin", "main"] in [c for c, _ in run.calls]
-    assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=git())) == [], "main is its last verified commit"
-    with open(log, "a") as fh:
-        fh.write(f"{M.iso(T0 - 120)} tick rc=1 1\n")
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "drive ticks: its own _behind alarm rings"
-    log.unlink()
-
-    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
-    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
-        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path, run=git(T0 - 60, since)), now,
-               M.AlertDir(alerts), by="test", force=True)
-    lines = (alerts / "monitors.jsonl").read_text().splitlines()
-    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
-        ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]
+def test_unverified_main_rings_ci_and_top_each_hour_past_three_the_verified_queue_decides_nothing(tmp_path):
+    """`main` moves only through the verified queue, so a loop stopped or stuck must not go hours with nobody outside ci
+    hearing: the relay times the queue's silence from its decisions file's last `at`, rings ci and top past 3 h and again each
+    further hour, and a file it can't read is the monitor's own error, not a quiet pass."""
     decisions = tmp_path / M.VQUEUE_DECISIONS
     decisions.parent.mkdir(parents=True)
     decisions.write_text(json.dumps({"action": "ring", "at": M.iso(T0 - 600)}) + "\n")
-    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], (
-        "the verified queue decides (ci, 9 Nov): drive's stale verified commit no longer rings")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path)) == [], "the queue decided 10 min ago"
     decisions.write_text(json.dumps({"action": "advance", "at": M.iso(T0 - 4 * 3600 - 60)}) + "\n")
-    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path))
     assert f.key == "vqueue:4" and f.owners == ("ci", "top") and "decided nothing for 4 h" in f.text
+
+    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
+    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path), now, M.AlertDir(alerts), by="test",
+               force=True)
+    lines = (alerts / "monitors.jsonl").read_text().splitlines()
+    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
+        ("event", "unverified-main|vqueue:5", ["ci", "top"])]
+    decisions.unlink()
+    with pytest.raises(FileNotFoundError):
+        M.unverified_main(M.Ctx(now=T0, root=tmp_path))
+
+
+def test_the_nightly_check_rings_infra_once_main_has_had_no_outcome_for_36_hours(tmp_path):
+    """A nightly check that stops starting, or never ends, says nothing by itself. The relay reads the loop's state on the
+    control pod: quiet while its newest outcome (an error is one: the loop posts those itself) is under 36 h old, one incident
+    past that, cleared by the next outcome; a loop that has had none yet is timed from its first pass, and a pod where it
+    never ran is found too."""
+    def ctx(now):
+        return M.Ctx(now=now, root=tmp_path)
+
+    (f,) = M.nightly_check(ctx(T0))
+    assert f.key == "absent" and f"/{M.NIGHTLY_STATE}" in f.text and "isn't running" in f.text
+    state = tmp_path / M.NIGHTLY_STATE
+    state.parent.mkdir(parents=True)
+
+    def write(**doc):
+        state.write_text(json.dumps({"since": M.iso(T0 - 90 * 86400), **doc}))
+
+    hour, limit = 3600, M.NIGHTLY_SILENT_S
+    assert limit == 36 * hour
+    last = {"day": "2026-10-02", "commit": "595cce6ddaf69e4411d8b11df4e91878c5826e27", "run": "r20261002-090007-1a2b",
+            "outcome": "passed", "at": M.iso(T0)}
+    write(last=last, night={"day": "2026-10-02", "phase": "done"})
+    assert M.nightly_check(ctx(T0 + limit - 1)) == [], "an outcome under 36 h old: quiet"
+    (f,) = M.nightly_check(ctx(T0 + limit))
+    assert f.key == "silent" and "no outcome for 36 h" in f.text and "`passed`" in f.text and M.iso(T0) in f.text
+    assert "`595cce6ddaf6`" in f.text and "`r20261002-090007-1a2b`" in f.text and "in progress" not in f.text
+    assert M.nightly_check(ctx(T0 + limit + 7 * hour))[0].key == "silent", "one incident however long it lasts"
+    assert "43 h" in M.nightly_check(ctx(T0 + limit + 7 * hour))[0].text
+
+    write(last=last, night={"day": "2026-10-03", "phase": "running", "run": "r20261003-090011-9f00"})
+    (f,) = M.nightly_check(ctx(T0 + limit))
+    assert "of 2026-10-03, is `running` (run `r20261003-090011-9f00`)" in f.text, "the night that hasn't ended is named"
+    write(last={**last, "outcome": "error", "run": None, "at": M.iso(T0 + limit)})
+    assert M.nightly_check(ctx(T0 + limit + hour)) == [], "an error is an outcome: the loop rang infra for it"
+
+    state.write_text(json.dumps({"since": M.iso(T0)}))
+    assert M.nightly_check(ctx(T0 + limit - 1)) == [], "no outcome yet, and the loop's first pass was under 36 h ago"
+    (f,) = M.nightly_check(ctx(T0 + limit))
+    assert f.key == "silent" and f"has run since {M.iso(T0)} and none has ended" in f.text
+    state.write_text("{}")
+    with pytest.raises(RuntimeError, match="neither a last outcome nor when its loop first ran"):
+        M.nightly_check(ctx(T0))
+
+    m = M.BY_ID["nightly-check"]
+    assert (m.owner, m.where, m.severity) == ("infra", "relay", "warn") and m.for_s == 1800 and not m.events
+    write(last=last)
+    alerts, st = tmp_path / "alerts", M.new_state()
+    for now in (T0 + limit, T0 + limit + 600, T0 + limit + 1800, T0 + limit + 2400):     # found, and still found 30 min on
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path), now, M.AlertDir(alerts), by="test")
+    write(last={**last, "at": M.iso(T0 + limit + 2700)})
+    M.step(st, [m], lambda memo: M.Ctx(now=T0 + limit + 3000, memo=memo, root=tmp_path), T0 + limit + 3000, M.AlertDir(alerts),
+           by="test")
+    assert [(e["event"], e["key"], e["owners"]) for e in events(alerts)] == [
+        ("open", "nightly-check|silent", ["infra"]), ("clear", "nightly-check|silent", ["infra"])]

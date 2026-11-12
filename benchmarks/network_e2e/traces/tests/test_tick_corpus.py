@@ -163,6 +163,24 @@ def test_the_tick_loads_the_gate_after_the_tracer(tmp_path, mod):
         "verity_tick = verity_vllm.pipeline.tick_plugin:register"]
 
 
+def test_a_cut_trace_serves_honest_s_load_with_the_cut_before_the_tracer(tmp_path, mod):
+    """`CUT`'s traces are honest's server at heavy's rate; a run with one loads `cut_plugin.register` between the
+    adversary and the tracer, and each trace's ``VERITY_CUT`` is one the plugin takes."""
+    from verity_vllm.pipeline import cut_plugin
+    corpus = mod("corpus")
+    site = corpus.plugin_site(tmp_path / "c", tick=True, cut=True)
+    assert (site / "verity_trace_corpus-0.0.dist-info" / "entry_points.txt").read_text().splitlines()[1:] == [
+        "verity_adversary = vllm_adversarial_plugin:register", "verity_cut = verity_vllm.pipeline.cut_plugin:register",
+        "verity_trace = vllm_trace_plugin:register", "verity_tick = verity_vllm.pipeline.tick_plugin:register"]
+    model = corpus.MODELS["llama32_1b"]
+    for name, cut in corpus.CUT.items():
+        assert corpus.TRACES[name][0] == corpus.TRACES["honest"][0] and name not in corpus.ORDER
+        assert corpus.rate_of(model, name, None) == model.rates["heavy"]
+        assert cut_plugin.cut_config({cut_plugin.CUT_ENV: json.dumps({**cut, "log": "/x", "feed": "/f"})})["feed"] == "/f"
+    module, name = corpus.CUT_MIDDLEWARE.rsplit(".", 1)
+    assert module == cut_plugin.__name__ and getattr(cut_plugin, name) is cut_plugin.SentFeed
+
+
 def test_hook_records_the_schedulers_kv_pool(tmp_path, monkeypatch, mod):
     plugin = mod("vllm_trace_plugin")
     monkeypatch.setenv(plugin.TRACE_DIR, str(tmp_path / "raw"))

@@ -132,9 +132,9 @@ def sampling_params(sampling: Mapping[str, Any], logprobs: int | None = None) ->
                           detokenize=False, output_kind=RequestOutputKind.DELTA)
 
 
-def edge_site(site: Path) -> Path:
-    """`serve_tax.plugin_site`'s directory with `tp_edge.register` declared beside `servetax_plugin.register`."""
-    S.plugin_site(site, tick=False)
+def edge_site(site: Path, arm: S.Arm) -> Path:
+    """`serve_tax.plugin_site`'s directory for ``arm`` with `tp_edge.register` declared beside the arm's plugins."""
+    S.plugin_site(site, arm)
     d = site / "verity_tp_edge-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-tp-edge\nVersion: 0.0\n")
@@ -242,7 +242,7 @@ def serve(a: argparse.Namespace) -> int:
     plan_file = out / "plan.jsonl"
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
-    site = edge_site(scratch / ".site")
+    site = edge_site(scratch / ".site", arm)
     port = S.corpus().free_port()
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"

@@ -226,13 +226,13 @@ def hdrT (s : String) : Impl String (fun _ => Json) :=
   | .obj ⟨⟨t⟩⟩ => t
   | _ => .leaf
 
-theorem hdr_obj (s : String) : hdrJ s = .obj ⟨⟨hdrT s⟩⟩ := by kernel_rfl
+theorem hdr_obj (s : String) : hdrJ s = .obj ⟨⟨hdrT s⟩⟩ := by kernel_rfl'
 theorem hdr_model (s : String) : (hdrT s).toListModel =
     [⟨"circuit_sha512", .str s⟩, ⟨"format", .str "flock-circuit-inputs"⟩, ⟨"frame_v3", fv3J⟩, ⟨"instances", jn 1⟩,
-     ⟨"rows", .bool false⟩, ⟨"statement", .str "verity/flock-circuit"⟩, ⟨"units", unitsJ⟩] := by kernel_rfl
-theorem hdr_asc (s : String) : ascending (hdrT s) = true := by kernel_rfl
-theorem fj_norm (s : String) : FlockSoundness.Discharge.Recursion.FirewallJson.norm (hdrJ s) = hdrJ s := by kernel_rfl
-theorem RN' (s : String) : Flock.norm (hdrJ s) = hdrJ s := by kernel_rfl
+     ⟨"rows", .bool false⟩, ⟨"statement", .str "verity/flock-circuit"⟩, ⟨"units", unitsJ⟩] := by kernel_rfl'
+theorem hdr_asc (s : String) : ascending (hdrT s) = true := by kernel_rfl'
+theorem fj_norm (s : String) : FlockSoundness.Discharge.Recursion.FirewallJson.norm (hdrJ s) = hdrJ s := by kernel_rfl'
+theorem RN' (s : String) : Flock.norm (hdrJ s) = hdrJ s := by kernel_rfl'
 
 /-! ### The hash's hex string -/
 
@@ -369,10 +369,10 @@ def objT (j : Json) : Impl String (fun _ => Json) :=
   | _ => .leaf
 
 theorem obj2_obj (a b : String) : Json.mkObj [("out", .str a), ("x", .str b)] =
-    .obj ⟨⟨objT (Json.mkObj [("out", .str a), ("x", .str b)])⟩⟩ := by kernel_rfl
+    .obj ⟨⟨objT (Json.mkObj [("out", .str a), ("x", .str b)])⟩⟩ := by kernel_rfl'
 theorem obj2_model (a b : String) : (objT (Json.mkObj [("out", .str a), ("x", .str b)])).toListModel =
-    [⟨"out", .str a⟩, ⟨"x", .str b⟩] := by kernel_rfl
-theorem obj2_asc (a b : String) : ascending (objT (Json.mkObj [("out", .str a), ("x", .str b)])) = true := by kernel_rfl
+    [⟨"out", .str a⟩, ⟨"x", .str b⟩] := by kernel_rfl'
+theorem obj2_asc (a b : String) : ascending (objT (Json.mkObj [("out", .str a), ("x", .str b)])) = true := by kernel_rfl'
 
 theorem obj2_plain {a b : String} (ha : plainStr a = true) (hb : plainStr b = true) :
     plain (Json.mkObj [("out", .str a), ("x", .str b)]) = true := by
@@ -381,9 +381,9 @@ theorem obj2_plain {a b : String} (ha : plainStr a = true) (hb : plainStr b = tr
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
   exact ⟨⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], ha⟩, ⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], hb⟩⟩
 
-theorem obj1_obj (a : String) : Json.mkObj [("x", .str a)] = .obj ⟨⟨objT (Json.mkObj [("x", .str a)])⟩⟩ := by kernel_rfl
-theorem obj1_model (a : String) : (objT (Json.mkObj [("x", .str a)])).toListModel = [⟨"x", .str a⟩] := by kernel_rfl
-theorem obj1_asc (a : String) : ascending (objT (Json.mkObj [("x", .str a)])) = true := by kernel_rfl
+theorem obj1_obj (a : String) : Json.mkObj [("x", .str a)] = .obj ⟨⟨objT (Json.mkObj [("x", .str a)])⟩⟩ := by kernel_rfl'
+theorem obj1_model (a : String) : (objT (Json.mkObj [("x", .str a)])).toListModel = [⟨"x", .str a⟩] := by kernel_rfl'
+theorem obj1_asc (a : String) : ascending (objT (Json.mkObj [("x", .str a)])) = true := by kernel_rfl'
 
 theorem obj1_plain {a : String} (ha : plainStr a = true) : plain (Json.mkObj [("x", .str a)]) = true := by
   rw [obj1_obj]
@@ -391,10 +391,10 @@ theorem obj1_plain {a : String} (ha : plainStr a = true) : plain (Json.mkObj [("
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq]
   exact ⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], ha⟩
 
-theorem units_obj : unitsJ = .obj ⟨⟨objT unitsJ⟩⟩ := by kernel_rfl
+theorem units_obj : unitsJ = .obj ⟨⟨objT unitsJ⟩⟩ := by kernel_rfl'
 theorem units_model : (objT unitsJ).toListModel = [⟨"blocks", .arr #[.arr #[jn 0]]⟩, ⟨"indices", .arr #[jn 0]⟩,
-    ⟨"units_per_vu", jn 1⟩, ⟨"vus_per_block", jn 1⟩] := by kernel_rfl
-theorem units_asc : ascending (objT unitsJ) = true := by kernel_rfl
+    ⟨"units_per_vu", jn 1⟩, ⟨"vus_per_block", jn 1⟩] := by kernel_rfl'
+theorem units_asc : ascending (objT unitsJ) = true := by kernel_rfl'
 
 theorem units_plain : plain unitsJ = true := by
   rw [units_obj]
@@ -402,12 +402,12 @@ theorem units_plain : plain unitsJ = true := by
   simp only [List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
   refine ⟨⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], by simp [plain, plainList, plainStr, String.all_bool_eq, jn]⟩, ⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], by simp [plain, plainList, plainStr, String.all_bool_eq, jn]⟩, ⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], by simp [plain, plainList, plainStr, String.all_bool_eq, jn]⟩, ⟨by simp [plain, plainList, plainStr, String.all_bool_eq, jn], by simp [plain, plainList, plainStr, String.all_bool_eq, jn]⟩⟩
 
-theorem fv3_obj : fv3J = .obj ⟨⟨objT fv3J⟩⟩ := by kernel_rfl
+theorem fv3_obj : fv3J = .obj ⟨⟨objT fv3J⟩⟩ := by kernel_rfl'
 theorem fv3_model : (objT fv3J).toListModel =
     [⟨"domain_ids", Json.mkObj [("out", .str "01"), ("x", .str "00")]⟩, ⟨"frame", .str "frame-v3-sha512"⟩,
      ⟨"roots", Json.mkObj [("out", .str (hexOf rootO)), ("x", .str (hexOf rootX))]⟩, ⟨"row_key_sha512", .str keyHex⟩,
-     ⟨"schemas", Json.mkObj [("x", .str "hm96-sha512/row/v1")]⟩] := by kernel_rfl
-theorem fv3_asc : ascending (objT fv3J) = true := by kernel_rfl
+     ⟨"schemas", Json.mkObj [("x", .str "hm96-sha512/row/v1")]⟩] := by kernel_rfl'
+theorem fv3_asc : ascending (objT fv3J) = true := by kernel_rfl'
 
 theorem fv3_plain : plain fv3J = true := by
   rw [fv3_obj]
@@ -571,6 +571,6 @@ theorem checkPublic_cW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse
   rw [HmRow.checkPublic_eqP, keyHex_eq, tl_eq, zr_eq]
   unfold pubV
   simp only [bodyB, bc_eq, hdrJ, restL, fv3_eq]
-  kernel_rfl
+  kernel_rfl'
 
 end FlockDeploy.Concrete

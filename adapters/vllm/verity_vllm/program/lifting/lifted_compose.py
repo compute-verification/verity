@@ -41,8 +41,8 @@ def lifted_workload(requests: Sequence[Any], eos: Sequence[int], *, lag: int, bo
     the lifted components of the declared requests (`WorkloadRequest`s from the manifest: id, index, prompt_len, cap, arrive_step).  The
     population is `Σ_r cap_r` sampling events fixed by the manifest; one shared lifted weights Input; the address map and the chronology are
     GP-01's own functions applied to the lifted Program (per request: the unlifted rows + that request's guard rows).  Every request
-    carries its own guard on its own tokens and NOTHING crosses between requests (the compose has no cross-request edge; the S-migration
-    count is a root-level value of the committed tokens, `live_count_hook`).  Nothing about a stop enters: the same object for every transcript."""
+    carries its own guard on its own tokens and NOTHING crosses between requests (the compose has no cross-request edge).  Nothing about a
+    stop enters: the same object for every transcript."""
     from verity_vllm.program import workload as W
     check_lag(lag)
     reqs = []

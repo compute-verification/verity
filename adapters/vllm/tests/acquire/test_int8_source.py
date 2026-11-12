@@ -121,7 +121,7 @@ def test_the_quantizers_results_are_committed_under_the_manifests_names_as_the_o
 
 class _Read(nn.Module):
     """A batch's int8 attention as the served layer runs it: through the paged caches (`paged_attention`), or over the windows
-    a credited read put in a step's K and V rows (`window_attention`, `engine.int8_window`)."""
+    a credited read put in a step's K and V rows (`window_attention`)."""
 
     def __init__(self, credited: bool) -> None:
         super().__init__()

@@ -1,14 +1,12 @@
-"""Batch invariance of the request-major compiler: the templates a registration's compilations call, for `circuit-check
---batch`, and the rule `steps.compile_steps` holds every compilation to (`check_compiled`).
+"""Batch invariance of the request-major compiler: the templates a registration's compilations call, for
+`check.batch.check`, and the rule `steps.compile_steps` holds every compilation to (`check_compiled`).
 
 A request's outputs may depend on its own certified inputs (its prompt, its seed) and on what the registration fixes (weights,
-tables, constants), never on its batch-mates. The batch reaches a Program two ways an owner-labelled check alone wouldn't see:
-
-- a request-owned Input whose value the batch picks: the seeded top-p sampler's split count in its derived form, S =
-  SplitsFor_v1(live rows, num_SMs) ("splits": "derived"), which changes the top-p keep set at top_p < 1.  Serving pins S to the
-  registered split count instead (`topp_geometry.registered_splits`, `engine.topp_pin`), a constant of the registration;
-- a launch static: a kind bound from the launch's shape (RMSNorm's BLOCK from its rows off batch invariance, FA3's tile from
-  max_seqlen_q, FA2's guard `MASKED_FROM` from the launch's causal flag on cc 12.0).
+tables, constants), never on its batch-mates. Beyond a request-owned Input whose value the batch picks, which the labels below
+catch, the batch reaches a Program through a launch static: a kind bound from the launch's shape (RMSNorm's BLOCK from its rows off
+batch invariance, FA3's tile from max_seqlen_q, FA2's guard `MASKED_FROM` from the launch's causal flag on cc 12.0, the top-p
+sampler's split count S had it followed vLLM's own pick from the live rows). Serving pins S to the registered split count
+(`topp_geometry.registered_splits`, `engine.topp_pin`), and `domain.check_splits` refuses any other before a Program is built.
 
 So Inputs are labelled by provenance (`OWN_GROUPS` own, the registration's shared, any other request-local group `BATCH`), and a
 role's launch statics are held to (b) across the launch shapes the registration allows (`templates`). In class G (`steps.CLASS_G`,
@@ -17,13 +15,13 @@ request's Program is built at its launch context, which the advice fixes, and th
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 
-- R3: a derived split count. The served engine runs every top-p launch at the registered split count, so the compiler emits the
-  constant form ("splits": registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)) at any top_p.
-- R2: a request whose unit (LP, T, policy, seed, id, C, prefill chunks, carried out, edge), rows or discarded rows differ when its advice is compiled
+- R2: a request whose unit (LP, T, policy, seed, id, C, recomputed, prefill chunks, carried out, edge), rows or discarded rows differ when its advice is compiled
   alone (its rows renumbered; release buckets, which no plan reads, 0): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
   request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
-  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused. In class G a
+  Alone, a stand-in computes it from the request's own tokens; a hit the request's Program recomputes (`steps.plan_steps`'
+  ``recompute_hits``) in class G, in the chunks the producers' rows ran it in, which are its launch context. Any other hit on
+  another request's KV is refused. In class G a
   unit also holds its launch context, the advice's schedule of the steps its rows ran in, never a batch-mate's value: R2 is then
   the request compiled alone at the same launch context, so the unit is compared apart from its launch (alone each row is a launch
   of its own), with its prefill chunks, its rows (each chunk one) and its discarded rows. A request a Commit window carries in
@@ -98,7 +96,7 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
     too where R2 checked it (``checked``: a hit whose tokens are checked equal); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
     `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
-    other request-local group (`splits`, an unchecked history, or one unknown here) `BATCH`. Its return: each
+    other request-local group (an unchecked history, or one unknown here) `BATCH`. Its return: each
     request's outputs held by its index, then the edge it leaves field by field."""
     from verity_vllm.program.workload import edge_ports
     edge = wl.edge.static() if getattr(wl, "edge", None) is not None else {"in": [], "out": []}
@@ -141,7 +139,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
               composition: tuple[tuple[int, int], ...] = ((4, 2), (3, 1))) -> list[Template]:
     """Every template a request-major compilation of ``phi`` calls, each with its labels, the launch shapes the registration
     allows (launches of up to ``max_tokens`` rows, ``max_seqs`` sampled rows, ``max_model_len`` positions) and its declared
-    verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy, at the registered split count, and under a derived one."""
+    verdicts; then GP-01 over ``composition``'s (LP, T) requests, greedy and at the registered split count."""
     tp, C = phi.target_profile(), model_shape(phi.model["hf_config"])
     if not tp.batch_invariant:
         raise Unexpressible(f"{phi.execution!r}: templates hold a batch-invariant registration's launch statics; without batch "
@@ -183,26 +181,16 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     out.append(Template(f"token select (greedy) {fn.id}", fn, (own("r"),), own("r"), bind_at=lambda _req, n: fn,
                         shapes=tuple(((), n) for n in range(1, max_seqs + 1))))
     # (logits, top_p, seed, pos, temperature, S)
-    fn = kind("token_select_stochastic", V=V, CONSTRUCTION=tp.effective_sampler_construction())
-    out.append(Template(f"token select (top-p, derived S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, BATCH), own("r"),
-                        expect=(False, None), why="its S operand is SplitsFor_v1(live rows): the batch picks the nucleus at top_p < 1"))
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for_v1
-    at = lambda n: kind("token_select_stochastic_split", V=V, S=splits_for_v1(n, tp.num_sms))  # noqa: E731
+    from verity.definitions.registry.topp_geometry import registered_splits
     S_reg = registered_splits(tp.num_sms)
     fn = kind("token_select_stochastic_split", V=V, S=S_reg)
-    sampled = tuple(((), n) for n in range(1, max_seqs + 1))
-    out.append(Template(f"token select (top-p, S = SplitsFor_v1(live rows)) {fn.id.split('{')[0]}", at(1),
-                        (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED), own("r"), bind_at=lambda _req, n: at(n), shapes=sampled,
-                        expect=(True, False), why="binding S per step makes it a launch static: five Definitions over 1-64 sampled rows"))
     out.append(Template(f"token select (top-p, registered S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED),
-                        own("r"), bind_at=lambda _req, n: fn, shapes=sampled))
+                        own("r"), bind_at=lambda _req, n: fn, shapes=tuple(((), n) for n in range(1, max_seqs + 1))))
 
     greedy = {"kind": "greedy"}
     topp = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True}
     for name, policy, expect, why in (("greedy", greedy, (True, None), ""),
-                                      ("top-p, registered S", {**topp, "splits": S_reg}, (True, None), ""),
-                                      ("top-p, derived S", {**topp, "splits": "derived"}, (False, None),
-                                       "each request's `splits` Input is the batch's")):
+                                      ("top-p, registered S", {**topp, "splits": S_reg}, (True, None), "")):
         wl = _workload(phi, list(composition), policy)
         labels, ret = workload_labels(wl)
         out.append(Template(f"GP-01 over {len(composition)} requests ({name})", wl.fn, labels, ret, expect=expect, why=why))
@@ -240,12 +228,14 @@ def _row(row: Any, request: int, sources: tuple) -> WA.Row:
     return WA.Row(request, row.kind, row.start, row.n, row.cache_hit, row.preempted, sources)
 
 
-def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[WA.Advice, dict, int]:
+def _solo(advice: Any, ingress: Mapping[str, Any], r: int, chunks: tuple[int, ...] = ()) -> tuple[WA.Advice, dict, int]:
     """``advice`` and ``ingress`` with request ``r`` alone, and r's index there: its record and body, each of its rows in a step of
     its own, and the state a Commit window carries it in with (`pipeline.window_advice`), rebuilt from the fields the compiler
     reads (`reads.READS`), its release buckets 0, which no plan reads. A hit on another request's KV (`_check_hit`) holds the KV
     of r's first C tokens, so alone a stand-in computes it: a greedy request of those C tokens with one output, admitted just
-    before r in r's first step. Such a hit on a later row (a resume, or any row of a carried request) has no solo form."""
+    before r in r's first step, or, given the hit's prefill ``chunks`` (a class G hit its Program recomputes, whose chunks are
+    its launch's), prefilled in them, a step each, before r's first. Such a hit on a later row (a resume, or any row of a
+    carried request) has no solo form."""
     q = advice.requests[r]
     carried = getattr(advice, "carried", ())
     rows = [(s, row) for s, step in enumerate(advice.steps) for row in step.rows if row.request == r]
@@ -262,27 +252,27 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[WA.Advice, d
         C, stand = rows[0][1].cache_hit, f"{q.id} (prefix)"
         requests, own = (WA.RequestAdvice(stand, C, 1, "length"), *requests), own + 1
         bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
-        steps[0] = WA.StepAdvice((WA.Row(0, "prefill", 0, C), _row(rows[0][1], 1, (WA.Source(0, C),))))
+        first = _row(rows[0][1], 1, (WA.Source(0, C),))
+        if sum(chunks) not in (0, C):
+            raise BatchDependent(f"request {r}: its hit's chunks {list(chunks)} don't sum to its hit of {C} tokens")
+        ends = [sum(chunks[:j + 1]) for j in range(len(chunks))]
+        steps = ([WA.StepAdvice((WA.Row(0, "prefill", end - n, n),)) for end, n in zip(ends, chunks)] + [WA.StepAdvice((first,)), *steps[1:]]
+                 if chunks else [WA.StepAdvice((WA.Row(0, "prefill", 0, C), first)), *steps[1:]])
     carry = tuple(WA.Carried(c.C, c.computed, c.kept, c.made) for c in carried[r:r + 1])
     return WA.Advice(requests, tuple(steps), (0,) * own, carry), bodies, k
 
 
 def _unit(u: Any) -> tuple:
-    return (u.LP, u.T, u.policy, u.seed, u.id, u.C, u.chunks, u.carried_out, u.edge)
+    return (u.LP, u.T, u.policy, u.seed, u.id, u.C, u.recomputed, u.chunks, u.carried_out, u.edge)
 
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
                    plan: Callable[..., Any]) -> None:
     """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, a Commit window's `Advice`, and ``ingress``) where a request's
-    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` plans a solo `Advice`
+    outputs could depend on its batch-mates: R2 and R1 of the module docstring. ``plan`` plans a solo `Advice`
     (`steps._replan`).
     Returns None when every request's Programs read only its own certified inputs and the registration."""
     units = compiled.requests
-    for u in units:
-        if u is not None and u.policy.get("kind") == "stochastic" and u.policy.get("splits") == "derived":
-            raise BatchDependent(f"request {u.request}: its top-p sampler's split count is derived from the step's live rows (S = "
-                                 f"SplitsFor_v1), so its batch picks its nucleus; compile the registered split count the served engine "
-                                 f"pins (splits = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs))")
     for s, rows in enumerate(compiled.steps):
         for rr in rows:
             u = units[rr.request]
@@ -293,7 +283,7 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
         if u is None:
             continue
         try:
-            solo, bodies, k = _solo(advice, ingress, r)
+            solo, bodies, k = _solo(advice, ingress, r, u.chunks[:len(u.hit_steps)])
             alone = plan(registered, solo, bodies)
         except BatchDependent:
             raise
@@ -303,7 +293,7 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
             checked.add(r)
         a = alone.requests[k]
         if _unit(a) != _unit(u):
-            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, chunks, carried out, edge) = {_unit(a)}, "
+            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, recomputed, chunks, carried out, edge) = {_unit(a)}, "
                                  f"in its batch {_unit(u)}")
         mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
         theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]

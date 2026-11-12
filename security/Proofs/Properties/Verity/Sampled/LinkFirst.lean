@@ -45,7 +45,8 @@ theorem checkBlobsAt_orderHeld {p : _root_.Spot.OneStageZk.Params}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.orderHeld p c e = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   · cases h

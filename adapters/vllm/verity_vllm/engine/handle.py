@@ -3,7 +3,7 @@ and the uniproc executor's driver worker).
 
 Each accessor takes a :class:`verity_vllm.LLM`, a ``vllm.LLM`` or its ``LLMEngine``, and raises ``RuntimeError`` naming
 the multiprocess engine core when the object lives in another process (build with ``VLLM_ENABLE_V1_MULTIPROCESSING=0``,
-`engine.env.ENGINE`).  Attribute reads only; nothing is patched.
+`engine.env.ENGINE`); `scheduler_or_none` returns None there instead.  Attribute reads only; nothing is patched.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     Engine = Union[Wrapper, vllm.LLM, LLMEngine]
 
-__all__ = ["engine_of", "model_runner", "scheduler"]
+__all__ = ["engine_of", "model_runner", "scheduler", "scheduler_or_none"]
 
 
 def engine_of(llm: Engine) -> LLMEngine:
@@ -45,6 +45,13 @@ def scheduler(llm: Engine) -> Scheduler:
         raise RuntimeError(f"{type(llm).__name__}: no in-process V1 scheduler (engine core {type(core).__name__}); "
                            "build with VLLM_ENABLE_V1_MULTIPROCESSING=0 (engine.env.ENGINE)")
     return sched
+
+
+def scheduler_or_none(llm: Engine) -> Scheduler | None:
+    """The engine's in-process V1 scheduler where it holds its requests in a dict (``requests``), else None (a multiprocess
+    engine core, a stub): for a reader that goes without it."""
+    sched = getattr(_engine_core(llm), "scheduler", None)
+    return sched if isinstance(getattr(sched, "requests", None), dict) else None
 
 
 def model_runner(llm: Engine) -> GPUModelRunner:

@@ -6,6 +6,7 @@ public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
+public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -31,10 +32,12 @@ public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.Checked
+public import Proofs.NetworkCertifier.ResponseCap
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
+public import Proofs.NetworkCertifier.PeriodCheckedChecks
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -91,6 +94,8 @@ any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. 
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`):
 inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontrivial lemma.
+`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.PeriodLeakChecked`, stated and not
+yet proved): which run its check is held to, and its nontrivial lemma.
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may

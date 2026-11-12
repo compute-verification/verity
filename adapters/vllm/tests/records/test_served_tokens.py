@@ -26,8 +26,9 @@ DATA = Path(__file__).parent / "data"
 REAL = DATA / "served_tokens.json"
 #: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
 #: with G6 on the parsed JSON before it read the record, then once more when G6 began refusing a declared request the record has no
-#: entry for: that turned `a request unserved` and `no requests` from PASS to FAIL, and changed no other case
-OUTCOMES_SHA256 = "e1c4765cc877c03197d6e5546636ead5397ab51157445b575fcb4b590e513d8d"
+#: entry for: that turned `a request unserved` and `no requests` from PASS to FAIL, and changed no other case; the sampler geometry's
+#: relation text is part of it
+OUTCOMES_SHA256 = "b4d89c925c29c4e0646b1756da386c67abf29e4eb8eb53d1accc27cdb15a9710"
 REQUIRED = ("requests", "requests[0].request_id", "requests[0].generated_token_ids", "lag.value")
 OPTIONAL = ("arrive_step_realized", "first_step", "finish_step", "finish_reason", "served_output_len", "executed_prefix_len")
 #: the TP capture's request fields (`pipeline.tp.capture`), and the TP Match arms' (`pipeline.tp.match`)

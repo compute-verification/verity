@@ -15,8 +15,7 @@ the suite's `testpaths` (`modules`) goes to exactly one part, longest first, eac
 (`parts`). A module's estimate is its seconds in `SECONDS` (measured; a module renamed since gets `DEFAULT_S`, which only
 unbalances the parts), so a stale table costs balance, never a test.
 
-`launch` starts each part as `research run --on auto` does for any suite run, with `--jobs` the CPUs the job holds:
-suites.py's default counts each process at its `TEST_PROCESS_GB` of 9 GB, which runs the suite in one process in a 16 GB job.
+`launch` starts each part as `research run --on auto` does for any suite run, with `--jobs` the CPUs the job holds.
 Each part keeps its suites.py logs in its run's `out/logs`, whose `integrations_vllm.json` `--seconds` reads.
 """
 from __future__ import annotations
