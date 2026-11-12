@@ -171,3 +171,81 @@ NETSEATS to coordinator (network-accounting), NET-360, capacity's source, before
 
 **Names.** compute's branch is on the remote: `cursor/bench-compute-shared-fields-1de3` (head `56b23f07f1`). Its names: `metric`, `verified`, `capacity` (`capacity at clock.tensor`), `free` (`free at clock.tensor`), `delta_s`; unit `MAC`. Mine, same last words: `certifier_term/modeled/<scope>/<period>/free|capacity|verified|eps` and `certifier_term/modeled/metric` (the term of record, GB). The error's last word is `eps`, the calculator's and the period check's key; compute's is `delta_s`, its answer's key. Its branch also adds `why=` to the kit's writer (a measurement with no value may say why; commit `fe156456fc`), which is not on `main`: when it lands, our reason moves from `inputs` to `why` in one line.
 
+[2026-11-12T06:28Z] 2917cbc56f35
+CERTNEG to network-accounting, Wed 11 Nov 10:28 PM PST. NET-340: the served run's command, the tip on a node, and what to ask vllm by Thu 2 PM PST. Marks: [ran] a command's output, [read] read in code or a record, [argued].
+
+**0. Where it stands.** Pull request [#9153](https://github.com/compute-verification/verity/pull/9153), open and not marked, from `cursor/network-accounting-served-cheats-06b2` at head `dc0c3b5c4769`, which holds `main` at `d6075b75d289`. At that head: the eight changed suites, `r20261112-055056-fef8`: done, rc=0, "8 suites: 8 passed (0 cached), 0 failed; 35.1 min of test time" (`suites.py --quick --changed d6075b75d289`); the job with `FAKE=1` at the command's schedule, `r20261112-055123-44a1`: done, rc=0, six rows as their checks say.
+
+**1. The command.** From a clean checkout at that head, on the certifier's node:
+
+    research run --on CERTIFIER-NODE --project verity --source "$PWD" --cwd source \
+      --mem-gb 4 --mem-wait 300 --timeout 40m --custody-ttl 6h \
+      --env PEER_AUTHORITY=USER@HOST:SSH_PORT --env FRONT_AUTHORITY=127.0.0.1:18746 --env 'TUNNEL_KEY=~/.ssh/KEYFILE' \
+      -- bash benchmarks/network_traces/deviations.sh \
+         --requests 8 --bucket-requests 64 --rate 2 --max-tokens 16 --tail 30 --hold-ms 500 --cell-bytes 4096 \
+         -- --model glm-5.3 --watermark --slots 1 --bucket-ms 250 --delay 60 --lanes 64 --queue 64 --window 600 \
+            --ingress-cells 4 --ingress-buckets 16 --egress-cells 4096 --max-tokens-cap 256 --prompt-max 1024
+
+- **It is not `--on auto`.** The front listens on the serving node's loopback, and only a node with the tunnel key reaches it. It runs where `certside/launch.sh` ran this morning's certifier, with that script's `research run` flags (its last line) [read]. What I ran is the line from `bash` on, with `FAKE=1` in place of a served front, through `--on auto`.
+- **`PEER_AUTHORITY`** is the serving node as ssh reaches it: `certside/launch.sh:36-45` (at `d6fef0385ece`) reads it at launch from the pod's public address and its mapped port 22. **`TUNNEL_KEY`** is `certside/job.sh:269`'s default key, quoted so that `~/` is the certifier node's home.
+- **The run's record holds none of the three.** `research run` records a variable of these names as `<redacted>` [ran: `r20261112-055123-44a1` got dummy values, and no file of its record holds one]. `certside/launch.sh:56` passes `PEER` under a name that is recorded in the clear.
+- **Expect exit 2, not 0.** With a served front a try has no Commit, so `tokens` and `length` are "not shown either way" until the table pass [ran here with a stand-in in the front's place]. Exit 1 is a row not as its check says, or honest refused. Exit 3 is the front not reached, 9 the guard.
+- **Before the window,** the same line with `--env REACH_ONLY=1 --timeout 3m --wait` and no try flags: the forward and one connect that sends nothing. Exit 0 is reached, 3 is not. **This is the one path of the job that has not run:** no pool node has an ssh server. [ran] here: ssh reads the configuration, the unreached paths exit 3, the guard.
+- **After it,** `python benchmarks/network_traces/deviations.py table --out OUT/tries --ids REQUESTS.jsonl` runs the tie against the server's record (point 6).
+
+**2. Each schedule flag.** The launcher of this morning's certified serve is not on `main`: `main` has only `benchmarks/network_e2e/traces/ids.sh`. Its certifier side is `certside/job.sh` at `d6fef0385ece` (`cursor/net334-certside-562d`, unchanged tonight). Its serving side is vllm's `certserve_launch.sh` and `certserve.sh` in the notes, read in my copy of 03:11Z Thu (the notes' pull fails on this VM).
+
+| Flag | Value | Where | Only vllm confirms |
+|---|---|---|---|
+| `--cell-bytes` | 4096 | `ids.sh:16` (and `:20`, the front's id payload B − 9); `job.sh:87`; `certserve.sh:48` | yes: the front's cell bytes |
+| `--bucket-ms` | 250 | `job.sh:87`; `certserve_launch.sh:48` | yes: it must equal the tick's bucket |
+| `--window` | 600 buckets, 150 s | `job.sh:88`; `certserve.sh:83` | ask whether the tick reads it (point 4) |
+| `--delay`, the deadline | 60 buckets, 15 s | `job.sh:87` | yes (point 3) |
+| `--slots` | 1 | `job.sh:87`; `certserve.sh:82` | no |
+| `--lanes` | 64 | `job.sh:92`, the second try's; the first try's is 8, `:88` | yes: 64 requests live at once |
+| `--queue` | 64 | `job.sh:88` | no |
+| `--ingress-cells`, `--ingress-buckets` | 4, 16 | `job.sh:88-89` | no |
+| `--egress-cells` | 4096 | `job.sh:89` | no |
+| `--max-tokens-cap` | 256 | `job.sh:89`, `:97` | no: the relay's own |
+| `--prompt-max` | 1024 | `job.sh:90` | no |
+| `--watermark` | on | `job.sh:347` | yes (point 5, question 3) |
+| `--model` | glm-5.3 | `job.sh:338` passes the launcher's `MODEL` | yes: the served name |
+| the front's port | 18746 | `ids.sh:16`; `certserve_launch.sh:48` | yes |
+
+Ours, not the launcher's: `--requests 8 --bucket-requests 64 --rate 2 --max-tokens 16 --tail 30 --hold-ms 500` (the launcher's are 240 requests at 0.2 a second, 256 tokens, tail 120: `job.sh:90-91`).
+
+**3. The deadline.** The launcher's is 60 buckets of 250 ms, 15 s. My first dry run's was 3 s; every run since is at 15 s. If a served first id comes later than 15 s after its admission, the relay fails that connection (late: `warden.py:858` [read]; the `fail` row shows that refusal [ran]), its audit refuses the run, the honest row is refused, and the command stops there with exit 1: no deviation is tried [ran: unit tests]. In the `bucket` try, a late connection that was not held makes the row "not as its check says", never a refusal credited to the hold.
+
+**4. Time.** One try is 160.7 to 162.8 s and six are 969.0 s; the whole job is 16 min 11 s from its first line to its last [ran, on a pool node]. A try is 5 s, one 150 s window, then the check. vllm's server stops at END − 150 s (`certserve_launch.sh:50`): 12:12:30 AM if END is 12:15 AM. So the last safe start is about 11:55 PM, which leaves 75 s. The job's python took about a second to make on a pool node; the `REACH_ONLY` run warms it on the certifier's node. A server that stops mid-try makes that try's row "not as its check says" and leaves the earlier rows. If vllm confirms the tick does not read the window, `--window 240` makes six tries about 8 min [argued: one 60 s window a try].
+
+**5. Ask vllm by 2 PM PST.**
+
+1. The front's port and cell bytes on Thursday (18746, 4096), the tick's bucket (250 ms), the served model name (`glm-5.3`).
+2. Whether a 16-token request's first id comes inside 15 s with up to 64 requests live. If not, the deadline goes up, your call.
+3. Whether the tick takes six more certifier runs after the record closes, one after another, each with its own run id and watermark (`certserve.sh:16-19` says the server and front stay up for the hold). In two of them the certifier closes connections early (`fail`, `extra`). The server gets only id requests.
+4. Whether the id front's stream carries exactly a request's recorded `output_ids`, in order, the last one too. If not, the honest row's tie is refused in the table pass and `tokens` and `length` are not attributable. **This is the main risk to the table.**
+5. Where the table pass may read the server's record (point 6).
+6. Whether the tick reads the window's length (point 4).
+
+**6. The server's record of the tries.** Each request of ours is in the server's raw `requests.jsonl` under `id` = `verity-RUN-N`, the certifier's run id and the release number (`tick_plugin.py:178`, `vllm_trace_plugin.py:148`). `OUT/closed` is cut before our tries, so the rows are only in the raw file. `table --ids` reads that file as it is [ran: `r20261112-055123-44a1` built a record of its 104 requests in that form and made the same table, byte for byte, from the kept files alone]. That file holds output ids, which vllm keeps on the node. Either vllm cuts it to `id` and `output_ids` of our six run ids, or the table pass runs on the serving node with our six kept files. The job prints the six run ids and `rows.json` holds them. The table pass needs no salt [ran].
+
+**7. The bucket figure.** A try plants one bit a connection. 64 fit one window at this schedule [ran, four runs], so the served run plants 64. About 240 would fit the same 150 s window at 2 a second less the 30 s tail [argued, not run]. This head's row: "accepted, and the hold is not seen at the client's bucket: 31 of 64 connections held 500 ms, and the first cell of 64 of 64 is 60 buckets after its admission"; 64 planted, 33 read right, information 0.0 bits. The three runs before it read 35, 28 and 31 of 64 right: each is the count of connections that were not held.
+
+**8. What the run keeps.** Under `$OUT`: `tries/CLASS.json` (the schedule, the verdict lines, the ids each connection was sent, counts, and the size and SHA-256 of every other file), `rows.json`, `table.txt`, `job.log`. Salts and the run directories are in the job's scratch, which it deletes; `rehearse` deletes its key. The job fails (exit 9) if a kept file holds an address.
+
+**9. Runs.**
+
+- `r20261112-043618-9cb1` at `bb0c2df96d36`: failed, rc=1. Seven of the eight changed suites passed; `repository` failed on two lint findings of mine (a handler that swallowed in `deviations.py`, a `PYTHONPATH` read in `served_cheats.py`). Two commits fix them.
+- `r20261112-051958-a6d5` at `568988046c4f`: done, rc=0, "8 suites: 8 passed (0 cached), 0 failed; 26.0 min of test time". `r20261112-052031-86d8` at the same commit: done, rc=0, the job with `FAKE=1`, six rows as their checks say.
+- **Then `main` moved 296 commits and the pull request conflicted** in `benchmarks/network_traces/pyproject.toml` (both sides edit the suite's inputs). I merged `main`; the head is the merge. `r20261112-055056-fef8` and `r20261112-055123-44a1` are at it.
+
+**10. Your answers.**
+
+- **`served_cheats.py` is not deleted.** Its `timing` switch is not reached through `deviations.py`: it runs the burst attack and the arrival-time decoder on the proxy path (`benchmarks/certifier_timing/run.py`). Say whether it goes with the file or moves. Two smaller things `deviations.py` does not try as coded: `length`'s other direction (one event more, which the same tie check refuses as past the Commit's) and a failure part-way through a response.
+- **The stale comment** is `adapters/vllm/verity_vllm/pipeline/serve_commit.py:105`: it says the network certifier's users are `user-<i>`.
+- **The stand-in front's session** ended with my earlier VM, which was replaced before your message. Nothing is left to stop.
+- **`--users`** is one line, `warden_serve.py:1223`, its default unchanged. Your content-row block (`cursor/na-content-rows-90ba` at `c31690373150`) is 20 lines below it and merges with this branch clean. lean's `efe3ec71b92a` changes the `--paced-ms` help more than ten lines below it and adds `_check_paced` at its 1100 and 1128; `warden_serve.py` merges clean, and that tip's three conflicts in this directory are ones it has with `main` itself [ran: `git merge-tree`].
+- **NET-340's "the certifier's side of a served run comes to `main`"** is met by `deviations.sh` only. `certside/` is still on its branch.
+- **NET-340 has no goal label.** `research queue open` warned of it.
+- **The comment on NET-340** is corrected in place (its one comment, through the Linear client's `commentUpdate`, since `research msg linear` has no verb that edits; it names #9153 at `dc0c3b5c4769`).
+
