@@ -6,7 +6,7 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   (`verity/composite/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
-  not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Where its
+  not at `Lms.deployed`, SPOT's v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Where its
   caller asks (`start`'s ``deployed``) the key is made at `lms.DEPLOYED` instead, its whole tree, about a quarter of
   an hour of one core spread over this machine's: still this run's alone, and one v2 reads signatures under. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
@@ -305,7 +305,7 @@ class Draws:
         with self._lock:
             if self._closed.is_set():
                 raise Ch.CoinError(f"the challenger's session has closed: rank {rank} holds it for its sessions' coin "
-                                   "trees before its draw ends")
+                                   "trees before its sample ends")
             self._held.add(rank)
 
     def release(self, rank: int) -> None:
@@ -320,7 +320,7 @@ class Draws:
             raise Ch.CoinError(self._refused)
         if self._client is None or self._closed.is_set():
             raise Ch.CoinError("the challenger's session is not open: a session's coin tree is sampled and opened between "
-                               "the session's open and its close, by a rank that holds it (Draws.hold)")
+                               "the session's open and its close, by a rank that holds it (hold)")
         return self._client
 
     def layout(self) -> dict:

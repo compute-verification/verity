@@ -1,14 +1,14 @@
 """The sessions of a window of several members on the window's own challenger session: each session's coin tree
 sampled and opened in the session the sample's coins come from, and closed there before the next session's first coin.
 
-Sampled proofs' v2 reads a window of several members' audit in its per-member form (`a5.case_members`), and holds the
+SPOT's v2 reads a window of several members' audit in its per-member form (`a5.case_members`), and holds the
 sessions' coins to one release log, the window's challenger session's (`OneStageZk.membersTreesHeld`,
 `challenger.members_tree_reason`): the sample, then each session's tree, its rounds together and its closing round last
 (`challenger.closes`: the tree's ``session`` round `challenger.CLOSING_ROUND` of no coins, opened after the SHA-512 of
 the session's evidence, `closing.closing_after`), the trees one after another in the sessions' order. The challenger
-serves one client, the driver's, whose samples already read it (`a5_coins.Draws`). So a driver:
+serves one client, the driver's, whose samples already read it (`a5_coins`). So a driver:
 
-* holds the session open past its sample (`a5_coins.Draws.hold`), until its sessions have closed (`release`);
+* holds the session open past its sample (`a5_coins`' `hold`), until its sessions have closed (`release`);
 * runs a `Relay` to it and starts each verifier on the relay (`Relay.flags`, `serve --tree-from`'s): the verifier's
   ``tree`` and ``tree-open`` frames (`remote`'s) go to the driver's one client and its answers back, and the challenger
   logs each before it answers;
@@ -18,7 +18,7 @@ serves one client, the driver's, whose samples already read it (`a5_coins.Draws`
   window's root and the coins' evidence with the case (`a5.case_coins`).
 
 `Relay(session, listener)` and `closing_round(session, directory)` take any ``session`` with a client's `layout()`,
-`tree(spec, nonce)` and `tree_open(root, stream, rnd, n, after)`: a `Draws` proxy, or a `remote.RemoteChallenger`
+`tree(spec, nonce)` and `tree_open(root, stream, rnd, n, after)`: `a5_coins`' proxy, or a `remote.RemoteChallenger`
 itself. The relay adds no rule: what the challenger refuses it refuses, which ends the challenger's session, and what
 the log must show is the verifier's to check.
 """

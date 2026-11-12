@@ -355,7 +355,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
     coins from its window (`a5_coins.need`), which opens
     the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the registration's
     digest and the stream reads them in the rank's turn on the step's one client. ``hold``: the rank holds the session
-    open past its sample, for its sessions' coin trees (`a5_coins.Draws.hold`), until the caller's `release`. -> (the
+    open past its sample, for its sessions' coin trees (`a5_coins`' `hold`), until the caller's `release`. -> (the
     stream, its sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it
     sampled none, and the challenger coins it planned)."""
     coins = AC.RankCoins(a.coins, rank)
@@ -1374,7 +1374,7 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
 
 def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[str]) -> dict:
     """The audit of the sessions that ran on the window's challenger session (`window_trees`), once it has ended
-    (``published``, `a5_coins.Draws.evidence`'s): ``ok`` when the session's release log shows each session of ``done``
+    (``published``, `a5_coins`' `evidence`): ``ok`` when the session's release log shows each session of ``done``
     (`member_checks`'s, in the order they ran) on a tree of its own, closed after its evidence, one after another
     (`member_trees.trees_reason`). ``relay`` is why each verifier's connection that did not end with its close ended
     (``relayed``, `member_trees.Relay.close`), for a reader of a refusal: the log alone decides."""

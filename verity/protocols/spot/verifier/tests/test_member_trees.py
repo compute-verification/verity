@@ -42,8 +42,8 @@ def open_at(tree: str, stream: str) -> str:
 
 
 TREE = canonical_json_text({"event": C.TREE_EVENT, "key": "02", "nonce": "03", "root": "01", "spec": {}})
-ROOT = canonical_json_text({"event": "root", "index": 0, "label": "draw", "received_at": 0, "root": "ab"})
-RELEASE = canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "draw", "released_at": 0})
+ROOT = canonical_json_text({"event": "root", "index": 0, "label": "sample", "received_at": 0, "root": "ab"})
+RELEASE = canonical_json_text({"after": "ab", "event": "release", "index": 0, "label": "sample", "released_at": 0})
 S, REP = CT.SESSION, "circuit/rep0"
 
 
@@ -158,7 +158,7 @@ class Served:
     tree of `SPEC`, its link points and one round of ``t/rep0``, and its record; `close` its closing round."""
 
     def __init__(self, seed: str) -> None:
-        self.challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("draw", 1)], entropy(seed))
+        self.challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy(seed))
         self.log: list[str] = []
 
     def opened(self, root: str, stream: str, rnd: int, n: int, after: bytes) -> list[int]:
