@@ -34,8 +34,6 @@ from typing import Any
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.log import init_logger
-from verity_vllm.pipeline.match import fold_construction_args
-from verity_vllm.pipeline.row_records import decomp_rc
 from verity_vllm.pipeline.tp.links import read_tp_links
 from verity_vllm.records.schema_ids import TP_FOLD_MATCH_SCHEMA
 
@@ -140,6 +138,8 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
     t0 = time.time()
     if derived:
         if shared:
+            # Read here, not at import: only a row whose ranks share one Build reads the row's records, and this module imports without them.
+            from verity_vllm.pipeline.row_records import decomp_rc
             rc = decomp_rc(str(rank_dir))
         else:
             cmd = [py, "-m", "verity_vllm.pipeline.cli", "batch-decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
@@ -328,6 +328,8 @@ def main(a: Options) -> int:
     res: dict[str, Any] = {"schema": SCHEMA, "capture": str(cap), "profile": a.profile, "world": a.world, "per_rank": {}, "problems": []}
 
     ranks = list(range(a.world))
+    # Read here, not at import: `pipeline.match` loads the core `verity`, and this module imports without numpy, torch or the core.
+    from verity_vllm.pipeline.match import fold_construction_args
     construction = {r: fold_construction_args(a.workload, [str(builds[r]), *derived[r]]) for r in ranks}
 
     def run_rank(r: int) -> tuple[dict[str, Any], list[str]]:

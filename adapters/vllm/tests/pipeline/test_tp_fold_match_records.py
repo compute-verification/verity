@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from verity_vllm.check.match import rank_match as RM
+from verity_vllm.pipeline import match as PM
 from verity_vllm.pipeline.tp import fold_match as FM
 
 LINKS = {"schema": "cb-a/tp_links/v2", "world": 2, "rank": 1, "links": [{"k": 0, "module": "m", "peers": []}]}
@@ -211,7 +212,7 @@ def _main(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(
     monkeypatch.setattr(FM, "fold_rank", fold_rank)
     monkeypatch.setattr(FM, "compare_rank", lambda *a, **k: {"comparator": "cb_a.compare", "verdict": "PASS", "seconds": 0.0})
     monkeypatch.setattr(FM, "global_match_rank", lambda *a, **k: {"verdict": "PASS", "ok": True, "failed_checks": [], "achieved_concurrency": None, "seconds": 0.0})
-    monkeypatch.setattr(FM, "fold_construction_args", lambda workload, dirs: [])
+    monkeypatch.setattr(PM, "fold_construction_args", lambda workload, dirs: [])
     monkeypatch.setattr(RM, "cross_rank_check", cross_rank_check)
     monkeypatch.setattr(RM, "own_producers_from_record", lambda path: {})
     rc = FM.main(FM.Options(capture=str(capture), profile="profile", out=str(out), build_rank=[str(tmp_path / "b0"), str(tmp_path / "b1")],
