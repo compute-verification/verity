@@ -47,16 +47,18 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
+from verity_vllm.pipeline.row_json import load_json
+from verity_vllm.records.schema_ids import CONFIG_RECORD_SCHEMA, RECORDS_INDEX_SCHEMA
 
 __all__ = ["INDEX", "KIND", "NAME", "TIERS", "aot_of", "index_refusal", "load_index", "record", "write_index"]
 
-SCHEMA = "verity-vllm/config-record/v1"
+SCHEMA = CONFIG_RECORD_SCHEMA
 NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
 MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
 INDEX = RECORDS
-INDEX_SCHEMA = "verity-vllm/records-index/v1"
+INDEX_SCHEMA = RECORDS_INDEX_SCHEMA
 #: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
 TIERS = ("fast", "heavy")
 INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned "
@@ -89,13 +91,6 @@ def aot_of(row: str, path: Path = INDEX) -> dict[str, Any] | None:
     """A switched row's `aot` (`comparison`: the run that found its predicted Programs equal to its traced Build's on every rank;
     `trace`: that Build, a `vllm-build/v1`), None for a row on the trace."""
     return (load_index(path)["rows"].get(row) or {}).get("aot")
-
-
-def _json(p: Path) -> Any:
-    try:
-        return json.loads(p.read_text())
-    except (OSError, ValueError):
-        return None
 
 
 def _jsonl(p: Path) -> list[dict]:
@@ -142,12 +137,12 @@ def match_part(d: Path, world: int) -> dict[str, Any] | None:
     cross-rank check, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
     no Match ran."""
     if world > 1:
-        fm = _json(d / "match" / "fold_match" / "tp2_fold_match.json")
+        fm = load_json(d / "match" / "fold_match" / "tp2_fold_match.json")
         if not fm:
             return None
         return {"ok": fm.get("pass") is True, "schema": fm.get("schema"), "profile": fm.get("profile"), "world": fm.get("world"),
                 "legs": fm.get("legs"), "problems": (fm.get("problems") or [])[:16]}
-    gm = _json(d / "global_match.json")
+    gm = load_json(d / "global_match.json")
     return {"ok": gm.get("verdict") == "PASS", "schema": gm.get("schema")} if isinstance(gm, dict) else None
 
 
@@ -210,9 +205,9 @@ def census_digests(parts: dict[str, Any]) -> dict[str, str]:
 
 
 def build_part(d: Path) -> dict[str, Any]:
-    bs = _json(d / "build_summary.json") or {}
+    bs = load_json(d / "build_summary.json") or {}
     programs = {k: (v or {}).get("program_digest") for k, v in sorted(bs.items()) if k not in ("workload",) and isinstance(v, dict)}
-    man = _json(d / "manifest_header.json") or _json(d / "manifest.json") or {}
+    man = load_json(d / "manifest_header.json") or load_json(d / "manifest.json") or {}
     q = man.get("query") or {}
     return {"ok": bool(bs) and all((v or {}).get("ok") for v in bs.values() if isinstance(v, dict)),
             "programs": programs, "census_digests": census_digests(bs), "workload_digest": (bs.get("workload") or {}).get("workload_digest"),
@@ -220,7 +215,7 @@ def build_part(d: Path) -> dict[str, Any]:
 
 
 def word_check_part(d: Path) -> dict[str, Any]:
-    w = _json(d / "strict_word.json") or {}
+    w = load_json(d / "strict_word.json") or {}
     return {k: w.get(k) for k in ("ok", "check", "word_lines", "components", "calls", "units", "gates", "problems")} if w else {"ok": None}
 
 
@@ -246,7 +241,7 @@ def single_gpu_commit_part(d: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """(commit, replay) of a single-GPU Commit of record: its decision document (`verdict.json`, vllm-verdict/v1, over every pair and
     the replay) decides it and names the manifest it committed against; its last instrumented run (`commit_part`) the rest."""
     commit, replay = commit_part(d)
-    v = _json(d / "verdict.json") or {}
+    v = load_json(d / "verdict.json") or {}
     commit.update(ok=v.get("outcome") == "PASS", outcome=v.get("outcome"), manifest={"manifest_digest": v.get("manifest_digest")})
     return commit, replay
 
@@ -265,14 +260,14 @@ def replay_of(sr: dict[str, Any]) -> dict[str, Any]:
 
 def tp_build_part(d: Path, world: int) -> dict[str, Any]:
     """A TP row's Build (`row_records.tp_build_summary`): per rank its Program digests and GP-01 workload digest, and the global manifest."""
-    ranks = (_json(d / "build_summary.json") or {}).get("ranks") or {}
+    ranks = (load_json(d / "build_summary.json") or {}).get("ranks") or {}
     per = {}
     for r in range(world):
         rk = ranks.get(f"rank{r}") or {}
         per[str(r)] = {"ok": bool(rk) and all((v or {}).get("ok") for v in rk.values() if isinstance(v, dict)),
                        "programs": {k: (v or {}).get("program_digest") for k, v in sorted(rk.items()) if k != "workload" and isinstance(v, dict)},
                        "census_digests": census_digests(rk), "workload_digest": (rk.get("workload") or {}).get("workload_digest")}
-    man = _json(d / "manifest_header.json") or _json(d / "manifest.json") or {}
+    man = load_json(d / "manifest_header.json") or load_json(d / "manifest.json") or {}
     return {"ok": all(p["ok"] for p in per.values()), "world": world, "per_rank": per, "manifest_digest": man.get("manifest_digest"),
             "query_id": (man.get("query") or {}).get("query_id"), "program_digest_per_rank": man.get("program_digest_per_rank")}
 
@@ -355,7 +350,7 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
     else:
         commit, replay = tp_commit_part(d, world) if world > 1 else commit_part(d)
         engine, timing = engine_part(d), timing_part(d)
-    served = SV.of_summary(summary if summary is not None else _json(d / "commit" / "summary.json"))
+    served = SV.of_summary(summary if summary is not None else load_json(d / "commit" / "summary.json"))
     gate = ("match", match["ok"]) if match is not None else ("word check", word.get("ok"))
     switches = ("served switches", (served or {}).get("ok"))
     checks = (("build", build["ok"]), gate, *((switches,) if switches[1] is False else ()), ("commit", commit.get("ok")),

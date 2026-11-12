@@ -1,13 +1,24 @@
 """Sampled exact VU replay (C2 of record) -- positive on a tiny honest Program, targeted negatives named."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.program import Program
+from verity.definitions.numerics import derived_rows as D
 from verity.definitions.numerics import rows as RK
+from verity.definitions.registry import b1
+from verity.definitions.registry import moe as R
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.hopper import HopperBF16WgmmaDot16
 
 from verity_vllm.check.replay import compare as CMP
 from verity_vllm.check.replay import coverage as COV
@@ -19,8 +30,11 @@ from verity_vllm.check.replay import opening as OP
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay import sample as SM
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query import program_view as PV
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.required import Q_MODULE_BODY_ID
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
@@ -39,10 +53,7 @@ def _under_module_body():
 def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> dict:
     """The required-value manifest of record (`verity_vllm.query`) of `inst` for each request id: one request manifest, or (several requests of
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
-    from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.compose import compose_global
-    from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.required import request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
     P = from_instances(inst)
@@ -163,7 +174,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
         lg = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", norm_rows[-1], 0, H]], W("model.model.embed_tokens.weight")])
         sel_prev = add(f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [[["n", lg, 0, V]]])
     params = [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]]
-    inst = {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": params, "rows": rows}
+    inst: dict[str, Any] = {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": params, "rows": rows}
     if registered:
         params.insert(1, ["values", "{" + ", ".join(f"{n}: Value<32>" for n, _b in vfields) + "}"])
         inst["supplied"] = {"registration": {"param": 1, "name": "values", "fields": [{"name": n, "width": 32, "bits": f"0x{b:x}", "offset": k}
@@ -349,7 +360,7 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
 
 def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_nothing(world):
     bmap, committed = world.bmap_and_reader()
-    seen = {"plan": set(), "replay": set()}
+    seen: dict[str, set] = {"plan": set(), "replay": set()}
 
     def reader(key):
         def read(step, name, lo, hi):
@@ -372,7 +383,8 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
 
 def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
     bmap, committed = world.bmap_and_reader()
-    progs, seen = _programs(world), {"cold": [], "warm": []}
+    progs = _programs(world)
+    seen: dict[str, list] = {"cold": [], "warm": []}
 
     def reader(key):
         def read(step, name, lo, hi):
@@ -397,7 +409,7 @@ def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world)
         b[pos] ^= 0x01
         store[k] = bytes(b)
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = [x for x in rep["mismatch"] if x["spec"].startswith("Gemm_v1{K=16,N=32}")]
     assert m and all(x["request_id"] == "r1" and x["step"] == 0 for x in m)
@@ -414,7 +426,7 @@ def test_equal_shape_request_swap_of_an_input_member_fails_named(world):
         half = len(b) // 2
         store[k] = bytes(b[half:] + b[:half])
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False
     specs = {x["spec"].split("{")[0] for x in rep["mismatch"]}
     # the norm rows themselves (inputs = embeddings of the right request) and the gate_up Gemm rows (input = the other request's norm) fail
@@ -434,7 +446,7 @@ def test_wrong_member_bytes_fail_named(world):
     def mutate(store, entries):
         store[(0, "model.norm/1")] = store[(0, "model.norm/0")]     # the residual member carries the normed rows
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False
     fused = [x for x in rep["mismatch"] if x["spec"].startswith("RMSNormFusedCuda")]
     assert fused and all(any(o["member"] == "1" and not o["equal"] for o in x["outputs"]) for x in fused)
@@ -445,7 +457,7 @@ def test_missing_committed_input_is_partial_never_pass(world):
     def mutate(store, entries):
         del store[(1, "model.layers.0.mlp.act_fn/out")]
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is None and rep["grade"] == "partial"
     assert any("not retained" in x["why"] for x in rep["not_evaluated"])
     assert any(k.split("|")[3] == "first-decode" for k in rep["strata_unevaluated"])
@@ -476,7 +488,7 @@ def test_boundary_linkage_positive_and_negatives(world):
     assert u["request_id"] == "r0" and u["engine_step"] == 2 and u["kind"] == "chain" and "!= committed sampled id" in u["why"]
     # the replay reads the Embedding VU's input from the Program's dataflow (the previous step's committed sampled id), so a forged `in`
     # member is invisible to it -- the exhaustive linkage is the check that names it; the two are graded separately (R2)
-    rep = SR.sampled_replay(_programs(world), bmap3, committed3, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap3, committed3, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is True
 
 
@@ -533,10 +545,10 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
     partial replay without form (B), with a form (B) mismatch / incomplete attribution, with an UNNAMED gap, or with any replay mismatch =
     FAIL (O1 stands: absence of both forms never passes)."""
     from verity_vllm.check.verdict import commit_verdict
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-            "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage + oracle", "result": True},
-            "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
-            "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []}}
+    base: dict[str, Any] = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
+                            "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage + oracle", "result": True},
+                            "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
+                            "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []}}
     K1, K2 = "RMSNormFusedCuda_v2{N=2048}|r0|rank0|first-decode|model.layers.1.input_layernorm|fresh-window", "SiluMul_v1{N=1024}|r0|rank0|first-decode|model.layers.1.mlp.experts|fresh-window"
     ne = [{"spec": 'RMSNormFusedCuda_v2{N=2048}', "request_id": "r0", "step": 1, "op_path": "model.layers.1.input_layernorm", "row": 0,
            "why": "no evaluator for RMSNormFusedCuda_v2{N=2048} variant (statics outside the registered relation)", "why_class": "no-evaluator"},
@@ -552,9 +564,9 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
           {"stratum": K2, **{k: ne[1][k] for k in ("spec", "request_id", "op_path", "why", "why_class")}, "phase": "first-decode", "n": 2, "classes": ["interior-composed-v2"]}]
     K3 = "SiluMul_v1{N=1024}|r0|rank0|first-decode|model.layers.1.mlp.experts|fresh-window"
     us_plane = {"stratum": K3, **{k: ne_plane[k] for k in ("spec", "request_id", "op_path", "why", "why_class")}, "phase": "first-decode", "n": 2, "classes": ["plane-fed"]}
-    part = {"result": None, "grade": "partial", "why": "2 strata not evaluated: [...]",
-            "sample": {"evaluated": 598, "equal": 598, "mismatch_n": 0, "not_evaluated_n": 224},
-            "strata_unevaluated": [K1, K2], "unevaluated_strata": us, "not_evaluated": ne}
+    part: dict[str, Any] = {"result": None, "grade": "partial", "why": "2 strata not evaluated: [...]",
+                            "sample": {"evaluated": 598, "equal": 598, "mismatch_n": 0, "not_evaluated_n": 224},
+                            "strata_unevaluated": [K1, K2], "unevaluated_strata": us, "not_evaluated": ne}
     oc_ok = {"result": True, "grade": "complete", "compared": 3, "equal": 3, "mismatch_n": 0, "complete": True,
              "compared_by_family": {"instance_outputs": 2, "input_token_ids": 1}, "not_compared_by_family": {},
              "attribution": {"complete": True, "pairs": 3, "unverified_n": 0, "ambiguous_steps": []}}
@@ -617,11 +629,8 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 
 
 def test_token_select_first_max_tie_rule():
-    logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
+    logits: np.ndarray = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.registry import b1
 
     nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
     assert [RK.token_select_first_max(np.asarray(r, dtype=np.uint16)) for r in nan] == [0, 2, 0]
@@ -732,7 +741,6 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
     BiasAdd rows are VUs and replay exact.  Gemm_v2 (the Hopper GEMM this finding was measured on) now HAS an evaluator -- see the Hopper
     tests below -- so the rule is exercised here with a synthetic GEMM version the query models (its ports are Gemm_v1's) and the
     evaluator table does not know (`Gemm_v9`): the same code path, the same names."""
-    from verity_vllm.query import program_view as PV
     inst = json.loads(json.dumps(biased_world.inst))
     pi1 = IX.ProgramIndex(inst)
     vus1, ne1, nef1 = POP.population(pi1, "r0")
@@ -805,7 +813,6 @@ def hopper_worlds():
 
 
 def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
-    from verity.definitions.numerics import derived_rows as D
     assert "Gemm_v2" in RK.EVALUATORS and "Gemm_v2" not in RC.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
     assert "dot_bf16_for" in RK.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in RK.EVALUATORS["Gemm_v2"]
     assert RK.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
@@ -823,8 +830,6 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     """Word for word against the registered scalar primitive (`hopper.HopperBF16WgmmaDot16`, pinned on the H100) on random finite lanes,
     and on an adversarial lane where the 26-bit and 25-bit adders round to DIFFERENT bf16 words: evaluate('Gemm_v2', Hopper DOT) returns
     the wgmma word, evaluate('Gemm_v1') / ('Gemm_v2', Ampere DOT) the mma.sync word."""
-    from verity.definitions.numerics import derived_rows as D
-    from verity.definitions.registry.hopper import HopperBF16WgmmaDot16
     rng = np.random.default_rng(1701)
     K, N = 64, 8
     x = _bf16(rng, K, 1.0)
@@ -841,7 +846,7 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     for _ in range(200):
         a = _bf16(rng, (4096, 16), 1.0)
         b = _bf16(rng, (4096, 16), 1.0)
-        z = np.zeros(4096, dtype=np.uint32)
+        z: np.ndarray = np.zeros(4096, dtype=np.uint32)
         h, _ = D.tc_dot16_hopper(z, a, b)
         m, _ = D.tc_dot16(z, a, b)
         diff = np.flatnonzero(D.f2fp_bf16(h) != D.f2fp_bf16(m))
@@ -950,7 +955,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
     named once at layer 0).  A parameters-only reader returned None for it -> every RoPE_v1 row 'registered weight field ... not available
     to the replay' (300/300 strata on the smollm2 canary).  The reader's set must equal the set `register_weights` pins:
     `named_parameters()` + `named_buffers()`; the wrapper prefix rule is unchanged; an unknown field is still None (unresolved by name)."""
-    torch = pytest.importorskip("torch")
+    torch: Any = pytest.importorskip("torch")
 
     class Rot(torch.nn.Module):
         def __init__(self):
@@ -999,7 +1004,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
 def test_model_weights_provider_serves_an_int32_table_as_its_u32_words():
     """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as an int32 Parameter [V, 6]; the in-place reader serves its words
     as the deferred replay does (`cpu_replay.WORDS`), so a `GatherI32x{V}` row reads the table either way, and an int64 one stays None."""
-    torch = pytest.importorskip("torch")
+    torch: Any = pytest.importorskip("torch")
 
     class Gate(torch.nn.Module):
         def __init__(self):
@@ -1030,7 +1035,7 @@ def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away
 
 def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from_weights(rope_world):
     bmap, committed = rope_world.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=5, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps(rep, indent=1, default=str)[:3000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"]
     assert {f"RoPE_v1{{NHEADS={NH},D={DH}}}", f"RoPE_v1{{NHEADS={KVH},D={DH}}}"} <= set(rep["population"]["by_family"]) or "RoPE_v1" in rep["population"]["by_family"]
@@ -1048,7 +1053,7 @@ def test_rope_v1_flipped_committed_output_word_fails_named_at_the_rope_row(rope_
         b[(e["element_offset"] + 1 * KVH * DH + 3) * 2 + 1] ^= 0x01               # r1, prompt row 1, word 3: one exponent/mantissa bit
         store[k] = bytes(b)
     bmap, committed = rope_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     assert m and all(x["spec"] == f"RoPE_v1{{NHEADS={KVH},D={DH}}}" and x["request_id"] == "r1" and x["row"] == 1 and x["step"] == 0 for x in m), m
@@ -1063,10 +1068,11 @@ def test_rope_v1_wrong_cache_row_is_a_mismatch_the_position_is_the_programs_slic
         inst = json.loads(json.dumps(rope_world.inst))
         if rid == "r0":
             r = next(x for x in inst["rows"] if x["spec"].startswith("RoPE_v1") and x["name"].endswith("rotary_embedding_0/query[1]"))
-            r["args"][1][0][2] += DH; r["args"][1][0][3] += DH
+            r["args"][1][0][2] += DH
+            r["args"][1][0][3] += DH
         progs[rid] = inst
     bmap, committed = rope_world.bmap_and_reader()
-    rep = SR.sampled_replay(progs, bmap, committed, _weights(rope_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(progs, bmap, committed, _weights(rope_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     assert rep["mismatch"] and all(x["spec"] == f"RoPE_v1{{NHEADS={NH},D={DH}}}" and x["request_id"] == "r0" and x["row"] == 1 and x["step"] == 0
                                    for x in rep["mismatch"]), rep["mismatch"]
@@ -1074,7 +1080,6 @@ def test_rope_v1_wrong_cache_row_is_a_mismatch_the_position_is_the_programs_slic
 
 def test_rope_v1_evaluator_equals_the_registered_prims_on_the_replays_own_rows(rope_world):
     """The replay's RoPE_v1 branch == prims.RopeOut / RopeOutAdd per coordinate on the honest Program's own committed q / k words."""
-    from verity.definitions.registry import prims as P
     pi = rope_world.pi
     r = next(x for x in pi.rows if x["spec"].startswith("RoPE_v1") and "/query" in x["name"])
     d = pi.describe(r)
@@ -1117,7 +1122,7 @@ def test_attention_rows_are_registered_units_of_the_population_and_the_interior_
     n_att = sum(1 for r in attn_world.pi.rows if r["spec"].startswith("Attention_v3"))
     assert n_att == LP + T
     bmap, committed = attn_world.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5, workers=0)
     assert "Attention_v3" not in rep["population"]["not_evaluable_by_family"]
     assert not any("K/V history" in k or "state-linked" in k for k in rep["population"]["not_evaluable"]), rep["population"]["not_evaluable"]
     assert rep["population"]["by_family"].get("Attention_v3") == 2 * n_att
@@ -1171,7 +1176,7 @@ def test_registered_values_program_replays_like_its_constants_twin(attn_world):
 
 def test_attention_v3_honest_program_replays_bit_exactly_from_the_committed_kv_history(attn_world):
     bmap, committed = attn_world.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps(rep, indent=1, default=str)[:3000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"]
     at = {k: v for k, v in rep["strata"].items() if k.startswith("Attention_v3")}
@@ -1213,7 +1218,7 @@ def test_attention_v3_flipped_committed_output_word_fails_named_at_the_attention
         b[(e["element_offset"] + 5) * 2 + 1] ^= 0x01                              # r1, head 0 word 5: one exponent/mantissa bit
         store[k] = bytes(b)
     bmap, committed = attn_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     assert m and all(x["spec"].startswith(f"Attention_v3{{T={LP + T},") and x["request_id"] == "r1" and x["step"] == T for x in m), m
@@ -1230,7 +1235,7 @@ def test_attention_v3_flipped_key_word_of_an_earlier_step_is_named_at_the_rows_t
         b[(e["element_offset"] + 1 * KVH * DH + 2) * 2] ^= 0x40                    # r0, prompt row 1, word 2: a mantissa bit
         store[k] = bytes(b)
     bmap, committed = attn_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     fams = {(x["spec"].split("{")[0], x["step"]) for x in m}
@@ -1251,7 +1256,7 @@ def test_attention_v3_flipped_value_word_of_the_prefill_is_named_at_every_row_th
         b[(e["element_offset"] + 0 * (NH + 2 * KVH) * DH + (NH + KVH) * DH + 4) * 2 + 1] ^= 0x01   # r1, prompt row 0, V word 4
         store[k] = bytes(b)
     bmap, committed = attn_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=3)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=3, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     assert all(x["request_id"] == "r1" for x in m), m
@@ -1302,7 +1307,6 @@ def test_attention_v2_statics_resolve_the_hopper_twins_by_name_and_an_unknown_id
     assert np.array_equal(v3, attn_world.values[("r0", r["i"])])
     st = dict(d["statics"], DOT='{"fn":"AmpereBF16TcDot16_v2"}', INV='{"fn":"Fa2InvSum_v1"}')
     assert np.array_equal(EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"], v3)
-    from verity.definitions.numerics import derived_rows as D
     st = dict(d["statics"], DOT='{"fn":"HopperBF16WgmmaDot16_v1"}', INV='{"fn":"Fa3InvSum_v1"}')
     got = EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"]
     q = np.asarray(inputs[0][0], dtype=np.uint16).reshape(NH, DH)
@@ -1365,7 +1369,6 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     """A DEVICE-retained committed store cannot be read by forked children (CUDA after fork): (a) the caller's
     retention='device' runs the replay serial in the parent (named in the record); (b) without the hint, a child that hits the device is a
     POOL failure -> serial fallback in the parent -- the honest row PASSES either way instead of failing closed on 'not evaluated'."""
-    import os
     bmap, committed = world.bmap_and_reader()
     parent = os.getpid()
     calls = {"child": 0, "parent": 0}
@@ -1503,7 +1506,7 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
     assert {v["family"] for v in vus} >= MOE_FAMS | {"SiluMul_v1", "RMSNormFusedCuda_v2"}
     assert {v["op_path"] for v in vus if v["family"] in MOE_FAMS - {"MoeSum_v1"} or v["family"] == "SiluMul_v1"} == {"moe/L0"}
     bmap, committed = w.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=2, seed=5)
+    rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=2, seed=5, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps({k: rep[k] for k in ("why", "mismatch", "not_evaluated", "population")}, indent=1, default=str)[:4000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"] > 0
     assert set(rep["population"]["by_family"]) >= MOE_FAMS and all(v["evaluated"] >= 1 for v in rep["strata"].values())
@@ -1526,7 +1529,7 @@ def test_the_plan_of_every_moe_vu_reads_what_its_replay_reads_its_sum_plane_copy
     for vu in vus:
         seen: dict[str, set] = {"plan": set(), "replay": set()}
 
-        def reader(key):
+        def reader(key, seen=seen):
             def read(step, name, lo, hi):
                 seen[key].add((step, name, lo, hi))
                 return committed(step, name, lo, hi)
@@ -1718,10 +1721,7 @@ def test_moe_evaluators_equal_the_registered_definitions():
     """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity.definitions.registry.moe`
     Definitions (the bodies moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
-    from verity.circuits.defs import bind
-    from verity.circuits.program import Program
     from verity.definitions.numerics.serve3_reference import materialize
-    from verity.definitions.registry import moe as R
 
     def ref(fn, inputs):
         P = Program(fn)
@@ -1742,7 +1742,7 @@ def test_moe_evaluators_equal_the_registered_definitions():
     assert [int(v) for v in EV.evaluate("MoeSum_v1", {"TOPK": K_, "H": 16}, [[y]], [None])["sum"]] == ref(bind(R.MoeSum, TOPK=K_, H=16), [[int(v) for v in y]])
     Es, K, N = 4, 32, 4
     x, slab, e = _bf16(rng, K), _bf16(rng, Es * N * K, 0.5), 2
-    g = np.float32(0.37).view(np.uint32).item()
+    g: int = np.float32(0.37).view(np.uint32).item()
     up = EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [slab]], [None, None, slab])["up"]
     assert [int(v) for v in up] == ref(bind(R.MoeExpertGemm, E=Es, K=K, N=N), [[int(v) for v in x], [e], [int(v) for v in slab]])
     dn = EV.evaluate("MoeExpertGemmW_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [np.asarray([g], dtype=np.uint32)], [slab]], [None, None, None, slab])["down"]
@@ -1759,7 +1759,6 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     and serialises builders on a lock: N concurrent builders yield exactly one compile, every observer sees a complete file, and a
     fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`).  The race
     is staged: the first builder stops half-way through its write until five more have found the library missing and reached its lock."""
-    import contextlib
     import multiprocessing as mp
 
     from verity.definitions.numerics import _jit
@@ -1777,8 +1776,10 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
         with open(counter, "ab") as fh:
             fh.write(b"1")
         with open(out, "wb") as fh:
-            fh.write(payload[:half]); fh.flush()
-            half_written.set(); release.wait()
+            fh.write(payload[:half])
+            fh.flush()
+            half_written.set()
+            release.wait()
             fh.write(payload[half:])
 
     real_lock = _jit.build_lock
@@ -1811,10 +1812,12 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     assert counter.read_bytes() == b"1", "exactly one compile across 6 concurrent builders"
     assert not list(tmp_path.glob("libtwin.so.*.tmp*")), "no temp file left behind"
     # fresh: no rebuild; stale source: rebuilt once, atomically
-    os.utime(src, (1_600_000_000, 1_600_000_000)); os.utime(lib, (1_600_000_100, 1_600_000_100))
+    os.utime(src, (1_600_000_000, 1_600_000_000))
+    os.utime(lib, (1_600_000_100, 1_600_000_100))
     _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"1"
-    src.write_text("int f(){return 2;}\n"); os.utime(src, (1_600_000_200, 1_600_000_200))
+    src.write_text("int f(){return 2;}\n")
+    os.utime(src, (1_600_000_200, 1_600_000_200))
     _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"11" and lib.read_bytes() == payload
     # the parent prewarm names the rms library for RMSNorm families and nothing for a Gemm-only sample
@@ -1829,7 +1832,6 @@ def test_moe_plane_naming_on_real_programs_dense_zero_moe_nonzero_rev_cb_m0733()
     """The named-not-evaluable MoE set is derived from Program rows alone, so it must be EMPTY on
     every dense Program and non-empty on every MoE Program: pins that the naming cannot grow silently onto dense rows.  Opt-in on real
     Programs (laptop: the Llama-3.2-1B B8 components; the OLMoE B1 Program)."""
-    from verity_vllm.query.manifest import format as RM
     dense = [d for d in os.environ.get("VERITY_DENSE_PROGRAM_DIRS", "").split(":") if d]
     moe = [d for d in os.environ.get("VERITY_MOE_PROGRAM_DIRS", "").split(":") if d]
     for d in dense:
@@ -1881,7 +1883,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
     ok, why = commit_verdict({**base, "binding": _bnd(2), "sampled_replay": rep}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why
     # the honest replay of the same world is still complete
-    rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=64, seed=1)
+    rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=64, seed=1, workers=1)
     assert rep_ok["result"] is True and rep_ok["grade"] == "complete" and rep_ok["sample"]["not_evaluated_n"] == 0
 
 
@@ -1899,9 +1901,9 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
         f = (rng.standard_normal(shape) * scale).astype(np.float32)
         return (f.view(np.uint32) >> 16).astype(np.uint16)
 
-    E, TOPK, VPT, H, I = 8, 2, 4, 32, 16
-    st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I}
-    x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * I, H), 0.3), bf16((E, H, I), 0.3)
+    E, TOPK, VPT, H, INTER = 8, 2, 4, 32, 16
+    st = {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER}
+    x, logits, w13, w2 = bf16((H,)), bf16((E,), 2.0), bf16((E, 2 * INTER, H), 0.3), bf16((E, H, INTER), 0.3)
     RK._PADDED_BLOCK_MEMO.clear()
     got = RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False)
     assert set(got) == {"out", "router_ids", "router_w"} | {f"slot{e}/{m}" for e in range(E) for m in ("up", "act", "down", "g")}
@@ -1912,9 +1914,9 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
     downs = []
     for j in range(TOPK):
         e = ids[j]
-        up = EV.evaluate("MoeExpertGemm_v1", {"E": E, "K": H, "N": 2 * I}, [[x], [np.asarray([e], dtype=np.uint32)], [w13.reshape(-1)]], [None, None, None])["up"]
-        act = EV.evaluate("SiluMul_v1", {"I": I}, [[up]], [None])["out"]
-        down = EV.evaluate("MoeExpertGemmW_v1", {"E": E, "K": I, "N": H},
+        up = EV.evaluate("MoeExpertGemm_v1", {"E": E, "K": H, "N": 2 * INTER}, [[x], [np.asarray([e], dtype=np.uint32)], [w13.reshape(-1)]], [None, None, None])["up"]
+        act = EV.evaluate("SiluMul_v1", {"I": INTER}, [[up]], [None])["out"]
+        down = EV.evaluate("MoeExpertGemmW_v1", {"E": E, "K": INTER, "N": H},
                            [[act], [np.asarray([e], dtype=np.uint32)], [np.asarray([alpha[j]], dtype=np.uint32)], [w2.reshape(-1)]], [None] * 4)["down"]
         assert got[f"slot{e}/up"].tolist() == up.tolist() and got[f"slot{e}/act"].tolist() == act.tolist() and got[f"slot{e}/down"].tolist() == down.tolist()
         assert int(got[f"slot{e}/g"][0]) == alpha[j]
@@ -1929,7 +1931,8 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
         assert got[f"slot{e}/up"].any()
     # the memo: the same (statics, x, logits) is one evaluation; a different logits word is another
     assert RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False) is got
-    logits2 = logits.copy(); logits2[0] ^= 0x0080
+    logits2 = logits.copy()
+    logits2[0] ^= 0x0080
     assert RK.padded_moe_block(st, [x, logits2, w13, w2], router_gemm=False) is not got
     # MoeFfnFixed_v1: the router Gemm inside = Gemm_v1 on (x, wg) then the same block
     wg = bf16((E, H), 0.5)
@@ -1943,29 +1946,33 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     Under a_e = 1 every word must be Active(twin value) = the payload exactly; under a_e = 0 every word must be enc(bot) exactly.  A bot word
     under Active, a value word under disabled, and a bot with a nonzero payload / INV each FAIL with the class named; the exact
     bot plane and the exact Active plane PASS.  The enable is derived from the row's COMMITTED router_ids, never the twin's."""
-    payload = np.asarray([0x3F80, 0xBF00, 0x0000, 0x4049], dtype=np.uint16)
+    payload: np.ndarray = np.asarray([0x3F80, 0xBF00, 0x0000, 0x4049], dtype=np.uint16)
     bot17 = 1 << 16
     eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32), payload, True, "l17")
     assert eq and nd == 0 and first is None and v.startswith("active")
     eq, nd, first, v = CMP.lifted_compare(np.full(4, bot17, dtype=np.uint32), payload, False, "l17")
     assert eq and v.startswith("disabled")
-    have = payload.astype(np.uint32); have[2] = bot17                                # a bot word where the slot is Active
+    have: np.ndarray = payload.astype(np.uint32)
+    have[2] = bot17                                # a bot word where the slot is Active
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 2 and "bot word under an Active enable" in v
-    have = np.full(4, bot17, dtype=np.uint32); have[1] = 0x3F80                      # a value word where the slot is disabled
+    have = np.full(4, bot17, dtype=np.uint32)
+    have[1] = 0x3F80                      # a value word where the slot is disabled
     eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and nd == 1 and first == 1 and "value word under a disabled enable" in v
-    have = np.full(4, bot17, dtype=np.uint32); have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
+    have = np.full(4, bot17, dtype=np.uint32)
+    have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
     eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and "nonzero payload" in v
     # an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
-    have = payload.astype(np.uint32).copy(); have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
+    have = payload.astype(np.uint32).copy()
+    have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 3 and "INV word" in v and "Active" in v
     eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32)[:3], payload, True, "l17")
     assert not eq and nd == -1 and "width" in v
     # l33: the g word and the router members (u64)
-    g = np.asarray([0x3F2C4635], dtype=np.uint32)
+    g: np.ndarray = np.asarray([0x3F2C4635], dtype=np.uint32)
     assert CMP.lifted_compare(np.asarray([0x3F2C4635], dtype=np.uint64), g, True, "l33")[0]
     assert CMP.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, False, "l33")[0]
     assert not CMP.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, True, "l33")[0]
@@ -1995,10 +2002,6 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     """Every not-evaluable reason population() counts carries its structured code (`population.not_evaluable_codes`, what the verdict
     reads), and on every site that code is the one a record written before the codes decodes its text to (`replay_codes`): a new record
     and a record of record grade alike."""
-    from collections import Counter
-
-    from verity_vllm.check.replay import replay_codes as RC
-
     monkeypatch.delitem(RK.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
     monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (plane-fed)
     monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (interior-composed) + direct Gemm gaps
@@ -2006,7 +2009,8 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     rows = [dict(r) for r in moe_world.inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]
     rows[ups[0]]["name"], rows[ups[1]]["name"] = rows[ups[1]]["name"], rows[ups[0]]["name"]            # a plane mapping failure
-    ne, codes = Counter(), {}
+    ne: Counter[str] = Counter()
+    codes: dict[str, dict] = {}
     for inst in (dict(moe_world.inst, rows=rows), biased_world.inst):
         ne.update(POP.population(IX.ProgramIndex(inst), "r0", codes=codes)[1])
     assert set(codes) == set(ne)

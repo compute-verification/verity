@@ -753,4 +753,4 @@ def vocabulary_for(mode: str, profile: str | None) -> Vocabulary:
     return v
 
 
-__all__ = ["Vocabulary", "PROFILE_B1_EAGER", "REFERENCE_CPU_F32", "vocabulary_for", "PROFILES"]
+__all__ = ["Vocabulary", "PROFILE_B1_EAGER", "PROFILE_B1_EAGER_V3", "REFERENCE_CPU_F32", "vocabulary_for", "PROFILES"]

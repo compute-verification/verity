@@ -16,7 +16,7 @@ from verity_vllm.pipeline import c2_replay as C2
 
 C, RL, BS = 4, 4, 2          # cached rows, key / value leaves per row (KVH*D), block size
 ROPE, QKV = "model.layers.{l}.self_attn.rotary_emb", "model.layers.{l}.self_attn.qkv_proj"
-LAYOUT = {"input": 1, "C": C, "row_leaves": RL, "layers": [f"model.layers.{l}.self_attn.attn" for l in (0, 1)]}
+LAYOUT = {"input": 1, "C": C, "row_leaves": RL, "layers": [f"model.layers.{layer}.self_attn.attn" for layer in (0, 1)]}
 
 
 class _Producer:
@@ -24,19 +24,20 @@ class _Producer:
     qkv rows (`out`, the value at [2 RL, 3 RL)), and an attention per history length T whose operands read rows 0..T-1."""
 
     def __init__(self, n=6, own_prefix=False):
-        self.rows, self.by_i, self._d = [], {}, {}
-        for l in (0, 1):
+        self.rows, self.by_i = [], {}
+        self._d: dict[int, dict] = {}
+        for layer in (0, 1):
             for t in range(n):
-                k, v = 1000 * l + t, 1000 * l + 100 + t
-                self._d[k] = {"members": [("key", RL, "bf16")], "step": 0, "row": t, "op_path": ROPE.format(l=l)}
-                self._d[v] = {"members": [("out", 3 * RL, "bf16")], "step": 0, "row": t, "op_path": QKV.format(l=l)}
+                k, v = 1000 * layer + t, 1000 * layer + 100 + t
+                self._d[k] = {"members": [("key", RL, "bf16")], "step": 0, "row": t, "op_path": ROPE.format(l=layer)}
+                self._d[v] = {"members": [("out", 3 * RL, "bf16")], "step": 0, "row": t, "op_path": QKV.format(l=layer)}
             for T in range(1, n + 1):
-                i = 1000 * l + 500 + T
-                kv = [[["p", 1, 0, C * RL]] + [["n", 1000 * l + t, 0, RL] for t in range(C, T)],
-                      [["p", 1, C * RL, 2 * C * RL]] + [["n", 1000 * l + 100 + t, 2 * RL, 3 * RL] for t in range(C, T)]] if own_prefix else \
-                     [[["n", 1000 * l + t, 0, RL] for t in range(T)], [["n", 1000 * l + 100 + t, 2 * RL, 3 * RL] for t in range(T)]]
+                i = 1000 * layer + 500 + T
+                kv = [[["p", 1, 0, C * RL]] + [["n", 1000 * layer + t, 0, RL] for t in range(C, T)],
+                      [["p", 1, C * RL, 2 * C * RL]] + [["n", 1000 * layer + 100 + t, 2 * RL, 3 * RL] for t in range(C, T)]] if own_prefix else \
+                     [[["n", 1000 * layer + t, 0, RL] for t in range(T)], [["n", 1000 * layer + 100 + t, 2 * RL, 3 * RL] for t in range(T)]]
                 r = {"i": i, "spec": f"Attention_v4{{T={T},NH=2,KVH=1,D={RL}}}", "args": [[["n", 0, 0, 2 * RL]], *kv],
-                     "name": f"model.model.layers.{l}.self_attn.attn/unified_attention_with_output[t={T - 1}]"}
+                     "name": f"model.model.layers.{layer}.self_attn.attn/unified_attention_with_output[t={T - 1}]"}
                 self.rows.append(r)
                 self.by_i[i] = r
 

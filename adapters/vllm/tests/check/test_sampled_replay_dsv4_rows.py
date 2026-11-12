@@ -158,7 +158,7 @@ def test_a_hash_id_outside_the_experts_reads_logit_zero():
     """`MoeRouterPick_v1`'s select chain falls through to logits[0] for an id outside [0, E); the row kernel reads the same."""
     d = bind(dsv4_moe.MoeRouterHash, E=16, SCALE=2.5)
     logits = (np.random.default_rng(4).standard_normal(16) * 3).astype(np.float32).view(np.uint32)
-    ids = np.asarray([-1, 16, 17, -(1 << 31), (1 << 31) - 1, 3], dtype=np.int64).astype(np.uint32)
+    ids: np.ndarray = np.asarray([-1, 16, 17, -(1 << 31), (1 << 31) - 1, 3], dtype=np.int64).astype(np.uint32)
     got = _row("MoeRouterHash_v1", RM.spec_statics(f"MoeRouterHash_v1{{E=16,SCALE={TWO5}}}"), [logits, ids])
     assert got.tolist() == _reference(d, signature_of(d)[0], [logits, ids]).tolist()
 

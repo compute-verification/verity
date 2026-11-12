@@ -53,6 +53,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from verity_vllm.records.commit_binding import CommitBinding
+from verity_vllm.records.schema_ids import NOT_EXECUTED_RECONCILIATION_SCHEMA
 
 __all__ = ["ACTIVE_REFERENCE_ONLY", "RULE", "executed_prefix_facts", "executed_prefix_of_record", "facts_accepted_by",
            "new_classification", "reconcile_not_executed", "request_steps_of_record", "restrict_engine_steps",
@@ -420,7 +421,7 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
     n_exec / arrive over the manifest's rows (expected_cells_from_population) -- a population statement that disagrees with its own facts
     FAILS.  A family the population does not reach (an older population tree: no kind, no cells statement) is NAMED under `outside_population_reach` with `population_reaches` False (pending, never read as equal) and, given the
     manifest, the Commit's count must still equal the arithmetic.  Not ok -> the caller fails coverage closed with `error`."""
-    out: dict[str, Any] = {"schema": "verity-sweep/not-executed-reconciliation/v3", "ok": True, "problems": [], "n_exec": {}, "by_family": {},
+    out: dict[str, Any] = {"schema": NOT_EXECUTED_RECONCILIATION_SCHEMA, "ok": True, "problems": [], "n_exec": {}, "by_family": {},
                            "outside_population_reach": {}, "rule": RULE, "scope": ACTIVE_REFERENCE_ONLY}
     if not isinstance(population, dict) or not population:
         out["ok"] = False

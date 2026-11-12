@@ -379,7 +379,7 @@ class TokenSelectGumbelTopP:
 
     def _temperature(self, node: TreeNode, ctx: StepContext) -> Resolution:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         rec = self._row_state(node, ctx, a.get("logits_ptr"))
         if isinstance(rec, Unsupported):
             return rec
@@ -398,7 +398,7 @@ class TokenSelectGumbelTopP:
 
     def _topp(self, node: TreeNode, ctx: StepContext, k: str) -> Resolution:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         rec = self._row_state(node, ctx, first(a.get("LOGITS"), a.get("logits_ptr")))     # the split kernels' signature: LOGITS, STATS, PARTS, K, P, ROUND
         if isinstance(rec, Unsupported):
             return rec
@@ -468,7 +468,7 @@ class TokenSelectGumbelTopP:
         if isinstance(rec, Unsupported):
             return rec
         R, V = rec["f32"].shape
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "logits width is not the vocabulary", V=V, vocab=self.vocab)
         vs = a.get("vocab_size")
         if vs is not None and int(vs) != V:
@@ -608,10 +608,10 @@ class LogitsGather:
                 return unsupported(node, "aten.index with an index pattern other than one leading index tensor", indices=_fmt(idxs))
             idx = tensors[0]
         else:
-            dim = a.get("dim", a.get("arg1"))
-            idx = a.get("index", a.get("arg2"))
-            if dim not in (0,) or not isinstance(idx, ViewDesc):
+            dim, index = a.get("dim", a.get("arg1")), a.get("index", a.get("arg2"))
+            if dim not in (0,) or not isinstance(index, ViewDesc):
                 return unsupported(node, "index_select not along the leading axis", dim=dim)
+            idx = index
         outs = node.output_views()
         if not outs or not is_int(idx) or idx.rank != 1:
             return unsupported(node, "gather index is not an integer [R] view", index=repr(idx))

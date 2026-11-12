@@ -9,3 +9,5 @@ extend-exclude = ["fixtures"]
 [lint.per-file-ignores]
 # a pytest fixture imported from a sibling module and taken as an argument
 "tests/**" = ["F811"]
+# the root's annotation rules hold only in the typed directories, of which this lint reads one (the root's says why)
+"!../../verity/definitions/kernels/**" = ["ANN001", "ANN201", "ANN202", "ANN204"]
