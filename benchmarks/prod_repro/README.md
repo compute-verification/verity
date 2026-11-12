@@ -27,7 +27,9 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
   stock vLLM as its recipe starts it on these cards; `prod-again`; and `prod-record`, which adds the scheduler's step
   trace and keeps each request's prompt ids and served ids. For any other model the benchmark refuses those arms, and
   the job serves `compiled`, `compiled-again` and `record`, at the benchmark's own settings. `--again none` serves
-  stock once: the cost then has no noise floor.
+  stock once: the cost then has no noise floor. `--stock none` serves ours alone, a first start of it and its replay:
+  there is then no cost, and under vLLM's client the benchmark's own cost step ends the runner with 1 for want of a
+  stock arm, which the job takes as no failure where ours served its load.
 - **The first form** sends the load by the corpus client: every arm gets the same plan (C4 prompts, about 60% of
   them behind one of eight shared prefixes) as a burst the engine can't keep up with, each rep from an empty prefix
   cache. It then replays rep 1 of ours (`--replay none`: no replay).

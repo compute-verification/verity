@@ -914,6 +914,48 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_at_the_recipes_arms_and
     assert "  prod: up in 300 s; the load served 1 time, 200 requests" in p.stdout and "the replay: DID NOT END" in p.stdout
 
 
+def test_the_runner_serves_ours_alone_and_takes_the_benchmarks_missing_cost_as_no_failure(tmp_path: Path):
+    script, run_dir = runner(tmp_path), tmp_path / "run"
+    limit = ("--max-model-len", "262144")
+    bench_arm(run_dir / "out", "prod-record", {"chat@16": [299.0]}, ids="chat@16", argv=limit)
+    replayed(run_dir / "out", "prod-record", load="chat@16", served_under=TOPK_UNDER)
+    argv = ("--client", "vllm-bench", "--model", "glm53", "--stock", "none", "--load", "chat=16", "--reps", "1",
+            "--replay", "chat@16", "--pass-prompts", "chat=8")
+    # the benchmark's runner ends 1 on its cost step, which has no stock arm to be over: the job's exit is the report's
+    p = bash(script, *argv, run_dir=run_dir, STAND_IN_RC="1")
+    assert p.returncode == 0, p.stdout + p.stderr
+    s = started(run_dir)
+    assert s["argv"] == "--model glm53 --arms prod-record --loads chat=16 --reps 1"
+    assert (s["REPLAY"], s["REPLAY_FROM"]) == ("chat@16", str(run_dir / "out/prod-record"))
+    assert "prod_repro: context limit 262,144 tokens, given outright to prod-record; with the limit left to it" in p.stdout
+    assert "prod_repro: load chat; stock not served, stock again not served, ours prod-record; run r-1" in p.stdout
+    assert "settings of prod-record:\n  prefix caching: on (the engine's configuration)\n" in p.stdout
+    assert "  context limit: 4,096 tokens (the engine took it; --max-model-len 262144), the model's own limit not read" in p.stdout
+    assert "tokens: reproduced: 2 requests replayed" in p.stdout
+    assert "cost: not measured: no stock arm was served: the job serves prod-record alone\n" in p.stdout
+    assert "prod_repro: no stock arm was served (--stock none), so the benchmark's own cost step had nothing to be over" in p.stdout
+    # read again, the job says the same of its arms
+    again = bash(script, "--report", str(run_dir / "out"), "--load", "chat=16", "--replay", "chat@16", "--stock", "none")
+    assert again.returncode == 0 and "stock not served, stock again not served, ours prod-record" in again.stdout
+    # where ours ended on an error the runner's 1 stands, and so it does where the replay differs or did not end
+    meta = run_dir / "out/prod-record/meta.json"
+    kept = meta.read_text()
+    meta.write_text(json.dumps(json.loads(kept) | {"error": "RuntimeError: the server exited 1"}))
+    p = bash(script, *argv, run_dir=run_dir, STAND_IN_RC="1")
+    assert p.returncode == 1 and "prod-record: FAILED: RuntimeError: the server exited 1" in p.stdout
+    assert "the job's exit is the report's" not in p.stdout
+    meta.write_text(kept)
+    shutil.rmtree(run_dir / "out/replay-compiled")
+    p = bash(script, *argv, run_dir=run_dir, STAND_IN_RC="1")
+    assert p.returncode == 1 and p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
+    # any other exit of the runner is the job's
+    p = bash(script, *argv, run_dir=run_dir, STAND_IN_RC="76")
+    assert p.returncode == 76
+    # the corpus client's runner has no cost step: its exit stands
+    assert bash(script, "--stock", "none", "--ours", "record", "--requests", "8", run_dir=run_dir, STAND_IN_RC="1").returncode == 1
+    assert started(run_dir)["ARMS"] == "record"
+
+
 def test_the_runner_reads_an_earlier_job_again_and_refuses_what_it_cannot_run(tmp_path: Path):
     script = runner(tmp_path)
     out = job(tmp_path)

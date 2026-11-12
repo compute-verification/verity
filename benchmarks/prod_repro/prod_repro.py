@@ -596,7 +596,7 @@ def advice(out: Path, trace: Path | None, stops: str | None, checkpoint: str | N
 
 # --------------------------------------------------------------------------------------------------------- the report
 
-def report(out: Path, stock: str, ours: str, again: str | None, load: str, rep: int = 1, replay_dir: Path | None = None,
+def report(out: Path, stock: str | None, ours: str, again: str | None, load: str, rep: int = 1, replay_dir: Path | None = None,
            target: float = TARGET, replayed: str | None = None, expect_replay: bool = False,
            advice_trace: Path | None = None, advice_stops: str | None = None, private: Path | None = None) -> dict:
     replay_dir = replay_dir or out / "replay-compiled"
@@ -617,7 +617,8 @@ def report(out: Path, stock: str, ours: str, again: str | None, load: str, rep: 
             else:
                 sets[a] = s
     meta = read(f"{ours}'s record", lambda: json.loads((dirs[ours] / "meta.json").read_text())) if ours in dirs else {}
-    line = read("the cost", lambda: cost(out, by, stock, ours, again, load, target))
+    line = read("the cost", lambda: cost(out, by, stock, ours, again, load, target)) if stock else not_measured(
+        f"no stock arm was served: the job serves {ours} alone")
     if len(sets) == 2 and (differ := settings_differ(sets[stock], sets[ours])):
         line["settings_differ"] = differ
         if line["measured"]:
@@ -725,6 +726,8 @@ def _setting(name: str, key: str, r: dict) -> str:
         return f"  {name}: not read ({_absent(r, ours)})"
     s = f"  {name}: {mine[key]['state']} ({mine[key]['by']})"
     theirs = sets.get(stock)
+    if stock is None:
+        return s
     if theirs is None:
         return s + f"; {_absent(r, stock)}"
     return s + ("" if theirs[key]["state"] == mine[key]["state"] else "; DIFFERS") + f"; {stock}: {theirs[key]['state']} ({theirs[key]['by']})"
@@ -745,6 +748,8 @@ def _limit(r: dict) -> str:
     if mine is None:
         return f"  context limit: not read ({_absent(r, ours)})"
     s = "  context limit: " + one(mine["context_limit"])
+    if stock is None:
+        return s
     if theirs is None:
         return s + f"; {_absent(r, stock)}"
     differ = "the context limit" in settings_differ(theirs, mine)
@@ -843,7 +848,7 @@ def text(r: dict) -> str:
     a, t, c, ran = r["arms"], r["tokens"], r["cost"], r["ran"]
     stock, ours = a["stock"], a["ours"]
     lines = [_first(r),
-             f"prod_repro: load {r['load']}; stock {stock}, stock again {a['again'] or 'not served'}, ours {ours}; "
+             f"prod_repro: load {r['load']}; stock {stock or 'not served'}, stock again {a['again'] or 'not served'}, ours {ours}; "
              f"run {r['run']}, commit {r['commit']}",
              f"model: {r['model'] or 'not read'}, as the benchmark names it; the checkpoint served: {r['checkpoint'] or 'not read'}",
              "what ran:", *(_arm(name, s) for name, s in ran["arms"].items()),
@@ -861,7 +866,7 @@ def text(r: dict) -> str:
     else:
         lines.append("  the replay: none was asked for")
     lines += _engine(ran["replay_engine"])
-    lines += [f"settings of {ours}, with {stock}'s beside:",
+    lines += [f"settings of {ours}" + (f", with {stock}'s beside:" if stock else ":"),
               _setting("prefix caching", "prefix_caching", r),
               _setting("speculative decoding", "speculative_decoding", r),
               _limit(r),
@@ -922,9 +927,14 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
     q.add_argument("--model", help="the model the job serves, as the benchmark names it")
     q.add_argument("--out", type=Path, help="an earlier job's out/, read again: the arms it is read as")
+    q = sub.add_parser("served", help="exit 0 where an arm of a job's out/ served the load without an error")
+    q.add_argument("out", type=Path)
+    q.add_argument("arm")
+    q.add_argument("--load", required=True)
     p = sub.add_parser("report", help="the settings and the three lines of a finished job's out/")
     p.add_argument("out", type=Path)
-    p.add_argument("--stock", help="the arms default to the three OUT is read as (default_arms)")
+    p.add_argument("--stock", help="the arms default to the three OUT is read as (default_arms); '' for a job that "
+                                   "served ours alone")
     p.add_argument("--again", help="stock in a second server lifetime, the noise floor ('' for none)")
     p.add_argument("--ours")
     p.add_argument("--load", required=True)
@@ -946,8 +956,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "arms":
         print(" ".join(default_arms(a.model, a.out)))
         return 0
+    if a.cmd == "served":
+        s = arm_state(a.out / a.arm, a.load)
+        return 0 if s["started"] and not s.get("error") and s.get("passes") else 1
     stock, again, ours = default_arms(out=a.out)
-    r = report(a.out, a.stock or stock, a.ours or ours, (again if a.again is None else a.again) or None, a.load, a.rep,
+    r = report(a.out, (stock if a.stock is None else a.stock) or None, a.ours or ours,
+               (again if a.again is None else a.again) or None, a.load, a.rep,
                a.replay, a.target, a.replayed, a.expect_replay, a.advice_trace, a.advice_stops, a.private)
     r["failed"] = failed(r)
     (a.out / "prod_repro.json").write_text(json.dumps(r, indent=1))

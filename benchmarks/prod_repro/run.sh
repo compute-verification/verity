@@ -15,7 +15,7 @@
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
 # settings (prod, prod-again, prod-record) for a model whose recipe the benchmark holds, else stock compiled vLLM,
 # stock again and the step record (prod_repro.py arms), each a server lifetime of its own; --again none serves stock
-# once, and the cost then has no noise floor. The context limit is --max-model-len's for every arm, by default the
+# once, and the cost then has no noise floor; --stock none serves ours alone, and there is then no cost. The context limit is --max-model-len's for every arm, by default the
 # benchmark's for the arm (at the recipe's settings, the recipe's for the cards); limits.json holds what is known of
 # leaving it to vLLM, which the report's first line says. By
 # default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
@@ -64,9 +64,12 @@ case $CLIENT in corpus|vllm-bench) ;; *) echo "prod_repro: --client corpus or vl
 VENV=${VENV:-$venv}
 [ -x "$VENV/bin/python" ] && PY=$VENV/bin/python || PY=python3
 arms=($("$PY" "$here/prod_repro.py" arms --model "${MODEL_ID:-moonlight}" ${REPORT:+--out "$REPORT"})) || exit 2
+# --stock none serves ours alone: a first start of it and its replay, with no stock arm, so no cost
+alone=0; [ "${STOCK-}" != none ] || { alone=1; AGAIN=none; }
 [ "${AGAIN-}" != none ] || AGAIN=
-STOCK=${STOCK:-${arms[0]}}; AGAIN=${AGAIN-${arms[1]}}; OURS=${OURS:-${arms[2]}}
-served="$STOCK${AGAIN:+ $AGAIN} $OURS"
+if [ $alone = 1 ]; then STOCK=; else STOCK=${STOCK:-${arms[0]}}; fi
+AGAIN=${AGAIN-${arms[1]}}; OURS=${OURS:-${arms[2]}}
+served="${STOCK:+$STOCK }${AGAIN:+$AGAIN }$OURS"
 REPLAY_MODES=${REPLAY_MODES:-compiled}
 # the report of a job's out/: with a replayed pass named, the job asked for a replay, and one that did not end fails;
 # the job's own report also reads what its processes kept in PRIVATE
@@ -103,6 +106,14 @@ case $CLIENT in
     REPLAYED=${REPLAYED:-none}; replays
     bash "$tax/run.sh" --model "$MODEL_ID" --arms "$served" --loads "$LOAD" --reps "${REPS:-6}"; rc=$? ;;
 esac
+# with no stock arm, the benchmark's runner under vLLM's client still ends on its own cost step, which then has
+# nothing to be over and fails after everything else: where ours served its load without an error, the job's exit is
+# the report's, which fails where the replay did not end or differs
+if [ $alone = 1 ] && [ "$CLIENT" = vllm-bench ] && [ $rc = 1 ] && "$PY" "$here/prod_repro.py" served "$OUT" "$OURS" --load "${LOAD%%=*}"; then
+  echo "prod_repro: no stock arm was served (--stock none), so the benchmark's own cost step had nothing to be over and" \
+    "ended 1; $OURS served its load without an error, and the job's exit is the report's"
+  rc=0
+fi
 [ $rc = 0 ] || echo "prod_repro: the serving cost benchmark's runner ended $rc: an arm, the replay or its own cost step failed (see above; the report below says how far each got)"
 [ -d "$OUT" ] || { echo "prod_repro: nothing was served (no $OUT): no report"; exit $(( rc ? rc : 1 )); }
 if [ $termed = 1 ]; then
