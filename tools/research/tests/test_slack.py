@@ -2,6 +2,7 @@
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
+import argparse
 import base64
 import email.message
 import http.client
@@ -13,6 +14,7 @@ import os
 import re
 import shutil
 import socketserver
+import subprocess
 import tempfile
 import threading
 import urllib.error
@@ -23,9 +25,10 @@ from typing import Callable
 
 import pytest
 
-from research import slack
+from research import queue, slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
+REGISTRY_HANDOVER = slack.registry_handover
 ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
@@ -173,6 +176,7 @@ def routes_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{remote}")
     monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
     monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))  # tests post as any name
+    monkeypatch.setattr(slack, "registry_handover", lambda ns, name, route: None)               # it pushes and opens a PR
     return local, remote
 
 
@@ -2028,8 +2032,8 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
 
 
 def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
-    """Daniel's page decided something no option names (card ee27f7dd): `otherwise` records it, with his words and
-    `page`, and never as the lane's own provisional decision."""
+    """A page that decided something no option names: `otherwise` records it with the note and `page`, never as the
+    lane's own provisional decision."""
     route.resolve = True
     run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
     assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
@@ -2714,17 +2718,69 @@ def test_a_reply_under_an_announcement_rings_only_the_names_it_starts_with(fake,
     assert run(capsys, "close", "--as", "proofs", "--thread", root["ts"], "--declined", "past the budget line")[0] == 0
     assert len(bells(fake, boxes["infra"])) == 1                                      # a decline wants the announcer
 
+def test_registry_with_route_gives_a_handle_its_routes_holder_and_suffixes_and_keeps_the_file_shape():
+    text = json.dumps({"handles": [{"handle": "circuits", "holder": "bc-11111111-2222-3333-4444-555555555555",
+                                    "branch_suffixes": ["5555"]}, {"handle": "ci", "holder": "bc-x"}]}, indent=2) + "\n"
+    route = {"holder": "bc-99999999-2222-3333-4444-666666666666", "branch_suffixes": ["5555", "6666"]}
+    new = json.loads(slack.registry_with_route(text, "circuits", route))
+    assert new["handles"][0] == {"handle": "circuits", "holder": route["holder"], "branch_suffixes": ["5555", "6666"]}
+    assert new["handles"][1] == {"handle": "ci", "holder": "bc-x"}
+    assert slack.registry_with_route(slack.registry_with_route(text, "circuits", route), "circuits", route) is None
+    assert slack.registry_with_route(text, "nobody", route) is None
+
+
+def test_a_succession_opens_the_registry_change_from_main_and_says_how_to_mark_it(tmp_path, monkeypatch, capsys):
+    """The route changes at once and the registry, which the queue reads owners and marks from, by its own PR: the handover
+    pushes that change from origin/main and opens it, so the successor's work stops resolving to its predecessor."""
+    origin, clone = tmp_path / "origin.git", tmp_path / "clone"
+    git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], check=True, capture_output=True, text=True).stdout  # noqa: E731
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True)
+    reg = clone / slack.REGISTRY_REL
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"handles": [{"handle": "circuits", "holder": "bc-11111111-2222-3333-4444-555555555555"}]},
+                              indent=2) + "\n")
+    git(clone, "add", "-A")
+    git(clone, "commit", "-qm", "registry")
+    git(clone, "push", "-q", "origin", "HEAD:main")
+    opened = []
+    monkeypatch.setattr(queue, "open_pr",
+                        lambda top, repo, head, title, body, sha=None, **kw: opened.append((head, body, sha)) or
+                        "https://github.com/o/r/pull/77")
+    ns = argparse.Namespace(dry_run=False, registry=str(reg))
+    route = {"holder": "bc-99999999-2222-3333-4444-666666666666", "branch_suffixes": ["5555", "6666"]}
+    assert REGISTRY_HANDOVER(ns, "circuits", route) == "https://github.com/o/r/pull/77"
+    (head, body, sha), = opened
+    assert head == "cursor/registry-circuits-6666" and body.startswith("Lane circuits\n")
+    pushed = json.loads(git(origin, "show", f"{head}:{slack.REGISTRY_REL}"))
+    assert pushed["handles"][0]["holder"] == route["holder"] and pushed["handles"][0]["branch_suffixes"] == ["5555", "6666"]
+    assert git(origin, "rev-parse", head).strip() == sha
+    assert "`research queue ready 77 --mark --by circuits`" in capsys.readouterr().out
+    assert git(clone, "worktree", "list").count("\n") == 1                                 # its scratch worktree is gone
+
+    git(origin, "update-ref", "refs/heads/main", f"refs/heads/{head}")                    # the change landed
+    assert REGISTRY_HANDOVER(ns, "circuits", route) is None and "already names" in capsys.readouterr().out
+    loose = tmp_path / "loose.json"
+    loose.write_text(reg.read_text())
+    assert REGISTRY_HANDOVER(argparse.Namespace(dry_run=False, registry=str(loose)), "circuits", route) is None
+    assert "open the registry change by hand" in capsys.readouterr().err
+
+
 def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecessors_suffix(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     notes_clone(tmp_path)
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "circuits", box, holder="bc-11111111-2222-3333-4444-555555555555", branch_suffixes=["ab12"])
     monkeypatch.setattr(slack, "_branch_suffix", lambda: "cd34")
+    handed = []
+    monkeypatch.setattr(slack, "registry_handover", lambda ns, name, route: handed.append((name, route["holder"])))
     assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-99999999-2222-3333-4444-666666666666", "--succeeds")[0] == 0
     r = json.loads((routes_dirs[0] / "circuits.json").read_text())
     assert r["holder"].startswith("bc-99999999") and r["branch_suffixes"] == ["ab12", "5555", "cd34"]
+    assert handed == [("circuits", r["holder"])]                                     # the registry's half of the handover
     monkeypatch.setattr(slack, "_branch_suffix", lambda: "ef56")                      # the same holder, on a new branch
     assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-99999999-2222-3333-4444-666666666666")[0] == 0
+    assert len(handed) == 1
     assert json.loads((routes_dirs[0] / "circuits.json").read_text())["branch_suffixes"] == ["ab12", "5555", "cd34", "ef56"]
 
 
@@ -2836,6 +2892,32 @@ def test_retract_blanks_only_the_names_own_post(fake, registry, capsys):
     assert rc == 2 and "was posted by @ci, not @infra" in err and other["text"] == "mine"
     rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", "1700000999.000001")
     assert rc == 2 and "a reply needs --thread ROOT" in err
+
+
+def test_retract_goes_through_the_broker_and_its_refusal_says_who_may(broker, registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--text", "x")
+    ts = out.split()[0]
+    assert run(capsys, "retract", "--as", "infra", "--ts", ts)[0] == 0
+    assert {"method": "chat.update", "args": {"channel": COORD, "ts": ts, "text": "_retracted by @infra_"}} in [r for _, r, _ in broker.requests]
+    assert next(m for m in broker.state.messages[COORD] if m["ts"] == ts)["text"] == "_retracted by @infra_"
+
+    def refuse_edits(url, data, headers):
+        if json.loads(data)["method"] == "chat.update":
+            raise http_error(403, {"error": "forbidden_caller"})
+        return broker(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", refuse_edits)
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", ts)
+    assert rc == 2 and "forbidden_caller): only an edit to a post made as a name this agent holds or posts as" in err
+
+
+def test_chat_open_goes_through_the_broker(broker, registry, people_d, capsys):
+    chat_users(broker.state)
+    rc, _, err = run(capsys, "chat", "open", "luke", "--user", LUKE)
+    assert rc == 0, err
+    sent = [r["method"] for _, r, _ in broker.requests]
+    assert {"conversations.create", "conversations.invite", "pins.add"} <= set(sent)
+    assert broker.identities == [slack.BROKER] and broker.state.channels
 
 
 def argparse_ns(**kw):
