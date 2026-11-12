@@ -31,7 +31,7 @@ from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_P
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
-from test_vqueue_loop import NEW, _check, env  # noqa: F401  (env: the loop's fixture)
+from test_vqueue_loop import NEW, PLAN, _check, env  # noqa: F401  (env: the loop's fixture)
 from test_vqueue_loop import _row as _loop_row
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
@@ -975,6 +975,121 @@ def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infr
         assert got.state == INFRA and got.infra[0].task.endswith("was killed (done rc=1)"), got
     else:
         assert got == Verdict(PASS)
+
+
+def _shards_now(h: Beside, tmp_path, running: tuple[tuple[int, str], ...] = (),
+                failed: tuple[tuple[int, str], ...] = ()) -> None:
+    """The three shards of the newest check that gates (`r-post-N`), each holding the preflights and its steps of `PLAN`, as
+    they are now: each step passed, but each (shard, step) of ``running``, which runs (its live record says so, and its
+    run's state), and of ``failed``, which failed with an error line; a shard with no step running ended, exit 1 when it
+    failed one."""
+    from research.landing import LIVE as LIVE_FILE, PREFLIGHT, failing
+
+    h.evidence = []
+    for k, steps in enumerate(PLAN, 1):
+        rid = f"r-post-{len(h.posted) - len(PLAN) + k - 1}"
+        (d := tmp_path / rid).mkdir(parents=True, exist_ok=True)
+        rows = [{"step": s, "status": "failed", "rc": 1, "log": f"{s}.log"} if (k, s) in failed else {"step": s, "status": "passed"}
+                for s in (*PREFLIGHT, *steps) if (k, s) not in running]
+        for r in rows:
+            if r["status"] == "failed":
+                (d / r["log"]).write_text("error: it failed\n")
+        (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+        runs = [s for j, s in running if j == k]
+        (d / LIVE_FILE).write_text(json.dumps({"schema": "check-live/v1", "state": "running" if runs else "passed",
+                                               "steps": [*({"step": r["step"], "state": r["status"]} for r in rows),
+                                                         *({"step": s, "state": "running"} for s in runs)]}))
+        h.run_state[rid] = ("running", None, None, failing(d)) if runs else ("done", int(any(r["status"] == "failed" for r in rows)),
+                                                                          None)
+        h.evidence.append(d)
+
+
+def test_the_check_that_gates_passes_once_each_step_it_judges_passed_in_every_shard_while_one_runs_circuit_check(
+        world, monkeypatch, tmp_path):
+    """circuit-check is off the merge gate, so it holds no pass: two shards ended passing every step, and the third passed
+    each step it holds that the check is judged on and still runs circuit-check.  The check passes, kept with the steps it
+    passed, and nothing is cancelled; what circuit-check failed is read only once its run ended, the pass kept as it was."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),))
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"] and not h.cancelled
+    assert "circuit-check" not in rec["verdict"]["passed"] and {"pytest", "lean-audit", "preflight-lints"} <= {
+        *rec["verdict"]["passed"]}
+    assert failures(h.d, rec, "circuit-check") is None
+    _shards_now(h, tmp_path, failed=((3, "circuit-check"),))
+    assert judge(h.d, rec) == Verdict(PASS) and "still_running" not in rec and not h.cancelled
+    assert failures(h.d, rec, "circuit-check") == {"circuit-check": "circuit-check failed, its log naming no failure"}
+
+
+@pytest.mark.parametrize("step", [(1, "lean-audit"), (2, "pytest"), (3, "pytest")])
+def test_the_check_that_gates_stays_pending_while_a_step_it_judges_runs_in_a_shard_that_holds_it(world, monkeypatch, tmp_path,
+                                                                                                   step):
+    """A step the check is judged on still runs in a shard holding it (pytest's suites are split over two shards, and one
+    passed its part), beside circuit-check: the check is pending, its verdict unkept; once that step passed there, it passes
+    while circuit-check runs on."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=(step, (3, "circuit-check")))
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),))
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
+@pytest.mark.parametrize("unfetched", [1, 3])
+def test_the_check_that_gates_stays_pending_while_a_shard_s_dir_isn_t_fetched(world, monkeypatch, tmp_path, unfetched):
+    """Every step the check is judged on passed in each shard and the first still runs circuit-check, but one shard's run
+    dir wasn't fetched: the running one's, or the third's, which ended and whose one step judged (pytest) the second shard
+    passed too.  What it holds is unread, so the check is pending, its verdict unkept; fetched, the same shard lets it
+    pass."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((1, "circuit-check"),))
+    every = h.evidence
+    h.evidence = [d for k, d in enumerate(every, 1) if k != unfetched]
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    h.evidence = every
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
+def test_the_check_that_gates_stays_pending_while_a_running_shard_s_live_record_names_only_the_preflights(
+        world, monkeypatch, tmp_path):
+    """The third shard passed its preflights and its live record names nothing else yet, so its plan (pytest's other
+    suites among it) is unknown: though pytest passed in the second shard and every other step the check is judged on
+    passed, the check is pending; once that record names the shard's whole plan, circuit-check still running, it passes."""
+    from research.landing import LIVE as LIVE_FILE, PREFLIGHT
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),))
+    d = h.evidence[2]
+    planned = (d / "steps.jsonl").read_text(), (d / LIVE_FILE).read_text()
+    (d / "steps.jsonl").write_text("".join(json.dumps({"step": s, "status": "passed"}) + "\n" for s in PREFLIGHT))
+    (d / LIVE_FILE).write_text(json.dumps({"schema": "check-live/v1", "state": "running",
+                                           "steps": [{"step": s, "state": "passed"} for s in PREFLIGHT]}))
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    (d / "steps.jsonl").write_text(planned[0])
+    (d / LIVE_FILE).write_text(planned[1])
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_it_and_one_an_allowance_covers_passes(
+        world, monkeypatch, tmp_path, allowed):
+    """Every other step the check is judged on passed and a shard still runs circuit-check: a suite of pytest failed in an
+    ended shard fails the check at once, as before, never a pass; one an unexpired allowance at the base covers counts as
+    passed, as at the end, and the check passes."""
+    tree = {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE), off_gate=OFF)} if allowed else None
+    h, base, sha, _ = _harness(world, monkeypatch, tree=tree)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),), failed=((2, "pytest"),))
+    (h.evidence[1] / "suites.json").write_text(json.dumps([PKG]))
+    got = judge(h.d, rec)
+    if allowed:
+        assert got == Verdict(PASS) and rec["still_running"] and "pytest" in rec["verdict"]["passed"]
+    else:
+        (f,) = got.failed
+        assert (got.state, f.task, f.tests) == (FAIL, "step pytest", {f"pkg::{TEST}"})
+        assert "verdict" not in rec and "still_running" not in rec and rec["early"]["state"] == FAIL
 
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
