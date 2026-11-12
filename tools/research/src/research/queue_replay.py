@@ -258,6 +258,7 @@ class Fault:
     changes: list[tuple[int, str]]
     suites: tuple[str, ...]              # the suites that failed first, by directory; none when no node recorded one
     delay: float | None = None           # from that drop until the blamed changes left the queue, None when the loop ejected
+    how: str = ""                        # how the blamed changes were found
 
 
 @dataclass
@@ -487,12 +488,15 @@ def trace(doc: dict) -> Trace:
         named = [k for k in mine if re.match(rf"#{k[0]}\b", c.get("why") or "")]
         named += [k for when, k in ejects if k in mine and abs(when - at) < 900 and k not in named]
         ejected = bool(named) and any(k in mine and abs(when - at) < 900 for when, k in ejects)
+        how = "named by the loop"
         if not named:
+            how = "found by a hold or a mark another withdrew"
             # a mark another withdrew, or a hold, soon after: not the loop's own eject for a later failure
             named = [k for k in mine if any(at - 1800 <= when <= at + 3 * 3600 and why != "owner"
                                             and not any(e == k and abs(when - x) < 300 for x, e in ejects)
                                             for when, why in closed.get(k, ()))]
         if not named:
+            how = "found by never landing"
             never = [k for k in mine if k not in landed]
             named = never if 0 < len(never) <= max(3, len(mine) // 4) else []
         named = [k for k in named if k in changes and k not in landed]
@@ -501,7 +505,7 @@ def trace(doc: dict) -> Trace:
             continue
         suites = tuple(dict.fromkeys(f[0] for s in c["shards"] for f in sorted(s.get("failed") or [], key=lambda f: f[1] or 0) if f[1]))
         out = [when for k in named for when, why in closed.get(k, ()) if when >= c["build"] and why != "owner"]
-        fault = Fault(len(faults), at, named, suites[:1], None if ejected else max(0.0, min(out) - at) if out else None)
+        fault = Fault(len(faults), at, named, suites[:1], None if ejected else max(0.0, min(out) - at) if out else None, how)
         faults[fault.id] = fault
         for k in named:
             changes[k].fault = fault.id
@@ -583,6 +587,10 @@ class Rule:
     period: float = 0.0            # a candidate is built every so many seconds whatever is below it, and no depth
     plain_first: bool = False      # with nothing in check, the plain batch is built before a Lean batch
     after: int = 2                 # under `first`, so many checks of `main` at once
+    overlap: bool = False          # a Lean batch's check starts with its records run and stands when the run ends
+    back: bool = False             # under `first`, a failure naming several changes reverts each, back to the queue's check;
+                                   # else the change at fault stays on `main` as long as it really stayed in the queue
+    pin_all: bool = True           # every Lean change the queue may take is pinned; else one is while a real candidate held it
 
 
 @dataclass
@@ -634,6 +642,8 @@ class Replay:
         self.union_s: list[float] = []
         self.red: list[tuple[float, float]] = []       # while `main` held a change at fault
         self.on_main: list[tuple[float, Change]] = []  # changes landed before their check, not yet in one
+        self.checked: set[tuple[int, str]] = set()     # changes reverted as suspects: checked before they land again
+        self.red_until = -float("inf")                 # a change at fault known to be on `main` until then
         self.post: list[dict] = []
         self.last_build = -float("inf")
         self.n = 0
@@ -728,7 +738,9 @@ class Replay:
                     if (why := self._why_gone(ch)) in TAKEN:
                         pulled.add(ch.pr)
                         left.append((ch.pr, ch.head, TAKEN[why]))
-        pinned = frozenset(ch.pr for ch in order if ch.lean and any(a <= self.t < b for a, b in ch.pins)) if pins else frozenset()
+        # as it ran, a Lean change was pinned by hand, about when a real candidate took it; now every one the queue may take is
+        pinned = frozenset(ch.pr for ch in order if ch.lean and (self.rule.pin_all or any(a <= self.t < b for a, b in ch.pins))) \
+            if pins else frozenset()
         snap = vq.Snapshot(main, rd, tuple(self._candidate(c) for c in cands), tuple(self.history), f["batch"],
                            f["depth"] if depth is None else depth, lean=f["lean"], now=self.t, records=f["records"],
                            left=tuple(left), wide=self.tr.wide, pinned=pinned, pulled=frozenset(pulled), flying=tuple(flying))
@@ -839,11 +851,17 @@ class Replay:
             elif isinstance(a, vq.Drop) and a.outcome is not None and a.sha in saved and a.outcome.state != vq.PASS:
                 self.history.append(a.outcome)
             elif isinstance(a, vq.Build):
-                if self.rule.period and self.t - self.last_build < self.rule.period:
+                # what was kept is on the chain again: the batch the loop would build in its place is not built
+                if saved or (self.rule.period and self.t - self.last_build < self.rule.period):
                     continue
                 c = self._new([ready[m] for m in a.members], a.base)
                 if a.records or (self.rule.side and any(ch.lean for ch in c.changes)):
                     c.records_at = self.t + (self.rng.choice(self.tr.records) if self.tr.records else 3600.0)
+                elif self.rule.overlap and any(ch.lean for ch in c.changes):
+                    self._check(c)
+                    took = self.rng.choice(self.tr.records) if self.tr.records else 3600.0
+                    self._use(self.t, self.t + took, RECORDS_PLACES)
+                    c.pass_at = max(c.pass_at, self.t + took)
                 elif self.rule.beside and any(ch.lean for ch in c.changes):
                     c.records_at = self.t + (self.rng.choice(self.tr.records) if self.tr.records else 3600.0)
                     self.side.append(c)
@@ -946,6 +964,14 @@ class Replay:
         snap, ready = self.snapshot(chain, self.main, busy=busy, pins=pins)
         acts = vq.decide(snap)
         self.apply(acts, ready)
+        if self.rule.alone:
+            # a check alone runs only on a place nothing else needs: the newest is cancelled first
+            for c in sorted(self.cands.values(), key=lambda c: -c.built):
+                if self._busy() <= PLACES:
+                    break
+                if c.twin is not None:
+                    self._use(c.twin[0], min(self.t, c.twin[1]), SHARDS)
+                    c.twin = None
         if self.rule.plain_first and not pins and not self.side:
             return
         if self.rule.beside and self.side and any(isinstance(a, vq.Build) and self.side[-1].built == t for a in acts):
@@ -956,8 +982,8 @@ class Replay:
 
     def _side(self) -> None:
         """Batches beside each other, each on the `main` it was built on: one that passes lands at once if `main` hasn't
-        moved since, else after a rerun of the suites that read files of both it and what landed since (the union's check);
-        a member touching a file that landed since is left out of the union and built again."""
+        moved since, else after a rerun of the suites that read files of both it and what landed since (the union's check).
+        One Lean batch is in its records run or its check at a time: the records of a second would be stale when the first lands."""
         for c in sorted(self.cands.values(), key=lambda c: c.built):
             if c.start is None:
                 if self.t < c.records_at:
@@ -967,7 +993,8 @@ class Replay:
             self.apply(vq.decide(snap), ready, on_main=self._union)
         if sum(1 for c in self.cands.values() if c.union is None) < self.rule.side:
             busy = {ch.pr for c in self.cands.values() for ch in c.changes}
-            snap, ready = self.snapshot([], self.main, depth=1, busy=busy)
+            lean = any(ch.lean for c in self.cands.values() for ch in c.changes)
+            snap, ready = self.snapshot([], self.main, depth=1, busy=busy, pins=not lean)
             self.apply([a for a in vq.decide(snap) if isinstance(a, vq.Build)], ready)
 
     def _union(self, c: _Cand) -> bool:
@@ -993,35 +1020,51 @@ class Replay:
     def _first(self) -> None:
         """Changes of the rule's class land on their mark and verdict; `main` is then checked, so many checks at once, each
         over what landed since the one before it.  A change at fault stays on `main` until a check fails on it and the loop
-        reverts it: at once when the failure names it alone, else when it was really taken from the queue."""
-        kind = self.rule.first
-        ready = self.ready()
-        red = any(ch.fault is not None and ch.key not in self.out for _, ch in self.on_main) or any(
-            ch.fault is not None and ch.key not in self.out for p in self.post for ch in p["changes"])
-        for ch in sorted(ready.values(), key=lambda ch: ch.rank):
-            if getattr(ch, kind) and not any(a <= self.t < b for a, b in ch.conflicts) and not any(
-                    ch in c.changes for c in self.cands.values()):
-                self._land(ch)
-                self.on_main.append((self.t, ch))
-                self.counts["on_red"] += red
-                red = red or ch.fault is not None
+        reverts it: at once when the failure names it alone; else as long after as it really was taken from the queue, or,
+        under `Rule.back`, at once with every other change the failure names, each of which the queue then checks before it
+        lands again.  Under `Rule.back` a failure with nobody at fault reverts every change of its check the same way."""
+        kind, back = self.rule.first, self.rule.back
         for p in list(self.post):
             if p["fail_at"] is not None and self.t >= p["fail_at"]:
+                again: list[Change] = list(p["changes"]) if p["flake"] and back else []
                 for ch in p["changes"]:
-                    if ch.fault is not None and ch.key not in self.out:
-                        lone = sum(1 for o in p["changes"] if vq.meets(self._files(o), self._blame(ch.fault))) == 1
-                        at = self.t if lone else self.t + (self.tr.faults[ch.fault].delay or 0.0)
+                    if ch.fault is not None and ch.key in self.landed:
+                        suspects = [o for o in p["changes"] if vq.meets(self._files(o), self._blame(ch.fault))]
+                        if len(suspects) > 1 and back:
+                            self.red.append((self.landed[ch.key], self.t))
+                            again += [o for o in suspects if o not in again]
+                            continue
+                        at = self.t if len(suspects) == 1 else self.t + (self.tr.faults[ch.fault].delay or 0.0)
                         self.red.append((self.landed[ch.key], at))
+                        self.red_until = max(self.red_until, at)
                         self.counts["reverts"] += 1
                         self.out[ch.key] = (at, "fault")
                         self.arrive[ch.key] = at
                         del self.landed[ch.key]
+                again = [o for o in again if o.key in self.landed]
+                if again:
+                    # the loop cannot name one change: each suspect is reverted and goes through the queue's check before it lands
+                    for o in again:
+                        del self.landed[o.key]
+                        self.checked.add(o.key)
+                    self.counts["reverts"] += len(again)
+                    self.history.append(vq.Outcome(tuple(o.pr for o in again), tuple(o.head for o in again), vq.FAIL,
+                                                   tuple(o.pr for o in again), self.main))
                 self.counts["false_reds"] += p["flake"]
                 self._use(p["start"], self.t, SHARDS)
                 self.post.remove(p)
             elif self.t >= p["pass_at"]:
                 self._use(p["start"], p["pass_at"], SHARDS)
                 self.post.remove(p)
+        red = self.t < self.red_until or any(ch.fault is not None and ch.key in self.landed for _, ch in self.on_main) or any(
+            ch.fault is not None and ch.key in self.landed for p in self.post for ch in p["changes"])
+        for ch in sorted(self.ready().values(), key=lambda ch: ch.rank):
+            if getattr(ch, kind) and ch.key not in self.checked and not any(a <= self.t < b for a, b in ch.conflicts) and not any(
+                    ch in c.changes for c in self.cands.values()):
+                self._land(ch)
+                self.on_main.append((self.t, ch))
+                self.counts["on_red"] += red
+                red = red or ch.fault is not None
         if self.on_main and len(self.post) < self.rule.after:
             changes = [ch for _, ch in self.on_main]
             self.on_main = []
@@ -1070,7 +1113,10 @@ def measure(tr: Trace, run: Replay) -> dict:
     """One run's numbers, over the changes that really landed in the window: minutes from the mark to `main` (a change
     the run did not land by the window's end has none)."""
     who = [ch for ch in tr.changes.values() if ch.landed is not None and ch.mark is not None and tr.start <= ch.landed <= tr.end]
-    minutes = sorted((run.landed[ch.key] - ch.mark) / 60 if ch.key in run.landed else float("inf") for ch in who)
+    wait = {ch.key: (run.landed[ch.key] - ch.mark) / 60 if ch.key in run.landed else float("inf") for ch in who}
+    minutes = sorted(wait.values())
+    lean = [wait[ch.key] <= qt.TARGET_MIN for ch in who if ch.lean]
+    other = [wait[ch.key] <= qt.TARGET_MIN for ch in who if not ch.lean]
     red = sorted(run.red)
     merged: list[list[float]] = []
     for a, b in red:
@@ -1081,6 +1127,7 @@ def measure(tr: Trace, run: Replay) -> dict:
     return {"n": len(minutes), "within": sum(1 for m in minutes if m <= qt.TARGET_MIN) / len(minutes) if minutes else 0.0,
             "p50": qt.pct(minutes, .5), "p90": qt.pct(minutes, .9), "unlanded": sum(1 for m in minutes if m == float("inf")),
             "lost": sum(run.lost.values()), "by_cause": dict(run.lost), **run.counts, **peak(run.places, tr.start, tr.end),
+            "within_lean": sum(lean) / len(lean) if lean else 0.0, "within_other": sum(other) / len(other) if other else 0.0,
             "landed_all": len(run.landed), "red_times": len(merged), "red_min": sum(b - a for a, b in merged) / 60,
             "union_min": (qt.pct(run.union_s, .5) or 0.0) / 60}
 
@@ -1089,9 +1136,13 @@ def measured(tr: Trace) -> dict:
     """What really happened over the replay's window, in `measure`'s terms."""
     m = tr.measured
     minutes = m["minutes"]
+    who = [ch for ch in tr.changes.values() if ch.landed is not None and ch.mark is not None and tr.start <= ch.landed <= tr.end]
+    kind = {k: [(ch.landed - ch.mark) / 60 <= qt.TARGET_MIN for ch in who if ch.lean == k] for k in (True, False)}
     return {"n": len(minutes), "within": sum(1 for x in minutes if x <= qt.TARGET_MIN) / len(minutes) if minutes else 0.0,
             "p50": qt.pct(minutes, .5), "p90": qt.pct(minutes, .9), "lost": sum(m["lost"].values()), "by_cause": m["lost"],
-            "built": m["built"], "reds": m["reds"], "moves": m["moves"], "landed": m["landed"]}
+            "built": m["built"], "reds": m["reds"], "moves": m["moves"], "landed": m["landed"],
+            "within_lean": sum(kind[True]) / len(kind[True]) if kind[True] else 0.0, "n_lean": len(kind[True]),
+            "within_other": sum(kind[False]) / len(kind[False]) if kind[False] else 0.0}
 
 
 def row(tr: Trace, rule: Rule, seeds: int) -> dict:
@@ -1163,22 +1214,28 @@ def lean_first(tr: Trace, doc: dict) -> list[dict]:
 
 
 RULES = (
-    Rule("0. For reference: every change lands the moment the queue may take it, with no check", "none: nothing is checked",
-         first="every"),
-    Rule("1. The loop as it ran: its flags, its blame and the drops by hand at their times", recorded=True),
-    Rule("1b. The loop as it runs now, left alone: batch 32, depth 6, a Lean batch's records run first"),
+    Rule("0. For reference: every change, Lean ones too, lands the moment the queue may take it and is checked after",
+         "a revert", first="every"),
+    Rule("1. The loop as it ran: its flags, its blame, its pins and the drops by hand at their times", recorded=True, pin_all=False),
+    Rule("1b. The loop with a Lean batch's records run first and nothing built meanwhile, left alone: batch 32, depth 6, "
+         "pins as they were", pin_all=False),
     Rule("2. Plain batches build beside a Lean batch's records run; a failed check removes only the change at fault and what "
          "is rebuilt keeps its passes", "none: the same checks, scheduled differently", beside=True, keep=True),
     Rule("2a. Only: plain batches build beside a Lean batch's records run", "none", beside=True),
-    Rule("2b. Only: a failed check removes only the change at fault and what is rebuilt keeps its passes", "none", keep=True),
+    Rule("2b. Row 1b, and only: a failed check removes only the change at fault and what is rebuilt keeps its passes", "none",
+         keep=True, pin_all=False),
     Rule("3. Batches side by side on `main`, 6 in check at once, each union rechecked on the suites both sides read",
          "a union that fails is dropped and its batch built again on `main`", side=6, beside=True),
     Rule("3b. The same, 4 in check at once", "the same", side=4, beside=True),
     Rule("4. Row 2, and each candidate above the lowest is also checked alone on `main` while places are idle",
          "none: a check alone that is not needed is cancelled", beside=True, keep=True, alone=True),
+    Rule("4b. Row 2a, and the same checks alone", "the same", beside=True, alone=True),
     Rule("5. Row 2, and a plain change lands on its mark and verdict and is checked after",
          "the loop reverts the change a later check fails on", beside=True, keep=True, first="plain"),
-    Rule("5b. The same on the loop as it runs now", "the same", first="plain"),
+    Rule("5b. Row 5, but a failed check of `main` that names several changes reverts each of them at once, and they are checked "
+         "before they land again", "the same, and the reverts of changes not at fault", beside=True, keep=True, first="plain",
+         back=True),
+    Rule("5c. Row 5 with four checks of `main` at once", "the same", beside=True, keep=True, first="plain", after=4),
     Rule("6a. Row 2, and a change of prose only (every file Markdown) lands on its mark and verdict", "a revert",
          beside=True, keep=True, first="prose"),
     Rule("6b. Row 2, and a change of tests only (every file under a tests directory) lands on its mark and verdict", "a revert",
@@ -1187,8 +1244,10 @@ RULES = (
          "none: more candidates are dropped on a red", beside=True, keep=True, period=600.0),
     Rule("6d. Row 2 with batch 16", "none", beside=True, keep=True, batch=16),
     Rule("6e. Row 2 with batch 64, depth 3", "none", beside=True, keep=True, batch=64, depth=3),
-    Rule("7. The loop as it runs now, and with nothing in check the plain batch is built before a Lean batch", "none",
-         plain_first=True),
+    Rule("6f. Row 2, and a Lean batch's check starts with its records run, not after it", "the check is run again when the "
+         "records commit changes more than the records (not priced: here it never does)", beside=True, keep=True, overlap=True),
+    Rule("7. Row 1b, and with nothing in check the plain batch is built before a Lean batch", "none", plain_first=True,
+         pin_all=False),
 )
 
 ASSUMPTIONS = (
@@ -1199,7 +1258,9 @@ ASSUMPTIONS = (
     "A change conflicts with `main` when it really did, whatever landed before it in the replay.",
     "The queue's order is the order the loop first built the changes in (its priority file's history is not kept).",
     "Check places are not rationed: a rule's peak is reported against the places there are.",
-    "A Lean change is pinned while a real candidate held it, and from its last build on if it landed (pins are set by hand).",
+    "Every Lean change the queue may take is pinned; in the rows that say pins as they were, one is pinned while a real "
+    "candidate held it, and from its last build on if it landed.  One Lean batch is in its records run at a time; side by "
+    "side, one in its records run or its check.  A records run takes as long as one of the real ones that passed.",
 )
 
 
@@ -1207,20 +1268,29 @@ def render(tr: Trace, rows: list[dict], extra: dict, held: list[dict]) -> str:
     m = measured(tr)
     span = (tr.end - tr.start) / 3600
 
+    found: dict[str, int] = {}
+    for f in tr.faults.values():
+        found[f.how] = found.get(f.how, 0) + 1
+
     def fmt(x):
         return "not by the window's end" if x != x or x == float("inf") else f"{x:.0f}"
 
-    out = [f"Window: {span:.0f} hours, {len(tr.ticks)} ticks of the loop, {m['n']} changes landed with a mark; {len(tr.faults)} "
-           f"failed checks with a change at fault, {len(tr.flakes)} with nobody at fault.", "",
-           "| Rule | On `main` within 2 h of the mark | Mark to `main`, median (min) | Ninth decile (min) | PR-rounds lost | Landed "
-           f"in the window | Check places at peak (of {PLACES}, soon {PLACES_SOON}) | `main` red |", "|---|---|---|---|---|---|---|---|",
-           f"| Measured | {m['within']:.0%} | {fmt(m['p50'])} | {fmt(m['p90'])} | {m['lost']} | {m['landed']} | not read | never |"]
+    out = [f"Window: {span:.0f} hours, {len(tr.ticks)} ticks of the loop, {m['n']} changes landed with a mark, {m['n_lean']} of "
+           f"them Lean changes (a Lean source that compiles); {len(tr.faults)} "
+           f"failed checks with a change at fault ({', '.join(f'{n} {how}' for how, n in sorted(found.items()))}), {len(tr.flakes)} "
+           "with nobody at fault.", "",
+           "| Rule | On `main` within 2 h of the mark | Of the Lean changes, of the others | Mark to `main`, median (min) | Ninth "
+           f"decile (min) | PR-rounds lost | Landed in the window | Check places at peak (of {PLACES}, soon {PLACES_SOON}) | "
+           "`main` red |", "|---|---|---|---|---|---|---|---|---|",
+           f"| Measured | {m['within']:.0%} | {m['within_lean']:.0%}, {m['within_other']:.0%} | {fmt(m['p50'])} | {fmt(m['p90'])} | "
+           f"{m['lost']} | {m['landed']} | not read | never |"]
     for r in rows:
         red = (f"{r['red_times']:.0f} times, {r['red_min']:.0f} min in all; {r['on_red']:.0f} changes landed on a red `main`; "
                f"{r['reverts']:.0f} reverts") if r["reverts"] or r["red_times"] else "never"
         over = f", over {PLACES} for {r['over']:.0%} of the time" if r["over"] >= 0.005 else ""
-        out.append(f"| {r['rule']} | {r['within']:.0%} ({r['within_range'][0]:.0%} to {r['within_range'][1]:.0%}) | {fmt(r['p50'])} | "
-                   f"{fmt(r['p90'])} | {r['lost']:.0f} | {r['landed_all']:.0f} | {r['peak']:.0f}{over} | {red} |")
+        out.append(f"| {r['rule']} | {r['within']:.0%} ({r['within_range'][0]:.0%} to {r['within_range'][1]:.0%}) | "
+                   f"{r['within_lean']:.0%}, {r['within_other']:.0%} | {fmt(r['p50'])} | {fmt(r['p90'])} | {r['lost']:.0f} | "
+                   f"{r['landed_all']:.0f} | {r['peak']:.0f}{over} | {red} |")
     out += ["", f"Each replayed row is the mean of {rows[0]['seeds'] if rows else 0} runs; in brackets, the least and the most of "
             "the runs.", "",
             f"Real batches built one after the other: {extra['none_shared']} of {extra['pairs']} pairs share no suite but those "
