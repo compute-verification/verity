@@ -52,7 +52,8 @@ else
     "$tmp/$W" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$tmp/pip.log" 2>&1 \
     || { tail -n 5 "$tmp/pip.log" >&2; [ -z "${OUT:-}" ] || cp "$tmp/pip.log" "$OUT/"; fail PIP "see the lines above"; }
   h=$(held); [ "$h" = "$BUILD" ] || fail IMPORT "the installed vLLM is not $BUILD (it is: ${h:-none})"
-  "$VENV/bin/vllm" --version >"$tmp/version.txt" 2>&1 || { tail -n 5 "$tmp/version.txt" >&2; fail IMPORT "the installed vLLM does not start"; }
+  # the package imports (its own command needs a device even to print its version, and a node may have none)
+  "$PY" -m vllm._version >"$tmp/import.txt" 2>&1 || { tail -n 5 "$tmp/import.txt" >&2; fail IMPORT "the installed vLLM does not import"; }
   # FlashInfer's own step, the one vLLM's image runs: the kernels of every GPU architecture, by uv into this environment
   UV_CACHE_DIR=$tmp/uv UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-600} FLASHINFER_DISABLE_VERSION_CHECK=1 \
     "$PY" -m flashinfer download-kernels >>"$tmp/pip.log" 2>&1 \
