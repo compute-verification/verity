@@ -23,9 +23,9 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, Read, _json, _text,
-                                  abandon, audit_built, audit_failures, audited, audits, based, combine, failures, judge, key,
-                                  lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced, shard_count, start,
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read, _json,
+                                  _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures, judge,
+                                  key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced, shard_count, start,
                                   step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
@@ -1189,36 +1189,106 @@ def test_where_lean_audit_gates_nothing_no_check_lends_it_and_none_waits_on_its_
     assert not audits(h.d, rec_base) and audited(h.d, own, rec, rec_base) == own == Verdict(PASS)
 
 
-def test_a_lean_input_is_a_lean_or_lake_file_or_lock_anywhere_the_check_s_or_lean_check_s_code_or_the_lean_tree_whole():
-    """The conservative set a member's change is judged against: a README under security/ counts as much as a Lean file;
-    `Security/`, the tree's name before, too; a path that only starts like one of them doesn't, nor the environment's
-    files, which every step reads."""
-    lean = ["security/README.md", "security/Definitions/Core.lean", "Security/Proofs/README.md", "Main.lean",
-            "verity/core/protocols/pous/lean/Grader.lean", "verity/core/service/flock/lakefile.toml",
-            "verity/core/service/flock/lakefile.lean", "lean-toolchain", "verity/x/lake-manifest.json",
-            "verity/core/protocols/nci/lean/lean-audit.json", "tools/verity/lean/check.py", "tools/verity/check/policy.toml"]
-    other = ["docs/security.md", "verity/security/x.py", "tools/verity/checkers/x.py", "tools/verity/lean-tools/x.py",
-             "verity/ml/circuits/ops.py", "uv.lock", ".python-version", "lean.md"]
-    assert [p for p in [*lean, *other] if meets((p,), LEAN_INPUTS)] == lean
+def _lean(files, paths):
+    """Those of ``paths`` that are Lean inputs of the tree holding ``files``."""
+    inputs = lean_inputs(files)
+    return [p for p in paths if meets((p,), inputs)]
 
 
-def test_a_tree_s_lean_inputs_hold_each_directory_of_a_lakefile_or_a_lock_whole_where_the_tree_puts_it():
-    """An audit reads every file of its package (`lean_audit.inputs`), one a module reads with `include_str` among them, as
-    pouw's `check/models.json`: every directory of the tree holding a lakefile or a lock is a Lean input whole, a file the
-    tree doesn't hold yet too, and the root's is all of it; a directory beside or above one isn't, nor one named like it."""
+def test_of_check_s_own_code_a_lean_input_is_common_py_and_the_code_that_runs_the_lean_audit_step():
+    """Of `tools/verity/check`: `common.py`, which every audit's key holds (the auditor imports it: `lean_audit.tool_files`),
+    and the code that runs the lean-audit step, which no key holds (`LEAN_AUDIT_STEP`): `check.py` and the wrapper it runs
+    an audit in.  A change to check.py alone is a Lean input, so its candidate audits itself: on the verdict of the candidate
+    below, a step it broke would land unrun and fail in the next candidate that audits.  What every candidate's check runs
+    is none: `slot.py`, check's settings, its policy, or a test of any of them."""
+    check = "tools/verity/check"
+    lean = [f"{check}/check.py", f"{check}/common.py", f"{check}/lean_slot.py"]
+    other = [f"{check}/slot.py", f"{check}/settings.py", f"{check}/policy.toml", f"{check}/drive.toml",
+             f"{check}/tests/test_slot.py", f"{check}/tests/test_check.py", f"{check}/tests/test_verdicts.py"]
+    assert tuple(lean[::2]) == LEAN_AUDIT_STEP
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+    assert _lean([*lean, *other], [f"{check}/check.py"]) == [f"{check}/check.py"]
+    assert _lean([*lean, *other], [f"{check}/slot.py", f"{check}/settings.py"]) == []
+    assert set(lean) <= set(lean_inputs(other)), "each is one in a tree that doesn't hold it yet"
+
+
+def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_caps():
+    """Of `tools/verity/lean`: the files every audit's key holds (`lean_audit.tool_files`), with the task graph's contract;
+    `lean_changed.py`, which every records key holds beside them; and what no key holds but lean-audit's verdict or a lock run's
+    commit does: the unread ratchet, its caps, and the caps a lock run repairs in `tests/test_lean_packages.py`.  Not its
+    tests and their fixtures, a Lake file among them, its docs, nor the tools beside the audit that no key holds."""
+    tool = "tools/verity/lean"
+    lean = [f"{tool}/check.py", f"{tool}/lean_audit.py", f"{tool}/lean_changed.py", f"{tool}/module_keys.py",
+            f"{tool}/unread.py", f"{tool}/unread-caps.json", "tools/verity/graph/verity_graph/contract.py",
+            "tests/test_lean_packages.py"]
+    other = [f"{tool}/README.md", f"{tool}/merge.py", f"{tool}/warm.py", f"{tool}/unread_gate.py", f"{tool}/pyproject.toml",
+             f"{tool}/tests/test_cache.py", f"{tool}/tests/fixtures/control/lakefile.toml",
+             f"{tool}/tests/fixtures/control/lake-manifest.json", f"{tool}/tests/fixtures/control/data.json",
+             "tools/verity/graph/verity_graph/keys.py", "tests/test_repository.py", "tools/verity/lean-tools/x.py"]
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+
+
+def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_and_pytest_files_are_not():
+    """A Lean package is a directory holding a lakefile or a lock, wherever the tree puts it, and a Lean input is each file
+    of it an audit reads (`lean_audit.own_files`): a Lean file, the lock, the Lake files, a file a module reads with
+    `include_str`, as pouw's `check/models.json`, a script, the vectors its tests read, and those of a package nested in it.
+    Its README, its pytest files and their settings and its .gitignore, which no audit reads, are not, nor a file beside or
+    above the package or in a directory named like it."""
     pouw, rand, pous = ("verity/protocols/pouw/verifier/lean/check", "verity/commitments/randomness",
                         "verity/protocols/pous/lean")
-    files = [f"{pouw}/lakefile.toml", f"{pouw}/models.json", f"{rand}/lakefile.lean", f"{rand}/__init__.py",
-             f"{pous}/lean-audit.json", f"{pous}/check.sh", "verity/protocols/README.md", "verity/protocols/pouw/models.json",
-             "a.txt"]
-    inputs = lean_inputs(files)
-    assert inputs[:len(LEAN_INPUTS)] == LEAN_INPUTS
-    lean = [f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
-            f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
-    other = ["verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
+    lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
+            f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
+            f"{rand}/lakefile.lean", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
+            f"{pous}/lean-audit.json", f"{pous}/Grader.lean", f"{pous}/check.sh", f"{pous}/TRUSTED.sha256"]
+    other = [f"{pouw}/README.md", f"{pouw}/tests/test_pouw_check.py", f"{pouw}/tests/conftest.py", f"{pouw}/pyproject.toml",
+             f"{pouw}/.gitignore", f"{pouw}/inner/README.md", f"{rand}/tests/test_vectors.py", f"{pous}/DESIGN.md",
+             "verity/protocols/README.md", "verity/protocols/pouw/models.json", "verity/commitments/randomness2/x.py",
              "verity/protocols/pous/leaner/x.json", "a.txt"]
-    assert [p for p in [*lean, *other] if meets((p,), inputs)] == lean
+    assert _lean([*lean, *other], [*lean, *other]) == lean
     assert meets(("a.txt",), lean_inputs(["lakefile.toml", "a.txt"])) and not meets(("a.txt",), lean_inputs(["a.txt"]))
+
+
+def test_a_lean_source_is_a_lean_input_wherever_it_is_and_any_other_file_only_in_a_lean_package():
+    """A Lean file counts in a package or outside every one.  A README, a Lake manifest or a toolchain file outside every
+    package, under security/ as anywhere, is in no key and doesn't; a path that only starts like a Lean input doesn't, nor
+    the environment's files, which every step reads."""
+    lean = ["Main.lean", "security/Definitions/Core.lean", "benchmarks/verifier_cost/whole_run/Main.lean",
+            "tools/verity/lean/tests/fixtures/control/Control.lean"]
+    other = ["security/README.md", "security/Proofs/notes.txt", "lean-toolchain", "verity/x/lake-manifest.json",
+             "docs/security.md", "tools/verity/checkers/x.py", "verity/ml/circuits/ops.py", "uv.lock", ".python-version",
+             "lean.md"]
+    assert _lean([*lean, *other], [*lean, *other]) == lean
+
+
+def test_a_path_a_change_deletes_is_a_lean_input_of_the_tree_listed_with_it():
+    """The audit's declaration says of a path what it says of a file there, and the tree a change leaves no longer lists a
+    file it deletes: a package's deleted file is a Lean input of that tree listed with the path, as a change is judged, and
+    a deleted README of it still isn't."""
+    pkg = "verity/protocols/pouw/verifier/lean/check"
+    left = [f"{pkg}/lakefile.toml", f"{pkg}/PouwCheck/Credit.lean"]
+    gone = [f"{pkg}/models.json", f"{pkg}/README.md"]
+    assert _lean(left, gone) == [] and _lean([*left, *gone], gone) == [f"{pkg}/models.json"]
+
+
+def test_the_lean_inputs_are_read_through_the_loop_s_own_copy_of_the_audit_s_declaration(monkeypatch, tmp_path):
+    """`lean_inputs` holds no list of its own: it calls the `own_files` and `tool_files` of the `lean_audit.py` in the tree
+    the loop runs from, the functions every audit's key and every records key is built from, so a file that module stops or
+    starts reading leaves or joins the loop's Lean inputs with it.  A copy that can't be loaded is an error the caller is
+    told (the loop then audits), never an empty list."""
+    from research import vqueue_slim
+    from research.queue import QueueError
+
+    assert vqueue_slim.OWN_AUDIT == Path(__file__).resolve().parents[3] / "tools" / "verity" / "lean" / "lean_audit.py"
+    files = ["pkg/lakefile.toml", "pkg/A.json", "pkg/README.md", "tools/verity/lean/check.py", "tools/verity/lean/warm.py"]
+    audit = vqueue_slim._declaration()
+    assert _lean(files, files) == ["pkg/lakefile.toml", "pkg/A.json", "tools/verity/lean/check.py"]
+    monkeypatch.setattr(audit, "UNREAD_NAMES", {"*.json": "read by nothing"})
+    monkeypatch.setattr(audit, "NOT_READ", {"check.py": "read by nothing"})
+    assert _lean(files, files) == ["pkg/lakefile.toml", "pkg/README.md", "tools/verity/lean/warm.py"]
+    monkeypatch.setattr(vqueue_slim, "OWN_AUDIT", tmp_path / "lean_audit.py")
+    monkeypatch.setattr(vqueue_slim, "_declaration", vqueue_slim._declaration.__wrapped__)
+    with pytest.raises(QueueError, match="the audit's declaration of what it reads .* can't be loaded: FileNotFoundError"):
+        lean_inputs(files)
 
 
 def test_failures_are_what_an_ended_run_failed_of_a_step_by_what_its_log_names_once_its_verdict_is_kept(

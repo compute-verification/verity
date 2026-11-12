@@ -70,9 +70,9 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   below, and one `Queue: #N` merge per PR. Stack only on your own unlanded PR, two deep at most: hand a longer chain in
   as one head, marked once, with the marks below withdrawn. A PR that doesn't merge onto `main` is left out, and its
   owner told the fix. A candidate changing a lock, the spec or Lean that runs as code first runs `lean-audit` alone (its
-  records run) off the chain, beside batches touching no Lean input, then goes on the chain's top with its regenerated
-  records committed (`Lock records regenerated for #N...`) and is checked on that commit, so `main` moves only to
-  regenerated records.
+  records run) off the chain, beside batches touching no Lean input (`vqueue_slim.lean_inputs`), then goes on the chain's
+  top with its regenerated records committed (`Lock records regenerated for #N...`) and is checked on that commit, so
+  `main` moves only to regenerated records.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate beside them (under `--gate
   check`, `check.py --record` of every step, in shards), judged on the merge gate, where an unexpired allowance of
   policy.toml at the candidate's base covers a failure. On a pass `main` moves to it. A failure its base shares blames no
