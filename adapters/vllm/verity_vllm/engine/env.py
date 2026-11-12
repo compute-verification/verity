@@ -64,15 +64,8 @@ EXPORT = {
 COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
 
 #: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
-#: ``ops/compiled_commit.sh``).
+#: ``ops/served_commit.sh``).
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
-#: ``MODE:PAGED_SO``: the int8 attention's credited read every engine of this process installs at its build (`engine.int8_credited_env`)
-INT8_CREDITED_READ = "VERITY_INT8_CREDITED_READ"
-
-
-def int8_credited_read() -> str | None:
-    return os.environ.get("VERITY_INT8_CREDITED_READ") or None
-
 
 #: The switches a served engine leaves at vLLM's defaults; a capture of record runs with none of them set, so the kernels it compares
 #: are the ones vLLM selects by default whatever the process inherited.
@@ -165,20 +158,13 @@ def snapshot() -> dict[str, str]:
     return dict(os.environ)
 
 
-def set_since(before: Mapping[str, str]) -> dict[str, str]:
-    """The keys set or changed since ``before`` (a `snapshot`). vLLM's batch invariance writes cuBLAS' and NCCL's switches while it
-    builds an engine, so a process that resets its environment between Commits on one engine (`commit_group`, `hot.serve`) puts
-    these back."""
-    return {k: v for k, v in os.environ.items() if before.get(k) != v}
-
-
 def disable_compile_cache() -> None:
     os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
 
 
 def prepare_compiled_process_cache() -> dict[str, Any]:
     """Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
-    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (compiled_commit.sh) -- torch's default
+    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (ops/served_commit.sh) -- torch's default
     /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other workloads' kernels; (2)
     VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
     would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for

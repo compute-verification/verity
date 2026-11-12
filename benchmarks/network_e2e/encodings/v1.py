@@ -153,9 +153,9 @@ def windows_of(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ing
     return {"trace": label, "tick": tr.releases is not None, "windows": [asdict(w) for w in wins]}
 
 
-#: the table's registered caps: a window of a full trace sends more decisions, hits and order entries than
-#: `code_v1.Caps`'s defaults
-TABLE_CAPS = CV.Caps(arrived=1 << 20, hits=1 << 20, order=1 << 16, order_len=1)
+#: the table's registered caps: a window of a full trace sends more decisions and order entries than `code_v1.Caps`'s
+#: defaults, and like v1's own (`CAPS`) no hit, resume or lag bit
+TABLE_CAPS = replace(CAPS, arrived=1 << 20, order=1 << 16)
 #: and under the certified tick
 TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 
@@ -166,15 +166,17 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
     or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
     decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
-    to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits
-    (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice. A trace served under the
-    certified tick is registered with its tick (`tick`: its τ)."""
+    to the trace's I1 v0; the residual's decisions and order entries; the length terms' bits, which every string holds
+    while the registration sends them (`length_bits`: under the certified tick, the whole charge); the replay's ideal
+    order bits (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice. A trace served
+    under the certified tick is registered with its tick (`tick`: its τ)."""
     tr, rec, adv = _trace(path, stop_ids, ingress)
     tick = _tick(tr)
     row: dict[str, Any] = {"trace": label, "ingress": ingress, "tick": None if tick is None else asdict(tick),
                            "requests": len(rec.requests), "steps": len(adv.steps), "windows": windows(rec, T),
                            "v0": sum(I1.bits_by_window(adv, T).values())}
-    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T, tick=tick))
+    reg = Registered(tr.engine, tuple(stop_ids), T=T, tick=tick)
+    wins, tails = residual(adv, rec, reg), length_tails(rec, reg)
     uniform = CV.Book.uniform(TABLE_CAPS if tick is None else TICK_TABLE_CAPS)
     books = {"held_out": CV.Book.from_json(book) if book is not None else uniform, "uniform": uniform}
     for name, b in books.items():
@@ -184,9 +186,8 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        tails = length_tails(rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg, tails)[1])
+        unordered = sum(string_of([CV.Window(w.arrived) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Window() for _ in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
@@ -196,16 +197,14 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
     row["order_entries"] = sum(len(w.order) for w in wins)
     row["inversions"] = sum(idx[0] for w in wins for _, idx in w.order)
     row["order_bits_replay"] = round(R.order_bits(tr), 2)
-    row["hits_sent"] = sum(len(w.hits) for w in wins)
-    row["hits_short"] = sum(1 for w in wins for h in w.hits if h)
+    row["length_bits"] = sum(n for t in tails for _v, n in t)
     return row
 
 
 def render(rows: Sequence[dict[str, Any]], T: int) -> str:
     out = [f"| trace | requests | windows (T = {T}) | I1 v0 | v1 charged, held-out book (total; per window) | of it the "
-           "order | of it the timing (decisions and order) | order entries (inversions) | the replay's ideal order bits | "
-           "decisions | hits sent (short of the cached prefix) | v1, uniform book (of it the order) | "
-           "decode(encode(a)) == a |",
+           "order | of it the timing (decisions and order) | of it the length terms | order entries (inversions) | the "
+           "replay's ideal order bits | decisions | v1, uniform book (of it the order) | decode(encode(a)) == a |",
            "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         if "error" in r:
@@ -215,8 +214,9 @@ def render(rows: Sequence[dict[str, Any]], T: int) -> str:
         per = ", ".join(f"{h['by_window'][w]:,}" for w in sorted(h["by_window"]))
         label = f"{r['trace']} (certified tick)" if r.get("tick") else r["trace"]
         out.append(f"| {label} | {r['requests']} | {r['windows']} | {r['v0']:,} | {h['bits']:,}; {per} | "
-                   f"{h['order_bits']:,} | {h['timing_bits']:,} | {r['order_entries']:,} ({r['inversions']:,}) | "
-                   f"{r['order_bits_replay']:,} | {r['decisions']:,} | {r['hits_sent']:,} ({r['hits_short']:,}) | "
+                   f"{h['order_bits']:,} | {h['timing_bits']:,} | {r['length_bits']:,} | {r['order_entries']:,} "
+                   f"({r['inversions']:,}) | "
+                   f"{r['order_bits_replay']:,} | {r['decisions']:,} | "
                    f"{u['bits']:,} ({u['order_bits']:,}) | {h['round_trip'] and u['round_trip']} |")
     return "\n".join(out) + "\n"
 
@@ -238,8 +238,8 @@ def _measure_job(job: tuple) -> dict[str, Any]:
 
 def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
-    registration would fix it from history before the run; for a trace under the certified tick, on their hits alone,
-    under `TICK_TABLE_CAPS`."""
+    registration would fix it from history before the run; for a trace under the certified tick, where no window's
+    segment codes anything, the uniform book under `TICK_TABLE_CAPS`."""
     runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
     out: list[dict | None] = []
     for k, mine in enumerate(runs):
@@ -247,7 +247,7 @@ def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
         if mine is None:
             out.append(None)
         elif residuals[k].get("tick"):
-            out.append(CV.fit_book([[CV.Window(hits=x.hits) for x in ws] for ws in others], TICK_TABLE_CAPS).to_json())
+            out.append(CV.Book.uniform(TICK_TABLE_CAPS).to_json())
         else:
             out.append(CV.fit_book(others, TABLE_CAPS).to_json())
     return out

@@ -138,6 +138,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
+    S("VERITY_CUT", json.loads, None, VALUE, "the carried pool's cut at each window edge under vLLM's engine core "
+      "(`pipeline.cut_plugin`), a JSON object: every_s or every_steps, hold_s, the log directory and the sent feed (`cut_plugin.SentFeed`); unset, none"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
     S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
       "ascending index order, the order DsaButterflyRows reads (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
@@ -181,15 +183,14 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_ADMIT_SLACK_GIB", float, 6.0, VALUE, "admission: GiB of host memory kept free"),
     S("VERITY_CENSUS_GPU_UTIL", float, None, VALUE, "the kernel census engine's gpu_memory_utilization"),
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
-    S("VERITY_HOT_RESTART_REASON", str, None, WHERE, "why the hot worker restarted (it sets it for its child)"),
-    S("VERITY_HOT_SUBMIT", one, False, WHERE, "1: the Commit submits itself to the pod's hot worker"),
     S("VERITY_SWITCH", float, None, DEBUG, "the interpreter's switch interval in seconds (a GIL-interference experiment)"),
     S("VERITY_TRACEDUMP", float, None, DEBUG, "every so many seconds, dump every thread's traceback"),
     S("VERITY_VU_EXPORT_DIR", str, None, WHERE, "where pair 0's replay exports its VU sample (`commit --vu-export-dir`)"),
     # ---- the engine (engine/)
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
-    S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
+    S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
+      "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
       "empty is refused", empty=True),
     # ---- Build, Match and the row (pipeline/, check/, query/)
@@ -223,13 +224,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("X09_PROFILE_OUT", str, None, DEBUG, "the file the batch decomposition writes its phase profile to; unset or blank, no profile"),
     S("X09_FORCE_DAG", str, None, VALUE, "1 runs the batch decomposition's DAG diagnostic even when the sequence criterion held, adding "
       "its fields to the record (diagnostic only, never on a workload of record)"),
-    # ---- the hot Commit worker (pipeline/hot.py) and the native builds it keys on
-    S("HOT_ROOT", str, "/workspace/cp/hot", WHERE, "the hot workers' directory (`hot --root`)"),
-    S("HOT_IDLE", float, 900.0, WHERE, "seconds a hot worker waits idle before it exits (`hot --idle`)"),
-    S("HOT_TIMEOUT", float, None, WHERE, "seconds a hot submit waits for its job; unset, no bound"),
-    S("HOT_RELEASING_MARKER", str, "/workspace/cp/RELEASING", WHERE, "the marker pod_release.sh holds while it ships a release"),
-    S("HOT_RELEASE_JSON", str, "/workspace/cp/RELEASE.json", WHERE, "the release (tag, commit) of the tree on the pod"),
-    S("RELEASING_STALE_S", float, 900.0, WHERE, "seconds after which a release marker nobody refreshed is stale"),
+    # ---- the native builds
     S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),

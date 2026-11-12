@@ -42,8 +42,6 @@ class Engine:
     target: Any = None   # the declared `TargetProfile` the engine was built under (None = none declared: vLLM's own selection)
     execution: str | None = None   # the workload's declared execution label the engine was built FOR (bi-eager / bi-compiled / ...), None = undeclared
     effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
-    environ: dict | None = None    # the process environment keys its build set or changed (`engine_env.set_since`), None when not built here
-    credited_read: dict | None = None  # the int8 attention's credited read installed at the build (`int8_credited_env`), None when none
 
 
 # the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
@@ -162,7 +160,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
                       engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None,
                       env: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
-    checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
+    checkpoint record), WITHOUT building.  Applies the
     same environment knobs as `build_engine` (idempotent), ``env`` (an engine class's, `engine_classes.env`) last, over the process's.
     Refusals (unknown execution, contradicting enforce_eager, an Inductor that read a fixed switch otherwise:
     `engine_env.require_inductor`) are the same."""
@@ -213,8 +211,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # so an eager engine can never serve a `__bi-compiled` workload (and vice versa) under a green-looking header.
     # `kernel_config.enable_flashinfer_autotune=False` by construction (the autotune dummy run must not depend on the shell's PATH);
     # explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
-    # `engine_kwargs_for` (the hot worker computes the same keyword set to decide reuse vs restart).
-    env0 = engine_env.snapshot()
+    # `engine_kwargs_for`.
     kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target,
                                           execution=execution, env=env)
     from vllm import LLM  # after apply_env
@@ -238,7 +235,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     build_s = time.perf_counter() - t0
     runner = handle.model_runner(llm) if world == 1 else None
     model = runner.get_model() if runner is not None else None
-    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, None, engine_env.set_since(env0))
+    eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution)
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
         raise RuntimeError(f"execution mismatch after build: the row declares {execution!r} but vllm_config.model_config.enforce_eager="
@@ -248,10 +245,6 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
-    from verity_vllm.engine import int8_credited_env
-    eng.credited_read = int8_credited_env.install(eng, engine_env.int8_credited_read())
-    if eng.credited_read is not None:
-        print(f"[engine] {int8_credited_env.ENV}: {json.dumps(eng.credited_read)}", flush=True)
     return eng
 
 

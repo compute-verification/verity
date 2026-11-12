@@ -186,7 +186,12 @@ class Detection:
         return self.proof_share / (self.overhead + self.replay) if self.sampled else 1.0
 
     def injected(self) -> float:
-        """Bits the accepted incorrect proof blocks inject: `J ln(1/δ) (1/q + floor) · step_bits`."""
+        """Bits the accepted incorrect proof blocks inject: `J ln(1/δ) (1/q + floor) · step_bits`.
+
+        It counts over any span, with the identities' factor and a floor, where core's `harm_bound` bounds one
+        profile, a population under its sampling design, so the two stay two definitions.
+        `tests/test_held_to_core.py` holds its sampled part to core's bound for one `Bernoulli(q)` level, over the
+        registry's ranges (`test_the_injected_bits_are_held_to_cores_bound_for_one_bernoulli_level`)."""
         if not self.sampled:
             return 0.0
         return self.identities * math.log(1 / self.p_evade) * (1 / self.q() + self.floor_steps) * self.step_bits

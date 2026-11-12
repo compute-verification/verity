@@ -3,12 +3,17 @@ bound reaches GLM-5.3's FP8 and FP4 weights, its bound at the beta of `REPORT`, 
 each through total_cost._point as Figure 1 computes it.
 
     uv run python benchmarks/spot_figures/breakeven/sweep.py --out DIR [--workers N] [--scopes all] [--only NAME...]
+                                                             [--steady ROWS.json]
 
 A case is a base line ((A) `tokens`, or (A′) `per_expert`, optionally with each table read fused into its consumer
 GEMM) and its levers: all proving scaled (`scale`, a faster prover or another h), the marginal scaled (`marginal`,
 each block's seconds), each statement's cap in blocks multiplied (`cap`) or its fixed cost scaled
 (`fixed`), the registration statements share within (`registration`), and the replay a sampled request costs in
 GPU-seconds (`replay`; default the figure's, a machine's 600 s block).  `tax` is its serve tax, outside beta.
+
+`--steady` prices each proof-server case's block types from the steady-state rows of a file where it holds one
+(`reprice.steady`), in place of the server prices and the statement cache's factors, and each such case's row then
+says what share of its proving each basis prices (`basis`).
 """
 import argparse
 import json
@@ -30,9 +35,16 @@ REPORT = (0.01, 0.05, 0.10)
 #: per-expert cut's 3.29e8 of 5.53e8 marginal and 3.95e8 of 1.70e9 at full statements, the registered cut's 1.3e10 of
 #: 1.4e10 and 2.4e10 of 1.3e11; the fixed ratio is (full - marginal) busy over (full - marginal) end to end
 BUSY = {"per_expert": (3.29 / 5.53, (3.95 - 3.29) / (17.0 - 5.53)), "tokens": (1.3 / 1.4, (2.4 - 1.3) / (13.0 - 1.4))}
-#: GLM-5.3's serve taxes from the serve_tax card, and their parts: the certified tick, the edge snapshot, the top-k
+#: GLM-5.3's serve taxes from the serve_tax card, and (A)'s parts by name
 TAXES = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("tokens", "per_expert"))
 PARTS = {p["part"]: p["share"] for p in TAXES["tokens"]["parts"]}
+#: the parts every two-stage case pays; the edge snapshot (`tc.EDGE`) is the one a case can go without
+SERVED = ("certified-tick rule", "step record", "two-stage boundary commitment", "history tables",
+          "deterministic top-k")
+if set(PARTS) != {*SERVED, tc.EDGE}:
+    raise ValueError(f"the serve_tax card's (A) has the parts {sorted(PARTS)} and Case.tax reads "
+                     f"{sorted({*SERVED, tc.EDGE})}: name each part of the card in SERVED (or as total_cost.EDGE), "
+                     "so that a case's serve tax is the sum of the card's parts")
 EDGE_PAUSE = tc.EDGE_PAUSE[0]
 WINDOW = c["window"].value
 REPLAY_FACTOR = c["replay_factor"].value
@@ -114,22 +126,25 @@ class Case:
     budget_form: str = ""
     split: tuple[tuple[str, int], ...] = ()
     leverage: tuple[float, ...] = ()
+    steady: str = ""
 
     def tax(self) -> float:
-        """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
-        length, or none when the replay reads the edge's state live; every full K/V page hashed when written if
-        `commit_write`; the prefill a prefix-cache hit would have skipped if `prefix_off`, or only the hits a pool per
-        window of `pool_window_s` loses.  The one-stage design's is the every-block line's, hashing every block's
-        outputs."""
+        """The serve tax, a sum of the serve_tax card's named parts: the certified tick, the step record, the two-stage
+        boundary commitment, the history tables and the top-k always (`SERVED`); the edge snapshot's pause over the
+        replay block's length (the card's part at the census window), or none when the replay reads the edge's state
+        live; every full K/V page hashed when written if `commit_write`; the prefill a prefix-cache hit would have
+        skipped if `prefix_off`, or only the hits a pool per window of `pool_window_s` loses.  The one-stage design's
+        is the every-block line's, hashing every block's outputs."""
         if self.form == "one-stage":
             return TAX_ONE_STAGE
-        edge = 0.0 if self.live else EDGE_PAUSE / (self.edge_s or WINDOW)
-        return (PARTS["certified-tick rule"] + PARTS["deterministic top-k"] + edge
+        edge = 0.0 if self.live else (EDGE_PAUSE / self.edge_s if self.edge_s else PARTS[tc.EDGE])
+        return (sum(PARTS[p] for p in SERVED) + edge
                 + (COMMIT_WRITE if self.commit_write else 0.0) + (PREFIX_OFF if self.prefix_off else 0.0)
                 + (POOL_WINDOW_LOST[self.pool_window_s] if self.pool_window_s else 0.0))
 
 
 def build(case: Case):
+    assert case.server or not case.steady, "a steady-state row is the proof server's price: the case needs `server`"
     strata = None
     per_type = (case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain or case.verify
                 or case.server)
@@ -146,7 +161,7 @@ def build(case: Case):
                                           verify=case.verify, column=case.column, tmpl=case.tmpl,
                                           fused_busy=case.fused_busy, verify_other=case.verify_other,
                                           k_gain=case.k_gain, dense_k=case.dense_k, verify_cut=case.verify_cut,
-                                          cold=case.cold)
+                                          cold=case.cold, steady=reprice.steady(case.steady) if case.steady else None)
         elif per_type:
             strata = reprice.apply(strata, cache=case.cache, overlap=case.overlap, prover=case.prover,
                                    full=case.full, host=case.host, plain=case.plain, verify=case.verify,
@@ -216,6 +231,8 @@ def run_case(job):
            "bound": {str(b): bound(L, b, scope, case.scale) for b in REPORT},
            "floor": floor_bits(L, 0.01, scope) if case.scale == 1.0 else bound(L, 0.01, scope, 1e-12),
            "beta": {w: solve(L, t - advice, scope, case.scale) if t > advice else None for w, t in WEIGHTS.items()}}
+    if case.server:
+        out["basis"] = reprice.basis_shares(L[1]["partition"].value["strata"])
     b4 = out["beta"]["FP4"]
     if case.compile_core_h and b4 is not None:
         pt = bound(L, b4, scope, case.scale, full=True)[1]
@@ -439,10 +456,13 @@ def main(argv=None) -> None:
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--scopes", nargs="*", default=["world week"])
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--steady", type=Path, help="steady-state rows (reprice.steady) for the proof-server cases")
     args = ap.parse_args(argv)
     scopes = list(SCOPES) if args.scopes == ["all"] else args.scopes
     every = cases()
     chosen = {n: k for n, k in every.items() if not args.only or n in args.only}
+    if args.steady:
+        chosen = {n: replace(k, steady=str(args.steady)) if k.server else k for n, k in chosen.items()}
     jobs = [(n, k, s) for s in scopes for n, k in chosen.items()]
     args.out.mkdir(parents=True, exist_ok=True)
     rows = []

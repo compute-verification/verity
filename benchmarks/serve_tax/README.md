@@ -23,7 +23,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 | `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
-| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`) | `boundary-rows` |
+| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -79,7 +79,10 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   `long` is long context: the client's synthetic dataset at one long length (8,192 tokens in, 128 out), which stands
   until a plan of recorded long requests replaces it; the output says which it was. Its first token takes seconds on
   any engine, so its goodput counts the time per output token alone, and the engines' context limit is raised to fit
-  it.
+  it. A pass sends the load's prompts whatever its rung, so a rung near or past them is held for part of the pass
+  only: `PASS_PROMPTS=chat=N` makes a pass of `chat` send N prompts at every rung, for a ladder that climbs past
+  them. Every rung sends the same N, since passes of two sizes differ in tokens a second by their size alone, and
+  the cost refuses two arms whose passes sent different numbers of prompts.
 - **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
@@ -116,10 +119,10 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
   (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
   cost within it.
-- **The Commit window** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
-  so that a pass holds the commits of the requests it finishes. At a window longer than a pass the commits would fall
-  between passes, where no request waits on them, and the cost would leave them out. A short window counts a window's
-  fixed work more often than a long one does, so the cost errs high; the commitment's line names the window.
+- **The Commit period** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
+  so that a pass holds the commits of the requests it finishes. At a period longer than a pass the commits would fall
+  between passes, where no request waits on them, and the cost would leave them out. A short period counts a period's
+  fixed work more often than a long one does, so the cost errs high; the commitment's line names the period.
 - **The number** is the larger of the two loads' costs, each load's cost printed beside it. Where only one load has
   run, the first line names it (`load chat alone`) and a later line says the number waits for the other: one load's
   cost is not the number. Its loads repeat no prefix, so it is labelled `no repeated prefix` and is never given
@@ -132,7 +135,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
   the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
   that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
-  blocks whose ids they share), each prompt as the synthetic token ids the client draws for its blocks, in the
+  blocks whose ids they share), each prompt as the synthetic token ids the client generates for its blocks, in the
   file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
   for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
   tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat

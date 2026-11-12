@@ -181,9 +181,10 @@ def _reach(made: list[list[int]], at: int) -> int:
     return next((b for a, b in made if a <= at < b), at)
 
 
-def _sources(q: _Req, hit: int, tokens: dict[str, list[int]], reqs: dict[str, _Req]) -> tuple[I1.Source, ...]:
+def _sources(q: _Req, hit: int, tokens: dict[str, list[int]], reqs: dict[str, _Req], block: int = 1) -> tuple[I1.Source, ...]:
     """The runs of positions 0 … hit − 1 and the requests whose computed KV each reuses: at each position, the request (first by
-    index) that computed it with the same tokens up to there and runs furthest.  Its own KV only on a resume."""
+    index) that computed it with the same tokens up to there and runs furthest.  Its own KV only on a resume.  The prefix cache
+    serves whole blocks of ``block`` tokens, each one request's, so a run ends on a block boundary or at the hit's end."""
     mine = tokens[q.rid]
     out: list[I1.Source] = []
     at = 0
@@ -196,6 +197,8 @@ def _sources(q: _Req, hit: int, tokens: dict[str, list[int]], reqs: dict[str, _R
             agree = at
             while agree < end and theirs[agree] == mine[agree]:
                 agree += 1
+            if agree < hit:
+                agree -= agree % block
             if agree > reach and theirs[:at] == mine[:at]:
                 best, reach = p, agree
         if best is None:
@@ -266,6 +269,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                 raise ValueError(f"request {r['request']} arrives twice")
             reqs[r["request"]] = _Req(r["request"], int(r["prompt_len"]))
     tokens = {rid: rec["prompt_ids"] + rec["output_ids"] for rid, rec in io.items()} if io is not None else None
+    block = next((int(r["config"].get("block_size") or 1) for r in recs if r["kind"] == "header" and "config" in r), 1)
     steps = ST.steps(recs)
     outside = {r["request"]: r for r in recs if r["kind"] == "finish"}
     built: list[list[tuple[_Req, int, int, int, bool]]] = []
@@ -304,7 +308,7 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             if hit:
                 if tokens is None:
                     raise ValueError(f"step {s}: request {q.rid} has a cache hit, whose sources need the Commit record's tokens")
-                sources = _sources(q, hit, tokens, reqs)
+                sources = _sources(q, hit, tokens, reqs, block)
             q.preempted = q.preempted and not resume
             out_rows.append((q, start, n, hit, resume, sources))
         built.append(out_rows)

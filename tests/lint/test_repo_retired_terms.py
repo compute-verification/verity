@@ -21,8 +21,10 @@ What a row retires:
 The lint reads the whole text of what the lane-text lint reads (``test_repo_lane_text.py``: code, Lean, shell and
 config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP`` names, with each reason, and outside
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
-``art:``, branch and lane names.  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its
-file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
+``art:``, branch and lane names.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power
+law, nvidia-smi's ``power.draw``, ``AUDIT_CAP``), by the code around it (hypothesis's ``draw``) and by the file's place
+(``OWN_CAPS``: PoUS's and PoUB's own caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows
+``count`` sites in its file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
 (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
 leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
 standard library and reads ``GLOSSARY.md`` from the tree it runs in.
@@ -33,10 +35,12 @@ standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -45,8 +49,8 @@ NAME = "repo_retired_terms"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 GLOSSARY = "GLOSSARY.md"
-#: the archive isn't developed
-LEFT_OUT = ("archive/",)
+#: path prefixes this lint leaves to others (the ratchet gate reads it): none
+LEFT_OUT = ()
 #: what isn't read, by path prefix (or a whole path), each with its reason
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
@@ -77,9 +81,31 @@ LIVE = {
     "IR": "an acronym the code uses for other things (an alias, a cut); \"Verity IR\" and \"IR evaluator\" are retired",
     "reference run": "a run whose output another is compared with is live; the training-cost reference is retired",
 }
-#: other senses of an enforced word, never counted
+#: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
+#: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, and the stacking property's caps as its Lean names
+#: them (``Gates.Caps``, ``FoolingCap``), none of them Pearl's
 OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?"
-                          r"|power draws?)")
+                          r"|power[ ._-]draws?)|(?<![^\W_])(?:audit_cap|AUDIT_CAP|auditCap|cap_ns|CAP_NS"
+                          r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])"
+                          r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap)(?!\w)")
+#: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
+OWN_CAPS = {
+    "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "verity/protocols/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+}
+#: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
+#: `Device.cap` are terms of their own)
+PEARL_CAP = re.compile(r"(?<!\w)CAPS?(?!\w)")
+#: hypothesis's own ``draw`` in a module importing it: a composite strategy's first parameter, through its body, and the
+#: data object's ``data.draw(``, as code where the file is Python; a comment or a string there, a ``"draw"`` key anywhere, a
+#: longer name, an attribute (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
+HYPOTHESIS = re.compile(r"^[ \t]*(?:from|import)[ \t]+hypothesis\b", re.M)
+COMPOSITE = re.compile(r"^([ \t]*)@(?:\w+\.)*composite\b.*\n(?:\1@.*\n)*\1(?:async[ \t]+)?def[ \t]+\w+[ \t]*\(\s*draw\b",
+                       re.M)
+BARE_DRAW = re.compile(r"(?<![\w.'\"-])draw(?![\w'\"])")
+DATA_DRAW = re.compile(r"(?<![\w.])data\.draw\(")
+#: a line that can end a block: its indent, then neither a comment nor a closing bracket
+LINE = re.compile(r"^([ \t]*)[^\s#)\]}]", re.M)
 #: what the word maps keep: a domain tag or format id, a note, an artifact, a branch, a lane
 KEEP = re.compile(r"[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b|note:[\w./-]+|art:[0-9a-f]+|cursor/[\w./-]+|lanes/[\w.-]+")
 #: a character of what ``KEEP`` keeps
@@ -219,19 +245,21 @@ def terms() -> tuple[tuple[Term, ...], dict[str, list[Term]]]:
     return found, by
 
 
-def sites_of(text: str, by: dict[str, list[Term]]) -> list[tuple[int, str]]:
-    """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word."""
+def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple[int, str]]:
+    """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word, ``path`` the
+    file's.  Where two terms match one span, the one the table spells longer names it, then the first by spelling."""
     words = {w.lower() for w in set(WORDS.findall(text))}
-    candidates = {t for w in words & by.keys() for t in by[w]}
+    candidates = sorted({t for w in words & by.keys() for t in by[w]}, key=lambda t: (-len(t.old), t.old))
     if not candidates:
         return []
     low = text.lower()
     if len(low) != len(text):                           # a character whose lower case is longer: lower it alone
         low = "".join(c if len(c.lower()) != 1 else c.lower() for c in text)
     hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)), key=lambda h: (h[0], -h[1]))
+    draws, caps = hypothesis_draws(text, path), path.startswith(tuple(OWN_CAPS))
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
-        if s < end or kept(text, s, e):
+        if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps):
             continue
         end = e
         line, at = line + text.count("\n", at, s), s
@@ -239,9 +267,10 @@ def sites_of(text: str, by: dict[str, list[Term]]) -> list[tuple[int, str]]:
     return out
 
 
-def kept(text: str, s: int, e: int) -> bool:
+def kept(text: str, s: int, e: int, own_caps: bool = False) -> bool:
     """Whether the site ``text[s:e]`` stands in what ``KEEP`` keeps or in ``OTHER_SENSES``, read from the run of id
-    characters around it and the few words about it."""
+    characters around it and the few words about it, or is a "cap" other than ``PEARL_CAP`` in a file ``OWN_CAPS`` names
+    (``own_caps``)."""
     a, b = s, e
     while a and ID.match(text, a - 1):
         a -= 1
@@ -249,15 +278,48 @@ def kept(text: str, s: int, e: int) -> bool:
         b += 1
     if any(m.start() <= s - a < m.end() for m in KEEP.finditer(text[a:b])):
         return True
+    if own_caps and text[s:e].lower() in ("cap", "caps") and not PEARL_CAP.match(text, s):
+        return True
     a = max(0, s - 40)
     return any(m.start() <= s - a < m.end() for m in OTHER_SENSES.finditer(text[a:e + 40]))
+
+
+def hypothesis_draws(text: str, path: str = "") -> frozenset[int]:
+    """Where ``text``, at ``path``, says hypothesis's own ``draw`` (``HYPOTHESIS``): the start of each.  A composite's body
+    runs to the first line after its header, not blank, a comment or a closing bracket, indented no deeper than its
+    decorator.  In a Python file only code counts; any other file's text has no code to tell from prose, so every bare
+    ``draw`` in the body counts."""
+    if "draw" not in text or not HYPOTHESIS.search(text):
+        return frozenset()
+    out = {m.end() - len("draw(") for m in DATA_DRAW.finditer(text)}
+    for m in COMPOSITE.finditer(text):
+        after = text.find("\n", m.end()) + 1 or len(text)
+        end = next((n.start() for n in LINE.finditer(text, after) if len(n.group(1)) <= len(m.group(1))), len(text))
+        out |= {d.start() for d in BARE_DRAW.finditer(text, m.end() - len("draw"), end)}
+    if not out or not path.endswith(PY):
+        return frozenset(out)
+    return frozenset(out) & code_names(text, "draw", path)
+
+
+def code_names(text: str, name: str, path: str) -> frozenset[int]:
+    """Where ``text``, the Python file ``path``, says ``name`` as code, outside comments and strings: the start of each.
+    Raises ``ValueError`` naming ``path`` where the text doesn't tokenize."""
+    starts = [0]
+    for line in text.split("\n"):
+        starts.append(starts[-1] + len(line) + 1)
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, SyntaxError) as e:
+        raise ValueError(f"{path}: doesn't tokenize as Python ({e}), so the retired-terms lint can't tell hypothesis's "
+                         f"`draw` from prose in it. Fix the file's syntax.") from e
+    return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokens if t.type == tokenize.NAME and t.string == name)
 
 
 def sites(text: str, path: str) -> list[tuple[int, str]]:
     """(line, what) of each site of a retired term in ``path``, ``text`` its content."""
     if not holds(path):
         return []
-    return sites_of(text, terms()[1])
+    return sites_of(text, terms()[1], path)
 
 
 def parse(doc: object) -> Counter:
@@ -354,9 +416,164 @@ def test_what_is_a_retired_term() -> None:
     assert sites_of("a\nb C-Flock\n", by) == [(2, "'C-Flock' is retired; say Flock (GLOSSARY.md)")]
 
 
+SENSES_EXAMPLE = """# Glossary
+## Older names
+
+| Old name, where it stays | Term |
+|---|---|
+| "draw" (noun, verb), "drawn unit"; `DrawIsCoin`, `--draw`, until renamed | the sample |
+| Pearl's "debit" and "cap": "cap", "cap check", "over-cap" tile; `capOK`, `Device.cap`, `CAP`, until renamed | the bound |
+"""
+
+
+def said(text: str, path: str = "") -> list[tuple[int, str]]:
+    """(line, the old name) of each site of ``SENSES_EXAMPLE``'s terms in ``text``, at ``path``; the default path isn't a
+    Python file's, so hypothesis's ``draw`` is found by the rule for text that isn't Python."""
+    by: dict[str, list[Term]] = {}
+    for t in terms_of(SENSES_EXAMPLE):
+        for a in t.anchors:
+            by.setdefault(a, []).append(t)
+    return [(line, w.split(" is retired")[0].strip("'\"")) for line, w in sites_of(text, by, path)]
+
+
+def test_nvidia_smi_s_power_draw_is_another_sense_and_the_sample_beside_it_is_not() -> None:
+    assert said("nvidia-smi --query-gpu=clocks.sm,power.draw,power.limit; POWER_DRAW, power_draw, its power draws") == []
+    assert said("q = 'power.draw,clocks.sm'  # then challenger.draw(k), --draw 3 and the draws") == [
+        (1, "draw"), (1, "--draw"), (1, "draws")]
+
+
+HYPOTHESIS_EXAMPLE = '''from hypothesis import given, strategies as st
+
+
+@st.composite
+def cases(draw, n: int = 3) -> dict:
+    k = draw(st.integers(0, n))
+    rows = helper(draw, k)
+    return {"draw": challenger.draw(k), "units": drawn, "n": draws, "flag": ["--draw"], "coin": DrawIsCoin}
+
+
+def helper(draw, k):
+    return draw(st.just(k))
+
+
+@given(st.data())
+def test_cases(data) -> None:
+    data.draw(cases())
+'''
+
+
+def test_hypothesis_s_draw_is_another_sense_and_the_sample_beside_it_is_not() -> None:
+    """A composite's first parameter and its uses in the body, and ``data.draw(``, are hypothesis's; in that body a string,
+    an attribute, another form or a longer name is the sample, and so is a ``draw`` past the body (an undecorated helper's
+    ``draw`` may be the sample: a test's parameter named for it)."""
+    sample = [(8, "draw"), (8, "draw"), (8, "drawn"), (8, "draws"), (8, "--draw"), (8, "DrawIsCoin"), (11, "draw"),
+              (12, "draw")]
+    assert said(HYPOTHESIS_EXAMPLE) == sample
+    bare = HYPOTHESIS_EXAMPLE.replace("from hypothesis import given, strategies as st",
+                                      "from hypothesis.strategies import composite").replace("@st.composite", "@composite")
+    assert said(bare) == sample
+    assert sorted(said(HYPOTHESIS_EXAMPLE.replace("from hypothesis", "from elsewhere"))) == sorted(
+        sample + [(5, "draw"), (6, "draw"), (7, "draw"), (17, "draw")])
+
+
+def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample() -> None:
+    """In a Python file only code is hypothesis's: the word in a comment or a docstring inside a composite's body is
+    prose."""
+    text = ('from hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n'
+            '    """Each unit we draw, one by one."""\n'
+            '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
+            '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
+    assert said(text, "verity/protocols/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
+
+
+def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> None:
+    """A file that isn't Python is never read as Python, so an example in Markdown with prose after it (an apostrophe,
+    which doesn't tokenize) doesn't stop the scan. In its body every bare ``draw`` is kept, the comment's too: this is the
+    rule before the code-only one, on purpose, since such a text has no code to tell from prose."""
+    text = ("# Units\n\n```python\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n"
+            "    k = draw(st.integers(0, 3))  # draw the count\n    return [draw(st.just(i)) for i in range(k)]\n```\n\n"
+            "It's the sample that counts past the example: one draw.\n")
+    assert said(text, "verity/protocols/spot/README.md") == [(13, "draw")]
+
+
+def test_a_python_file_that_doesn_t_tokenize_stops_the_scan_naming_itself() -> None:
+    path = "verity/protocols/spot/tests/test_broken.py"
+    text = 'from hypothesis import given, strategies as st\n\n\n@given(st.data())\ndef test_it(data):\n    data.draw(st.just("x))\n'
+    try:
+        said(text, path)
+    except ValueError as e:
+        assert path in str(e) and "Fix the file's syntax" in str(e), e
+    else:
+        raise AssertionError(f"{path} doesn't tokenize, and the scan read it anyway")
+
+
+def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_senses_and_a_cap_beside_them_is_not() -> None:
+    """The stacking property's caps by the names its Lean gives them, and nvidia-smi's field, anywhere; a "cap" beside
+    them, and a longer name built on one, still count, in their directories too."""
+    theirs = ("R_cap, R_cap_phase, R_cap_node, R_cap_node_by_class_peak, caps.total, `Gates.FoolingCap`; "
+              'nvidia-smi --query-gpu=name,compute_cap; {"compute_cap": "12.0"}')
+    assert said(theirs, "benchmarks/stacked_share/share.py") == []
+    assert said("R_cap is the cap; R_capRows, caps.totals, FoolingCaps, a compute cap, compute_cap_max and its cap",
+                "benchmarks/stacked_share/beta.py") == [(1, "cap"), (1, "cap"), (1, "caps"), (1, "Caps"), (1, "cap"),
+                                                         (1, "cap"), (1, "cap")]
+
+
+def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
+    """PoUS's and PoUB's caps by their names anywhere, and any "cap" in their protocols' files; Pearl's spellings
+    everywhere, in those files too, against the real table as well."""
+    theirs = "the cap: `Params.schedule_cap`, SCHEDULE_CAP, `RTT_ALLOWANCE_CAP_NS`, cap_ns, `AUDIT_CAP`, `auditCap`; v.cap, caps"
+    pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
+    pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
+    for path in ("verity/protocols/pous/verifier/audit.py", "verity/protocols/poub/verifier/audit.py"):
+        assert said(theirs + pearls, path) == pearl
+    assert said(theirs + pearls, "verity/protocols/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
+    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/poub/verifier/audit.py")] == [o for _, o in pearl]
+
+
+def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
+    """The ratchet gate compares a base's sites with a head's as strings, each found in its own process, and a set of
+    terms iterates in an order that differs between processes."""
+    alive, said = [], set()
+    for i in range(64):
+        pair = [Term("Dampener*", "the slowdown", code=True), Term("*RemotePeriod", "monitoring period", code=True)]
+        alive.append(pair)
+        by: dict[str, list[Term]] = {}
+        for t in pair[::-1] if i % 2 else pair:
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        said |= set(sites_of("the DampenerRemotePeriod\n", by))
+    assert said == {(1, "'DampenerRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
+
+
+def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
+    class Placed(Term):
+        """A term whose place in a small set is chosen: such a set gives its members in the order of their hashes."""
+
+        def __init__(self, place: int, old: str, new: str):
+            super().__init__(old, new, code=True)
+            self.place = place
+
+        def __hash__(self) -> int:
+            return self.place
+
+    def said(text: str, *rows: tuple[int, str, str]) -> list[tuple[int, str]]:
+        by: dict[str, list[Term]] = {}
+        for t in (Placed(*row) for row in rows):
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        return sites_of(text, by)
+
+    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]  # second by spelling: the length decides
+    assert said("an OldName", (1, "*Name", "the shorter row's"), (2, "OldNa*", "the longer row's")) == longer
+    assert said("an OldName", (2, "*Name", "the shorter row's"), (1, "OldNa*", "the longer row's")) == longer
+    first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]  # of one length: the spelling decides
+    assert said("an OldName", (1, "OldN*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
+    assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
+
+
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
-    assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
+    assert not holds("x.json") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []
 

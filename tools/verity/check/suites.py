@@ -106,9 +106,11 @@ deselects the other parts' tests; one that holds none of them passes only when t
 whole suite that collects none fails. Its key is the suite's with the part (`part_key`), and its share an equal one.
 
 `--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
-keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, and names what failed
-that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal that a key misses an input
-(`check.py --no-cache`, the nightly `audit-main` job). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
+keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, runs Lake with its local
+artifact cache off (`UNCACHED_ENV`: in the verifier's `lake build` and in every suite's tests, so what they test was compiled
+from the tree), and names what failed that a cached pass (the suite's or a test's) answers for: the nightly cold check's signal
+that a key misses an input (`check.py --no-cache`, the nightly `audit-main` job, which first imports every pass the commit's
+recorded checks hold). A stop mid-run (SIGINT) still keeps the passes of runs that finished.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
 forkserver and its workers, after a kill) is killed with it. A suite whose pytest dies by a signal is reported with it, its peak
@@ -128,7 +130,8 @@ time, beside the others, which run side by side on as few of the processes as le
 does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
 `--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of every
-lane would run a thread per core, and the node's load would reach several times its cores.
+lane would run a thread per core, and the node's load would reach several times its cores. Each test process also starts with
+oneDNN held off AMX (`ONEDNN_ISA`), unless the environment already names that variable.
 
 Each suite's verdict is its real one: a failed test fails its suite here wherever else it is red. Whether a failure may stay red
 is drive's policy (`research.policy`, tools/verity/check/policy.toml's allowances), judged where drive and the quick tier read
@@ -213,7 +216,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/protocols/spot/verifier", "verity/protocols/certifier/verifier", "verity-pouw-benchmarks",
               "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
-              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm")
+              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -222,6 +225,11 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
 #: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
 #: failure no PR caused
 LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
+#: what an uncached run (`--fresh`, and every step of check's `--no-cache`) gives each Lake build it runs and each suite's tests:
+#: Lake's local artifact cache off, so every module is compiled from the tree, none unpacked from what an earlier build on the
+#: node or `tools/verity/lean/cache.py get` left there. No key holds it, so a fresh pass keys as the pass it is compared with;
+#: a test of Lake's cache sets its own
+UNCACHED_ENV = {"LAKE_ARTIFACT_CACHE": "false"}
 QUICK = ["-m", "not slow"]
 #: the guard's (`verity_suite_guard`): the tests of each test file the option names carry the mark, which `whole_args` keeps
 WHOLE_MARK, WHOLE_OPT = "verity_whole", "--verity-whole"
@@ -274,6 +282,13 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None =
 
 #: the thread-pool sizes a test process inherits, each left as the environment sets it
 THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+#: every test process's oneDNN is held off AMX, unless the environment already names the variable. On a CPU with AMX (the flags
+#: `amx_bf16 amx_tile`) oneDNN's AMX kernel now and then returns wrong values for a bf16 matrix product whose process is
+#: preempted, so a test that compares one with torch fails by chance on a loaded machine. Under this cap oneDNN runs the
+#: AVX-512 bf16 kernels instead, the ones a CPU with `avx512_bf16` and no AMX runs anyway. oneDNN reads the variable once, at
+#: the process's first primitive, so it is in the environment the process starts with, where no import order can miss it.
+#: `research run` gives every job the same (research.result's ONEDNN_ISA).
+ONEDNN_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
 
 
 def threads_per_process(jobs: int) -> int:
@@ -2047,6 +2062,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
     for var in THREAD_VARS if threads > 0 else ():
         env.setdefault(var, str(threads))
+    env.setdefault(*ONEDNN_ISA)
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_DENY=json.dumps(dropped(suite, allowed)),
                VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0",
@@ -2424,6 +2440,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
               f"{ROOT}'s own environment: `{' '.join(SYNC)} && uv run tools/verity/check/suites.py` there", file=sys.stderr)
         return 2
+    if a.fresh:
+        os.environ.update(UNCACHED_ENV)
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
     args = (QUICK if a.quick else []) + extra
