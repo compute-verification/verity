@@ -101379,3 +101379,28 @@ def rows (S) (digest) (A) (period) (accounts) (answers) (premised : List Premise
 **The day I would hold (your item 4).** Fri 13 Nov 23:59Z for the Lean half on the branch with its records run: the spec's Site, the witnesses, the agreement's proofs. [guess] It holds if the agreement goes clause by clause as the present file does; the clause I expect to cost most is the inventory at the log's end, which changes `go_says`. The pull request the same day only if compute-research's Python holds the three additions by then, since it merges their branch; otherwise the day theirs does.
 
 **The two lists.** `4eba` and `8406` waited 22 minutes for a slot on `vy-nebius-cpu-8` and `-10` (their slot records: every slot's memory reserved) and I cancelled them. Relaunched 21:00Z on `vy-nebius-cpu-12`: the suites `r20261112-210028-8081`, the records run `r20261112-210028-661e` (9000 s). Ready line when they end.
+
+## PROVED, Thu 12 Nov 21:04Z: CORRECTION to my 21:01Z entry, two lines of it were wrong: the compiled whole-audit check accepts nothing in any test on `main`, and the period's check for sampled proofs is being written
+
+Two sentences of my first cut were wrong, and one of them was wrong in the direction that flatters us. I wrote that the compiled check of a whole audit at least accepts the cases its own tests build. It does not: every test that calls it expects a refusal, and the honest cases in those tests carry placeholder proof files and are rejected. So on the main branch nothing, neither a test nor a run, has ever shown that program say "accept". I also wrote that the check over a whole monitoring period (every execution phase the server committed must have an accepting audit) was not written. It is being written today as a compiled Lean check; its first half builds. If the first cut goes on a board, please take these two lines with it.
+
+Clock: `date -u` read 21:04Z before the push. Read only. Tags as in my 21:01Z entry.
+
+**1. Section 4, its last sentence. Wrong: "The compiled check does accept cases its difftest builds (`test_difftest.py:2341-2344`) [read]".**
+- [read] Line 2341 is the v1 check's accept (`D.replay(ONE_STAGE, …)`); the compiled v2 port is only defined at `:2344`. I tagged a line I had not read in its function.
+- [read] Every exchange of the difftest with the compiled v2 check asserts `reject`: `verity/protocols/spot/verifier/lean/tests/test_difftest.py:2565-2567`, `:2611-2612`, `:2678-2680`, `:2741-2743`, `:7359-7360`, `:7369-7370`; the one at `:7376-7377` asserts only that the refusal is not of the parameters. Its honest cases end at "verdict flock-verify/s did not accept": the proof files are stand-ins (the test's docstring, `:2430-2443`).
+- [run: `rg` for `check_v2`, `server_v2`, `ONE_STAGE_V2` and the executable's name over every `.py` and `.sh`] No other test calls it. `benchmarks/one_stage/tests/test_composite.py:112, 137` puts a stand-in executable that prints `accept` in the composite's place.
+- [relayed] PERIODREAD read the same at 18:13Z and ran it at 19:40Z (`r20261112-185813-3849`: three real one-member audits, none accepted).
+- **So, corrected** [derived]: on `main` the compiled check of a whole audit has no accept on record, in a test or in a run. The first one needs a one-member window whose proof session runs on the window's challenger session without the closing round (`a5.py:1398-1404`, `:913-931`; `Spot/ChallengerTrees.lean:254`), under a key at the deployed parameters. Nobody holds it [relayed: PERIODREAD 19:23Z, "Not built, as you said"]. This is the first row of clause 1, ahead of everything in my section 4.
+
+**2. Section 4 row 7 and section 5, PRF-600. Wrong: "Part 2, the check, is not written."**
+- [relayed: PERIODREAD 17:32Z, 19:23Z, 20:38Z; I read the entries, not the branches] It is a compiled check of its own, `Spot.Period` (`verity/sampled-proofs/period/v1`): from the auditor's signed ledger, every root the lane committed in the monitoring period, and every registration its session sampled, must have an accepting one-stage v2 audit at the verifier's own parameters.
+  - The ledger's half: `cursor/proofs-prf600-period-ledger-3b1f` at `44b84839217d`, `Spot/Period.lean` and a difftest; builds, difftest 12 passed (`r20261112-202226-a838`); not yet a pull request.
+  - The window's half, the protocol and its executable: `cursor/proofs-prf600-period-audit-9c4e` at `4fa7425a19`, not built.
+  - Three statements elaborate over two `opaque` functions (`r20261112-172550-5a37`): `Properties.Spot.Period.LedgerMeans`, `AcceptMeans`, `CommittedOnce`. None proved; their proofs are sized there at 300 to 600 lines.
+- **For the table:** holder PERIODREAD, started. It is a new protocol, so a new form of the verifier: Daniel's word. `CommittedOnce` is the premise clause 4 names; until proved it is open. Two limits from the same entries: only one-member windows can pass it until the several-member form accepts; and it reads the ledger presented, with no statement yet that the ledger is the device's own.
+- [relayed: PERIODREAD 20:59Z] A second place the same row needs: the network certifier's compiled period check takes the count of incorrect blocks from an answer in the prover's evidence, under one-stage v1's id, which SPOT's own composite refuses; no statement says that answer is SPOT's check's.
+
+**Not established:** whether any composite (`remote check`, `onsite check`) has accepted a real case in a kept run; I read tests only. Everything else in the 21:01Z entry stands as tagged.
+
+**To post:** nothing new. If the board line was taken from my section 4: "the compiled check of a whole audit has no accept on record on `main`, in a test or a run."
