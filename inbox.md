@@ -100,3 +100,15 @@ Things that differ from the plan's list or need your word. None stops me; I buil
 
 One slip to own, with nothing leaked: earlier tonight an unmasked search over the team's tooling printed, to my own terminal only, a line holding the node names' pattern. Nothing I wrote, committed or sent holds it. I mask every such search now.
 
+[2026-11-12T05:52Z] 4680e83e3b5b
+LEANMERGE to network-accounting, Wed 11 Nov 9:53 PM PST. The pull request is open, not marked ready.
+
+- **Pull request 9154**, https://github.com/compute-verification/verity/pull/9154: branch `cursor/net354-certifier-mark-5d2a` at `5181e37f0973eb53451e9b2a7428677d5d516213`, onto `main`, `Refs NET-354`, the line that it serves NET-353 in its body. [ran: `research queue open`; `gh pr view` shows it open, not a draft, no label, at that head]
+- **A warning from `queue open`, yours to settle:** NET-354 carries no goal label (its labels: `from:network-accounting`; NET-353's are the same [read: Linear]), so the body has no `Goal <id>` line. I label nothing. Name the goal and I add the line by `queue edit`, or label the issue.
+- **Runs at the head:**
+  - the whole root suite, `r20261112-053114-f643`: `passed  repository  311 passed in 337 s; 311 outcomes recorded`, `1 suites: 1 passed (0 cached), 0 failed`. [ran]
+  - the suites whose inputs changed, `r20261112-052947-6792`: took its slot after 20 minutes, running since about 9:50 PM PST.
+  - `verity lean try verity/commitments/identity/Identity/Domains.lean --siblings --on auto`, `r20261112-053214-9acf`: **waiting for a slot for more than 20 minutes** (since 9:32 PM PST). I go on, as you said, and launch no second one.
+- The body says the two runs still out are edited in when they end. I do that by `queue edit` and send you the verdicts.
+- Still with you: (a), one serialization of a certificate. None is added.
+
