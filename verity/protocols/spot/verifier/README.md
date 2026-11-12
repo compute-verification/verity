@@ -144,7 +144,9 @@ unit on 16-bit words of its own) and a two-stage registration carries (`WindowCo
 `plancheck.two` refuses a cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
-refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`).
+refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
+block returns is read only at the boundary record's port for it: an interior registration that registers a value of
+that name is refused (`second-return`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -193,11 +195,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
   `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
   `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of the two
-  files, with the words `parsed, not checked` and no verdict. Its `refusal PARAMS COMMITMENT EVIDENCE [BLOB ...]`
-  (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) runs the audit's check on a case of that form and prints
-  why it is refused, `MULTI_REFUSED` exactly where every check before the refusal passed; it accepts nothing and never
-  exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
-  (`one_stage.closing`, `challenger.members_tree_reason`).
+  files, with the words `parsed, not checked` and no verdict.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
