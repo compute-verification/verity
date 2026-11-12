@@ -14,6 +14,7 @@ from verity_vllm.pipeline.tp import links
 BLOCKS = (
     {"compilation_mode": "3", "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2], "enforce_eager": False, "backend": None},
     {"mode": 1, "use_inductor_graph_partition": True, "compile_cache": False, "kernel_set_sha256": "ab"},
+    {"backend": "inductor", "call_set_sha256": "cd", "wrapper_norm_set_sha256": "ef", "emulate_precision_casts": True},
     {"enforce_eager": True},
     None,
 )
@@ -30,6 +31,8 @@ def test_a_declared_block_gives_its_compilation_facts_under_one_spelling():
     assert GD.compilation_facts(BLOCKS[0]) == {"mode": "VLLM_COMPILE", "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2]}
     assert GD.compilation_facts(BLOCKS[1]) == {"mode": "STOCK_TORCH_COMPILE", "use_inductor_graph_partition": True, "compile_cache": False,
                                               "kernel_set_sha256": "ab"}
+    assert GD.compilation_facts(BLOCKS[2]) == {"backend": "inductor", "call_set_sha256": "cd", "wrapper_norm_set_sha256": "ef"}
+    assert {k for b in BLOCKS[:3] for k in GD.compilation_facts(b)} == set(GD.COMPILATION_FACT_KEYS)
 
 
 @pytest.mark.parametrize("stated, name", [("0", "NONE"), (2, "DYNAMO_TRACE_ONCE"), ("VLLM_COMPILE", "VLLM_COMPILE")])
@@ -54,7 +57,6 @@ def test_an_absent_path_or_a_suffix_that_is_no_whole_component_names_another(a, 
 
 def test_the_build_hands_on_the_engine_conditions_and_facts_the_match_states():
     assert GP.MODELLED_ENGINE == GD.MODELLED_ENGINE and GD.MODELLED_ENGINE["enforce_eager"] is True
-    assert GP.COMPILATION_FACT_KEYS == GD.COMPILATION_FACT_KEYS
     assert [GP.compilation_facts(b) for b in BLOCKS] == [GD.compilation_facts(b) for b in BLOCKS]
 
 
