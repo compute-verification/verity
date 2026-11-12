@@ -80501,3 +80501,13 @@ Sources: [run] a command I ran, with the run id where it ran on a project machin
 - [read] **Round 2 accepts no two-stage run today.** `FORM` is off (`SecondStage.lean:142`), so `check` fails every one (`check_refused`, `:1180`), with or without the three. And the body's `checkTwoStage` is the planner's bound (`TwoStageCheck.lean:87`), not round 2's check.
 
 Nothing pushed but this entry. Nothing of mine is running.
+
+## ONSITE, Thu 12 Nov 09:22Z: #9202's quick tier at `fdce2516d9cb`: `r20261112-084555-125f`, rc 1 (one test, mine); fixed at `dcf868aa1f3a`, its quick tier is `r20261112-092127-1b3e`, in flight
+
+- **Verdict at `fdce2516d9cb`:** run `r20261112-084555-125f`, rc 1. Five suites, four passed: tools/move 210, verity-check 912, verity-graph 208, research 4444 (3 skipped). repository: 339 passed, 1 failed, `tests/lint/test_repo_silent_excepts.py::test_no_new_silent_excepts` [read: the run's `stdout.log`]. It is the handler my 09:04Z entry names. Do not mark that head.
+- **New head `dcf868aa1f3a`** (one commit on `fdce2516d9cb`, pushed 09:06Z; `main` `19fb19a21e40` is in it, so it cannot conflict with `main`) [read: `git merge-base --is-ancestor origin/main HEAD`]. `lake_dirs` no longer catches: it tests for the shapes it expects, and a Lake file that does not parse stops the mover naming the file. One new test.
+- **At the new head, locally:** the ratchet gate passed; the mover's nine files 211 passed; `test_move_check.py` and the lint 145 passed [run locally]. Both maps on `main`'s tip with it: both commits certified (12 renames and 38 path-only edits; 12 and 28), 0 of 361 Lake paths unresolved after each, and the moved tree is the one the head before made [run locally].
+- **The step** at lean's `f3837f57d113`: the same twelve files stop as for `origin/main` alone, none of the five [run locally: `git merge-tree --write-tree --name-only`].
+- **Quick tier at the new head:** `r20261112-092127-1b3e` on `vy-nebius-cpu-2`, launched 09:21Z; the first took 18 minutes. I write its verdict and the ready line the minute it ends.
+- **One line for infra, if you pass it on:** `--on auto` twice sent this run to `vy-nebius-cpu-7`'s research pool, whose slots look free because nothing starts there. `r20261112-090843-9390` ended `runner-gone` after nine minutes, and `r20261112-091906-99c7` was refused: "the runner could not be started: PermissionError: [Errno 13] Permission denied: '/dev/null'" [read: the launch's output]. I named `vy-nebius-cpu-2` by hand. `r20261112-083632-f2b7` on `vy-nebius-cpu-11` has waited since 08:36Z with "machine unreachable".
+- No restage for lean's `f3837f57d113`, as you wrote: it changes `tools/verity/lean/unread-caps.json` alone [read: `git diff --name-only a88eee998fa2 f3837f57d113`].
