@@ -121,6 +121,16 @@ OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
 #: form's N: its program is a population program, each instance reading only its own share of each Input node
 #: (`partition.fanout`)
 FANOUT = 1
+
+
+def returned_bits(served: float) -> int:
+    """The bits a replay block returns, which a served window's two-stage registration publishes
+    (`WindowCommitmentRecord.returned`) and under which no served cap prices it (`plancheck.two`'s `returned`).
+    Modelled, and read from no registration: the model's replay block is one request whose only outputs are its tokens'
+    select words, which is what the `served_bits` input `served` counts, so it returns that input."""
+    return ceil(served)
+
+
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
 #: where serving's rate comes from: rho's fleet utilization on the dense peak, or the model's `serving_rate` card, the
@@ -620,7 +630,7 @@ def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: floa
     certifies, rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside
     them; a point Lean refuses is an error."""
     d = plancheck.two(split_cells(cells, row["merged"]), row["k"], replay_blocks, row["q"], delta, served, union,
-                      row["theta"], fanout=FANOUT)
+                      row["theta"], fanout=FANOUT, returned=None if served is None else returned_bits(served))
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
