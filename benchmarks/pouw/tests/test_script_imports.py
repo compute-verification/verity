@@ -74,7 +74,7 @@ def test_no_script_is_another_suites_unless_this_suites_inputs_hold_it():
 
 
 def test_load_names_each_script_apart():
-    names = Counter("_".join(p.relative_to(POUW).with_suffix("").parts) for p in CT.scripts() if p.parent != POUW)
+    names = Counter(CT.load_name(p.relative_to(POUW)) for p in CT.scripts())
     assert not [name for name, n in names.items() if n > 1]
     assert not names.keys() & holders().keys()
 
