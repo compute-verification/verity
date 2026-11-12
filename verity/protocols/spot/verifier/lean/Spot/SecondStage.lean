@@ -102,13 +102,16 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   output in the block (a wire), a value the verifier holds without the prover, or the opened row of a read against a
   root round 1 committed. So a value the interior registration registers passes where the verifier pinned it, holds it
   to an earlier record (`Own.fixed`), or fills it from its own bytes (`ownValues`); any other is the prover's, and
-  passes only as a read's row, salt or path, where the verifier fills the read's root and domain, the read's key is a
-  wire, a port of round 1's record or a value the verifier holds, and the read's verdict port reads a value the
-  verifier fills with 1 (`openedRow`): the row is then the table's at that key, short of a SHA-512 collision. A read is
-  a template of the read's Definition (`OPENING`), by its id; that the circuit a session proves under that id is the
-  read's is the template check's (`Flock.ReadNet.check`), not round 2's. It is checked with the interior record's
-  order, and reported beside the other codes, so a run that has it still reaches its other stops
-  (`check_ok_inputs`: a passing check has none).
+  passes only as a read's row, salt or path, where the verifier fills the read's root and domain from one table
+  round 1's record registers (`oneTable`), the read's key is a port of round 1's record or a value the verifier holds,
+  and the read's verdict port reads a value the verifier fills with 1 (`openedRow`): the row is then the table's at
+  that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
+  (`KEY_WHY`): no statement covers it. A read is a template of the read's Definition (`OPENING`), by its id; that the
+  circuit a session proves under that id is the read's is the template check's (`Flock.ReadNet.check`), not round 2's.
+  Not held here either: that the table has as many leaves as the read's template has rows, and that round 1's record
+  registers the root the verifier resolves the table's name to (the interior registration's own check of its
+  `history`). It is checked with the interior record's order, and reported beside the other codes, so a run that has
+  it still reaches its other stops (`check_ok_inputs`: a passing check has none).
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
@@ -188,8 +191,12 @@ def NAMES_WHY : String :=
 def INPUTS_WHY : String :=
   "the interior registration registers a value that is neither one the verifier holds without the prover (one " ++
   "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a " ++
-  "read whose root and domain it fills, whose key the interior registration leaves the prover no choice of, " ++
-  "and whose verdict it holds to 1"
+  "read whose root and domain it fills from one table round 1's record registers, whose key is a port of " ++
+  "round 1's record or a value it holds, and whose verdict it holds to 1"
+
+def KEY_WHY : String :=
+  "the interior registration registers the opened row of a read at a key the block computes (the read's key is " ++
+  "wired to another template's output): no statement covers it"
 
 /-- A read's Definition, as a template's id begins (`EmbeddingRead_v1{V, H}`, whose template the verifier builds:
 `Flock.ReadNet.readTmpl`). -/
@@ -198,8 +205,14 @@ def OPENING : String := "EmbeddingRead_v1{"
 /-- A read's key port. -/
 def OPENING_KEY : String := "tok"
 
+/-- A read's port of its table's root. -/
+def OPENING_ROOT : String := "root"
+
+/-- A read's port of its table's domain id. -/
+def OPENING_DOMAIN : String := "domain"
+
 /-- A read's ports of the table it opens: its root and its domain id. -/
-def OPENING_TABLE : List String := ["root", "domain"]
+def OPENING_TABLE : List String := [OPENING_ROOT, OPENING_DOMAIN]
 
 /-- A read's ports of the row it opens: the row, its salt and its path. -/
 def OPENING_ROW : List String := ["row", "salt", "path"]
@@ -215,6 +228,10 @@ def OWN_SOURCES : List String := ["bytes", "history"]
 
 /-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
 def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
+
+/-- The source of a row that names a table round 1's record registers: `{"history": "H/root"}` its root,
+`{"history": "H/domain"}` its domain id. -/
+def TABLE_SOURCE : String := "history"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -1126,13 +1143,33 @@ def ownRows (mine : Array (String × Array (Array (String × String)))) (v : Str
     Option (Array (Array (String × String))) :=
   (mine.toList.reverse.find? (·.1 == v)).map (·.2)
 
+/-- The table row `row` names as its `field`, as its name's characters: `H` where the row is the one source
+`{"history": "H/<field>"}` (`TABLE_SOURCE`), none for any other row. -/
+def tableOf (field : String) (row : Array (String × String)) : Option (List Char) :=
+  let x := row.getD 0 ("", "")
+  let name := x.2.toList
+  let tail := ("/" ++ field).toList
+  if row.size == 1 && x.1 == TABLE_SOURCE && tail.isSuffixOf name then some (name.take (name.length - tail.length))
+  else none
+
+/-- Values `root` and `domain`, which template `t`'s root and domain ports read, name one table of round 1's record
+at every unit. Each has at least one row, row `i` of `root` the one source `{"history": "H/root"}` and row `i` of
+`domain` `{"history": "H/domain"}` of the same `H` (`tableOf`), and the two ports' rows place each unit alike
+(`Own.rows`: one `per` and the same runs), so a unit reads the root and the domain id of one table. -/
+def oneTable (own : Own) (mine : Array (String × Array (Array (String × String)))) (t root domain : String) : Bool :=
+  let a := ((ownRows mine root).getD #[]).map (tableOf OPENING_ROOT)
+  let b := ((ownRows mine domain).getD #[]).map (tableOf OPENING_DOMAIN)
+  let place := fun (p : String) => (rowsOf own t p).map fun r => (r.per, r.runs)
+  !a.isEmpty && a.all (·.isSome) && a == b && (place OPENING_ROOT).isSome && place OPENING_ROOT == place OPENING_DOMAIN
+
 /-- **An opened row**: link `x` names the opened row of a read against a root round 1 committed. Its template is a
 read (`OPENING`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
-(`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`); its key (`OPENING_KEY`)
-is wired, or linked at values the interior registration doesn't register (`registered`: a port of round 1's record
-then, by `second-links`) or the verifier holds (`own.fixed`, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its
-template's reference statement's reads (`Own.refReads`, the template's first), a value the verifier fills, of at least
-one row, each row `VERDICT_ONE`. -/
+(`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which name one table of
+round 1's record at every unit (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked at values the interior
+registration doesn't register (`registered`: a port of round 1's record then, by `second-links`) or the verifier holds
+(`own.fixed`, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads
+(`Own.refReads`, the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE`. A key
+the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/
 def openedRow (own : Own) (registered : Array String) (mine : Array (String × Array (Array (String × String))))
     (x : Link) : Bool :=
   let t := x.template
@@ -1147,7 +1184,8 @@ def openedRow (own : Own) (registered : Array String) (mine : Array (String × A
     | none => none
   t.startsWith OPENING && OPENING_ROW.contains x.port &&
     OPENING_TABLE.all (fun p => !(linked p).isEmpty && (linked p).all isMine) &&
-    ((wireOf own t OPENING_KEY).isSome || (!(linked OPENING_KEY).isEmpty && (linked OPENING_KEY).all held)) &&
+    (linked OPENING_ROOT).all (fun r => (linked OPENING_DOMAIN).all fun d => oneTable own mine t r d) &&
+    (wireOf own t OPENING_KEY).isNone && !(linked OPENING_KEY).isEmpty && (linked OPENING_KEY).all held &&
     match verdict with
     | some v => (match ownRows mine v with
       | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE)
@@ -1169,11 +1207,11 @@ the verifier holds it without the prover: one it pinned or holds to an earlier r
 from its own bytes (`ownValues`). Any other passes only as the opened row of a read against a root round 1 committed:
 at least one link names it, each link that does is such a row's (`openedRow`), and no template's reference statement
 reads it at a port no link names it at (`readUnlinked`), so nothing reads the row but its opening. So every input of
-a replay block the prover gives after the first stage's sample is a row a read opens under a root the verifier
-supplies, at a key the prover no longer chooses, and the prover's choice of it is SHA-512's collision: the links at
-round 1's ports, the wires and the values the verifier holds are the block's other inputs, none the interior
-registration's to choose. That the circuit a session proves under a read's id is the read's is the template check's
-(`Flock.ReadNet.check`). -/
+a replay block the prover gives after the first stage's sample is a row a read opens under the root of a table round
+1's record registers, at a key round 1's record or the verifier fixes, and the prover's choice of it is SHA-512's
+collision: the links at round 1's ports, the wires and the values the verifier holds are the block's other inputs,
+none the interior registration's to choose. That the circuit a session proves under a read's id is the read's is the
+template check's (`Flock.ReadNet.check`). -/
 def inputsFailure (own : Own) : Option String :=
   let names := (match getD own.interior "registered" with | .arr es => es | _ => #[]).filterMap fun e =>
     match getD e "value" with
@@ -1185,11 +1223,18 @@ def inputsFailure (own : Own) : Option String :=
     !(own.fixed.contains v || mine.any (·.1 == v)) &&
       (!(!links.isEmpty && links.all (openedRow own names mine)) || readUnlinked own v)
 
+/-- Why value `v` is refused (`inputsFailure`): `KEY_WHY` where a link names it as the opened row of a read whose key
+is wired, a key the block computes, else `INPUTS_WHY`. -/
+def inputsWhy (own : Own) (v : String) : String :=
+  if (own.links.getD #[]).any fun x => x.value == v && x.template.startsWith OPENING && OPENING_ROW.contains x.port &&
+      (wireOf own x.template OPENING_KEY).isSome then KEY_WHY
+  else INPUTS_WHY
+
 /-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
 `second-interior-names` unless no value the interior registration registers is of a name the boundary registration's
 record has (`namesOk`), then `second-schedule` where the schedule the boundary registration's record commits is not one
 of its replay blocks (`Schedule.failure`), then `second-inputs` where the interior registration registers a value a
-replay block's input may not read (`inputsFailure`), naming the first. -/
+replay block's input may not read (`inputsFailure`), naming the first and why (`inputsWhy`). -/
 def interiorFailures (own : Own) : List (String × Json) :=
   (if interiorOrderOk own then [] else [("second-interior-order", Json.str INTERIOR_ORDER_WHY)]) ++
     (if namesOk own then [] else [("second-interior-names", Json.str NAMES_WHY)]) ++
@@ -1197,7 +1242,7 @@ def interiorFailures (own : Own) : List (String × Json) :=
     | some why => [("second-schedule", Json.str why)]
     | none => []) ++
     match inputsFailure own with
-    | some v => [("second-inputs", Json.mkObj [("value", Json.str v), ("why", Json.str INPUTS_WHY)])]
+    | some v => [("second-inputs", Json.mkObj [("value", Json.str v), ("why", Json.str (inputsWhy own v))])]
     | none => []
 
 /-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, then,

@@ -675,14 +675,21 @@ READ_LINKS = tuple(SS.Link(READ_T, p, p) for p in ("tok", "root", "domain", "row
 READ_FILLED = {"root": [[{"history": "t/root"}]], "domain": [[{"history": "t/domain"}]], "tok": [[{"bytes": "00000002"}]],
                "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
 READ_REF = ((READ_T, {"ports": {"o1": {"value": "one"}}}),)
+#: The rows of the read's root and domain ports: one row a block, which every unit reads.
+READ_ROWS = tuple(SS.Rows(READ_T, p, 1, (SS.Run(0, 1, 0, 0),)) for p in ("root", "domain"))
+#: `READ_FILLED` with the root and the domain of two rows each, of tables ``t`` and ``u``.
+TWO_TABLES = {**READ_FILLED, "root": [[{"history": "t/root"}], [{"history": "u/root"}]],
+              "domain": [[{"history": "t/domain"}], [{"history": "u/domain"}]]}
 
 
-def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF) -> SS.Own:
+def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
+             rows=READ_ROWS) -> SS.Own:
     """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
-    design's `links` and `wires`, the verifier's own `supplied` values and `fixed` names, and the reference reads."""
+    design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, and the reference
+    reads."""
     return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, {"roots": []}, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
-                  fixed=tuple(fixed), ref_reads=tuple(ref_reads))
+                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows))
 
 
 READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
@@ -697,8 +704,18 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(("p",), [SS.Link("T", "p", "p")], supplied={"p": [[{"port": "T/o0"}]]}), "p"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "tok"}), "tok"),
     (_holding(READ_VALUES[1:], [*READ_LINKS[1:], SS.Link(READ_T, "tok", "b.ingress")]), None),
-    (_holding(READ_VALUES[1:], READ_LINKS[1:], wires=[SS.Wire(READ_T, "tok", "W", "o0")]), None),
     (_holding(READ_VALUES[1:], READ_LINKS[1:]), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "domain": [[{"history": "u/domain"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "domain": [[{"history": "t/root"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [[{"bytes": "00"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [[{"history": "t/root"}, {"history": "t/root"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": TWO_TABLES["root"]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [], "domain": []}), "row"),
+    (_holding(READ_VALUES, supplied=TWO_TABLES), None),
+    (_holding(READ_VALUES, rows=()), "row"),
+    (_holding(READ_VALUES, rows=READ_ROWS[:1]), "row"),
+    (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 2, READ_ROWS[1].runs))), "row"),
+    (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 1, (SS.Run(0, 1, 0, 1),)))), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "root"}), "root"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000000"}]]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "one": []}), "row"),
@@ -718,16 +735,36 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     """`second_stage.inputs_failure`, the first value of the interior registration that a replay block's input may not
     read. Held without the prover, and passing: a value the verifier fills from its own bytes, or pinned or holds to an
     earlier record. Refused: one the prover registers, or one filled from a root of the interior record. A read's row,
-    salt and path pass where the verifier fills its root and domain, its key is filled, a port of round 1's record or a
-    wire, and its verdict port reads a value filled with 1 at every row; and are refused, the row named, where the key
-    is unlinked, the verdict's value has a row that is not 1, no row, is pinned and not filled, is the interior's own
-    port or is not named, where another template reads the row too, or the template is no read. A key or a root the
-    prover registers is refused by its own name, and so is a value no link names. A row, a salt or a path that a
-    reference statement reads at a port no link names it at is refused too: only its opening may read it; a reference
-    reading it at its link's port, or reading a value the verifier fills anywhere, changes nothing."""
+    salt and path pass where the verifier fills its root and domain from one table of round 1's record, its key is
+    filled or a port of round 1's record, and its verdict port reads a value filled with 1 at every row; and are
+    refused, the row named, where the key is unlinked, the verdict's value has a row that is not 1, no row, is pinned
+    and not filled, is the interior's own port or is not named, where another template reads the row too, or the
+    template is no read. The root and the domain name one table: refused where the domain's row names another table or
+    a root, where the root's row is the verifier's bytes or two sources, where the two have other counts of rows or
+    none, and where the two ports' rows are missing or place a unit differently; two tables named alike row by row
+    pass. A key or a root the prover registers is refused by its own name, and so is a value no link names. A row, a
+    salt or a path that a reference statement reads at a port no link names it at is refused too: only its opening may
+    read it; a reference reading it at its link's port, or reading a value the verifier fills anywhere, changes
+    nothing."""
     assert SS.inputs_failure(own) == value
     found = dict(SS._interior_failures(own)).get("second-inputs")
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():
+    """A read whose key is wired to another template's output reads a key the block computes, which no statement
+    covers: its row is refused (`second-inputs`), with a reason of its own (`second_stage.KEY_WHY`), where the same read
+    at a key of round 1's record passes, and one with no key at all is refused for the general reason."""
+    wired = _holding(READ_VALUES[1:], READ_LINKS[1:], wires=[SS.Wire(READ_T, "tok", "W", "o0")])
+    assert SS.inputs_failure(wired) == "row"
+    assert dict(SS._interior_failures(wired))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+    both = _holding(READ_VALUES, wires=[SS.Wire(READ_T, "tok", "W", "o0")])
+    assert dict(SS._interior_failures(both))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+    linked = _holding(READ_VALUES[1:], [*READ_LINKS[1:], SS.Link(READ_T, "tok", "b.ingress")])
+    assert SS.inputs_failure(linked) is None
+    unkeyed = _holding(READ_VALUES[1:], READ_LINKS[1:])
+    assert dict(SS._interior_failures(unkeyed))["second-inputs"] == {"value": "row", "why": SS.INPUTS_WHY}
+    assert SS.KEY_WHY != SS.INPUTS_WHY and "no statement covers it" in SS.KEY_WHY
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
