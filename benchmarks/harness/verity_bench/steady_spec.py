@@ -181,7 +181,7 @@ def timed_sessions(sessions: int, provers: int, period: int | None) -> int:
 
 
 def is_steady(source: str | Path) -> bool:
-    """Whether a spec, by its path or its name under `benchmarks/specs`, says it is a steady-state spec."""
+    """Whether a spec, by its path or its name under `benchmarks/harness/specs`, says it is a steady-state spec."""
 
     try:
         text = spec_path(source).read_text(encoding="utf-8")

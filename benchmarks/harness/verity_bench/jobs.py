@@ -242,7 +242,7 @@ def plan_json(plan: Plan) -> dict[str, Any]:
 def _relative_spec(source: str | Path, root: Path) -> str:
     path = Path(source)
     if not path.is_file():
-        path = root / "benchmarks" / "specs" / f"{former_name(source) or source}.toml"
+        path = root / "benchmarks" / "harness" / "specs" / f"{former_name(source) or source}.toml"
     try:
         return path.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:

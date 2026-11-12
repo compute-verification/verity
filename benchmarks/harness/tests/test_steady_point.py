@@ -30,7 +30,7 @@ from verity_bench.tool import STEADY_POINT
 CIRCUIT = "the circuit of gemm64\n"
 PIN = hashlib.sha512(CIRCUIT.encode()).hexdigest()
 DRIVER, CUDA = "570.86.15", "12.8.93"
-SETUP = "benchmarks/specs/steady-setup.sh"
+SETUP = "benchmarks/harness/specs/steady-setup.sh"
 RECORD = "prove-glm53-flock-steady"
 #: a made-up artifact of the store, and the directory in it that holds a staged statement
 ART, IN_ART = "art:" + "5" * 64, "out/row1"
@@ -88,11 +88,11 @@ def tree(tmp_path: Path, spec: dict | None = None, files: dict | None = None, na
         else:
             doc[key] = change
     root = tmp_path / name
-    for path, text in ({**FILES, "benchmarks/specs/steady.toml": toml(doc)} | (files or {})).items():
+    for path, text in ({**FILES, "benchmarks/harness/specs/steady.toml": toml(doc)} | (files or {})).items():
         if text is not None:
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_text(text)
-    return root, "benchmarks/specs/steady.toml"
+    return root, "benchmarks/harness/specs/steady.toml"
 
 
 def git(root: Path) -> None:
@@ -184,7 +184,7 @@ REFUSED_SPECS = [
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
     ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
     ({"spec": {"setup": None}}, "setup"),
-    ({"spec": {"setup": "benchmarks/specs/none.sh"}}, "`setup` 'benchmarks/specs/none.sh' is no script of the source tree"),
+    ({"spec": {"setup": "benchmarks/harness/specs/none.sh"}}, "`setup` 'benchmarks/harness/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
     ({"spec": {"env": {"CUDA_VISIBLE_DEVICES": "0"}}}, "`env` can't set 'CUDA_VISIBLE_DEVICES'"),
     ({"spec": {"env": {"VERITY_BENCH_STEADY_BIN": "/x"}}}, "`env` can't set 'VERITY_BENCH_STEADY_BIN'"),
@@ -225,8 +225,8 @@ BOUND = {
     "the driver's version": {"spec": {"driver": "570.86.16"}},
     "the CUDA toolkit's version": {"spec": {"cuda_toolkit": "12.9.41"}},
     "the run's environment": {"spec": {"env": {"RUST_MIN_STACK": "2147483648"}}},
-    "which script is the setup": {"spec": {"setup": "benchmarks/specs/other-setup.sh"},
-                                  "files": {"benchmarks/specs/other-setup.sh": FILES[SETUP]}},
+    "which script is the setup": {"spec": {"setup": "benchmarks/harness/specs/other-setup.sh"},
+                                  "files": {"benchmarks/harness/specs/other-setup.sh": FILES[SETUP]}},
     "the block type": {"spec": {"row0": {"type": "gemm32"}}},
     "the statement's units": {"spec": {"row0": {"n": 2}}},
     "the statement's pin": {"spec": {"row0": {"pin": "cd" * 64}}},
@@ -846,7 +846,7 @@ def test_plan_and_check_take_a_steady_spec_and_say_why_a_point_has_no_passing_ru
 
 
 def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_this_machine_alone(tmp_path, monkeypatch):
-    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/specs`."""
+    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/harness/specs`."""
 
     root, path = tree(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
@@ -854,7 +854,7 @@ def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_t
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
     with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
-    with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
+    with pytest.raises(ValueError, match="git has no commit adding benchmarks/harness/specs/steady.toml"):
         P.make_plan(root / path, root=root)
     assert [point.passing_run for point in P.make_plan(elsewhere, root=root, local_only=True).points] == [None] * 3
 
