@@ -10,8 +10,9 @@ The statements are about inference blocks of `c` gates reading `k` novel bits; h
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
 **Counted sets.** Each statement counts its own products: the covering family and the E1 bounds count each (weight,
-token) pair of the forward pass once, and the cover and thread theorems count whatever products their certificate
-covers. A count on a set `S` is `κ / κ_S` times as many of the
+token) pair of the forward pass once, the cover and thread theorems count whatever products their certificate
+covers, and the min-cut bound (`cut`, its arithmetic in `min_cut`) counts the profile's own, the trained weights'
+forward and input-gradient products. A count on a set `S` is `κ / κ_S` times as many of the
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
 be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
@@ -30,7 +31,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-from rho import lean
+from rho import lean, min_cut
 from rho.hardware import Units
 from rho.params import Registry
 from rho.profile import Profile
@@ -261,6 +262,18 @@ def output_premise(k: float, map_width: float, map_width_min: float, b: float, b
     return map_width * k / beta_v if k <= output_cap(map_width_min, b, beta_x, beta_v) else math.inf
 
 
+def cut(k: float, b_w: float, b_a: float, outputs: float) -> float:
+    """The min-cut bound a block (`min_cut.HE`, by `min_cut.macs_a_block`): `((B + √(B² + 4 (k + α))) / 2)²` products,
+    with `α = ½ √(k³ / (q b))`, `B = (k/2) √(o / q)` and `q = β_w β_x`, on a work of forward and input-gradient
+    products (two of the three kinds, so `F = 1`). A word's own wires are a cut, so no value costs more than its
+    width: a weight value costs `β_w = b_w`; an activation value (H)'s `β(k)` (`min_cut.beta`), at most its `b_a`
+    bits; an output is an activation, so (E)'s `b = b_a` and `o = outputs · b_a` wires a product. Nothing past
+    `β(k)`'s last `k`. That the work's values are distinct words and no two of its matmuls share both operands'
+    values is assumed, not checked."""
+    beta = min_cut.beta(k)
+    return math.inf if beta is None else min_cut.macs_a_block(k, outputs * b_a, b_w * min(beta, b_a), b_a)
+
+
 DEPTH = ("layers", "layer_weights")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
@@ -288,6 +301,7 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
             ("h_eff", "b_ps", "step_tokens"), accumulator, counts="kappa_wgrad"),
     Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise"),
             ("map_width", "map_width_min", "b", "beta_x", "beta_v"), output_premise, counts="kappa_forward"),
+    Formula("min-cut", (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS), ("b_w", "b_a", "outputs_per_product"), cut),
 )}
 
 #: weakest last
@@ -295,9 +309,16 @@ STANDINGS = ("supported", "assumed", "contested", "refuted")
 
 
 def premises(registry: Registry | None = None) -> dict[str, dict]:
-    """`data/premises.toml` by the cited name (`lean`): each premise's `standing`, `beyond` and `credible_bits`."""
+    """`data/premises.toml` by the cited name (`lean`): each premise's `standing`, `beyond` and `credible_bits`. (H)'s
+    `beta` rows are the file's: `min_cut` reads them there, so a registry that holds others is refused."""
     reg = registry or Registry.load()
-    return {reg[f"premise.{n}.lean"]: reg.table(f"premise.{n}") for n in reg.names("premise")}
+    table = {reg[f"premise.{n}.lean"]: reg.table(f"premise.{n}") for n in reg.names("premise")}
+    rows = table.get(min_cut.HARDNESS, {}).get("beta")
+    if rows is not None and tuple(map(tuple, rows)) != min_cut.BETA:
+        raise ValueError("premise.training-cut-hardness.beta differs from data/premises.toml's rows, which "
+                         "rho/min_cut.py reads from the file (it imports nothing of this package): an override "
+                         "doesn't reach the min-cut class, so edit the file")
+    return table
 
 
 def premise_status(cites: Iterable[str], k: float, registry: Registry | None = None,

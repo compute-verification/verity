@@ -515,7 +515,8 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
     replays every tile's debit as the verifier will.  For a tile over the cap it gives up the credited row whose removal
     leaves the least debit over the cap, and repeats while the tile is over and the count caps allow; a tile the caps
     leave over the cap stays so, and fails if sampled.  Under the row cap (`row_cap`) a credited A row over its own cap goes
-    first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight."""
+    first, the furthest over first.  Rows go up to ⌈m/64⌉ per unit and ⌈n/64⌉ per weight.  R1's rows aren't given up
+    here: `records` are `declare`'s on the transcript, which excludes them."""
     va: dict[int, set[int]] = {r.matmul.index: set(r.voluntary_a) for r in records}
     vb: dict[int, set[int]] = {}
     for r in records:

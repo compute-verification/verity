@@ -63,8 +63,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from concurrent.futures import ProcessPoolExecutor
-from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from math import expm1, floor, inf, log, log1p, log10
 from pathlib import Path
@@ -634,10 +632,10 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
         workers: int = 1, lean: bool = True) -> dict:
-    """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes, with
-    Lean checking every line's designs unless `lean` is off."""
-    with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        return _run(model_name, scope_names, request, pool.map if pool else map, lean)
+    """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes
+    (`figure1.processes`), with Lean checking every line's designs unless `lean` is off."""
+    with f1.processes(workers, lean) as each:
+        return _run(model_name, scope_names, request, each, lean)
 
 
 def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
@@ -818,6 +816,14 @@ def _certify(job: tuple) -> dict | None:
     return certify(lambda v: _at(what, line, beta, v, True), x, target, what == "h", rel)
 
 
+def _breakeven(job: tuple) -> tuple[float | None, dict | None]:
+    """A break-even `_solve` finds and, with `lean`, its certificate (`_certify`), in one job, so no break-even waits on
+    the others' to be certified."""
+    *solve, lean = job
+    x = _solve(tuple(solve))
+    return x, _certify((*solve, x)) if lean else None
+
+
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
               workers: int = 1, rel: float = 0.01, lean: bool = True) -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
@@ -833,11 +839,9 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
     jobs = [(what, t, (n, inputs[n], lines[n], s, computed[n], confs[n],
                        registration_gpu_seconds(confs[n].registration, c), batch(confs[n], s, c)), f1.RATIO_BUDGET, rel)
             for n, s in keys for what, t in [("h", None)] + [(w, t) for w in SPANS for t in targets.values()]]
-    with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        each = pool.map if pool else map
-        solved = list(each(_solve, jobs))
-        certs = list(each(_certify, [j + (x,) for j, x in zip(jobs, solved)])) if lean else None
-    it, cit = iter(solved), iter(certs or [])
+    with f1.processes(workers, lean) as each:
+        found = list(each(_breakeven, [j + (lean,) for j in jobs]))
+    it, cit = iter(x for x, _ in found), iter(cert for _, cert in found)
     rows = []
     for n, s in keys:
         oh, floor_bits = lines[n][2], next(it)

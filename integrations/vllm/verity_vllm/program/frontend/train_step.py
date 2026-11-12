@@ -13,6 +13,10 @@ the parameters, the optimizer state, the step's three host scalars (`AdamW.scala
 Program's inputs, in that order, each tensor one parameter named after it (`param_<fqn>`, `exp_avg_<fqn>`, ...). The parameters
 are the Program's theta (`Program.theta`: the start's weights); the optimizer state, the scalars and the batch are not.
 
+At a compute capability (`cc`) the step is traced as that GPU runs it (`export_step(..., gpu=True)`): a `Tensor.is_cuda` the step's
+own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16), and the TF32 setting
+its calls run under (cuda.matmul.allow_tf32), which the traced graph doesn't show, is the rules' `tf32`.
+
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the `run` input (a hole, `rules.training_survey`), and returns a `StepSurvey`: every
 refusal at once and the census of everything else, without a Program. A hole is a value no gate checks, which a prover would
@@ -24,13 +28,17 @@ weights are `in_bits_beyond_theta(program, gates)`.
 
 from __future__ import annotations
 
+import contextlib
 import keyword
+import os
 import re
+import sys
 from dataclasses import dataclass
 from typing import Callable
 
 import torch
 from torch.func import functional_call, grad_and_value
+from torch.overrides import TorchFunctionMode
 
 from verity.ml.circuits import parts
 from verity.ml.circuits.boundary import gate_width, in_gates
@@ -38,6 +46,7 @@ from verity.ml.circuits.census import census
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.query_ast import GateSet
+from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
@@ -105,12 +114,15 @@ class _Loss(torch.nn.Module):
 
 @dataclass
 class StepLayout:
-    """Which Program input and output is which: the parameters' and buffers' fqns in order, the host scalars, the batch."""
+    """Which Program input and output is which: the parameters' and buffers' fqns in order, the host scalars, the batch; and how
+    the step was traced: as a GPU runs it (`gpu`), and then with cuda.matmul.allow_tf32 on (`tf32`)."""
     params: list[str]
     buffers: list[str]
     scalars: tuple[str, ...]
     inputs: list[str]
     outputs: list[str]
+    gpu: bool = False
+    tf32: bool = False
 
     def to_json(self) -> dict:
         return {"params": self.params, "buffers": self.buffers, "scalars": list(self.scalars), "inputs": self.inputs,
@@ -122,9 +134,39 @@ def _ident(s: str) -> str:
     return s + "_" if keyword.iskeyword(s) else s
 
 
-def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW,
-                example_batch: torch.Tensor) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
-    """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`."""
+_TORCH_DIR = os.path.dirname(torch.__file__) + os.sep
+
+
+class _TF32Seen(TorchFunctionMode):
+    """Collects the cuda.matmul.allow_tf32 each torch call of the traced step runs under."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.seen: set[bool] = set()
+
+    def __torch_function__(self, func, types, args=(), kwargs=None):
+        self.seen.add(bool(torch.backends.cuda.matmul.allow_tf32))
+        return func(*args, **(kwargs or {}))
+
+
+@contextlib.contextmanager
+def _gpu_branches():
+    """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
+    meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
+    base = torch._C.TensorBase.is_cuda
+
+    def is_cuda(t: torch.Tensor) -> bool:
+        return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
+
+    with hooks.patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
+        yield mode.seen
+
+
+def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *,
+                gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
+    """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
+    as a GPU runs it (`_gpu_branches`): its CUDA branches, and the layout's `tf32` the cuda.matmul.allow_tf32 its calls ran
+    under, which must be one setting for the whole step (a step that changes it between products is refused)."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
@@ -164,9 +206,13 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW,
     inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
               + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
-    with sdpa_kernel(SDPBackend.MATH):
+    with sdpa_kernel(SDPBackend.MATH), (_gpu_branches() if gpu else contextlib.nullcontext(set())) as tf32:
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
-    return gm, metas, StepLayout(short, bshort, scalars, inputs, outputs)
+    if len(tf32) > 1:
+        raise ValueError("export_step: the step changes cuda.matmul.allow_tf32 between its calls, and the rules take one setting "
+                         "for the whole step: set it once, outside the step")
+    return gm, metas, StepLayout(short, bshort, scalars, inputs, outputs, gpu=gpu,
+                                 tf32=gpu and (tf32.pop() if tf32 else bool(torch.backends.cuda.matmul.allow_tf32)))
 
 
 @dataclass(frozen=True)
@@ -185,16 +231,20 @@ class StepSurvey:
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
                 exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
-    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc)`). `exported`:
-    `export_step`'s result. `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole
-    (`rules.training_survey.survey`)."""
+    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc, tf32=...)`, with
+    the step's TF32 setting at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
+    `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`)."""
     from verity_vllm.program.frontend.rules.training import training_rules
     from verity_vllm.program.frontend.rules.training_survey import survey as survey_graph
 
     if rules is not None and cc is not None:
         raise ValueError("step_report: pass rules or cc, not both (training_rules(cc=...) is the rule set cc names)")
-    gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
-    ruleset = rules if rules is not None else training_rules(cc=cc)
+    gpu = cc is not None
+    gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch, gpu=gpu)
+    if gpu and not layout.gpu:
+        raise ValueError("step_report: at a cc the step is the GPU's, its CUDA branches and its TF32 setting: export it with "
+                         "export_step(..., gpu=True)")
+    ruleset = rules if rules is not None else training_rules(cc=cc, tf32=layout.tf32)
     theta = layout.inputs[:len(layout.params)]
     rep = derive_graph(gm, metas, mode=mode, rules=ruleset, name=name, input_names=layout.inputs, theta=theta)
     rep.provenance["train_step"] = layout.to_json()
@@ -236,7 +286,8 @@ def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | t
     parameters (tied ones once), the optimizer state, the step's host scalars (`AdamW.scalars`), the buffers and the batch; its
     outputs are the loss and the new parameters and state, in `annotations["train_step"]`'s order. `mode` is the derivation mode:
     "reference" lowers every op to the reference vocabulary's exact f32 arithmetic (`rules.training`). `cc` (the compute capability
-    `cublas_bf16.TRAIN_CC`): its bf16 matrix products as that GPU's cuBLAS computes them instead, at the shapes its capture covers."""
+    `cublas_bf16.TRAIN_CC`): the step as that GPU runs it (`export_step(..., gpu=True)`), its bf16 matrix products as its cuBLAS
+    computes them instead, at the shapes its capture covers, and its f32 ones refused under cuda.matmul.allow_tf32 (TF32 GEMMs)."""
     return step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc).result
 
 

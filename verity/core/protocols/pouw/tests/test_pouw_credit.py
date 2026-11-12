@@ -262,6 +262,19 @@ def test_llama32_1b_int8_and_its_k2048_role_pin_one_checkpoint():
     assert Cr.PINNED_MODELS["LLAMA32_1B_INT8_K2048"] == e["checkpoint_sha512"]
 
 
+def test_llama32_1b_bf16_pins_the_upstream_checkpoint():
+    """LLAMA32_1B_BF16 is unsloth/Llama-3.2-1B as upstream holds it (`upstream-bf16`, snapshot 9535bd9b), the checkpoint
+    LLAMA32_1B_INT8 is made from: the 6 files a served engine reads, each by SHA-512. It is the role a remote memory audit
+    serves Llama 3.2 1B under, since its store's layout covers BF16 weights; credit counts none of its weights."""
+    e = json.loads(Cr.MODELS.read_text())["LLAMA32_1B_BF16"]
+    assert (e["repo"], e["revision"], e["recipe"]) == (
+        "unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "upstream-bf16")
+    assert set(e["files"]) == {"config.json", "generation_config.json", "model.safetensors", "special_tokens_map.json",
+                               "tokenizer.json", "tokenizer_config.json"}
+    assert e["checkpoint_sha512"] == hashlib.sha512(codec.canonical_json(e["files"])).hexdigest()
+    assert Cr.PINNED_MODELS["LLAMA32_1B_BF16"] == e["checkpoint_sha512"]
+
+
 def test_glm53_int8_pins_the_v3_checkpoint():
     """GLM53_INT8 is vllm's v3 int8 checkpoint of zai-org/GLM-5.3 (`verity-int8-channel127/v3`, snapshot 7065fe60): the
     146 files its `checkpoints-int8.json` entry lists by size and sha256 (141 shards, their index, the config, the

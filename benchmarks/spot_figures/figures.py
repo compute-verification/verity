@@ -2,7 +2,8 @@
 card it read) and its PNG and SVG into one directory, which `research data put --kind spot-figure/v1 --tree DIR`
 publishes for the console.  Figure 1 is the total-cost form (`total_cost.py`, `figure1.json`), its skipped-work figure
 beside it; the bounds against proof overhead (`figure1.py`, `figure1_overhead.json`) and their appendix come with it.
-Figure 4 (`figure4.py`) reads Figure 1's configurations and serve taxes.
+Figure 4 (`figure4.py`) reads Figure 1's configurations and serve taxes.  `--workers` processes plan Figure 1's
+points and run Lean's checks of their designs, each point one job, so the JSON is the same at any number of them.
 
     uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N] [--request workload]
         [--workers N] [--no-lean]
@@ -34,7 +35,8 @@ def main(argv=None) -> None:
                     help="the proof overheads of the bounds against overhead, the vertical line's besides")
     ap.add_argument("--request", choices=figure1.REQUESTS, default="census",
                     help="a request's tokens: the census's mean, or the workload card's request")
-    ap.add_argument("--workers", type=int, default=os.cpu_count(), help="processes planning Figure 1's curves")
+    ap.add_argument("--workers", type=int, default=os.cpu_count(),
+                    help="processes planning Figure 1's points and running Lean's checks of them (default: every CPU)")
     ap.add_argument("--no-lean", dest="lean", action="store_false",
                     help="plan Figure 1 without Lean's check of its designs and without the break-even's certificate")
     args = ap.parse_args(argv)

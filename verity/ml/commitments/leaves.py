@@ -81,7 +81,7 @@ EMPTY_TAG = "verity-vllm/empty/v1"
 DIGEST_BYTES = 32
 
 
-def H(tag: str, *parts: bytes, hash: str = "sha256") -> bytes:  # noqa: N802 - the contract names it H
+def H(tag: str, *parts: bytes, hash: str = "sha256") -> bytes:  # the contract names it H
     """SHA-256 over the tag and the length-prefixed parts (layout in the module docstring); ``hash="sha512"`` is the
     ``vllm-v1-sha512`` tree's form, the same bytes through SHA-512."""
 

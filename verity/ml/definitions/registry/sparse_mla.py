@@ -29,8 +29,8 @@ Registered functions (all `Name_v1`):
 
 T is the row's valid count (at most `index_topk`), kv its selected rows in order; `SPARSE_MLA_GLM53` holds GLM-5.3's statics.
 A head is cut exactly into its key blocks (`visits`), each a `SparseMlaHeadBlock` carrying the online softmax's state to the next,
-and `SparseMlaHeadEnd`, its epilogue: a full block takes 0.94 of a Flock block at GLM-5.3's statics where a head of two blocks
-needs 2^30 bits whole, so serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).
+and `SparseMlaHeadEnd`, its epilogue: at GLM-5.3's statics a full block fits a Flock block and a head of two blocks does not, so
+serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ from verity.ml.circuits.ops.prims import const
 from verity.ml.definitions.registry import hopper
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.b1 import _lane
-from verity.ml.definitions.registry.prims import A16, BF16, F32
+from verity.ml.definitions.registry.prims import BF16, F32
 
 _CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 mainloop and softmax.h (the module docstring's files) at hdim "
          "64 / hdimv 512; tests/properties/glm53_dsa_capture_gpu.py is its hardware check")

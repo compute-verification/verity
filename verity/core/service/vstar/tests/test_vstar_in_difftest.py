@@ -46,7 +46,7 @@ from verity_flock import rec_vstar as V
 from verity.ml.commitments import hm96
 
 LEAN = Path(__file__).resolve().parents[1]
-FLOCK_TESTS = LEAN.parents[2] / "ml" / "flock" / "tests"
+FLOCK_TESTS = Path(__file__).resolve().parents[5] / "verity/ml/flock/tests"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 SEED = 20261026

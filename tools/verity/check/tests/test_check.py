@@ -130,11 +130,26 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
     return tmp_path / "out", sent
 
 
+def _signed(sent: Path, at: Path) -> Path:
+    """`AGREEMENT_URLS` at ``at``, as `agreement_url_file` writes it, for the pinned files `_pinned` built in ``sent``, each with a
+    `file:` URL of its tarball."""
+    import json
+
+    pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
+    at.write_text(json.dumps({k: {"art": pin[k]["art"], "sha256": pin[k]["sha256"], "bytes": (sent / f).stat().st_size,
+                                  "url": (sent / f).as_uri()} for k, f in (("upstream", "a.tar.gz"), ("inputs", "b.tar.gz"))}))
+    return at
+
+
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     """`lake build`, the unit-cut conformance and the audit of every Lean package are required; the agreement runs when the run
-    has the pinned upstream build and inputs (found by hash, whatever their names), and is skipped by name otherwise."""
+    was sent URLs of the pinned upstream build and inputs, each listed with its pinned sha256, is skipped by name when it was
+    sent none, and fails when the file it was sent can't be read or doesn't list both, rather than passing for not sent."""
+    import json
+
     out, sent = _pinned(tmp_path, monkeypatch)
-    (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out)
+    urls = _signed(sent, tmp_path / "agreement-urls.json")
+    (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out, agreement_urls=urls)
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
     assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
@@ -145,10 +160,16 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     warn = CHECK.lean_steps(out, bookkeeping=True)[2][1]
     assert "--bookkeeping" not in lean_audit and warn[warn.index("--bookkeeping") + 1] == "warn"
     assert "--bookkeeping" not in CHECK.lean_steps(out, regenerate=False, bookkeeping=True)[2][1]
-    assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
-    (sent / "b.tar.gz").unlink()
-    assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
-    (sent / "a.tar.gz").unlink()
+    assert argv[1].endswith("tools/verity/check/check.py") and argv[2:] == ["--lean-agreement-urls", str(out), str(urls)]
+    doc = json.loads(urls.read_text())
+    urls.write_text(json.dumps({**doc, "inputs": {**doc["inputs"], "sha256": "0" * 64}}))
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "the URLs sent list upstream of the pinned upstream build and inputs"
+    for unsigned in ({"upstream": {**doc["upstream"], "url": None}}, ["upstream"]):
+        urls.write_text(json.dumps(unsigned))
+        assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "the URLs sent list neither of the pinned upstream build and inputs"
+    urls.write_text("{")
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == ("the URLs sent for the pinned upstream build and inputs can't be "
+                                                                "read (JSONDecodeError)")
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
@@ -159,15 +180,15 @@ def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_
     import json
 
     out, sent = _pinned(tmp_path, monkeypatch)
+    urls = _signed(sent, tmp_path / "agreement-urls.json")
     lean = CHECK.FLOCK_LEAN
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "inner"\npath = "inner"\n')
-    assert not isinstance(CHECK.lean_steps(out)[3][1], str)
+    assert not isinstance(CHECK.lean_steps(out, agreement_urls=urls)[3][1], str)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "identity"\npath = "../identity"\n')
-    assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires identity from outside its directory")
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1].startswith(
+        "the verifier's Lean package requires identity from outside its directory")
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
     (lean / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"}]}))
-    for f in sent.iterdir():
-        f.unlink()
     assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires mathlib from outside")
     assert CHECK.requires_outside(ROOT / "verity" / "core" / "service" / "flock") == []
 
@@ -188,6 +209,25 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
         got.unlink()
     monkeypatch.setenv(CHECK.LEAN_DEPS_URLS_ENV, "/somewhere/urls.json")                  # a local recorded run's launcher
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
+
+
+def test_the_agreement_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
+    """The pinned upstream build's URLs grant a read until they expire, as the Lean bundles' do: taken out of the run directory
+    to a file only its owner reads, the step's argument, which `run` deletes when the run ends; a local recorded run reads its
+    launcher's file where it is, and leaves it."""
+    out, sent = _pinned(tmp_path, monkeypatch)
+    monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
+    assert CHECK.take_agreement_urls(out) is None
+    body = _signed(sent, out / "inputs" / CHECK.AGREEMENT_URLS).read_text()
+    got = CHECK.take_agreement_urls(out)
+    try:
+        assert not (out / "inputs" / CHECK.AGREEMENT_URLS).exists() and not got.is_relative_to(out)
+        assert got.read_text() == body and got.stat().st_mode & 0o777 == 0o600 and got.name.startswith(CHECK.TAKEN)
+        assert CHECK.lean_steps(out, agreement_urls=got)[3][1][-1] == str(got)
+    finally:
+        got.unlink()
+    monkeypatch.setenv(CHECK.AGREEMENT_URLS_ENV, str(local := _signed(sent, tmp_path / CHECK.AGREEMENT_URLS)))
+    assert CHECK.take_agreement_urls(out) == local and not local.name.startswith(CHECK.TAKEN)
 
 
 def test_the_verdict_pack_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch, capsys):
@@ -214,7 +254,7 @@ def test_custody_deletes_the_presigned_urls_wherever_a_run_leaves_them(tmp_path)
     from research.store.custody import drop_credentials
 
     (tmp_path / "inputs").mkdir()
-    for name in (CHECK.LEAN_DEPS_URLS, CHECK.VERDICT_URLS, "sent.txt"):
+    for name in (CHECK.LEAN_DEPS_URLS, CHECK.VERDICT_URLS, CHECK.AGREEMENT_URLS, "sent.txt"):
         (tmp_path / "inputs" / name).write_text("x")
     drop_credentials(tmp_path)
     assert [p.name for p in (tmp_path / "inputs").iterdir()] == ["sent.txt"]
@@ -248,6 +288,60 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
 
 
+def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
+    """The launch used to fetch the pinned upstream build and inputs from the store and send them, minutes of every shard's
+    launch on the control pod; the step now fetches them through the URLs the launch signed, into scratch outside the run
+    directory, each held to its listed size and pinned sha256, and runs the agreement on them.  With no other copy to fall
+    back on, a fetch that fails is tried again after each of `AGREEMENT_FETCH_WAITS_S`, and the step fails when the last does;
+    no URL is printed, since each grants a read until it expires."""
+    import json
+    import urllib.error
+
+    out, sent = _pinned(tmp_path, monkeypatch)
+    urls = _signed(sent, tmp_path / "agreement-urls.json")
+    (scratch := tmp_path / "scratch").mkdir()
+    monkeypatch.setattr(CHECK.tempfile, "tempdir", str(scratch))
+    slept = []
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 0 and slept == []
+    argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
+    assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
+    assert "check: lean-agreement: fetched the pinned upstream build and inputs (0 MiB) in " in capsys.readouterr().out
+    assert not list(scratch.iterdir()), "the fetched files are scratch, deleted when the step ends"
+
+    real, calls = CHECK.urllib.request.urlopen, []
+
+    def flaky(url, timeout):
+        calls.append(url)
+        if len(calls) <= 2:
+            raise urllib.error.URLError("unreachable")
+        return real(url, timeout=timeout)
+
+    monkeypatch.setattr(CHECK.urllib.request, "urlopen", flaky)
+    out, sent = _pinned(tmp_path / "flaky", monkeypatch)
+    assert CHECK.lean_agreement_urls(out, _signed(sent, tmp_path / "flaky.json"), sleep=slept.append) == 0
+    assert slept == list(CHECK.AGREEMENT_FETCH_WAITS_S) and len(calls) == 4
+    said = capsys.readouterr().out
+    assert said.count("the pinned upstream build (art:u): it can't be fetched (URLError); fetching it again in ") == 2
+
+    monkeypatch.setattr(CHECK.urllib.request, "urlopen", real)
+    out, sent = _pinned(tmp_path / "gone", monkeypatch)
+    doc = json.loads(_signed(sent, urls).read_text())
+    urls.write_text(json.dumps({**doc, "inputs": {**doc["inputs"], "bytes": doc["inputs"]["bytes"] - 1}}))
+    slept.clear()
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1 and slept == list(CHECK.AGREEMENT_FETCH_WAITS_S)
+    err = capsys.readouterr()
+    n = doc["inputs"]["bytes"]
+    assert (f"error: the pinned inputs (art:i): the {n} bytes fetched aren't the {n - 1} the store lists under its sha256 "
+            f"({len(CHECK.AGREEMENT_FETCH_WAITS_S) + 1} tries)") in err.err
+    assert "file:" not in err.out + err.err and not (out / "flock-agreement" / "argv.json").exists()
+    urls.write_text(json.dumps({"upstream": doc["upstream"]}))
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1
+    assert f"error: {urls} lists upstream of the pinned upstream build and inputs" in capsys.readouterr().err
+    urls.write_text("{")
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1
+    assert f"error: {urls} can't be read (JSONDecodeError)" in capsys.readouterr().err
+
+
 def test_a_build_that_cannot_run_here_fails_the_preflight_in_seconds(tmp_path, monkeypatch, capsys):
     """A binary built for another CPU starts, parses its arguments, and dies of SIGILL on the first instruction this CPU
     lacks, printing nothing: only a real replay shows it. So does a binary that replays with the wrong verdict."""
@@ -274,7 +368,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/ml/flock/pod/", "verity/ml/flock/verifier/",
+                                                           "verity/ml/flock/tool.py", "verity/core/service/flock/", "!README.md",
                                                            "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
@@ -584,6 +679,102 @@ def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unles
             CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", str(given)])
 
 
+class _Remote:
+    """The store's remote as `agreement_url_file` reads it: it holds every object at ``n`` bytes (none without ``held``) and signs
+    a URL of each, keeping each signature; a read of an object fails the test."""
+
+    def __init__(self, n: int = 7 << 20, held: bool = True):
+        self.n, self.held, self.signed = n, held, []
+
+    def head(self, key: str) -> dict | None:
+        return {"bytes": self.n, "etag": None} if self.held else None
+
+    def presign(self, key: str, expires_s: int) -> str:
+        self.signed.append((key, expires_s))
+        return f"https://store.invalid/{key}?X-Amz-Signature=signed"
+
+    def get(self, key: str, path: Path) -> None:
+        raise AssertionError(f"the launch read {key}")
+
+
+def _remote(monkeypatch, remote) -> None:
+    import research.store.remote
+
+    monkeypatch.setattr(research.store.remote, "load_remote", lambda path=None: remote)
+
+
+def test_a_launch_that_needs_the_agreement_sends_its_urls_and_fetches_nothing(tmp_path, monkeypatch, capsys):
+    """The launch fetched the pinned upstream build and inputs from the store to send with the run: minutes of each shard's
+    launch on the control pod.  It now reads each one's size from the store's remote and signs a GET of it for
+    `AGREEMENT_URL_TTL_S`, in a file only its owner reads, sent with the run or, for a local one, named by
+    `AGREEMENT_URLS_ENV`; it opens no local store, reads no object and prints no URL.  A remote that can't sign, can't be read
+    or doesn't hold a pinned file refuses the launch, whose agreement would otherwise fail on the machine."""
+    import tempfile
+    import urllib.error
+
+    import research.store.local
+    from research.store.local import object_key
+
+    real, launched, sent, opened = subprocess.run, [], {}, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            named = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--send" and cmd[i + 1].endswith(CHECK.AGREEMENT_URLS)]
+            for p in map(Path, named + ([u] if (u := (k.get("env") or {}).get(CHECK.AGREEMENT_URLS_ENV)) else [])):
+                sent[p] = (json.loads(p.read_text()), p.stat().st_mode & 0o777)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    class Store:
+        def __init__(self, *a, **k):
+            opened.append(a)
+            raise AssertionError("the launch opened the local store")
+
+    (scratch := tmp_path / "scratch").mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
+    _remote(monkeypatch, remote := _Remote())
+    pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
+    want = {k: {"art": pin[k]["art"], "sha256": pin[k]["sha256"], "bytes": 7 << 20,
+                "url": f"https://store.invalid/{object_key(pin[k]['sha256'])}?X-Amz-Signature=signed"} for k in ("upstream", "inputs")}
+    assert CHECK.record(["--on", "vy-x", "--base", "HEAD", "--agreement"]) == 0
+    [cmd] = launched
+    [(path, (doc, mode))] = sent.items()
+    assert path.name == CHECK.AGREEMENT_URLS and doc == want and mode == 0o600 and str(path) in cmd
+    assert [cmd[i + 1] for i, x in enumerate(cmd) if x == "--input"] == [f"flock_{k}={pin[k]['art']}" for k in ("upstream", "inputs")]
+    assert remote.signed == [(object_key(pin[k]["sha256"]), CHECK.AGREEMENT_URL_TTL_S) for k in ("upstream", "inputs")]
+    out = capsys.readouterr().out
+    assert "sending presigned URLs for the pinned upstream build and inputs (14 MiB, which the run fetches)" in out
+    assert "X-Amz-Signature" not in out and opened == [] and not list(scratch.iterdir())
+    launched.clear(), sent.clear()
+    assert CHECK.record(["--base", "HEAD", "--agreement"]) == 0                        # a local recorded run
+    [(path, (doc, _))] = sent.items()
+    assert doc == want and CHECK.AGREEMENT_URLS not in " ".join(launched[0])
+
+    class Unreadable(_Remote):
+        def head(self, key: str) -> dict | None:
+            raise urllib.error.HTTPError(f"https://store.invalid/{key}", 403, "Forbidden", {}, None)
+
+    launched.clear()
+    for given, why in ((_Remote(held=False), f"the store's remote doesn't hold the pinned upstream ({pin['upstream']['art']})"),
+                       (Unreadable(), "the store's remote can't be read (HTTPError 403)"), (None, "no store remote here signs URLs")):
+        _remote(monkeypatch, given)
+        assert CHECK.record(["--on", "vy-x", "--base", "HEAD", "--agreement"]) == 2
+        assert (f"check: --record refused: the run needs lean-agreement, which fetches the pinned upstream build and inputs "
+                f"through presigned URLs, and {why}; nothing launched") in capsys.readouterr().err
+        assert CHECK.main(["--agreement-files"]) == 1 and f"check: --agreement-files: {why}" in capsys.readouterr().err
+    assert launched == [] and opened == [] and not list(scratch.iterdir())
+    _remote(monkeypatch, _Remote())
+    assert CHECK.main(["--agreement-files"]) == 0
+    printed = capsys.readouterr().out.split()
+    assert printed[0] == "--send" and json.loads(Path(printed[1]).read_text()) == want
+
+
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
     """git reports a rename by its destination alone unless asked not to, which would leave out the step the file's old path
     requires."""
@@ -591,8 +782,6 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     import subprocess
     import sys
     import tempfile
-
-    import research.store.local
 
     def git(*args):
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
@@ -609,13 +798,8 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     git("commit", "-q", "-m", "base")
     git("mv", "verity/ml/flock/verify.rs", "verify.rs")
     git("commit", "-q", "-m", "move")
-    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
-
-    class Store:
-        def fetch(self, art):
-            (tmp_path / art[4:]).write_text("")
-            return tmp_path / art[4:]
-
+    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u", "sha256": "a" * 64},
+                                                        "inputs": {"art": "art:i", "sha256": "b" * 64}}))
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -627,12 +811,13 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "HEAD^"]) == 0
     [cmd] = launched
-    assert "flock_upstream=art:u" in cmd and "sending the pinned upstream build" in capsys.readouterr().out
+    assert "flock_upstream=art:u" in cmd and "sending presigned URLs for the pinned upstream build" in capsys.readouterr().out
 
 
 def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
@@ -860,8 +1045,8 @@ def test_the_agreement_is_not_required_for_docs_alone():
     rule = tool.CHECK.merge_requires["lean-agreement"]
     docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
-    assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
+    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/", "verity/ml/flock/verifier/"]
+    assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/", "verity/ml/flock/verifier/"]  # only the two names are left out
     for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
         reads = [line for line in (ROOT / "verity" / "ml" / "flock" / "verifier" / f).read_text().splitlines()
                  if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
@@ -1552,8 +1737,6 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     import sys
     import tempfile
 
-    from research.store import local
-
     def git(*args: str) -> None:
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
                        check=True, capture_output=True)
@@ -1568,11 +1751,6 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")
-
-    class Store:
-        def fetch(self, art: str) -> Path:
-            return tmp_path / art.replace(":", "_")
-
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -1583,11 +1761,14 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
 
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert "check: changes under verity/ml/flock/, verity/core/service/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    assert ("check: changes under verity/ml/flock/, verity/ml/flock/pod/, verity/ml/flock/verifier/, verity/ml/flock/tool.py, "
+            "verity/core/service/flock/ against main: sending presigned URLs for the pinned upstream build and inputs") \
+        in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
 

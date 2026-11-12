@@ -309,6 +309,33 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
   (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
 #guard exValues (exReported "w1" 7 exRegistering) (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])
   (exReading "w1" 7 8 6 [0, 1, 2, 3, 4, 5]) == #["second-values"]
+-- a value only the interior registers (a history table, say), read only at its root, domain and leaves
+-- (`second-read`); and a value neither registers, refused
+#guard (exCheck true (exReported "w2" 1 exRegistering) #[exReading "w2" 1 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-read"]
+#guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 1 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-read"]
+#guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 3 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-read"]
+#guard (exCheck true (exReported "w3" 9 exRegistering) #[exReading "w3" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-read"]
+
+/-- `exRegistering` with the boundary registering the interior's values too. -/
+private def exBothRegistering : Own :=
+  { exRegistering with boundary := exOwn.boundary.setObjVal! "registered" (getD exRegistering.interior "registered") }
+
+-- the reads that rest on the interior's own values, which the attached record names (`interiorReads`, `attach`): a
+-- value only the interior registers; not an own port's, a linked port's, or a value the boundary registers too
+#guard jeq (.arr (interiorReads exRegistering [exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]))
+  (.arr #[Json.mkObj [("template", "Pair_v0"), ("port", "x"), ("value", "w2")]])
+#guard (interiorReads exRegistering [exHonest]).isEmpty
+#guard (interiorReads exOwn [exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).isEmpty
+#guard (interiorReads exLinked [exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).isEmpty
+#guard (interiorReads exBothRegistering [exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).isEmpty
+#guard (exCheck true (exReported "w2" 9 exBothRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {} #[Json.mkObj [("value", "w2")]]) "interior_reads")
+  (.arr #[Json.mkObj [("value", "w2")]])
+#guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {}) "interior_reads") .null
 #guard (exValues (exReported "x" 1) (exReadField "reads_from" (3 : Nat) (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]))
   (exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5])).isEmpty
 -- reads where the reference reads none, none where it reads one, a field of a port's other than the run's, or no

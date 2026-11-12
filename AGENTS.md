@@ -271,7 +271,10 @@ rule for each case: the team skill's Landing.
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
-  `show-environment`.
+  `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
+  `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
+  over its directory, which matches the keys beside it. Look at a key with `stat`, `sha256sum` or
+  `openssl pkey -in FILE -pubout`.
 
 ## Where writing goes
 

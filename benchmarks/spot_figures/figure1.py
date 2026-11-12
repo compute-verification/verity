@@ -71,12 +71,12 @@ import json
 import re
 import tomllib
 from concurrent.futures import ProcessPoolExecutor
-from contextlib import nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from itertools import repeat
 from math import ceil, inf, log, sqrt
+from multiprocessing import get_context
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.core.protocols.reporting import PERIODS
@@ -86,7 +86,7 @@ from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain
 from verity.ml.circuits.partition_v2 import unit_class
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
 RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
@@ -556,6 +556,34 @@ def lean_point(m: Model, design: str, p: dict) -> dict:
     return p | {"bound": min(bits, top), "capped": bits >= top} | checked
 
 
+def checked_point(job: tuple[Model, str, str, float, bool]) -> dict:
+    """One point of a curve (`point`) and, with `lean`, Lean's check of its design: a two-stage point's `lean_point`,
+    any other's `lean` and bound from `lean_check`.  A point reads only its own job, so processes may plan and check
+    the points in any order (`processes`)."""
+    m, design, target, budget, lean = job
+    p = point(m, design, target, budget)
+    if not lean:
+        return p
+    if design in TWO_STAGE:
+        return lean_point(m, design, p)
+    ((on, bound),) = lean_check([(m, design, target, p)])
+    return p | {"bound": bound, "lean": on}
+
+
+@contextmanager
+def processes(workers: int, lean: bool) -> Iterator[Callable]:
+    """`map` over `workers` forked processes, or `map` itself at one.  With `lean`, Lean's checker is built first, so
+    each fork inherits it (`plancheck.executable` builds once a process, one process at a time) rather than queueing to
+    build it again."""
+    if workers <= 1:
+        yield map
+        return
+    if lean:
+        plancheck.executable(plancheck.EXE)
+    with ProcessPoolExecutor(workers, mp_context=get_context("fork")) as pool:
+        yield pool.map
+
+
 PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay", "boundary", "interior", "commit",
         "total", "fill")
 
@@ -734,10 +762,10 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
         request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True) -> dict:
     """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
-    (default all), each curve's points planned and checked on `workers` processes, with Lean checking every design
-    unless `lean` is off."""
-    with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        return _run(model_name, points, scope_names, request, designs, pool.map if pool else map, lean)
+    (default all), with Lean checking every design unless `lean` is off: every point of every curve one job
+    (`checked_point`) on `workers` processes (`processes`), the JSON the same at any number."""
+    with processes(workers, lean) as each:
+        return _run(model_name, points, scope_names, request, designs, each, lean)
 
 
 def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, request: str,
@@ -762,29 +790,27 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                  | {"served": SERVED_STATUS if TWO_STAGE[d][1] == "sets" else OUTS_STATUS}
               for d in planned["exfiltration"] if d in TWO_STAGE and TWO_STAGE[d][1]}
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}
+    models = {s.name: [model(c, part, s, x, fill) for x in xs] for s in chosen}
+    curves = [(s, panel, target, design, beta) for s in chosen
+              for panel, target in (("exfiltration", "leak"), ("skipped_work", "work"))
+              for design in planned[panel] for beta in budgets]
+    points = iter(list(each(checked_point, [(m, design, target, beta * s.gpu_seconds, lean)
+                                            for s, _, target, design, beta in curves for m in models[s.name]])))
+    for s, panel, target, design, beta in curves:
+        pts = [next(points) for _ in xs]
+        ys = [p["bound"] for p in pts]
+        series[panel].append({
+            "scope": s.name, "design": design, "budget": beta, "headline": design == HEADLINE[panel],
+            "main": design in MAIN[panel], "x": xs, "y": ys,
+            "capped": [p["capped"] for p in pts],
+            "share": [y / cap(models[s.name][0], target) for y in ys],
+            **({k: [p[k] for p in pts] for k in (("lean", "planner", "theta") if design in TWO_STAGE else ("lean",))}
+               if lean else {}),
+            "plan": [None if p["row"] is None else _plan(p["row"]) for p in pts]})
     for s in chosen:
         base = model(c, part, s, 1.0, fill)
         serve_hash = base.dot.units * base.dot.commit_bytes * base.byte_s / s.gpu_seconds
         boundary_hash = base.replay.replay_blocks * base.replay.boundary_bytes * base.byte_s / s.gpu_seconds
-        models = [model(c, part, s, x, fill) for x in xs]
-        for panel, target in (("exfiltration", "leak"), ("skipped_work", "work")):
-            for design in planned[panel]:
-                for beta in budgets:
-                    pts = list(each(point, models, repeat(design), repeat(target), repeat(beta * s.gpu_seconds)))
-                    two = lean and design in TWO_STAGE
-                    if two:
-                        pts = list(each(lean_point, models, repeat(design), pts))
-                    checked = (lean_check([(m, design, target, p) for m, p in zip(models, pts)])
-                               if lean and not two else None)
-                    ys = [b for _, b in checked] if checked else [p["bound"] for p in pts]
-                    series[panel].append({
-                        "scope": s.name, "design": design, "budget": beta, "headline": design == HEADLINE[panel],
-                        "main": design in MAIN[panel], "x": xs, "y": ys,
-                        "capped": [p["capped"] for p in pts],
-                        "share": [y / cap(models[0], target) for y in ys],
-                        **({"lean": [c for c, _ in checked]} if checked else {}),
-                        **({k: [p[k] for p in pts] for k in ("lean", "planner", "theta")} if two else {}),
-                        "plan": [None if p["row"] is None else _plan(p["row"]) for p in pts]})
         ratio = infiltration_ratio(infiltration, series["exfiltration"], s.name, c["proof_overhead"].value)
         out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                               "gpu_seconds": s.gpu_seconds, "requests": s.requests, "flop_request": s.flop_request,

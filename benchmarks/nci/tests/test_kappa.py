@@ -1,4 +1,5 @@
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -8,12 +9,45 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import catalog  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
+from rho import instances
 
 KIMI_ROWS = ("pretrain-full", "pretrain-full-subspace-arch", "sft-full-weights")
+SHAPES = instances.models()
 
 
 def rows() -> dict:
     return {r["id"]: r for r in catalog.load("rows")}
+
+
+@pytest.mark.parametrize("name", sorted(K.MODELS))
+def test_every_shape_is_rhos(name):
+    """A model's shape is benchmarks/rho's (`models.toml`), read through its loader: a recipe states none, and the
+    weight matrices priced here are the model's rows there, shape by shape (its MTP modules apart, which rho's rows
+    leave out), with its width, depth, vocabulary and attention."""
+    recipe, m = K.RECIPES[name], K.MODELS[name]
+    assert set(recipe) == {"model", "source", "optimizer", "batch_tokens", "schedule"}
+    shape = SHAPES[recipe["model"]]
+    assert m == K.shape(shape) | recipe
+    assert (m["d"], m["layers"], m["vocab"], m["mtp"]) == (shape.d_model, shape.layers, shape.vocab, shape.mtp)
+    assert m["attention"] == shape.attention
+    mine, rhos = Counter(), Counter()
+    for out, inp, copies, active in K.matrices(m | {"mtp": 0}):
+        mine[inp, out, "copies"] += copies
+        mine[inp, out, "active"] += active
+    for x in shape.group(instances.LAYERED):
+        rhos[x.d_in, x.d_out, "copies"] += x.copies
+        rhos[x.d_in, x.d_out, "active"] += x.active
+    assert +mine == +rhos
+
+
+def test_the_library_models_rho_also_has_are_its_sizes():
+    """`models.json` is the library's table, with the thread family's `entry_fee` and `fanout`; where rho has the model,
+    its sizes are rho's."""
+    both = {m["id"]: m for m in catalog.load("models") if m["id"] in SHAPES}
+    assert set(both) == {"kimi-k2", "dense-100b"}
+    for name, m in both.items():
+        shape = SHAPES[name]
+        assert (m["n_total"], m["n_active"], m["d_model"]) == (shape.n_total, shape.n_active, shape.d_model), name
 
 
 def kimi_chain_products() -> float:

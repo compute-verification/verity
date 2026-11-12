@@ -97,8 +97,8 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
   "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits",
   "Properties.Spot.Interval", "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck",
-  "Properties.Spot.Halt", "Properties.Spot.Second", "Properties.Spot.Wires", "Properties.Spot.Members", "Properties.Spot.HistoryTable",
-  "Properties.Core.Evaluate",
+  "Properties.Spot.Halt", "Properties.Spot.Second", "Properties.Spot.Wires", "Properties.Spot.Members",
+  "Properties.Spot.Tables", "Properties.Spot.HistoryTable", "Properties.Core.Evaluate",
   "Properties.NetworkCertifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
   "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
   "Properties.Accounting.Remote",
@@ -110,4 +110,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Sha512", "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.Verity.Subprotocols", "Properties.Verity.Coupling", "Properties.Flock.Nets", "Properties.Pous.WipeSigned",
-  "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site"]
+  "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet",
+  "Properties.Assumptions"]

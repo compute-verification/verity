@@ -4,7 +4,8 @@ request's replay block, replay to a far edge, and say how close the replay came.
     rebuild.py --arm-dir OUT/restore [--from-edge 1] [--to-edge 2] --kv-dir DIR [--checkpoint DIR] [--tail copy] --out DIR
     rebuild.py ... --tail nan --at-step S --mirror-out MDIR --out DIR    # then
     rebuild.py ... --tail nan --from-mirror MDIR --out DIR
-    rebuild.py --served OUT/ARM/serve --scratch DIR [--from-edge 1] [--to-edge 2] --tail copy --out DIR
+    rebuild.py --served OUT/ARM/serve --scratch DIR [--from-edge 1] [--to-edge 2] --tail copy
+               [--shape-only RID [--capture TEMPLATE]] --out DIR
 
 A restore (`restore.py`) puts the served engine's whole state back: the block pool, the scheduler and the model runner's
 rows. Lifetime replay has less: a host copy of each K/V page, written when the page was, and the step record. So here a
@@ -56,7 +57,10 @@ The engine is built again in this process from the served argv, and every page i
 through `collective_rpc` (`RankKv`). A dump holds whole blocks, so the tail is the served bytes (``--tail copy``) and
 the roots cover each request's full pages. A forced hit's page comes from the first edge's dump, or, written after the
 replay's start, from the far edge's. A pool vLLM zeroes as it hands out blocks (mamba or mixed-precision K/V) keeps
-the pages `readd` loaded, as a KV connector's. There is no mirror here.
+the pages `readd` loaded, as a KV connector's. There is no mirror here. With ``--shape-only``, ``--capture TEMPLATE`` takes
+the target's logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`, each rank's rows under the
+scratch) and writes rank 0's to OUT/capture as a span of TEMPLATE's units; shape.json says whether its ids are the tokens
+serving emitted for the target.
 
 Zero is the replay. NaN probes for reads at weight zero, which no finite dummy can show: FA3's causal varlen prefill
 weights the sequence packed after RID by zero in RID's last partial key tile, so a NaN dummy there turns RID's rows NaN
@@ -1372,6 +1376,22 @@ def tp_engine(meta: dict[str, Any], header: dict[str, Any], scratch: Path) -> tu
     return eng, info
 
 
+def capture(a: argparse.Namespace, takes: list[dict], steps: dict[int, dict], outputs: dict[int, dict], first: int,
+            r_end: int) -> dict[str, Any]:
+    """``--capture``: the target's rows from every rank's `take`, held to rank 0's (`sampler_capture.spans`), written to
+    OUT/capture, and whether its ids are the tokens serving emitted for it from ``first`` to ``r_end``."""
+    from verity_vllm.engine import sampler_capture as SC
+
+    t = time.monotonic()
+    span = SC.spans(takes, [steps[s] for s in sorted(steps)]).get(a.shape_only)
+    if span is None:
+        raise SystemExit(f"--capture: no rank's sampler took a row of {a.shape_only}")
+    SC.write(a.out / "capture", a.capture, {a.shape_only: span})
+    served = [x for s in sorted(outputs) if first <= s <= r_end for x in (outputs[s].get(a.shape_only) or [[]])[0]]
+    return {"template": a.capture, "tokens": len(span["tokens"]), "as_served": span["tokens"] == served,
+            "program": span["program"], "write_s": time.monotonic() - t}
+
+
 def run_tp(a: argparse.Namespace) -> dict[str, Any]:
     """`run` for an arm `tp_restore.py serve` wrote (``--served``), on an engine of its tensor-parallel size: from the
     first edge only (no mirror), each rank's pages from the edges' dumps (`RankKv`), the generators and seeds each rank
@@ -1408,6 +1428,9 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
     if out["config_difference"]:
         raise SystemExit(f"the fresh engine's scheduler or cache settings differ from the served one's: {out['config_difference']}")
     rpc = core.model_executor.collective_rpc
+    if a.capture:
+        from verity_vllm.engine import sampler_capture as SC
+        rpc(SC.install, args=([target],))
     kv = RankKv(rpc, bs, near, w["recs"][a.from_edge]["layers"])
     # a page written after the first edge comes from the far edge's dump, the bytes serving committed for it
     pages = first_of(dump_pages(near, st0["pool"]), *([dump_pages(far, st1["pool"])] if far_dumped else []))
@@ -1485,6 +1508,7 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
                 raise SystemExit(f"the replay is idle at step {trace.scheduled} short of {w['hi']}")
         eng.step()
     out["replay_wall_s"] = time.monotonic() - start
+    takes = rpc(SC.take, args=(str(a.scratch / "capture"),)) if a.capture else None
     hooks.uninstall()
     steps = {r["step"]: r for r in trace.records if r["kind"] == "step" and first <= r["step"] < w["hi"]}
     block = {"from_edge": a.from_edge, "to_edge": a.to_edge, "from_step": w["lo"], "to_step": w["hi"], "first_step": first,
@@ -1492,6 +1516,8 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
     out["pages_from"] = {("near" if d == str(near) else "far" if d == str(far) else d): n for d, n in kv.loaded_from.items()}
     out["ranks_disagree"] = kv.ranks_disagree
     if shape:
+        if a.capture:
+            out["capture"] = capture(a, takes, steps, w["outputs"], first, r_end)
         return out | shape_report(target, shape, w, steps, outs, first, r_end, readded, hits) | {
             "replay_block": block, "dummy": a.dummy}
     outs = {s: v for s, v in outs.items() if s < w["hi"]}
@@ -1544,6 +1570,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--perturb", type=int, default=0, metavar="N",
                     help="with --shape-only, a control: add one dummy of N prompt tokens at the first step, a row serving "
                          "never ran")
+    ap.add_argument("--capture", metavar="TEMPLATE",
+                    help="with --served and --shape-only: take the target's logits rows and ids at every rank's sampler "
+                         "into OUT/capture, a span of TEMPLATE's units (a token select's, e.g. TokenSelect_v4{V=154880})")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if bool(a.served) == bool(a.arm_dir and a.kv_dir) or bool(a.served) != bool(a.scratch):
@@ -1554,6 +1583,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--at-step and --mirror-out go together, and not with --from-mirror")
     if a.shape_only and a.mirror_out:
         raise SystemExit("--shape-only starts from an edge or --from-mirror, not with --mirror-out")
+    if a.capture and not (a.served and a.shape_only):
+        raise SystemExit("--capture takes the sampler rows of --served's --shape-only target")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
@@ -1575,7 +1606,7 @@ def main(argv: list[str] | None = None) -> int:
                           "steps_differing": sh["schedule"]["steps_differing"], "during_target": sh["during_target"],
                           "near_differing": rec["near_edge"]["differing"],
                           "taken": {k: v for k, v in sh["taken"].items() if k != "forced_hits"}}
-                         | {k: rec[k] for k in ("pages_from", "ranks_disagree") if k in rec}, default=str))
+                         | {k: rec[k] for k in ("pages_from", "ranks_disagree", "capture") if k in rec}, default=str))
         return 0
     if a.mirror_out:
         print(json.dumps({k: rec.get(k) for k in ("served_identical_to_start", "at_step", "mirror", "replay_wall_s")} |
