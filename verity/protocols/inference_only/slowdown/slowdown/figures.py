@@ -242,15 +242,15 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
         for i, f in enumerate(r.families):
             best = f.best_attack
             rows.append({"scenario": name, "family": f.family, "lo": f.lo,
-                         "attack": {"argument": best.argument, "rho": best.rho} if best else None,
+                         "attack": {"argument": best.argument, "slowdown": best.rho} if best else None,
                          "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
-                         "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "rho": e.rho}
+                         "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "slowdown": e.rho}
                                     for e in f.bounds],
                          "excluded": list(f.combined.excluded),
-                         "attacks": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.attacks],
+                         "attacks": [{"argument": e.argument, "status": e.status, "slowdown": e.rho} for e in f.attacks],
                          "contradictions": list(f.contradictions)})
     finite = [v for row in rows for v in (row["lo"], *row["lo_by_status"].values(),
-                                          *(e["rho"] for e in row["bounds"] + row["attacks"]))
+                                          *(e["slowdown"] for e in row["bounds"] + row["attacks"]))
               if v and math.isfinite(v) and v > 0]
     xmax = max(finite + list(targets)) * 3
     fig, ax = plt.subplots(figsize=(9, 1.2 + 1.1 * len(rows)))
@@ -271,10 +271,10 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
     for y, row in enumerate(reversed(rows)):
         ax.plot(edge(row["lo"]), y, "|", ms=22, mew=3, c="k", zorder=5, label=label("the lower bound (every bound)"))
         for e in row["bounds"]:
-            if not math.isnan(e["rho"]):
+            if not math.isnan(e["slowdown"]):
                 refuted = e["premise"] == "refuted"
                 hollow = {"mfc": "none"} if refuted else {}
-                ax.plot(edge(e["rho"]), y + 0.25, "o", ms=5, c=STATUS_COLORS[e["status"]], alpha=0.8, zorder=3,
+                ax.plot(edge(e["slowdown"]), y + 0.25, "o", ms=5, c=STATUS_COLORS[e["status"]], alpha=0.8, zorder=3,
                         label=label("a bound alone, premises refuted" if refuted else f"a bound alone ({e['status']})"),
                         **hollow)
         for st, v in row["lo_by_status"].items():
@@ -282,11 +282,11 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
                     label=label(f"the lower bound from {', '.join(STATUSES[:STATUSES.index(st) + 1])} bounds and "
                                 "cuts"))
         for e in row["attacks"]:
-            if not math.isnan(e["rho"]):
-                ax.plot(edge(e["rho"]), y - 0.25, "v", ms=8, c=STATUS_COLORS[e["status"]], mec="k", zorder=3,
+            if not math.isnan(e["slowdown"]):
+                ax.plot(edge(e["slowdown"]), y - 0.25, "v", ms=8, c=STATUS_COLORS[e["status"]], mec="k", zorder=3,
                         label=label(f"an attack ({e['status']})"))
         by = ", ".join(f"{st} {num(v)}" for st, v in row["lo_by_status"].items())
-        attack = f"attack {row['attack']['argument']} {num(row['attack']['rho'])}" if row["attack"] else "no attack"
+        attack = f"attack {row['attack']['argument']} {num(row['attack']['slowdown'])}" if row["attack"] else "no attack"
         ax.text(xmax * 1.05, y, f"overhead ≥ {num(row['lo'])}; {attack}\nby status: {by}", va="center", fontsize=8)
     _targets(ax, targets, "x")
     ax.set_yticks(range(len(rows)), [f"{r['scenario']}\n{r['family']}" for r in reversed(rows)], fontsize=9)
@@ -365,16 +365,16 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
         xs, ys = _span(px, px.value, grid, 0.5), _span(py, py.value, grid, 0.5)
         z = analysis.phase(registry, name, kx, xs, ky, ys, metric)
         fronts = {t: analysis.frontier(registry, name, kx, xs, ky, ys[0], ys[-1], t, metric) for t in targets}
-        panels.append({"scenario": name, "x": kx, "y": ky, "xs": xs, "ys": ys, "rho": z,
+        panels.append({"scenario": name, "x": kx, "y": ky, "xs": xs, "ys": ys, "slowdown": z,
                        "base": [px.value, py.value], "box": [[px.low, px.high], [py.low, py.high]],
                        "frontier": {str(t): f for t, f in fronts.items()}})
     if not panels:
         return []
-    vals = [v for p in panels for row in p["rho"] for v in row if math.isfinite(v) and v > 0]
+    vals = [v for p in panels for row in p["slowdown"] for v in row if math.isfinite(v) and v > 0]
     norm = LogNorm(vmin=max(min(vals), 1.0) if vals else 1, vmax=max(vals + [max(targets) * 10]))
     fig, axes = plt.subplots(1, len(panels), figsize=(5.6 * len(panels), 5.0), squeeze=False, layout="constrained")
     for ax, p in zip(axes[0], panels, strict=True):
-        z = [[_finite(v) for v in row] for row in p["rho"]]
+        z = [[_finite(v) for v in row] for row in p["slowdown"]]
         flat = [v for row in z for v in row if not math.isnan(v)]
         mesh = ax.pcolormesh(p["xs"], p["ys"], z, norm=norm, cmap="RdYlGn", shading="nearest")
         levels = [t for t in sorted(targets) if flat and min(flat) < t < max(flat)]
@@ -545,7 +545,7 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
     fig.suptitle("The adversarial corner: each ranged parameter moved to the worse end of its plausible range, "
                  "cumulatively", fontsize=11)
     return _save(fig, out, "corner", {"targets": list(targets), "scenarios": {
-        n: {"base": c.base, "rho": c.rho, "joint": c.joint, "values": dict(c.values), "path": c.path}
+        n: {"base": c.base, "slowdown": c.rho, "joint": c.joint, "values": dict(c.values), "path": c.path}
         for n, c in found.items()}})
 
 

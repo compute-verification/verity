@@ -268,7 +268,7 @@ The two forms:
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
   (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
-  machines: the world is rho's world fleet (`verity/protocols/inference_only/slowdown/data/reference.toml`, `fleet.world-h200`), the census's
+  machines: the world is the slowdown calculator's world fleet (`verity/protocols/inference_only/slowdown/data/reference.toml`, `fleet.world-h200`), the census's
   inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate

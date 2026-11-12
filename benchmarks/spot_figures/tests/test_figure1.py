@@ -75,8 +75,8 @@ def test_a_model_runs_once_its_workload_card_lands(card_dir):
 
 
 def test_sparseloco_goes_as_the_served_models_parameters(out):
-    """rho's syncs are its reference model's: the line is scaled to the served model's parameters, and without them
-    names the model it is sized for; rho's work references name their model."""
+    """the slowdown calculator's syncs are its reference model's: the line is scaled to the served model's parameters, and without them
+    names the model it is sized for; the slowdown calculator's work references name their model."""
     c = out["inputs"]
     syncs = out["panels"]["exfiltration"]["references"][0]
     assert (syncs["label"], syncs["scaled_by"]) == ("1,000 SparseLoCo syncs of GLM-5.3", "params / ref_params")
@@ -223,7 +223,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
 
 
 def test_the_world_fleet_computes_the_census_world(world):
-    """rho's world fleet at serving's MFU over a year computes the census's world, and its requests are that compute at
+    """the slowdown calculator's world fleet at serving's MFU over a year computes the census's world, and its requests are that compute at
     GLM-5.3's FLOP a request."""
     c, _, _, s = world
     flop = s.gpu_seconds * c["mfu_serve"].value * c["peak_flops"].value

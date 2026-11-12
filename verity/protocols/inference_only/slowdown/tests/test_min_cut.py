@@ -1,4 +1,4 @@
-"""The min-cut bound: `rho.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, the
+"""The min-cut bound: `slowdown.min_cut` against the Lean text it computes, its rows of `β(k)`, the bound at a policy, the
 bound over a period's blocks with untied words, with a threshold and with none, beside the work no block is credited
 for, the class in `CLASSES`, and `periods.py --bounds`."""
 

@@ -45,7 +45,7 @@ multiplications per unit of loss is a compute amplifier, multiplying eta by g; i
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
 only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
-mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
+mfu, isn't computed here: it is the overhead calculator's ``slowdown.theorem.multiple_bound`` in Lean's form
 (``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
