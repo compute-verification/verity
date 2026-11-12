@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.Projection
+public import Definitions.Core.Game.TwoRun
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Core.Game.InterleaveBridge
