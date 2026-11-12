@@ -8,7 +8,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import conftest as CT
-import sass_gate
+import report
 
 POUW = CT.POUW
 TESTS = Path(__file__).resolve().parent
@@ -76,7 +76,10 @@ def test_load_is_the_files_module_under_its_own_name_and_runs_it_once():
     theirs = CT.load("gpu_kit/sass_gate.py")
     assert theirs.__name__ == "gpu_kit_sass_gate" and Path(theirs.__file__) == POUW / "gpu_kit" / "sass_gate.py"
     assert sys.modules["gpu_kit_sass_gate"] is theirs is CT.load("gpu_kit/sass_gate.py")
-    assert Path(sass_gate.__file__) == POUW / "harness" / "sass_gate.py"
+
+
+def test_a_name_ahead_gives_a_directory_is_that_directorys_by_name():
+    assert len(holders()["report"]) > 1 and Path(report.__file__) == POUW / "harness" / "report.py"
 
 
 def test_a_file_that_fails_to_load_leaves_no_module_behind(tmp_path, monkeypatch):

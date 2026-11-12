@@ -25,7 +25,7 @@ POUW = Path(__file__).resolve().parents[1]
 #: what under ``benchmarks/pouw/`` holds no script: the tests, and the two packages the environment installs
 NOT_SCRIPTS = frozenset({"tests", "machine_model", "exact_kit"})
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
-#: derive, report and sass_gate; ``h1_lanes``: run)
+#: derive and report; ``h1_lanes``: run)
 AHEAD = ("harness", "h1_lanes")
 
 

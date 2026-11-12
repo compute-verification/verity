@@ -13,8 +13,8 @@ from pathlib import Path
 
 import ieee_pin as IP
 import pytest
-import sass_gate as SG
 
+SG = IP.SG
 UUID = "GPU-00112233-4455-6677-8899-aabbccddeeff"
 
 

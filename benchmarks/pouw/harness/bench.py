@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib.util
 import inspect
 import json
 import os
@@ -51,10 +52,23 @@ import fill as F
 import identity as I
 import refs as RF
 import report as R
-import sass_gate as SG
 import schedule as S
 import shapes as SH
 
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def _gate():
+    """The SASS gate, from its file and under the name every file that loads it gives it, so a process holds one."""
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, ROOT / "benchmarks/pouw/harness/sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+SG = _gate()
 EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY, EXIT_TERMINATED = 0, 2, 3, 5, 6, 143
 EXIT_SASS = SG.EXIT_FAIL
 METHODS = ("graph", "burst")
