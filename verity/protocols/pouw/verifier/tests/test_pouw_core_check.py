@@ -225,6 +225,21 @@ def test_ratios_have_one_spelling():
             CC.ratio(s, "x")
 
 
+def test_a_ratio_reads_a_number_of_any_length():
+    """As `Core.Ratio.ofString` does, past `int`'s limit on digits, and leaves the process's limit as it was."""
+    limit = sys.get_int_max_str_digits()
+    big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
+    assert len(big) == 4301 > sys.int_info.default_max_str_digits
+    assert CC.ratio(big, "x") == 10**4300
+    assert CC.ratio(f"{big}/{odd}", "x") == Fraction(10**4300, 10**5000 + 1)
+    assert CC.ratio(f"7/{odd}", "x") == Fraction(7, 10**5000 + 1)
+    for s, why in ((f"{big}/{big}0", "lowest terms"), ("0" + big, "canonical form"), (f"{big}/0{odd}", "canonical form"),
+                   (f"{big}/1", "denominator 1"), (f"{big}/{odd}/3", "not a ratio")):
+        with pytest.raises(CC.Refused, match=why):
+            CC.ratio(s, "x")
+    assert sys.get_int_max_str_digits() == limit
+
+
 _WINDOW_ENTRY = "is not the registered window's entry"
 _HEADER, _COUNT = "the proof's public file has no JSON header", "the proof's header has no instance count"
 _ROWS = "the proof's first rows are not an A row and a B row of the registered schemas"

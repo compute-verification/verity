@@ -20,6 +20,7 @@ registered program family's expanded body).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -132,7 +133,6 @@ class RuleSet:
 
     @property
     def version(self) -> str:
-        import hashlib
         ids = sorted(r.rule_id for r in self.rules) + sorted(f.rule_id for f in self.families)
         return hashlib.sha256("\n".join(ids).encode()).hexdigest()[:16]
 

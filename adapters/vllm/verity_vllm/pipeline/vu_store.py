@@ -29,17 +29,21 @@ import hashlib
 import json
 import time
 from collections import Counter
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
 
 import numpy as np
-
 from verity.circuits.query_ast import NameSel
 
+from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.check.replay.population import phase_anchor, population, split_not_executed
-from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay.population import (
+    phase_anchor,
+    population,
+    split_not_executed,
+)
 from verity_vllm.pipeline import vu_export as VX
 
 STORE_SCHEMA = "vllm-vu-store/v1"
@@ -66,7 +70,7 @@ def _evaluation(k: tuple, fam: str, st: dict, ops: list, out: dict, refs: list, 
     wg, rows_of = VX.WEIGHT_ROWS_OF.get(fam, (None, None))
     for g, a in enumerate(ops):
         ref = refs[g] if g < len(refs) else None
-        if ref is not None and g == wg:
+        if ref is not None and g == wg and rows_of is not None:
             w, extra = rows_of(st, ops)
             N, K = w.shape
             rows = VX._Picker(k[0], k[1])(N, limits.gemm_coords_per_row)
@@ -108,6 +112,7 @@ def _run_draw(n: int, workers: int, budget_s: float, t0: float) -> Iterator[tupl
             yield None if time.perf_counter() - t0 > budget_s else _one_vu(k)
         return
     import gc
+
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.check.replay.fork import fork_pool
     SR._prewarm_weights(_FORK["indices"], _FORK["picked"], _FORK["weights"])
@@ -144,7 +149,8 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
     by_inst: dict[int, ProgramIndex] = {}
     all_vus: list[dict] = []
     skipped: list[str] = []
-    reuse = population_of_record if (population_of_record or {}).get("indices") and set(population_of_record["indices"]) >= set(map(str, programs)) else None
+    reuse = population_of_record if (population_of_record and population_of_record.get("indices")
+                                     and set(population_of_record["indices"]) >= set(map(str, programs))) else None
     for n_built, (rid, inst) in enumerate([] if reuse else programs.items()):
         # the population build has its own budget, checked between request Programs (a B32 row's 33 Programs took > 18 min):
         # the requests left are named, the sampling runs over the ones built
@@ -171,7 +177,7 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                  arrivals=arrivals, key=key, limits=limits)
     digest_of = {rid: str(inst.get("digest") or "program") for rid, inst in programs.items()}
     fam_stats: dict[str, Counter] = {}
-    fam_time: Counter = Counter()
+    fam_time: dict[str, float] = {}
     units: dict[str, list[dict]] = {}
     try:
         for k, res in enumerate(_run_draw(len(picked), int(limits.workers), float(limits.max_seconds), t_draw)):
@@ -181,16 +187,16 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                 continue
             unit, blobs, dt = res
             st["drawn"] += 1
-            fam_time[unit["family"]] += dt
+            fam_time[unit["family"]] = fam_time.get(unit["family"], 0) + dt
             if unit["result"] is True:
                 st["replayed_equal"] += 1
                 st["stored" if unit.get("stored") else "not_stored_operand_too_large"] += 1
             else:
                 st["not_exported_" + ("mismatch" if unit["result"] is False else "not_evaluated")] += 1
             for h, (dt_, b) in blobs.items():
-                f = root / "values" / f"{h}.{dt_}"
-                if not f.exists():
-                    f.write_bytes(b)
+                blob = root / "values" / f"{h}.{dt_}"
+                if not blob.exists():
+                    blob.write_bytes(b)
             units.setdefault(digest_of[unit["request"]], []).append(unit)
             if k % 100 == 0:
                 print(f"[vu-export] {k}/{len(picked)} VUs, {time.perf_counter() - t_draw:.0f} s", flush=True)
@@ -219,14 +225,14 @@ def export_vus(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], commit
                                                           "phase", "result", "why", "inputs", "stored")}, separators=(",", ":"), default=str) + "\n")
     t_extract = time.perf_counter()
     sets, inst_by_family = extract(root, out / "sets")
-    for f, n in inst_by_family.items():
-        fam_stats.setdefault(f, Counter())["instances"] += n
+    for family, n in inst_by_family.items():
+        fam_stats.setdefault(family, Counter())["instances"] += n
     summary = {"schema": VX.EXPORT_SCHEMA, "provenance": prov, "limits": dataclasses.asdict(limits),
                "population": {"vus": len(all_vus), "pool": len(pool), "not_executed": len(_not_exec),
                               "programs": len(programs), "programs_built": len(indices), "programs_past_budget": skipped,
                               "source": "the sampled replay's own population (reused)" if reuse else "built here",
                               "pool_by_family": dict(Counter(v["family"] for v in pool)), "not_exported_families": VX.NOT_EXPORTED},
-               "by_family": {f: dict(c) | {"seconds": round(fam_time[f], 3)} for f, c in sorted(fam_stats.items())},
+               "by_family": {f: dict(c) | {"seconds": round(fam_time.get(f, 0), 3)} for f, c in sorted(fam_stats.items())},
                "store": {"values": len(list((root / "values").iterdir())), "bytes": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())},
                "sets": sets, "wall_s": round(time.perf_counter() - t0, 3),
                "timing": {"population_s": round(t_draw - t0, 3), "draw_s": round(t_extract - t_draw, 3), "extract_s": round(time.perf_counter() - t_extract, 3),
@@ -257,7 +263,7 @@ def _value(root: Path, a: dict[str, Any]) -> np.ndarray:
 
 
 def _operands(root: Path, ev: dict[str, Any], weights: Callable | None) -> list:
-    ops = []
+    ops: list = []
     for a in ev["args"]:
         if "sample" in a:
             w = a["weight"]
