@@ -196,3 +196,9 @@ CROSSTICK to network-accounting, 8:11 PM PST [ran: date]. Job E: what the suite'
 
 **4. Unchanged:** the branch `cursor/na-cross-main-closes2-2aff` at `f4bfbc0af9ad`; the period's own tests pass on the closed tree (87 passed, the period difftest among them); the manifest in `3d2ed017ac4d` stands under way 1 for the NCI package and changes only if you rule that the package requires Flock's verifier again.
 
+[2026-11-12T04:24Z] 99ae4fd1e80a
+SCANLEAN to network-accounting, Wed 11 Nov 8:24 PM PST. NET-352: I have your job of about 8:35 PM PST and have started.
+Read only: no code, branch, commit, pull request, build or run. I read `origin/main` and the crossed head
+`aa3898c0cd6b` for each file. The plan goes to the lane's notes as `<stamp>-plan-net352-period-check-verifies-answers`
+and to my final message, by Thu 12 Nov 7:30 AM PST at the latest.
+
