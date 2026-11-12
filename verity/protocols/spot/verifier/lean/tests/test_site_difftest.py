@@ -110,7 +110,7 @@ A, B, Q, S = SHEET_A.digest(), SHEET_B.digest(), SHEET_Q.digest(), SHEET_S.diges
 AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE,
                              (("cert0", "dummy-cert0-key", SCHEME), ("chal0", "", SCHEME),
                               ("vm0", "dummy-vm0-key", SCHEME), ("chal9", "", SCHEME)),
-                             tuple(MEMORY.items()), tuple(HOSTS.items())),
+                             tuple(MEMORY.items()), tuple(HOSTS.items()), timebases=(("vm0", "tb0"),)),
            "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE, (), tuple(MEMORY.items()), tuple(HOSTS.items()))}
 SITE0 = Loc("site0", "site", time_unit=NS)
 NODE = Entry("", (SHEET_A, SHEET_B), (
@@ -157,9 +157,10 @@ ENTRIES = {
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
 }
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
-VM0 = Loc("vm0", "auditor-host", "site0", "auditor", key="dummy-vm0-key", scheme=SCHEME)
+VM0 = Loc("vm0", "auditor-host", "site0", "auditor", key="dummy-vm0-key", scheme=SCHEME, timebase="tb0")
 HOUSED = Entry("", locs=(VM0, Loc("chal9", "challenger", "vm0", "auditor", scheme=SCHEME)))
-"""An auditor's host at the site with a second memory challenger in it, which the onsite auditor holds the keys of."""
+"""An auditor's host at the site with a second memory challenger in it; the onsite auditor holds their keys and the
+host's time base."""
 LATERS = [*(e for _, e in ENTRIES.values()), HOUSED]
 
 
@@ -200,7 +201,8 @@ LOC_FIELDS = {"id": st.sampled_from(POOL), "kind": st.sampled_from(KINDS), "pare
               "bw": st.sampled_from([None, 0, 28, 6554]), "chip": st.sampled_from([None, 0, 1 << 23]),
               "shared": st.sampled_from([(), (("disk", 50),), (("disk", 50), ("disk", 60))]),
               "drift": st.sampled_from([None, Fraction(0), Fraction(1, 10 ** 6), Fraction(1)]),
-              "time_unit": st.sampled_from([None, Fraction(0), NS, 2 * NS])}
+              "time_unit": st.sampled_from([None, Fraction(0), NS, 2 * NS]),
+              "timebase": st.sampled_from([None, None, "tb0", "tb1"])}
 LINK_FIELDS = {"id": st.sampled_from([*POOL, "u9"]), "ends": st.tuples(st.sampled_from(POOL), st.sampled_from(POOL)),
                "beta": st.sampled_from([None, 0, 1, 100_000]), "latency": st.sampled_from([0, 1]),
                "unmediated": st.sampled_from([None, "", "no certifier splits it"])}
@@ -219,6 +221,7 @@ MEMORIES = [*MEMORY.items(), ("nvme1", MemoryFigures("node0", 0, 1 << 40)), ("dr
 HOST_FIGURES = [*HOSTS.items(), ("node0", HostFigures(1 << 25)), ("node0", HostFigures(1 << 23, ways=(("uplink0", None),))),
                 ("node1", HostFigures(1 << 23, (("sim-int8-a", 1),)))]
 DRIFTS = [("chal0", Fraction(1, 10 ** 6)), ("cert0", Fraction(1)), ("gpu0", Fraction(0))]
+TIMEBASES = [("vm0", "tb0"), ("vm0", "tb1"), ("cert0", "tb0")]
 
 
 def _mostly(draw, usual, *others):
@@ -286,10 +289,10 @@ def auditors(draw, composite: str) -> Auditor:
         auditor = AUDITOR[_mostly(draw, composite, *COMPOSITES)]
         return replace(auditor, tolerance=_mostly(draw, auditor.tolerance, *TOLERANCES))
     sheets = draw(st.lists(SHEETS, max_size=4))
-    keys, memory, hosts, drift = (draw(st.lists(st.sampled_from(xs), max_size=4))
-                                  for xs in (KEYS, MEMORIES, HOST_FIGURES, DRIFTS))
+    keys, memory, hosts, drift, timebases = (draw(st.lists(st.sampled_from(xs), max_size=4))
+                                             for xs in (KEYS, MEMORIES, HOST_FIGURES, DRIFTS, TIMEBASES))
     return Auditor(tuple(sheets), draw(st.sampled_from(TOLERANCES)), tuple(keys), tuple(memory), tuple(hosts),
-                   tuple(drift))
+                   tuple(drift), tuple(timebases))
 
 
 @st.composite
@@ -397,15 +400,17 @@ def test_the_sample_site(server):
 
 
 def test_an_auditors_host(server):
-    """An auditor's host with a challenger in it is taken with the host's key, and refused by `owner` without it and by
-    `kind` under a host of the prover's, on both sides; in the views the host and the device in it are in no host of
-    the prover's."""
+    """An auditor's host with a challenger in it is taken with the host's key and time base, and refused by `owner`
+    without the key, with another time base than the auditor's or with none, and by `kind` under a host of the
+    prover's, on both sides; in the views the host and the device in it are in no host of the prover's."""
     log = grown()
     housed = replace(HOUSED, previous=log.head)
     keyless = replace(AUDITOR["onsite"], keys=AUDITOR["onsite"].keys[:2])
+    other = replace(AUDITOR["onsite"], timebases=(("vm0", "tb1"),))
     under = replace(housed, locs=(replace(VM0, parent="node0"), housed.locs[1]))
-    for auditor, e, want in ((AUDITOR["onsite"], housed, None), (keyless, housed, "owner"),
-                             (AUDITOR["onsite"], under, "kind")):
+    bare = replace(housed, locs=(replace(VM0, timebase=None), housed.locs[1]))
+    for auditor, e, want in ((AUDITOR["onsite"], housed, None), (keyless, housed, "owner"), (other, housed, "owner"),
+                             (AUDITOR["onsite"], bare, "owner"), (AUDITOR["onsite"], under, "kind")):
         j = {"auditor": auditor.to_json(), "entry": e.to_json(), "log": log.to_json()}
         assert ref_refusal(j)["refusal"] == want
         assert server.call("site_refusal", j) == ("output", D.canonical(ref_refusal(j)))

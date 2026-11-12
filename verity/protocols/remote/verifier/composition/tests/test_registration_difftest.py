@@ -68,9 +68,9 @@ ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d
          {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
 DAY0 = G.Declaration(0, "1" * 128, ("block0",))
 EXAMPLE = (G.site((SHEET,), LOCS, LINKS), G.Information(ITEMS), DAY0)
-#: An auditor's host at the site (the Lean's `vm0`), and `AUDITOR` holding its key (`withVm`).
-VM0 = S.Loc("vm0", "auditor-host", "site0", owner="auditor", key="k2", scheme=LMS)
-WITH_VM = dataclasses.replace(AUDITOR, keys=(*AUDITOR.keys, ("vm0", "k2", LMS)))
+#: An auditor's host at the site (the Lean's `vm0`), and `AUDITOR` holding its key and time base (`withVm`).
+VM0 = S.Loc("vm0", "auditor-host", "site0", owner="auditor", key="k2", scheme=LMS, timebase="tb0")
+WITH_VM = dataclasses.replace(AUDITOR, keys=(*AUDITOR.keys, ("vm0", "k2", LMS)), timebases=(("vm0", "tb0"),))
 
 
 def in_vm(host: S.Loc = VM0) -> list:
@@ -179,7 +179,7 @@ FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": [
           "ends": [("node0", S.OUTSIDE), ("node0", "node0"), ("chal0", "hbm0"), ("cert0", "node0"), ("up0", "node0")],
           "beta": [None, 0, 1], "unmediated": [None, "a stand-in"], "id": IDS, "scheme": ["", LMS, "x"],
           "bw": [None, 0, 6554], "chip": [None, 1, 1 << 25], "time_unit": [None, 0, NS, 2 * NS],
-          "drift": [None, Fraction(1, 10)]}
+          "drift": [None, Fraction(1, 10)], "timebase": [None, "tb0", "tb1"]}
 
 
 #: Site entries that, after the example's, each fail one check of their own: an uplink no certifier splits
@@ -274,6 +274,7 @@ def cases(draw) -> dict:
         k = pick(draw, range(len(log)))
         log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, S.genesis("remote")]))
     auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), WIDE, WITH_VM, dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
+                                         dataclasses.replace(WITH_VM, timebases=(("vm0", "tb1"),)),
                                          dataclasses.replace(AUDITOR, tolerance=0),
                                          dataclasses.replace(AUDITOR, tolerance=1),
                                          dataclasses.replace(AUDITOR, keys=(("cert0", "k1", LMS), ("chal0", "k1", LMS))),
@@ -371,6 +372,8 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
                "entry 0: figures"),
               (case("onsite", chain("onsite", in_vm()), WITH_VM), None),
               (case("onsite", chain("onsite", in_vm())), "entry 0: owner"),
+              (case("onsite", chain("onsite", in_vm()), dataclasses.replace(WITH_VM, timebases=(("vm0", "tb1"),))),
+               "entry 0: owner"),
               (case("onsite", chain("onsite", in_vm(dataclasses.replace(VM0, parent="node0"))), WITH_VM),
                "entry 0: kind")]
     with D.Server(PORT.argv()) as server:
