@@ -25,10 +25,13 @@ expression, names others in their place): another repository's `main` is its own
 `research notes sync` pushes), and the registry names a branch without its repository. A push's words are read as git
 reads them (`read_push`: options anywhere, by any prefix, with their values), and one whose repository the guard can't tell
 is judged as one to them (`judged`): run outside a repository, a first word that is neither a remote, a URL nor a path, an
-option git doesn't know, a `cd` before it that may not hold (`indexed_invocations`), or git variables the command sets.
+option git doesn't know, or git configuration another command in the line may set.
+A git command runs, for every rule, in the event's cwd (else the workspace root) joined with its own `git -C DIR`, and
+nowhere else (`indexed_invocations`). A `cd`, `pushd`, `popd` or `source` anywhere in the command, run or not, or a repository
+named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, makes its directory unknown (`moves`): a push is then judged as one to
+the queue's repositories with every branch its current one, and a branch switch is refused.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
-judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
-event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
+judged.
 """
 from __future__ import annotations
 
@@ -113,51 +116,61 @@ def hand_reason(commands: list[list[str]], agent: str) -> str | None:
 
 #: git's own options that take the next word as their value (`git -h`; git takes none of its own options by a prefix)
 GIT_VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--attr-source"}
-#: git's own options that change which repository or configuration a command reads: the guard's own git is given them too
-GIT_CONFIGURING = {"-c", "--git-dir", "--work-tree", "--config-env", "--bare"}
-#: the operator shell_hook.flattened gives a command that a carrier runs: a `cd` there never reaches the commands after it
-CARRIED = "carried"
+#: git's own options that change which configuration a command reads: the guard's own git is given them too
+GIT_CONFIGURING = {"-c", "--config-env", "--bare"}
+#: git's own options, and the variables, that name the repository or worktree in place of the directory git runs in
+DIRECTORY_OPTIONS = {"--git-dir", "--work-tree"}
+DIRECTORY_VARIABLES = {"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"}
+#: what moves the shell to another directory, wherever it sits in a command and whether or not it runs
+MOVES = {"cd", "pushd", "popd", "source"}
+#: the words after which the shell starts a command
+HEADS = {"{", "(", "then", "do", "else", "elif", "!", "time"}
 
 
 class Git(NamedTuple):
     i: int                  # its index among the commands
-    d: str                  # the directory it runs in
+    d: str                  # the directory it runs in: the hook's cwd and its own `-C`
     args: list[str]         # its arguments after git's own options
     options: list[str]      # git's own options among GIT_CONFIGURING, with their values
-    settled: bool           # whether `d` is known: no `cd` before it that might not hold, or an absolute `-C`
+    unknown: str            # why `d` may not be where it runs or what it reads, or ""
 
 
-def indexed_invocations(commands: list[list[str]], cwd: str, ops: list[str] | None = None) -> list[Git]:
-    """Each `git` among `commands` (unwrapped simple commands), tracking `cd DIR`, `pushd DIR` and `git -C DIR`. `ops[i]` is the
-    shell operator after command `i` (CARRIED for one a carrier runs); a `cd` holds for the commands after it only when it is
-    typed alone between `;` or `&&` (not piped, sent to the background, in a carrier or before a `)` that may close it), and
-    any other change of directory (`cd -`, `popd`, `source`, a `cd` with an option or a `$`) leaves the directory unsettled."""
-    out, settled, moved, before = [], True, False, ";"
+def moves(commands: list[list[str]]) -> str:
+    """Why no git command among `commands` (unwrapped simple commands) can be placed by the hook's cwd and its own `-C`, or "":
+    a `cd`, `pushd`, `popd` or `source` anywhere among them (in any list, pipeline, subshell, body, function or carrier, run or
+    not), a `.`, or a command the shell names only later (`$C DIR`)."""
+    for words in commands:
+        heads = [w for j, w in enumerate(words) if j == 0 or words[j - 1] in HEADS]
+        if hit := next((w for w in words if w in MOVES), None):
+            return f"the command has a `{hit}` in it, and the guard follows none, wherever it sits"
+        if hit := next((w for w in heads if w == "." or any(c in w for c in UNEXPANDED)), None):
+            return f"the command runs `{hit}`, which may move it to another directory"
+    return ""
+
+
+def indexed_invocations(commands: list[list[str]], cwd: str, envs: list[dict[str, str]] | None = None) -> list[Git]:
+    """Each `git` among `commands` (unwrapped simple commands), run in the hook's `cwd` and its own `git -C DIR`, nothing else;
+    `envs[i]` is the git variables command `i` runs under (shell_hook.git_env). Its directory is unknown (`Git.unknown`) when
+    the command moves (`moves`), or when it names its repository by DIRECTORY_OPTIONS or DIRECTORY_VARIABLES."""
+    moved, out = moves(commands), []
     for i, words in enumerate(commands):
-        op = ops[i] if ops is not None and i < len(ops) else None
-        if words and words[0] in ("cd", "pushd", "popd", "source", "."):
-            if words[0] in ("cd", "pushd"):
-                cwd = os.path.normpath(os.path.join(cwd, os.path.expanduser(words[1] if len(words) > 1 else "~")))
-            settled = settled and (words[0] == "cd" and len(words) == 2 and not words[1].startswith("-")
-                                   and not any(c in words[1] for c in UNEXPANDED) and op in ("&&", ";")
-                                   and "|" not in before.replace("||", ""))
-            moved = True
-        elif words and os.path.basename(words[0]) == "git":
-            d, args, options, anchored = cwd, words[1:], [], False
-            while args and args[0].startswith("-"):
-                a, valued = args[0], args[0] in GIT_VALUED and len(args) > 1
-                if a == "-C" and valued:
-                    path = os.path.expanduser(args[1])
-                    d, anchored = os.path.normpath(os.path.join(d, path)), anchored or os.path.isabs(path)
-                elif a.partition("=")[0] in GIT_CONFIGURING:
-                    options += args[:1 + valued]
-                args = args[1 + valued:]
-            if args:
-                out.append(Git(i, d, args, options, settled or anchored))
-        if moved and op is not None and ")" in op:
-            settled = False
-        if op != CARRIED:
-            before = op or ";"
+        if not words or os.path.basename(words[0]) != "git":
+            continue
+        env = envs[i] if envs is not None and i < len(envs) else {}
+        d, args, options = cwd, words[1:], []
+        unknown = moved or next((f"the command sets `{n}`" for n in sorted(DIRECTORY_VARIABLES & set(env))), "")
+        while args and args[0].startswith("-"):
+            a, valued = args[0], args[0] in GIT_VALUED and len(args) > 1
+            name = a.partition("=")[0]
+            if a == "-C" and valued:
+                d = os.path.normpath(os.path.join(d, os.path.expanduser(args[1])))
+            elif name in GIT_CONFIGURING:
+                options += args[:1 + valued]
+            elif name in DIRECTORY_OPTIONS:
+                unknown = unknown or f"it names its repository with `{name}`"
+            args = args[1 + valued:]
+        if args:
+            out.append(Git(i, d, args, options, unknown))
     return out
 
 
@@ -170,7 +183,9 @@ def created_branch(sub: str, args: list[str]) -> str | None:
     return None
 
 
-def switches_branch(directory: str, sub: str, args: list[str]) -> bool:
+def switches_branch(directory: str, sub: str, args: list[str], known: bool = True) -> bool:
+    """Whether `git SUB ARGS` switches the branch; a `checkout` of one name does when the name is a commit in `directory`, and
+    may when the directory is not `known`."""
     if sub == "switch":
         return True
     if sub != "checkout" or "--" in args:
@@ -178,7 +193,7 @@ def switches_branch(directory: str, sub: str, args: list[str]) -> bool:
     if created_branch(sub, args):
         return True
     rest = [a for a in args if not a.startswith("-")]
-    return len(rest) == 1 and git(directory, "rev-parse", "--verify", "-q", rest[0] + "^{commit}") is not None
+    return len(rest) == 1 and (not known or git(directory, "rev-parse", "--verify", "-q", rest[0] + "^{commit}") is not None)
 
 
 #: `git push`'s long options (`git push -h`); git takes each by any prefix that names one alone, and `--no-` before each
@@ -201,6 +216,7 @@ class Push:
     d: str
     options: list[str]                  # git's own options the guard's git is given too (Git.options)
     env: dict[str, str]                 # the GIT_* variables, HOME and XDG_CONFIG_HOME the command is given
+    placed: bool = True                 # whether it runs in `d` (not Git.unknown)
     repository: str | None = None       # its first word that isn't an option, else `--repo`'s value; None: the default
     refspecs: list[str] = field(default_factory=list)
     every: bool = False                 # PUSH_EVERY
@@ -218,11 +234,11 @@ def long_option(name: str) -> tuple[str, bool] | None:
     return hits[0] if len(hits) == 1 else None
 
 
-def read_push(g: Git, env: dict[str, str] | None) -> Push:
+def read_push(g: Git, env: dict[str, str]) -> Push:
     """`git push` (`g.args[1:]`) read as git reads it: its options may come anywhere before a `--`, a long one by any prefix that
     names one alone, and a value in the option's word or the next one; the first word that is neither is the repository, the
-    rest its refspecs. `env` is None when an earlier command may have changed the git variables it runs under."""
-    p = Push(g.d, g.options, env or {})
+    rest its refspecs. `env` holds `$` for a variable another command may set (shell_hook.git_env)."""
+    p = Push(g.d, g.options, env, placed=not g.unknown)
     words, i, given = g.args[1:], 0, []
     while i < len(words):
         a, i = words[i], i + 1
@@ -251,16 +267,17 @@ def read_push(g: Git, env: dict[str, str] | None) -> Push:
             given.append(a)
     if given:
         p.repository, p.refspecs = given[0], given[1:]
-    if not g.settled:
-        p.unsure = "a `cd` before it may not hold (in a subshell, a pipe, a carrier, after `||`), so its directory is unknown"
-    if env is None or any(c in w for w in [*g.options, *p.env.values()] for c in UNEXPANDED):
-        p.unsure = "the git configuration it runs under is set in the command, or named through `$`"
+    if any(c in w for w in [*g.options, *p.env.values()] for c in UNEXPANDED):
+        p.unsure = "the git configuration it runs under is set elsewhere in the command, or named through `$`"
+    if g.unknown:
+        p.unsure = g.unknown
     return p
 
 
 def push_targets(p: Push) -> list[str]:
-    """The branches `p` updates, as their names under refs/heads/ (`*` in one stands for any branch)."""
-    current = git(p.d, *p.options, "symbolic-ref", "--short", "-q", "HEAD", env=p.env)
+    """The branches `p` updates, as their names under refs/heads/ (`*` in one stands for any branch, and for the current branch
+    of a push the guard can't place)."""
+    current = git(p.d, *p.options, "symbolic-ref", "--short", "-q", "HEAD", env=p.env) if p.placed else None
     out = []
     for s in p.refspecs or ["HEAD"]:
         s = s.lstrip("+")
@@ -316,8 +333,10 @@ def judged(p: Push) -> str | None:
 
 def judged_note(why: str) -> str:
     """What a refusal of a push judged for `why` (`judged`) adds: how to name the repository so the guard can tell it."""
-    return (f" The guard judged it as a push to verity or infra because {why}. A push to another repository passes once the "
-            f"guard can tell it: name the checkout and the remote, `git -C <checkout> push <remote> <refspec>`.") if why else ""
+    return (f" The guard judged it as a push to verity or infra because {why}. It places a push only by the directory the "
+            f"command starts in, git's own `-C` and a URL or path given as the repository, and a push to another repository "
+            f"passes once it can: name the checkout and the remote on git itself, with no `cd` in the command, `git -C "
+            f"<checkout> push <remote> <refspec>`.") if why else ""
 
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
 #: so even `--name-only` prints it
@@ -395,33 +414,35 @@ def unexpanded_reason(commands: list[list[str]], indexed: list[Git], pushes: dic
     return None
 
 
-def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] | None = None, ops: list[str] | None = None,
-           envs: list[dict[str, str] | None] | None = None) -> str | None:
+def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] | None = None,
+           envs: list[dict[str, str]] | None = None) -> str | None:
     """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates.
-    `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any; `ops[i]` the shell operator after it
-    (`indexed_invocations`); `envs[i]` the git variables it is given (`read_push`)."""
-    indexed = indexed_invocations(commands, cwd, ops)
+    `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any; `envs[i]` the git variables it runs
+    under (shell_hook.git_env)."""
+    indexed = indexed_invocations(commands, cwd, envs)
     pushes = {g.i: read_push(g, envs[g.i] if envs is not None and g.i < len(envs) else {}) for g in indexed if g.args[0] == "push"}
     if why := unexpanded_reason(commands, indexed, pushes) or main_or_config_reason(indexed, pushes, next_ok or [], agent):
         return why
-    found = [(g.i, g.d, g.args) for g in indexed]
     if not agent:
         return None
     if why := hand_reason(commands, agent):
         return why
-    for i, d, args in found:
-        gitdir = git(d, "rev-parse", "--absolute-git-dir")
-        if gitdir is None:
-            continue
+    for i, d, args, _, unknown in indexed:
         sub = args[0]
-        mine = owner(gitdir, agent, d)
+        if unknown and sub in ("checkout", "switch") and switches_branch(d, sub, args[1:], known=False):
+            return (f"the guard can't tell whose checkout this `git {sub}` switches, because {unknown}. Name the checkout on git "
+                    f"itself, with no `cd` in the command: `git -C <checkout> {sub} ...` (files: `git -C <checkout> checkout -- "
+                    f"PATH`). One agent per checkout (AGENTS.md).")
+        gitdir = None if unknown else git(d, "rev-parse", "--absolute-git-dir")
+        if gitdir is None and not unknown:
+            continue
+        mine = owner(gitdir, agent, d) if gitdir else agent
         if sub in ("checkout", "switch") and switches_branch(d, sub, args[1:]) and mine != agent:
             top = git(d, "rev-parse", "--show-toplevel") or d
             return (f"{top} is agent {mine}'s checkout, and switching its branch moves everything installed from it under that "
                     f"agent (the `research` CLI follows it). Work in a checkout of your own: `git -C {top} worktree add "
                     f"../wt-<name> -b <branch>` (or `git worktree add ../wt-<name> <existing-branch>`), then run git there "
-                    f"(`git -C ../wt-<name> ...`, or `cd ../wt-<name> && ...` in the same command). One agent per checkout "
-                    f"(AGENTS.md).")
+                    f"with `git -C ../wt-<name> ...`. One agent per checkout (AGENTS.md).")
         if sub == "push" and (judgment := judged(pushes[i])) is not None and (
                 why := owner_reason(push_targets(pushes[i]), agent)):
             return why + judged_note(judgment)

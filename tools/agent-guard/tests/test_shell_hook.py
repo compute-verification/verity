@@ -809,7 +809,10 @@ def clones(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("AGENT_GUARD_", "GIT_CONFIG"))}
 
     def ask(form: str, clone: str) -> dict:
-        command = form.format(V=tmp_path / "verity", N=tmp_path / "notes", VURL=urls["verity"], NURL=urls["notes"])
+        command = form
+        for key, value in (("{VURL}", urls["verity"]), ("{NURL}", urls["notes"]), ("{V}", tmp_path / "verity"),
+                           ("{N}", tmp_path / "notes")):
+            command = command.replace(key, str(value))
         event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": "bc-me",
                  "cwd": str(tmp_path / clone)}
         out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
@@ -855,33 +858,100 @@ def test_a_repo_option_names_the_repository_unless_a_word_does(clones):
     ("git push nosuchremote main", "notes"),                             # neither a remote nor a URL nor a path
     ("git push --repo origin main", "notes"),                            # git takes `main` for the repository
     ("git push --frobnicate x origin main", "notes"),                    # no option of git push
-    ("(cd {N} && true); git push origin main", "verity"),                # the subshell's cd ends at its `)`
-    ("bash -c 'cd {N}'; git push origin main", "verity"),                # and a carrier's at its end
-    ("cd {N} | true; git push origin main", "verity"),                   # and a piped one at once
-    ("cd {N} || true; git push origin main", "verity"),
-    ("pushd {V} && git push origin main", "notes"),
     ("GIT_DIR={V}/.git git push origin main", "notes"),
+    ("GIT_DIR={N}/.git git push origin main", "notes"),                  # named by GIT_DIR, whichever it is
+    ("GIT_WORK_TREE={N} git push origin main", "notes"),
     ("env GIT_DIR={V}/.git git push origin main", "notes"),
     ("export GIT_DIR={V}/.git; git push origin main", "notes"),
+    ("git push origin main; export GIT_DIR={V}/.git", "notes"),           # a loop or a function may run it first
     ("git --git-dir={V}/.git push origin main", "notes"),
     ("git --git-dir {V}/.git push origin main", "notes"),
+    ("git --work-tree={N} push origin main", "notes"),
     ("git -c remote.origin.pushurl={VURL} push origin main", "notes"),
 ])
 def test_a_push_whose_repository_the_guard_cant_tell_is_judged_as_one_to_the_queues(clones, form, clone):
-    """Where the words or the directory may be misread, or the command changes the configuration git reads, the push is judged
-    as one to verity or infra, never passed; the refusal says how to name the repository so the guard can tell it."""
+    """Where the words may be misread, or the command names its repository or changes the configuration git reads, the push is
+    judged as one to verity or infra, never passed; the refusal says how to name the repository so the guard can tell it."""
     out = clones(form, clone)
     assert out["permission"] == "deny" and "only drive and the lander move" in out["agent_message"], (form, out)
+
+
+#: commands with a `cd` that never runs, or that runs only where the push doesn't: the shell pushes from the clone it started in
+NEVER_RUN_CDS = [
+    "true || cd {T}; git push origin main", "false && cd {T}; git push origin main", "if false; then cd {T}; fi; git push origin main",
+    "while false; do cd {T}; done; git push origin main", "f() { cd {T}; }; git push origin main",
+]
+#: and commands whose `cd` the guard would have to follow, and doesn't
+UNFOLLOWED_CDS = [
+    *(f.replace("cd {T}", "pushd {T}") for f in NEVER_RUN_CDS),
+    "function f { cd {T}; }; git push origin main", "(cd {T} && true); git push origin main", "bash -c 'cd {T}'; git push origin main",
+    "cd {T} | true; git push origin main", "case x in x) cd {T};; esac; git push origin main", "C=cd; $C {T}; git push origin main",
+    "git push origin main; cd {T}", "popd; git push origin main", ". ./env.sh; git push origin main",
+    "cd {T} && git push origin main", "cd {T}; git push --repo=origin", "(cd {T} && git push origin main)",
+    "cd {T} && git push origin HEAD", "cd {T} && git push", "cd {T} && git -C {T} push origin main",
+]
+
+
+@pytest.mark.parametrize("form", NEVER_RUN_CDS + UNFOLLOWED_CDS)
+def test_a_cd_anywhere_in_the_command_leaves_a_push_unplaced(clones, form):
+    """The rule followed a `cd` as if it held, so `false && cd NOTES; git push origin main` in a verity clone passed as a push to
+    the notes, and the shell pushed verity's `main`; `main`'s guard, which judges every push of `main`, refused it. The guard
+    now places a push by the hook's cwd, git's `-C` and a URL alone: any `cd` in the command, run or not, leaves it unplaced,
+    and a push it can't place is judged as one to verity or infra, its current branch any branch."""
+    for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
+        out = clones(form.replace("{T}", target), clone)
+        assert out["permission"] == "deny" and "only drive and the lander move" in out["agent_message"], (form, clone, out)
+        assert "with no `cd` in the command, `git -C <checkout> push <remote> <refspec>`" in out["agent_message"], out
 
 
 def test_what_the_guard_can_place_in_another_repository_still_passes(clones):
     out = clones("git push nosuchremote main", "notes")
     assert "git -C <checkout> push <remote> <refspec>" in out["agent_message"] and "is no remote" in out["agent_message"]
-    for form, clone in (("git push origin main", "notes"), ("cd {N} && git push origin main", "verity"),
-                        ("git -C {N} push -o x origin main", "verity"), ("cd {N}; git push --repo=origin", "verity"),
-                        ("(cd {N} && git push origin main)", "verity"), ("git push nosuchremote lane/mine", "notes"),
-                        ("GIT_DIR={N}/.git git push origin main", "notes")):
+    out = clones("cd {N} && git push origin main", "verity")
+    assert out["permission"] == "deny" and "has a `cd` in it" in out["agent_message"], out
+    for form, clone in (("git push origin main", "notes"), ("git -C {N} push -o x origin main", "verity"),
+                        ("git -C {N} push origin main", "infra"), ("git push {NURL} main", "verity"),
+                        ("git push --repo={NURL}", "infra"), ("git push nosuchremote lane/mine", "notes")):
         assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+@pytest.mark.parametrize("form", [
+    "cd {T} && git push origin lane/mine", "false && cd {T}; git push -u origin lane/mine",
+    "pushd {T} && git push origin HEAD:refs/heads/lane/mine", "cd {T} && git push --force-with-lease origin lane/mine",
+])
+def test_a_lanes_own_branch_still_passes_after_a_cd(clones, form):
+    """Where a push goes matters only for `main`, `checked`, `next` and another agent's branches: a lane's branch, named, passes
+    from wherever the shell pushes it."""
+    for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
+        assert clones(form.replace("{T}", target), clone) == {"permission": "allow"}, (form, clone)
+
+
+def test_a_branch_switch_the_guard_cant_place_is_refused(tmp_path):
+    """The branch-switch rule followed a `cd` too: from the coordinator's checkout, `false && cd MINE; git switch lane` read as
+    a switch of the worker's own checkout and passed, and the shell switched the coordinator's. A switch in a command with a
+    `cd`, or naming its repository by `GIT_DIR` or `--git-dir`, is refused; `git -C` places it."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    ws, wt = tmp_path / "ws", tmp_path / "wt"
+    for args in (["init", "-q", "-b", "main", str(ws)], ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "branch", "lane"], ["-C", str(ws), "worktree", "add", "-q", str(wt), "-b", "mine"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent, cwd):
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent, "cwd": str(cwd)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                             env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    assert ask("git status", "bc-coord", ws) == {"permission": "allow"}
+    assert ask("git status", "bc-worker", wt) == {"permission": "allow"}
+    lies = [f.replace("{T}", str(wt)).replace("git push origin main", "git switch lane") for f in NEVER_RUN_CDS]
+    for command in (*lies, *(c.replace("cd ", "pushd ") for c in lies), f"cd {wt} && git switch -c x", f"cd {wt} && git checkout lane",
+                    f"GIT_DIR={ws}/.git git switch lane", f"git --git-dir={ws}/.git switch lane"):
+        out = ask(command, "bc-worker", ws if "GIT_DIR" not in command and "git-dir" not in command else wt)
+        assert out["permission"] == "deny" and "can't tell whose checkout" in out["agent_message"], (command, out)
+        assert "`git -C <checkout> " in out["agent_message"], out
+    for command in (f"git -C {wt} switch -c x", f"cd {wt} && git checkout -- README", f"cd {ws} && git log -1"):
+        assert ask(command, "bc-worker", ws) == {"permission": "allow"}, command
 
 
 @pytest.mark.parametrize("form", [

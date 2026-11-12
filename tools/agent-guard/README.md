@@ -27,10 +27,13 @@ The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
 repository. The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
-own `-C`, `-c`, `--git-dir` and the like) and judges as a push to them one whose repository it can't tell: a first word
-that is neither a remote, a URL nor a path, an option git doesn't know, a `cd` that may not hold (in a subshell, a pipe,
-a carrier, after `||`), or `GIT_*` variables or `HOME` set in the command. It can't see what earlier commands left in
-the shell (an exported `GIT_DIR`, an alias); `pre_push.py`, which reads the URL git pushes to, can. Not covered by the
+own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
+and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd`, `popd` or `source` anywhere in the
+command, run or not, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, leaves the push unplaced
+(`git -C <checkout> push ...` places it), and the branch-switch rule refuses a switch it can't place. It judges as a push
+to the queue's repositories one it can't place, or whose first word is neither a remote, a URL nor a path, an option git
+doesn't know, or git configuration set elsewhere in the command. It can't see what earlier commands left in the shell (an
+exported `GIT_DIR`, an alias); `pre_push.py`, which reads the URL git pushes to, can. Not covered by the
 push rule: a push that runs `/usr/bin/git` by path, a git alias for `push`, `VERITY_GIT_GUARD=off`, and a client other
 than git. On a git before 2.31 a push is judged but runs no other pre-push hook.
 
