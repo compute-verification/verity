@@ -667,7 +667,7 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
               software={"backend": {"name": "b", "commit": None}, "toolchain": {}}, preprocessing="none", retention="retained",
               instances=None, subcircuit="silu-mul/i8192")
     assert contract.fingerprint(domain="total", **kw)["domain"] == "total"
-    with pytest.raises(ValueError, match="pre-2026-09-27 hardcode"):
+    with pytest.raises(ValueError, match="domain 'finite' is what older results hardcoded"):
         contract.fingerprint(domain="finite", **kw)
     old = {**contract.fingerprint(domain="finite-only", **kw), "domain": "finite"}
     assert contract.validate_fingerprint(old) == [] and contract.identity(old)["domain"] == "finite-only"

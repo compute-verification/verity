@@ -1,10 +1,9 @@
 """End-to-end latency as a first-class axis: what each design costs in wall-clock time per batch when every challenge
 is a real network round trip, and what pipelining independent batches needs to recover throughput.
 
-The protocol is INTERACTIVE (``backends/ZK_CONSTRUCTION.md`` 3.3: the verifier-coin commitment gives
-malicious-verifier ZK at +1 depth, where Fiat-Shamir would force a re-parameterisation), so ``rounds.sequential_depth``
-verifier messages are ``depth`` network round trips on the critical path.  Model (``archive/AGENTS.md`` "Latency is a
-first-class axis"; the contract's ``t.e2e.rtt_<x>ms``)::
+The protocol is INTERACTIVE (the verifier-coin commitment gives malicious-verifier ZK at +1 depth, where Fiat-Shamir
+would force a re-parameterisation), so ``rounds.sequential_depth`` verifier messages are ``depth`` network round trips
+on the critical path.  Model (the contract's ``t.e2e.rtt_<x>ms``)::
 
     t.e2e(rtt, bw) = t.prove + t.verify + depth x rtt + bytes / bw          (the honest serial number for one batch)
 
@@ -30,7 +29,7 @@ shallower protocol has the lower end-to-end latency despite a slower prover.
 
 :data:`CATALOG` holds the designs the report runs (numbers from the recorded runs and reports named in each entry;
 every one labelled with its proof class, hardware, and what is modelled rather than measured); :func:`from_envelope`
-builds a design from a ``result.json`` that carries ``rounds.sequential_depth`` (the measured runs of this lane).
+builds a design from a ``result.json`` that carries ``rounds.sequential_depth``.
 ``python -m verity_numerical.bench.latency [--envelope NAME=result.json ...] [--out reports/latency]`` writes the
 report (``latency.md`` + ``latency.json``).
 """
@@ -236,8 +235,8 @@ GPU_H100 = "H100 80 GB"
 GPU_H100_MEM = 80 * GB
 
 #: The designs of the report at K = 1536.  ``prove_s`` is the zero-latency prover compute per batch (``t.total``).
-#: CPU rows are the recorded runs of archive/gkr/README.md and archive/direct/README.md (the ``--rtt-ms`` runs of
-#: this lane replace them when their envelopes are given); GPU rows are the re-priced kernel measurements of the
+#: CPU rows are the recorded runs each entry's ``source`` names (a result given with ``--envelope`` replaces
+#: one's numbers); GPU rows are the re-priced kernel measurements of the
 #: named reports (prover time measured or re-priced per bucket; memory per batch from the reports' device-memory
 #: numbers; the verifier's time is the CPU verifier's, an assumption for a GPU pair).
 CATALOG: dict[str, Design] = {
@@ -300,7 +299,7 @@ CATALOG: dict[str, Design] = {
 
 # --- A-GKR: depth-reduction options (costed, not implemented) --------------------------------------------------
 #
-# A's critical path (measured by the transcript's trip counter, archive/gkr/src/main.rs) is
+# A's critical path (measured by the trip counter of the archived prover's transcript) is
 #     depth = 1 (message 2a) + max(lookup chain, checker chain) + 2 (Ligero r, Q)
 #     lookup chain(n)  = 1 + sum_{k=0}^{n-1} (ceil(k / c) + 1)     the range table's fractional-GKR tree: level k is a k-round
 #                                                                  sumcheck followed by one (mu, lambda) message
@@ -334,8 +333,8 @@ def a_depth_options(n_r16: int, layers: Sequence[tuple[int, int]], committed: fl
     """The costed depth-reduction options for A at one (n_R16, checker layout): depth, prover-work factor, committed
     elements delta, e2e at 10 / 50 ms on the CPU and GPU rows, and the RTT above which each beats the baseline on
     the GPU (``prove x (w - 1) / (depth_base - depth_opt)``).  Work factors: c variables per message multiply the
-    sumcheck buckets by (d+1)^c / ((d+1) c) (PROTOCOL.md 5.4; the GPU's sumcheck share is ``sumcheck_share_gpu``,
-    fused_sumcheck_4090.md: 55-69%); committing more elements scales the commit/open buckets (``commit_share_gpu``)."""
+    sumcheck buckets by (d+1)^c / ((d+1) c) (the GPU's sumcheck share is ``sumcheck_share_gpu``); committing more
+    elements scales the commit/open buckets (``commit_share_gpu``)."""
 
     t = 65_536  # the 16-bit range table's size
     base_l, base_c = lookup_chain(n_r16), checker_chain(layers)

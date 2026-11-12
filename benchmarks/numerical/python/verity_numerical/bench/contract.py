@@ -5,7 +5,7 @@
 
 * the ``workload_fingerprint`` fields a campaign number must carry (:data:`REQUIRED_FIELDS`), with the
   :data:`IDENTITY_FIELDS` two results must agree on before any of their numbers may be compared
-  (``archive/AGENTS.md``: never compare across ``proof_class``; the same batch size, hardware and soundness target);
+  (never compare across ``proof_class``; the same batch size, hardware and soundness target);
 * the measurement names: the six disjoint timing buckets ``t.<bucket>`` (seconds), ``t.total``, joint stages
   ``t.joint.<a>+<b>`` for a kernel that fuses buckets it cannot split (never double-counted against a standalone
   bucket or another joint), and the rest of the decision's columns (VU throughput, peak memory, bytes moved,
@@ -163,7 +163,7 @@ log = logging.getLogger(__name__)
 
 RESULT_SCHEMA = "research/result/v0.1"
 
-#: The campaign target's profile name (``archive/AGENTS.md``: the target is fixed), and the domain of the FIRST relations,
+#: The campaign target's profile name (the target is fixed), and the domain of the FIRST relations,
 #: whose circuits assert their operands finite.  A backend proving a total statement records ``total``.
 PROFILE = FIRST.name
 DOMAIN = "finite-only"
@@ -516,7 +516,7 @@ def fingerprint(
     fp.update(extra)
     problems = validate_fingerprint(fp)
     if domain in LEGACY_DOMAINS:
-        problems.append(f"domain {domain!r} is the pre-2026-09-27 hardcode; record the statement's domain, one of {DOMAINS}")
+        problems.append(f"domain {domain!r} is what older results hardcoded; record the statement's domain, one of {DOMAINS}")
     if problems:
         raise ValueError("fingerprint does not conform: " + "; ".join(problems))
     return fp
