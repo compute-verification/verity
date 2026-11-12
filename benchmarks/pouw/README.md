@@ -17,6 +17,10 @@ names a path the tree doesn't have.
 uv run python benchmarks/pouw/contents.py   # what is here, from contents/
 ~~~
 
+`verity bench pouw NAME [ARGS]` runs `NAME/`'s runner with ARGS. `run.py` here is that front door: a directory's runner
+is its `run.sh`, else its `run.py`, and given no NAME it names the directories that have one. A runner that needs a GPU
+or a whole node is the command of a `research run`, as its header says.
+
 Served claims (`pearl_c_vllm/`) are measured against graphed stock FP8: stock vLLM `quantization="fp8"` compiled with its
 CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).
 
