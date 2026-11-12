@@ -250,6 +250,9 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   unchanged digests is refused (`circuit`). It imports no `verity_vllm` code. Its sampled members' sessions run one at a time
   (`a5.ONE_AT_A_TIME`), and Lean's checks of finished members run beside them, `--lean-workers` at a time, each starting
   only while its memory estimate fits within `--audit-mem-gb` beside the running session's and checks' (`a5.LeanPool`).
+  Its negatives after the audit record run one after another, or `--negative-workers` at a time, each in a worker process
+  forked from the audit with its own Lean verifier process, started only while its memory estimate, read then, fits
+  (`a5.NegativeWorkers`); the negatives' file is the same either way, and nothing is retried.
   An `--out` that holds an audit record takes no second audit: nothing resamples, and a second attempt on a registration
   is a new serve directory. No answer accepts beside an audit that exited nonzero: `served_integrity.answer` accepts only
   where the audit's summary says it passed.

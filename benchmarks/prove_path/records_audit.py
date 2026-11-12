@@ -71,6 +71,8 @@ them out of an audit (its summary says so), for a run of several audits of one c
 a5's part runs under its memo (`a5_memo.memo`), as `a5.main` does: a check the verifier answered is asked once per
 input, keyed by every argument's content, so a negative's stream on the honest registration and draw reuses their
 checks and one that alters an input is checked again; the summary's ``verifier_checks`` counts those asked and reused.
+With ``--negative-workers N`` a5's negatives that ask the verifier again run N at a time, each in a worker process
+forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 An ``--out`` that already holds an audit record (``window/audit.json``) is one audit's: ``audit`` refuses to start on it
 (`held_record`) and changes nothing under it. Nothing resamples, and an attempt that wrote no record of its own would
@@ -85,7 +87,7 @@ quotes the warm's beside it.
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR]
+        [--compose-cache DIR] [--negative-workers N]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
@@ -909,7 +911,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing", "outputs", "verifier_checks")},
+                                    "timing", "outputs", "verifier_checks", "negative_workers")},
            **({"checks": s["checks"]} if "checks" in s else {})}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)

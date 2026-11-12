@@ -12,6 +12,7 @@ from __future__ import annotations
 import inspect
 import sys
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -88,11 +89,12 @@ def _asked(monkeypatch) -> Counter:
     return asked
 
 
-def _negatives() -> dict[str, dict]:
-    """a5's negatives on the challenger's coins: each its own stream on the honest draw's bytes, registering the same record
-    (in its window), drawing, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
+def _negatives(names: Sequence[str] = tuple(NEGATIVES)) -> dict[str, dict]:
+    """a5's negatives on the challenger's coins (those of ``names``): each its own stream on the honest draw's bytes,
+    registering the same record (in its window), drawing, and its outcome with its evidence. -> by name: accepted, the
+    Lean run's side, the record."""
     out = {}
-    for name, (coins, window) in NEGATIVES.items():
+    for name, (coins, window) in ((n, NEGATIVES[n]) for n in names):
         s = S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 memo test, challenger", coins=AC.Replay(READ),
                      clock=lambda: 0.0)
         d = s.select(s.register(_record(), _ports(), window_root=window, counts=COUNTS))

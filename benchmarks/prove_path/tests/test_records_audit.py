@@ -1178,7 +1178,8 @@ def test_an_out_whose_attempt_wrote_no_audit_record_takes_a_second_attempt_whose
 def test_a5s_part_of_the_audit_runs_under_its_memo_and_the_summary_counts_the_checks(written, tmp_path, monkeypatch):
     """`a5.audit` runs inside `a5_memo.memo`: while it runs, the verifier's kept checks (`a5_memo.PURE`) are the memo's
     and its counts are live, and the verifier's own are back once the audit returns. The audit's summary carries a5's
-    ``verifier_checks``, the checks asked and reused."""
+    ``verifier_checks``, the checks asked and reused. ``--negative-workers`` reaches a5, 1 unless given, and the summary
+    carries a5's ``negative_workers``."""
     import a5 as A5
     import a5_coins as AC
 
@@ -1188,8 +1189,10 @@ def test_a5s_part_of_the_audit_runs_under_its_memo_and_the_summary_counts_the_ch
     counts = {"asked": {"check": 2}, "reused": {"check": 5}, "unkeyed": {}}
 
     def audit(*a, **kw):
-        seen.update(counts=A5.AM.counts(), wrapped=[name for name in A5.AM.PURE if getattr(V, name) is not own[name]])
-        return {"checks_before_draw": {"registration": False}, "verifier_checks": counts}, False
+        seen.update(counts=A5.AM.counts(), wrapped=[name for name in A5.AM.PURE if getattr(V, name) is not own[name]],
+                    negative_workers=a[0].negative_workers)
+        return {"checks_before_draw": {"registration": False}, "verifier_checks": counts,
+                "negative_workers": {"workers": a[0].negative_workers}}, False
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
@@ -1197,12 +1200,17 @@ def test_a5s_part_of_the_audit_runs_under_its_memo_and_the_summary_counts_the_ch
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     out = tmp_path / "out"
     assert A5.AM.counts() is None
-    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"],
-                    "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out),
-                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
-    assert seen == {"counts": {"asked": {}, "reused": {}, "unkeyed": {}}, "wrapped": list(A5.AM.PURE)}
+    argv = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"],
+            "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f",
+            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
+    assert RA.main([*argv, "--out", str(out)]) == 1
+    assert seen == {"counts": {"asked": {}, "reused": {}, "unkeyed": {}}, "wrapped": list(A5.AM.PURE), "negative_workers": 1}
     assert A5.AM.counts() is None and {name: getattr(V, name) for name in A5.AM.PURE} == own
-    assert json.loads((out / "summary.json").read_text())["verifier_checks"] == counts
+    summary = json.loads((out / "summary.json").read_text())
+    assert summary["verifier_checks"] == counts and summary["negative_workers"] == {"workers": 1}
+    assert RA.main([*argv, "--out", str(tmp_path / "several"), "--negative-workers", "5"]) == 1
+    assert seen["negative_workers"] == 5
+    assert json.loads((tmp_path / "several" / "summary.json").read_text())["negative_workers"] == {"workers": 5}
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
