@@ -1924,3 +1924,27 @@ three launches are dry-run, or at 13:00Z with where you are.
   it in each kept proof's tree. If it does not, say so on HASH-115 in one worker comment today (not
   on Thursday): proofs then names where the program comes from. Benchmarks' runner (#9068) is on
   `main` since 07:25Z.
+
+## Thu 12 Nov 08:45Z: PROOFS RULED (HASH-98, 08:44Z): Thursday's list is final, eight statements
+
+Read its comment whole. **A served statement proves the Definition its partition file names, row by row:**
+
+| what a file on `main` names | kinds | share | rows |
+|---|---|---|---|
+| the Boolean version at the census's statics | 12 | 5.3% | 4, 9, 10, 11, 12 |
+| the census's own Definition (the word form) | 9 | 0.06% | 15 and the eight column ends |
+| nothing at the census's statics | 24 | 25.6% | 6, 7, 8, 14, 16 |
+
+**Thursday, cards 4, 5, 7, 17:30Z to 20:55Z, at 1, 2 and 4 provers, heaviest first:**
+1. **Rows 7, 6, 16:** `ScaledMmFp8BlockSharedScale_v2{K,N=4,G=128}` at K = 2048, 6144 and 256: the
+   census's binding in its Boolean version. **Drop the partition's `{K=256,N=1,G=128}` statement:**
+   proofs rules that a statement at N=1 prices nothing in Friday's figure (the file's unit is the
+   same GEMM split four times finer, and naming rows 6 and 7 in a file is proofs' PRF-588).
+2. **Rows 12, 4, 9, 10, 11:** the Boolean version at the census's statics, as planned.
+3. **Row 15: not again**, nor its `_v2`: `verify --zk` takes the word forms the step-16 file names.
+4. **Rows 8 and 14: not timed.**
+5. Last, if minutes are left: the head block's `FIRST=true` at one prover for its kept proof.
+
+The figure needs no change for these rows: it joins a row by `stage.word`, which the stager writes
+as the census's name. One kept proof a kind with its `program-word.json`, as benchmarks asked.
+My go is at 17:20Z. Return as said (the eight staged, the three launches dry-run), or at 13:00Z.
