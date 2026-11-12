@@ -45,7 +45,7 @@ record's Programs and fails if a Program digest moved; `program_graph`, a row's 
 the export of a row's sampled proof blocks (`vu_store`, `vu_export`); and the top-p split's GPU check and its
 fixture (`topp_pin_check`, `topp_split_probe`).
 
-What other code takes from a module is what its `__all__` lists. For a module that is a command that is its options
+What code outside these modules takes from one of them is what its `__all__` lists. For a command that is its options
 (`Options`, or `COMMANDS`) and `main`, which the command line reads, and beside them: `build` (`read_tp_links`,
 `same_module_path`, `sampler_geometry`, `sampling_policy`, `write_instances`), `build_instances` (`write_instances`,
 which `benchmarks/prove_path` imports too), `circuit_db` (`STAGED`, `checkpoint`, `data`), `global_program`
