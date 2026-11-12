@@ -73203,3 +73203,122 @@ The mailbox is 135 lines, its newest section your 04:19Z [run: `git show origin/
 **Not shown by anyone.** [read] An accept by the Lean verifier of a wide session at m = 32 or more with its Program (`6edf` stops at the missing Program; `527f` is m = 25); a templated wide session; any wide session on a card; m = 33 and 34; and #9108's own Lean check, suites and agreement check, which its body says have not run at any head.
 
 For the table: no new row and no figure. The wide level-0 leaf is on three branches, not on `main`: kernels' prover and session verifier (#9079 at `c4bdf9e1ec4a`), their rate script's flag (#9077 at `4b31aa150ccc`) and our Lean names (#9108 at `e39cc8aa6e40`); on CPU nodes the three agree on kernels' wide session at m = 32 up to the missing Program, and on a whole verdict at m = 25; no card has run it and nothing here is timed.
+
+## SESSREAD, Thu 12 Nov 05:57Z: step 5's list, by read: the real change is six Lean files and two deleted lines of statement, with no proof left to find if `r20261112-054602-bc5b` passes; records of two guarantees and their honest witnesses move in two locks, with one hand-written `why`; the Python that states the clause is two refusals and two tests
+
+### Step 5: what the real change would touch, by read
+
+The real change deletes one line of one definition and one line of one property, replaces one proof, and deletes both
+of my new files: their proofs go in place of the present ones. Nothing below is edited on my branch.
+
+**The definition and the property** [read, now]:
+
+- `security/Definitions/Claims/SamplingTwoRankin.lean:79-88`, `AdmissibleTwoRankinPatterns`: line 84 goes. Its
+  docstring (75-78, "into requests each reading the proof blocks of one replay block") and the module's list (25-26,
+  "when each request ...") say the clause and go with it.
+- `security/Properties/Spot/TwoStageCheck.lean:56-64`, `RequestsCover`: line 58, its first conjunct, goes. Its
+  docstring (53-55, "each request reads in one replay block") and the module's list (18-20) say it.
+  `TwoStageCheckPatternsSound` (78-85) reads `RequestsCover` by name and its text does not change.
+
+**Each proof that names either** [read, now; `rg` of the six names over `*.lean`, `*.py`, `*.md`, `*.toml`]:
+
+- `security/Proofs/Flock/SamplingGeneric/TwoRankin.lean`: `admissibleTwo_rankin_patterns` (267-372) is replaced by
+  `admissibleTwo_rankin_patterns_requests`' proof and its six lemmas (about 165 lines for 106; the file is 488 lines,
+  under `tests/test_lean_packages.py`'s 2,000). `blocksTo_inter_blocksIn` (240-261) then has no reader and goes. The
+  header's item (29-32) describes the old proof.
+- `security/Proofs/Flock/Claims/Witnesses/SamplingTwoRankin.lean`: the honest witness `rankinTwoPatterns_honest`
+  (58-66) concludes the clause as its third conjunct; without it, it is `rankinTwo_honest`'s statement word for word.
+  The header (13-15) and its docstring (58-59) say the clause. `rankinTwoPatterns_nontrivial` (155-206) does not read it.
+- `security/Proofs/Properties/Spot/TwoStageCheck.lean`: `twoStageCheckPatternsSound_form` (243-263) drops `hreq.1`
+  (252), and `hreq.2.2` (260) and `hreq.2.1` (262) become `hreq.2` and `hreq.1`. `pair_requestsCover` (343-354) drops
+  its first component and its two lines (346-347). `twoStageCheckPatternsSound_honest` (420-429) reads
+  `RequestsCover` by name; its docstring (420-421) says "reads in its one replay block". `twoStageCheckPatternsSound`
+  (308-309) and `_nontrivial` (433-439) do not change.
+- Nothing else in Lean names them: `security/Proofs/Flock/SamplingGeneric.lean:110` and
+  `verity/protocols/spot/verifier/lean/Spot/TwoStageCheck.lean:9-13` name the two guarantees in a docstring, with no
+  clause. No theorem reads `twoStageCheckPatternsSound` or `admissibleTwo_rankin_patterns` but those above.
+
+**The lock records that would move** [read, now: the two JSON files, walked for the names]:
+
+- `security/lean-audit.json`:
+  - guarantee `Claims.Sampling.admissibleTwo_rankin_patterns` (`claims.generic` lists its statement
+    `Claims.Sampling.AdmissibleTwoRankinPatterns`): its signature line names the definition, so its `type_hash` stays
+    and its `unfolded_hash` moves (`check.py:2305-2306`).
+  - its honest witness `Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest`: signature and hash move.
+    `rankinTwoPatterns_nontrivial`'s record does not.
+  - `reads`: `Definitions.Claims.SamplingTwoRankin`, whose `definitions` hold `AdmissibleTwoRankinPatterns`: that
+    hash and the module's digest move. `Proofs.Flock.Claims.Witnesses.SamplingTwoRankin`'s entry holds only the
+    witnesses' definitions (`rankinTwo`, `onePart`, `nothingTwo`, `toyReq`, `twoReq`), which do not change.
+- `security/Properties/lean-audit.json`:
+  - `domain` entry `Properties.Spot.RequestsCover`: its digest, and its hand-written `why`, which says "each read in
+    one replay block, disjoint, as many and as wide as its classes say". `--update` does not rewrite a `why`.
+  - guarantee `Properties.Spot.SecurityProofs.twoStageCheckPatternsSound` (premises: `InScopeTwo`, `ClassesCover`,
+    `FirstStageAt`, `RequestsCover`): `unfolded_hash` moves, signature and `type_hash` stay, the premise list stays.
+  - its honest witness `twoStageCheckPatternsSound_honest`: names `RequestsCover`, so it moves the same way.
+  - `reads`: `Properties.Spot.TwoStageCheck`: `Properties.Spot.RequestsCover`'s hash and the module's digest move.
+    [derived] `TwoStageCheckPatternsSound`'s own hash there should not: a definition's hash is of its own content
+    (`check.py:1302-1306`), which names `RequestsCover` and does not unfold it. Not run.
+  - `reads`: `Definitions.Claims.SamplingTwoRankin` in this lock holds only `blocksIn`, `Design.Two.passes` and the
+    three factors, and its digest is of those (`check.py:1309-1312`, `1339`), so it does not move.
+- The guarantees that read the two: `admissibleTwo_rankin_patterns` and `twoStageCheckPatternsSound`, and no other.
+  Neither is under `deployed`, `trust_gap`, `open` or `assumptions` in either lock, so no gap, open premise or
+  assumption moves. `security/Proofs/lean-audit.json` names neither (only the root `Proofs.Properties.Spot.TwoStageCheck`).
+- [derived] Both statements get stronger (a hypothesis less), and both are listed, so by the brief this is Daniel's
+  through you, not a PR's own.
+
+**Python and tests that mirror the first clause** [read, now]:
+
+- `verity/protocols/spot/plancheck.py:92-111`: `two` under `union` (the patterns' form) raises on `fanout > 1`,
+  with the reason "the patterns' form reads each request in one replay block, so it needs fan-out 1"; its docstring
+  (98-99) says "each replay block is read by one request, reading all of it".
+- `verity/protocols/spot/optimize.py:1183-1186` and `1200-1202`: `two_stage_exfil`'s docstring and the same refusal.
+- `verity/protocols/spot/verifier/tests/test_plancheck.py:131-146` asserts `{"union": True, "fanout": 2}` raises;
+  `verity/protocols/spot/verifier/tests/test_optimize.py:812-817` (docstring) and `832-833`
+  (`match="needs fan-out 1, not 2"`) assert the same of `two_stage_exfil`.
+- `benchmarks/spot_figures/figure1.py:120-123` (`FANOUT = 1`) and `130-132` (`DEPLOYMENT`: "a replay block is a
+  request"), and `benchmarks/spot_figures/README.md:285-286` ("no proof block to be shared across requests") state the
+  reading the figures are in.
+- [derived] The Python's F is not the clause itself: `partition.fanout`
+  (`verity/protocols/spot/verifier/one_stage/partition.py:291-303`) joins proof blocks one of which reads another's
+  result, and the patterns' form refuses F above 1 for the clause's reason. A session whose later replay blocks read
+  rows its earlier ones committed has F above 1 there. So with the clause gone the refusal is what keeps the plan
+  check from pricing it, and what the point then carries (`N` = 1 a replay block, `S` the session's served bits,
+  `reads` one session's) is a choice of the planner's, not a proof. It is not mine and I did not try it.
+- [read] The executable `Spot.TwoStageCheck.checkTwoStage` and its difftest read no `RequestsCover`: the check's code
+  and its Python mirror's arithmetic do not change.
+
+**What my branch is not** [read `tools/verity/lean/check.py:1470-1475`]: a pull request. No root imports the two new
+files, and the Lean check fails a file no root imports (`orphan.file`). They are the evidence that the two proofs
+exist; the real change puts the proofs in the present files.
+
+### Does the whole change fit Fri 13 Nov 17:00Z
+
+[derived] The Lean of it does: six files edited, two lines of statement deleted, one proof replaced by the one that
+compiled, three terms changed in the other (waiting on its run), two honest witnesses shortened, and two locks that the
+candidate's records run regenerates but for one `why`; what it waits on is not a proof but Daniel's yes on two listed
+statements, and the planner's reading of a session in `plancheck.two` and `two_stage_exfil`, which is two refusals and
+two tests and is not counted here.
+
+### Where the four steps stand
+
+1. **Answered** (my 05:47Z entry).
+2. **Compiled** [run `r20261112-052746-8213`, exit 0, `c6c9d7c417`].
+3. **Compiled**, the same run. [run `r20261112-054644-631b`, exit 0, `fd8e4f58af`] the sibling check on it: "no built
+   module of its package that doesn't import Proofs.Flock.SamplingGeneric.TwoRankinRequests declares a name it does
+   (94 imported ...); 3797 unchecked", the unchecked ones having no build in that slot's tree. [run] `rg` of
+   `(theorem|lemma|def|abbrev|instance) NAME` over every `*.lean` for the eleven new names finds each once, in my files.
+4. **Written, not compiled** (`fd8e4f58af`). `r20261112-054602-bc5b` has waited for a check slot on vy-nebius-cpu-9
+   since 05:46Z and is one from the head of its line [run `research inspect`, 05:57Z].
+5. **Written**: above.
+
+### Runs
+
+| run | what | exit |
+|---|---|---|
+| `r20261112-054644-631b` | try of `TwoRankinRequests.lean` with `--siblings` at `fd8e4f58af` | 0 |
+| `r20261112-054602-bc5b` | try of `TwoStageCheckRequests.lean` at `fd8e4f58af` | waiting for a slot, 1 ahead |
+| `r20261112-055349-9c8d` | the same with `--siblings`, launched when `bc5b` did not start | cancelled by me, 8 ahead in its line, never started |
+
+Mailbox read 05:57Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`.
+
+Next: `bc5b`'s result, then the verdict entry. My branch `cursor/proofs-sessread-1b22` is at `fd8e4f58af`, pushed.
