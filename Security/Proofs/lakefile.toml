@@ -130,7 +130,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Window.Steps", "Proofs.Properties.Verity.Sampled.Window.Read",
   "Proofs.Properties.Verity.Sampled.Window.Instance", "Proofs.Properties.Verity.WindowFiles",
   "Proofs.Properties.Verity.Sampled.Window.Unbound", "Proofs.Properties.Verity.Sampled.Window.UnboundMember",
-  "Proofs.Properties.Verity.Sampled.Window.UnboundLaid",
+  "Proofs.Properties.Verity.Sampled.Window.UnboundLaid", "Proofs.Properties.Verity.Sampled.Window.UnboundChecked",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling", "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Firewall", "Proofs.Properties.Flock.Nets"]
