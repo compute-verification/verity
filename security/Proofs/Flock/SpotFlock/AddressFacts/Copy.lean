@@ -52,6 +52,9 @@ alone (`CopiesRef`, `OutRef`), at the column `pickAny` gives the gate there. At 
 (`Hidden.srcKey_commit`), and the member's unit net is the session's logical net (`unrolled_unit_commit`). `CopyRef`
 reads only the registration and the address; no check of the verifier's decides it today. The address's place is one
 for every unit that needs the gate.
+
+`copyFact_of_ref`: `CopyRef` at each gate's address, with `AddressFacts`' `RowFact` for `Counted`, gives its
+`CopyFact`.
 -/
 
 @[expose] public section
@@ -458,5 +461,13 @@ theorem copyHolds_of_ref {S : Address} {g : ℕ} {U : ℕ → Prop}
   obtain ⟨hu, hn⟩ := hU r hr hg
   obtain ⟨m, hm, hx⟩ := hc r.u hu
   exact CheckedRun.copy_of_copies hr (CheckedRun.inBlock_of_counted hr hn) hm (CheckedRun.copies_of_ref hr hm hx)
+
+/-- **`CopyFact` from the registration's copy condition** at each gate `i`'s address, over the units `U i` whose
+proof blocks need `i` at an accepted run, with the row fact for `Counted`. -/
+theorem copyFact_of_ref {ω : ℕ → ℕ} {keep : ℕ → Bool} {addr : ℕ → Address} {U : ℕ → ℕ → Prop}
+    (hrow : RowFact h ω keep addr) (hU : ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → U i r.u)
+    (hc : ∀ i, CopyRef h (addr i) i (U i)) : CopyFact h addr :=
+  fun r hr i hi => copyHolds_of_ref h (S := addr i) (g := i) (U := U i)
+    (fun r hr hi => ⟨hU r hr i hi, And.left (hrow r hr i hi)⟩) (hc i) r hr hi
 
 end SpotFlock

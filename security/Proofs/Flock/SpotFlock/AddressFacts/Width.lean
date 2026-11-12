@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.SlotsAt
+public import Proofs.Flock.SpotFlock.AddressFacts
 
 /-!
 # The width fact of an address
@@ -17,6 +17,8 @@ the registration and the address (`WidthRef`): every unit that needs the gate na
 a port of the place's width. `widthHolds_of_ref` gives `WidthHolds` from it.
 
 No check of the verifier's decides `WidthRef` today. It reads only the members and the address, so a check can.
+
+`widthFact_of_ref`: `WidthRef` at each gate's address gives `AddressFacts`' `WidthFact`.
 -/
 
 @[expose] public section
@@ -111,5 +113,12 @@ theorem widthHolds_of_ref {S : Address} {g : ℕ} {U : ℕ → Prop}
     WidthHolds h S g := by
   intro r hr hg
   rw [hw r.u (hU r hr hg), CheckedRun.words_eq hr]
+
+/-- **`WidthFact` from the registration's width** at each gate `i`'s address, over the units `U i` whose proof
+blocks need `i` at an accepted run. -/
+theorem widthFact_of_ref {addr : ℕ → Address} {U : ℕ → ℕ → Prop}
+    (hU : ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → U i r.u)
+    (hw : ∀ i, WidthRef h (addr i) (U i)) : WidthFact h addr :=
+  fun r hr i hi => widthHolds_of_ref h (S := addr i) (g := i) (U := U i) (fun r hr hi => hU r hr i hi) (hw i) r hr hi
 
 end SpotFlock
