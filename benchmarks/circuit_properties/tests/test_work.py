@@ -3,8 +3,8 @@ registry's products whose work is known by hand: a training loop's scan, whose c
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
 them; carried rows no one node shows distinct left out, one multiply by an input's words however it is written, a
 stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them, a
-weight cancelled against itself, through a call too, or times its own rows in another order refused at a point, the
-updates' premise held as facts; a lookup
+weight cancelled against itself, through a call too, or times its own rows in another order refused at a point, and a
+row holding a NaN or a specific operand overflowed there, the updates' premise held as facts; a lookup
 whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
 activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
 row; a rank-4 bottleneck between two carried weights; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
@@ -1039,17 +1039,17 @@ def _specific_overflow() -> Program:
     return _loop("SpecificOverflow", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
 
 
-def test_a_specific_operand_is_left_to_the_specific_rule(monkeypatch):
-    """Q's charge rests on the specific rule, so the point doesn't test its rows: u Q^T is charged and the Program not
-    refused, though Q's rows, past f32's range, are all +inf at the point. Tested for distinct rows alone, Q would
-    be refused."""
+def test_a_specific_operand_is_tested_at_the_point_too(monkeypatch):
+    """Q is specific and distinct by the reading's rules, and its rows, past f32's range, are all +inf at the point:
+    the point tests a specific operand's rows as any other's, so the Program is refused, rows 0 and 1, as an overflow
+    is everywhere else. Without the point u Q^T is charged."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_specific_overflow(), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificOverflowStep_v1", "w", (0, 1))
+    monkeypatch.setattr(PT, "check", lambda *a: None)
     w = WK.read(_specific_overflow(), KB)
     (g,) = w.groups
     assert g.weight == (True, False) and w.N == (T - 1) * K * PN
-    monkeypatch.setattr(PT, "claimed", lambda st: st.distinct)
-    with pytest.raises(WK.RepeatedRows) as e:
-        WK.read(_specific_overflow(), KB)
-    assert (e.value.operand, e.value.rows) == ("w", (0, 1))
 
 
 def test_clique():

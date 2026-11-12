@@ -1,8 +1,7 @@
 """The reading's distinct rows, tested at a point (`check`).
 
-A charged product's operand that the reading takes as a weight with distinct rows (`Status.distinct`, and not
-specific: `claims`) is claimed to have no two equal rows of its contraction's K
-words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
+A charged product's operand that the reading takes as a weight with distinct rows (`Status.distinct`: `claims`) is
+claimed to have no two equal rows of its contraction's K words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
 is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
 (`Input<w>`) is one word, sampled generic, nonzero and, as a float, positive, repeated through every array it fills
@@ -213,15 +212,16 @@ class Tally:
 
 
 def claimed(st) -> bool:
-    """Whether a charged operand of status ``st`` is charged for its distinct rows alone: `Status.distinct`, and not
-    specific, whose charge the specific rule carries. A charged operand carries no gather's rows and, unless it is
-    specific, reads no current input (`work.may_repeat`), so those need no test here."""
-    return st.distinct and not st.specific
+    """Whether a charged operand of status ``st`` is claimed to have distinct rows: `Status.distinct`, specific or
+    not, since a specific operand's rows differ at the point unless it overflows there. A charged operand carries no
+    gather's rows and, unless it is specific, reads no current input (`work.may_repeat`), so those need no test
+    here."""
+    return st.distinct
 
 
 def claims(R, root, reasons) -> dict:
-    """The charged products' operands whose rows the reading shows distinct and nothing else does (`claimed`), by
-    summary and node: (argument, its parameter's name, K)."""
+    """The charged products' operands whose rows the reading shows distinct (`claimed`), by summary and node:
+    (argument, its parameter's name, K)."""
     out: dict = {}
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}

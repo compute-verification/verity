@@ -62,7 +62,7 @@ by a shared weight would then read one pair of values twice. A carried word's ro
 shift or a rounding to a narrower float (`work.ROUNDINGS`) whatever else it reads, as a weight's update does, and by a
 multiply or a divide only where every other argument is one no input reaches, one word every member of every enclosing
 batch reads, or one whose own rows are shown distinct (a weight times a weight); any other carried rows may repeat, and
-a multiply by a stated 0 reaches nothing. Each charged operand whose rows only these rules show distinct is tested at a
+a multiply by a stated 0 reaches nothing. Each charged operand whose rows these rules show distinct is tested at a
 point (`points.check`): the Program evaluated once, θ's words generic and every input's one positive word repeated,
 the submitter's worst case, and refused (`work.RepeatedRows`) where two rows are equal at enough points to hold 64
 sampled bits a row, or where a row holds a NaN, which no comparison shows distinct. So a weight combined with its own words whose rows are equal whatever the weight is refused: cancelled
