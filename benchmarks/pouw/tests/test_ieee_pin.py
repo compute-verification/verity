@@ -64,10 +64,9 @@ def test_a_control_must_differ_somewhere():
 
 def test_copied_out_of_the_tree_beside_the_gate_it_holds_that_copy(tmp_path):
     """The script and the gate also run copied beside a build (`settings.STANDALONE`): there the gate is the file beside
-    the script, as it is the tree's inside the tree."""
-    assert Path(SG.__file__) == Path(IP.__file__).with_name("sass_gate.py")
-    for name in ("ieee_pin.py", "sass_gate.py", "sass_pins.json"):
-        shutil.copy(Path(IP.__file__).with_name(name), tmp_path / name)
+    the script, wherever the tree keeps it."""
+    for src in (IP.__file__, SG.__file__, SG.PINS):
+        shutil.copy(src, tmp_path / Path(src).name)
     got = subprocess.run([sys.executable, "-c", "import ieee_pin as I; print(I.SG.__file__, I.SG.PINS)"], cwd=tmp_path,
                          capture_output=True, text=True)
     here = tmp_path.resolve()
