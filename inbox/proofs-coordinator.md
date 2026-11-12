@@ -74948,3 +74948,46 @@ Tags as before. Mailbox read 06:41Z: 128 lines, newest section 05:05Z; your 06:3
 - [run: `git diff --stat origin/main...` on FRAME's and REDRAW's branches, `gh pr view` for #9116 and #9081] All four branches change `Spot/Pieces.lean`, three change `tests/test_difftest.py`, and #9081 changes `Spot.lean`. So I touch none of those: the piece is served from `DifftestMain.lean`, which none of them changes, and the module is built as that executable's import, not from `Spot.lean`'s list. The suite that runs the difftest is the verifier's Lean package's (`verity/protocols/spot/verifier/lean/tests/`, through `lake exe sampled-proofs-difftest`).
 
 **4. Next**: the Lean module and the proofs file, tried one file at a time; then the mirror and the difftest. Next entry when the proofs file compiles or at 08:00Z.
+
+## CROSSCLOSE, Thu 12 Nov 06:42Z: the K = 160 chain pin is restored in `6ead8fa9e6e2` and equals the crossed side's; the three renamed files, `Spot/Slots.lean` and the interface's build pass on the trial tree; the suites run has 12 passed and none failed
+
+[read: the mailbox's 06:27Z section, at 06:28Z and again at 06:40Z; nothing newer]
+
+**The fourth commit.**
+
+- [run here: `git commit`, `git push -u origin cursor/proofs-cross-main-closes-51ee`, 06:39Z] `6ead8fa9e6e22cb1635238948e1acd6e81ab9cbe` on `cursor/proofs-cross-main-closes-51ee`, on top of `c5a0b47d4268`: `verity/definitions/registry/pearl_c_forming.py` and `pearl_c_forming.circuit-check.json`. **Tried: `r20261112-063204-2cc1`.**
+- [run here: `git diff --cached --stat d6075b75d289`] Both files are `main`'s at `d6075b75d289` with 8 lines added and 2 removed: one binding in `bindings()` (`bind(pick(PearlCChain, PearlCChainV2), K=160, DOT=atoms[0], G=4)`, so on words and on bits), its clause of the docstring, and one pin. The crossed line has neither file, so on my branch each is added whole; `git diff d6075b75d289 6ead8fa9e6e2 -- verity/definitions/registry/pearl_c_forming.py verity/definitions/registry/pearl_c_forming.circuit-check.json` shows only the change. lean takes the two paths whole, or leaves both.
+- [run: `r20261112-063204-2cc1`, vy-nebius-cpu-7, done, exit 0, on the trial tree with the binding (`0b5e2913ce27`, local)] `circuit-check --no-cache --update-pins` on the forming sidecar wrote one entry and nothing else (`git status` in the run: the pin file alone): `PearlCChain_v2{K=160,DOT=HopperE4m3QgmmaDot32_v2,G=4}`, `and` 34910, `type` `92e9bacff38b…8034c9`. The pass after it: 50 targets, 0 failures, and no `lowering/unpinned` (the update pass itself reported 1, before it wrote). The tile's sidecar after it: 10 targets, 0 failures.
+- [run here: the two JSON entries compared] **The new pin equals the crossed side's**, `and` and all 128 hex digits of `type`. I did not stop.
+- [run here: `sha256sum`] The committed bytes are the run's: the pin file `e35e5c94fadd…`, `pearl_c_forming.py` `0f1085d34e69…`, as the run printed them.
+
+**The runs that ended.** All on the trial tree `ad0b783d765f` (local, not pushed), which is not the merged tree.
+
+- [run: `r20261112-061935-a30d`, vy-nebius-cpu-11, done, exit 0] `lean_changed.py --try`, each `lean exit 0`:
+  - `verity/protocols/interface/CoreProtocol/Profile.lean` (its imports build, 9 jobs);
+  - `verity/protocols/interface/CoreProtocol/Period.lean`;
+  - `verity/commitments/attest/lean/Attest/Period.lean` (14 jobs);
+  - `verity/protocols/spot/verifier/lean/Spot/Slots.lean --siblings` (87 jobs): its one theorem uses no axiom beyond the three, and no built module of its package declares a name it does; 16 siblings went unchecked, having no build of their source as it is.
+  The interface's and attest's modules build (`--build`, exit 0), and the interface package's own `lake build` in the run's clone completes (42 jobs, the executables linked), with `core-periods-difftest`.
+- [run: `r20261112-061646-e2b5`, vy-nebius-cpu-12, done, exit 0] Its last step, the forming and call sidecars before the binding: 54 targets, 0 failures.
+
+**Still out.**
+
+| Run | What | State at 06:40Z |
+|---|---|---|
+| `r20261112-061732-4833` (vy-nebius-cpu-2) | `suites.py --changed 1fb5db1f1978 --quick`, 84 suites | [run] running; 12 passed, none failed. Among the passed: `verity-core-sampled-proofs` (the spot verifier's difftest, a file of ours both lines changed), `verity/commitments/attest`, `verity-core-periods`, `pous-check`, `verity-pouw-check-difftest`, `verity/protocols/certifier/verifier`. [guess] past 08:30Z |
+| `r20261112-063715-4580` (vy-nebius-cpu-11) | new: `--try` of `Flock.lean`, `security/Proofs/Flock/Claims/Sampling/Reg.lean`, `Claims/Sampling.lean` and `Flock/Soundness.lean`; the spot verifier's `lake build`; `benchmarks/verifier_cost/whole_run/Main.lean` elaborated against it | [run] waiting for a slot since 06:37Z; three hours allowed |
+
+**The no-stop meets, so far.** [derived] None found beyond the three import renames (`c5a0b47d4268`) and `Spot/Slots.lean` (network-accounting's `a74a9caf815d`).
+
+- [run here: `git diff --name-only` of each line from the base `493f49485e50`] 181 files changed on both lines; 55 stop; **126 merge with no stop**. [run here: `research msg owners --dry-run`, nothing sent] By owner: proofs 25, vllm 24, memory-accounting 14, network-accounting 13, lean 13, top 11, compute-accounting 8, soundness 5, circuits 4, ci 4, benchmarks 2, kernels 1, infra 1, comms 1.
+- [derived] Of our 25, eight are locks (`lean-audit.json`), which are not mine. Of the other 17: `Profile.lean` and `Slots.lean` are closed and tried; four Lean files and `whole_run/Main.lean` are run `4580`; seven Python files are under suites of the suites run (`benchmarks/one_stage` and its `interfaces`, `verity/circuits`, `verity-flock`, and `verity-core-sampled-proofs`, which passed); [read] the three Markdown files (`verity/README.md`, `verity/protocols/flock/agreement/README.md`, `benchmarks/verifier_cost/README.md`) change different rows and paragraphs on each line, and neither line's text contradicts the other's.
+- [read] Not tried: `benchmarks/verifier_cost/population/Main.lean`, which only the crossed line has and no Lake package owns (`population.sh` builds it against the spot verifier). It names no declaration `main` removed.
+- [run here: a scan of every `.lean` file] A declaration one line removed or renamed whose name the other line's added lines use: 3 candidates, no meet. `RowsTiedSampled` and `RowsTiedSampledOf` are in `security/Properties/NetworkPeriod.lean`, which stops (network-accounting's); `mem_map` is `List.mem_map`. The crossed line's two renames I read by hand have no stale use in the trial tree: `Spot.Slots.Layout` to `SlotOrder`, and `Rule.over` taking the strata sizes.
+- [run here: a scan of every tracked `.py` file's imports of our distributions] The trial tree has no `import` or `from … import NAME` that fails to resolve which `main`'s tip does not also have (127 distinct findings on each tree, the same 127: mostly names under `verity.ml` and `verity.core`, which my scan resolves on neither).
+
+**What the trial tree lacks.** [read: `git log aa3898c0cd6b..` on each branch] Closes that exist and my brief did not name, so the trial tree holds those files at the crossed side's text: network-accounting's `3d2ed017ac` and `f4bfbc0af9` (the period check and the two `NetworkPeriod.lean`), top's `c3e7b4f880`, memory-accounting's `3d62dddca0`, compute-accounting's `84157d66f0`. A failure of the suites run in one of those files is the open stop's, and I will say so beside it.
+
+**Open for you:** nothing.
+
+**Checkpoint 06:41Z.** Four commits pushed: `f3f76962f261`, `c37c905dff6d`, `c5a0b47d4268`, `6ead8fa9e6e2`. Two runs out. Next entry when both end, or at 09:00Z with what is still out.
