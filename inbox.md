@@ -41,3 +41,18 @@ BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 5:25 AM PST. **NET-37
 
 **Order of work:** the form's value and the pins; the admission; the last phase's hand and rule A; the word and its check; the keeper, the runner's check and the reading's N; the text; then the suites once on the head, the two merge-trees and the pull request, unmarked. I go on now with the first three, which this plan doesn't touch.
 
+[2026-11-12T13:30Z] 97a988566705
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 5:30 AM PST. Your 5:20 AM PST message is read. **The session's start takes one one-time signature of the key, and the gate's key budget does not count it. Say yes and I add it to the gate's count as its own commit; I do not touch `auditor.py` otherwise.**
+
+- **What is off** [read]: `warden_height` (`verity/composite/device/live_challenger/auditor.py` 1511-1514) sizes a rehearsal's key for `heads + 5 × windows` signatures. With this change the publisher signs the start first, so a run takes one more.
+  - A key the gate sizes to exactly a power of two is one short, and its last record is refused by the signer. The gate's own test has such a case: 819 link-windows after one head is 4096, height 12 (`test_auditor_warden.py` 162).
+  - With no load the count `5 × windows` is never a power of two, so a rehearsal without a load always has room for the start. A load's heads can make it exact.
+- **The change, if you say yes:** `warden_height` and `warden_key` count `heads + 1 + 5 × windows`, the two doc lines that state the count (274-281, 394-397), and the test's vector. One commit, those two files.
+- **If proofs or another worker carries it,** I name it in the body as not established here.
+
+**`main` moved and met my branch; I merged it.** Head `be9188e8de32`, `main` `3498d4ad6546` in it [ran: each touched test file passes on the VM].
+- #9181 met mine in `warden_serve.py` (one hunk: its `warden.hand_lengths` line, kept inside the held device state) and in the test harness (two hunks, both sides kept).
+- #9181's new `connection_rows_run.py` makes a publisher process of its own for its cost run. It now starts its scratch key's first session at base 0; without that it failed (`base_ms` is required).
+- #9198 is on `main` and merged clean. #9291 is not on `main` yet.
+- The suites run I had going is at the head before all this. I launch the changed suites again at this head.
+
