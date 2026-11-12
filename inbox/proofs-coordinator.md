@@ -72950,3 +72950,83 @@ Agent `bc-91afa190-e757-5374-b33f-2763b8d55e5e`. Third entry. Every time below i
 - I close nothing.
 
 **Next.** #8406's redo on `58a598e615b1`, its entry by 09:00Z. `9dd0`'s result here when it ends.
+
+## CROSSCLOSE, Thu 12 Nov 05:51Z: first entry: 19 of our files stop against `main` at `d6075b75d289`, 17 are joins I am writing now, two need your word, and `PearlCChain_v1` can take `main`'s with no caller losing anything
+
+Branch `cursor/proofs-cross-main-closes-51ee`, cut from `aa3898c0cd6b`, no commit yet. Every close below is against `main` at `d6075b75d289`.
+
+**The stop list at the tip**
+- [run here: `git merge-tree --write-tree --name-only aa3898c0cd6b d6075b75d289`] 55 files stop (54 against `62bf29346f76`). Ours are 19: the 18, and `verity/protocols/spot/verifier/README.md` joined. None of ours left.
+- [run here: `git diff --name-only 62bf29346f76 d6075b75d289 -- <the 19>`] `main` changed two of them in that span: `verity/definitions/tests/catalog_ids.json` and `verity/protocols/spot/verifier/README.md`.
+
+**Two choices waiting on your word.** I write both as I recommend and change them if you say otherwise; I report no sha before your answer.
+
+1. **`verity/protocols/interface/lakefile.toml`: the merged package needs a require neither side has.**
+   - [read] Crossed requires `flock_verifier` and `verity_difftest`. `main` requires `core_base` alone. Git joins the requires to `core_base` and `verity_difftest`, so `verity_difftest` stays, as soundness assumed; only the header comment stops.
+   - [read, and run here: an import scan of the merged tree's 36 packages] The crossed side's `CoreProtocol/Profile.lean` imports `Flock.Draw` (the work sampling design: `Flock.Draw.Law`, `workK`) and `Flock.Canon`, and its `CoreProtocol/Period.lean` imports `Flock.Canon`. Both merge with no stop. On `main` those modules are `Commitments.Draw` in `core_commitments` and `Base.Canon` in `core_base`; `Flock/*.lean` are re-exports inside `flock_verifier`, which the interface no longer requires and `REQUIRES_FLOCK_VERIFIER` doesn't list.
+   - (a) The closed lakefile requires `core_base`, `core_commitments` and `verity_difftest`, and the two files' imports are renamed (they are outside the 19, so in a commit of their own, below). [derived from the merged lakefiles and manifests] Two manifests then gain an inherited `core_commitments`: soundness's `composition/lake-manifest.json` (`25630889df27` must be redone) and network-accounting's `nci/lean/lake-manifest.json`. Of the other 15 manifests that inherit the interface, 14 list it already; the fifteenth, `pearlplus`'s, is stale without us (below).
+   - (b) The closed lakefile requires only what git joined. `core_protocol` then does not build on the merged tree until the profile's sampling design leaves the interface.
+   - **I recommend (a).**
+2. **`benchmarks/one_stage/v2_case.py`: which public digest the case names when the window keeps the staged one.**
+   - [read] Base passed no `public`. Crossed: `public=PF.file_sha512(pub)`, "the kept public file's SHA-512, since the window keeps no digest of it from before the sample", and one member's statement read from `summary.json` (`members`, `k`, `template`, `registered.json`, lookup tables), several members leaving only `missing.json`.
+   - [read] `main`: `public` is the digest the audit staged (`case-v2.json`'s `params.proofs.public`); "A kept public file with another SHA-512 is refused: no case is written" (`Refused`); the label says whether it was staged before the sample, after a handed one, or cannot tell; a window that keeps no staged digest gets the kept file's own.
+   - The two differ in one case: a kept public file whose SHA-512 is not the staged one. Crossed builds a case on the kept file's digest; `main` refuses.
+   - **I recommend `main`'s rule on the crossed side's member structure**: one member's statement as crossed reads it, the staged digest, the refusal and the label as `main` has them, several members still leaving only `missing.json`. `tests/test_v2_case.py` follows it.
+
+**Verifier code, one line each** (none is a choice by my read; say if you read one otherwise)
+- [read] `verity/protocols/flock/verifier/FlockVerify.lean` (1 stop, in `verifyCmd`): the closed file is `main`'s `buildSessionBy read.descAt read.progAt …` and `Registered.checkCoverBy read.progAt …` with the crossed side's `RegBound.check st.c st.pub program own bound declared` between them. It accepts what the crossed side's accepts on every input (`buildSessionBy_read`, `checkCoverBy_read`: `main`'s readers equal the originals) and what `main`'s accepts wherever the `--registered` file binds no port (`RegBound.check_empty`: it is then `Registered.checkComplete`). `verity lean try` on the trial tree confirms or refutes.
+- [read] `verity/commitments/attest/lean/Attest/FrameV3Sha512.lean` (deleted on crossed, one import renamed on `main`): closes as deleted, which on my branch is no change. `main` changed no meaning in it, and nothing in the merged tree imports it: the crossed side's `Attest/Period.lean` reads `FV3.Sha512`'s tree, which `main`'s `Commitments/FV3.lean` still holds. So the merged check accepts what each side's does.
+- [read] `verity/protocols/spot/verifier/one_stage/proofs.py` (1 stop): two writers added at one place, `statements_v2` (crossed) and `PARSED`, `Member`, `members_v2`, `members_parsed` (`main`). Both stay, crossed's first. The stop holds no accept path: `verify`, `check_v2` and `verdicts_v2` merge from lines only one side changed. `statements_v2` has no caller on either side and repeats `members_v2`'s evidence half; I leave it and name it as cleanup.
+
+**The 19** (stops; the close)
+
+| file | stops | close |
+|---|---|---|
+| `benchmarks/one_stage/pyproject.toml` | 1, the comment over `inputs` | both sides' comment lines in the list's order; the list merged with both sides' paths |
+| `benchmarks/one_stage/README.md` | 1 | crossed's "(the prover's pre-flight check, on the node)" inside `main`'s sentence on what the run's record publishes (`demos/vllm/published.sh`) |
+| `benchmarks/one_stage/served_composite.sh` | 3, header comment | `main`'s onsite cases as their pieces wrote them (`onsite_cases`, `ONSITE_SKIP`) with crossed's cases on the registration record, `remote-v1` under `POUW=pearlplus` and the hand-off off the served node; the case loop skips crossed's three directories, then `ONSITE_SKIP` |
+| `benchmarks/one_stage/served_shares.py` | 1, a comment | crossed's wording ("dense int8 and FP8 rate", "4,096 MACs a clock") without the citation of `benchmarks/pouw/accel_v31`, which `main` deleted |
+| `benchmarks/one_stage/v2_case.py` | 5 | choice 2 |
+| `benchmarks/one_stage/tests/test_a5_case_v2.py` | 1, end of file | both sides' new tests, crossed's then `main`'s; no name in common |
+| `benchmarks/one_stage/tests/test_served_verdicts.py` | 2 | both sides' assertions in each |
+| `benchmarks/one_stage/tests/test_v2_case.py` | 2 | both sides' tests, as choice 2 goes; and a clash git doesn't stop on, below |
+| `verity/protocols/interface/lakefile.toml` | 1, header comment | choice 1; `verity_difftest` kept |
+| `verity/protocols/interface/lake-manifest.json` | 1 | `lake update`'s resolution of the closed lakefile, run here (path requires only), dirs normalized as soundness did |
+| `verity/protocols/interface/README.md` | 1 | "requires the base package for canonical JSON, bytes and hashes, and the difftest harness's Lean for its periods' port" (and `core_commitments` under 1a); no Mathlib, nothing of Flock's verifier |
+| `verity/protocols/flock/verifier/FlockVerify.lean` | 1 | above |
+| `verity/commitments/attest/lean/Attest/FrameV3Sha512.lean` | deleted against modified | deleted |
+| `verity/protocols/spot/verifier/one_stage/proofs.py` | 1 | above |
+| `verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json` | 1 | generated, below |
+| `verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json` | 1 | generated, below |
+| `verity/protocols/flock/prover/tests/fixtures/randomness_lean.json` | 1 | generated, below |
+| `verity/definitions/tests/catalog_ids.json` | 1 | generated, below |
+| `verity/protocols/spot/verifier/README.md` | 1, the Reads bullet | `main` deleted the bullet's three lines (the file says them at `registered`: `reads`, `reads_file`, and names `Flock.Registered` and `TemplateQuery` elsewhere); crossed added the bound ports' rule to it. I keep crossed's added rule as the bullet, every name in it, without the three lines `main` removed |
+
+**The four generated files**
+- [read] The three `*_lean.json` are pins (`tools/verity/check/pins.py`; "written only by its command"). Their vectors are the same on base, crossed and `main`; the one stop in each is the sha256 of `security/Proofs/lake-manifest.json`, which each side changed. Their commands (`bash verity/protocols/spot/verifier/tests/lean/generate.sh`, `bash verity/protocols/flock/prover/tests/lean/generate.sh`) build `security/Proofs` modules, so they can't run before lean's manifest is final. I close each by the rule (`main`'s text, the manifest's digest that of the trial tree's file, every other input's digest checked against the trial tree) and they **must be regenerated on the merged tree**: `python tools/verity/check/pins.py --merged aa3898c0cd6b origin/main`, or `--regen`.
+- [read] `catalog_ids.json` is `uv run python verity/definitions/tests/test_catalog.py --update`, a fresh `catalog.load()`, which refuses the merged tree until `PearlCChain_v1` is settled. Crossed added 12 ids and `main` 110; two are in both (`PearlCChain_v1`, `PearlCChain_v2`). I close it as the sorted union, 1,662 ids, and regenerate it on the trial tree after the second commit to hold the union to the command.
+
+**`PearlCChain_v1`: no crossed-side caller needs anything `main`'s lacks, so I take your default**
+- [read `pearl_c_forming.py` at `d6075b75d289`, `pearl_c_tile.py` at `aa3898c0cd6b`] Same statics (`K`, `DOT`, `G`), same signature, same operations in the same order at G ≥ 1: per window of 32·G products a fresh +0, the `DOT` steps in k order, one `F32AddV2` into the total from +0, the last window short. `main`'s adds G = 0 (no promotion) and makes each +0 one node where crossed's calls `ZERO32` once a window. The registry holds one object per id (`Registry.add`), so the second module to load is refused; `PearlCChain_v2`, σ of each, collides the same way.
+- [read both sidecars' pins] The one binding both pin, `PearlCChain_v2{K=128,DOT=BlackwellE4m3QmmaDot32_v2,G=4}`, has 36,933 ANDs and the lowering digest `9f65226edfdd…` on both sides: there the two lower to one circuit.
+- [run here: `git grep` of `PearlCChain`, `PearlCTileRead`, `pearl_c_tile` at `aa3898c0cd6b`] The crossed chain's only caller is `PearlCTileReadCell` in the same file, reached by `PearlCTileRead`, the sidecar's roots and compute-accounting's `verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py`. No Program, adapter, kernel check or kept artifact names it; the Lean (`Pouw/PearlC/Unscale.lean`, `PouwPearlPlus/Rule.lean`) and `pearl_c_u.py` name only `PearlCUnscale_v1`. `main`'s callers: `PearlCGram`, `PearlCPeelA`, `PearlCPeelB`, `PearlCCell` (`pearl_c_call.py`), their tests, `benchmarks/pouw/pearl_c_vllm/forming_headroom.py`.
+- [read] What the crossed body has that `main`'s doesn't: it refuses G < 1 and a K that is no integer, and its conformance text names `pearl_c_u`. The cell and the tile keep both in their own `refuse` and text.
+- The second commit: `pearl_c_tile.py` drops `PearlCChain` and `PearlCChainV2` and imports `main`'s; its pins are regenerated by `circuit-check` through `research run`. [guess until that run] The crossed pin at K = 160 on the H100's atom (34,910 ANDs) stays, since a constant costs no gate.
+- [read] Beside it, a duplicate and no clash: crossed's `PearlCTileReadCell_v1{K,DOT,G}` and `main`'s `PearlCCell_v1{K,R,DOT,G,STEP}` are one function at R = 32 on the H100's BF16 step. Not in the second commit; a follow-up makes them one.
+
+**Does our close change what `lake update` writes for `security/Proofs/lake-manifest.json`? No, and git's merged text is not what `lake update` writes either way**
+- [derived] Git's merged manifest (sha256 `63af037d2357…`) already lists every package the closed interface requires (`core_base`, `verity_difftest`, `core_commitments`), so our close adds and removes none, under 1a or 1b.
+- [derived: Lake's rule from `Lake/Load/Resolve.lean` of the toolchain, breadth-first with each package's missing requires in reverse order; my simulation of it reproduces the manifests of `security/Proofs`, the interface, composition, spot and attest at base and at the crossed head] It gives the same order for `security/Proofs` on the merged tree under 1a and under 1b.
+- [derived, same simulation] That order is **not** git's merged text: the rule puts `core_commitments, core_base, core_circuits` after `verity_difftest`, where the merged text has `core_circuits, core_base` there and `core_commitments` after `core_attest`. `main`'s own file is not in Lake's order (it was last written at `5165c370fa`, the base-package cut crossed by the move's scripts). `pins.py --merged` runs `lake update` in every package whose manifest both sides changed, `security/Proofs` among them. So memory-accounting's line holds only if lean keeps git's text; if lean regenerates, it goes stale whatever we do. I can get the bytes `lake update` writes from a run on the trial tree if you want them.
+
+**Where the two sides meet with no stop, so far**
+- [run here: the import scan] @proofs: `verity/protocols/interface/CoreProtocol/Profile.lean` (lines 14, 17, 18) and `CoreProtocol/Period.lean` (20, 22) import `Flock.Draw` and `Flock.Canon`, outside the interface's requires (choice 1).
+- [run here: the import scan] @proofs: `verity/commitments/attest/lean/Attest/Period.lean:4` imports `Flock.FV3`; `main`'s `core_attest` requires `core_commitments`, where it is `Commitments.FV3`.
+- [run here: the import scan] @network-accounting: `NciCheck/Baseline.lean:4` imports `Flock.WindowRecord`, outside `nci_check`'s requires (you had this one).
+- [read] @proofs: `Spot/Slots.lean`: `main` changed `inputGates` to `d.isInputNode x`; crossed added `inputGatesFast`, still on `Flock.TemplateQuery.isInput tid`, and `@[csimp] inputGates_eq_inputGatesFast`, whose proof no longer closes. The fix is `d.isInputNode x` in the fast one. It is the verifier's sample layout, so I name it and don't write it without your word.
+- [read] @proofs: `benchmarks/one_stage/tests/test_v2_case.py` outside its two stops: two helpers named `_window` and `RP` defined twice. I rename the crossed side's helper and keep `main`'s import of `RP`, in the one commit, since the file is one of the 19.
+- [derived] @compute-accounting: `verity/protocols/pouw/verifier/lean/pearlplus/lake-manifest.json`, crossed-only and so merged untouched, lacks `core_base`, `core_circuits` and `core_commitments`, which its requires now reach: it needs `lake update` on the merged tree.
+- [read] @top: `tests/lint/allowlists/repo_retired_terms.json` keeps an entry for `Attest/FrameV3Sha512.lean`, stale once the file is gone (bookkeeping).
+- [read] @proofs: `PearlCChain_v1` and `PearlCChain_v2`, above.
+
+**Next, in order.** The closes in a work commit on my branch; the `PearlCChain_v1` commit and its `circuit-check` run; the trial tree with the named closes and its runs. I propose a third commit for the no-stop fixes that are ours and not meaning (the three import renames), which the trial tree needs to build at all; say if you'd rather lean take them. The Markdown gate's output comes with the commit. Mailbox read at 05:38Z; I read it again before each entry.
