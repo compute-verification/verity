@@ -68,8 +68,8 @@ from verity.protocols.spot.verifier.one_stage import (audit, draw as DR, hello a
                                                   link_points as LP, partition as P, produced as PD, proofs as PF,
                                                   registered as G, registration as R)
 from verity.protocols.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
-from verity.protocols.spot.device.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
-                                              draw_coins, draw_first, law_problem)
+from verity.protocols.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
+                                              coins_within, draw_coins, draw_first, law_problem)
 from verity.protocols.spot.device.coins import ran_out as draw_ran_out
 from verity.protocols.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.spot.verifier.one_stage.verdict import Verdict
@@ -1493,9 +1493,9 @@ def run(j):
     `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a bernoulli sampling design at
     any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
     (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), then the
-    sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any (`_coins_hold`:
-    code `coins`; a `coin_source` other than the challenger is refused up front: the verifier samples no coins of its
-    own); `deliver`: one or more sessions, each matching
+    sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any, held to
+    the run's `family` (`_coins_code`: code `coins`, or `family`; a `coin_source` other than the challenger is refused
+    up front: the verifier samples no coins of its own); `deliver`: one or more sessions, each matching
     `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the sample's proved units unless
     given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
     "codes"}`; inputs the Lean decodes before the run (`Pieces.run`) are refused up front. Under a two-stage rule the
@@ -1522,6 +1522,9 @@ def run(j):
     proved, instances = j.get("proved_units"), j.get("instances")
     if not (proved is None or isinstance(proved, list) and all(map(_int, proved))) or not (instances is None or _int(instances)):
         raise D.Reject("proved_units is not a list of integers, or instances not an integer")
+    for of, what in ((j, "the run's"), (j.get("interior"), "an interior's")):
+        if isinstance(of, dict) and not (of.get("family") is None or isinstance(of["family"], str)):
+            raise D.Reject(f"{what} family is not a string")
     if not isinstance(j.get("source"), str):
         raise D.Reject("source is not hex")
     PR.unhex(j["source"])
@@ -1560,8 +1563,9 @@ def run(j):
         return {"codes": ["closure"], "step": "select"}
     drawn = select({"closure": closure, "program": j["params"]["program"], "query": j["params"]["query"], "rule": j["rule"],
                     "source": j["source"], "work_table": p["work_table"]})
-    if not _coins_hold(j, rec, PR.unhex(j["source"])[:drawn["read"]]):
-        return {"codes": ["coins"], "step": "select"}
+    code = _coins_code(j, rec, PR.unhex(j["source"])[:drawn["read"]])
+    if code is not None:
+        return {"codes": [code], "step": "select"}
     codes = DR.check_draw(drawn["draw"], rec, derived).codes
     if codes:
         return {"codes": list(codes), "step": "select"}
@@ -1605,8 +1609,7 @@ def run(j):
         own = SS.Own(tuple(sample), SS.parts(len(sample), strata), it["record"], rec, tuple(DR.proved(inner["draw"])),
                      links, audit.session_registered(verdicts), SS.verified_of(verdicts), it["refs"], it["ref_reads"],
                      SS.replay_wires(p["program"], it["replay"]["program_fn"]),
-                     SS.replay_rows(p["program"], it["replay"]["program_fn"]),
-                     SS.replay_returns(p["program"], it["replay"]["program_fn"], rec))
+                     SS.replay_rows(p["program"], it["replay"]["program_fn"]))
         out2 = SS.attach(out2, SS.check(SS.FORM, own, it["statements"]), SS.interior_reads(own, it["statements"] or ()))
         accepted = accepted and out2["accepted"] is True
         staged = {"interior": {"audit": codec.canonical_json(out2).decode(), "draw": inner["draw"], "read": inner["read"],
@@ -1655,8 +1658,6 @@ def _interior_of(it) -> dict:
         raise D.Reject("an interior names no wires: the verifier derives them from the replay block's Definition")
     if "rows" in it:
         raise D.Reject("an interior names no rows: the verifier derives them from the replay block's Definition")
-    if "returns" in it:
-        raise D.Reject("an interior names no returns: the verifier derives them from the replay block's Definition")
     return {**it, "decoded": decoded, "replay_program": PROGRAMS[sha], "values": values, "proved_units": proved,
             "instances": instances, "served": it.get("served"), "session_roots": it.get("session_roots"),
             "record": it.get("record"), "coins": it.get("coins"), "statements": it.get("statements"),
@@ -1702,19 +1703,24 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
         draw2 = service.select_second(sample, ns, ks, coins)
     except ValueError as e:
         raise D.Reject(str(e)) from None
-    if not _coins_hold(it, rec, src[:at]):
-        return {"codes": ["coins"], "step": "second"}
+    code = _coins_code(it, rec, src[:at])
+    if code is not None:
+        return {"codes": [code], "step": "second"}
     return {"draw": draw2, "law": service.second_law(sample, ns, ks), "read": at, "receipt": receipt}
 
 
-def _coins_hold(j: dict, rec: dict, read: bytes) -> bool:
-    """`Run.coinsHold`: a sample that read no coins carries no evidence; one that read coins read the challenger's and
-    carries evidence that holds (`coins_reason`) for the verifier's window root, after the registration's digest."""
+def _coins_code(j: dict, rec: dict, read: bytes) -> str | None:
+    """`Run.coinsCode`: a sample that read no coins carries no evidence; one that read coins read the challenger's and
+    carries evidence that holds (`coins_reason`) for the verifier's window root, of the run's family, after the
+    registration's digest. The code it is refused under, or None: `family` for a family whose log shows another root
+    (`FAMILY_ROOT`), else `coins`."""
     if not read:
-        return j.get("coins") is None
-    window = j["params"].get("window_root")
-    return window is not None and coins_reason(j.get("coins"), window, bytes.fromhex(R.digest(rec)), read,
-                                               lms_verify) is None
+        return None if j.get("coins") is None else "coins"
+    window, family = j["params"].get("window_root"), j.get("family")
+    if window is None or family is None:
+        return "coins"
+    why = coins_reason(j.get("coins"), window, family, bytes.fromhex(R.digest(rec)), read, lms_verify)
+    return None if why is None else "family" if why == FAMILY_ROOT else "coins"
 
 
 def hello(j):
@@ -2492,12 +2498,14 @@ def decode_params_v2(j) -> dict:
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
-                     keys: list[str] | None = None, seed: int = 0, order: str = "honest") -> tuple[Drawn, dict, dict]:
+                     keys: list[str] | None = None, seed: int = 0, order: str = "honest",
+                     **shape: bool) -> tuple[Drawn, dict, dict]:
     """A sample under `law` from the coins of a challenger session its ledger opens withheld, under the key of `seed` at
     the deployed parameters, released after `rec`'s digest and read as `draw_first` reads them, the session's
     challenger sampling and opening `trees` coin trees too (`TreeSession`) on v2's one table (`OneStageZk.sessionTables`),
     their links opened after `keys` (that table when none), its log in `order` (`ORDERS`): the session, the sample, and the
-    evidence's `coins` (the session's record without the key, which the verifier's parameters name)."""
+    evidence's `coins` (the session's record without the key, which the verifier's parameters name). `shape`: `Drawn`'s
+    `before` or `later`, a session whose family holds another root."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -2509,8 +2517,8 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
-              keys=keys, params=[DEPLOYED], seed=seed, order=order)
+    d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
+              keys=keys, params=[DEPLOYED], seed=seed, order=order, **shape)
     at = [0]
 
     def source(k: int) -> bytes:
@@ -2895,7 +2903,8 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
         stranger = _challenger_draw(rng, s, law, rec, seed=1)[0]
         assert stranger.s.key != d.s.key
         elsewhere = Drawn(rng, reads=lambda c: c(COIN_BYTES), params=[DEPLOYED])
-        bare = Drawn(rng, before=True, after=after, reads=lambda c: c(COIN_BYTES), withheld=False, params=[DEPLOYED])
+        bare = Drawn(rng, after=after, reads=lambda c: c(COIN_BYTES), withheld=False, params=[DEPLOYED])
+        again = {shape: _challenger_draw(rng, s, law, rec, **{shape: True}) for shape in ("before", "later")}
         undeployed = {**d.s.key.to_json(), **rng.choice([{"H": 6}, {"W": 2}, {"W": 4, "H": 10}])}
         cases = {
             "no challenger": ("params", audit_of(d, draw, coins, challenger=None)),
@@ -2919,8 +2928,12 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
                 elsewhere, draw, {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"})),
             "not withheld": ("coins", audit_of(
                 bare, draw, {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"})),
+            "a family with a root before the sample's": ("coins", audit_of(*again["before"])),
+            "a family with a root after the sample's": ("coins", audit_of(*again["later"])),
+            "before": ("coins", audit_of(again["before"][0], again["before"][1], {
+                **again["before"][2], "segment": _mutated(rng, again["before"][0], "before")[0]})),
         } | {name: ("coins", audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}))
-             for name in DRAW_MUTATIONS if name not in ("unread", "read-tampered", "other-after")}
+             for name in DRAW_MUTATIONS if name not in ("before", "unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
         for name, (c, why) in unclosed(coins).items():
@@ -3959,10 +3972,11 @@ def _run_case(a: dict, source: str, sessions: int, outputs: list) -> dict:
             "source": source, "statement": e.get("statement"), "values": pub["values"], "verdicts": verdicts}
 
 
-def _from_challenger(c: dict, rng: random.Random) -> tuple[Drawn, dict]:
+def _from_challenger(c: dict, rng: random.Random, **shape: bool) -> tuple[Drawn, dict]:
     """Run `c` sampling from the auditor's challenger, as a `Stream` over a window runs it: its coins a ledger session's
     challenger opened after the registration's digest and read by the selection rule's sample (`Drawn`), the source the
-    bytes read, the evidence the session's and the window root the ledger's open's."""
+    bytes read, the evidence the session's, the family the session's `draw` and the window root the ledger's open's.
+    `shape`: `Drawn`'s `before` or `later`, a session whose family holds another root."""
     rec, p, rule = c["record"], _params_of(c), _rule(c["rule"])
     law = DR.derive(p["program"], p["query"],
                     service.selection_law(rule, rec["population"], service.selection_sizes(rule, p["program"], p["query"])),
@@ -3977,9 +3991,9 @@ def _from_challenger(c: dict, rng: random.Random) -> tuple[Drawn, dict]:
             return b
         service.select_draw(rule, law, rec["population"], source)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads)
+    d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, **shape)
     return d, {**c, "params": {**c["params"], "window_root": d.ledger.window["root"]}, "source": d.read.hex(),
-               "coins": d.evidence(d.segment.to_json())}
+               "coins": d.evidence(d.segment.to_json()), "family": "draw"}
 
 
 def _public_change(change):
@@ -4154,7 +4168,7 @@ def _as_stated(c: dict) -> dict:
 
 
 @functools.cache
-def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
+def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False) -> str:
     """A two-stage run's input (canonical text; the coins' sessions are signed once): the boundary registration over
     `BOUNDARY`'s replay blocks, its first stage from a ledger session's challenger opened after its digest, then the
     interior registration over the replay sample's six proof blocks, logged after it in a window of its own that names
@@ -4165,7 +4179,8 @@ def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
     block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
     reference statement reads, the statement's, which round 2 compares but for the run's fields
-    (`second_stage.blank_reads`)."""
+    (`second_stage.blank_reads`). Each stage's coins are its own session's `draw` family's alone; `again`: the stage
+    (0 or 1) whose family holds a root before its registration's (`Drawn`'s `before`)."""
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
     first_law = DR.derive(b.program, b.query, service.selection_law(rule, b.population))
@@ -4184,7 +4199,7 @@ def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
             draw_one(source)
             return bytes(got)
         return reader
-    d1 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads(
+    d1 = Drawn(rng, before=again == 0, after=bytes.fromhex(R.digest(rec)), reads=reads(
         lambda source: sample.extend(service.select_draw(rule, first_law, b.population, source)["units"])))
     ns = service.replay_cells(Program(BLOCK), i.query)
     ks = service.second_counts(rule.k, [PAIR.id], ns)
@@ -4196,7 +4211,7 @@ def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
 
     def second_stage(source):
         second["draw"] = service.select_second(sample, ns, ks, source)
-    d2 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage),
+    d2 = Drawn(rng, before=again == 1, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage),
                window=None if elsewhere else {"root": SS.interior_root(R.digest(rec), sample)})
     n = sum(ns)
     linked = {p: {"value": v, "root": BOUNDARY_ROOTS[v], **b.ports[v], "reads_from": 0,
@@ -4217,6 +4232,7 @@ def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
                 "upstream": {"accepted": True, "of_record": False}}
     return D.canonical({
         "challenger": "verifier-test", "closure": None, "coins": d1.evidence(d1.segment.to_json()), "delta": "1/4",
+        "family": "draw",
         "instances": None, "outputs": ["credited"], "params": params(b, first_law, [], d1), "proved_units": None,
         "public": public, "received": RECEIVED, "record": rec, "rule": TWO_STAGE_RULE, "served": None,
         "session_roots": dict(BOUNDARY_ROOTS), "sessions": RUN_SESSIONS, "source": d1.read.hex(),
@@ -4227,12 +4243,13 @@ def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
                           "registered": statements[0]["registered"]}]}},
                      "replay": _json(codec.encode_program(Program(BLOCK))),
                      "values": ivalues, "record": irec, "received": "2026-10-07T00:01:00Z", "source": d2.read.hex(),
-                     "coins": d2.evidence(d2.segment.to_json()), "proved_units": None, "instances": None,
+                     "coins": d2.evidence(d2.segment.to_json()), "family": "draw", "proved_units": None,
+                     "instances": None,
                      "served": None, "session_roots": dict(ROOTS), "statements": statements}})
 
 
-def _two_stage_case(seed: int = 0, elsewhere: bool = False) -> dict:
-    return json.loads(_two_stage_text(seed, elsewhere))
+def _two_stage_case(seed: int = 0, again: int | None = None, elsewhere: bool = False) -> dict:
+    return json.loads(_two_stage_text(seed, again, elsewhere))
 
 
 def _inner(change):
@@ -4349,7 +4366,6 @@ TWO_STAGE_CHANGES = [
     (_inner(lambda it, x: {**it, "rows": [None, [], [{"template": INTERIOR.templates[0], "port": "x", "per": 3,
                                                       "runs": [[0, 3, 0, 1]]}]][x % 3]}),
      st.integers(0, 63)),
-    (_inner(lambda it, x: {**it, "returns": [None, [], [BOUT]][x % 3]}), st.integers(0, 63)),
     (_verdict_change(lambda v, c, x: {**v, "registered": [
         {"x": {"value": "x", "root": ROOTS["x"]}}, {"y": {"value": BX, "root": BOUNDARY_ROOTS[BX]}},
         {"x": {"value": "x", "root": "00" * 64}}, {"x": {"value": "x"}}, {}][x % 5]}), st.integers(0, 63)),
@@ -4430,15 +4446,6 @@ def _rows_of(j):
     return rows
 
 
-def _returns_of(j):
-    """`secondStatements`' `returns`: none for null, else a list of strings."""
-    if j is None:
-        return ()
-    if not (isinstance(j, list) and all(isinstance(x, str) for x in j)):
-        raise D.Reject("returns is null or a list of strings")
-    return tuple(j)
-
-
 def second_statements(j):
     """`Pieces.secondStatements`: round 2's statement check (`second_stage.check`) of `statements` (null for none), the
     two-stage form allowed when `allow`, over what `_second_own` reads of `j`."""
@@ -4457,9 +4464,8 @@ def _second_own(j):
     """`Pieces.secondOwn`: of `j`, whether the two-stage form is allowed (`allow`), what round 2 holds of the run
     (`second_stage.Own`) and the statements (null for none). Round 2 holds the parts the interior `program`'s strata
     under `query` make for the replay `sample`, the `interior` and `boundary` records, the second stage's units `drawn`,
-    the design's `links` and `wires` (each null for none derived), the `rows` they place its units at (null for
-    none) and the names of what the replay block `returns` (null for none), the reads the `verdicts` of record report
-    (`audit.session_registered`) and what they name of the sessions
+    the design's `links` and `wires` (each null for none derived) and the `rows` they place its units at (null for
+    none), the reads the `verdicts` of record report (`audit.session_registered`) and what they name of the sessions
     they checked (`second_stage.verified_of`), and each template's reference header (`refs`, `{template: header}`, null
     for none) and the registered reads the params give it, taken as given (`ref_reads`, `{template: registered}`, each
     null for none, null for no template's)."""
@@ -4472,7 +4478,6 @@ def _second_own(j):
         raise D.Reject("drawn is not a list of slots")
     desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
     links, wires, rows = _links_of(j.get("links")), _wires_of(j.get("wires")), _rows_of(j.get("rows"))
-    returns = _returns_of(j.get("returns"))
     verdicts = _obj(j.get("verdicts"), "verdicts")
     if not all(isinstance(v, dict) for v in verdicts.values()):
         raise D.Reject("a verdict is not an object")
@@ -4497,7 +4502,7 @@ def _second_own(j):
         raise D.Reject("ref_reads is not an object")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
-                 tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns)
+                 tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows)
     return j["allow"], own, statements
 
 
@@ -4522,8 +4527,7 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
     registering it, those in `own` read it from their own `x`, each slot its own row, and each reader of `wires`,
     ``(reader, writer)`` pairs, reads it from its writer's `out`, each slot its writer's first slot in its cell, the
     design wiring it and the interior then not registering the reader's `x`, which its header holds at its writer's
-    root and binding; the design's rows place each linked and wired unit so, and what a replay block returns is the
-    boundary's `o0` (`BOUT`); the verifier reports those
+    root and binding; the design's rows place each linked and wired unit so; the verifier reports those
     reads, and a verdict of
     record names each statement's session as it checked it (`_checked_by`); and each template's reference header is
     its part's (`_second_reference`) over the ports its session has, and its reference statement's registered reads
@@ -4575,7 +4579,6 @@ def _second_case(s: Setup, named: bool, sample: list[int], drawn: list[int], lin
             "wires": [{"template": t, "port": "x", "writer": w, "wport": "out"} for t, w in sorted(wired.items())],
             "rows": [{"template": t, "port": "x", "per": per, "runs": _runs(n[t], per)} for t in sorted(links)] + [
                 {"template": t, "port": "x", "per": n[w], "runs": [[0, n[t], 0, 0]]} for t, w in sorted(wired.items())],
-            "returns": [BOUT],
             "refs": refs, "ref_reads": {s_["template"]: s_["registered"] for s_ in statements}}
 
 
@@ -4676,23 +4679,6 @@ def _rerowed(c: dict, x: int) -> dict:
         first(lambda u, k, w, s: [u, k, w + 1, s]), first(lambda u, k, w, s: [u, max(k - 1, 1), w, s]),
         first(lambda u, k, w, s: [u, k + 1, w, s]), first(lambda u, k, w, s: [u, k, w, 1 - s if s < 2 else 0]),
         [*rs, {"template": "Other_v0", "port": "x", "per": 1, "runs": [[0, 1, 0, 0]]}], rs[::-1]][x % 11]}
-
-
-def _returned(c: dict, x: int) -> dict:
-    """`c` with the names of what its replay block returns underived (null), none, of another type, of a name not a
-    string, or the boundary's `x` instead; or with its interior registering a value (`INTERIOR_VALUES`' first's root,
-    domain and leaves) of the first of them, the boundary record still holding a port of that name, or no longer."""
-    returns, rec, b = c.get("returns"), c.get("interior"), c.get("boundary")
-    if x % 7 < 5:
-        return {**c, "returns": [None, [], 5, [5], [BX]][x % 7]}
-    if not (isinstance(returns, list) and returns and isinstance(returns[0], str) and isinstance(rec, dict)
-            and isinstance(b, dict) and isinstance(b.get("roots"), list)):
-        return c
-    held = rec.get("registered") if isinstance(rec.get("registered"), list) else []
-    roots = b["roots"] if x % 7 == 5 else [r for r in b["roots"]
-                                           if not (isinstance(r, dict) and r.get("port") == returns[0])]
-    return {**c, "boundary": {**b, "roots": roots},
-            "interior": {**rec, "registered": [*held, {**INTERIOR_VALUES[0], "value": returns[0]}]}}
 
 
 def _reported(c: dict, x: int) -> dict:
@@ -4889,8 +4875,7 @@ def _shadowing(c: dict, x: int) -> dict:
 #: verifier reports, what a verdict of record names of a session it checked (`_unverified`), the reference
 #: headers (`_referenced`), the reference statements' registered reads (`_valued`), a registered value read where the
 #: reference reads it or another (`_read_registered`), a value only the interior registers read (`_read_interior`),
-#: the interior registering a value of a name the boundary record has (`_shadowing`), the names of what the replay
-#: block returns or the interior registering one's value (`_returned`), the interior record's replay
+#: the interior registering a value of a name the boundary record has (`_shadowing`), the interior record's replay
 #: sample or run (`_reordered`), or the rows a header shares (`_shared_rows`).
 SECOND_CHANGES = [
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
@@ -4905,7 +4890,6 @@ SECOND_CHANGES = [
     _read_registered,
     _read_interior,
     _shadowing,
-    _returned,
     _reordered,
     _shared_rows,
     lambda c, x: {**c, "statements": _restated(c["statements"], x)},
@@ -4953,7 +4937,6 @@ def second_statement_runs(draw) -> dict:
             ("links", 5), ("wires", 5), ("wires", [{"template": "t", "port": "x", "writer": "w"}]), ("rows", 5),
             ("rows", [{"template": "t", "port": "x", "per": -1, "runs": []}]),
             ("rows", [{"template": "t", "port": "x", "per": 1, "runs": [[0, 1, True, 0]]}]),
-            ("returns", 5), ("returns", [5]), ("returns", None),
             ("verdicts", None), ("verdicts", {"lean": 5}), ("refs", []), ("refs", "r"), ("ref_reads", []),
             ("ref_reads", "r"), (None, None)]))
         drop = draw(st.sampled_from(sorted(c)))
@@ -5011,61 +4994,13 @@ DUO = bind(CompositeDefinition("CoreSpotDuo", 0, (),
                                register=False))
 SWAP = bind(CompositeDefinition("CoreSpotSwap", 0, (), lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
                                 lambda B, S, x: array_of([B.call(ID8, x[1]), B.call(ID8, x[0])]), register=False))
-#: A token select's pieces made small, each token two rows of two logits. Gathered: DUO is a chunk, its two outputs a
-#: best and an index, and MERGE the combine, reading logits[0], every chunk's best and every chunk's index. By units:
-#: UNIT is a unit of two chunks, its outputs its chunks' bests, their indices and its first logit, and JOIN the combine,
-#: each parameter one whole output of one unit, two of them one output port of UNIT at its token's two units. By chunk
-#: position, each token three rows: SWAP and KEEP are its first and second chunks, each a Definition of its own with
-#: one output, and LAST the combine, over the last chunk's logits and each other chunk's one output, whole.
-MERGE = bind(CompositeDefinition(
-    "CoreSpotMerge", 0, (), lambda S: ((("x0", Value(8)), ("best", Array(2, Value(8))), ("idx", Array(2, Value(8)))), Value(8)),
-    lambda B, S, x0, best, idx: B.call(XOR8, B.call(XOR8, x0, B.call(XOR8, best[0], best[1])), B.call(XOR8, idx[0], idx[1])),
-    register=False))
-UNIT = bind(CompositeDefinition(
-    "CoreSpotUnit", 0, (), lambda S: ((("x", Array(2, Value(8))),), Tuple(Array(2, Value(8)), Array(2, Value(8)), Value(8))),
-    lambda B, S, x: tuple_of(array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]),
-                             array_of([B.call(XOR8, x[0], x[1]), B.call(XOR8, x[1], x[0])]), x[0]), register=False))
-JOIN = bind(CompositeDefinition(
-    "CoreSpotJoin", 0, (), lambda S: ((("x0", Value(8)), *((f"{p}{j}", Array(2, Value(8))) for p in ("best", "idx")
-                                                            for j in range(2))), Value(8)),
-    lambda B, S, x0, *ps: functools.reduce(lambda a, p: B.call(XOR8, a, B.call(XOR8, p[0], p[1])), ps, x0),
-    register=False))
-KEEP = bind(CompositeDefinition("CoreSpotKeep", 0, (), lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
-                                lambda B, S, x: array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]), register=False))
-LAST = bind(CompositeDefinition(
-    "CoreSpotLast", 0, (), lambda S: ((("x", Array(2, Value(8))), ("r0", Array(2, Value(8))), ("r1", Array(2, Value(8)))),
-                                      Value(8)),
-    lambda B, S, x, *rs: functools.reduce(lambda a, p: B.call(XOR8, a, B.call(XOR8, p[0], p[1])), rs,
-                                          B.call(XOR8, x[0], x[1])), register=False))
-
-
-def _select(B, x):
-    """`TokenSelect_v4`'s shape: a token's chunks, then its combine gathering one output of each."""
-    a, b = B.call(DUO, x[0]), B.call(DUO, x[1])
-    return B.call(MERGE, x[0][0], array_of([a[0], b[0]]), array_of([a[1], b[1]]))
-
-
-def _select_units(B, x):
-    """A token's units, then its combine reading each output of each whole."""
-    a, b = B.call(UNIT, x[0]), B.call(UNIT, x[1])
-    return B.call(JOIN, a[2], a[0], b[0], a[1], b[1])
-
-
-def _select_places(B, x):
-    """`GreedySelect_v1`'s shape: a token's chunks, a Definition a chunk position, then its combine over the last
-    chunk's logits and each other chunk's one output, whole."""
-    return B.call(LAST, x[2], B.call(SWAP, x[0]), B.call(KEEP, x[1]))
-
-
 #: Replay blocks of templates with several callers, to derive round 2's rows from (`second_stage.replay_rows`): PAIR
 #: over each of two rows, in order and the other way round, its outputs returned in order; that, and ID8 over the
 #: second's output, returned beside them; ID8 over the second output of DUO, a template of two; and, deriving none, PAIR
 #: over two parameters, PAIR over a slice not one of its rows, an ID8 batch mapped over a PAIR batch's outputs, PAIR
 #: over the parameter and over SWAP's output (a port one caller links and another wires), and PAIR over two ID8 outputs
 #: (a port gathered from two writers); then DUO over each of two rows, its first outputs returned, its second, both as
-#: two fields, and, deriving none, the first's first beside the second's second; then a token select inlined over two
-#: tokens, gathered (`_select`: no wires, and its logits read at two row widths), by units (`_select_units`) and by
-#: chunk position (`_select_places`).
+#: two fields, and, deriving none, the first's first beside the second's second.
 MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
                  for name, sig, body in (
     ("Pairs", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
@@ -5092,13 +5027,7 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
      lambda B, S, x: (lambda a, b: tuple_of(array_of([a[0], b[0]]), array_of([a[1], b[1]])))(
          B.call(DUO, x[0]), B.call(DUO, x[1]))),
     ("Uneven", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
-     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])),
-    ("Select", lambda S: ((("x", Array(2, Array(2, Array(2, Value(8))))),), Array(2, Value(8))),
-     lambda B, S, x: array_of([_select(B, x[0]), _select(B, x[1])])),
-    ("SelectUnits", lambda S: ((("x", Array(2, Array(2, Array(2, Value(8))))),), Array(2, Value(8))),
-     lambda B, S, x: array_of([_select_units(B, x[0]), _select_units(B, x[1])])),
-    ("SelectPlaces", lambda S: ((("x", Array(2, Array(3, Array(2, Value(8))))),), Array(2, Value(8))),
-     lambda B, S, x: array_of([_select_places(B, x[0]), _select_places(B, x[1])])))]
+     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])))]
 ID18 = PrimitiveDefinition("CoreSpotId18", 1, (("a", Value(8)),), Value(18), lambda a: a, register=False)
 WIDE = bind(CompositeDefinition("CoreSpotWide", 0, (), lambda S: ((("x", Value(8)),), Value(18)),
                                 lambda B, S, x: B.call(ID18, x), register=False))
@@ -5116,12 +5045,6 @@ REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
     (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS + WIDE_REPLAYS]
 PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
-#: The interiors of the three inlined token selects (`MULTI_REPLAYS`' last three) after a replay sample of two: each
-#: block's four chunks then its two combines, each block's four units then its two combines, and each block's two
-#: first chunks, its two second chunks, then its two combines.
-SECOND_SELECTS = [Setup(P.mixed_population_program(list(ts)), P.template_instances_query([t.id for t, _n in ts]))
-                  for ts in (((DUO, 8), (MERGE, 4)), ((UNIT, 8), (JOIN, 4)), ((SWAP, 4), (KEEP, 4), (LAST, 4)))]
-PROGRAMS.update({s.sha512: s.program for s in SECOND_SELECTS})
 
 
 def replay_links(j):
@@ -5203,25 +5126,6 @@ def replay_rows(j):
 #: The replay_rows piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
 REPLAY_ROWS = D.Port(PIECES, "replay_rows", replay_rows,
                      st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
-
-
-def replay_returns(j):
-    """`Pieces.replayReturns`: the names the return of the replay block of descriptor id `replay` in `program` has in
-    the `boundary` record (`second_stage.replay_returns`); none for none."""
-    desc = _obj(j.get("program") if isinstance(j, dict) else None, "program")
-    if not isinstance(j.get("replay"), str):
-        raise D.Reject("replay is not a string")
-    if not desc:
-        raise D.Reject("not a program descriptor")
-    sha = PO.program_sha512(desc)
-    if sha not in PROGRAMS:
-        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
-    return list(SS.replay_returns(PROGRAMS[sha], j["replay"], j.get("boundary")))
-
-
-#: The replay_returns piece's input: replay_links' (`replay_link_inputs`).
-REPLAY_RETURNS = D.Port(PIECES, "replay_returns", replay_returns,
-                        st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
 
 
 def replay_returned(j):
@@ -5672,8 +5576,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
-              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
-              (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNED, 300), (SECOND_SCHEDULE, 300), (FITS, 400),
+              (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
@@ -6604,9 +6508,11 @@ def test_the_run_reaches_every_step(pieces):
     the Python's whole: each accepts, on the sample from the challenger's coins (`_from_challenger`), showing the
     verdicts' public outputs. The same runs refused at each step (a declared item missing, a record R1-R7 refuses, no
     session, a verdict of record about other sessions) and rejected (a verdict that ran and did not accept), which the
-    sampled runs reach only probably. A run that read coins is refused at its select step without their evidence, or with
-    empty evidence (`coins`): the provenance check is never skipped. A run asked to sample from the verifier's own coins
-    is refused before it starts: the verifier samples no coins of its own."""
+    sampled runs reach only probably. A run that read coins is refused at its select step without their evidence, with
+    empty evidence, without the family the stream read them from or under another (`coins`): the provenance check is
+    never skipped. Evidence that holds but for a root other than the registration's digest in the family, before the
+    sample's coins or after them, is refused for that (`family`): a family's coins follow one registration. A run asked
+    to sample from the verifier's own coins is refused before it starts: the verifier samples no coins of its own."""
     v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
     v2["evidence"]["verdicts"]["upstream"] = {"accepted": True, "of_record": False}
     seen = []
@@ -6619,17 +6525,28 @@ def test_the_run_reaches_every_step(pieces):
                         {**case, "verdicts": {**case["verdicts"], "lean": other}},
                         {**case, "verdicts": {**case["verdicts"], "upstream": {"accepted": False, "of_record": False}}},
                         {k: v for k, v in case.items() if k != "coins"}, {**case, "coins": {}},
-                        {**case, "coins": {"segment": None}}):
+                        {**case, "coins": {"segment": None}}, {k: v for k, v in case.items() if k != "family"},
+                        {**case, "family": "other"}):
             out = run(copy.deepcopy(changed))
             assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (a["params"]["law"], out)
             seen.append(out.get("step") or out["symbol"])
-            if changed.get("coins") != case["coins"]:
+            if (changed.get("coins"), changed.get("family")) != (case["coins"], case["family"]):
                 assert out["codes"] == ["coins"], out
+        for shape in ("before", "later"):
+            _, again = _from_challenger(_run_case(a, "", 2, ["credited"]), random.Random(f"run/{i}/{shape}"),
+                                        **{shape: True})
+            out = run(copy.deepcopy(again))
+            assert D.replay(RUN, again, pieces) == ("output", D.canonical(out)), (a["params"]["law"], shape, out)
+            assert (out.get("step"), out.get("codes")) == ("select", ["family"]), (a["params"]["law"], shape, out)
+        kind, why = D.replay(RUN, {**case, "family": 5}, pieces)
+        assert kind == "reject" and "family is not a string" in why, (kind, why)
+        with pytest.raises(D.Reject, match="family is not a string"):
+            run({**copy.deepcopy(case), "family": 5})
         assert run(copy.deepcopy(case))["public"] == {"credited": 12} and run(copy.deepcopy(case))["read"] > 0
         for own in ("verifier", "os", ""):
             kind, why = D.replay(RUN, {**case, "coin_source": own}, pieces)
             assert kind == "reject" and "the verifier draws no coins of its own" in why, (own, kind, why)
-    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", "select", "select", "select"] * 7
+    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", *["select"] * 5] * 7
 
 
 def test_a_two_stage_run_reaches_every_step(pieces):
@@ -6646,8 +6563,11 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     window that is neither the boundary registration's nor the one the verifier computes (`interior-window`: the
     second session opened on a sampled root, which signs and opens as the honest one does; a root no session opened;
     no root), not after the boundary registration (`R6-previous`), or declaring a value the Spec doesn't hold;
-    second-stage coins without their evidence, or held to the boundary registration's window, which the second
-    session didn't open (`coins`). Rejected where a verdict didn't accept, and refused before it starts for `k` =
+    second-stage coins without their evidence, held to the boundary registration's window, which the second
+    session didn't open, or under no family or another than the interior's (`coins`); and either stage's coins from
+    a family whose log shows a root before its registration's digest (`family`, at `select` and at `second`: the rule
+    holds for the interior registration as for the first). Rejected where a verdict didn't accept, and refused before
+    it starts for `k` =
     n_rho (it would prove whole replay blocks) and an interior registration under a one-stage rule."""
     case = _two_stage_case()
     out = run(copy.deepcopy(case))
@@ -6706,6 +6626,11 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         (_inner(lambda it, x: {**it, "values": it["values"][1:]})(case, 0), ("interiors", None)),
         (_inner(lambda it, x: {**it, "coins": None})(case, 0), ("second", ["coins"])),
         (_inner_params(window_root=case["params"]["window_root"])(case, 0), ("second", ["coins"])),
+        (_inner(lambda it, x: {**it, "family": None})(case, 0), ("second", ["coins"])),
+        (_inner(lambda it, x: {**it, "family": "other"})(case, 0), ("second", ["coins"])),
+        ({**case, "family": "other"}, ("select", ["coins"])),
+        (_two_stage_case(again=0), ("select", ["family"])),
+        (_two_stage_case(again=1), ("second", ["family"])),
     ]
     for changed, (step, codes) in steps:
         got = run(copy.deepcopy(changed))
@@ -7172,61 +7097,13 @@ def test_round_two_refuses_an_interior_that_registers_a_name_round_one_has(piece
     honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
     linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
     names = len(SECOND_BOUNDARY["roots"]) + len(SECOND_BOUNDARY["registered"])
-    unreturned = {**honest, "returns": []}
-    cases = [*((_shadowing(unreturned, x), ["second-interior-names"]) for x in range(names)),
+    cases = [*((_shadowing(honest, x), ["second-interior-names"]) for x in range(names)),
              (_read_linked(linked, 0, kept=True), ["second-interior-names"]),
              (_read_linked(linked, 1, kept=True), ["second-interior-names", "second-read"])]
     for case, codes in [(honest, []), (linked, []), *cases]:
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
-
-
-def test_round_two_reads_what_a_replay_block_returns_only_at_round_ones_port(pieces):
-    """What a replay block returns is committed before the first stage's sample (`returnsOk`): round 2 refuses an
-    interior record registering a value of a name the block's return has in the boundary record (`second-return`),
-    Lean's the Python's whole, so a port a link names for the return is read only at the port round 1 committed. Over
-    the two-template interior after a replay sample of two, with TRIPLE's `x` linked to the block's output port
-    (`BOUT`, which `second_stage.replay_returns` names of `BOUNDARY`'s replay block): the interior's value of that
-    name, read as round 2 places a linked value's (`_read_linked`), passes `second-read` and is refused, with the
-    boundary record holding no port of that name, and with it holding one (`second-interior-names` too) or the read at
-    another root (`second-read` too); the same run with no name of a return passes, which is what the check refuses;
-    an interior registering a value of the boundary's other port's name isn't refused by it, and neither is the link's
-    read at the boundary record's port."""
-    _, triple = SECOND_MIXED.templates
-    assert SS.replay_returns(BOUNDARY.program, codec.descriptor_id(BLOCK), SECOND_BOUNDARY) == (BOUT,)
-    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
-    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
-    assert honest["returns"] == linked["returns"] == [BOUT]
-    ref = linked["ref_reads"][triple]
-    out = {**linked, "links": [{**linked["links"][0], "value": BOUT}], "ref_reads": {**linked["ref_reads"], triple: {
-        **ref, "ports": {**ref["ports"], "x": {**ref["ports"]["x"], "value": BOUT}}}}}
-    at = {"value": BOUT, "root": BOUNDARY_ROOTS[BOUT], **BOUNDARY.ports[BOUT]}
-    port = out
-    for k, s in enumerate(linked["statements"]):
-        if s["template"] == triple:
-            reads = s["registered"]["ports"]
-            port = _second_with(port, k, registered={**s["registered"], "ports": {**reads, "x": {**reads["x"], **at}}})
-    port = {**port, "verdicts": {**port["verdicts"], "lean": {**port["verdicts"]["lean"], "registered": {
-        f"{triple}/x": {"value": BOUT, "root": BOUNDARY_ROOTS[BOUT]}}}}}
-    cases = [(port, []),
-             (_read_linked(out, 0), ["second-return"]),
-             ({**_read_linked(out, 0), "returns": []}, []),
-             ({**_read_linked(out, 0), "returns": None}, []),
-             ({**_read_linked(out, 0), "returns": [BX]}, []),
-             (_read_linked(out, 2), ["second-return", "second-read"]),
-             (_read_linked(out, 0, kept=True), ["second-interior-names", "second-return"]),
-             (_returned(honest, 5), ["second-interior-names", "second-return"]),
-             (_returned(honest, 6), ["second-return"]),
-             (_read_linked(linked, 0), [])]
-    for case, codes in [(honest, []), (linked, []), *cases]:
-        got = second_statements(copy.deepcopy(case))
-        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
-        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
-    for change in (5, [5]):
-        assert D.replay(SECOND_STATEMENTS, {**honest, "returns": change}, pieces)[0] == "reject"
-        with pytest.raises(D.Reject):
-            second_statements({**honest, "returns": change})
 
 
 def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):
@@ -7332,16 +7209,9 @@ def test_the_designs_rows_place_each_callers_units(pieces):
     the last no wires either; an ID8 batch mapped over a PAIR batch's outputs, or PAIR over two ID8 outputs, makes no
     wires; the rows are then only those of the others. DUO over each of two rows, returned one field of each, links
     that field's port (`o<f>`), each field returned its own; its first output at one caller and its second at the other
-    links neither. A token select inlined over two tokens, its combine gathering one output of each of a token's two
-    chunks, makes no wires, and its links read the logits at two row widths, the chunk's four rows a block and, for
-    logits[0], the combine's eight; by units, the combine reading each output of each of a token's two units whole, it
-    makes five wires, each unit of the combine at its token's units' rows, the logits read at the unit's width alone;
-    by chunk position, each chunk a Definition of its own, it makes one wire a chunk, each to that chunk's one output at
-    its token's unit, and every template reads its own row of its token's three."""
-    pair, id8, duo, merge, unit, join, swap, keep, last = (
-        codec.descriptor_id(d) for d in (PAIR, ID8, DUO, MERGE, UNIT, JOIN, SWAP, KEEP, LAST))
-    (pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven, select,
-     units, places) = MULTI_REPLAYS
+    links neither."""
+    pair, id8, duo = (codec.descriptor_id(d) for d in (PAIR, ID8, DUO))
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
 
     def link(t, port, value):
         return {"port": port, "template": t, "value": value}
@@ -7371,18 +7241,6 @@ def test_the_designs_rows_place_each_callers_units(pieces):
         (halves, [link(duo, "x", "x"), link(duo, "o0", "o0"), link(duo, "o1", "o1")], [],
          rows((duo, "x", 2, two), (duo, "o0", 2, two), (duo, "o1", 2, two))),
         (uneven, None, [], []),
-        (select, [link(duo, "x", "x"), link(merge, "x0", "x"), link(merge, "o0", "o0")], None,
-         rows((duo, "x", 4, [[0, 4, 0, 1]]), (merge, "x0", 8, [[0, 2, 0, 4]]), (merge, "o0", 2, two))),
-        (units, [link(unit, "x", "x"), link(join, "o0", "o0")],
-         [{"port": port, "template": join, "wport": wport, "writer": unit}
-          for port, wport in (("x0", "o2"), ("best0", "o0"), ("best1", "o0"), ("idx0", "o1"), ("idx1", "o1"))],
-         rows((unit, "x", 4, [[0, 4, 0, 1]]), (join, "o0", 2, two), (join, "x0", 4, [[0, 2, 0, 2]]),
-              (join, "best0", 4, [[0, 2, 0, 2]]), (join, "best1", 4, [[0, 2, 1, 2]]),
-              (join, "idx0", 4, [[0, 2, 0, 2]]), (join, "idx1", 4, [[0, 2, 1, 2]]))),
-        (places, [link(swap, "x", "x"), link(keep, "x", "x"), link(last, "x", "x"), link(last, "o0", "o0")],
-         [{"port": port, "template": last, "wport": "o0", "writer": writer} for port, writer in (("r0", swap), ("r1", keep))],
-         rows((swap, "x", 6, [[0, 2, 0, 3]]), (keep, "x", 6, [[0, 2, 1, 3]]), (last, "x", 6, [[0, 2, 2, 3]]),
-              (last, "o0", 2, two), (last, "r0", 2, two), (last, "r1", 2, two))),
     ]
     for r, links, wires, want in cases:
         c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
@@ -7393,60 +7251,6 @@ def test_the_designs_rows_place_each_callers_units(pieces):
             assert got == expected and D.replay(port, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
 
 
-def test_round_two_passes_an_inlined_token_selects_design_by_units_or_chunk_position_and_refuses_it_gathered(pieces):
-    """Round 2's design check, Lean's the Python's whole, on the design each derives (`replay_links`, `replay_wires`,
-    `replay_rows`) from a replay block inlining a token select over two tokens, over its interior's parts after a
-    replay sample of two. Gathered, as `TokenSelect_v4`'s combine reads one output of each of its token's chunks, the
-    design has no wires and is refused before a statement is read (``second-wires``). By units, a combine reading each
-    output of each of its token's units whole, the check holds, and a run of no statements fails ``second-statements``
-    alone; that design without its wires, or with a wired port's rows another count a block than its writer's units, is
-    refused (``second-wires``). By chunk position, as `GreedySelect_v1`'s combine reads each chunk's one output whole,
-    each chunk a Definition of its own, the check holds the same way, each of the combine's two wires to another
-    template's port, and is refused without its wires."""
-    def case(r, s):
-        c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
-             "boundary": None}
-        design = {}
-        for name, port, mirror in (("links", REPLAY_LINKS, replay_links), ("wires", REPLAY_WIRES, replay_wires),
-                                   ("rows", REPLAY_ROWS, replay_rows)):
-            design[name] = mirror(copy.deepcopy(c))
-            assert D.replay(port, c, pieces) == ("output", D.canonical(design[name])), (c["replay"], name)
-        return {**_second_case(s, True, [0, 2], []), "statements": None, **design}
-    gathered, units, places = (case(r, s) for r, s in zip(MULTI_REPLAYS[-3:], SECOND_SELECTS, strict=True))
-    assert gathered["wires"] is None and len(units["wires"]) == 5
-    assert sorted((w["port"], w["writer"], w["wport"]) for w in places["wires"]) == [
-        ("r0", codec.descriptor_id(SWAP), "o0"), ("r1", codec.descriptor_id(KEEP), "o0")]
-    short = [{**r, "per": 2} if r["port"] == "best1" else r for r in units["rows"]]
-    for c, codes in ((gathered, ["second-wires"]), (units, ["second-statements"]),
-                     ({**units, "wires": None}, ["second-wires"]), ({**units, "rows": short}, ["second-wires"]),
-                     (places, ["second-statements"]), ({**places, "wires": None}, ["second-wires"])):
-        got = second_statements(copy.deepcopy(c))
-        assert D.replay(SECOND_STATEMENTS, c, pieces) == ("output", D.canonical(got)), (codes, got)
-        assert got["codes"] == codes and not got["ok"], (codes, got)
-
-
-def test_the_names_of_what_a_replay_block_returns_lean_the_pythons_whole(pieces):
-    """The names a replay block's return has in the boundary record, Lean's the Python's whole, from the registered
-    replay block's Definition alone: one output port ``o<j>`` for each field of what it returns, named as the record
-    names its ports, by template or plainly, and none for a descriptor id the program doesn't define. Over each replay
-    block the links are derived from (`REPLAY_PROGRAMS`), every port a link names for the return is one of them."""
-    block = codec.descriptor_id(BLOCK)
-    for prog, key in REPLAY_PROGRAMS:
-        for rec in (None, SECOND_BOUNDARY, {"roots": [{"port": f"{key}/x"}]}):
-            c = {"program": _json(codec.encode_program(prog)), "replay": key, "boundary": rec}
-            got, links = replay_returns(copy.deepcopy(c)), replay_links(copy.deepcopy(c))
-            assert D.replay(REPLAY_RETURNS, c, pieces) == ("output", D.canonical(got)), (key, got)
-            named = rec is not None
-            assert got and got == [f"{key}/o{j}" if named else f"o{j}" for j in range(len(got))], (key, got)
-            ins = SS.replay_links(prog, key, {"roots": []}) or ()
-            assert {x["value"] for x in links or ()} - set(got) <= {
-                f"{key}/{x.value}" if named else x.value for x in ins if not x.value.startswith("o")}, (key, links)
-    c = {"program": _json(codec.encode_program(BOUNDARY.program)), "replay": block, "boundary": SECOND_BOUNDARY}
-    for case, want in [(c, [BOUT]), ({**c, "boundary": None}, ["o0"]), ({**c, "replay": "Other_v0"}, [])]:
-        got = replay_returns(copy.deepcopy(case))
-        assert got == want and D.replay(REPLAY_RETURNS, case, pieces) == ("output", D.canonical(got)), (want, got)
-
-
 def test_a_replay_block_returns_its_units_fields_on_words_of_their_own(pieces):
     """The bits a replay block returns, Lean's the Python's whole, counted from its Definition's return: each unit's
     returned field on 16-bit words of its own. `BLOCK` returns three PAIR outputs of 8 bits, a word each; ID8 over DUO's
@@ -7454,7 +7258,7 @@ def test_a_replay_block_returns_its_units_fields_on_words_of_their_own(pieces):
     both are; four units of an 18-bit value two words each, twice their 72 bits; and two units of eight such values in
     one field nine words each, the 144 bits they hold. A replay block whose links can't be derived returns none, as do
     a key naming one of its templates and a key naming no Definition."""
-    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS[:13]
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
     wides, packs = WIDE_REPLAYS
     cases = [(BLOCK, None, 3 * 16), (pairs, None, 2 * 16), (fan, None, 3 * 16), (field, None, 16), (heads, None, 2 * 16),
              (halves, None, 4 * 16), (wides, None, 4 * 32), (packs, None, 2 * 144), (apart, None, None),
@@ -7475,7 +7279,8 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose sampling design samples a
     stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
     segment or the bytes, coins opened after another digest, coins of a session the ledger doesn't open withheld,
-    evidence for another window, and none or empty."""
+    evidence for another window, and none or empty; and at its select (`family`) for a session whose family holds
+    another root, before the sample's coins or after them, on evidence that holds but for that."""
     rule, s = service.Law("stratified-rate:1/2"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]
@@ -7496,7 +7301,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     def case_of(d: Drawn, segment: dict, read: bytes, **change) -> dict:
         c = _run_case(a, read.hex(), 2, ["credited"])
         c["params"] = {**c["params"], "window_root": d.ledger.window["root"]}
-        return {**c, "coins": d.evidence(segment), **change}
+        return {**c, "coins": d.evidence(segment), "family": "draw", **change}
 
     def ran(c: dict) -> dict:
         out = run(copy.deepcopy(c))
@@ -7505,7 +7310,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
 
     for seed in range(3):
         rng = random.Random(f"window/{seed}")
-        d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads)
+        d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads)
         honest = case_of(d, d.segment.to_json(), d.read)
         out = ran(honest)
         assert out["symbol"] == "accept" and out["read"] == len(d.read), out
@@ -7526,17 +7331,25 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
         tampered = bytearray(d.read)
         tampered[rng.randrange(len(tampered))] ^= 1 << rng.randrange(8)
         selects = [case_of(d, _mutated(rng, d, name)[0], d.read) for name in DRAW_MUTATIONS
-                   if name not in ("unread", "read-tampered", "other-after")]
+                   if name not in ("before", "unread", "read-tampered", "other-after")]
         selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
         elsewhere = Drawn(rng, reads=reads)
-        bare = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, withheld=False)
+        bare = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, withheld=False)
         selects += [case_of(elsewhere, elsewhere.segment.to_json(), elsewhere.read),
                     case_of(bare, bare.segment.to_json(), bare.read),
                     {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
-                    {**honest, "coins": None}, {**honest, "coins": {}}]
+                    {**honest, "coins": None}, {**honest, "coins": {}}, {**honest, "family": None},
+                    {**honest, "family": "other"}]
         for c in selects:
             out = ran(c)
             assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
+        for shape in ("before", "later"):
+            again = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, **{shape: True})
+            out = ran(case_of(again, again.segment.to_json(), again.read))
+            assert (out.get("step"), out.get("codes")) == ("select", ["family"]), (shape, out)
+            if shape == "before":
+                out = ran(case_of(again, _mutated(rng, again, "before")[0], again.read))
+                assert out.get("step") == "select" and out.get("codes") in (["coins"], ["family"]), out
 
 
 def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
@@ -7545,9 +7358,10 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
     released after the registration's digest, Lean's the Python's. The sample from those coins is accepted; it is rejected
     for another sample, the evidence's coins carrying a key (`coins_reason`'s form, where the prover named the key), none,
     coins under another key, on another window, of another family, opened after another digest, each mutation of the
-    segment, or a session the ledger doesn't open withheld (one whose challenger may have released its root before the
-    prover's commitment), and refused for a challenger without a window. A verifier that names no challenger decides as
-    before, and rejects evidence that carries coins."""
+    segment, a family whose log shows another root before the sample's coins or after them (`FAMILY_ROOT`), or a session
+    the ledger doesn't open withheld (one whose challenger may have released its root before the prover's commitment),
+    and refused for a challenger without a window. A verifier that names no challenger decides as before, and rejects
+    evidence that carries coins."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     mine = DR.derive(s.program, s.query, law, None)
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -7593,12 +7407,12 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
 
     for seed in range(3):
         rng = random.Random(f"one-stage-coins/{seed}")
-        d = Drawn(rng, before=True, after=after, reads=reads)
+        d = Drawn(rng, after=after, reads=reads)
         coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
         draw = drawn_from(d.read)
         accepts(audit_of(d, draw, coins))
         other = next(x for x in (drawn_from(rng.randbytes(4 * len(d.read) + 256)) for _ in range(64)) if x["units"] != draw["units"])
-        stranger = next(x for x in (Drawn(rng, before=True, after=after, reads=reads) for _ in range(16))
+        stranger = next(x for x in (Drawn(rng, after=after, reads=reads) for _ in range(16))
                         if x.s.key != d.s.key)
         elsewhere = Drawn(rng, reads=reads)
         rejected = [audit_of(d, other, coins), audit_of(d, draw, d.evidence(d.segment.to_json())),
@@ -7610,8 +7424,17 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
                              {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"}),
                     audit_of(d, draw, coins, challenger=None)]
         rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in DRAW_MUTATIONS
-                     if name not in ("unread", "read-tampered", "other-after")]
-        bare = Drawn(rng, before=True, after=after, reads=reads, withheld=False)
+                     if name not in ("before", "unread", "read-tampered", "other-after")]
+        for shape in ("before", "later"):
+            again = Drawn(rng, after=after, reads=reads, **{shape: True})
+            held = {k: v for k, v in again.evidence(again.segment.to_json()).items() if k != "key"}
+            rejected.append(audit_of(again, drawn_from(again.read), held))
+            with pytest.raises(CoinError, match=re.escape(FAMILY_ROOT)):
+                draw_coins(again.s.key, again.ledger.window["root"], "draw", after, held, lms_verify)
+            if shape == "before":
+                rejected.append(audit_of(again, drawn_from(again.read),
+                                         {**held, "segment": _mutated(rng, again, "before")[0]}))
+        bare = Drawn(rng, after=after, reads=reads, withheld=False)
         bare_coins = {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"}
         rejected.append(audit_of(bare, drawn_from(bare.read), bare_coins))
         with pytest.raises(CoinError, match="withhold"):
