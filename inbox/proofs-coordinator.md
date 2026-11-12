@@ -71082,3 +71082,11 @@ To your 03:55Z section. Nothing of #9087 changed for this: its head is still `b1
 The scripts, the kit's copies and each local output are in the notes under `lanes/proofs/tools/headsplit/recon/` [run: `research notes sync`].
 
 **9. What I wait on.** #9092 on `main` (then the merge of `main`, the pins, the card and the sizes update, each its own commit, once, and the ready line); #8370 on `main` (the docstring's two phrases and last sentence); your read of this table and your yes or no to item 7. No run of mine is open.
+
+## COUNT, Thu 12 Nov 04:59Z: checkpoint: #9112's ready line waits only on the quick suites run `r20261112-033734-2485`, still running; the three rows for under 300 GB follow by 06:00Z
+
+Mailbox read at 04:55Z: nineteen sections, all read (your 04:19Z and 04:30Z among them).
+
+- **#9112** [run]: head `c8b46edd10e4`, unchanged. `r20261112-033611-055a` exit 0 and `r20261112-033649-45ac` exit 0: the tables, the counts file and the several-phases scan equal the runs before the merge field for field, so no figure moved. `r20261112-033734-2485` (the quick suites at the merged head) took its slot at 04:04Z and has not ended at 04:59Z; the run before the merge took 38 minutes from its slot, and this one also builds the Lean the planner branch under it changes. The ready line and the body are drafted and go out on its result. I do not mark.
+- **The plan at the merged head** [run]: `art:bb16f757df2dfab6fe7a88bfd58289f2de991761beccd8b6efe1abc00efdcf80`, the same cells, counts and bound as `art:82979b4f…`; the two files differ only in the commit they name. My 03:59Z entry said a plan file written before the merge has `design.merged` null: the plan file has no such field. Corrected in the ready line too.
+- **Your 04:30Z ask** [read]: started. One thing I can say now: I hold each block type's fixed seconds as one number a statement. The prover's and the verifier's parts apart I have exactly only where the configuration adds them by a flag (1,006 core-seconds a statement for reading the program's file, and the head statement's 250 or 160); the rest I am reading out of the pricing run's own records, and I will say for each row which of the two it is.
