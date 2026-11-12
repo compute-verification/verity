@@ -444,7 +444,6 @@
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "attr-defined", "symbol": "tensor_data_as_detach.fget", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "attr-defined", "symbol": "tensor_data_as_detach.fset", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "no-redef", "symbol": "default_fp8_linear_leaf", "detail": ""},
-    {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "union-attr", "symbol": "_router_params_through_owner.select", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_ops.py", "kind": "arg-type", "symbol": "bind_vocab_parallel_embeddings", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_ops.py", "kind": "arg-type", "symbol": "embedding_shard_of", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_ops.py", "kind": "attr-defined", "symbol": "embedding_shard_of", "detail": ""},

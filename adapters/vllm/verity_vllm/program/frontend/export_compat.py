@@ -390,8 +390,9 @@ def _router_params_through_owner(model, h) -> None:
         held = tuple((a, *owners[id(p)]) for a, p in vars(r).items() if isinstance(p, torch.nn.Parameter) and id(p) in owners)
         if not held:
             continue
+        sel = r.select_experts
 
-        def select(*a, _r=r, _held=held, _sel=r.select_experts, **k):
+        def select(*a, _r=r, _held=held, _sel=sel, **k):
             for attr, owner, name in _held:
                 setattr(_r, attr, getattr(owner, name))
             return _sel(*a, **k)
