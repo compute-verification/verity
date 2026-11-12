@@ -465,7 +465,8 @@
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
-        "benchmarks/certifier_timing/"
+        "benchmarks/certifier_timing/",
+        "benchmarks/scan_cost/"
       ],
       "branch_suffixes": [
         "728f",
@@ -628,6 +629,7 @@
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/prod_repro/",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -659,7 +661,7 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/exfiltration/",
-        "benchmarks/specs/",
+        "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
         "benchmarks/README.md"

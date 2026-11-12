@@ -19,14 +19,15 @@ from types import SimpleNamespace
 import pytest
 
 from research import merge
+from research.merge import REPAIRED
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read, _json,
-                                  _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures, judge,
-                                  key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced, shard_count, start,
-                                  step_test, suite_kind, traced_reads, unnamed)
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
+                                  _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
+                                  judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
+                                  shard_count, start, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -608,6 +609,70 @@ def test_a_shard_of_an_auto_plan_that_registered_no_run_stops_the_others_and_the
     got = judge(h.d, rec)
     assert got.state == INFRA and "registered no run: shard 2/2: train.sh: no slot" in got.infra[0].task
     assert h.cancelled == ["r-1"] and not Path(rec["plan"]["out"]).exists()
+
+
+def _plans(*plans: list[list[str]]) -> str:
+    """`CI_TOML` with a `[[plan]]` of each of ``plans``' shards."""
+    return CI_TOML + "".join(f"[[plan]]\nshards = {json.dumps(p)}\n" for p in plans)
+
+
+#: a three-shard plan whose second shard audits security/Proofs, and a two-shard one naming it in none
+HEAVY_PLAN = [["pytest"], [HEAVY_PART, "lean-audit:security/Properties"], ["lean-audit:*", "circuit-check"]]
+REST_PLAN = [["lean-audit:*", "lean-build"], ["pytest"]]
+
+
+@pytest.mark.parametrize("shards, plan, heavy", [
+    (3, HEAVY_PLAN, ["m1", "big", "m3"]), (2, REST_PLAN, ["big", "m2"]), (3, None, ["big"] * 3), (1, HEAVY_PLAN, ["big"]),
+], ids=["names-it", "rest", "unread", "whole"])
+def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_the_heavy_machines(
+        world, monkeypatch, shards, plan, heavy):
+    """`heavy_on`: the shard that audits `HEAVY_PART`, found in the candidate's own ci.toml plan with N shards (here the second,
+    not the first), launches on those machines alone and the others on theirs; a plan naming it in no shard sends the one
+    auditing `lean-audit:*`; no plan of N shards sends every shard, logged; a whole run goes there.  Without it, each
+    shard launches on its usual machines and the record is as before."""
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": _plans(
+        *([plan] if plan else []), [["pytest"]] * (5 - shards))})
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    plain = start(h.d, sha, base, shards=shards)
+    usual = shard_machines("m1,m2,m3", shards) if shards > 1 else ["m1,m2,m3"]
+    assert machines == usual and "heavy_on" not in plain
+    machines.clear()
+    rec = start(h.d, sha, base, shards=shards, heavy_on="big")
+    assert machines == heavy and rec["heavy_on"] == "big"
+    assert {k: v for k, v in rec.items() if k not in ("ids", "groups", "heavy_on")} == {
+        k: v for k, v in plain.items() if k not in ("ids", "groups")}
+    unread = f"candidate {sha[:12]}'s plan of {shards} shards can't be read or names neither {HEAVY_PART} nor lean-audit:*"
+    assert any(unread in x for x in world.logs) == (plan is None and shards > 1)
+
+
+def test_heavy_on_moves_no_run_that_audits_nothing(world, monkeypatch):
+    """The run beside a check under graph2 (no shards) runs no lean-audit, nor does a check taking lean-audit's verdict from a
+    candidate below (``audit_from``): ``heavy_on`` moves neither."""
+    h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": _plans(HEAVY_PLAN)})
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    assert "heavy_on" not in start(h.d, sha, base, heavy_on="big")
+    assert "heavy_on" not in start(h.d, sha, base, shards=3, audit_from=base, heavy_on="big")
+    assert machines == ["m1,m2,m3", "m1", "m2", "m3"]
+
+
+def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_on_the_heavy_machines(
+        world, monkeypatch, tmp_path):
+    """An auto plan's shards launch once it is made: the one its plan gives `HEAVY_PART` goes on the heavy machines, which the
+    record kept from `start`."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    plans = Plans(h.d, tmp_path)
+    rec = json.loads(json.dumps(start(h.d, sha, base, shards="auto:3", heavy_on="big")))
+    assert rec["heavy_on"] == "big" and machines == []
+    shards = [{"parts": HEAVY_PLAN[k]} for k in (0, 2, 1)]
+    plans.answers[rec["plan"]["out"]] = ({**_plan_doc(3), "shards": shards}, None)
+    assert judge(h.d, rec) == Verdict(PENDING) and machines == ["m1", "m2", "big"]
 
 
 @pytest.mark.parametrize("how", ["failed", "lost", "late", "another n"])
@@ -1212,15 +1277,15 @@ def test_of_check_s_own_code_a_lean_input_is_common_py_and_the_code_that_runs_th
     assert set(lean) <= set(lean_inputs(other)), "each is one in a tree that doesn't hold it yet"
 
 
-def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_caps():
+def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_limits():
     """Of `tools/verity/lean`: the files every audit's key holds (`lean_audit.tool_files`), with the task graph's contract;
     `lean_changed.py`, which every records key holds beside them; and what no key holds but lean-audit's verdict or a lock run's
-    commit does: the unread ratchet, its caps, and the caps a lock run repairs in `tests/test_lean_packages.py`.  Not its
-    tests and their fixtures, a Lake file among them, its docs, nor the tools beside the audit that no key holds."""
+    commit does: the unread ratchet and the two files a lock run repairs (`merge.REPAIRED`: the ratchet's limits and those of
+    `tests/test_lean_packages.py`).  Not its tests and their fixtures, a Lake file among them, its docs, nor the tools beside
+    the audit that no key holds."""
     tool = "tools/verity/lean"
     lean = [f"{tool}/check.py", f"{tool}/lean_audit.py", f"{tool}/lean_changed.py", f"{tool}/module_keys.py",
-            f"{tool}/unread.py", f"{tool}/unread-caps.json", "tools/verity/graph/verity_graph/contract.py",
-            "tests/test_lean_packages.py"]
+            f"{tool}/unread.py", "tools/verity/graph/verity_graph/contract.py", *sorted(REPAIRED)]
     other = [f"{tool}/README.md", f"{tool}/merge.py", f"{tool}/warm.py", f"{tool}/unread_gate.py", f"{tool}/pyproject.toml",
              f"{tool}/tests/test_cache.py", f"{tool}/tests/fixtures/control/lakefile.toml",
              f"{tool}/tests/fixtures/control/lake-manifest.json", f"{tool}/tests/fixtures/control/data.json",

@@ -954,25 +954,36 @@ class DriveFlags:
                         for k, v in dataclasses.asdict(self).items())
 
 
+#: the word of a PR list that names every PR (`listed` with ``every``)
+EVERY = "*"
+
+
 def priority_list(path: Path, flag: str = "--priority-file", comments: bool = False) -> tuple[int, ...]:
     """Drive's priority list (`--priority-file`, `Queue.priority`), the landing order: the PR numbers ``path`` holds, separated
     by spaces or commas, in its order, first to land first, each once (a number repeated keeps its first place); empty when
     there is no such file.  With ``comments``, a `#` starts a comment that runs to the end of its line.  QueueError, with the
     fix, when it can't be read or holds anything else, naming it as ``flag``: the verified queue reads its `--wide-file` so
     too, and its `--pins-file` with ``comments``."""
+    return listed(path, flag, comments)[0]
+
+
+def listed(path: Path, flag: str = "--priority-file", comments: bool = False, every: bool = False) -> tuple[tuple[int, ...], bool]:
+    """(``path``'s PR numbers, as `priority_list` reads them; whether it holds `EVERY` too, a word only ``every`` takes): the
+    verified queue reads its `--heavy-file` so."""
     try:
         if not path.exists():
-            return ()
+            return (), False
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as e:
         raise QueueError(f"{flag} {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
                          "PR numbers separated by spaces or commas, or remove it") from None
     words = [w for w in re.split(r"[\s,]+", re.sub(r"#.*", "", text) if comments else text) if w]
-    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
+    star = every and EVERY in words
+    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w) and not (every and w == EVERY)]:
         raise QueueError(f"{flag} {path} holds {', '.join(map(repr, bad[:5]))}, which "
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
-                         "spaces or commas")
-    return tuple(dict.fromkeys(map(int, words)))
+                         f"spaces or commas{f', or {EVERY} for every PR' if every else ''}")
+    return tuple(dict.fromkeys(int(w) for w in words if w != EVERY)), star
 
 
 #: how long a landing or warn gate may run before it counts as unable to judge (`run_gate`)
@@ -1092,12 +1103,13 @@ def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, s
     return p.returncode, p.stdout if p.returncode in (0, 1) else (p.stderr or p.stdout).strip()[-400:]
 
 
-def scripts_at(repo: Path, at: str, paths: Iterable[str]) -> dict[str, str]:
-    """{path: blob} of the Python files at ``at`` of ``paths`` (a file, or a directory's own files when it ends in `/`)."""
+def scripts_at(repo: Path, at: str, paths: Iterable[str], suffix: str = ".py") -> dict[str, str]:
+    """{path: blob} of the Python files (those ending in ``suffix``; "" for every file) at ``at`` of ``paths`` (a file, or a
+    directory's own files when it ends in `/`)."""
     out = {}
     for line in _out(repo, "ls-tree", "-z", at, "--", *paths).split("\0"):
         meta, _, path = line.partition("\t")
-        if path.endswith(".py") and meta.split()[1:2] == ["blob"]:
+        if path.endswith(suffix) and meta.split()[1:2] == ["blob"]:
             out[path] = meta.split()[2]
     return out
 
@@ -2444,7 +2456,9 @@ class Queue:
         head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its landing gates
         are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
         holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
-        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None)."""
+        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None).  Its
+        worktree is added and removed under the clone's worktree lock (`worktrees_locked`), which train.sh's launches in the
+        same clone hold for theirs: a prune beside a worktree half made deletes it."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
@@ -2460,9 +2474,10 @@ class Queue:
             rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
         except tomllib.TOMLDecodeError as e:
             return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
-        with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
+        with scratch() as tmp:
             wt = Path(tmp, "wt")
-            _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
+            with worktrees_locked(self.workdir):
+                _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
                 rename = write_scripts(self.workdir, scripts, Path(tmp, "rename")) / RENAME
                 r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
@@ -2496,8 +2511,9 @@ class Queue:
                          f"{_tail(c, 1)}")
                 return commit, "", report
             finally:
-                _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
-                _git(self.workdir, "worktree", "prune", check=False)
+                with worktrees_locked(self.workdir):
+                    _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
+                    _git(self.workdir, "worktree", "prune", check=False)
 
     def _merge_through(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` of ``pr`` onto ``tip``, carried across each move below it (`_moves`) that its head lacks: restacked through
@@ -2525,10 +2541,8 @@ class Queue:
         """Whether ``head``'s own change (from its merge base with the move's base) names a word of ``mv``'s map, in a path or a
         line, as text in any case: a superset of what `rename.py` rewrites in it."""
         if mv.map not in self._words_of:
-            r = _git(self.workdir, "show", f"{mv.commit}^1:{mv.map}", check=False)
-            data = tomllib.loads(r.stdout) if not r.returncode else {}      # it parsed: its rename.py made the move from it
-            words = {*data.get("words", {}), *(w for s in data.get("words_in", []) for w in s.get("words", {}))}
-            self._words_of[mv.map] = {w.lower() for w in words if w}
+            got = map_retires(self.workdir, f"{mv.commit}^1", mv.map)
+            self._words_of[mv.map] = set(got.words) if got else set()
         r = _git(self.workdir, "diff", "-U0", "--no-color", "--no-ext-diff", f"{mv.commit}^1...{head}", check=False)
         low = r.stdout.lower()
         return bool(r.returncode) or any(w in low for w in self._words_of[mv.map])
@@ -2934,7 +2948,8 @@ class Queue:
         PR based on another branch among them.  ``fetched``, called once the clone is fetched and before anything reads it,
         returns ``stale`` instead: the command reads its cutoff and drive.toml at `main` there, so it fetches once.  With
         ``loop``, as the verified queue admits each onto `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on
-        `main` landed, and a move PR that conflicts with `main` refused as any PR is; else as `sync` builds `next`, with each
+        `main` landed, a move PR that conflicts with `main` refused as any PR is, and so is a head whose own change names what a
+        move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
         member's place on it, a head on `checked` landed there, and the refusals of the last sync."""
         self._clone()
         state = self.load_state()
@@ -2985,6 +3000,7 @@ class Queue:
                                               and (loop or not e.pr.move)
                                               and conflicts.get(str(n), {}).get("head") != e.pr.head
                                               and waits.get(str(n), {}).get("head") != e.pr.head])
+        maps: dict[tuple[str, str], Retired | None] = {}
         for n in contained_first(entries):
             e = entries[n]
             if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
@@ -2996,6 +3012,8 @@ class Queue:
             elif e.state == "ready" and (loop or not e.pr.move) and (files := files_of[e.pr.head]):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
+            elif e.state == "ready" and loop and (lacked := lacked_moves(self.workdir, main, e.pr.head, maps=maps)):
+                e.state, e.why = "refused", lacks_why(lacked)
             elif e.state == "ready":
                 e.why = ("admitted: the verified queue merges it into a candidate on `main` once it has a land verdict"
                          + (", or on its mark alone once its move is certified on `main`, as drive.toml allows" if e.pr.move else
@@ -3986,7 +4004,7 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
 
 #: a move commit's line naming its map, and so its script, as `tools/move/restack.py`'s `MOVE_LINE` reads it: `Move:` (drive's
 #: and `stage.py`'s word maps, `rename.py`) and `Layout-move:` (`stage.py`'s path maps, `layout.py`)
-MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): tools/move/[\w.-]+\.toml(?: --no-lock)?$", re.M)
+MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
 #: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
 #: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
 #: worktree), and prints the tree it leaves (`MAPPED_RE`)
@@ -4092,6 +4110,83 @@ def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]
             commit, *parents = line.split()
             found.append((commit, parents))
     return found
+
+
+@dataclass(frozen=True)
+class Retired:
+    """What a move's map retires, as a branch's own change may still name it (`map_retires`): ``names``, matched as written
+    (paths, a directory's without its `/`, and dotted module names), and ``words``, a word map's old words in lower case,
+    matched in any case: a superset of what `rename.py` renames."""
+    names: frozenset[str] = frozenset()
+    words: frozenset[str] = frozenset()
+
+    def named(self, text: str) -> list[str]:
+        """Those of them ``text`` holds."""
+        low = text.lower()
+        return sorted({n for n in self.names if n in text} | {w for w in self.words if w in low})
+
+
+def map_retires(repo: Path, at: str, path: str) -> Retired | None:
+    """What the move map ``path`` retires, read at ``at`` (the move's base, where `tools/move/stage.py` ran it and
+    `move_check.py` reads it), or None when it is missing there or doesn't parse (said on stderr): a layout map's old paths
+    that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted [modules] and [aliases] old names
+    (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old words."""
+    r = _git(repo, "show", f"{at}:{path}", check=False)
+    try:
+        data = tomllib.loads(r.stdout) if not r.returncode else None
+    except tomllib.TOMLDecodeError as e:
+        print(f"research queue: the move map {path} at {at[:12]} doesn't parse ({e}), so a head that lacks its move "
+              "stays out", file=sys.stderr)
+        data = None
+    if not isinstance(data, dict):
+        return None
+
+    def table(key: str, of: dict = data) -> dict:
+        return t if isinstance(t := of.get(key), dict) else {}
+
+    paths = {o for o, n in table("paths").items() if o != n}
+    paths |= {p for k in ("retired", "drop") if isinstance(ps := table(k).get("paths"), list) for p in ps if isinstance(p, str)}
+    modules = {o for k in ("modules", "aliases") for o, n in table(k).items() if o != n and "." in o}
+    words = {*table("words"), *(w for s in data.get("words_in") or [] if isinstance(s, dict) for w in table("words", s))}
+    return Retired(frozenset(p.rstrip("/") for p in paths if p.strip("/")) | frozenset(modules),
+                   frozenset(w.lower() for w in words if w))
+
+
+def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None = None,
+                 maps: dict[tuple[str, str], Retired | None] | None = None) -> list[tuple[str, str, list[str] | None]]:
+    """Each move ``main`` landed that ``head`` lacks (`moves_between`) whose map (`map_retires`, kept in ``maps`` by its base and
+    path) retires what ``head``'s own change names, oldest first: (the move, its map, those names, or None when its map can't
+    be read).  The own change is ``head``'s against its merge base with ``main``: its files (``files``, else `own_files`) and
+    its added lines.  A head whose change names none of them crosses the moves by a plain merge of `main`, and what a map
+    can't list (a path spelled in parts, a relative one) is the check's to find."""
+    if not (moves := moves_between(repo, main, head)):
+        return []
+    maps = {} if maps is None else maps
+    files = own_files(repo, main, head) if files is None else files
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
+    text = "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+    out = []
+    for commit, parents in moves:
+        if not (m := MOVE_LINE_RE.search(_out(repo, "log", "-1", "--format=%B", commit))):
+            continue
+        if (key := (parents[0] if parents else f"{commit}^", m[1])) not in maps:
+            maps[key] = map_retires(repo, *key)
+        if (got := maps[key]) is None or (names := got.named(text)):
+            out.append((commit, m[1], None if got is None else names))
+    return out
+
+
+def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
+    """Why a head `lacked_moves` names moves of is left out, with the fix."""
+    def said(names: list[str] | None) -> str:
+        if names is None:
+            return "whose map can't be read at its base, so what its own change names of it can't be told"
+        shown = ", ".join(f"`{x}`" for x in names[:5]) + (f" and {len(names) - 5} more" if len(names) > 5 else "")
+        return f"whose retired names its own change names ({shown})"
+
+    moves = "; and ".join(f"the move {c[:12]} `main` landed ({m}), {said(ns)}" for c, m, ns in lacked)
+    return (f"it lacks {moves}: merge `main` into it and rename them, or cross it with `tools/move/restack.py`, and mark the "
+            "new head ready")
 
 
 def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
@@ -4563,7 +4658,8 @@ LEAN_FIXTURES = "tools/verity/lean/"
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
 #: where a merged worktree goes when its caller names no root (`merged_worktree`): `main` sets it from --preflight-root, so
-#: drive's other merged trees (`ported`'s codemod) leave its network-volume TMPDIR too, where each add and remove takes minutes
+#: drive's other merged trees (`ported`'s codemod, a move's regeneration: `scratch`) leave its network-volume TMPDIR too, where
+#: each add and remove takes minutes
 MERGED_ROOT: Path | None = None
 #: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
 #: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
@@ -5771,9 +5867,11 @@ PASSES_LOOKBACK_S = 3 * 86400
 KEY_COMMAND = "tools/verity/lean/lean_changed.py"
 KEY_CODE = ("tools/verity/lean/", "tools/verity/check/", "tools/verity/graph/verity_graph/")
 KEY_TIMEOUT_S = 600
-#: the fast path's command, which `RecordsGate` names for each package it can't vouch for
-RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
+#: the fast path's command, which `RecordsGate` names for each package it can't vouch for, asking the memory `records_mem_gb`
+#: gives: the commit's own `KEY_COMMAND --ask`'s, else `RECORDS_MEM_GB`, within `ASK_TIMEOUT_S`
+RECORDS_COMMAND = ("research run --on auto --mem-gb {gb} --max-min 120 --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
+RECORDS_MEM_GB, ASK_TIMEOUT_S = 93, 60
 #: why `RecordsGate` warns and never refuses, which each of its warnings says
 RECORDS_AFTER_LANDING = ("the lock run after its landing regenerates the records, and what it can't regenerate fails that run, "
                          "a red whose culprit, the PR, is fixed forward or reverted")
@@ -5795,19 +5893,12 @@ def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dic
     if pkgs is None:
         pkgs = [posixpath.dirname(f) for f in _out(repo, "ls-tree", "-r", "-z", "--name-only", commit).split("\0")
                 if f.endswith("/" + LEAN_LOCK) and not f.startswith(LEAN_FIXTURES)]
-    code = scripts_at(repo, commit, KEY_CODE)
-    if not (pkgs := sorted(set(pkgs))) or KEY_COMMAND not in code:
+    if not (pkgs := sorted(set(pkgs))):
         return {}
-    with tempfile.TemporaryDirectory(prefix="queue-keys-", ignore_cleanup_errors=True) as d:
-        tool = write_scripts(repo, code, Path(d)) / KEY_COMMAND
-        if "--inputs-key" not in tool.read_text(errors="replace"):
-            return {}
-        try:
-            r = subprocess.run([sys.executable, str(tool), "--inputs-key", *pkgs, "--head", commit, "--repo", str(Path(repo).resolve())],
-                               cwd=d, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=KEY_TIMEOUT_S,
-                               env=git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1"))
-        except subprocess.TimeoutExpired:
-            raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} ran over {KEY_TIMEOUT_S} s") from None
+    r = _own_key_command(repo, commit, "--inputs-key", [*pkgs, "--head", commit, "--repo", str(Path(repo).resolve())],
+                         KEY_TIMEOUT_S)
+    if r is None:
+        return {}
     if r.returncode:
         raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} exited {r.returncode}: "
                          f"{(r.stderr or r.stdout).strip()[-300:]}")
@@ -5819,6 +5910,50 @@ def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dic
     if not isinstance(keys, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in keys.items()):
         raise bad
     return keys
+
+
+def _own_key_command(repo: Path, commit: str, flag: str, args: list[str], timeout: float,
+                     suffix: str = ".py") -> subprocess.CompletedProcess | None:
+    """``commit``'s own `KEY_COMMAND` run with ``flag`` and ``args`` from git's objects in ``repo`` (no checkout, no build), the
+    files of `KEY_CODE` ending in ``suffix`` (`scripts_at`) at ``commit`` written to a temporary directory it runs in: None when
+    ``commit`` has no such command or it names no ``flag``; QueueError when it runs over ``timeout`` seconds."""
+    code = scripts_at(repo, commit, KEY_CODE, suffix)
+    if KEY_COMMAND not in code:
+        return None
+    with tempfile.TemporaryDirectory(prefix="queue-keys-", ignore_cleanup_errors=True) as d:
+        tool = write_scripts(repo, code, Path(d)) / KEY_COMMAND
+        if flag not in tool.read_text(errors="replace"):
+            return None
+        try:
+            return subprocess.run([sys.executable, str(tool), flag, *args], cwd=d, capture_output=True, text=True,
+                                  stdin=subprocess.DEVNULL, timeout=timeout,
+                                  env=git_env(GIT_TERMINAL_PROMPT="0", PYTHONDONTWRITEBYTECODE="1"))
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"`{KEY_COMMAND} {flag}` at {commit[:12]} ran over {timeout:g} s") from None
+
+
+def records_mem_gb(repo: Path, commit: str, pkgs: Iterable[str], log: Callable[[str], None] = print) -> int:
+    """The memory, in GB, a records run of ``pkgs`` at ``commit`` asks (`RECORDS_COMMAND`'s `--mem-gb`): the one whole number
+    ``commit``'s own `KEY_COMMAND --ask PKG...` prints, run as `lean_keys` runs `--inputs-key` (every file of `KEY_CODE` at
+    ``commit``, `ASK_TIMEOUT_S` at most); `RECORDS_MEM_GB` where it has no `--ask`, or it fails, runs over or prints anything
+    else.  Logs which."""
+    try:
+        r = _own_key_command(repo, commit, "--ask", sorted(set(pkgs)), ASK_TIMEOUT_S, suffix="")
+    except QueueError as e:
+        why = str(e)
+    else:
+        if r is None:
+            why = f"{commit[:12]} has no `{KEY_COMMAND} --ask`"
+        elif r.returncode:
+            said = (r.stderr or r.stdout).strip()[-300:]
+            why = f"`{KEY_COMMAND} --ask` at {commit[:12]} exited {r.returncode}{f': {said}' if said else ''}"
+        elif re.fullmatch(r"[1-9][0-9]*", r.stdout.strip()):
+            log(f"research queue: records run at {commit[:12]}: --mem-gb {r.stdout.strip()}, its own `{KEY_COMMAND} --ask`'s")
+            return int(r.stdout.strip())
+        else:
+            why = f"`{KEY_COMMAND} --ask` at {commit[:12]} printed no whole number of GB: {r.stdout.strip()[-200:]!r}"
+    log(f"research queue: records run at {commit[:12]}: --mem-gb {RECORDS_MEM_GB}, as {why}")
+    return RECORDS_MEM_GB
 
 
 def lean_passed(store, pkg: str, key: str) -> tuple[str, str, str] | None:
@@ -5927,7 +6062,8 @@ class RecordsGate:
         lines = []
         for pkg in missing:
             lines += self._failures(pr.head, pkg)
-            lines.append(f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`; when its result keeps "
+            gb = records_mem_gb(self.repo, pr.head, [pkg], self.log)
+            lines.append(f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg, gb=gb)}`; when its result keeps "
                          f"records (`lean-audit/record/<path>/{LEAN_LOCK}`, {pkg}'s and each requirer's it regenerated), commit "
                          f"exactly those over the locks of their paths and mark that commit, which needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
