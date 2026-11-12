@@ -1,4 +1,5 @@
 import math
+import sys
 import types
 
 import numpy as np
@@ -215,6 +216,13 @@ def test_hf_parity(llama, qwen, ids):
         r = evaluate(snap, ids[:4], [], hf_check=True)
         g = r["gates"]["hf_reference"]
         assert g["checked"] == M.Config.read(snap).layers and g["failed"] == 0, g
+
+
+def test_without_transformers_the_hf_reference_gate_is_skipped_by_name(llama, ids, monkeypatch):
+    """Where `transformers` does not import, no layer is compared and the gate says why, so `run.py eval` fails the run."""
+    monkeypatch.setitem(sys.modules, "transformers", None)
+    g = evaluate(llama, ids[:4], [], hf_check=True)["gates"]["hf_reference"]
+    assert g == {"checked": 0, "failed": 0, "first_failure": None, "skipped": "transformers is not importable"}
 
 
 def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):

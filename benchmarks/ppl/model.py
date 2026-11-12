@@ -323,12 +323,8 @@ def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tenso
                                       reduction="none") for c, i in enumerate(range(0, T - 1, LOSS_ROWS))])
 
 
-def hf_layer(cfg: Config, snapshot: Path, li: int, layer: Layer):
-    """HF transformers' own decoder layer with the same weights and SDPA attention, or None without transformers."""
-    try:
-        import transformers
-    except ImportError:
-        return None
+def hf_layer(transformers, cfg: Config, snapshot: Path, li: int, layer: Layer):
+    """HF `transformers`' own decoder layer with the same weights and SDPA attention, and its RoPE module."""
     hc = transformers.AutoConfig.from_pretrained(str(snapshot))
     hc._attn_implementation = "sdpa"
     mod = {"llama": transformers.models.llama.modeling_llama.LlamaDecoderLayer,
@@ -360,11 +356,12 @@ def check_reference(gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.T
     if cfg.arch == "glm_moe_dsa":
         import glm
         return glm.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out)
-    hf = hf_layer(cfg, snapshot, layer.li, layer)
-    if hf is None:
+    try:
+        import transformers
+    except ImportError:
         gates.skip("hf_reference", "transformers is not importable")
         return
-    hl, rot = hf
+    hl, rot = hf_layer(transformers, cfg, snapshot, layer.li, layer)
     pos = torch.arange(h.shape[1], device=h.device)[None]
     with torch.no_grad():
         hcos, hsin = rot(h, pos)
