@@ -241,9 +241,10 @@ def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_state
     def shapes(*requests: dict) -> list[tuple[int, int]]:
         return Phi(workload={"requests": [{"max_tokens": 2, **r} for r in requests]}).request_shapes()
 
-    stated = [{"prompt_token_ids": [7, 8, 9], "prompt_len": 5, "input_len": 6}, {"prompt_len": 5, "input_len": 6}, {"input_len": 6}]
+    stated: list[dict] = [{"prompt_token_ids": [7, 8, 9], "prompt_len": 5, "input_len": 6}, {"prompt_len": 5, "input_len": 6}, {"input_len": 6}]
     assert shapes(*stated) == [(3, 1), (5, 1), (6, 1)]
-    for empty in (None, 0, "", [], {}, False):
+    empties: list[object] = [None, 0, "", [], {}, False]
+    for empty in empties:
         assert shapes({"prompt_len": empty, "input_len": 6}) == [(6, 1)], empty
     for none in ({}, {"prompt_len": None}, {"prompt_len": 0, "input_len": None}, {"prompt_token_ids": None}):
         with pytest.raises(TypeError, match="NoneType"):
