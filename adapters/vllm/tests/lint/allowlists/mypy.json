@@ -1499,8 +1499,6 @@
     {"file": "verity_vllm/protocols/pouw/h1/tables_device.py", "kind": "assignment", "symbol": "device_lib", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "index", "symbol": "PassEnds.end", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "union-attr", "symbol": "PassEnds.end", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/pearl_c/grouped.py", "kind": "arg-type", "symbol": "_capture", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/pearl_c/grouped.py", "kind": "var-annotated", "symbol": "_capture", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/lanes.py", "kind": "union-attr", "symbol": "LaneCalls._lanes", "detail": "", "count": 10},
     {"file": "verity_vllm/protocols/remote_bandwidth/binder.py", "kind": "arg-type", "symbol": "Binder.on_kv", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/remote_bandwidth/binder.py", "kind": "arg-type", "symbol": "Binder.on_load", "detail": ""},

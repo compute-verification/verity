@@ -384,7 +384,7 @@ def _capture(run: Any, c: _Call) -> None:
     capture.wait_stream(torch.cuda.current_stream(run.device))
     if c.cut is not None:
         c.ev_tree = torch.cuda.Event(external=True)
-    made = []
+    made: list[Any] = []
     for steps, cut in ((c.main, c.cut), (c.tree, None), (c.side, None)):
         if not steps:
             made.append(None)
