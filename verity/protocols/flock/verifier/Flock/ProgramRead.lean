@@ -1,16 +1,20 @@
-/-
-The verifier's program, read once.
-
-A setup reads the verifier's own program (`--program`) through `TemplateQuery.Desc.parse` and `Program.decode`, each of
-which parses the descriptor's JSON and hashes its canonical form. Each function below named `…By` is the function it is
-named after with those two readings as its parameters `readDesc` and `readProg`, and at the readings themselves it is that
-function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with both readings of it,
-each made when first asked for and kept; its `descAt` and `progAt` are the two readings on every input
-(`ProgramRead.descAt_of`, `ProgramRead.progAt_of`), so a run that hands them to its setups reads its program once.
--/
 module
 
 public import Flock.Registered
+public import Flock.ProvedScope
+
+/-!
+# The verifier's program, read once
+
+A setup reads the verifier's own program (`--program`) through `TemplateQuery.Desc.parse` and `Program.decode`, each of
+which reads the descriptor's bytes as JSON (`Program.readJson`) and hashes its canonical form. Each function below named `…By` is the function it is
+named after with those two readings as its parameters `readDesc` and `readProg`, and at the readings themselves it is that
+function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with its JSON and
+both readings of it, each made when first asked for and kept, the two readings from the one JSON; its `jsonAt`, `descAt` and
+`progAt` are `Program.readJson` and the two readings on every input (`ProgramRead.jsonAt_of`, `descAt_of`, `progAt_of`), so
+a run that hands them to its setups parses its program once. `TemplateQuery.Desc.parseOf`, `Program.decodeOf` and
+`ProvedScope.programDigestOf` are the two readings and the program's digest from that JSON.
+-/
 
 @[expose] public section
 
@@ -18,15 +22,92 @@ namespace Flock
 
 open Lean (Json)
 
-/-- A program and its two readings, `TemplateQuery.Desc.parse` and `Program.decode` of `bytes`. -/
+namespace TemplateQuery
+
+/-- `Desc.parseWith` from the descriptor's bytes as `Program.readJson` read them (`Desc.parseWith_eq_of`). -/
+def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
+    (read : Option (Except String Json)) : M Desc := do
+  let some parsed := read | throw "program: not UTF-8"
+  let j ← match parsed with
+    | .ok j => pure j
+    | .error e => throw s!"program: not JSON: {e}"
+  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
+    throw "program: not a verity-ir/descriptor/v1 descriptor"
+  let bare := match j with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  let callees ← match j.getObjVal? "callees" with
+    | .ok (.arr a) => a.mapM fun c => match c.getStr? with | .ok s => pure s | .error _ => throw "program: a callee is not a string"
+    | _ => throw "program: callees"
+  let defs ← match j.getObjVal? "definitions" with
+    | .ok (.obj kvs) => kvs.toArray.mapM fun (id, dj) => do
+      let form := (dj.getObjValAs? String "form").toOption.getD ""
+      if form == "primitive" then pure (id, ({ prim := true, nodes := #[] } : DDef))
+      else if form == "composite" then
+        let nodes ← match (dj.getObjVal? "body").toOption.bind (fun b => (b.getObjVal? "nodes").toOption) with
+          | some (.arr ns) => ns.mapM fun nj => do
+            let form := (nj.getObjValAs? String "form").toOption.getD ""
+            let some fn := (nj.getObjValAs? Nat "fn").toOption | throw s!"program: {id}: a node without a callee"
+            if fn ≥ callees.size then throw s!"program: {id}: a node's callee is outside callees"
+            pure ({ form, fn, n := (nj.getObjValAs? Nat "n").toOption.getD 1 } : DNode)
+          | _ => throw s!"program: {id}: a composite without body nodes"
+        pure (id, ({ prim := false, nodes } : DDef))
+      else throw s!"program: {id}: an unknown definition form {form}"
+    | _ => throw "program: definitions"
+  let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
+  if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
+  return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
+
+theorem Desc.parseWith_eq_of {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (sha512 : ByteArray → M ByteArray) (bytes : ByteArray) :
+    Desc.parseWith sha512 bytes = Desc.parseOfWith sha512 (Program.readJson bytes) := by
+  unfold Desc.parseWith Desc.parseOfWith Program.readJson
+  generalize String.fromUTF8? bytes = o
+  cases o <;> rfl
+
+/-- `Desc.parse` from the descriptor's bytes as `Program.readJson` read them (`Desc.parse_eq_of`). -/
+def Desc.parseOf (read : Option (Except String Json)) : V Desc := Desc.parseOfWith (fun b => pure (Sha512.hash b)) read
+
+theorem Desc.parse_eq_of (bytes : ByteArray) : Desc.parse bytes = Desc.parseOf (Program.readJson bytes) :=
+  Desc.parseWith_eq_of _ bytes
+
+end TemplateQuery
+
+namespace ProvedScope
+
+/-- `programDigest` from the program's bytes as `Program.readJson` read them (`programDigest_eq_of`). -/
+def programDigestOf (read : Option (Except String Lean.Json)) : Option String := do
+  let j ← (← read).toOption
+  let bare := match j with
+    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+
+theorem programDigest_eq_of (bytes : ByteArray) : programDigest bytes = programDigestOf (Program.readJson bytes) := by
+  unfold programDigest programDigestOf Program.readJson
+  generalize String.fromUTF8? bytes = o
+  cases o <;> rfl
+
+end ProvedScope
+
+/-- A program, its bytes read as JSON (`Program.readJson`) and its two readings, `TemplateQuery.Desc.parse` and
+`Program.decode` of `bytes`. -/
 structure ProgramRead where
   bytes : ByteArray
+  json : Thunk (Option (Except String Json))
   desc : Thunk (V TemplateQuery.Desc)
   prog : Thunk (V Program.Prog)
 
-/-- `program` with its readings, neither made before it is asked for. -/
+/-- `program` with its JSON and its readings, none made before it is asked for, both readings from the one JSON. -/
 def ProgramRead.of (program : ByteArray) : ProgramRead :=
-  ⟨program, Thunk.mk fun _ => TemplateQuery.Desc.parse program, Thunk.mk fun _ => Program.decode program⟩
+  let json := Thunk.mk fun _ => Program.readJson program
+  ⟨program, json, Thunk.mk fun _ => TemplateQuery.Desc.parseOf json.get, Thunk.mk fun _ => Program.decodeOf json.get⟩
+
+/-- `Program.readJson`: on `r`'s own bytes the JSON `r` keeps, elsewhere read anew. -/
+def ProgramRead.jsonAt (r : ProgramRead) (b : ByteArray) : Option (Except String Json) :=
+  match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
+  | isTrue _ => r.json.get
+  | isFalse _ => Program.readJson b
 
 /-- `TemplateQuery.Desc.parse`: on `r`'s own bytes the reading `r` keeps, elsewhere made anew. -/
 def ProgramRead.descAt (r : ProgramRead) (b : ByteArray) : V TemplateQuery.Desc :=
@@ -40,12 +121,20 @@ def ProgramRead.progAt (r : ProgramRead) (b : ByteArray) : V Program.Prog :=
   | isTrue _ => r.prog.get
   | isFalse _ => Program.decode b
 
+theorem ProgramRead.jsonAt_of (program : ByteArray) : (ProgramRead.of program).jsonAt = Program.readJson := by
+  funext b
+  unfold ProgramRead.jsonAt
+  split
+  · rename_i h _
+    exact congrArg Program.readJson (Eq.symm h)
+  · rfl
+
 theorem ProgramRead.descAt_of (program : ByteArray) : (ProgramRead.of program).descAt = TemplateQuery.Desc.parse := by
   funext b
   unfold ProgramRead.descAt
   split
   · rename_i h _
-    exact congrArg TemplateQuery.Desc.parse (Eq.symm h)
+    exact (TemplateQuery.Desc.parse_eq_of program).symm.trans (congrArg TemplateQuery.Desc.parse (Eq.symm h))
   · rfl
 
 theorem ProgramRead.progAt_of (program : ByteArray) : (ProgramRead.of program).progAt = Program.decode := by
@@ -53,8 +142,13 @@ theorem ProgramRead.progAt_of (program : ByteArray) : (ProgramRead.of program).p
   unfold ProgramRead.progAt
   split
   · rename_i h _
-    exact congrArg Program.decode (Eq.symm h)
+    exact (Program.decode_eq_of program).symm.trans (congrArg Program.decode (Eq.symm h))
   · rfl
+
+/-- `ProvedScope.programDigestOf` at the JSON a `ProgramRead` keeps is `ProvedScope.programDigest`. -/
+theorem ProvedScope.programDigestOf_read (read bytes : ByteArray) :
+    ProvedScope.programDigestOf ((ProgramRead.of read).jsonAt bytes) = ProvedScope.programDigest bytes := by
+  rw [ProgramRead.jsonAt_of, ProvedScope.programDigest_eq_of]
 
 namespace HmRow
 
