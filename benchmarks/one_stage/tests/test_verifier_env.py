@@ -1,7 +1,8 @@
 """The benchmarks' runs of the Lean verifier (`a0.lean_verify`, `server_rate.Lean`) start `flock-verify verify` in
 `verifier_env`: under the verifier's allocator setting where this process's environment sets none, and under the
-caller's own value where it does, with the rest of the environment as it is. The children are stand-ins that record the
-environment they were given."""
+caller's own value where it does, with the rest of the environment as it is. So does a run's kept verifier
+(`a0.VerifyMembers`, `flock-verify verify-members`). The children are stand-ins that record the environment they were
+given."""
 from __future__ import annotations
 
 import io
@@ -48,6 +49,20 @@ def test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets
     (out / "sessions" / "s" / "session.json").write_text("{}")
     assert a0.lean_verify("flock-verify", st, 8, out, zk=True)["accepted"]
     assert children["verify"] == {**os.environ, NAME: want}
+
+
+@CASES
+def test_a0s_kept_verifier_runs_under_the_allocator_setting_unless_the_caller_sets_its_own(tmp_path, monkeypatch, own, want):
+    children = {}
+
+    def child(cmd, **kw):
+        children[cmd[1]] = kw["env"]
+        return SimpleNamespace()
+
+    caller(monkeypatch, own)
+    monkeypatch.setattr(a0.subprocess, "Popen", child)
+    a0.VerifyMembers("flock-verify", tmp_path / "archive", "0" * 128, tmp_path / "verify-members.log")
+    assert children["verify-members"] == {**os.environ, NAME: want}
 
 
 @CASES
