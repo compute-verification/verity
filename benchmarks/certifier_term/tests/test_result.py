@@ -196,7 +196,7 @@ def test_free_is_the_documents_term_and_the_error_its_phases_deltas_summed(tmp_p
     assert metric["inputs"][0] == f"modeled: {doc['name']}" and metric["inputs"][1:] == year["inputs"][1:]
 
 
-def test_the_cards_figure_is_the_term_of_records_row_at_the_other_jitter_bound_and_says_what_it_rests_on(tmp_path, capsys):
+def test_the_cards_figure_is_the_term_of_records_row_at_the_other_jitter_bound_and_names_its_clause(tmp_path, capsys):
     """Beside the term of record the result holds the card's figure: the scan's term over the world's year at D_j = 1,
     as the document gives it under its label. Its name says simulated, the card's mark, and it is no term of record:
     the metric is the document's value still. Its inputs open with the row it is of and the card as the document
@@ -209,13 +209,15 @@ def test_the_cards_figure_is_the_term_of_records_row_at_the_other_jitter_bound_a
     assert (figure["label"], figure["mark"]) == ("with a simulated set-time card", "simulated")
     assert (card["value"], card["unit"]) == (figure["value"], figure["unit"]) == (year["term"]["1"]["GB"], "GB")
     assert card["value"] < got[METRIC]["value"] == doc["value"] == year["term"]["2"]["GB"]
-    assert (card["target"], card["verdict"]) == (doc["target"]["value"], "over target") and year["term"]["1"]["of_target"] > 1
+    assert (card["target"], card["verdict"]) == (doc["target"]["value"], "over target")
+    assert year["term"]["1"]["of_target"] > 1
     assert card["inputs"][0] == ("modeled: the row of certifier_term/modeled/metric at D_j = 1, with a simulated "
                                  "set-time card: no term of record")
     stated = f"set_time_card = simulated (simulated): {LB.SET_TIME_CLAUSE}"
     assert card["inputs"][1] == stated == R.stated("set_time_card", doc["inputs"]["set_time_card"])
     assert "no such card is deployed, and the software pacer that stands in for it does not meet it." in stated
-    assert card["inputs"][2:] == [i for i in got[METRIC]["inputs"][1:] if i != stated] and stated in got[METRIC]["inputs"]
+    assert card["inputs"][2:] == [i for i in got[METRIC]["inputs"][1:] if i != stated]
+    assert stated in got[METRIC]["inputs"]
     # a target over the figure: it stands within it
     bench(capsys, "--out", str(tmp_path / "over"), *BOUNDED, "--target-gb", "1e12")
     assert result(tmp_path / "over")[CARD]["verdict"] == "within target"

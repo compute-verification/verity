@@ -70,10 +70,19 @@ rule, and never by requests what a check counts by capacity:
 * the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
   block sampled on a served audit. The lengths unit holds a response's length to its Program's output count and the
   stop block holds that count to the ids, so the lengths are held; the entries are the compute audit's; and its term
-  is the jitter and the pooled failures;
+  is the jitter, the pooled failures and the count (below);
 * the design with no stop block, the same before a stop block has been sampled on a served audit: nothing holds the
   output count to the ids, so the server picks it and each connection is still charged its schedule, as the scan
-  charges it. Its failed connections, jitter and entries are the design's.
+  charges it. Its failed connections, jitter, count and entries are the design's.
+
+**The count.** Under the design the network certifier signs, for each execution phase of a link, a head over its
+tables, and a content class's tables are the rows it holds and no other. So the head states how many of the execution
+phase's releases each class holds: one of R + 1 values a class, R being the most connections the schedule releases in
+an execution phase (`phase_releases`). A link's execution phase is charged classes · log2(R + 1) bits for it
+(`counted`), by link whatever it serves, on the rows whose check reads that head (`Kind.count`): the design's two.
+The schedule's classes, delay and ingress buckets are inputs, by default those of the lengths rows' cost runner
+(`COST_RUNNER`). Its lanes are the input the entries read: with none given the count is at the least lanes whose
+schedule releases what a link serves in an execution phase, the least the rule can charge at this load.
 
 `inputs` marks each input measured, modeled, assumed or simulated (`MARKS`) with its source, and `main` prints the
 table and its JSON.
@@ -161,18 +170,20 @@ CHANGES = {"lengths": "a response's length held to its Program's output count, a
 
 
 class Terms(NamedTuple):
-    """A check's terms over a period, in bits: the network certifier's own (the schedules, the fail cells and the
-    jitter) and the entries, the tied compute audits' free inputs, which are the compute side's and None where its
-    own bound stands in their place."""
+    """A check's terms over a period, in bits: the network certifier's own (the schedules, the fail cells, the jitter
+    and the count) and the entries, the tied compute audits' free inputs, which are the compute side's and None where
+    its own bound stands in their place. The count is what the heads of the links' execution phases state of each
+    content class's held rows (`counted`), 0 on a row whose check reads no such head."""
     schedules: Any
     cells: Any
     jitter: Any
     entries: Any
+    count: Any = 0
 
     @property
     def certifier(self) -> Any:
         """The network certifier's own term."""
-        return self.schedules + self.cells + self.jitter
+        return self.schedules + self.cells + self.jitter + self.count
 
 
 def failed(connections: Any, failures: Any, cells: int) -> float:
@@ -184,6 +195,22 @@ def failed(connections: Any, failures: Any, cells: int) -> float:
         return 0.0
     n, f = float(connections), float(failures)
     return min(f * (math.log2(math.e * n / f) + math.log2(cells + 1)), n * math.log2(cells + 2))
+
+
+def phase_releases(lanes: int, buckets: int, delay: int, ingress_buckets: int) -> int:
+    """R, the most connections a schedule releases in one execution phase: ``lanes`` · ⌈(``buckets`` +
+    ``ingress_buckets`` − 1) / (``delay`` + 1)⌉. A release is at most ``ingress_buckets`` − 1 buckets after its
+    connection's admission, so an execution phase's releases are of connections admitted in ``buckets`` +
+    ``ingress_buckets`` − 1 buckets in a row; and a connection holds its lane through its admission's bucket +
+    ``delay``, so those admitted in any ``delay`` + 1 buckets in a row hold a lane each. It is a bound: at some
+    schedules no load releases as many. A schedule that signs its releases' tables has at most ``delay`` ingress
+    buckets."""
+    if (not all(type(x) is int for x in (lanes, buckets, delay, ingress_buckets)) or lanes < 0 or buckets < 1
+            or not 1 <= ingress_buckets <= delay):
+        raise ValueError(f"a schedule's lanes are an integer from 0, its execution phase's buckets a positive integer "
+                         f"and its ingress buckets an integer from 1 to its delay, not {lanes!r} lanes, {buckets!r} "
+                         f"buckets, {ingress_buckets!r} ingress buckets and a delay of {delay!r}")
+    return lanes * -(-(buckets + ingress_buckets - 1) // (delay + 1))
 
 
 def _jitter(dj: int, steps: int) -> int:
@@ -465,6 +492,12 @@ SCOPES = ("node", "datacenter", "world")
 RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 #: the scan's slot stride in buckets, the scan class's default
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
+#: the lengths rows' cost runner, whose default schedule (`cost`'s) the count's inputs are read at
+COST_RUNNER = "benchmarks/network_traces/connection_rows_run.py"
+#: that schedule: its content classes, its delay D in buckets, which its ingress buckets equal, its lanes and its
+#: execution phase's buckets. The count is at the first two where a caller names none; the last two are the schedule
+#: `render` prints the count at beside the command's own
+CLASSES, DELAY, COST_LANES, COST_BUCKETS = 6, 30, 16, 600
 #: the GB the term is read against
 TARGET_GB = 300
 #: the request a scope's requests are counted of, which every row names: one a caller chooses (`REQUESTS`), or none
@@ -481,11 +514,13 @@ REQUESTS = ("plan", "census")
 class Kind(NamedTuple):
     """One of `ROWS`: where it stands (a check on main, a change to the scan's check, or a design), the changes it
     makes to the scan's check (`CHANGES`; None for the clock form, which is another check), what it counts and by
-    which rule, and whether a stop block holds a response's output count to its ids (`terms`' ``stop``)."""
+    which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), and whether its
+    check reads the head that states each content class's held rows, so that it is charged the count (`counted`)."""
     standing: str
     changes: tuple[str, ...] | None
     counts: str
     stop: bool = True
+    count: bool = False
 
 
 #: a scope's eight rows over a monitoring period: the two checks on main, the scan under each of `CHANGES` and under
@@ -508,13 +543,16 @@ ROWS = {
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
         "a served audit: the lengths unit holds a response's length to its Program's output count, but nothing "
         "holds that count to the ids, so the server picks it and each connection is still charged its schedule, as "
-        "the scan charges it; its failed connections' pooled charge, its jitter and its entries are the design's",
-        stop=False),
+        "the scan charges it; its failed connections' pooled charge, its jitter, its count and its entries are the "
+        "design's",
+        stop=False, count=True),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
                    "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
                    "served audit: the lengths are held, the stop block holding a response's output count to its "
-                   "ids, and the entries are the compute audit's, so its term is the jitter and the failed "
-                   "connections' pooled charge"),
+                   "ids, and the entries are the compute audit's, so its term is the jitter, the failed "
+                   "connections' pooled charge and the count, what the head of each link's execution phase states "
+                   "of the rows each content class holds, counted by link",
+                   count=True),
 }
 
 
@@ -587,7 +625,8 @@ def plan() -> dict[str, Input]:
 def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets: int = BUCKETS,
            bucket_s: float | Fraction = TAU, failure_rate: float | Fraction = 0, requests: str = "plan",
            world_requests: float | None = None, scan_delta: float | Fraction = SCAN_DELTA,
-           syncs: int | None = None, lanes: int | None = None) -> dict[str, Input]:
+           syncs: int | None = None, lanes: int | None = None, classes: int = CLASSES, delay: int = DELAY,
+           ingress_buckets: int | None = None) -> dict[str, Input]:
     """Every input of the scaling by requests, each marked (`MARKS`) with its source.
 
     The scale is read from the files: the world's machines and their serving MFU (rho's world fleet), a machine's
@@ -598,8 +637,12 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     ``requests`` is. ``request_count`` names which of `COUNTS` it is. The class is assumed, no run having certified
     one for the served model: ``response_ids``, the most ids a response holds, ``id_bits``, an execution phase's
     ``buckets`` of ``bucket_s`` seconds (by default the network certifier's), one connection a request and one link a
-    machine, and ``lanes``, the connections a link holds at once, which only the entries read: with None they are
-    counted one a request. ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is
+    machine, and ``lanes``, the connections a link holds at once, which the entries and the count read: with None the
+    entries are counted one a request and the count at the least lanes that serve a link's load (`counted`).
+    ``classes``, ``delay`` and ``ingress_buckets`` are the rest of the schedule the count is at: its content classes,
+    the buckets from a connection's admission to its first egress cell's, and the buckets a release is within of its
+    connection's admission, by default the delay's; each is by default the lengths rows' cost runner's
+    (`COST_RUNNER`). ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is
     the share of connections that fail, which only the rows with the lengths held read, and ``scan_delta`` each
     execution phase's scan's δ. ``set_time_card`` is the card every figure under `SET_TIME` rests on: it is
     simulated, the one input so marked (`SIMULATED`), and its source is the clause it rests on (`SET_TIME_CLAUSE`)."""
@@ -660,10 +703,21 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
                           f"no certified {MODEL} class: a bucket's seconds, by default the network certifier's "
                           "(--bucket-s)"),
         "lanes": Input(lanes, "lane", "assumed",
-                       "none given (--lanes): the entries are counted one a request, the least the check can charge"
-                       if lanes is None else
+                       "none given (--lanes): the entries are counted one a request, the least the check can charge, "
+                       "and the count at the least lanes whose schedule releases what a link serves in an execution "
+                       "phase" if lanes is None else
                        f"no certified {MODEL} class: the connections a link holds at once, each lane with a slot "
                        f"entry every {EVERY} buckets, the scan class's default stride (--lanes)"),
+        "classes": Input(classes, "class", "assumed",
+                         f"no certified {MODEL} class: the content classes a schedule files a link's releases in, "
+                         f"whose held rows the count is of; by default {COST_RUNNER} cost's (--classes)"),
+        "delay": Input(delay, "bucket", "assumed",
+                       f"no certified {MODEL} class: the buckets from a connection's admission to its first egress "
+                       f"cell's; by default {COST_RUNNER} cost's (--delay)"),
+        "ingress_buckets": Input(delay if ingress_buckets is None else ingress_buckets, "bucket", "assumed",
+                                 f"no certified {MODEL} class: the buckets a release is within of its connection's "
+                                 f"admission; by default the delay's, as {COST_RUNNER} cost sets it "
+                                 "(--ingress-buckets)"),
         "syncs": Input(chosen["n_delta"].default * chosen["n_rho"].default if syncs is None else syncs, "sync",
                        "assumed",
                        "N2's #Σ_sync, the most a calibration chooses by default: "
@@ -711,12 +765,46 @@ def _class(inp: Mapping[str, Input]) -> Assumed:
                    Fraction(inp["bucket_s"].value))
 
 
+class Count(NamedTuple):
+    """What a link's execution phase is charged for the count, and the schedule it is counted at. The head of an
+    execution phase states how many of its releases each of ``classes`` content classes holds: one of ``releases``
+    + 1 values a class, ``releases`` being the most the schedule releases in an execution phase (`phase_releases`),
+    so ``bits`` is ``classes`` · log2(``releases`` + 1). ``lanes`` are the schedule's: a caller's where ``given``,
+    and otherwise the least whose schedule releases ``load``, the connections a link serves in an execution phase."""
+    classes: int
+    lanes: int
+    given: bool
+    releases: int
+    load: Fraction
+    bits: float
+
+
+def counted(inp: Mapping[str, Input]) -> Count:
+    """The count's charge at ``inp``'s schedule (`Count`): its classes, its delay and ingress buckets, its execution
+    phase's buckets and its lanes. With no lanes given the schedule is not known, so the count is at the least lanes
+    whose schedule releases what a link serves in an execution phase: any schedule that serves this load releases at
+    least as many, so this is the least the rule can charge at it."""
+    cls, lanes, classes = _class(inp), inp["lanes"].value, inp["classes"].value
+    if type(classes) is not int or classes < 0:
+        raise ValueError(f"a schedule's content classes are an integer from 0, not {classes!r}")
+    world = scopes(inp)[-1]
+    load = (Fraction(inp["world_requests"].value) * inp["connections"].value * cls.phase_s
+            / (PERIODS["year"] * world.machines * inp["links"].value))
+    a_lane = phase_releases(1, cls.T, inp["delay"].value, inp["ingress_buckets"].value)
+    given = lanes is not None
+    if not given:
+        lanes = -(-math.ceil(load) // a_lane)
+    releases = phase_releases(lanes, cls.T, inp["delay"].value, inp["ingress_buckets"].value)
+    return Count(classes, lanes, given, releases, load, classes * math.log2(releases + 1))
+
+
 def table(inp: Mapping[str, Input]) -> list[Row]:
     """Each check's terms (`ROWS`) at each scope's load (`scopes`) over each monitoring period (`PERIODS`), from
-    ``inp`` (`inputs`), in exact arithmetic but for the failed connections' charge. A scope serves the world's
-    requests a year in proportion to its GPU-seconds, so every row counts all its scope serves: the scan's
+    ``inp`` (`inputs`), in exact arithmetic but for the failed connections' charge and the count. A scope serves the
+    world's requests a year in proportion to its GPU-seconds, so every row counts all its scope serves: the scan's
     connections by request, the links' execution phases by link, and the entries by capacity where the lanes are
-    given, never by requests what a check counts by capacity."""
+    given, never by requests what a check counts by capacity. The count (`counted`) is by link, for each of its
+    execution phases, on the rows whose check reads the head that states it (`Kind.count`)."""
     cls, lanes, syncs = _class(inp), inp["lanes"].value, inp["syncs"].value
     failing, scan_delta = Fraction(inp["failure_rate"].value), Fraction(inp["scan_delta"].value)
     if not (0 <= failing <= 1 and 0 < scan_delta < 1 and inp["world_requests"].value >= 0):
@@ -725,7 +813,7 @@ def table(inp: Mapping[str, Input]) -> list[Row]:
     if lanes is not None and (type(lanes) is not int or lanes < 1 or cls.T % EVERY):
         raise ValueError(f"a link's lanes are a positive integer and its execution phase's buckets a multiple of the "
                          f"slot stride's {EVERY}, not {lanes!r} lanes and {cls.T} buckets")
-    world = scopes(inp)[-1]
+    world, a_phase = scopes(inp)[-1], counted(inp).bits
     a_gpu_second = Fraction(inp["world_requests"].value) / (world.gpus * PERIODS["year"])
     rows = []
     for scope in scopes(inp):
@@ -742,6 +830,8 @@ def table(inp: Mapping[str, Input]) -> list[Row]:
                     at = {dj: terms(connections, phases, cells=cls.cells, steps=cls.T, dj=dj, entries=entries,
                                     changes=kind.changes, failures=failing * connections, stop=kind.stop)
                           for dj in JITTERS}
+                if kind.count:
+                    at = {dj: t._replace(count=float(phases) * a_phase) for dj, t in at.items()}
                 rows.append(Row(scope, period, name, requests, phases, at, phases * scan_delta))
     return rows
 
@@ -773,14 +863,20 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     its unit, the label it is printed under (`SET_TIME`) and its ``mark``, the card's own (``inp``'s
     ``set_time_card``: simulated). A row's own ``with_set_time_card`` is that label where its changes include the
     timing's, so that its jitter is 0 at either D_j and every figure of it rests on the card, and None on every
-    other row. ``only`` and ``periods`` keep the rows of those scopes and monitoring periods; ``covers`` is the share
-    of its scope's compute a row counts, and ``request_count`` which of `COUNTS` its requests are, the document's
-    one."""
+    other row. A row's ``count`` is its count's charge, 0 where its check reads no head that states one, and the
+    document's ``count`` says how it is counted (`Count`): the schedule, R as ``releases``, the bits a class and a
+    link's execution phase, whether the schedule releases what a link serves (``holds_load``), the rows it is on, its
+    charge over the world's year beside the target, and the same rule at the cost runner's own schedule
+    (``cost_runner``). ``failure_rate_at_target`` is the largest failure rate at which the design's term over the
+    world's year, with its release times taken once, is at most the target: the failed connections' charge and the
+    count; it is None where the count alone is over the target. ``only`` and ``periods`` keep the rows of those
+    scopes and monitoring periods; ``covers`` is the share of its scope's compute a row counts, and
+    ``request_count`` which of `COUNTS` its requests are, the document's one."""
     only, periods, target = set(only) or set(SCOPES), set(periods) or set(PERIODS), Fraction(target_gb) * GB
     if not target > 0 or only - set(SCOPES) or periods - set(PERIODS):
         raise ValueError(f"the target is positive, a scope one of {', '.join(SCOPES)} and a monitoring period one of "
                          f"{', '.join(PERIODS)}, not {target_gb!r}, {sorted(only)} and {sorted(periods)}")
-    cls, lanes, counted = _class(inp), inp["lanes"].value, inp["request_count"].value
+    cls, lanes, request_count = _class(inp), inp["lanes"].value, inp["request_count"].value
 
     def term(r: Row, dj: int) -> dict:
         t = Fraction(r.terms[dj].certifier)
@@ -790,20 +886,24 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     rows = [{"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
              "with_set_time_card": SET_TIME if "timing" in (ROWS[r.name].changes or ()) else None,
              "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
-             "request_count": counted, "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0,
+             "request_count": request_count, "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0,
              "eps": float(r.eps), "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
+             "count": _size(r.terms[1].count),
              "jitter": {str(dj): _size(r.terms[dj].jitter) for dj in JITTERS},
              "term": {str(dj): term(r, dj) for dj in JITTERS}, "entries": _size(r.terms[1].entries)}
             for r in table(inp)]
     head = next(r for r in rows if (r["scope"], r["period"], r["row"]) == ("world", "year", "scan"))
     connections = head["requests"] * inp["connections"].value
+    count, delay, ingress = counted(inp), inp["delay"].value, inp["ingress_buckets"].value
+    held = count.bits * head["phases"]
+    at_cost = phase_releases(COST_LANES, COST_BUCKETS, DELAY, DELAY)
     return {"schema": "certifier-term/v2",
             "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
                     f"it today at two release schedules (D_j = {OF_RECORD})",
             "value": head["term"][str(OF_RECORD)]["GB"], "unit": "GB",
             "with_set_time_card": {"value": head["term"]["1"]["GB"], "unit": "GB", "label": SET_TIME,
                                    "mark": inp["set_time_card"].mark},
-            "commit": commit, "run": run, "model": MODEL, "request_count": counted,
+            "commit": commit, "run": run, "model": MODEL, "request_count": request_count,
             "target": {"value": float(target_gb), "unit": "GB", "bits_a_phase": float(target) / head["phases"],
                        "bits_a_request": float(target) / head["requests"] if head["requests"] else None},
             "weights": {"value": WEIGHTS.bits / GB, "unit": "GB", "label": WEIGHTS.label},
@@ -811,7 +911,16 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                       "requests": head["requests"] / head["phases"], "connection_bits": cls.cell,
                       "sync_bits": clock_terms(1, 1, syncs=inp["syncs"].value, steps=cls.T).schedules,
                       "entry_bits": cls.entry},
-            "failure_rate_at_target": afforded(float(target), connections, cls.cells),
+            "count": {"rows": [name for name, kind in ROWS.items() if kind.count], "classes": count.classes,
+                      "lanes": count.lanes, "lanes_given": count.given, "delay": delay, "ingress_buckets": ingress,
+                      "releases": count.releases, "holds_load": count.releases >= count.load,
+                      "bits_a_class": math.log2(count.releases + 1), "bits_a_phase": count.bits,
+                      "world_year": {**_size(held), "of_target": held / float(target)},
+                      "cost_runner": {"lanes": COST_LANES, "buckets": COST_BUCKETS, "delay": DELAY,
+                                      "ingress_buckets": DELAY, "releases": at_cost,
+                                      "bits_a_phase": count.classes * math.log2(at_cost + 1)}},
+            "failure_rate_at_target": (afforded(float(target) - held, connections, cls.cells)
+                                       if held <= target else None),
             "entries_rule": "one entry a request, the least the check can charge: it charges every slot's entry, a "
                             "count by capacity that needs the class's lanes" if lanes is None else
                             f"every slot's entry, by capacity: {lanes} lanes x {cls.T // EVERY} strides a link's "
@@ -852,7 +961,8 @@ def render(doc: dict) -> str:
     ph, tg, theirs = doc["phase"], doc["target"], "the compute side's"
     at = [str(dj) for dj in sorted(JITTERS, key=lambda dj: dj != OF_RECORD)]
     counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
-    card = doc["with_set_time_card"]
+    card, ct = doc["with_set_time_card"], doc["count"]
+    cost, rate = ct["cost_runner"], doc["failure_rate_at_target"]
     # the scan's schedules and fail cells are the same at each jitter bound and its jitter is 0 at D_j = 1, so what
     # the term of record holds past the labelled term is the jitter alone
     jitter = doc["value"] - card["value"]
@@ -877,7 +987,8 @@ def render(doc: dict) -> str:
         f"# {doc['name'][0].upper()}{doc['name'][1:].split(' over ')[0]}, at a scope's load", "",
         f"commit {doc['commit'] or 'unknown'}, run {doc['run'] or 'none'}", "",
         "Each row counts all its scope serves over the monitoring period, by its check's own rule. The term is the "
-        "schedules, the fail cells and the jitter. The entries are the compute side's.",
+        "schedules, the fail cells, the jitter and, on a row whose check reads the head that states it, the count. "
+        "The entries are the compute side's.",
         f"The term of record is the one at D_j = {OF_RECORD}, two release schedules. The term at D_j = 1 is what a "
         f"network certifier whose network card releases at a set time would be charged. That card is {card['mark']}, "
         "the input set_time_card, whose source is what the term rests on: none is deployed, so it is printed as "
@@ -893,13 +1004,34 @@ def render(doc: dict) -> str:
         f"requests, each charged {ph['connection_bits']} bits for its schedule and again for its fail cell; N2's "
         f"schedules are {_n(ph['sync_bits'])} bits; the jitter is {_n(ph['buckets'])} bits at D_j = {OF_RECORD}, and "
         f"0 at D_j = 1 {card['label']}; a slot entry is {_n(ph['entry_bits'])} bits.",
+        f"The count, on the rows {' and '.join(f'`{name}`' for name in ct['rows'])}: the head of a link's execution "
+        "phase states how many of "
+        f"its releases each of {_n(ct['classes'])} content classes holds, one of R + 1 values a class, so a link's "
+        f"execution phase is charged {_n(ct['classes'])} x log2(R + 1) = {_n(ct['bits_a_phase'])} bits, whatever it "
+        f"serves. R = {_n(ct['releases'])} is the most connections a schedule of {_n(ct['lanes'])} lanes releases in "
+        f"an execution phase: {_n(ct['lanes'])} x ⌈({_n(ph['buckets'])} + {_n(ct['ingress_buckets'])} - 1) / "
+        f"({_n(ct['delay'])} + 1)⌉. "
+        + ("The lanes are given (--lanes)" if ct["lanes_given"] else
+           f"No lanes are given (--lanes), so they are the least whose schedule releases the {_n(ph['requests'])} "
+           "requests a link serves in an execution phase, the least the rule can charge at this load")
+        + ("." if ct["holds_load"] else
+           f": that schedule releases fewer than the {_n(ph['requests'])} requests a link serves in an execution "
+           "phase, so it does not serve this load.")
+        + f" At the lengths rows' cost runner's schedule, {_n(cost['lanes'])} lanes and an execution phase of "
+          f"{_n(cost['buckets'])} buckets, R = {_n(cost['releases'])} and the count is {_n(cost['bits_a_phase'])} "
+          "bits a link's execution phase.",
         f"The target is {_n(tg['value'])} GB: over the world's year, {_n(tg['bits_a_phase'])} bit a link's execution "
         f"phase and {_n(tg['bits_a_request'])} bit a request. The weights are one copy of {doc['weights']['label']}, "
         f"{_n(doc['weights']['value'])} GB.",
         "With the lengths held by a stop block and the release times taken once by a network certifier whose network "
-        f"card releases at a set time ({card['mark']}), the world's year meets the target at a failure rate of at "
-        f"most {_n(doc['failure_rate_at_target'])}. Without that card the jitter alone, at D_j = {OF_RECORD}, is "
-        f"{_n(jitter)} {doc['unit']} over the world's year, {_n(jitter / tg['value'])} times the target.",
+        f"card releases at a set time ({card['mark']}), the design's term over the world's year is the failed "
+        "connections' charge and the count. "
+        + (f"The count alone is {_n(ct['world_year']['GB'])} {doc['unit']}, {_n(ct['world_year']['of_target'])} "
+           "times the target, so the world's year meets the target at no failure rate." if rate is None else
+           f"The count is {_n(ct['world_year']['GB'])} {doc['unit']}, and with it the world's year meets the target "
+           f"at a failure rate of at most {_n(rate)}.")
+        + f" Without that card the jitter alone, at D_j = {OF_RECORD}, is {_n(jitter)} {doc['unit']} over the "
+          f"world's year, {_n(jitter / tg['value'])} times the target.",
         "ε is the scan's execution phases' δ summed, a union bound: at 1 or more it bounds nothing.", "",
         "## Inputs", "",
         *_pipes(("input", "value", "unit", "mark", "source"),
@@ -909,21 +1041,21 @@ def render(doc: dict) -> str:
                 [(*k, *(_n(r[c]) for c in ("request_count", "machines", "gpu_seconds", "requests", "phases", "eps")))
                  for k, r in seen.items()], 3), "",
         "## The terms in GB", "",
-        *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
+        *_pipes(("scope", "period", "row", "request count", "schedules", "cells", "count",
                  *(head("jitter", dj) for dj in at),
                  *(head(c, dj) for dj in at for c in ("term", "x target", "x weights")),
                  "entries, the compute side's"),
                 [(r["scope"], r["period"], name(r), r["request_count"], _n(r["schedules"]["GB"]),
-                  _n(r["cells"]["GB"]), *(_n(r["jitter"][dj]["GB"]) for dj in at),
+                  _n(r["cells"]["GB"]), _n(r["count"]["GB"]), *(_n(r["jitter"][dj]["GB"]) for dj in at),
                   *(_n(r["term"][dj][k]) for dj in at for k in ("GB", "of_target", "of_weights")),
                   entries(r, "GB")) for r in doc["rows"]], 4), "",
         "## The terms in bits", "",
-        *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
+        *_pipes(("scope", "period", "row", "request count", "schedules", "cells", "count",
                  *(head("jitter", dj) for dj in at),
                  *(head("term", dj) for dj in at), "entries, the compute side's",
                  *(head("a link's phase", dj) for dj in at), *(head("a request", dj) for dj in at)),
                 [(r["scope"], r["period"], name(r), r["request_count"], _n(r["schedules"]["bits"]),
-                  _n(r["cells"]["bits"]), *(_n(r["jitter"][dj]["bits"]) for dj in at),
+                  _n(r["cells"]["bits"]), _n(r["count"]["bits"]), *(_n(r["jitter"][dj]["bits"]) for dj in at),
                   *(_n(r["term"][dj]["bits"]) for dj in at),
                   entries(r, "bits"), *(_n(r["term"][dj]["bits_a_phase"]) for dj in at),
                   *(_n(r["term"][dj]["bits_a_request"]) for dj in at)) for r in doc["rows"]], 4)]
@@ -959,8 +1091,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--bucket-s", type=Fraction, default=TAU, metavar="S",
                     help=f"a bucket's seconds (default {TAU}, the network certifier's)")
     ap.add_argument("--lanes", type=int, metavar="N",
-                    help="the connections a link holds at once: the entries are then every slot's, by capacity "
-                         "(default: none, and the entries are one a request, the least)")
+                    help="the connections a link holds at once: the entries are then every slot's, by capacity, and "
+                         "the count is at these lanes (default: none; the entries are one a request, the least, and "
+                         "the count at the least lanes whose schedule releases what a link serves)")
+    ap.add_argument("--classes", type=int, default=CLASSES, metavar="N",
+                    help=f"the content classes whose held rows the count is of (default {CLASSES})")
+    ap.add_argument("--delay", type=int, default=DELAY, metavar="D",
+                    help="the buckets from a connection's admission to its first egress cell's, which the count's "
+                         f"R reads (default {DELAY})")
+    ap.add_argument("--ingress-buckets", type=int, metavar="I",
+                    help="the buckets a release is within of its connection's admission, which the count's R reads "
+                         "(default: the delay's)")
     ap.add_argument("--syncs", type=int, metavar="N",
                     help="N2's #Σ_sync (default: the most a calibration chooses)")
     ap.add_argument("--failure-rate", type=Fraction, default=Fraction(0), metavar="F",
@@ -982,7 +1123,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     inp = inputs(response_ids=a.response_ids, id_bits=a.id_bits, buckets=a.phase_buckets, bucket_s=a.bucket_s,
                  failure_rate=a.failure_rate, requests=a.requests, world_requests=a.world_requests,
-                 scan_delta=a.scan_delta, syncs=a.syncs, lanes=a.lanes)
+                 scan_delta=a.scan_delta, syncs=a.syncs, lanes=a.lanes, classes=a.classes, delay=a.delay,
+                 ingress_buckets=a.ingress_buckets)
     doc = document(inp, target_gb=a.target_gb, commit=a.commit or _head(), run=a.run, only=a.scope or (),
                    periods=a.period or ())
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else render(doc))

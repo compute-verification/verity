@@ -68,9 +68,9 @@ it prints doesn't change. Every measurement is the model's and its name says so;
   as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (`--scan-delta`).
 
 A row whose error is 1 or more has no bound at its period, since a union bound of 1 bounds nothing. Its `free` and
-`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so are `metric`
-and the card's figure where the row is the term of record's. Its `error` is written with its value, and its `capacity`, which no error
-enters. What the command prints is the calculator's still, those rows' terms among it.
+`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so are
+`metric` and the card's figure where the row is the term of record's. Its `error` is written with its value, and its
+`capacity`, which no error enters. What the command prints is the calculator's still, those rows' terms among it.
 
 A measurement's `inputs` name what it was computed from: its row, the document's inputs with their values, marks and
 sources, the registration read, and the measurements it is a difference of. Every one names the class the term is at,
@@ -119,13 +119,14 @@ and each row says where it stands:
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
-  Its failed connections' charge, its jitter and its entries are the design's.
+  Its failed connections' charge, its jitter, its count and its entries are the design's.
 - `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
   sampled on a served audit. The lengths are held, the stop block holding a response's output count to its ids, and
-  the entries are the compute audit's, so its term is the jitter and the failed connections' charge.
+  the entries are the compute audit's, so its term is the jitter, the failed connections' charge and the count.
 
 Nothing a check counts by capacity is scaled by requests: twice the requests are twice the scan's schedules and fail
-cells, and nothing else.
+cells, and nothing else. The count is by capacity too: with the lanes given it does not move with the requests, and
+with none given it moves only as the least lanes that serve them do.
 
 ## The terms
 
@@ -142,7 +143,22 @@ cells, and nothing else.
   certifier with a set-time card would be charged: it is printed as "with a simulated set-time card". Where
   the timing is taken once it is 0 at either D_j, and that 0 rests on the same card, so those rows carry the label
   in their name.
-- **term**: the three summed, the network certifier's own term, at each D_j. The term of record is the one at
+- **count**: on the design's two rows, classes · log2(R + 1) bits for each execution phase on each link, whatever
+  it serves, and 0 on every other row. Under the design the network certifier signs a head over each execution
+  phase's tables, and a content class's tables are the rows it holds and no other, so the head states how many of
+  the execution phase's releases each class holds: one of R + 1 values a class.
+  - R is the most connections the schedule releases in an execution phase of T buckets: lanes · ⌈(T + ingress
+    buckets − 1) / (D + 1)⌉, D being the delay. It is a bound: at some schedules no load releases as many.
+  - The classes, the delay and the ingress buckets are inputs (`--classes`, `--delay`, `--ingress-buckets`), by
+    default those of the lengths rows' cost runner (`benchmarks/network_traces/connection_rows_run.py cost`): six
+    classes and a delay of 30 buckets, which its ingress buckets equal.
+  - The lanes are the input the entries read (`--lanes`). With none given the schedule is not known, so the count
+    is at the least lanes whose schedule releases what a link serves in an execution phase: any schedule that
+    serves the load releases at least as many, so it is the least the rule can charge. With lanes given the count
+    is at them, and the lines above the tables say so where that schedule releases fewer than a link serves.
+  - The rows `lengths` and `all three` carry no count: they say that a stop block holds a response's output count
+    to its ids, and not that its tables are a class's held rows.
+- **term**: the four summed, the network certifier's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.
 - **entries**: the slot entries, which are the compute side's and not part of the term. The scan's check charges
@@ -157,29 +173,38 @@ cells, and nothing else.
   and the figure is what that device would be charged: the set-time card, `set_time_card`, alone); the source is the
   file and key it is read from, the parameter that gave it, or for the card the clause its figures rest on. No run
   has certified a class for GLM-5.3, so the class is assumed: the most ids a response holds
-  (`--response-ids`), an id's bits (`--id-bits`), and an execution phase's buckets and their seconds
-  (`--phase-buckets`, `--bucket-s`).
+  (`--response-ids`), an id's bits (`--id-bits`), an execution phase's buckets and their seconds
+  (`--phase-buckets`, `--bucket-s`), and the schedule the count is at (`--lanes`, `--classes`, `--delay`,
+  `--ingress-buckets`).
 - **The scopes**: the compute each row covers, which is all its scope serves: machines, GPU-seconds, requests and
   execution phases, and ε, the scan's execution phases' δ summed (`--scan-delta`). ε is a union bound, so at 1 or more
   it bounds nothing.
 - **request count**: a column of every table, and `request_count` on every row of the document and at its top:
   `plan`, `census` or `given`, the request the row's requests are counted of. One table holds one request count;
   rows of two don't compare.
-- **The terms in GB**: schedules, cells, the jitter at each D_j, and the term at each D_j with its multiple of the
-  target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries. The
-  columns at D_j = 2, the term of record, come before those at D_j = 1. Every column at D_j = 1, the multiples too,
-  has the label in its header, as `simulated set-time card`, and so has the name of a row whose release times
-  are taken once, in the `row` column: `timing, simulated set-time card`.
+- **The terms in GB**: schedules, cells, the count, the jitter at each D_j, and the term at each D_j with its
+  multiple of the target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the
+  entries. The columns at D_j = 2, the term of record, come before those at D_j = 1. Every column at D_j = 1, the
+  multiples too, has the label in its header, as `simulated set-time card`, and so has the name of a row whose
+  release times are taken once, in the `row` column: `timing, simulated set-time card`.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
   (`a link's phase`) and for one request (`a request`), the term as a share of the compute it covers.
 
 The lines above the tables give the rule for the term of record, that the card is simulated, and the rule for the
 rows that carry the label, each row's rule, one link's execution phase (its requests, a connection's bits, N2's
-schedules, the jitter at each D_j, a slot entry's bits), the target as bits a link's execution phase and a request
-over the world's year, and the largest failure rate at which, with the lengths held by a stop block and the release
-times taken once by a network certifier whose network card releases at a set time (simulated), the world's year
-meets the target. Then they give what the jitter alone is without that card, at D_j = 2 over the world's year, in GB
-and as a multiple of the target.
+schedules, the jitter at each D_j, a slot entry's bits), the count (its rows, its bits a link's execution phase, R
+and the schedule R is of, and the same rule at the cost runner's own schedule, 16 lanes and an execution phase of
+600 buckets), and the target as bits a link's execution phase and a request over the world's year. Then they say
+what the design's term over the world's year is with the release times taken once by a network certifier whose
+network card releases at a set time (simulated), the failed connections' charge and the count: the largest failure
+rate at which it meets the target, the document's `failure_rate_at_target`, or, where the count alone is over the
+target, that no failure rate meets it, and the document's rate is null. Last they give what the jitter alone is
+without that card, at D_j = 2 over the world's year, in GB and as a multiple of the target.
+
+The document's `count` holds how the count is counted: its rows, the schedule (`classes`, `lanes` and whether they
+were given, `delay`, `ingress_buckets`), R as `releases`, whether that schedule releases what a link serves
+(`holds_load`), the bits a class and a link's execution phase, its charge over the world's year beside the target,
+and the cost runner's schedule's R and bits. Each row holds its own `count`, in bits and GB.
 
 ## Where the scale comes from
 
