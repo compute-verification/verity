@@ -97,13 +97,33 @@ def test_derived_gpu_numbers(sku: str) -> None:
     assert 0 < value(card, "memory.read") <= value(card, "memory.bandwidth")
 
 
+#: The uniform registers a warp that each card's `store.reg_extra` counts: the 80 a run found hold values on the RTX PRO
+#: 6000, and 63 on the cards whose uniform registers no run has swept.
+UNIFORM_REGISTERS = {"b200-sxm-180gb": 63, "h200-sxm-141gb": 63, "rtx-pro-6000-server": 80}
+
+
 @pytest.mark.parametrize("sku", skus("gpu"))
 def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
-    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers (63
-    a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in 32-bit words."""
+    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers
+    (`UNIFORM_REGISTERS` a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in
+    32-bit words. Its source states the count, and a count that is a run's cites the run's record."""
     card = load(sku)
-    warps = value(card, "sm.warps")
-    assert value(card, "store.reg_extra") >= 63 * warps + 7 * warps + math.ceil(7 * warps / 32)
+    warps, uniform = value(card, "sm.warps"), UNIFORM_REGISTERS[sku]
+    assert value(card, "store.reg_extra") >= uniform * warps + 7 * warps + math.ceil(7 * warps / 32)
+    source = card["store"]["reg_extra"]["source"]
+    assert f"({uniform} a warp at {warps} warps" in source
+    assert (re.search(r"\bart:[0-9a-f]{12}\b", source) is not None) == (uniform != 63)
+
+
+def test_the_registers_a_run_found_on_the_rtx_pro_6000() -> None:
+    """The RTX PRO 6000's `store.reg_extra` is its 80 uniform registers a warp, its predicates and its uniform
+    predicates and nothing more, pinned with the on-chip bytes its stores then give a sheet (the registers, shared
+    memory and L2) so that a change to either is deliberate: a Lean table and every sheet of the card move with it."""
+    card = load("rtx-pro-6000-server")
+    assert value(card, "store.reg_extra") == 80 * 48 + 336 + 11 == 4187
+    sms = value(card, "sm.count")
+    words = value(card, "store.reg") + value(card, "store.reg_extra")
+    assert 4 * sms * words + sms * value(card, "store.smem") + value(card, "store.l2") == 211_290_960
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
